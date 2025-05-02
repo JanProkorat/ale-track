@@ -1,44 +1,139 @@
-var builder = WebApplication.CreateBuilder(args);
+using System.Configuration;
+using System.Reflection;
+using System.Text.Json.Serialization;
+using AleTrack.Common.Models;
+using AleTrack.Common.Utils;
+using AleTrack.Infrastructure.Interceptors.PublicEntity;
+using AleTrack.Infrastructure.Interceptors.SaveChangesCombine;
+using AleTrack.Infrastructure.Persistance;
+using AleTrack.Infrastructure.Persistence;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using FluentValidation;
+using Microsoft.AspNetCore.Http.Json;
+using Serilog;
+using Serilog.Events;
+using Serilog.Extensions.Logging;
+using Serilog.Sinks.SystemConsole.Themes;
+using EFCore.NamingConventions;
+using Microsoft.EntityFrameworkCore;
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(theme: AnsiConsoleTheme.Code)
+    .CreateBootstrapLogger();
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+try
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    var builder = WebApplication.CreateBuilder(args);
+    var configuration = builder.Configuration;
+    
+    Log.Information("Starting web host AleTrack");
+    
+    var services = builder.Services;
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
+    var assembly = Assembly.GetExecutingAssembly();
+    
+    builder.Host.UseSerilog((context, config) => config
+        .ReadFrom.Configuration(context.Configuration));
+    
+    var connectionString = configuration.GetConnectionString("AleTrack");
+    if (string.IsNullOrWhiteSpace(connectionString))
+        throw new ConfigurationErrorsException($"DB Connection string as configured property named 'ConnectionStrings:{connectionString}' is missing");
+    
+    services.Configure<JsonOptions>(options =>
     {
-        var forecast = Enumerable.Range(1, 5).Select(index =>
-                new WeatherForecast
-                (
-                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    Random.Shared.Next(-20, 55),
-                    summaries[Random.Shared.Next(summaries.Length)]
-                ))
-            .ToArray();
-        return forecast;
-    })
-    .WithName("GetWeatherForecast")
-    .WithOpenApi();
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
-app.Run();
+    services.AddEndpointsApiExplorer();
+    
+    services.AddMemoryCache();
+    services.AddHttpClient();
+    services.AddHttpContextAccessor();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+    services.AddFastEndpoints()
+        .SwaggerDocument(o =>
+        {
+            o.DocumentSettings = s =>
+            {
+                s.Title = "AleTrack API";
+                s.Version = "v1";
+                s.OperationProcessors.Add(new FilterableQueryProcessor());
+                s.OperationProcessors.Add(new BadRequestResponseProcessor());
+
+            };
+        })
+        .AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton);
+
+    services.AddDbContext<AleTrackDbContext>(options =>
+    {
+        options
+            .UseLoggerFactory(new SerilogLoggerFactory())
+            .UseSqlite(connectionString)
+            .UseSnakeCaseNamingConvention()
+            .UseCombineOf(new PublicEntityInterceptor());
+        
+        options.EnableDetailedErrors();
+        options.EnableSensitiveDataLogging();
+    });
+    
+    // Add JWT Service
+    services.AddScoped<IJwtService, JwtService>();
+    services.AddSingleton<IPasswordHasher, PasswordHasher>();
+
+    // Add JWT Authentication using the extension method
+    services.AddJwtAuthentication(builder.Configuration);
+
+    // Add user Authorization
+    services.AddUserAuthorization();
+    
+    var application = builder.Build();
+    Log.Information("Successfully building up application");
+    
+    if (application.Environment.IsProduction())
+        application.UseHsts();
+
+    application.UseRouting();
+    // application.UseCors();
+
+    application.UseAuthentication();
+    application.UseAuthorization();
+    
+    application
+        .UseFastEndpoints(c =>
+        {
+            c.Endpoints.RoutePrefix = "ale-track";
+            c.Binding.Modifier = (request, _, binderContext, _) =>
+            {
+                if (request is FilterableRequest filterableRequest)
+                {
+                    filterableRequest.Parameters = binderContext.HttpContext
+                        .Request
+                        .Query
+                        .ToDictionary(k => k.Key, v => v.Value.ToString());
+                }
+
+                c.Versioning.Prefix = "v";
+                c.Versioning.DefaultVersion = 1;
+                c.Versioning.PrependToRoute = true;
+            };
+        })
+        .UseAleTrackExceptionHandler(Log.Logger)
+        .UseSwaggerGen();
+    
+    Log.Information("Successfully setting up application middlewares");
+    
+    Log.Information("Running up the application");
+    await application.RunAsync();
+}
+catch (Exception ex)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    Log.Fatal(ex, "An unhandled exception occured during bootstrapping");
+}
+finally
+{
+    Log.Information("Shutting down the application");
+    await Log.CloseAndFlushAsync();
 }
