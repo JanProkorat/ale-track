@@ -1,12 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
+using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Entities.BaseEntities;
+namespace AleTrack.Entities;
 
 /// <summary>
 /// Base entity containing address information
 /// </summary>
-public class LocationEntity : PublicEntity
+[Owned]
+public class Address
 {
     /// <summary>
     /// Name of the street
@@ -41,10 +44,9 @@ public class LocationEntity : PublicEntity
     public string Zip { get; set; } = null!;
     
     /// <summary>
-    /// Name of related country
+    /// Related country
     /// </summary>
-    [MaxLength(50)]
     [Required]
     [Column("country")]
-    public string Country { get; set; } = null!;
+    public Country Country { get; set; }
 }

@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 
@@ -48,7 +47,16 @@ public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
         var driver = new Driver
         {
             FirstName = req.Data.FirstName,
-            LastName = req.Data.LastName
+            LastName = req.Data.LastName,
+            PhoneNumber = req.Data.PhoneNumber,
+            Color = req.Data.Color,
+            Availabilities = req.Data.AvailableDates
+                .Select(d => new DriverAvailability
+                {
+                    From = d.From,
+                    Until = d.Until
+                })
+                .ToList()
         };
 
         dbContext.Drivers.Add(driver);

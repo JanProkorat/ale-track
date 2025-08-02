@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +34,13 @@ public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoi
             {
                 Id = c.PublicId,
                 FirstName = c.FirstName,
-                LastName = c.LastName
+                LastName = c.LastName,
+                PhoneNumber = c.PhoneNumber,
+                Color = c.Color,
+                AvailableDates = c.Availabilities
+                    .Select(a => new DriverAvailabilityListItemDto(a.From, a.Until))
+                    .ToList()
+                
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

@@ -13,7 +13,12 @@ public sealed record UpdateClientDto
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Info about clients address
+    /// Info about clients' official address
     /// </summary>
-    public AddressDto Address { get; set; } = null!;
+    public AddressDto OfficialAddress { get; set; } = null!;
+    
+    /// <summary>
+    /// Info about clients' contact address
+    /// </summary>
+    public AddressDto? ContactAddress { get; set; }
 }

@@ -15,7 +15,7 @@ public sealed record ProductDeliveryDto
     /// <summary>
     /// Date when drivers will go to brewery for products to fill the inventory
     /// </summary>
-    public DateTime DeliveryDate { get; set; }
+    public DateOnly DeliveryDate { get; set; }
     
     /// <summary>
     /// Info about related vehicle
@@ -28,11 +28,6 @@ public sealed record ProductDeliveryDto
     public ProductDeliveryState State { get; set; }
 
     /// <summary>
-    /// Info about related brewery
-    /// </summary>
-    public BreweryInfoDto Brewery { get; set; } = null!;
-
-    /// <summary>
     /// Info about related drivers
     /// </summary>
     public List<DriverInfoDto> Drivers { get; set; } = [];
@@ -41,10 +36,41 @@ public sealed record ProductDeliveryDto
     /// Note to the delivery
     /// </summary>
     public string? Note { get; set; }
-    
-    public record VehicleInfoDto(Guid Id, string Name);
-    
-    public record BreweryInfoDto(Guid Id, string Name);
-    
-    public record DriverInfoDto(Guid Id, string FirstName, string LastName);
+
+    /// <summary>
+    /// A collection of stops associated with a product delivery.
+    /// Each stop provides details about the brewery, notes, and related information.
+    /// </summary>
+    public List<ProductDeliveryStopDto> Stops { get; set; } = [];
 }
+
+public record ProductDeliveryStopDto
+{
+    /// <summary>
+    /// Public ID of the delivery stop
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Info about related brewery
+    /// </summary>
+    public BreweryInfoDto Brewery { get; set; } = null!;
+    
+    /// <summary>
+    /// Note to the delivery stop
+    /// </summary>
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// List of products included in the delivery stop.
+    /// </summary>
+    public List<ProductDeliveryItemDto> Products { get; set; } = [];
+}
+
+public record ProductDeliveryItemDto(Guid ProductId, string Name, int Quantity, string? Note);
+
+public record BreweryInfoDto(Guid Id, string Name);
+
+public record VehicleInfoDto(Guid Id, string Name);
+    
+public record DriverInfoDto(Guid Id, string FirstName, string LastName);

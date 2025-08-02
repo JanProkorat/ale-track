@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,17 +27,59 @@ public sealed class Product : PublicEntity
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Price per one unit
-    /// </summary>
-    [Column("price")]
-    public decimal Price { get; set; }
-    
-    /// <summary>
     /// Note to the product
     /// </summary>
     [MaxLength(200)]
     [Column("description")]
     public string? Description { get; set; }
+    
+    /// <summary>
+    /// Kind of the product
+    /// </summary>
+    [Column("kind")]
+    public ProductKind Kind { get; set; }
+    
+    /// <summary>
+    /// Type of the product
+    /// </summary>
+    [Column("type")]
+    public ProductType Type { get; set; }
+    
+    /// <summary>
+    /// How much alcohol product contains
+    /// </summary>
+    [Column("alcohol_percentage")]
+    public float? AlcoholPercentage { get; set; }
+    
+    /// <summary>
+    /// Degree of the beer - 10, 11, 12 etc.
+    /// </summary>
+    [Column("plato_degree")]
+    public float? PlatoDegree { get; set; }
+    
+    /// <summary>
+    /// Size of the whole package
+    /// </summary>
+    [Column("package_size")]
+    public double? PackageSize { get; set; }
+    
+    /// <summary>
+    /// Price per one unit
+    /// </summary>
+    [Column("price_with_vat")]
+    public decimal PriceWithVat { get; set; }
+    
+    /// <summary>
+    /// Price for unit with VAT
+    /// </summary>
+    [Column("price_for_unit_with_vat")]
+    public decimal PriceForUnitWithVat { get; set; }
+    
+    /// <summary>
+    /// Price for unit without VAT
+    /// </summary>
+    [Column("price_for_unit_without_vat")]
+    public decimal PriceForUnitWithoutVat { get; set; }
     
     /// <summary>
     /// Related Brewery

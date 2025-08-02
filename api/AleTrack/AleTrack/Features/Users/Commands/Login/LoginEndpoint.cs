@@ -1,6 +1,5 @@
 using AleTrack.Common.Utils;
 using AleTrack.Features.Users.Utils;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +50,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
             {
                 s.Summary = "Login user into the system";
                 s.Responses[StatusCodes.Status200OK] = "User logged in";
+                s.Responses[StatusCodes.Status401Unauthorized] = "User not authorized";
             }
         );
     }

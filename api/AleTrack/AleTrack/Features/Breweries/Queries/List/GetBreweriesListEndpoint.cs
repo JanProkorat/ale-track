@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -40,11 +39,16 @@ public sealed class GetBreweriesListEndpoint(AleTrackDbContext dbContext) : Endp
     /// <inheritdoc />
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
-        var data = await dbContext.Clients
+        var data = await dbContext.Breweries
             .Select(c => new BreweryListItemDto
             {
                 Id = c.PublicId,
-                Name = c.Name
+                Name = c.Name,
+                City = c.OfficialAddress.City,
+                Country = c.OfficialAddress.Country,
+                Zip = c.OfficialAddress.Zip,
+                StreetName = c.OfficialAddress.StreetName,
+                StreetNumber = c.OfficialAddress.StreetNumber
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

@@ -13,5 +13,5 @@ public static class UserErrorCodes
     /// <summary>
     /// Error code for case when the provided password is incorrect.
     /// </summary>
-    public static string InvalidPasswordError = "INVALID_PASSWORD";
+    public const string InvalidPasswordError = "INVALID_PASSWORD";
 }

@@ -6,14 +6,9 @@ namespace AleTrack.Features.ProductDeliveries.Commands.Create;
 public sealed record CreateProductsDeliveryDto
 {
     /// <summary>
-    /// ID of related brewery
-    /// </summary>
-    public Guid BreweryId { get; set; }
-    
-    /// <summary>
     /// Date when drivers are going to brewery for the products
     /// </summary>
-    public DateTime DeliveryDate { get; set; }
+    public DateOnly DeliveryDate { get; set; }
 
     /// <summary>
     /// IDs of related drivers
@@ -29,17 +24,38 @@ public sealed record CreateProductsDeliveryDto
     /// Note to the delivery
     /// </summary>
     public string? Note { get; set; }
+
+    /// <summary>
+    /// A collection of stops specified in the delivery, each representing a brewery and the associated products to deliver.
+    /// </summary>
+    public List<CreateProductDeliveryStopDto> Stops { get; set; } = [];
+}
+
+/// <summary>
+/// Data transfer object representing a specific stop in a product delivery, including associated brewery details and delivered products.
+/// </summary>
+public sealed record CreateProductDeliveryStopDto
+{
+    /// <summary>
+    /// ID of related brewery
+    /// </summary>
+    public Guid BreweryId { get; set; }
+    
+    /// <summary>
+    /// Note to the delivery
+    /// </summary>
+    public string? Note { get; set; }
     
     /// <summary>
     /// Products to be delivered
     /// </summary>
-    public List<ProductDeliveryItemDto> Products { get; set; } = [];
+    public List<CreateProductDeliveryItemDto> Products { get; set; } = [];
 }
 
 /// <summary>
 /// Data transfer object representing the details of an individual product item included in a delivery.
 /// </summary>
-public sealed record ProductDeliveryItemDto
+public sealed record CreateProductDeliveryItemDto
 {
     /// <summary>
     /// ID of related product

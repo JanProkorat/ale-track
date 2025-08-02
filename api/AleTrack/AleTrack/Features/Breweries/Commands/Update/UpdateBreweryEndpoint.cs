@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -59,11 +58,26 @@ public sealed class UpdateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
             ThrowHelper.PublicEntityNotFound(nameof(brewery), req.Id);
 
         brewery!.Name = req.Data.Name;
-        brewery.StreetName = req.Data.Address.StreetName;
-        brewery.StreetNumber = req.Data.Address.StreetNumber;
-        brewery.City = req.Data.Address.City;
-        brewery.Zip = req.Data.Address.Zip;
-        brewery.Country = req.Data.Address.Country;
+        brewery.OfficialAddress = new Address
+        {
+            StreetName = req.Data.OfficialAddress.StreetName,
+            StreetNumber = req.Data.OfficialAddress.StreetNumber,
+            City = req.Data.OfficialAddress.City,
+            Country = req.Data.OfficialAddress.Country,
+            Zip = req.Data.OfficialAddress.Zip
+        };
+
+        if (req.Data.ContactAddress is not null)
+        {
+            brewery.ContactAddress = new Address
+            {
+                StreetName = req.Data.ContactAddress.StreetName,
+                StreetNumber = req.Data.ContactAddress.StreetNumber,
+                City = req.Data.ContactAddress.City,
+                Country = req.Data.ContactAddress.Country,
+                Zip = req.Data.ContactAddress.Zip
+            };
+        }
         
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);

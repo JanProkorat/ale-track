@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -56,12 +55,25 @@ public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateDriverRequest req, CancellationToken ct)
     {
-        var driver = await dbContext.Drivers.FirstOrDefaultAsync(d => d.PublicId == req.Id, ct);
+        var driver = await dbContext.Drivers
+            .Where(d => d.PublicId == req.Id)
+            .Include(d => d.Availabilities)
+            .FirstOrDefaultAsync(ct);
+        
         if (driver is null)
             ThrowHelper.PublicEntityNotFound(nameof(Driver), req.Id);
         
         driver!.FirstName = req.Data.FirstName;
         driver.LastName = req.Data.LastName;
+        driver.PhoneNumber = req.Data.PhoneNumber;
+        driver.Color = req.Data.Color;
+        driver.Availabilities = req.Data.AvailableDates
+            .Select(d => new DriverAvailability
+            {
+                From = d.From.ToLocalTime(),
+                Until = d.Until.ToLocalTime()
+            })
+            .ToList();
         
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);

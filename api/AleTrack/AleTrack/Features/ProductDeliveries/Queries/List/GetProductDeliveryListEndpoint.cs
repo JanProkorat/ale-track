@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +20,7 @@ namespace AleTrack.Features.ProductDeliveries.Queries.List;
 /// </example>
 /// <param name="dbContext">The database context used to access product delivery information.</param>
 /// <response code="200">Returns a list of product deliveries.</response>
-public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) : Endpoint<FilterableRequest, List<ProductDeliveryListItem>>
+public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) : Endpoint<FilterableRequest, List<ProductDeliveryListItemDto>>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -44,14 +43,13 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
         var data = await dbContext.ProductDeliveries
-            .Select(d => new ProductDeliveryListItem
+            .Select(d => new ProductDeliveryListItemDto
             {
                 Id = d.PublicId,
                 DeliveryDate = d.Date,
                 State = d.State,
                 NumOfAssignedDrivers = d.Drivers.Count,
-                Brewery = new ProductDeliveryListItem.BreweryInfoDto(d.Brewery.PublicId, d.Brewery.Name),
-                Vehicle = d.Vehicle != null ? new ProductDeliveryListItem.VehicleInfoDto(d.Vehicle.PublicId, d.Vehicle.Name) : null,
+                Vehicle = d.Vehicle != null ? new ProductDeliveryListItemDto.VehicleInfoDto(d.Vehicle.PublicId, d.Vehicle.Name) : null,
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

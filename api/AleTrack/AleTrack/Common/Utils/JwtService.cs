@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using Microsoft.IdentityModel.Tokens;
 

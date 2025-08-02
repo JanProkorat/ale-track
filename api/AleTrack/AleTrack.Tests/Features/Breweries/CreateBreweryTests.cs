@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Entities;
 using AleTrack.Features.Breweries.Commands.Create;
@@ -19,12 +20,12 @@ public sealed class CreateBreweryTests
             Data = new CreateBreweryDto
             {
                 Name = "Test Brewery",
-                Address = new AddressDto
+                OfficialAddress = new AddressDto
                 {
                     City = "city",
                     StreetName = "Street",
                     StreetNumber = "123",
-                    Country = "cz",
+                    Country = Country.Czechia,
                     Zip = "12345"
                 }
             }

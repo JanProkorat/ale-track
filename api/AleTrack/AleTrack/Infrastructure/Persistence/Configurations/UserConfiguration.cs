@@ -1,5 +1,3 @@
-using AleTrack.Common.Enums;
-using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

@@ -20,7 +20,7 @@ public sealed class Vehicle : PublicEntity
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Max weight that vehicle can carry
+    /// Max weight that the vehicle can carry
     /// </summary>
     [Column("max_weight")]
     public double MaxWeight { get; set; }

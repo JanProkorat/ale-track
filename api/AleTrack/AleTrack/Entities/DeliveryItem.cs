@@ -14,8 +14,8 @@ public sealed class DeliveryItem : BaseEntity
     /// <summary>
     /// ID of related delivery
     /// </summary>
-    [Column("delivery_id")]
-    public long DeliveryId { get; set; }
+    [Column("delivery_stop_id")]
+    public long DeliveryStopId { get; set; }
     
     /// <summary>
     /// ID of related product brought by the delivery
@@ -28,13 +28,6 @@ public sealed class DeliveryItem : BaseEntity
     /// </summary>
     [Column("amount")]
     public int Amount { get; set; }
-    
-    /// <summary>
-    /// Name of the product to be delivered
-    /// </summary>
-    [MaxLength(50)]
-    [Column("name")]
-    public string? Name { get; set; }
     
     /// <summary>
     /// Description of the product to be delivered
@@ -50,7 +43,7 @@ public sealed class DeliveryItem : BaseEntity
     public Product Product { get; set; } = null!;
     
     /// <summary>
-    /// Related delivery
+    /// Related delivery stop
     /// </summary>
-    public ProductDelivery Delivery { get; set; } = null!;
+    public DeliveryStop DeliveryStop { get; set; } = null!;
 }

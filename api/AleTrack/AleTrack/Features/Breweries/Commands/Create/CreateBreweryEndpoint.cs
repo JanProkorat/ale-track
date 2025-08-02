@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 
@@ -50,11 +49,22 @@ public sealed class CreateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
         var brewery = new Brewery
         {
             Name = req.Data.Name,
-            StreetName = req.Data.Address.StreetName,
-            StreetNumber = req.Data.Address.StreetNumber,
-            City = req.Data.Address.City,
-            Country = req.Data.Address.Country,
-            Zip = req.Data.Address.Zip
+            OfficialAddress = new Address
+            {
+                StreetName = req.Data.OfficialAddress.StreetName,
+                StreetNumber = req.Data.OfficialAddress.StreetNumber,
+                City = req.Data.OfficialAddress.City,
+                Country = req.Data.OfficialAddress.Country,
+                Zip = req.Data.OfficialAddress.Zip
+            },
+            ContactAddress = req.Data.ContactAddress is not null ? new Address
+            {
+                StreetName = req.Data.ContactAddress.StreetName,
+                StreetNumber = req.Data.ContactAddress.StreetNumber,
+                City = req.Data.ContactAddress.City,
+                Country = req.Data.ContactAddress.Country,
+                Zip = req.Data.ContactAddress.Zip
+            } : null
         };
         
         dbContext.Breweries.Add(brewery);

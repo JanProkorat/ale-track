@@ -14,7 +14,7 @@ public static class UserThrowHelper
     /// <exception cref="AleTrackException">Thrown when the user is not found, containing details such as status code, error code, and error properties.</exception>
     public static void UserNotFound(string userName)
         => throw new AleTrackException(
-            StatusCodes.Status404NotFound,
+            StatusCodes.Status401Unauthorized,
             UserErrorCodes.UserNotFoundError,
             new Dictionary<string, object>
             {

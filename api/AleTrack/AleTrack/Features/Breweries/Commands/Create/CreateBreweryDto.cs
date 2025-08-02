@@ -13,7 +13,12 @@ public sealed class CreateBreweryDto
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Info about brewery address
+    /// Info about the brewery's official address
     /// </summary>
-    public AddressDto Address { get; set; } = null!;
+    public AddressDto OfficialAddress { get; set; } = null!;
+    
+    /// <summary>
+    /// Info about the brewery's contact address
+    /// </summary>
+    public AddressDto? ContactAddress { get; set; }
 }

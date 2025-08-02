@@ -16,7 +16,7 @@ public sealed class ProductDelivery : PublicEntity
     /// Date when drivers will go to brewery for products to fill the inventory
     /// </summary>
     [Column("date")]
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
     
     /// <summary>
     /// ID of related vehicle
@@ -29,12 +29,6 @@ public sealed class ProductDelivery : PublicEntity
     /// </summary>
     [Column("state")]
     public ProductDeliveryState State { get; set; }
-    
-    /// <summary>
-    /// ID of related <see cref="Brewery"/> where drivers will go for the products
-    /// </summary>
-    [Column("brewery_id")]
-    public long BreweryId { get; set; }
 
     /// <summary>
     /// Note to the delivery
@@ -44,26 +38,20 @@ public sealed class ProductDelivery : PublicEntity
     public string? Note { get; set; }
     
     /// <summary>
-    /// Related <see cref="Brewery"/>
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Restrict)]
-    public Brewery Brewery { get; set; } = null!;
-    
-    /// <summary>
     /// Related <see cref="Vehicle"/>
-    /// </summary>
+    /// </summary> 
     [DeleteBehavior(DeleteBehavior.Restrict)]
     public Vehicle? Vehicle { get; set; }
     
     /// <summary>
-    /// List of drivers doing the delivery
+    /// List of <see cref="Driver"/> doing the delivery
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Restrict)]
-    public ICollection<Driver> Drivers { get; set; } = [];
+    public List<Driver> Drivers { get; set; } = [];
     
     /// <summary>
-    /// List of item brought by the delivery from the brewery
+    /// List of stops in the delivery - typically breweries where drivers will go for the products
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<DeliveryItem> Items { get; set; } = [];
+    public List<DeliveryStop> Stops { get; set; } = [];
 }

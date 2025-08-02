@@ -1,3 +1,5 @@
+using AleTrack.Common.Enums;
+
 namespace AleTrack.Common.Models;
 
 /// <summary>
@@ -26,7 +28,7 @@ public sealed record AddressDto
     public string Zip { get; set; } = null!;
     
     /// <summary>
-    /// Name of related country
+    /// Related country
     /// </summary>
-    public string Country { get; set; } = null!;
+    public Country Country { get; set; }
 }

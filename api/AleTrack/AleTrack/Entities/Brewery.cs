@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Entities.BaseEntities;
-using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
@@ -9,7 +8,7 @@ namespace AleTrack.Entities;
 /// Entity representing a brewery
 /// </summary>
 [Table("breweries")]
-public sealed class Brewery : LocationEntity
+public sealed class Brewery : PublicEntity
 {
     /// <summary>
     /// Name of the brewery
@@ -19,6 +18,16 @@ public sealed class Brewery : LocationEntity
     [Column("name")]
     public string Name { get; set; } = null!;
 
+    /// <summary>
+    /// Official address of the brewery
+    /// </summary>
+    public Address OfficialAddress { get; set; } = null!;
+
+    /// <summary>
+    /// Contact address of the brewery, which can be null
+    /// </summary>
+    public Address? ContactAddress { get; set; }
+    
     /// <summary>
     /// List of related products
     /// </summary>

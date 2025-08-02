@@ -1,4 +1,3 @@
-using AleTrack.Common.Enums;
 using AleTrack.Entities;
 
 namespace AleTrack.Common.Utils;

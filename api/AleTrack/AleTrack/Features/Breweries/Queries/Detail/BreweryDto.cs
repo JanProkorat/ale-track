@@ -1,3 +1,5 @@
+using AleTrack.Common.Models;
+
 namespace AleTrack.Features.Breweries.Queries.Detail;
 
 /// <summary>
@@ -21,27 +23,12 @@ public sealed record BreweryDto
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Name of the street
+    /// Official address
     /// </summary>
-    public string StreetName { get; set; } = null!;
+    public AddressDto OfficialAddress { get; set; } = null!;
     
     /// <summary>
-    /// Street number
+    /// Contact address
     /// </summary>
-    public string StreetNumber { get; set; } = null!;
-    
-    /// <summary>
-    /// Name of the city
-    /// </summary>
-    public string City { get; set; } = null!;
-    
-    /// <summary>
-    /// Zip code
-    /// </summary>
-    public string Zip { get; set; } = null!;
-    
-    /// <summary>
-    /// Name of related country
-    /// </summary>
-    public string Country { get; set; } = null!;
+    public AddressDto? ContactAddress { get; set; }
 }

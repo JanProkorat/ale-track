@@ -187,6 +187,13 @@ public static class QueryableExtensions
         if (propertyExpr is null)
             return query; // If property doesn't exist, return original query
 
+        // Convert string properties to lower case for case-insensitive sorting
+        if (propertyExpr.Type == typeof(string))
+        {
+            var toLowerMethod = typeof(string).GetMethod("ToLower", Type.EmptyTypes);
+            propertyExpr = Expression.Call(propertyExpr, toLowerMethod!);
+        }
+
         // Create lambda expression for sorting
         var lambdaExpr = Expression.Lambda(propertyExpr, parameter);
 
@@ -288,7 +295,10 @@ public static class QueryableExtensions
                 if (propertyType == typeof(string))
                 {
                     var containsMethod = typeof(string).GetMethod("Contains", new[] { typeof(string) });
-                    return Expression.Call(propertyExpr, containsMethod, valueExpr);
+                    var toLower = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
+                    var lowerProperty = Expression.Call(propertyExpr, toLower);
+                    var lowerValue = Expression.Constant(value.ToLower());
+                    return Expression.Call(lowerProperty, containsMethod, lowerValue);
                 }
 
                 return null;
@@ -297,7 +307,10 @@ public static class QueryableExtensions
                 if (propertyType == typeof(string))
                 {
                     var startsWithMethod = typeof(string).GetMethod("StartsWith", new[] { typeof(string) });
-                    return Expression.Call(propertyExpr, startsWithMethod, valueExpr);
+                    var toLower = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
+                    var lowerProperty = Expression.Call(propertyExpr, toLower);
+                    var lowerValue = Expression.Constant(value.ToLower());
+                    return Expression.Call(lowerProperty, startsWithMethod, lowerValue);
                 }
 
                 return null;
@@ -306,7 +319,10 @@ public static class QueryableExtensions
                 if (propertyType == typeof(string))
                 {
                     var endsWithMethod = typeof(string).GetMethod("EndsWith", new[] { typeof(string) });
-                    return Expression.Call(propertyExpr, endsWithMethod, valueExpr);
+                    var toLower = typeof(string).GetMethod("ToLower", Type.EmptyTypes)!;
+                    var lowerProperty = Expression.Call(propertyExpr, toLower);
+                    var lowerValue = Expression.Constant(value.ToLower());
+                    return Expression.Call(lowerProperty, endsWithMethod, lowerValue);
                 }
 
                 return null;
@@ -344,6 +360,9 @@ public static class QueryableExtensions
 
         if (targetType == typeof(DateTime))
             return DateTime.Parse(value);
+        
+        if (targetType == typeof(DateOnly))
+            return DateOnly.Parse(value);
 
         if (targetType == typeof(bool) && (value == "1" || value == "0"))
             return value == "1";

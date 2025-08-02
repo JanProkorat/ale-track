@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FastEndpoints;
 
 namespace AleTrack.Common.Utils;

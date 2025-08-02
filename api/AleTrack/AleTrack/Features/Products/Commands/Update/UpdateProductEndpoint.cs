@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -59,8 +58,15 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
             ThrowHelper.PublicEntityNotFound(nameof(Product), req.Id);
         
         product!.Name = req.Data.Name;
-        product.Price = req.Data.Price;
         product.Description = req.Data.Description;
+        product.Type = req.Data.Type;
+        product.Kind = req.Data.Kind;
+        product.PackageSize = req.Data.PackageSize;
+        product.PriceForUnitWithoutVat = req.Data.PriceForUnitWithoutVat;
+        product.PriceForUnitWithVat = req.Data.PriceForUnitWithVat;
+        product.PriceWithVat = req.Data.PriceWithVat;
+        product.AlcoholPercentage = req.Data.AlcoholPercentage;
+        product.PlatoDegree = req.Data.PlatoDegree;
 
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);

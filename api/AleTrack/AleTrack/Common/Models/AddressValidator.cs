@@ -24,6 +24,6 @@ public sealed class AddressValidator : Validator<AddressDto>
         RuleFor(r => r.Zip).MaximumLength(10).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
 
         RuleFor(r => r.Country).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-        RuleFor(r => r.Country).MaximumLength(50).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        RuleFor(r => r.Country).IsInEnum().WithErrorCode(ErrorCodes.ValidationEnumError);
     }
 }

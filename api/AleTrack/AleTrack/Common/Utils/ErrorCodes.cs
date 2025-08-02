@@ -49,4 +49,9 @@ internal static class ErrorCodes
     /// Error code for the case when an entity already exists
     /// </summary>
     public const string EntityAlreadyExistError = "ENTITY_ALREADY_EXISTS";
+    
+    /// <summary>
+    /// Error code for case when property should be enum value, but is not
+    /// </summary>
+    public const string ValidationEnumError = "ALIDATION_NOT_ENUM_PROPERTY";
 }

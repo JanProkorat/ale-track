@@ -1,11 +1,12 @@
 using System.Configuration;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Infrastructure.Converters;
 using AleTrack.Infrastructure.Interceptors.PublicEntity;
 using AleTrack.Infrastructure.Interceptors.SaveChangesCombine;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -15,7 +16,6 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Extensions.Logging;
 using Serilog.Sinks.SystemConsole.Themes;
-using EFCore.NamingConventions;
 using Microsoft.EntityFrameworkCore;
 
 Log.Logger = new LoggerConfiguration()
@@ -45,6 +45,7 @@ try
     services.Configure<JsonOptions>(options =>
     {
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.SerializerOptions.Converters.Add(new UtcDateTimeConverter());
     });
 
     services.AddEndpointsApiExplorer();
@@ -62,7 +63,12 @@ try
                 s.Version = "v1";
                 s.OperationProcessors.Add(new FilterableQueryProcessor());
                 s.OperationProcessors.Add(new BadRequestResponseProcessor());
-
+                
+            };
+            o.ShortSchemaNames = true;
+            o.SerializerSettings = s =>
+            {
+                s.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             };
         })
         .AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton);
@@ -89,18 +95,30 @@ try
     // Add user Authorization
     services.AddUserAuthorization();
     
+    services.AddCors(options =>
+    {
+        options.AddPolicy("AllowFrontend", policy =>
+        {
+            policy.WithOrigins("http://localhost:3039")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+    });
+    
     var application = builder.Build();
     Log.Information("Successfully building up application");
     
     if (application.Environment.IsProduction())
         application.UseHsts();
 
+    application.UseCors("AllowFrontend");
     application.UseRouting();
-    // application.UseCors();
 
     application.UseAuthentication();
     application.UseAuthorization();
-    
+    application.UseOpenApi();
+
     application
         .UseFastEndpoints(c =>
         {

@@ -26,4 +26,28 @@ public sealed class Driver : PublicEntity
     [Required]
     [Column("last_name")]
     public string LastName { get; set; } = null!;
+
+    /// <summary>
+    /// Phone number of the driver
+    /// </summary>
+    [MaxLength(20)]
+    [Column("phone_number")]
+    public string? PhoneNumber { get; set; }
+
+    /// <summary>
+    /// Color of the driver in the calendar - hexa code
+    /// </summary>
+    [MaxLength(20)]
+    [Column("color")]
+    public string Color { get; set; } = null!;
+    
+    /// <summary>
+    /// List of deliveries which the current user is related to
+    /// </summary>
+    public ICollection<ProductDelivery> Deliveries { get; set; } = [];
+    
+    /// <summary>
+    /// Dates when the driver is available
+    /// </summary>
+    public ICollection<DriverAvailability> Availabilities { get; set; } = [];
 }

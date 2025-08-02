@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -63,8 +62,15 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
             brewery!.Products.Add(new Product
             {
                 Name = product.Name,
-                Price = product.Price,
-                Description = product.Description
+                Description = product.Description,
+                Type = product.Type,
+                Kind = product.Kind,
+                PackageSize = product.PackageSize,
+                PriceForUnitWithoutVat = product.PriceForUnitWithoutVat,
+                PriceForUnitWithVat = product.PriceForUnitWithVat,
+                PriceWithVat = product.PriceWithVat,
+                AlcoholPercentage = product.AlcoholPercentage,
+                PlatoDegree = product.PlatoDegree
             });
         }
         

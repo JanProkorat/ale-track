@@ -2,7 +2,6 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -55,10 +54,20 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
                 DeliveryDate = d.Date,
                 State = d.State,
                 Note = d.Note,
-                Brewery = new ProductDeliveryDto.BreweryInfoDto(d.Brewery.PublicId, d.Brewery.Name),
-                Vehicle = d.Vehicle != null ? new ProductDeliveryDto.VehicleInfoDto(d.Vehicle.PublicId, d.Vehicle.Name) : null,
+                Vehicle = d.Vehicle != null ? new VehicleInfoDto(d.Vehicle.PublicId, d.Vehicle.Name) : null,
                 Drivers = d.Drivers
-                    .Select(dr => new ProductDeliveryDto.DriverInfoDto(dr.PublicId, dr.FirstName, dr.LastName))
+                    .Select(dr => new DriverInfoDto(dr.PublicId, dr.FirstName, dr.LastName))
+                    .ToList(),
+                Stops = d.Stops
+                    .Select(s => new ProductDeliveryStopDto
+                    {
+                        Id = s.PublicId,
+                        Note = s.Note,
+                        Brewery = new BreweryInfoDto(s.Brewery.PublicId, s.Brewery.Name),
+                        Products = s.Items
+                            .Select(i => new ProductDeliveryItemDto(i.Product.PublicId, i.Product.Name, i.Amount, i.Note))
+                            .ToList()
+                    })
                     .ToList()
             })
             .FirstOrDefaultAsync(ct);

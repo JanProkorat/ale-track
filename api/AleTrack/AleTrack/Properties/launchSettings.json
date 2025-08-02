@@ -10,7 +10,7 @@
         "JWT_Key": "eb58baa8f90d76949d7f52f88c97bd916484c08f9d5cd6394602963be325c38b",
         "PPS_ENV": "Local"
       },
-      "applicationUrl": "http://localhost:8907"
+      "applicationUrl": "http://localhost:8080"
     }
   }
 }

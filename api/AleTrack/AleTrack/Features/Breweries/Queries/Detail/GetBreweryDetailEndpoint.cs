@@ -2,7 +2,6 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -30,9 +29,9 @@ public sealed class GetBreweryDetailEndpoint(AleTrackDbContext dbContext) : Endp
             .RequireRole(UserRoleType.User)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetBreweryDetailEndpoint)));
-        
+
         DontCatchExceptions();
-        
+
         Summary(s =>
         {
             s.Summary = "Gets brewery detail";
@@ -49,15 +48,28 @@ public sealed class GetBreweryDetailEndpoint(AleTrackDbContext dbContext) : Endp
             .Select(c => new BreweryDto
             {
                 Id = c.PublicId,
-                City = c.City,
-                Country = c.Country,
                 Name = c.Name,
-                Zip = c.Zip,
-                StreetName = c.StreetName,
-                StreetNumber = c.StreetNumber
+                OfficialAddress = new AddressDto
+                {
+                    City = c.OfficialAddress.City,
+                    Country = c.OfficialAddress.Country,
+                    Zip = c.OfficialAddress.Zip,
+                    StreetName = c.OfficialAddress.StreetName,
+                    StreetNumber = c.OfficialAddress.StreetNumber
+                },
+                ContactAddress = c.ContactAddress != null
+                    ? new AddressDto
+                    {
+                        City = c.ContactAddress.City,
+                        Country = c.ContactAddress.Country,
+                        Zip = c.ContactAddress.Zip,
+                        StreetName = c.ContactAddress.StreetName,
+                        StreetNumber = c.ContactAddress.StreetNumber
+                    }
+                    : null
             })
             .FirstOrDefaultAsync(ct);
-        
+
         if (breweries is null)
             ThrowHelper.PublicEntityNotFound(nameof(Brewery), req.Id);
 

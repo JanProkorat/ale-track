@@ -30,5 +30,24 @@ public sealed class CreateDriverDtoValidator : Validator<CreateDriverDto>
         RuleFor(r => r.FirstName).MaximumLength(20).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         RuleFor(r => r.LastName).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
         RuleFor(r => r.LastName).MaximumLength(20).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        RuleFor(r => r.Color).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+        RuleFor(r => r.Color).MaximumLength(20).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        RuleFor(r => r.AvailableDates).ForEach(d => d.SetValidator(new CreateDriverAvailabilityDtoValidator()));
     }
 }
+
+/// <summary>
+/// Provides validation logic for the <see cref="CreateDriverAvailabilityDto"/> object to ensure
+/// that the provided date range data adheres to the required validation rules, including
+/// non-null constraints for date properties.
+/// </summary>
+public sealed class CreateDriverAvailabilityDtoValidator : Validator<CreateDriverAvailabilityDto>
+{
+    public CreateDriverAvailabilityDtoValidator()
+    {
+        RuleFor(r => r.From).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Until).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Until).GreaterThan(r => r.From).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+    }   
+}
+

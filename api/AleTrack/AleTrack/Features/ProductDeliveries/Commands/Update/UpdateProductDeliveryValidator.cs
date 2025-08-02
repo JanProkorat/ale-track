@@ -1,6 +1,4 @@
-using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
-using AleTrack.Features.ProductDeliveries.Utils;
 using FastEndpoints;
 using FluentValidation;
 
@@ -27,48 +25,96 @@ public sealed class UpdateProductDeliveryValidator : Validator<UpdateProductDeli
 }
 
 /// <summary>
-/// Validator for <see cref="UpdateProductDeliveryDto"/> that enforces business rules and validation logic
-/// for updating product delivery data.
+/// Validator for the <see cref="UpdateProductDeliveryDto"/> to ensure that the provided delivery details
+/// comply with all required rules and constraints.
+/// Handles validation of high-level properties, such as BreweryId, DeliveryDate, Note,
+/// and delegates validation of nested product items to <see cref="UpdateProductDeliveryStopDtoValidator"/>.
 /// </summary>
-/// <remarks>
-/// This validator ensures that the properties of the <see cref="UpdateProductDeliveryDto"/> adhere to specific
-/// constraints such as required fields, maximum allowable lengths, and conditional validations.
-/// Rules applied:
-/// - State must not be null.
-/// - DeliveryDate must not be null.
-/// - Note, if provided, must not exceed 200 characters.
-/// </remarks>```c#
-/// <summary>
-/// Validator for <see cref="UpdateProductDeliveryDto"/> that enforces business rules and validation logic
-/// for the data transfer object used in updating product delivery details.
-/// </summary>
-/// <remarks>
-/// This validator ensures that the properties within the data transfer object comply with
-/// specific business rules and data integrity constraints.
-/// Rules applied:
-/// - State must not be null.
-/// - DeliveryDate must not be null.
-/// - Note, if provided, must not exceed a maximum length of 200 characters.
-/// </remarks>
 public sealed class UpdateProductDeliveryDtoValidator : Validator<UpdateProductDeliveryDto>
 {
     public UpdateProductDeliveryDtoValidator()
     {
-        RuleFor(r => r.State).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.DeliveryDate).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Note)
             .MaximumLength(200)
             .When(r => r.Note != null)
             .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         
-        RuleFor(r => r.VehicleId)
-            .NotNull()
-            .When(r => r.State != ProductDeliveryState.InPlanning)
-            .WithErrorCode(ProductDeliveryErrorCodes.VehicleNotSelectedError);
+        RuleFor(r => r.Stops)
+            .ForEach(r => r.SetValidator(new UpdateProductDeliveryStopDtoValidator()))
+            .When(r => r.Stops.Count > 0);
         
-        RuleFor(r => r.DriverIds)
-            .NotEmpty()
-            .When(r => r.State != ProductDeliveryState.InPlanning)
-            .WithErrorCode(ProductDeliveryErrorCodes.DriversNotSelectedError);
+        RuleFor(r => r.Stops)
+            .Custom((stops, context) =>
+            {
+                var duplicateIds = stops
+                    .GroupBy(s => s.BreweryId)
+                    .Where(g => g.Count() > 1 && g.Key != null)
+                    .Select(g => g.Key)
+                    .ToList();
+
+                if (duplicateIds.Count > 0)
+                {
+                    context.AddFailure("Stops", $"Nelze zadat více stejných pivovarů: {string.Join(", ", duplicateIds)}");
+                }
+            });
+    }
+}
+
+/// <summary>
+/// Validator for the <see cref="UpdateProductDeliveryStopDto"/> to ensure that the provided data adheres to defined validation rules and constraints.
+/// Validates critical properties such as the brewery identifier and the collection of delivered products.
+/// Delegates validation of individual product entries to <see cref="UpdateProductDeliveryItemDtoValidator"/>.
+/// </summary>
+public sealed class UpdateProductDeliveryStopDtoValidator : Validator<UpdateProductDeliveryStopDto>
+{
+    public UpdateProductDeliveryStopDtoValidator()
+    {
+        RuleFor(r => r.BreweryId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        
+        RuleFor(r => r.Note)
+            .MaximumLength(200)
+            .When(r => r.Note != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        
+        RuleFor(r => r.Products)
+            .ForEach(r => r.SetValidator(new UpdateProductDeliveryItemDtoValidator()))
+            .When(r => r.Products.Count > 0);
+        
+        RuleFor(r => r.Products)
+            .Custom((products, context) =>
+            {
+                var duplicateIds = products
+                    .GroupBy(s => s.ProductId)
+                    .Where(g => g.Count() > 1 && g.Key != null)
+                    .Select(g => g.Key)
+                    .ToList();
+
+                if (duplicateIds.Count > 0)
+                {
+                    context.AddFailure("Products", $"Nelze zadat více stejných produktů: {string.Join(", ", duplicateIds)}");
+                }
+            });
+    }
+}
+
+/// <summary>
+/// Validator for the <see cref="UpdateProductDeliveryItemDto"/> to ensure that the provided product item details
+/// adhere to the defined validation rules and constraints.
+/// Validates key properties such as ProductId and Quantity, and enforces optional constraints such as
+/// maximum length for the Note field.
+/// </summary>
+public sealed class UpdateProductDeliveryItemDtoValidator : Validator<UpdateProductDeliveryItemDto>
+{
+    public UpdateProductDeliveryItemDtoValidator()
+    {
+        RuleFor(r => r.ProductId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Quantity).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        
+        RuleFor(r => r.Note)
+            .MaximumLength(200)
+            .When(r => r.Note != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
     }
 }

@@ -1,7 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
-using AleTrack.Infrastructure.Persistance;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -46,20 +45,19 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(CreateProductsDeliveryRequest req, CancellationToken ct)
     {
-        var brewery = await GetBreweryAsync(req.Data.BreweryId, ct);
+        
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
-        var deliveryItems = await GetDeliveryItemsAsync(req.Data.Products, ct);
+        var stops = await CreateDeliveryStopsAsync(req.Data.Stops, ct);
 
         var delivery = new ProductDelivery
         {
             Note = req.Data.Note,
-            Brewery = brewery,
             State = ProductDeliveryState.InPlanning,
             Date = req.Data.DeliveryDate,
             Vehicle = vehicle,
             Drivers = drivers,
-            Items = deliveryItems
+            Stops = stops
         };
         
         dbContext.ProductDeliveries.Add(delivery);
@@ -68,13 +66,79 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
         await SendAsync(delivery.PublicId, StatusCodes.Status201Created, cancellation: ct);
     }
 
-    private async Task<Brewery> GetBreweryAsync(Guid breweryId, CancellationToken cancellationToken)
+    private async Task<List<DeliveryStop>> CreateDeliveryStopsAsync(List<CreateProductDeliveryStopDto> requestStops, CancellationToken cancellationToken)
     {
-        var brewery = await dbContext.Breweries.FirstOrDefaultAsync(b => b.PublicId == breweryId, cancellationToken);
-        if (brewery is null)
-            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId);
+        var breweryIds = requestStops
+            .Select(s => s.BreweryId)
+            .ToList();
+        
+        var breweries = await GetBreweriesAsync(breweryIds, cancellationToken);
+        
+        var productIds = requestStops
+            .SelectMany(s => s.Products)
+            .Select(p => p.ProductId)
+            .Distinct()
+            .ToList();
 
-        return brewery!;
+        var products = await GetProductsAsync(productIds, cancellationToken);
+        
+        var deliveryStops = new List<DeliveryStop>();
+
+        foreach (var requestStop in requestStops)
+        {
+            var relatedProducts = products
+                .Where(p => requestStop.Products.Any(dp => dp.ProductId == p.PublicId))
+                .ToList();
+            
+            deliveryStops.Add(new DeliveryStop
+            {
+                Brewery = breweries.First(b => b.PublicId == requestStop.BreweryId),
+                Items = requestStop.Products
+                    .Select(p => new DeliveryItem
+                    {
+                        Product = relatedProducts.First(rp => rp.PublicId == p.ProductId),
+                        Amount = p.Quantity,
+                        Note = p.Note
+                    })
+                    .ToList()
+            });
+        }
+        
+        return deliveryStops;
+    }
+
+    private async Task<List<Product>> GetProductsAsync(List<Guid> productIds, CancellationToken cancellationToken)
+    {
+        var existingProducts = await dbContext.Products
+            .Where(p => productIds.Contains(p.PublicId))
+            .ToListAsync(cancellationToken);
+
+        if (existingProducts.Count == productIds.Count)
+            return existingProducts;
+        
+        var foundProductIds = existingProducts.Select(p => p.PublicId).ToList();
+        var nonExistingProductIds = productIds.Except(foundProductIds).ToList();
+        
+        ThrowHelper.PublicEntitiesNotFound(nameof(Product), nonExistingProductIds);
+
+        return existingProducts;
+    }
+
+    private async Task<List<Brewery>> GetBreweriesAsync(List<Guid> breweryIds, CancellationToken cancellationToken)
+    {
+        var existingBreweries = await dbContext.Breweries
+            .Where(b => breweryIds.Contains(b.PublicId))
+            .ToListAsync(cancellationToken);
+
+        if (existingBreweries.Count == breweryIds.Count)
+            return existingBreweries;
+        
+        var foundBreweryIds = existingBreweries.Select(b => b.PublicId).ToList();
+        var nonExistingBreweryIds = breweryIds.Except(foundBreweryIds).ToList();
+    
+        ThrowHelper.PublicEntitiesNotFound(nameof(Brewery), nonExistingBreweryIds);
+
+        return existingBreweries;
     }
 
     private async Task<Vehicle?> GetVehicleAsync(Guid? vehicleId, CancellationToken cancellationToken)
@@ -109,7 +173,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
         return drivers;
     }
     
-    private async Task<List<DeliveryItem>> GetDeliveryItemsAsync(List<ProductDeliveryItemDto> products, CancellationToken cancellationToken)
+    private async Task<List<DeliveryItem>> GetDeliveryItemsAsync(List<CreateProductDeliveryItemDto> products, CancellationToken cancellationToken)
     {
         if (products.Count == 0)
             return [];
