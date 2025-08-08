@@ -5,7 +5,7 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Features.Products.Commands.Ceate;
+namespace AleTrack.Features.Products.Commands.Create;
 
 /// <summary>
 /// Request to add multiple products to a brewery

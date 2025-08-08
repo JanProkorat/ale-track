@@ -3,7 +3,7 @@ using AleTrack.Common.Utils;
 using FastEndpoints;
 using FluentValidation;
 
-namespace AleTrack.Features.Products.Commands.Ceate;
+namespace AleTrack.Features.Products.Commands.Create;
 
 /// <summary>
 /// Validator for the <see cref="CreateProductsRequest"/> class.

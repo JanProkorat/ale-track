@@ -1,6 +1,6 @@
 using AleTrack.Common.Enums;
 
-namespace AleTrack.Features.Products.Commands.Ceate;
+namespace AleTrack.Features.Products.Commands.Create;
 
 /// <summary>
 /// Represents the data transfer object for creating multiple products.
