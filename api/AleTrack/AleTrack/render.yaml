@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     branch: dev
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./AleTrack/Dockerfile
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Development
