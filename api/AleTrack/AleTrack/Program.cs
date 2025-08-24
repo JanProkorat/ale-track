@@ -31,12 +31,23 @@ try
     
     Log.Information("Starting web host AleTrack");
     
+    
     var services = builder.Services;
 
     var assembly = Assembly.GetExecutingAssembly();
     
     builder.Host.UseSerilog((context, config) => config
         .ReadFrom.Configuration(context.Configuration));
+    
+    // DEBUG informace
+    Log.Information($"Current Environment: {builder.Environment.EnvironmentName}");
+    Log.Information($"ContentRoot: {builder.Environment.ContentRootPath}");
+
+// Vypište všechny config sources
+    foreach (var source in configuration.Sources)
+    {
+        Log.Information($"Config source: {source.GetType().Name}");
+    }
     
     var connectionString = configuration.GetConnectionString("AleTrack");
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -84,6 +95,10 @@ try
         options.EnableDetailedErrors();
         options.EnableSensitiveDataLogging();
     });
+
+    // Health checks registration
+    services.AddHealthChecks()
+        .AddDbContextCheck<AleTrackDbContext>("Database");
     
     // Add JWT Service
     services.AddScoped<IJwtService, JwtService>();
@@ -108,6 +123,10 @@ try
     
     var application = builder.Build();
     Log.Information("Successfully building up application");
+
+    // Map health checks endpoints before authentication/authorization middlewares
+    application.MapHealthChecks("/health/live");
+    application.MapHealthChecks("/health/ready");
     
     if (application.Environment.IsProduction())
         application.UseHsts();
