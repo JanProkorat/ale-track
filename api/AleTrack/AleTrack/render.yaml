@@ -4,9 +4,11 @@ services:
     runtime: docker
     plan: free
     branch: dev
-    dockerfilePath: ./AleTrack/Dockerfile
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Development
       - key: ASPNETCORE_URLS
         value: http://*:$PORT
+      - key: ConnectionStrings__AleTrack
+        value: Data Source=Infrastructure/Persistence/aletrack.db
