@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Configuration;
 using System.Reflection;
 using System.Text.Json;
@@ -26,6 +27,14 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    Console.WriteLine($"Raw ENV var: {Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}");
+    Console.WriteLine($"All ENV vars containing 'ENV': ");
+    foreach (DictionaryEntry env in Environment.GetEnvironmentVariables())
+    {
+        if (env.Key.ToString().Contains("ENV"))
+            Console.WriteLine($"  {env.Key} = {env.Value}");
+    }
+    
     var builder = WebApplication.CreateBuilder(args);
     var configuration = builder.Configuration;
     
@@ -38,16 +47,6 @@ try
     
     builder.Host.UseSerilog((context, config) => config
         .ReadFrom.Configuration(context.Configuration));
-    
-    // DEBUG informace
-    Log.Information($"Current Environment: {builder.Environment.EnvironmentName}");
-    Log.Information($"ContentRoot: {builder.Environment.ContentRootPath}");
-
-// Vypište všechny config sources
-    foreach (var source in configuration.Sources)
-    {
-        Log.Information($"Config source: {source.GetType().Name}");
-    }
     
     var connectionString = configuration.GetConnectionString("AleTrack");
     if (string.IsNullOrWhiteSpace(connectionString))
