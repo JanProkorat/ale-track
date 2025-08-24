@@ -39,16 +39,6 @@ try
     builder.Host.UseSerilog((context, config) => config
         .ReadFrom.Configuration(context.Configuration));
     
-    // DEBUG informace
-    Log.Information($"Current Environment: {builder.Environment.EnvironmentName}");
-    Log.Information($"ContentRoot: {builder.Environment.ContentRootPath}");
-
-    // Vypište všechny config sources
-    foreach (var source in configuration.Sources)
-    {
-        Log.Information($"Config source: {source.GetType().Name}");
-    }
-    
     var connectionString = configuration.GetConnectionString("AleTrack");
     if (string.IsNullOrWhiteSpace(connectionString))
         throw new ConfigurationErrorsException($"DB Connection string as configured property named 'ConnectionStrings:{connectionString}' is missing");
