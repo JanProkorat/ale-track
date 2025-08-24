@@ -26,6 +26,6 @@ COPY --from=build /app/publish .
 RUN ls -la /app/*.json
 
 # Expose port (Render will set the PORT environment variable)
-EXPOSE $PORT
+EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "AleTrack.dll"]
