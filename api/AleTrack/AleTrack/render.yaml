@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: aletrack-api-dev
+    runtime: docker
+    plan: free
+    branch: dev
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Development
+      - key: ASPNETCORE_URLS
+        value: http://*:$PORT
