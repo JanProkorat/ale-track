@@ -57,7 +57,7 @@ public sealed class UpdateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
 
         inventoryItem!.Product = product;
         inventoryItem.Name = req.Data.Name;
-        inventoryItem.Amount = req.Data.Amount;
+        inventoryItem.Quantity = req.Data.Quantity;
         inventoryItem.Note = req.Data.Note;
 
         await dbContext.SaveChangesAsync(ct);

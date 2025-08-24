@@ -46,8 +46,9 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
             .Select(o => new OrderListItemDto
             {
                 State = o.State,
-                ClientId = o.Client.PublicId,
-                DeliveryDate = o.DeliveryDate
+                Id = o.PublicId,
+                DeliveryDate = o.DeliveryDate,
+                ClientName = o.Client.Name
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

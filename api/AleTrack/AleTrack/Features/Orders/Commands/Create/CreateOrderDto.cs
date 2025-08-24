@@ -16,7 +16,7 @@ public sealed record CreateOrderDto
     /// <summary>
     /// Date when order should be delivered
     /// </summary>
-    public DateTime? DeliveryDate { get; set; }
+    public DateOnly? DeliveryDate { get; set; }
 
     /// <summary>
     /// List of items included in the order

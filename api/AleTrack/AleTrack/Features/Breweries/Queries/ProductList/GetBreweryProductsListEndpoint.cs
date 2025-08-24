@@ -5,7 +5,22 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Features.Products.Queries.List;
+namespace AleTrack.Features.Breweries.Queries.ProductList;
+
+/// <summary>
+/// Request model for retrieving a filtered list of products.
+/// </summary>
+/// <remarks>
+/// This request is used to pass filtering and sorting parameters for querying the list of products.
+/// It inherits properties from the <see cref="FilterableRequest"/> class to support query parameter functionality.
+/// </remarks>
+public record GetProductsListRequest : FilterableRequest
+{
+    /// <summary>
+    /// ID of related brewery.
+    /// </summary>
+    public Guid Id { get; set; }
+}
 
 /// <summary>
 /// Endpoint for retrieving a filtered list of Products.
@@ -17,30 +32,31 @@ namespace AleTrack.Features.Products.Queries.List;
 /// <example>
 /// The endpoint responds with a list of `BreweryListItemDto` objects, representing each brewery's identifier and name.
 /// </example>
-public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpoint<FilterableRequest, List<ProductListItemDto>>
+public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) : Endpoint<GetProductsListRequest, List<BreweryProductListItemDto>>
 {
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("products");
+        Get("breweries/{id}/products");
         Description(b => b
             .RequireRole(UserRoleType.User)
-            .WithName(nameof(GetProductsListEndpoint)));
+            .WithName(nameof(GetBreweryProductsListEndpoint)));
         
         DontCatchExceptions();
         
         Summary(s =>
         {
             s.Summary = "Gets filtered products list";
-            s.Responses[StatusCodes.Status200OK] = "List of products";
+            s.Responses[StatusCodes.Status200OK] = "List of products from given brewery";
         });
     }
     
     /// <inheritdoc />
-    public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
+    public override async Task HandleAsync(GetProductsListRequest req, CancellationToken ct)
     {
         var data = await dbContext.Products
-            .Select(c => new ProductListItemDto
+            .Where(p => p.Brewery.PublicId == req.Id)
+            .Select(c => new BreweryProductListItemDto
             {
                 Id = c.PublicId,
                 Name = c.Name,

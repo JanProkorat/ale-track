@@ -47,18 +47,26 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         var order = await dbContext.Orders
             .Where(o => o.PublicId == req.Id)
-            .Include(o => o.Client)
             .Select(o => new OrderDto
             {
                 Id = o.PublicId,
                 DeliveryDate = o.DeliveryDate,
                 State = o.State,
                 CreatedDate = o.CreatedDate,
-                Client = new ClientInfo
+                Client = new ClientInfoDto
                 {
                     Id = o.Client.PublicId,
                     Name = o.Client.Name
-                }
+                },
+                OrderItems = o.OrderItems
+                    .Select(i => new OrderItemDto
+                    {
+                        Id = i.PublicId,
+                        Quantity = i.Quantity,
+                        ProductId = i.Product.PublicId,
+                        ProductName = i.Product.Name,
+                    })
+                    .ToList()
             })
             .FirstOrDefaultAsync(ct);
         

@@ -51,7 +51,7 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
                     Id = i.PublicId,
                     ProductId = i.Product != null ? i.Product.PublicId : null,
                     Name = i.Product != null ? i.Product.Name : i.Name,
-                    Amount = i.Amount,
+                    Quantity = i.Quantity,
                     Kind = i.Product != null ? i.Product.Kind : null,
                     Type = i.Product != null ? i.Product.Type : null,
                     AlcoholPercentage = i.Product != null ? i.Product.AlcoholPercentage : null,

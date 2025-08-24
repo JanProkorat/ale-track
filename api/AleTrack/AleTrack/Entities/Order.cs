@@ -30,7 +30,7 @@ public sealed class Order : PublicEntity
     /// Can be null only in state <see cref="OrderState.New"/>
     /// </summary>
     [Column("delivery_date")]
-    public DateTime? DeliveryDate { get; set; }
+    public DateOnly? DeliveryDate { get; set; }
     
     /// <summary>
     /// Date when the order was created
@@ -48,5 +48,4 @@ public sealed class Order : PublicEntity
     /// Related client
     /// </summary>
     public Client Client { get; set; } = null!;
-
 }

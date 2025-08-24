@@ -131,14 +131,14 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
             var relatedExistingItemForProduct = existingInventoryItemsForProducts.FirstOrDefault(i => i.Product.Id == item.Product.Id);
             if (relatedExistingItemForProduct is not null)
             {
-                relatedExistingItemForProduct.Amount += item.Amount;
+                relatedExistingItemForProduct.Quantity += item.Quantity;
                 relatedExistingItemForProduct.Note = item.Note;
             }
             else
             {
                 relatedExistingItemForProduct = new InventoryItem
                 {
-                    Amount = item.Amount,
+                    Quantity = item.Quantity,
                     Note = item.Note,
                     Product = item.Product,
                 };
@@ -166,7 +166,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
                 .Select(p => new DeliveryItem
                 {
                     Product = products.First(pr => pr.PublicId == p.ProductId),
-                    Amount = p.Quantity,
+                    Quantity = p.Quantity,
                     Note = p.Note
                 })
                 .ToList();
@@ -183,7 +183,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
                     .Select(p => new DeliveryItem
                     {
                         Product = products.First(pr => pr.PublicId == p.ProductId),
-                        Amount = p.Quantity,
+                        Quantity = p.Quantity,
                         Note = p.Note
                     })
                     .ToList()

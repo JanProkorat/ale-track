@@ -65,7 +65,7 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
                         Note = s.Note,
                         Brewery = new BreweryInfoDto(s.Brewery.PublicId, s.Brewery.Name),
                         Products = s.Items
-                            .Select(i => new ProductDeliveryItemDto(i.Product.PublicId, i.Product.Name, i.Amount, i.Note))
+                            .Select(i => new ProductDeliveryItemDto(i.Product.PublicId, i.Product.Name, i.Quantity, i.Note))
                             .ToList()
                     })
                     .ToList()

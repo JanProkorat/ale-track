@@ -26,7 +26,7 @@ public sealed record InventoryItemListItemDto
     /// <summary>
     /// Amount of products currently in inventory
     /// </summary>
-    public int Amount { get; set; }
+    public int Quantity { get; set; }
     
     /// <summary>
     /// Kind of the product associated with the inventory item

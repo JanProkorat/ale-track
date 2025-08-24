@@ -97,7 +97,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
                     .Select(p => new DeliveryItem
                     {
                         Product = relatedProducts.First(rp => rp.PublicId == p.ProductId),
-                        Amount = p.Quantity,
+                        Quantity = p.Quantity,
                         Note = p.Note
                     })
                     .ToList()
@@ -203,7 +203,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
             deliveryItems.Add(new DeliveryItem
             {
                 Product = relatedProduct,
-                Amount = requestProduct.Quantity,
+                Quantity = requestProduct.Quantity,
                 Note = requestProduct.Note
             });
         }

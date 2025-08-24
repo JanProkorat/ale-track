@@ -35,10 +35,32 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
 {
     public UpdateOrderDtoValidator()
     {
-        
+        RuleFor(r => r.ClientId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+
         RuleFor(r => r.DeliveryDate)
-            .GreaterThan(DateTime.UtcNow)
+            .GreaterThan(DateOnly.FromDateTime(DateTime.UtcNow))
             .When(d => d.DeliveryDate != null)
             .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        
+        RuleFor(r => r.OrderItems)
+            .ForEach(i => i.SetValidator(new UpdateOrderItemDtoValidator()))
+            .When(i => i.OrderItems.Count > 0);
+    }
+}
+
+/// <summary>
+/// Validates the properties of the UpdateOrderItemDto object to ensure they meet the required criteria.
+/// </summary>
+/// <remarks>
+/// This validator checks the following rules:
+/// - The ProductId must not be null. A specific error code is generated if this validation fails.
+/// - The Quantity must be greater than 0. A specific error code is generated if this validation fails.
+/// </remarks>
+public sealed class UpdateOrderItemDtoValidator : Validator<UpdateOrderItemDto>
+{
+    public UpdateOrderItemDtoValidator()
+    {
+        RuleFor(r => r.ProductId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
     }
 }

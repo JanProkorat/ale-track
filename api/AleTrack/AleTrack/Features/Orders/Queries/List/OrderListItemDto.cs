@@ -8,10 +8,11 @@ namespace AleTrack.Features.Orders.Queries.List;
 /// </summary>
 public sealed record OrderListItemDto
 {
+    
     /// <summary>
-    /// Public ID of related client
+    /// Public ID of the order
     /// </summary>
-    public Guid ClientId { get; set; }
+    public Guid Id { get; set; }
     
     /// <summary>
     /// State of the order
@@ -21,5 +22,10 @@ public sealed record OrderListItemDto
     /// <summary>
     /// When the order should be delivered
     /// </summary>
-    public DateTime? DeliveryDate { get; set; }
+    public DateOnly? DeliveryDate { get; set; }
+    
+    /// <summary>
+    /// Name of the related client
+    /// </summary>
+    public string ClientName { get; set; } = null!;
 }

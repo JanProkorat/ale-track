@@ -53,7 +53,7 @@ public sealed class GetInventoryItemDetailEndpoint(AleTrackDbContext dbContext) 
                 Id = i.PublicId,
                 ProductId = i.Product != null ? i.Product.PublicId : null,
                 Name = i.Product != null ? i.Product.Name : i.Name,
-                Amount = i.Amount,
+                Quantity = i.Quantity,
                 Note = i.Note
             })
             .FirstOrDefaultAsync(ct);

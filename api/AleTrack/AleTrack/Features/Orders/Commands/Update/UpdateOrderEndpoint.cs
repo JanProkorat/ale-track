@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -57,14 +58,56 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateOrderRequest req, CancellationToken ct)
     {
-        var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+        var order = await dbContext.Orders
+            .Where(o => o.PublicId == req.Id)
+            .Include(o => o.Client)
+            .Include(o => o.OrderItems)
+            .FirstOrDefaultAsync(ct);
+        
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
-        order!.DeliveryDate = req.Data.DeliveryDate;
+        if (req.Data.ClientId != order!.Client.PublicId)
+        {
+            var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.Data.ClientId, ct);
+            if (client == null)
+                ThrowHelper.PublicEntityNotFound(nameof(Client), req.Data.ClientId);
+            
+            order.Client = client!;
+        }
+        
+        var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
+
+        order.DeliveryDate = req.Data.DeliveryDate;
         order.State = req.Data.State;
+        
+        order.OrderItems.Clear();
+        
+        foreach (var orderItem in req.Data.OrderItems)
+        {
+            var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
+            if (relatedProduct is null)
+                ThrowHelper.PublicEntityNotFound(nameof(Product), orderItem.ProductId);
+
+            order.OrderItems.Add(new OrderItem
+            {
+                Product = relatedProduct!,
+                Quantity = orderItem.Quantity
+            });
+        }
         
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);
+    }
+    
+    private async Task<List<Product>> GetExistingProductsAsync(List<UpdateOrderItemDto> orderItems, CancellationToken ct)
+    {
+        var productIds = orderItems
+            .Select(i => i.ProductId)
+            .ToList();
+
+        return await dbContext.Products
+            .Where(p => productIds.Contains(p.PublicId))
+            .ToListAsync(ct);
     }
 }

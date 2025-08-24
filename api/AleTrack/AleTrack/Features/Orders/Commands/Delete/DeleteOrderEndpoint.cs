@@ -51,7 +51,7 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         if (order == null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
-        order!.State = OrderState.Cancelled;
+        dbContext.Orders.Remove(order!);
         
         await dbContext.SaveChangesAsync(ct);
         await SendAsync(null, StatusCodes.Status202Accepted, ct);

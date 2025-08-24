@@ -29,8 +29,8 @@ public sealed class OrderItem : PublicEntity
     /// <summary>
     /// Amount ordered from client
     /// </summary>
-    [Column("amount")]
-    public int Amount { get; set; }
+    [Column("quantity")]
+    public int Quantity { get; set; }
     
     /// <summary>
     /// The parent <see cref="Order"/> related to this item.

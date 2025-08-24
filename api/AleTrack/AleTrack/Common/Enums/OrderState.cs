@@ -28,7 +28,7 @@ public enum OrderState
     Finished = 3,
 
     /// <summary>
-    /// Indicates that the order has been cancelled, and no further actions will take place with this order.
+    /// Indicates that the order has been canceled, and no further actions will take place with this order.
     /// </summary>
     Cancelled = 4
 }

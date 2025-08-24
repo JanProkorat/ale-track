@@ -26,8 +26,8 @@ public sealed class DeliveryItem : BaseEntity
     /// <summary>
     /// Amount of items to be delivered
     /// </summary>
-    [Column("amount")]
-    public int Amount { get; set; }
+    [Column("quantity")]
+    public int Quantity { get; set; }
     
     /// <summary>
     /// Description of the product to be delivered

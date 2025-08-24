@@ -25,8 +25,8 @@ public sealed class InventoryItem : PublicEntity
     /// <summary>
     /// Amount of products currently in inventory
     /// </summary>
-    [Column("amount")]
-    public int Amount { get; set; }
+    [Column("quantity")]
+    public int Quantity { get; set; }
     
     /// <summary>
     /// Related <see cref="Product"/>

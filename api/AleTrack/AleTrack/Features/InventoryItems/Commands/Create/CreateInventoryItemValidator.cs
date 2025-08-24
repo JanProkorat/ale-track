@@ -42,8 +42,8 @@ public sealed class CreateInventoryItemDtoValidator : Validator<CreateInventoryI
 {
     public CreateInventoryItemDtoValidator()
     {
-        RuleFor(r => r.Amount).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.Amount).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        RuleFor(r => r.Quantity).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
 
         RuleFor(r => r.ProductId)
             .Null()

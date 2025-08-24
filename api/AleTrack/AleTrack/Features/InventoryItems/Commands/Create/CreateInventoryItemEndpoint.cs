@@ -71,7 +71,7 @@ public sealed class CreateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
             Product = product,
             Note = req.Data.Note,
             Name = req.Data.Name,
-            Amount = req.Data.Amount
+            Quantity = req.Data.Quantity
         };
         
         dbContext.InventoryItems.Add(inventoryItem);

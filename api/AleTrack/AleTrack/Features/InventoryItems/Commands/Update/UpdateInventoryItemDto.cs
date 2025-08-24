@@ -22,7 +22,7 @@ public sealed record UpdateInventoryItemDto
     /// <summary>
     /// Amount of the item
     /// </summary>
-    public int Amount { get; set; }
+    public int Quantity { get; set; }
     
     /// <summary>
     /// Note to the item

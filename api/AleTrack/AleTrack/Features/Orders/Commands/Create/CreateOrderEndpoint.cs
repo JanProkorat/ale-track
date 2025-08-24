@@ -71,7 +71,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             order.OrderItems.Add(new OrderItem
             {
                 Product = relatedProduct!,
-                Amount = orderItem.Quantity
+                Quantity = orderItem.Quantity
             });
         }
         
