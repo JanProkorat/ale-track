@@ -84,12 +84,10 @@ try
         
         options.EnableDetailedErrors();
         options.EnableSensitiveDataLogging();
+        options.ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     });
 
-    // Health checks registration
-    services.AddHealthChecks()
-        .AddDbContextCheck<AleTrackDbContext>("Database");
-    
     // Add JWT Service
     services.AddScoped<IJwtService, JwtService>();
     services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -112,12 +110,16 @@ try
     });
     
     var application = builder.Build();
+
+    // Apply database migrations
+    using (var scope = application.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AleTrackDbContext>();
+        await db.Database.MigrateAsync();
+    }
+    
     Log.Information("Successfully building up application");
 
-    // Map health checks endpoints before authentication/authorization middlewares
-    application.MapHealthChecks("/health/live");
-    application.MapHealthChecks("/health/ready");
-    
     if (application.Environment.IsProduction())
         application.UseHsts();
 
