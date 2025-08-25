@@ -11,7 +11,7 @@ services:
       - key: ASPNETCORE_URLS
         value: http://*:$PORT
       - key: ConnectionStrings__AleTrack
-        value: Data Source=Infrastructure/Persistence/aletrack.db
+        value: Data Source=/data/aletrack.db
         
     disk:
       name: aletrack-data
