@@ -39,7 +39,7 @@ public sealed class User : PublicEntity
     /// User password
     /// </summary>
     [Required]
-    [MaxLength(50)]
+    [MaxLength(80)]
     [Column("password")]
     public string Password { get; set; } = null!;
     

@@ -1,14 +1,24 @@
 ﻿{
   "profiles": {
-    "AleTrack.Application": {
+    "Local": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "JWT_Issuer": "AleTrackAPI",
-        "JWT_Key": "eb58baa8f90d76949d7f52f88c97bd916484c08f9d5cd6394602963be325c38b",
-        "PPS_ENV": "Local"
+        "JWT_Key": "eb58baa8f90d76949d7f52f88c97bd916484c08f9d5cd6394602963be325c38b"
+      },
+      "applicationUrl": "http://localhost:8080"
+    },
+    "Dev": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "JWT_Issuer": "AleTrackAPI",
+        "JWT_Key": "eb58baa8f90d76949d7f52f88c97bd916484c08f9d5cd6394602963be325c38b"
       },
       "applicationUrl": "http://localhost:8080"
     }

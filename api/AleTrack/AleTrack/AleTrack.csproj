@@ -8,7 +8,7 @@
 
     <ItemGroup>
         <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
-        <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
+        <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
         <PackageReference Include="FastEndpoints" Version="6.0.0" />
         <PackageReference Include="FastEndpoints.Security" Version="6.0.0" />
         <PackageReference Include="FastEndpoints.Swagger" Version="6.0.0" />
@@ -16,12 +16,13 @@
         <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
         <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.4">
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.19">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="8.0.19" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
         <PackageReference Include="NSwag.MSBuild" Version="14.4.0">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -32,6 +33,10 @@
         <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0"/>
         <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Infrastructure\Persistence\Migrations\" />
     </ItemGroup>
 
 </Project>
