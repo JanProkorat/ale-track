@@ -5,8 +5,6 @@ using System.Text.Json.Serialization;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Infrastructure.Converters;
-using AleTrack.Infrastructure.Interceptors.PublicEntity;
-using AleTrack.Infrastructure.Interceptors.SaveChangesCombine;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -14,7 +12,6 @@ using FluentValidation;
 using Microsoft.AspNetCore.Http.Json;
 using Serilog;
 using Serilog.Events;
-using Serilog.Extensions.Logging;
 using Serilog.Sinks.SystemConsole.Themes;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,7 +28,6 @@ try
     
     Log.Information("Starting web host AleTrack");
     
-    
     var services = builder.Services;
 
     var assembly = Assembly.GetExecutingAssembly();
@@ -39,9 +35,7 @@ try
     builder.Host.UseSerilog((context, config) => config
         .ReadFrom.Configuration(context.Configuration));
     
-    var connectionString = configuration.GetConnectionString("AleTrack");
-    if (string.IsNullOrWhiteSpace(connectionString))
-        throw new ConfigurationErrorsException($"DB Connection string as configured property named 'ConnectionStrings:{connectionString}' is missing");
+    var connectionString = configuration.GetConnectionString(builder.Environment);
     
     services.Configure<JsonOptions>(options =>
     {
@@ -74,20 +68,12 @@ try
         })
         .AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton);
 
-    services.AddDbContext<AleTrackDbContext>(options =>
-    {
-        options
-            .UseLoggerFactory(new SerilogLoggerFactory())
-            .UseSqlite(connectionString)
-            .UseSnakeCaseNamingConvention()
-            .UseCombineOf(new PublicEntityInterceptor());
-        
-        options.EnableDetailedErrors();
-        options.EnableSensitiveDataLogging();
-        options.ConfigureWarnings(w =>
-            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
-    });
+    services.CreateDbContext(connectionString);
 
+    // Health checks registration
+    services.AddHealthChecks()
+        .AddDbContextCheck<AleTrackDbContext>("Database");
+    
     // Add JWT Service
     services.AddScoped<IJwtService, JwtService>();
     services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -110,16 +96,15 @@ try
     });
     
     var application = builder.Build();
-
-    // Apply database migrations
-    using (var scope = application.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<AleTrackDbContext>();
-        await db.Database.MigrateAsync();
-    }
     
     Log.Information("Successfully building up application");
 
+    await application.ApplyMigrationsAsync();
+    
+    // Map health checks endpoints before authentication/authorization middlewares
+    application.MapHealthChecks("/health/live");
+    application.MapHealthChecks("/health/ready");
+    
     if (application.Environment.IsProduction())
         application.UseHsts();
 
