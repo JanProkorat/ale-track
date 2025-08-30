@@ -88,6 +88,11 @@ try
     {
         options.AddPolicy("AllowFrontend", policy =>
         {
+            policy.WithOrigins("https://ale-track.netlify.app")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+            
             policy.WithOrigins("http://localhost:3039")
                 .AllowAnyHeader()
                 .AllowAnyMethod()
