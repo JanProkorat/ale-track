@@ -61,24 +61,39 @@ public enum ProductType
     /// Limonáda
     /// </summary>
     Lemonade = 12,
-    
+
     /// <summary>
     /// Merch - sklo, slunecniky, trika, kalendare atd.
     /// </summary>
     Merchandise = 13,
-    
+
     /// <summary>
     /// Světlý premium ležák
     /// </summary>
     PaleLagerPremium = 14,
-    
+
     /// <summary>
     /// Světlé silné
     /// </summary>
     PaleStrong = 15,
-    
+
     /// <summary>
     /// Tmave silné
     /// </summary>
     DarkStrong = 16,
+
+    /// <summary>
+    /// Kroužkovaný ležák
+    /// </summary>
+    YeastLager = 17,
+
+    /// <summary>
+    /// Řezaný nefiltrovaný ležák
+    /// </summary>
+    UnfilteredBlendedLager = 18,
+    
+    /// <summary>
+    /// Sváteční ležák
+    /// </summary>
+    FestiveLager = 19
 }

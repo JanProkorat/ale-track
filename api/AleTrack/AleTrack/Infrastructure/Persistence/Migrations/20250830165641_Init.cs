@@ -33,7 +33,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_breweries", x => x.id);
+                    table.PrimaryKey("PK_breweries", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -57,7 +57,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_clients", x => x.id);
+                    table.PrimaryKey("PK_clients", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -74,7 +74,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_drivers", x => x.id);
+                    table.PrimaryKey("PK_drivers", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -91,7 +91,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_users", x => x.id);
+                    table.PrimaryKey("PK_users", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -106,7 +106,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_vehicles", x => x.id);
+                    table.PrimaryKey("PK_vehicles", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -124,15 +124,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     plato_degree = table.Column<float>(type: "real", nullable: true),
                     package_size = table.Column<double>(type: "double precision", nullable: true),
                     price_with_vat = table.Column<decimal>(type: "numeric", nullable: false),
+                    price_without_vat = table.Column<decimal>(type: "numeric", nullable: true),
                     price_for_unit_with_vat = table.Column<decimal>(type: "numeric", nullable: false),
                     price_for_unit_without_vat = table.Column<decimal>(type: "numeric", nullable: false),
                     public_id = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_products", x => x.id);
+                    table.PrimaryKey("PK_products", x => x.id);
                     table.ForeignKey(
-                        name: "fk_products_breweries_brewery_id",
+                        name: "FK_products_breweries_brewery_id",
                         column: x => x.brewery_id,
                         principalTable: "breweries",
                         principalColumn: "id",
@@ -153,9 +154,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_orders", x => x.id);
+                    table.PrimaryKey("PK_orders", x => x.id);
                     table.ForeignKey(
-                        name: "fk_orders_clients_client_id",
+                        name: "FK_orders_clients_client_id",
                         column: x => x.client_id,
                         principalTable: "clients",
                         principalColumn: "id",
@@ -174,9 +175,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_driver_availabilities", x => x.id);
+                    table.PrimaryKey("PK_driver_availabilities", x => x.id);
                     table.ForeignKey(
-                        name: "fk_driver_availabilities_drivers_driver_id",
+                        name: "FK_driver_availabilities_drivers_driver_id",
                         column: x => x.driver_id,
                         principalTable: "drivers",
                         principalColumn: "id",
@@ -194,9 +195,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_user_roles", x => x.id);
+                    table.PrimaryKey("PK_user_roles", x => x.id);
                     table.ForeignKey(
-                        name: "fk_user_roles_users_user_id",
+                        name: "FK_user_roles_users_user_id",
                         column: x => x.user_id,
                         principalTable: "users",
                         principalColumn: "id",
@@ -217,9 +218,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_product_deliveries", x => x.id);
+                    table.PrimaryKey("PK_product_deliveries", x => x.id);
                     table.ForeignKey(
-                        name: "fk_product_deliveries_vehicles_vehicle_id",
+                        name: "FK_product_deliveries_vehicles_vehicle_id",
                         column: x => x.vehicle_id,
                         principalTable: "vehicles",
                         principalColumn: "id",
@@ -240,9 +241,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_inventory_items", x => x.id);
+                    table.PrimaryKey("PK_inventory_items", x => x.id);
                     table.ForeignKey(
-                        name: "fk_inventory_items_products_product_id",
+                        name: "FK_inventory_items_products_product_id",
                         column: x => x.product_id,
                         principalTable: "products",
                         principalColumn: "id");
@@ -261,15 +262,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_order_items", x => x.id);
+                    table.PrimaryKey("PK_order_items", x => x.id);
                     table.ForeignKey(
-                        name: "fk_order_items_orders_order_id",
+                        name: "FK_order_items_orders_order_id",
                         column: x => x.order_id,
                         principalTable: "orders",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_order_items_products_product_id",
+                        name: "FK_order_items_products_product_id",
                         column: x => x.product_id,
                         principalTable: "products",
                         principalColumn: "id",
@@ -289,15 +290,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_delivery_stops", x => x.id);
+                    table.PrimaryKey("PK_delivery_stops", x => x.id);
                     table.ForeignKey(
-                        name: "fk_delivery_stops_breweries_brewery_id",
+                        name: "FK_delivery_stops_breweries_brewery_id",
                         column: x => x.brewery_id,
                         principalTable: "breweries",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "fk_delivery_stops_product_deliveries_delivery_id",
+                        name: "FK_delivery_stops_product_deliveries_delivery_id",
                         column: x => x.delivery_id,
                         principalTable: "product_deliveries",
                         principalColumn: "id",
@@ -313,7 +314,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_product_delivery_drivers", x => new { x.product_delivery_id, x.driver_id });
+                    table.PrimaryKey("PK_product_delivery_drivers", x => new { x.product_delivery_id, x.driver_id });
                     table.ForeignKey(
                         name: "FK_product_delivery_drivers_drivers_driver_id",
                         column: x => x.driver_id,
@@ -341,15 +342,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_delivery_items", x => x.id);
+                    table.PrimaryKey("PK_delivery_items", x => x.id);
                     table.ForeignKey(
-                        name: "fk_delivery_items_delivery_stops_delivery_stop_id",
+                        name: "FK_delivery_items_delivery_stops_delivery_stop_id",
                         column: x => x.delivery_stop_id,
                         principalTable: "delivery_stops",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "fk_delivery_items_products_product_id",
+                        name: "FK_delivery_items_products_product_id",
                         column: x => x.product_id,
                         principalTable: "products",
                         principalColumn: "id",
@@ -367,138 +368,138 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 values: new object[] { 1L, 0, 1L });
 
             migrationBuilder.CreateIndex(
-                name: "ix_breweries_public_id",
+                name: "IX_breweries_public_id",
                 table: "breweries",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_clients_public_id",
+                name: "IX_clients_public_id",
                 table: "clients",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_delivery_items_delivery_stop_id",
+                name: "IX_delivery_items_delivery_stop_id",
                 table: "delivery_items",
                 column: "delivery_stop_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_delivery_items_product_id",
+                name: "IX_delivery_items_product_id",
                 table: "delivery_items",
                 column: "product_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_delivery_stops_brewery_id",
+                name: "IX_delivery_stops_brewery_id",
                 table: "delivery_stops",
                 column: "brewery_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_delivery_stops_delivery_id",
+                name: "IX_delivery_stops_delivery_id",
                 table: "delivery_stops",
                 column: "delivery_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_delivery_stops_public_id",
+                name: "IX_delivery_stops_public_id",
                 table: "delivery_stops",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_driver_availabilities_driver_id",
+                name: "IX_driver_availabilities_driver_id",
                 table: "driver_availabilities",
                 column: "driver_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_drivers_public_id",
+                name: "IX_drivers_public_id",
                 table: "drivers",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_inventory_items_product_id",
+                name: "IX_inventory_items_product_id",
                 table: "inventory_items",
                 column: "product_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_inventory_items_public_id",
+                name: "IX_inventory_items_public_id",
                 table: "inventory_items",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_order_items_order_id",
+                name: "IX_order_items_order_id",
                 table: "order_items",
                 column: "order_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_order_items_product_id",
+                name: "IX_order_items_product_id",
                 table: "order_items",
                 column: "product_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_order_items_public_id",
+                name: "IX_order_items_public_id",
                 table: "order_items",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_orders_client_id",
+                name: "IX_orders_client_id",
                 table: "orders",
                 column: "client_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_orders_public_id",
+                name: "IX_orders_public_id",
                 table: "orders",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_product_deliveries_public_id",
+                name: "IX_product_deliveries_public_id",
                 table: "product_deliveries",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_product_deliveries_vehicle_id",
+                name: "IX_product_deliveries_vehicle_id",
                 table: "product_deliveries",
                 column: "vehicle_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_product_delivery_drivers_driver_id",
+                name: "IX_product_delivery_drivers_driver_id",
                 table: "product_delivery_drivers",
                 column: "driver_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_products_brewery_id",
+                name: "IX_products_brewery_id",
                 table: "products",
                 column: "brewery_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_products_public_id",
+                name: "IX_products_public_id",
                 table: "products",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_user_roles_user_id",
+                name: "IX_user_roles_user_id",
                 table: "user_roles",
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
-                name: "ix_users_public_id",
+                name: "IX_users_public_id",
                 table: "users",
                 column: "public_id",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_users_user_name",
+                name: "IX_users_user_name",
                 table: "users",
                 column: "user_name",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_vehicles_public_id",
+                name: "IX_vehicles_public_id",
                 table: "vehicles",
                 column: "public_id",
                 unique: true);

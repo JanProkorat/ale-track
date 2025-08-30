@@ -20,6 +20,7 @@ public sealed class InventoryItem : PublicEntity
     /// Name of the item - not null only if it is not related to product
     /// </summary>
     [MaxLength(50)]
+    [Column("name")]
     public string? Name { get; set; }
     
     /// <summary>

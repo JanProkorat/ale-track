@@ -64,11 +64,17 @@ public sealed class Product : PublicEntity
     public double? PackageSize { get; set; }
     
     /// <summary>
-    /// Price per one unit
+    /// Price with VAT
     /// </summary>
     [Column("price_with_vat")]
     public decimal PriceWithVat { get; set; }
     
+    /// <summary>
+    /// Price without VAT
+    /// </summary>
+    [Column("price_without_vat")]
+    public decimal? PriceWithoutVat { get; set; }
+
     /// <summary>
     /// Price for unit with VAT
     /// </summary>

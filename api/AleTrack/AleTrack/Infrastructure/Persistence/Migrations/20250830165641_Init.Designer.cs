@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    [Migration("20250825183432_Init")]
+    [Migration("20250830165641_Init")]
     partial class Init
     {
         /// <inheritdoc />
@@ -44,12 +44,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_breweries");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_breweries_public_id");
+                        .IsUnique();
 
                     b.ToTable("breweries", (string)null);
                 });
@@ -73,12 +71,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_clients");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_clients_public_id");
+                        .IsUnique();
 
                     b.ToTable("clients", (string)null);
                 });
@@ -109,16 +105,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
-                    b.HasKey("Id")
-                        .HasName("pk_delivery_items");
+                    b.HasKey("Id");
 
-                    b.HasIndex("DeliveryStopId")
-                        .HasDatabaseName("ix_delivery_items_delivery_stop_id");
+                    b.HasIndex("DeliveryStopId");
 
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("ix_delivery_items_product_id");
+                    b.HasIndex("ProductId");
 
-                    b.ToTable("delivery_items", (string)null);
+                    b.ToTable("delivery_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.DeliveryStop", b =>
@@ -147,20 +140,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_delivery_stops");
+                    b.HasKey("Id");
 
-                    b.HasIndex("BreweryId")
-                        .HasDatabaseName("ix_delivery_stops_brewery_id");
+                    b.HasIndex("BreweryId");
 
-                    b.HasIndex("DeliveryId")
-                        .HasDatabaseName("ix_delivery_stops_delivery_id");
+                    b.HasIndex("DeliveryId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_delivery_stops_public_id");
+                        .IsUnique();
 
-                    b.ToTable("delivery_stops", (string)null);
+                    b.ToTable("delivery_stops");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Driver", b =>
@@ -199,14 +188,12 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_drivers");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_drivers_public_id");
+                        .IsUnique();
 
-                    b.ToTable("drivers", (string)null);
+                    b.ToTable("drivers");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.DriverAvailability", b =>
@@ -230,13 +217,11 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("until");
 
-                    b.HasKey("Id")
-                        .HasName("pk_driver_availabilities");
+                    b.HasKey("Id");
 
-                    b.HasIndex("DriverId")
-                        .HasDatabaseName("ix_driver_availabilities_driver_id");
+                    b.HasIndex("DriverId");
 
-                    b.ToTable("driver_availabilities", (string)null);
+                    b.ToTable("driver_availabilities");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.InventoryItem", b =>
@@ -270,17 +255,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
-                    b.HasKey("Id")
-                        .HasName("pk_inventory_items");
+                    b.HasKey("Id");
 
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("ix_inventory_items_product_id");
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_inventory_items_public_id");
+                        .IsUnique();
 
-                    b.ToTable("inventory_items", (string)null);
+                    b.ToTable("inventory_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Order", b =>
@@ -312,17 +294,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("state");
 
-                    b.HasKey("Id")
-                        .HasName("pk_orders");
+                    b.HasKey("Id");
 
-                    b.HasIndex("ClientId")
-                        .HasDatabaseName("ix_orders_client_id");
+                    b.HasIndex("ClientId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_orders_public_id");
+                        .IsUnique();
 
-                    b.ToTable("orders", (string)null);
+                    b.ToTable("orders");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OrderItem", b =>
@@ -350,20 +329,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
-                    b.HasKey("Id")
-                        .HasName("pk_order_items");
+                    b.HasKey("Id");
 
-                    b.HasIndex("OrderId")
-                        .HasDatabaseName("ix_order_items_order_id");
+                    b.HasIndex("OrderId");
 
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("ix_order_items_product_id");
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_order_items_public_id");
+                        .IsUnique();
 
-                    b.ToTable("order_items", (string)null);
+                    b.ToTable("order_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Product", b =>
@@ -418,6 +393,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric")
                         .HasColumnName("price_with_vat");
 
+                    b.Property<decimal?>("PriceWithoutVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("price_without_vat");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
@@ -426,17 +405,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("type");
 
-                    b.HasKey("Id")
-                        .HasName("pk_products");
+                    b.HasKey("Id");
 
-                    b.HasIndex("BreweryId")
-                        .HasDatabaseName("ix_products_brewery_id");
+                    b.HasIndex("BreweryId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_products_public_id");
+                        .IsUnique();
 
-                    b.ToTable("products", (string)null);
+                    b.ToTable("products");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.ProductDelivery", b =>
@@ -469,17 +445,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("vehicle_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_product_deliveries");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_product_deliveries_public_id");
+                        .IsUnique();
 
-                    b.HasIndex("VehicleId")
-                        .HasDatabaseName("ix_product_deliveries_vehicle_id");
+                    b.HasIndex("VehicleId");
 
-                    b.ToTable("product_deliveries", (string)null);
+                    b.ToTable("product_deliveries");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.User", b =>
@@ -517,18 +490,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("user_name");
 
-                    b.HasKey("Id")
-                        .HasName("pk_users");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_public_id");
+                        .IsUnique();
 
                     b.HasIndex("UserName")
-                        .IsUnique()
-                        .HasDatabaseName("ix_users_user_name");
+                        .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users");
 
                     b.HasData(
                         new
@@ -557,13 +527,11 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_user_roles");
+                    b.HasKey("Id");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_user_roles_user_id");
+                    b.HasIndex("UserId");
 
-                    b.ToTable("user_roles", (string)null);
+                    b.ToTable("user_roles");
 
                     b.HasData(
                         new
@@ -597,33 +565,27 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.HasKey("Id")
-                        .HasName("pk_vehicles");
+                    b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_vehicles_public_id");
+                        .IsUnique();
 
-                    b.ToTable("vehicles", (string)null);
+                    b.ToTable("vehicles");
                 });
 
             modelBuilder.Entity("product_delivery_drivers", b =>
                 {
                     b.Property<long>("product_delivery_id")
-                        .HasColumnType("bigint")
-                        .HasColumnName("product_delivery_id");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("driver_id")
-                        .HasColumnType("bigint")
-                        .HasColumnName("driver_id");
+                        .HasColumnType("bigint");
 
-                    b.HasKey("product_delivery_id", "driver_id")
-                        .HasName("pk_product_delivery_drivers");
+                    b.HasKey("product_delivery_id", "driver_id");
 
-                    b.HasIndex("driver_id")
-                        .HasDatabaseName("ix_product_delivery_drivers_driver_id");
+                    b.HasIndex("driver_id");
 
-                    b.ToTable("product_delivery_drivers", (string)null);
+                    b.ToTable("product_delivery_drivers");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Brewery", b =>
@@ -631,8 +593,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.OwnsOne("AleTrack.Entities.Address", "ContactAddress", b1 =>
                         {
                             b1.Property<long>("BreweryId")
-                                .HasColumnType("bigint")
-                                .HasColumnName("id");
+                                .HasColumnType("bigint");
 
                             b1.Property<string>("City")
                                 .IsRequired()
@@ -667,15 +628,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                             b1.ToTable("breweries");
 
                             b1.WithOwner()
-                                .HasForeignKey("BreweryId")
-                                .HasConstraintName("fk_breweries_breweries_id");
+                                .HasForeignKey("BreweryId");
                         });
 
                     b.OwnsOne("AleTrack.Entities.Address", "OfficialAddress", b1 =>
                         {
                             b1.Property<long>("BreweryId")
-                                .HasColumnType("bigint")
-                                .HasColumnName("id");
+                                .HasColumnType("bigint");
 
                             b1.Property<string>("City")
                                 .IsRequired()
@@ -710,8 +669,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                             b1.ToTable("breweries");
 
                             b1.WithOwner()
-                                .HasForeignKey("BreweryId")
-                                .HasConstraintName("fk_breweries_breweries_id");
+                                .HasForeignKey("BreweryId");
                         });
 
                     b.Navigation("ContactAddress");
@@ -725,8 +683,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.OwnsOne("AleTrack.Entities.Address", "ContactAddress", b1 =>
                         {
                             b1.Property<long>("ClientId")
-                                .HasColumnType("bigint")
-                                .HasColumnName("id");
+                                .HasColumnType("bigint");
 
                             b1.Property<string>("City")
                                 .IsRequired()
@@ -761,15 +718,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                             b1.ToTable("clients");
 
                             b1.WithOwner()
-                                .HasForeignKey("ClientId")
-                                .HasConstraintName("fk_clients_clients_id");
+                                .HasForeignKey("ClientId");
                         });
 
                     b.OwnsOne("AleTrack.Entities.Address", "OfficialAddress", b1 =>
                         {
                             b1.Property<long>("ClientId")
-                                .HasColumnType("bigint")
-                                .HasColumnName("id");
+                                .HasColumnType("bigint");
 
                             b1.Property<string>("City")
                                 .IsRequired()
@@ -804,8 +759,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                             b1.ToTable("clients");
 
                             b1.WithOwner()
-                                .HasForeignKey("ClientId")
-                                .HasConstraintName("fk_clients_clients_id");
+                                .HasForeignKey("ClientId");
                         });
 
                     b.Navigation("ContactAddress");
@@ -820,15 +774,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("Items")
                         .HasForeignKey("DeliveryStopId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_delivery_items_delivery_stops_delivery_stop_id");
+                        .IsRequired();
 
                     b.HasOne("AleTrack.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_delivery_items_products_product_id");
+                        .IsRequired();
 
                     b.Navigation("DeliveryStop");
 
@@ -841,15 +793,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("BreweryId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_delivery_stops_breweries_brewery_id");
+                        .IsRequired();
 
                     b.HasOne("AleTrack.Entities.ProductDelivery", "Delivery")
                         .WithMany("Stops")
                         .HasForeignKey("DeliveryId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_delivery_stops_product_deliveries_delivery_id");
+                        .IsRequired();
 
                     b.Navigation("Brewery");
 
@@ -862,8 +812,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("Availabilities")
                         .HasForeignKey("DriverId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_driver_availabilities_drivers_driver_id");
+                        .IsRequired();
 
                     b.Navigation("Driver");
                 });
@@ -872,8 +821,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("AleTrack.Entities.Product", "Product")
                         .WithMany()
-                        .HasForeignKey("ProductId")
-                        .HasConstraintName("fk_inventory_items_products_product_id");
+                        .HasForeignKey("ProductId");
 
                     b.Navigation("Product");
                 });
@@ -884,8 +832,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("Orders")
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_orders_clients_client_id");
+                        .IsRequired();
 
                     b.Navigation("Client");
                 });
@@ -896,15 +843,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("OrderItems")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_order_items_orders_order_id");
+                        .IsRequired();
 
                     b.HasOne("AleTrack.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_order_items_products_product_id");
+                        .IsRequired();
 
                     b.Navigation("Order");
 
@@ -917,8 +862,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("Products")
                         .HasForeignKey("BreweryId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_products_breweries_brewery_id");
+                        .IsRequired();
 
                     b.Navigation("Brewery");
                 });
@@ -928,8 +872,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasOne("AleTrack.Entities.Vehicle", "Vehicle")
                         .WithMany()
                         .HasForeignKey("VehicleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_product_deliveries_vehicles_vehicle_id");
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Vehicle");
                 });
@@ -940,8 +883,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .WithMany("UserRoles")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_user_roles_users_user_id");
+                        .IsRequired();
 
                     b.Navigation("User");
                 });
