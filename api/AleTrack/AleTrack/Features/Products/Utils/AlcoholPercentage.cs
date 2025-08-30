@@ -7,6 +7,7 @@ public static class AlcoholPercentage
 {
     public const float Zero = 0.0f;
     public const float ZeroPointFive = 0.5f;
+    public const float TwoPointNine = 2.9f;
     public const float Four = 4.0f;
     public const float FourPointFour = 4.4f;
     public const float FourPointSix = 4.6f;
