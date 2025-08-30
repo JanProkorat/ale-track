@@ -17,7 +17,7 @@ public class AleTrackDbContextFactory : IDesignTimeDbContextFactory<AleTrackDbCo
             .Build();
 
         var connectionString = configuration.GetConnectionString("AleTrack");
-        var dbPassword = "honzajebuh";
+        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
         
         if (string.IsNullOrWhiteSpace(dbPassword))
             throw new ConfigurationErrorsException("DB_PASSWORD environment variable/configuration is missing.");
