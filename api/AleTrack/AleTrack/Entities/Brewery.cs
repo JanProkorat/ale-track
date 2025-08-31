@@ -31,5 +31,5 @@ public sealed class Brewery : PublicEntity
     /// <summary>
     /// List of related products
     /// </summary>
-    public ICollection<Product> Products { get; set; } = [];
+    public List<Product> Products { get; set; } = [];
 }
