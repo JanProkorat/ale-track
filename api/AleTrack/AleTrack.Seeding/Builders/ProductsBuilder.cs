@@ -2,12 +2,12 @@ using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using AleTrack.Features.Products.Utils;
 
-namespace AleTrack.Features.Seeding;
+namespace AleTrack.Seeding.Builders;
 
 /// <summary>
 /// Class containing data for seeding products
 /// </summary>
-internal sealed class ProductData
+internal static class ProductsBuilder
 {
     public static List<Product> GetSampleBottledProducts()
     {
@@ -15,7 +15,7 @@ internal sealed class ProductData
         [
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Desítka",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleDraftBeer,
@@ -29,7 +29,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Máz",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -43,7 +43,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijany 450",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLagerPremium,
@@ -57,7 +57,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Rytíř",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -71,7 +71,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kníže",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleStrong,
@@ -85,7 +85,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Kněžna",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.DarkStrong,
@@ -99,7 +99,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Baron",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleStrong,
@@ -113,7 +113,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.NonAlcoholicBeer,
@@ -132,7 +132,7 @@ internal sealed class ProductData
         [
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Shine",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -146,7 +146,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Desítka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -161,7 +161,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Desítka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -176,7 +176,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Desítka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -191,7 +191,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Šlik",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -206,7 +206,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Šlik",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -221,7 +221,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Šlik",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -236,7 +236,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Máz",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -251,7 +251,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Máz",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -266,7 +266,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Máz",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -281,7 +281,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Zámek",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -296,7 +296,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Zámek",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -311,7 +311,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Zámek",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -326,7 +326,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Rytíř",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -341,7 +341,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Rytíř",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -356,7 +356,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Rytíř",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -371,7 +371,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijany 450",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -386,7 +386,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijany 450",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -401,7 +401,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijany 450",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -416,7 +416,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kvasničák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -431,7 +431,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kvasničák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -446,7 +446,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kvasničák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -461,7 +461,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kníže",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -476,7 +476,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kníže",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -491,7 +491,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Kníže",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -506,7 +506,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Kněžna",
                 Kind = ProductKind.Keg,
                 Type = ProductType.DarkStrong,
@@ -521,7 +521,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanská Kněžna",
                 Kind = ProductKind.Keg,
                 Type = ProductType.DarkStrong,
@@ -536,7 +536,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Fanda",
                 Kind = ProductKind.Keg,
                 Type = ProductType.UnfilteredBlendedLager,
@@ -551,7 +551,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Fanda",
                 Kind = ProductKind.Keg,
                 Type = ProductType.UnfilteredBlendedLager,
@@ -566,7 +566,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Baron",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -581,7 +581,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Baron",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -596,7 +596,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Dux",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -611,7 +611,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svátek",
                 Kind = ProductKind.Keg,
                 Type = ProductType.FestiveLager,
@@ -626,7 +626,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijany 20 - výroční pivo",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -641,7 +641,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Weizenbier",
                 Kind = ProductKind.Keg,
                 Type = ProductType.WheatBeer,
@@ -655,7 +655,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Weizenbier",
                 Kind = ProductKind.Keg,
                 Type = ProductType.WheatBeer,
@@ -669,7 +669,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -683,7 +683,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -697,7 +697,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka Yuzu & Bergamot",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -710,7 +710,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka Yuzu & Bergamot",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -724,7 +724,7 @@ internal sealed class ProductData
 
             new Product
             {
-                BreweryId = 2,
+                PublicId = Guid.NewGuid(),
                 Name = "Svijanský Vozka (bez příchuti)",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,

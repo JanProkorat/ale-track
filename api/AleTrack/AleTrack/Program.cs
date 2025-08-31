@@ -1,4 +1,3 @@
-using System.Configuration;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,7 +12,6 @@ using Microsoft.AspNetCore.Http.Json;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
-using Microsoft.EntityFrameworkCore;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
