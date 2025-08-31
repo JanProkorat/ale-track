@@ -28,23 +28,14 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(AleTrackDbContext dbC
     /// <inheritdoc />
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var clientsCountTask = dbContext.Clients.CountAsync(ct);
-        var breweriesCountTask = dbContext.Breweries.CountAsync(ct);
-        var driversCountTask = dbContext.Drivers.CountAsync(ct);
-        var vehiclesCountTask = dbContext.Vehicles.CountAsync(ct);
-        var inventoryItemsCountTask = dbContext.InventoryItems.CountAsync(ct);
-        var usersCountTask = dbContext.Users.CountAsync(ct);
-
-        await Task.WhenAll(clientsCountTask, breweriesCountTask, driversCountTask, vehiclesCountTask, inventoryItemsCountTask);
-
         var result = new NumberOfRecordsInEachModuleDto
         {
-            ClientsCount = await clientsCountTask,
-            BreweriesCount = await breweriesCountTask,
-            DriversCount = await driversCountTask,
-            VehiclesCount = await vehiclesCountTask,
-            InventoryItemsCount = await inventoryItemsCountTask,
-            UsersCount = await usersCountTask
+            ClientsCount = await dbContext.Clients.CountAsync(ct),
+            BreweriesCount = await dbContext.Breweries.CountAsync(ct),
+            DriversCount = await dbContext.Drivers.CountAsync(ct),
+            VehiclesCount = await dbContext.Vehicles.CountAsync(ct),
+            InventoryItemsCount = await dbContext.InventoryItems.CountAsync(ct),
+            UsersCount = await dbContext.Users.CountAsync(ct)
         };
 
         await SendOkAsync(result, ct);
