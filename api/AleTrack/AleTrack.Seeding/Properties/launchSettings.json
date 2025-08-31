@@ -13,8 +13,7 @@
       "dotnetRunMessages": true,
       "launchBrowser": false,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "DB_PASSWORD": "honzajebuh"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }
