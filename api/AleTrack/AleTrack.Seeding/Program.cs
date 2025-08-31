@@ -42,7 +42,7 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .Build();
     
-// Spuštění seedování
+// Start seeding
 using var scope = host.Services.CreateScope();
 var services = scope.ServiceProvider;
 
