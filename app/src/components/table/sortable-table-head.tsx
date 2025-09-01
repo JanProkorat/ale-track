@@ -52,7 +52,13 @@ export function SortableTableHead(
                         key={headCell.id}
                         align={headCell.align || 'left'}
                         sortDirection={orderBy === headCell.id ? order : false}
-                        sx={{width: headCell.width, minWidth: headCell.minWidth}}
+                        sx={{
+                            width: headCell.width,
+                            minWidth: headCell.minWidth,
+                            position: headCell.id == "name" ? 'sticky' : undefined,
+                            left: headCell.id == "name" ? 0 : undefined,
+                            zIndex: headCell.id == "name" ? 1 : undefined
+                    }}
                     >
                         <TableSortLabel
                             hideSortIcon

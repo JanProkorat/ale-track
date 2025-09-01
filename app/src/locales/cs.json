@@ -147,7 +147,10 @@
     "Merchandise": "Propagační předměty",
     "PaleLagerPremium": "Světlý premium ležák",
     "PaleStrong": "Světlé silné",
-    "DarkStrong": "Tmavé silné"
+    "DarkStrong": "Tmavé silné",
+    "FestiveLager": "Sváteční ležák",
+    "UnfilteredBlendedLager": "Řezaný nefiltrovaný ležák",
+    "YeastLager": "Kroužkovaný ležák"
   },
   "productKind": {
     "Keg": "Sud",

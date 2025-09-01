@@ -18,8 +18,7 @@ import {
 } from "../../../api/Client";
 
 import type {
-    ProductType,
-    ProductKind} from "../../../api/Client";
+    ProductType} from "../../../api/Client";
 
 type ProductDetailViewProps = {
     id: string | null,
@@ -39,7 +38,7 @@ export function ProductDetailView(
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [product, setProduct] = useState<ProductDto>(new ProductDto());
     const [productTypes, setProductTypes] = useState<ProductType[]>([]);
-    const [productKinds, setProductKinds] = useState<ProductKind[]>([]);
+    const [productKinds, setProductKinds] = useState<string[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {

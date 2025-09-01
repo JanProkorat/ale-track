@@ -1,26 +1,20 @@
 import {useTranslation} from "react-i18next";
+import {varAlpha} from "minimal-shared/utils";
 import React, {useState, useEffect} from 'react';
 
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableContainer from '@mui/material/TableContainer';
-
-import {Scrollbar} from 'src/components/scrollbar';
+import Card from "@mui/material/Card";
+import Drawer from "@mui/material/Drawer";
+import {linearProgressClasses} from "@mui/material/LinearProgress";
+import {Box, Button, Typography, LinearProgress, Tabs, Tab} from "@mui/material";
 
 import {BreweryDetailView} from "../detail-view";
-import {emptyRows} from "../../../providers/utils";
-import {BreweriesTableRow} from '../breweries-table-row';
-import {useTable} from "../../../providers/TableProvider";
+import {Iconify} from "../../../components/iconify";
+import {DashboardContent} from "../../../layouts/dashboard";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {BreweriesTableToolbar} from "../breweries-table-toolbar";
-import {TableNoData} from '../../../components/table/table-no-data';
 import {BreweryDetailCard} from "../detail-view/brewery-detail-card";
-import {TableEmptyRows} from '../../../components/table/table-empty-rows';
-import {SplitViewLayout} from "../../../layouts/dashboard/split-view-layout";
-import {SortableTableHead} from '../../../components/table/sortable-table-head';
 
-import type {BreweriesProps} from '../breweries-table-row';
+import type {BreweryListItemDto} from "../../../api/Client";
 
 // ----------------------------------------------------------------------
 
@@ -29,52 +23,26 @@ export function BreweriesView() {
     const {t} = useTranslation();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
-    const [filterName, setFilterName] = useState<string>('');
-    const [breweries, setBreweries] = useState<BreweriesProps[]>([]);
+    const [breweries, setBreweries] = useState<BreweryListItemDto[]>([]);
     const [selectedBreweryId, setSelectedBreweryId] = useState<string | null>(null);
     const [createBreweryDrawerVisible, setCreateBreweryDrawerVisible] = useState<boolean>(false);
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
 
-    const [order, setOrder] = useState<'asc' | 'desc'>('asc');
-    const [orderBy, setOrderBy] = useState<string>('name');
-
-    const table = useTable({order, setOrder, orderBy, setOrderBy});
-
     useEffect(() => {
         const loadInitial = async () => {
             const loaded = await fetchBreweries();
             setBreweries(loaded);
-            setSelectedBreweryId(loaded.length > 0 ? loaded[0].id : null);
+            setSelectedBreweryId(loaded.length > 0 ? loaded[0].id! : null);
             setInitialLoading(false);
         };
         void loadInitial();
     }, []);
 
-    useEffect(() => {
-        if (!initialLoading) {
-            void fetchBreweries().then(setBreweries);
-        }
-    }, [filterName, order, orderBy]);
-
     const fetchBreweries = async () => {
         try {
             const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
-
-            if (filterName) filters.name = `startswith:${filterName}`;
-            filters.sort = `${order}:${orderBy}`;
-
-            const response = await client.fetchBreweries(filters);
-            return response.map(item => ({
-                id: item.id,
-                name: item.name,
-                streetName: item.streetName,
-                streetNumber: item.streetNumber,
-                city: item.city,
-                zip: item.zip,
-                country: item.country
-            } as BreweriesProps));
+            return await client.fetchBreweries({});
         } catch (error) {
             showSnackbar('Error fetching breweries', 'error');
             console.error('Error fetching breweries:', error);
@@ -87,109 +55,100 @@ export function BreweriesView() {
         setCreateBreweryDrawerVisible(false);
     }
 
-    const handleRowClick = (id: string) => {
-        if (hasDetailChanges) {
-            setPendingBreweryId(id);
-        } else {
-            setSelectedBreweryId(id);
-        }
-    };
-
     const handleDisplayedBreweryChange = (shouldLoadNewData: boolean) => {
-        if (shouldLoadNewData){
-            fetchBreweries().then(setBreweries);
-
-            if (pendingBreweryId !== null)
-                setSelectedBreweryId(pendingBreweryId);
+        if (shouldLoadNewData) {
+            fetchBreweries().then(newBreweries => {
+                setBreweries(newBreweries);
+                if (pendingBreweryId !== null) {
+                    setSelectedBreweryId(pendingBreweryId);
+                }
+            });
         }
         setPendingBreweryId(null);
-    }
+    };
 
     const handleAfterDeletingBrewery = async () => {
         await fetchBreweries().then((newData) => {
             setBreweries(newData);
-            setSelectedBreweryId(newData.length > 0 ? newData[0].id : null);
+            setSelectedBreweryId(newData.length > 0 ? newData[0].id! : null);
         })
     }
 
-    const breweriesListCard = (
-        <>
-            <BreweriesTableToolbar
-                numSelected={table.selected.length}
-                filterName={filterName}
-                onFilterName={(event: React.ChangeEvent<HTMLInputElement>) => {
-                    setFilterName(event.target.value);
-                    table.onResetPage();
-                }}
-            />
-
-            <Scrollbar>
-                <TableContainer sx={{overflow: 'unset'}}>
-                    <Table>
-                        <SortableTableHead
-                            order={table.order}
-                            orderBy={table.orderBy}
-                            rowCount={breweries.length}
-                            numSelected={table.selected.length}
-                            onSort={table.onSort}
-                            onSelectAllRows={(checked) =>
-                                table.onSelectAllRows(
-                                    checked,
-                                    breweries.map((brewery) => brewery.id)
-                                )
-                            }
-                            headLabel={[
-                                {id: 'name', label: t('breweries.name')},
-                            ]}
-                        />
-                        <TableBody>
-                            {breweries
-                                .slice(
-                                    table.page * table.rowsPerPage,
-                                    table.page * table.rowsPerPage + table.rowsPerPage
-                                )
-                                .map((row) => (
-                                    <BreweriesTableRow
-                                        key={row.id}
-                                        row={row}
-                                        selected={table.selected.includes(row.id)}
-                                        onSelectRow={() => table.onSelectRow(row.id)}
-                                        onRowClick={() => handleRowClick(row.id)}
-                                        isSelected={selectedBreweryId === row.id}
-                                    />
-                                ))}
-
-                            <TableEmptyRows
-                                height={68}
-                                emptyRows={emptyRows(table.page, table.rowsPerPage, breweries.length)}
-                            />
-
-                            {breweries.length == 0 && <TableNoData colSpan={1} />}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Scrollbar>
-        </>
-    );
-
     return (
-        <SplitViewLayout
-            title={t('breweries.title')}
-            initialLoading={initialLoading}
-            newLabel={t('breweries.new')}
-            onNewClick={() => setCreateBreweryDrawerVisible(true)}
-            leftContent={breweriesListCard}
-            rightContent={<BreweryDetailCard
-                id={selectedBreweryId}
-                onDelete={handleAfterDeletingBrewery}
-                onHasChangesChange={setHasDetailChanges}
-                shouldCheckPendingChanges={pendingBreweryId !== null}
-                onConfirmed={handleDisplayedBreweryChange}
-                onProgressbarVisibilityChange={setInitialLoading}
-            />}
-            drawerOpen={createBreweryDrawerVisible}
-            onDrawerClose={closeDrawer}
-            drawerContent={<BreweryDetailView onClose={closeDrawer} />}
-        />
+        <DashboardContent>
+            <Box sx={{mb: 5, display: 'flex', alignItems: 'center'}}>
+                <Typography variant="h4" sx={{flexGrow: 1}}>
+                    {t('breweries.title')}
+                </Typography>
+                <Button
+                    variant="contained"
+                    color="inherit"
+                    startIcon={<Iconify icon="mingcute:add-line"/>}
+                    onClick={() => setCreateBreweryDrawerVisible(true)}
+                >
+                    {t('breweries.new')}
+                </Button>
+            </Box>
+
+            <Box sx={{display: 'flex'}}>
+                <Box sx={{flexGrow: 1}}>
+                    <Box sx={{position: 'relative', alignItems: "center"}}>
+                        {initialLoading ? (
+                                <LinearProgress
+                                    sx={{
+                                        zIndex: 1,
+                                        position: 'absolute',
+                                        top: 190,
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        width: '40%',
+                                        bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+                                        [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                                    }}
+                                />
+                            ) :
+                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
+                                {breweries.length === 0 ? <div>no items placeholder</div> :
+                                    <>
+                                        <Card sx={{p: 2}}>
+                                            <Tabs
+                                                value={selectedBreweryId}
+                                                onChange={(_, newValue) => setSelectedBreweryId(newValue)}
+                                                textColor="secondary"
+                                                indicatorColor="secondary"
+                                                variant="fullWidth"
+                                            >
+                                                {breweries.map((brewery) => (
+                                                    <Tab value={brewery.id} label={brewery.name}/>
+                                                ))}
+                                            </Tabs>
+                                        </Card>
+                                        <Card sx={{p: 3}}>
+                                            <BreweryDetailCard
+                                                id={selectedBreweryId}
+                                                onDelete={handleAfterDeletingBrewery}
+                                                onHasChangesChange={setHasDetailChanges}
+                                                shouldCheckPendingChanges={pendingBreweryId !== null}
+                                                onConfirmed={handleDisplayedBreweryChange}
+                                                onProgressbarVisibilityChange={setInitialLoading}
+                                            />
+                                        </Card>
+                                    </>
+                                }
+                            </Box>}
+                    </Box>
+                </Box>
+            </Box>
+
+            <Drawer
+                anchor="right"
+                open={createBreweryDrawerVisible}
+                onClose={closeDrawer}
+            >
+                <Box sx={{width: 700, p: 2}}>
+                    <BreweryDetailView onClose={closeDrawer}/>
+                </Box>
+            </Drawer>
+        </DashboardContent>
     );
 }

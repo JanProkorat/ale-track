@@ -1,7 +1,7 @@
 import {useTranslation} from "react-i18next";
 import React, {useState, useCallback} from "react";
 
-import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
+import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
 import {ProductsView} from "../../products/view";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
@@ -51,7 +51,6 @@ export function BreweryDetailCard(
 
     const fetchBrewery = useCallback(async () => {
         try {
-            onProgressbarVisibilityChange(true);
             const clientApi = new AuthorizedClient();
 
             const data = await clientApi.getBreweryDetailEndpoint(id!);
@@ -102,7 +101,10 @@ export function BreweryDetailCard(
                 contactAddress: brewery.contactAddress
             });
 
-            await clientApi.updateBreweryEndpoint(id!, updateDto.toJSON()).then(() => onConfirmed(true));
+            await clientApi.updateBreweryEndpoint(id!, updateDto.toJSON()).then(() => {
+                if (brewery.name !== initialBrewery!.name)
+                    onConfirmed(true);
+            });
 
             showSnackbar(t('breweries.saveSuccess'), 'success');
             return true;
@@ -113,14 +115,14 @@ export function BreweryDetailCard(
         } finally {
             onProgressbarVisibilityChange(false);
         }
-    }, [brewery, id, onConfirmed, onProgressbarVisibilityChange, showSnackbar, t]);
+    }, [brewery, id, initialBrewery, onConfirmed, onProgressbarVisibilityChange, showSnackbar, t]);
 
     const deleteBrewery = useCallback(async () => {
         const client = new AuthorizedClient();
         await client.deleteBreweryEndpoint(id!);
         triggerRefresh();
         showSnackbar('Brewery deleted', 'success');
-    }, [id, showSnackbar]);
+    }, [id, showSnackbar, triggerRefresh]);
 
     const resetBrewery = useCallback(() => {
         setBrewery(initialBrewery!);
@@ -161,27 +163,30 @@ export function BreweryDetailCard(
                 {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
             </FormControl>
 
-            {/* Official address section */}
-            <AddressForm
-                title={t('address.officialAddress')}
-                address={brewery.officialAddress ?? new AddressDto()}
-                errors={errors}
-                onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                    ...prev,
-                    officialAddress: newAddress
-                }))}
-            />
-
-            {/* Contact address section */}
-            <AddressForm
-                title={t('address.contactAddress')}
-                address={brewery.contactAddress ?? new AddressDto()}
-                errors={contactAddressErrors}
-                onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                    ...prev,
-                    contactAddress: newAddress
-                }))}
-            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                    <AddressForm
+                        title={t('address.officialAddress')}
+                        address={brewery.officialAddress ?? new AddressDto()}
+                        errors={errors}
+                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            officialAddress: newAddress
+                        }))}
+                    />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                    <AddressForm
+                        title={t('address.contactAddress')}
+                        address={brewery.contactAddress ?? new AddressDto()}
+                        errors={contactAddressErrors}
+                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            contactAddress: newAddress
+                        }))}
+                    />
+                </Box>
+            </Box>
 
             {id && <ProductsView breweryId={id}/>}
         </DetailCardLayout>

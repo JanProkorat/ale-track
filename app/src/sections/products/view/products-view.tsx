@@ -9,7 +9,7 @@ import TableBody from "@mui/material/TableBody";
 import Typography from "@mui/material/Typography";
 import TableContainer from "@mui/material/TableContainer";
 import TablePagination from "@mui/material/TablePagination";
-import {Dialog, DialogTitle, DialogActions} from "@mui/material";
+import {Tab, Tabs, Dialog, DialogTitle, DialogActions} from "@mui/material";
 
 import {emptyRows} from "../../../providers/utils";
 import {Iconify} from "../../../components/iconify";
@@ -24,7 +24,7 @@ import {ProductDetailView} from "../detail-view/product-detail-view";
 import {TableEmptyRows} from "../../../components/table/table-empty-rows";
 import {SortableTableHead} from "../../../components/table/sortable-table-head";
 
-import type {BreweryProductListItemDto} from "../../../api/Client";
+import type {ProductType, BreweryProductListItemDto} from "../../../api/Client";
 
 type ProductsViewProps = {
     breweryId: string
@@ -34,11 +34,14 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
     const {t} = useTranslation();
     const { showSnackbar } = useSnackbar();
 
+    const [productKinds, setProductKinds] = useState<string[]>([]);
     const [products, setProducts] = useState<BreweryProductListItemDto[]>([]);
     const [productIdToDelete, setProductIdToDelete] = useState<string | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<string | null | undefined>(undefined);
 
     const [filterName, setFilterName] = useState<string>('');
+    const [filterKind, setFilterKind] = useState<string>("Keg");
+    const [filterType, setFilterType] = useState<ProductType | undefined>(undefined);
 
     const [order, setOrder] = useState<'asc' | 'desc'>('asc');
     const [orderBy, setOrderBy] = useState<string>('name');
@@ -47,16 +50,18 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
 
     useEffect(() => {
         void fetchProducts();
-    }, [filterName, breweryId, order, orderBy]);
+    }, [filterKind, filterName, breweryId, order, orderBy]);
 
     const fetchProducts = async () => {
         try {
             const client = new AuthorizedClient();
             const filters: Record<string, string> = {};
 
+            filters.kind = `eq:${filterKind}`;
             if (filterName) filters.name = `startswith:${filterName}`;
             filters.sort = `${order}:${orderBy}`;
 
+            await client.getProductKindListEndpoint().then((result) => setProductKinds(result))
             const response = await client.fetchBreweryProducts(breweryId, filters);
             setProducts(response);
         } catch (error) {
@@ -120,6 +125,18 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                 </Button>
             </Box>
 
+            <Tabs
+                value={filterKind}
+                onChange={(_, newValue) => setFilterKind(newValue)}
+                textColor="secondary"
+                indicatorColor="secondary"
+                variant="fullWidth"
+            >
+                {productKinds.map((kind) => (
+                    <Tab key={kind} value={kind} label={t('productKind.' + kind)}/>
+                ))}
+            </Tabs>
+
             <ProductsTableToolbar
                 numSelected={table.selected.length}
                 filterName={filterName}
@@ -127,11 +144,13 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                     setFilterName(event.target.value);
                     table.onResetPage();
                 }}
+                filterType={filterType}
+                onFilterType={setFilterType}
             />
 
             <Scrollbar>
                 <TableContainer sx={{overflow: 'unset'}}>
-                    <Table>
+                    <Table stickyHeader>
                         <SortableTableHead
                             order={table.order}
                             orderBy={table.orderBy}
@@ -180,7 +199,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                 count={products.length}
                 rowsPerPage={table.rowsPerPage}
                 onPageChange={table.onChangePage}
-                rowsPerPageOptions={[5, 10, 25]}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
                 onRowsPerPageChange={table.onChangeRowsPerPage}
                 labelRowsPerPage={t('table.rowsPerPage')}
             />

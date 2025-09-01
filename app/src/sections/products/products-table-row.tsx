@@ -18,8 +18,14 @@ type ProductsTableRowProps = {
     onDeleteClick: () => void;
 };
 
-export function ProductsTableRow({row, selected, onSelectRow, onRowClick, onDeleteClick}: Readonly<ProductsTableRowProps>) {
-    const { t } = useTranslation();
+export function ProductsTableRow({
+                                     row,
+                                     selected,
+                                     onSelectRow,
+                                     onRowClick,
+                                     onDeleteClick
+                                 }: Readonly<ProductsTableRowProps>) {
+    const {t} = useTranslation();
 
     return (
         <TableRow hover tabIndex={-1} role="checkbox" selected={selected}>
@@ -34,19 +40,38 @@ export function ProductsTableRow({row, selected, onSelectRow, onRowClick, onDele
                 />
             </TableCell>
 
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.name}</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.platoDegree != undefined ? row.platoDegree + "%" : ""}</TableCell>
-
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
-                <Chip label={t('productKind.' + row.kind)} />
+            <TableCell
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap',
+                    minWidth: 'fit-content',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 1
+                }}
+            >
+                {row.name}
             </TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize}L</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.alcoholPercentage}%</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceWithVat} Kč</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceForUnitWithVat} Kč</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceForUnitWithoutVat} Kč</TableCell>
-            <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
-                <Chip label={t('productType.' + row.type)} />
+            <TableCell onClick={onRowClick} sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content'
+            }}>{row.platoDegree != undefined ? row.platoDegree + "%" : ""}</TableCell>
+
+            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+                <Chip label={t('productKind.' + row.kind)}/>
+            </TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.packageSize}L</TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage}%</TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceWithVat} Kč</TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceForUnitWithVat} Kč</TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceForUnitWithoutVat} Kč</TableCell>
+            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+                <Chip label={t('productType.' + row.type)}/>
             </TableCell>
 
             <TableCell align="right">
