@@ -9,6 +9,7 @@ internal static class BreweryBuilder
         new ()
         {
             DisplayOrder = 1,
+            Color = "#f52b07",
             Name = "Svijany",
             PublicId = Guid.NewGuid(),
             OfficialAddress = new Address
@@ -33,6 +34,7 @@ internal static class BreweryBuilder
         new ()
         {
             DisplayOrder = 2,
+            Color = "#f5e107",
             Name = "Rohozec",
             PublicId = Guid.NewGuid(),
             OfficialAddress = new Address
@@ -49,6 +51,7 @@ internal static class BreweryBuilder
         new ()
         {
             DisplayOrder = 3,
+            Color = "#0fa699",
             Name = "Primátor",
             PublicId = Guid.NewGuid(),
             OfficialAddress = new Address

@@ -58,6 +58,7 @@ public sealed class UpdateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
             ThrowHelper.PublicEntityNotFound(nameof(brewery), req.Id);
 
         brewery!.Name = req.Data.Name;
+        brewery.Color = req.Data.Color;
         brewery.OfficialAddress = new Address
         {
             StreetName = req.Data.OfficialAddress.StreetName,
