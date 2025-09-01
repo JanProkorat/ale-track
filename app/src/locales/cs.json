@@ -77,7 +77,8 @@
     "saveError": "Chyba při ukládání pivovaru",
     "loadListError": "Chyba při načítání pivovarů",
     "loadDetailError": "Chyba při načítání pivovaru",
-    "noDetailToDisplay": "K zobrazení detailu vyberte pivovar ze seznamu"
+    "noDetailToDisplay": "K zobrazení detailu vyberte pivovar ze seznamu",
+    "color": "Barva"
   },
   "drivers": {
     "title": "Řidiči",

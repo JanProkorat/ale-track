@@ -4,7 +4,7 @@ import React, {useRef, useState} from "react";
 
 import Box from "@mui/material/Box";
 import Popover from "@mui/material/Popover";
-import {FormControl, OutlinedInput, FormHelperText, InputAdornment} from "@mui/material";
+import {FormControl, OutlinedInput, FormHelperText, InputAdornment, InputLabel} from "@mui/material";
 
 import {Iconify} from "../iconify";
 
@@ -35,6 +35,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({color, errors, onChange
     return (
         <>
             <FormControl fullWidth error={!!errors.color}>
+                <InputLabel htmlFor="color">{t('breweries.color')}</InputLabel>
                 <OutlinedInput
                     inputRef={inputRef}
                     value={color}

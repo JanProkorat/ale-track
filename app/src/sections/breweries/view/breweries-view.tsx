@@ -5,7 +5,7 @@ import React, {useState, useEffect} from 'react';
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
 import {linearProgressClasses} from "@mui/material/LinearProgress";
-import {Box, Button, Typography, LinearProgress, Tabs, Tab} from "@mui/material";
+import {Box, Tab, Tabs, Button, Typography, LinearProgress} from "@mui/material";
 
 import {BreweryDetailView} from "../detail-view";
 import {Iconify} from "../../../components/iconify";
@@ -117,6 +117,13 @@ export function BreweriesView() {
                                                 textColor="secondary"
                                                 indicatorColor="secondary"
                                                 variant="fullWidth"
+                                                slotProps={{
+                                                        indicator: {
+                                                            style: {
+                                                                backgroundColor: breweries.find(b => b.id === selectedBreweryId)?.color || 'inherit'
+                                                            }
+                                                        }
+                                                    }}
                                             >
                                                 {breweries.map((brewery) => (
                                                     <Tab value={brewery.id} label={brewery.name}/>

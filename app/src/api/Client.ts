@@ -137,6 +137,12 @@ export interface IClient {
     getProductDeliveryListEndpoint(parameters: { [key: string]: string; }): Promise<ProductDeliveryListItemDto[]>;
 
     /**
+     * Creates delivery of brewery products
+     * @return Delivery created
+     */
+    createProductsDeliveryEndpoint(data: CreateProductsDeliveryDto): Promise<string>;
+
+    /**
      * Gets product delivery detail
      * @return Detail of a product delivery
      */
@@ -153,12 +159,6 @@ export interface IClient {
      * @return Delivery deleted
      */
     deleteProductDeliveryEndpoint(id: string): Promise<string>;
-
-    /**
-     * Creates delivery of brewery products
-     * @return Delivery created
-     */
-    createProductsDeliveryEndpoint(data: CreateProductsDeliveryDto): Promise<string>;
 
     /**
      * Gets filtered order list
@@ -1497,7 +1497,7 @@ export class Client implements IClient {
      * @return List of product delivery states
      */
     getProductDeliveryStateListEndpoint(): Promise<ProductDeliveryState[]> {
-        let url_ = this.baseUrl + "/ale-track/product/deliveries/states";
+        let url_ = this.baseUrl + "/ale-track/products/deliveries/states";
         url_ = url_.replace(/[?&]$/, "");
 
         let options_: RequestInit = {
@@ -1556,7 +1556,7 @@ export class Client implements IClient {
      * @return List of product deliveries
      */
     getProductDeliveryListEndpoint(parameters: { [key: string]: string; }): Promise<ProductDeliveryListItemDto[]> {
-        let url_ = this.baseUrl + "/ale-track/product/deliveries?";
+        let url_ = this.baseUrl + "/ale-track/products/deliveries?";
         if (parameters === undefined || parameters === null)
             throw new Error("The parameter 'parameters' must be defined and cannot be null.");
         else
@@ -1612,6 +1612,67 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<ProductDeliveryListItemDto[]>(null as any);
+    }
+
+    /**
+     * Creates delivery of brewery products
+     * @return Delivery created
+     */
+    createProductsDeliveryEndpoint(data: CreateProductsDeliveryDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/products/deliveries";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateProductsDeliveryEndpoint(_response);
+        });
+    }
+
+    protected processCreateProductsDeliveryEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : <any>null;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
     }
 
     /**
@@ -1787,67 +1848,6 @@ export class Client implements IClient {
                 result202 = resultData202 !== undefined ? resultData202 : <any>null;
     
             return result202;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string>(null as any);
-    }
-
-    /**
-     * Creates delivery of brewery products
-     * @return Delivery created
-     */
-    createProductsDeliveryEndpoint(data: CreateProductsDeliveryDto): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/products/deliveries";
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(data);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processCreateProductsDeliveryEndpoint(_response);
-        });
-    }
-
-    protected processCreateProductsDeliveryEndpoint(response: Response): Promise<string> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 201) {
-            return response.text().then((_responseText) => {
-            let result201: any = null;
-            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-                result201 = resultData201 !== undefined ? resultData201 : <any>null;
-    
-            return result201;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("Bad Request", status, _responseText, _headers);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -7180,6 +7180,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
     id?: string;
     name?: string;
     displayOrder?: number;
+    color?: string;
 
     constructor(data?: IBreweryListItemDto) {
         if (data) {
@@ -7195,6 +7196,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
             this.id = _data["id"];
             this.name = _data["name"];
             this.displayOrder = _data["displayOrder"];
+            this.color = _data["color"];
         }
     }
 
@@ -7210,6 +7212,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
         data["id"] = this.id;
         data["name"] = this.name;
         data["displayOrder"] = this.displayOrder;
+        data["color"] = this.color;
         return data;
     }
 }
@@ -7218,11 +7221,13 @@ export interface IBreweryListItemDto {
     id?: string;
     name?: string;
     displayOrder?: number;
+    color?: string;
 }
 
 export class BreweryDto implements IBreweryDto {
     id?: string;
     name?: string;
+    color?: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 
@@ -7239,6 +7244,7 @@ export class BreweryDto implements IBreweryDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.color = _data["color"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
         }
@@ -7255,6 +7261,7 @@ export class BreweryDto implements IBreweryDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["color"] = this.color;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
         return data;
@@ -7264,6 +7271,7 @@ export class BreweryDto implements IBreweryDto {
 export interface IBreweryDto {
     id?: string;
     name?: string;
+    color?: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 }
@@ -7330,6 +7338,7 @@ export interface IDeleteBreweryRequest {
 
 export class UpdateBreweryDto implements IUpdateBreweryDto {
     name!: string;
+    color!: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 
@@ -7345,6 +7354,7 @@ export class UpdateBreweryDto implements IUpdateBreweryDto {
     init(_data?: any) {
         if (_data) {
             this.name = _data["name"];
+            this.color = _data["color"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
         }
@@ -7360,6 +7370,7 @@ export class UpdateBreweryDto implements IUpdateBreweryDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
+        data["color"] = this.color;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
         return data;
@@ -7368,12 +7379,14 @@ export class UpdateBreweryDto implements IUpdateBreweryDto {
 
 export interface IUpdateBreweryDto {
     name: string;
+    color: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 }
 
 export class CreateBreweryDto implements ICreateBreweryDto {
     name!: string;
+    color!: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 
@@ -7389,6 +7402,7 @@ export class CreateBreweryDto implements ICreateBreweryDto {
     init(_data?: any) {
         if (_data) {
             this.name = _data["name"];
+            this.color = _data["color"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
         }
@@ -7404,6 +7418,7 @@ export class CreateBreweryDto implements ICreateBreweryDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
+        data["color"] = this.color;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
         return data;
@@ -7412,6 +7427,7 @@ export class CreateBreweryDto implements ICreateBreweryDto {
 
 export interface ICreateBreweryDto {
     name: string;
+    color: string;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
 }
