@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AleTrack")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e286561f10112e0ab111b0dc44ccfcf2fd8d97a5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3317d7434efef749fbf172fb46db9e43024e8cd2")]
 [assembly: System.Reflection.AssemblyProductAttribute("AleTrack")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AleTrack")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -25,7 +25,7 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("product/deliveries");
+        Get("products/deliveries");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .WithName(nameof(GetProductDeliveryListEndpoint)));

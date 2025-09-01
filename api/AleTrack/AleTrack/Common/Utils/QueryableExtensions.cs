@@ -367,6 +367,9 @@ public static class QueryableExtensions
         if (targetType == typeof(bool) && (value == "1" || value == "0"))
             return value == "1";
 
+        if (targetType.IsEnum)
+            return Enum.Parse(targetType, value, true);
+        
         // General conversion
         return Convert.ChangeType(value, targetType);
     }
