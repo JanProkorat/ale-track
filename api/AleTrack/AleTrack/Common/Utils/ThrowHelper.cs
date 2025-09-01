@@ -65,4 +65,21 @@ public static class ThrowHelper
                 { nameof(entityName), entityName },
                 { nameof(publicId), publicId }
             });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> to represent a bad request error with a provided message.
+    /// </summary>
+    /// <param name="message">The detailed error message describing the bad request.</param>
+    /// <exception cref="AleTrackException">
+    /// Thrown to indicate a bad request error with a status code of 400 and an error code of "BAD_REQUEST_ERROR".
+    /// Includes the provided message in the exception's error properties.
+    /// </exception>
+    public static void BadRequest(string message)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.BadRequestError,
+            new Dictionary<string, object>
+            {
+                { "message", message }
+            });
 }

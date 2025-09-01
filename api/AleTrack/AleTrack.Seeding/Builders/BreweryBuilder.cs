@@ -3,11 +3,12 @@ using AleTrack.Entities;
 
 namespace AleTrack.Seeding.Builders;
 
-internal sealed class BreweryBuilder
+internal static class BreweryBuilder
 {
     public static Brewery CreateSvijany() =>
         new ()
         {
+            DisplayOrder = 1,
             Name = "Svijany",
             PublicId = Guid.NewGuid(),
             OfficialAddress = new Address
@@ -24,6 +25,38 @@ internal sealed class BreweryBuilder
                 StreetNumber = "1685",
                 City = "Vratislavice nad Nisou",
                 Zip = "463 11",
+                Country = Country.Czechia
+            }
+        };
+    
+    public static Brewery CreateRohozec() =>
+        new ()
+        {
+            DisplayOrder = 2,
+            Name = "Rohozec",
+            PublicId = Guid.NewGuid(),
+            OfficialAddress = new Address
+            {
+                StreetName = "Malý Rohozec",
+                StreetNumber = "29",
+                City = "Turnov",
+                Zip = "51101",
+                Country = Country.Czechia
+            }
+        };
+    
+    public static Brewery CreatePrimator() =>
+        new ()
+        {
+            DisplayOrder = 3,
+            Name = "Primátor",
+            PublicId = Guid.NewGuid(),
+            OfficialAddress = new Address
+            {
+                StreetName = "Dobrošovská",
+                StreetNumber = "130",
+                City = "Náchod",
+                Zip = "54701",
                 Country = Country.Czechia
             }
         };

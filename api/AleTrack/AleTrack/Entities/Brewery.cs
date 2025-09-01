@@ -19,6 +19,11 @@ public sealed class Brewery : PublicEntity
     public string Name { get; set; } = null!;
 
     /// <summary>
+    /// Order in which the brewery should be displayed in tabs
+    /// </summary>
+    public int DisplayOrder { get; set; }
+    
+    /// <summary>
     /// Official address of the brewery
     /// </summary>
     public Address OfficialAddress { get; set; } = null!;
