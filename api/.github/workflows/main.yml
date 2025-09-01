@@ -1,0 +1,19 @@
+name: Refresh Exchange Rates
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet publish ./AleTrack.ExchangeRateDownloader/AleTrack.ExchangeRateDownloader.csproj -c Release -o out
+      - run: dotnet out/AleTrack.ExchangeRateDownloader.dll
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
