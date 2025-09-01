@@ -22,6 +22,14 @@ public sealed class Brewery : PublicEntity
     /// Order in which the brewery should be displayed in tabs
     /// </summary>
     public int DisplayOrder { get; set; }
+
+    /// <summary>
+    /// Color of the brewery in HEX format (e.g. #FFFFFF for white)
+    /// </summary>
+    [MaxLength(10)]
+    [Required]
+    [Column("color")]
+    public string Color { get; set; } = null!;
     
     /// <summary>
     /// Official address of the brewery

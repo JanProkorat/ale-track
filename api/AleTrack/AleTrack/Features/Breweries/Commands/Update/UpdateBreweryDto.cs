@@ -13,6 +13,11 @@ public sealed record UpdateBreweryDto
     public string Name { get; set; } = null!;
     
     /// <summary>
+    /// Color of the brewery in HEX format (e.g. #FFFFFF for white)
+    /// </summary>
+    public string Color { get; set; } = null!;
+    
+    /// <summary>
     /// Info about the brewery's official address
     /// </summary>
     public AddressDto OfficialAddress { get; set; } = null!;

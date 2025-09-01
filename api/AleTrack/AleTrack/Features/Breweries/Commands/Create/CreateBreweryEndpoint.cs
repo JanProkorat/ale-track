@@ -3,6 +3,7 @@ using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Features.Breweries.Commands.Create;
 
@@ -46,8 +47,15 @@ public sealed class CreateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
     /// <inheritdoc />
     public override async Task HandleAsync(CreateBreweryRequest req, CancellationToken ct)
     {
+        var lastDisplayOrder = await dbContext.Breweries
+            .OrderByDescending(c => c.DisplayOrder)
+            .Select(c => c.DisplayOrder)
+            .FirstOrDefaultAsync(ct);
+        
         var brewery = new Brewery
         {
+            DisplayOrder = lastDisplayOrder + 1,
+            Color = req.Data.Color,
             Name = req.Data.Name,
             OfficialAddress = new Address
             {
