@@ -19,4 +19,9 @@ public sealed record BreweryListItemDto
     /// Order in which the brewery should be displayed in tabs.
     /// </summary>
     public int DisplayOrder { get; set; }
+
+    /// <summary>
+    /// Represents the color associated with the brewery item.
+    /// </summary>
+    public string Color { get; set; } = null!;
 }
