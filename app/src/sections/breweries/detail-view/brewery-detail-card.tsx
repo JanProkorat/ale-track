@@ -8,6 +8,7 @@ import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {validateAddress} from "../../../utils/validate-address";
 import {AddressForm} from "../../../components/forms/address-form";
+import {ColorPicker} from "../../../components/color/color-picker";
 import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 import {Country, AddressDto, BreweryDto, UpdateBreweryDto} from "../../../api/Client";
@@ -36,6 +37,7 @@ export function BreweryDetailCard(
 
     const [brewery, setBrewery] = useState<BreweryDto>(new BreweryDto({
         name: '',
+        color: '',
         officialAddress: new AddressDto({
             streetName: '',
             streetNumber: '',
@@ -98,7 +100,8 @@ export function BreweryDetailCard(
             const updateDto = new UpdateBreweryDto({
                 name: brewery.name!,
                 officialAddress: brewery.officialAddress!,
-                contactAddress: brewery.contactAddress
+                contactAddress: brewery.contactAddress,
+                color: brewery.color!
             });
 
             await clientApi.updateBreweryEndpoint(id!, updateDto.toJSON()).then(() => {
@@ -148,20 +151,42 @@ export function BreweryDetailCard(
             resetConfirmMessage={t('common.resetConfirm')}
             pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
         >
-            {/* Brewery name */}
-            <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="name">{t('breweries.name')}</InputLabel>
-                <OutlinedInput
-                    id="name"
-                    value={brewery.name ?? ''}
-                    onChange={event => setBrewery(prev => new BreweryDto({
-                        ...prev,
-                        name: event.target.value
-                    }))}
-                    label={t('breweries.name')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+            <Box display="flex" alignItems="center" gap={2} sx={{mt: 2}}>
+                {/* Brewery name */}
+                <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
+                    <InputLabel htmlFor="name">{t('breweries.name')}</InputLabel>
+                    <OutlinedInput
+                        id="name"
+                        value={brewery.name ?? ''}
+                        onChange={event => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            name: event.target.value
+                        }))}
+                        label={t('breweries.name')}
+                    />
+                    {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
+                </FormControl>
+
+                <Box display="flex" alignItems="center" gap={2} sx={{mt: 1}}>
+                    <ColorPicker
+                        color={brewery.color ?? ''}
+                        errors={errors}
+                        onChange={color => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            color
+                        }))}
+                    />
+                    <Box
+                        sx={{
+                            width: 46,
+                            height: 46,
+                            backgroundColor: brewery.color,
+                            borderRadius: 1,
+                            border: '1px solid #ccc',
+                        }}
+                    />
+                </Box>
+            </Box>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
                 <Box sx={{ flex: 1 }}>

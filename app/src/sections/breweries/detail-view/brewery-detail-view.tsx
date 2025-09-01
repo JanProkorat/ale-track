@@ -1,12 +1,14 @@
-import {useState} from "react";
+import React, {useState} from "react";
 import {useTranslation} from "react-i18next";
 
+import Box from "@mui/material/Box";
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {validateAddress} from "../../../utils/validate-address";
 import {AddressForm} from "../../../components/forms/address-form";
+import {ColorPicker} from "../../../components/color/color-picker";
 import {DrawerLayout} from '../../../layouts/components/drawer-layout';
 import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
 import {Country, AddressDto, BreweryDto, CreateBreweryDto} from "../../../api/Client";
@@ -22,6 +24,7 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
 
     const [brewery, setBrewery] = useState<BreweryDto>(new BreweryDto({
         name: '',
+        color: '',
         officialAddress: new AddressDto({
             streetName: '',
             streetNumber: '',
@@ -63,6 +66,7 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
 
             const createDto = new CreateBreweryDto({
                 name: brewery.name!,
+                color: brewery.color!,
                 officialAddress: brewery.officialAddress!,
                 contactAddress: brewery.contactAddress
             });
@@ -86,20 +90,43 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
             onSaveAndClose={saveBrewery}
         >
 
-            {/* brewery name */}
-            <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="Jméno">{t('breweries.name')}</InputLabel>
-                <OutlinedInput
-                    id="name"
-                    value={brewery.name ?? ''}
-                    onChange={event => setBrewery(prev => new BreweryDto({
-                        ...prev,
-                        name: event.target.value
-                    }))}
-                    label={t('breweries.name')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+            <Box display="flex" alignItems="center" gap={2} sx={{mt: 2}}>
+
+                {/* brewery name */}
+                <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
+                    <InputLabel htmlFor="Jméno">{t('breweries.name')}</InputLabel>
+                    <OutlinedInput
+                        id="name"
+                        value={brewery.name ?? ''}
+                        onChange={event => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            name: event.target.value
+                        }))}
+                        label={t('breweries.name')}
+                    />
+                    {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
+                </FormControl>
+
+                <Box display="flex" alignItems="center" gap={2} sx={{mt: 1}}>
+                    <ColorPicker
+                        color={brewery.color ?? ''}
+                        errors={errors}
+                        onChange={color => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            color
+                        }))}
+                    />
+                    <Box
+                        sx={{
+                            width: 46,
+                            height: 46,
+                            backgroundColor: brewery.color,
+                            borderRadius: 1,
+                            border: '1px solid #ccc',
+                        }}
+                    />
+                </Box>
+            </Box>
 
             {/* Official address section */}
             <AddressForm
