@@ -12,7 +12,7 @@ public sealed class GetProductDeliveryStateListEndpoint : EndpointWithoutRequest
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("product/deliveries/states");
+        Get("products/deliveries/states");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .WithName(nameof(GetProductDeliveryStateListEndpoint)));

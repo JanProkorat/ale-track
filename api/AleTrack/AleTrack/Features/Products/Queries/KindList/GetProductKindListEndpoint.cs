@@ -4,7 +4,7 @@ using FastEndpoints;
 
 namespace AleTrack.Features.Products.Queries.KindList;
 
-internal sealed class GetProductKindListEndpoint : EndpointWithoutRequest<ProductKind[]>
+internal sealed class GetProductKindListEndpoint : EndpointWithoutRequest<string[]>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -26,7 +26,7 @@ internal sealed class GetProductKindListEndpoint : EndpointWithoutRequest<Produc
     /// <inheritdoc />
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var productKinds = Enum.GetValues<ProductKind>();
+        var productKinds = Enum.GetNames<ProductKind>();
         
         await SendAsync(productKinds, cancellation: ct);
     }
