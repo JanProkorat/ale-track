@@ -33,17 +33,8 @@
 
     <ItemGroup>
       <None Remove="appsettings.json" />
-      <EmbeddedResource Include="appsettings.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </EmbeddedResource>
       <None Remove="appsettings.Development.json" />
-      <EmbeddedResource Include="appsettings.Development.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </EmbeddedResource>
       <None Remove="appsettings.Development.Local.json" />
-      <EmbeddedResource Include="appsettings.Development.Local.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </EmbeddedResource>
     </ItemGroup>
 
 </Project>
