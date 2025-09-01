@@ -21,6 +21,11 @@ public sealed record BreweryDto
     /// Name of the client
     /// </summary>
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Represents the color associated with the brewery.
+    /// </summary>
+    public string Color { get; set; } = null!;
     
     /// <summary>
     /// Official address
