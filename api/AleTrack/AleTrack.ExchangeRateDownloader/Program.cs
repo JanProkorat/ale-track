@@ -18,8 +18,8 @@ var host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((_, config) =>
     {
         config
-            .AddJsonFile("../AleTrack/appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"../AleTrack/appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true);
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true);
 
     })
     .ConfigureServices((context, services) =>
