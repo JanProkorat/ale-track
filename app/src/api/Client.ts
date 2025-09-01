@@ -92,7 +92,7 @@ export interface IClient {
      * Gets product kinds list
      * @return List of product kinds
      */
-    getProductKindListEndpoint(): Promise<ProductKind[]>;
+    getProductKindListEndpoint(): Promise<string[]>;
 
     /**
      * Gets product detail
@@ -225,6 +225,16 @@ export interface IClient {
      * @return Inventory item deleted
      */
     deleteInventoryItemEndpoint(id: string): Promise<string>;
+
+    /**
+     * @return No Content
+     */
+    aleTrackFeaturesHealthCheckQueriesHealthEndpoint(): Promise<void>;
+
+    /**
+     * @return No Content
+     */
+    aleTrackFeaturesHealthCheckQueriesReadyEndpoint(): Promise<void>;
 
     /**
      * Gets filtered driver list
@@ -1108,7 +1118,7 @@ export class Client implements IClient {
      * Gets product kinds list
      * @return List of product kinds
      */
-    getProductKindListEndpoint(): Promise<ProductKind[]> {
+    getProductKindListEndpoint(): Promise<string[]> {
         let url_ = this.baseUrl + "/ale-track/products/kinds";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -1124,7 +1134,7 @@ export class Client implements IClient {
         });
     }
 
-    protected processGetProductKindListEndpoint(response: Response): Promise<ProductKind[]> {
+    protected processGetProductKindListEndpoint(response: Response): Promise<string[]> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1160,7 +1170,7 @@ export class Client implements IClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<ProductKind[]>(null as any);
+        return Promise.resolve<string[]>(null as any);
     }
 
     /**
@@ -2530,6 +2540,72 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    aleTrackFeaturesHealthCheckQueriesHealthEndpoint(): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/health/live";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAleTrackFeaturesHealthCheckQueriesHealthEndpoint(_response);
+        });
+    }
+
+    protected processAleTrackFeaturesHealthCheckQueriesHealthEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * @return No Content
+     */
+    aleTrackFeaturesHealthCheckQueriesReadyEndpoint(): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/health/ready";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processAleTrackFeaturesHealthCheckQueriesReadyEndpoint(_response);
+        });
+    }
+
+    protected processAleTrackFeaturesHealthCheckQueriesReadyEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     /**
@@ -4203,6 +4279,9 @@ export enum ProductType {
     PaleLagerPremium = 14,
     PaleStrong = 15,
     DarkStrong = 16,
+    YeastLager = 17,
+    UnfilteredBlendedLager = 18,
+    FestiveLager = 19,
 }
 
 export class ProductListItemDto implements IProductListItemDto {
@@ -7100,11 +7179,7 @@ export interface IGetProductsListRequest extends IFilterableRequest {
 export class BreweryListItemDto implements IBreweryListItemDto {
     id?: string;
     name?: string;
-    streetName?: string;
-    streetNumber?: string;
-    city?: string;
-    zip?: string;
-    country?: Country;
+    displayOrder?: number;
 
     constructor(data?: IBreweryListItemDto) {
         if (data) {
@@ -7119,11 +7194,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
-            this.streetName = _data["streetName"];
-            this.streetNumber = _data["streetNumber"];
-            this.city = _data["city"];
-            this.zip = _data["zip"];
-            this.country = _data["country"];
+            this.displayOrder = _data["displayOrder"];
         }
     }
 
@@ -7138,11 +7209,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
-        data["streetName"] = this.streetName;
-        data["streetNumber"] = this.streetNumber;
-        data["city"] = this.city;
-        data["zip"] = this.zip;
-        data["country"] = this.country;
+        data["displayOrder"] = this.displayOrder;
         return data;
     }
 }
@@ -7150,11 +7217,7 @@ export class BreweryListItemDto implements IBreweryListItemDto {
 export interface IBreweryListItemDto {
     id?: string;
     name?: string;
-    streetName?: string;
-    streetNumber?: string;
-    city?: string;
-    zip?: string;
-    country?: Country;
+    displayOrder?: number;
 }
 
 export class BreweryDto implements IBreweryDto {

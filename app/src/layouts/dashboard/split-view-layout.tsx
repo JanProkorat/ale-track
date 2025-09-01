@@ -14,7 +14,7 @@ interface SplitViewLayoutProps {
     newLabel: string;
     onNewClick: () => void;
     rightContent: React.ReactNode;
-    leftContent: React.ReactNode;
+    leftContent?: React.ReactNode;
     drawerOpen?: boolean;
     onDrawerClose?: () => void;
     drawerContent?: React.ReactNode;
@@ -58,14 +58,15 @@ export function SplitViewLayout(
             </Box>
 
             <Box sx={{display: 'flex'}}>
-                <Box sx={{
+                {leftContent && <Box sx={{
                     width: leftContentWidth ? leftContentWidth +'%' : '20%',
                     maxWidth: leftContentMaxWidth ? leftContentMaxWidth + '%' : undefined,
                     pr: 2}}>
                     <Card>
                         {leftContent}
                     </Card>
-                </Box>
+                </Box>}
+
                 <Box sx={{flexGrow: 1}}>
                     <Box sx={{ position: 'relative', alignItems: "center" }}>
                         {initialLoading && (

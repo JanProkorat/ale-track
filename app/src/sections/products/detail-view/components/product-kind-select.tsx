@@ -7,11 +7,11 @@ import Checkbox from "@mui/material/Checkbox";
 import ListItemText from "@mui/material/ListItemText";
 import {Chip, Select, InputLabel, FormControl} from "@mui/material";
 
-import type {ProductKind} from "../../../../api/Client";
+import {ProductKind} from "../../../../api/Client";
 
 type ProductKindSelectProps = {
     selectedKind: ProductKind | undefined;
-    kinds: ProductKind[];
+    kinds: string[];
     shouldValidate: boolean;
     onSelect: (kind: ProductKind) => void;
 }
@@ -28,19 +28,19 @@ export function ProductKindSelect({selectedKind, kinds, onSelect, shouldValidate
                 value={selectedKind ?? ''}
                 renderValue={() => selectedKind !== undefined &&
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        <Chip key={selectedKind} label={t('productKind.' + selectedKind)} size="small"/>
+                        <Chip key={selectedKind} label={t('productKind.' + (typeof selectedKind === "number" ? ProductKind[selectedKind] : selectedKind))} size="small"/>
                     </Box>}
             >
-                {kinds.map((kind) => (
+                {kinds.map((kind) => ProductKind[kind as keyof typeof ProductKind]).map((kind) => (
                     <MenuItem
                         key={kind}
-                        value={kind}
+                        value={ProductKind[kind]}
                         onClick={() => {
                             setKindsTouched(true);
-                            onSelect(kind)
+                            onSelect(kind!)
                         }}>
                         <Checkbox checked={selectedKind === kind} />
-                        <ListItemText primary={t('productKind.' + kind)} />
+                        <ListItemText primary={t('productKind.' + ProductKind[kind])} />
                     </MenuItem>
                 ))}
             </Select>

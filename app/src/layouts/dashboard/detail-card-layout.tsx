@@ -188,7 +188,7 @@ export function DetailCardLayout<T>(
                     overflowY: 'auto',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 3,
+                    gap: 2,
                 }}>
                     {children}
                 </Box>

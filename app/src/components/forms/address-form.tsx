@@ -9,9 +9,6 @@ import {Box, Collapse, InputLabel, Typography, FormControl, OutlinedInput, FormH
 
 import {Country, AddressDto} from "src/api/Client";
 
-import {AuthorizedClient} from "../../api/AuthorizedClient";
-import {useSnackbar} from "../../providers/SnackbarProvider";
-
 type AddressFormProps = {
     title: string;
     address: AddressDto | undefined;
@@ -22,33 +19,20 @@ type AddressFormProps = {
 export function AddressForm({ title, address, errors, onChange }: Readonly<AddressFormProps>) {
     const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(true);
-    const { showSnackbar } = useSnackbar();
 
-    const safeAddress = address ?? new AddressDto({
-        streetName: '',
-        streetNumber: '',
-        city: '',
-        zip: '',
-        country: Country.Czechia,
-    });
-
-    const [countries, setCountries] = useState<Country[]>([]);
+    const [safeAddress, setSafeAddress] = useState<AddressDto>(new AddressDto({
+        streetName: "",
+        city: "",
+        zip: "",
+        streetNumber: "",
+        country: Country.Germany
+    }));
 
     useEffect(() => {
-        void fetchCountries();
-    }, []);
-
-    const fetchCountries = async () => {
-        try {
-            const client = new AuthorizedClient();
-
-            const response = await client.getCountriesEndpoint();
-            setCountries(response);
-        } catch (error) {
-            showSnackbar('Error fetching countries', 'error');
-            console.error('Error fetching countries:', error);
-        }
-    }
+        console.log(address)
+        if (address !== undefined)
+            setSafeAddress(address);
+    }, [address])
 
     return (
         <>
@@ -62,13 +46,13 @@ export function AddressForm({ title, address, errors, onChange }: Readonly<Addre
                 {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
             </Box>
             <Collapse in={isExpanded} sx={{mb: 0.5}}>
-                <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
+                <Box sx={{display: 'flex', flexDirection: 'column', gap: 2, mt: 3}}>
                     <Box sx={{display: 'flex', gap: 2}}>
                         <FormControl fullWidth error={!!errors.streetName}>
                             <InputLabel htmlFor="street">{t('address.street')}</InputLabel>
                             <OutlinedInput
                                 id="street"
-                                value={safeAddress.streetName ?? ''}
+                                value={safeAddress?.streetName ?? ''}
                                 onChange={(e) => onChange(new AddressDto({
                                     ...safeAddress,
                                     streetName: e.target.value
@@ -122,12 +106,12 @@ export function AddressForm({ title, address, errors, onChange }: Readonly<Addre
                     <FormControl fullWidth error={!!errors.country}>
                         <Autocomplete
                             id="countries"
-                            options={countries}
+                            options={Object.values(Country).filter(key => isNaN(Number(key)))}
                             autoHighlight
-                            value={safeAddress.country}
+                            value={Country[safeAddress.country]}
                             onChange={(_, value) => onChange(new AddressDto({
                                 ...safeAddress,
-                                country: value!
+                                country: Country[value as keyof typeof Country]
                             }))}
                             getOptionLabel={(option) => {
                                 const labelKey = typeof option === 'number' ? Country[option] : option;
