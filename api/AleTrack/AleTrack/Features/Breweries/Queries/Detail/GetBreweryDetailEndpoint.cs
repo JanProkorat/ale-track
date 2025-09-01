@@ -49,6 +49,7 @@ public sealed class GetBreweryDetailEndpoint(AleTrackDbContext dbContext) : Endp
             {
                 Id = c.PublicId,
                 Name = c.Name,
+                Color = c.Color,
                 OfficialAddress = new AddressDto
                 {
                     City = c.OfficialAddress.City,
