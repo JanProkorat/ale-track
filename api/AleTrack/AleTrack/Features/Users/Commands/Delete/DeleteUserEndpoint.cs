@@ -5,7 +5,7 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Features.Users.Commands.delete;
+namespace AleTrack.Features.Users.Commands.Delete;
 
 /// <summary>
 /// Represents a request to delete a user within the application.
@@ -25,7 +25,7 @@ public record DeleteUserRequest
 /// Configures functionality to delete a user by their ID, requiring the caller to have admin-level privileges.
 /// This endpoint verifies the existence of the user before deletion and returns appropriate HTTP status codes based on the operation outcome.
 /// </remarks>
-public sealed class DeleteUserEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteUserRequest>
+public sealed class DeleteUserEndpoint(AleTrackDbContext dbContext, IAppContext appContext) : Endpoint<DeleteUserRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -51,11 +51,14 @@ public sealed class DeleteUserEndpoint(AleTrackDbContext dbContext) : Endpoint<D
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteUserRequest req, CancellationToken ct)
     {
-        var product = await dbContext.Users.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
-        if (product == null)
+        var user = await dbContext.Users.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+        if (user == null)
             ThrowHelper.PublicEntityNotFound(nameof(User), req.Id);
 
-        dbContext.Users.Remove(product!);
+        if (user!.PublicId == appContext.UserId)
+            ThrowHelper.BadRequest("You cannot delete your own user.");
+        
+        dbContext.Users.Remove(user!);
         await dbContext.SaveChangesAsync(ct);
         
         await SendAsync(null, StatusCodes.Status202Accepted, ct);

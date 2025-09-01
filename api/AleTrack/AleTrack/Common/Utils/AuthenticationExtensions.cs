@@ -45,9 +45,9 @@ public static class AuthenticationExtensions
     public static IServiceCollection AddUserAuthorization(this IServiceCollection services)
     {
         services.AddAuthorizationBuilder()
-            .AddPolicy(UserRoleType.Admin.ToString(), policy => policy.RequireRole(UserRoleType.Admin.ToString()))
-            .AddPolicy(UserRoleType.User.ToString(), policy => 
-                policy.RequireRole(UserRoleType.User.ToString(), UserRoleType.Admin.ToString()));
+            .AddPolicy(nameof(UserRoleType.Admin), policy => policy.RequireRole(nameof(UserRoleType.Admin)))
+            .AddPolicy(nameof(UserRoleType.User), policy => 
+                policy.RequireRole(nameof(UserRoleType.User), nameof(UserRoleType.Admin)));
 
         return services;
     }

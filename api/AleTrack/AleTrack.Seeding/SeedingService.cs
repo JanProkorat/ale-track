@@ -13,8 +13,14 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         var svijany = BreweryBuilder.CreateSvijany();
         svijany.Products.AddRange(ProductsBuilder.GetSampleBottledProducts());
         svijany.Products.AddRange(ProductsBuilder.GetSampleKegProducts());
-        
         dbContext.Breweries.Add(svijany);
+        
+        var rohozec = BreweryBuilder.CreateRohozec();
+        dbContext.Breweries.Add(rohozec);
+        
+        var primator = BreweryBuilder.CreatePrimator();
+        dbContext.Breweries.Add(primator);
+        
         await dbContext.SaveChangesAsync();
     }
 }

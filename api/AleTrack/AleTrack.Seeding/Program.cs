@@ -28,12 +28,9 @@ var host = Host.CreateDefaultBuilder(args)
     {
         // Add DB context
         var connectionString = context.Configuration.GetConnectionString("AleTrack");
-        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+        if (connectionString is not null && connectionString.Contains("[YOUR-PASSWORD]"))
+            connectionString = connectionString.AddPasswordToConnectionString();
         
-        if (string.IsNullOrWhiteSpace(dbPassword))
-            throw new ConfigurationErrorsException("DB_PASSWORD environment variable/configuration is missing.");
-            
-        connectionString = connectionString!.Replace("[YOUR-PASSWORD]", dbPassword);
         services.AddDbContext<AleTrackDbContext>(options =>
             options.UseNpgsql(connectionString));
 

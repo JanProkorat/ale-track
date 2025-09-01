@@ -1,5 +1,3 @@
-using AleTrack.Common.Enums;
-
 namespace AleTrack.Features.Breweries.Queries.List;
 
 /// <summary>
@@ -18,27 +16,7 @@ public sealed record BreweryListItemDto
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Name of the street
+    /// Order in which the brewery should be displayed in tabs.
     /// </summary>
-    public string StreetName { get; set; } = null!;
-    
-    /// <summary>
-    /// Street number
-    /// </summary>
-    public string StreetNumber { get; set; } = null!;
-    
-    /// <summary>
-    /// Name of the city
-    /// </summary>
-    public string City { get; set; } = null!;
-    
-    /// <summary>
-    /// Zip code
-    /// </summary>
-    public string Zip { get; set; } = null!;
-    
-    /// <summary>
-    /// Name of related country
-    /// </summary>
-    public Country Country { get; set; }
+    public int DisplayOrder { get; set; }
 }

@@ -17,12 +17,8 @@ public class AleTrackDbContextFactory : IDesignTimeDbContextFactory<AleTrackDbCo
             .Build();
 
         var connectionString = configuration.GetConnectionString("AleTrack");
-        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
-        
-        if (string.IsNullOrWhiteSpace(dbPassword))
-            throw new ConfigurationErrorsException("DB_PASSWORD environment variable/configuration is missing.");
-            
-        connectionString = connectionString!.Replace("[YOUR-PASSWORD]", dbPassword);
+        if (connectionString is not null && connectionString.Contains("[YOUR-PASSWORD]"))
+            connectionString = connectionString.AddPasswordToConnectionString();
         
         optionsBuilder.UseNpgsql(connectionString, npgsqlOptions =>
         {

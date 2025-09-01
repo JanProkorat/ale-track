@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http.Json;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
+using AppContext = AleTrack.Common.Utils.AppContext;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
@@ -45,8 +46,9 @@ try
     
     services.AddMemoryCache();
     services.AddHttpClient();
-    services.AddHttpContextAccessor();
-
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<IAppContext, AppContext>();
+    
     services.AddFastEndpoints()
         .SwaggerDocument(o =>
         {

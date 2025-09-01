@@ -39,12 +39,9 @@ public static class DatabaseConnectionExtensions
         var environmentName = environment.EnvironmentName;
         if (string.Equals(environmentName, "Development.Local", StringComparison.OrdinalIgnoreCase)) 
             return connectionString;
-        
-        var dbPassword = configuration["DB_PASSWORD"];
-        if (string.IsNullOrWhiteSpace(dbPassword))
-            throw new ConfigurationErrorsException("DB_PASSWORD environment variable/configuration is missing.");
-            
-        connectionString = connectionString.Replace("[YOUR-PASSWORD]", dbPassword);
+
+        if (connectionString.Contains("[YOUR-PASSWORD]"))
+            connectionString = connectionString.AddPasswordToConnectionString();
 
         return connectionString;
     }
@@ -105,5 +102,17 @@ public static class DatabaseConnectionExtensions
             options.EnableDetailedErrors();
             options.EnableSensitiveDataLogging();
         });
+    }
+    
+    public static string AddPasswordToConnectionString(this string connectionString)
+    {
+        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+        
+        if (string.IsNullOrWhiteSpace(dbPassword))
+            throw new ConfigurationErrorsException("DB_PASSWORD environment variable/configuration is missing.");
+            
+        connectionString = connectionString.Replace("[YOUR-PASSWORD]", dbPassword);
+        
+        return connectionString;
     }
 }
