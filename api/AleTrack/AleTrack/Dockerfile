@@ -2,15 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy solution file if exists
-COPY *.sln ./
-
 # Copy all csproj files to restore dependencies
 COPY AleTrack/*.csproj ./AleTrack/
-COPY AleTrack.Tests/*.csproj ./AleTrack.Tests/
 
 # Restore dependencies
-RUN dotnet restore
+RUN dotnet restore AleTrack/AleTrack.csproj
 
 # Copy everything and build
 COPY . ./
