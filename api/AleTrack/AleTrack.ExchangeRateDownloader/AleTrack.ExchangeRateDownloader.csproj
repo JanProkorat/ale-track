@@ -32,9 +32,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="appsettings.json" />
-      <None Remove="appsettings.Development.json" />
-      <None Remove="appsettings.Development.Local.json" />
+        <None Include="..\AleTrack\appsettings.json">
+            <Link>appsettings.json</Link>
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>
