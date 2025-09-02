@@ -73,7 +73,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     useEffect(() => {
         void fetchRates(user !== null);
 
-        const interval = setInterval(fetchRates, 24 * 60 * 60 * 1000);
+        const interval = setInterval(() => fetchRates(user !== null), 24 * 60 * 60 * 1000);
         return () => clearInterval(interval);
     }, [user]);
 
