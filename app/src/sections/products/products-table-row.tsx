@@ -7,6 +7,7 @@ import TableCell from "@mui/material/TableCell";
 import IconButton from "@mui/material/IconButton";
 
 import {Iconify} from "../../components/iconify";
+import {useCurrency} from "../../providers/currency-provider";
 
 import type {BreweryProductListItemDto} from "../../api/Client";
 
@@ -18,17 +19,19 @@ type ProductsTableRowProps = {
     onDeleteClick: () => void;
 };
 
-export function ProductsTableRow({
-                                     row,
-                                     selected,
-                                     onSelectRow,
-                                     onRowClick,
-                                     onDeleteClick
-                                 }: Readonly<ProductsTableRowProps>) {
+export function ProductsTableRow(
+    {
+        row,
+        selected,
+        onSelectRow,
+        onRowClick,
+        onDeleteClick
+    }: Readonly<ProductsTableRowProps>) {
     const {t} = useTranslation();
+    const { formatPrice } = useCurrency();
 
     return (
-        <TableRow hover tabIndex={-1} role="checkbox" selected={selected}>
+        <TableRow hover tabIndex={-1} selected={selected}>
             <TableCell padding="checkbox">
                 <Checkbox
                     disableRipple
@@ -64,12 +67,17 @@ export function ProductsTableRow({
                        sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.packageSize}L</TableCell>
             <TableCell onClick={onRowClick}
                        sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage}%</TableCell>
+            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+                {formatPrice(row.priceWithVat)}
+            </TableCell>
             <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceWithVat} Kč</TableCell>
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+                {formatPrice(row.priceForUnitWithVat)}
+            </TableCell>
             <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceForUnitWithVat} Kč</TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.priceForUnitWithoutVat} Kč</TableCell>
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+                {formatPrice(row.priceForUnitWithoutVat)}
+            </TableCell>
             <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
                 <Chip label={t('productType.' + row.type)}/>
             </TableCell>

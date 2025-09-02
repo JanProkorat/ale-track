@@ -7,6 +7,7 @@ import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/
 
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
+import {useCurrency} from "../../../providers/currency-provider";
 import {ProductTypeSelect} from "./components/product-type-select";
 import {ProductKindSelect} from "./components/product-kind-select";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
@@ -34,6 +35,7 @@ export function ProductDetailView(
     }: Readonly<ProductDetailViewProps>) {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
+    const {selectedCurrency, formatPriceValue, formatPriceToDefault} = useCurrency();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [product, setProduct] = useState<ProductDto>(new ProductDto());
@@ -231,11 +233,11 @@ export function ProductDetailView(
                         type="number"
                         id="priceVat"
                         label={t('products.priceVat')}
-                        endAdornment={<InputAdornment position="end">Kč</InputAdornment>}
-                        value={product.priceWithVat ?? undefined}
+                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
+                        value={formatPriceValue(product.priceWithVat) ?? undefined}
                         onChange={event => setProduct(prev => new ProductDto({
                             ...prev,
-                            priceWithVat: parseFloat(event.target.value)
+                            priceWithVat: formatPriceToDefault(parseFloat(event.target.value))
                         }))}
                     />
                 </FormControl>
@@ -246,11 +248,11 @@ export function ProductDetailView(
                         type="number"
                         id="priceUnitVat"
                         label={t('products.priceUnitVat')}
-                        endAdornment={<InputAdornment position="end">Kč</InputAdornment>}
-                        value={product.priceForUnitWithVat ?? undefined}
+                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
+                        value={formatPriceValue(product.priceForUnitWithVat) ?? undefined}
                         onChange={event => setProduct(prev => new ProductDto({
                             ...prev,
-                            priceForUnitWithVat: parseFloat(event.target.value)
+                            priceForUnitWithVat: formatPriceToDefault(parseFloat(event.target.value))
                         }))}
                     />
                 </FormControl>
@@ -261,11 +263,11 @@ export function ProductDetailView(
                         type="number"
                         id="priceUnitNoVat"
                         label={t('products.priceUnitNoVat')}
-                        endAdornment={<InputAdornment position="end">Kč</InputAdornment>}
-                        value={product.priceForUnitWithoutVat ?? undefined}
+                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
+                        value={formatPriceValue(product.priceForUnitWithoutVat) ?? undefined}
                         onChange={event => setProduct(prev => new ProductDto({
                             ...prev,
-                            packageSize: parseFloat(event.target.value)
+                            priceForUnitWithoutVat: formatPriceToDefault(parseFloat(event.target.value))
                         }))}
                     />
                 </FormControl>
