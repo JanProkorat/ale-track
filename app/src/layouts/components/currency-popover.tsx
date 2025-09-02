@@ -33,7 +33,7 @@ export function CurrencyPopover({data = [], sx, ...other}: CurrencyPopoverProps)
 
     useEffect(() => {
         setCurrencies(rates.map((rate) => {
-            const relatedData = data.find((item) => rate.currencyCode == item.code);
+            const relatedData = data.find((item) => rate.currencyCode === item.code);
             return {
                 rate: rate.rate,
                 code: rate.currencyCode,
