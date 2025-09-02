@@ -16,6 +16,7 @@ import {routesSection} from './routes/sections';
 import {ErrorBoundary} from './routes/components';
 import {AuthProvider} from "./context/AuthContext";
 import {SnackbarProvider} from "./providers/SnackbarProvider";
+import {CurrencyProvider} from "./providers/currency-provider";
 import {EntityStatsProvider} from "./providers/EntityStatsContext";
 
 // ----------------------------------------------------------------------
@@ -32,9 +33,11 @@ export const router = createBrowserRouter([
                     <SnackbarProvider>
                         <EntityStatsProvider>
                             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={currentLocale}>
-                                <App>
-                                    <Outlet/>
-                                </App>
+                                <CurrencyProvider>
+                                    <App>
+                                        <Outlet/>
+                                    </App>
+                                </CurrencyProvider>
                             </LocalizationProvider>
                         </EntityStatsProvider>
                     </SnackbarProvider>

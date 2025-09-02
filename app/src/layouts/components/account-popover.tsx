@@ -1,6 +1,7 @@
 import type {IconButtonProps} from '@mui/material/IconButton';
 
 import {useState, useCallback} from 'react';
+import {useTranslation} from "react-i18next";
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -13,6 +14,9 @@ import IconButton from '@mui/material/IconButton';
 import {useRouter} from 'src/routes/hooks';
 
 import {useAuth} from "../../context/AuthContext";
+import {languages, currencies} from "../dashboard";
+import {LanguagePopover} from "./language-popover";
+import {CurrencyPopover} from "./currency-popover";
 
 // ----------------------------------------------------------------------
 
@@ -20,6 +24,7 @@ export type AccountPopoverProps = IconButtonProps;
 
 export function AccountPopover({sx, ...other}: AccountPopoverProps) {
     const router = useRouter();
+    const { t } = useTranslation();
 
     const {signOut, user} = useAuth();
 
@@ -70,11 +75,43 @@ export function AccountPopover({sx, ...other}: AccountPopoverProps) {
             >
                 <Box sx={{ p: 2, pb: 1.5, display: 'flex', justifyContent: 'center' }}>
                     <Typography variant="subtitle2" noWrap>
-                        {user && user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : ""}
+                        {user?.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : ""}
                     </Typography>
                 </Box>
 
                 <Divider sx={{borderStyle: 'dashed'}}/>
+
+                <Box
+                    sx={{
+                        pt: 2,
+                        pr: 2,
+                        pl: 2,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}
+                >
+                    <Typography variant="subtitle2" noWrap>
+                        {t('languages.language')}
+                    </Typography>
+                    <LanguagePopover data={languages} />
+                </Box>
+                
+                <Box
+                    sx={{
+                        pr: 2,
+                        pl: 2,
+                        pb: 1.5,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}
+                >
+                    <Typography variant="subtitle2" noWrap>
+                        {t('common.currency')}
+                    </Typography>
+                    <CurrencyPopover data={currencies} />
+                </Box>
 
                 <Box sx={{p: 1}}>
                     <Button fullWidth color="error" size="medium" variant="text" onClick={handleSignOut}>

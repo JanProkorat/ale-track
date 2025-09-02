@@ -237,6 +237,12 @@ export interface IClient {
     aleTrackFeaturesHealthCheckQueriesReadyEndpoint(): Promise<void>;
 
     /**
+     * Gets list of exchange rates
+     * @return List of exchange rates
+     */
+    getExchangeRatesEndpoint(): Promise<ExchangeRateDto[]>;
+
+    /**
      * Gets filtered driver list
      * @return List of drivers
      */
@@ -2606,6 +2612,65 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * Gets list of exchange rates
+     * @return List of exchange rates
+     */
+    getExchangeRatesEndpoint(): Promise<ExchangeRateDto[]> {
+        let url_ = this.baseUrl + "/ale-track/exchange-rates";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetExchangeRatesEndpoint(_response);
+        });
+    }
+
+    protected processGetExchangeRatesEndpoint(response: Response): Promise<ExchangeRateDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ExchangeRateDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ExchangeRateDto[]>(null as any);
     }
 
     /**
@@ -6249,6 +6314,94 @@ export interface IUpdateInventoryItemDto {
     note?: string | undefined;
 }
 
+export class ExchangeRateDto implements IExchangeRateDto {
+    currencyCode?: string;
+    rate?: number;
+
+    constructor(data?: IExchangeRateDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.currencyCode = _data["currencyCode"];
+            this.rate = _data["rate"];
+        }
+    }
+
+    static fromJS(data: any): ExchangeRateDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExchangeRateDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["currencyCode"] = this.currencyCode;
+        data["rate"] = this.rate;
+        return data;
+    }
+}
+
+export interface IExchangeRateDto {
+    currencyCode?: string;
+    rate?: number;
+}
+
+export class CreateInventoryItemDto implements ICreateInventoryItemDto {
+    productId?: string | undefined;
+    name?: string | undefined;
+    quantity!: number;
+    note?: string | undefined;
+
+    constructor(data?: ICreateInventoryItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): CreateInventoryItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateInventoryItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface ICreateInventoryItemDto {
+    productId?: string | undefined;
+    name?: string | undefined;
+    quantity: number;
+    note?: string | undefined;
+}
+
 export class DriverListItemDto implements IDriverListItemDto {
     id?: string;
     firstName?: string;
@@ -6311,54 +6464,6 @@ export interface IDriverListItemDto {
     phoneNumber?: string | undefined;
     color?: string;
     availableDates?: DriverAvailabilityListItemDto[];
-}
-
-export class CreateInventoryItemDto implements ICreateInventoryItemDto {
-    productId?: string | undefined;
-    name?: string | undefined;
-    quantity!: number;
-    note?: string | undefined;
-
-    constructor(data?: ICreateInventoryItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.productId = _data["productId"];
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-            this.note = _data["note"];
-        }
-    }
-
-    static fromJS(data: any): CreateInventoryItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateInventoryItemDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["productId"] = this.productId;
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        data["note"] = this.note;
-        return data;
-    }
-}
-
-export interface ICreateInventoryItemDto {
-    productId?: string | undefined;
-    name?: string | undefined;
-    quantity: number;
-    note?: string | undefined;
 }
 
 export class DriverAvailabilityListItemDto implements IDriverAvailabilityListItemDto {

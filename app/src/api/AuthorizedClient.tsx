@@ -118,7 +118,7 @@ export class AuthorizedClient extends Client {
     }
 
     async fetchProductDeliveries(filters: Record<string, string>) {
-        const url = new URL('/ale-track/product/deliveries', baseAddress);
+        const url = new URL('/ale-track/products/deliveries', baseAddress);
 
         for (const [key, value] of Object.entries(filters)) {
             url.searchParams.append(key, value);

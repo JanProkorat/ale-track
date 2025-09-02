@@ -18,7 +18,8 @@
     "overlappingIntervals": "Dostupnost se překrývá s jiným termínem",
     "resetConfirm": "Opravdu chcete zahodit provedené změny?",
     "pendingChangesConfirm": "Máte neuložené změny. Chcete je před odchodem uložit?",
-    "unsavedChangesLossConfirm": "Máte neuložené změny, které budou ztraceny. Operavdu chcete pokračovat?"
+    "unsavedChangesLossConfirm": "Máte neuložené změny, které budou ztraceny. Operavdu chcete pokračovat?",
+    "currency": "Měna"
   },
   "months": {
     "january": "Leden",
@@ -239,5 +240,14 @@
     "Delivering": "K doručení",
     "Finished": "Dokončeno",
     "Cancelled": "Zrušeno"
+  },
+  "exchangeRates": {
+    "fetchError": "Error při načítání kurzů měn"
+  },
+  "languages": {
+    "language": "Jazyk",
+    "English": "Angličtina",
+    "German": "Němčina",
+    "Czech": "Čeština"
   }
 }

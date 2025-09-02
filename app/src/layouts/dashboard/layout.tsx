@@ -15,7 +15,6 @@ import {getNavData} from "../nav-config-dashboard";
 import { MenuButton } from '../components/menu-button';
 import {AuthorizedClient} from "../../api/AuthorizedClient";
 import { AccountPopover } from '../components/account-popover';
-import { LanguagePopover } from '../components/language-popover';
 import {useEntityStatsRefresh} from "../../providers/EntityStatsContext";
 import { MainSection , HeaderSection , LayoutSection , layoutClasses } from '../core';
 
@@ -39,6 +38,17 @@ export const languages = [
     value: 'cs',
     label: 'Czech',
     icon: '/assets/icons/flags/ic-flag-cs.svg',
+  },
+];
+
+export const currencies = [
+  {
+    code: 'CZK',
+    icon: '/assets/icons/flags/ic-flag-cs.svg',
+  },
+  {
+    code: 'EUR',
+    icon: '/assets/icons/flags/ic-flag-eu.svg',
   },
 ];
 
@@ -114,7 +124,7 @@ export function DashboardLayout({
           {/*<Searchbar />*/}
 
           {/** @slot Language popover */}
-          <LanguagePopover data={languages} />
+          {/*<LanguagePopover data={languages} />*/}
 
           {/** @slot Notifications popover */}
           {/*<NotificationsPopover data={_notifications} />*/}
