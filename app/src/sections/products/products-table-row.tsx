@@ -7,7 +7,6 @@ import TableCell from "@mui/material/TableCell";
 import IconButton from "@mui/material/IconButton";
 
 import {Iconify} from "../../components/iconify";
-import {formatPrice} from "../../utils/format-price";
 import {useCurrency} from "../../providers/currency-provider";
 
 import type {BreweryProductListItemDto} from "../../api/Client";
@@ -29,7 +28,7 @@ export function ProductsTableRow(
         onDeleteClick
     }: Readonly<ProductsTableRowProps>) {
     const {t} = useTranslation();
-    const { selectedCurrency, defaultCurrency } = useCurrency();
+    const { formatPrice } = useCurrency();
 
     return (
         <TableRow hover tabIndex={-1} selected={selected}>
@@ -69,15 +68,15 @@ export function ProductsTableRow(
             <TableCell onClick={onRowClick}
                        sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage}%</TableCell>
             <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
-                {formatPrice(row.priceWithVat, selectedCurrency, defaultCurrency)}
+                {formatPrice(row.priceWithVat)}
             </TableCell>
             <TableCell onClick={onRowClick}
                        sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
-                {formatPrice(row.priceForUnitWithVat, selectedCurrency, defaultCurrency)}
+                {formatPrice(row.priceForUnitWithVat)}
             </TableCell>
             <TableCell onClick={onRowClick}
                        sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
-                {formatPrice(row.priceForUnitWithoutVat, selectedCurrency, defaultCurrency)}
+                {formatPrice(row.priceForUnitWithoutVat)}
             </TableCell>
             <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
                 <Chip label={t('productType.' + row.type)}/>

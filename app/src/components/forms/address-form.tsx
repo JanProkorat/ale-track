@@ -29,7 +29,6 @@ export function AddressForm({ title, address, errors, onChange }: Readonly<Addre
     }));
 
     useEffect(() => {
-        console.log(address)
         if (address !== undefined)
             setSafeAddress(address);
     }, [address])
