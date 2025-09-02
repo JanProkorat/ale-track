@@ -22,7 +22,7 @@ public class GetExchangeRatesEndpoint(AleTrackDbContext dbContext) : EndpointWit
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("orders");
+        Get("exchange-rates");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .WithName(nameof(GetExchangeRatesEndpoint)));
