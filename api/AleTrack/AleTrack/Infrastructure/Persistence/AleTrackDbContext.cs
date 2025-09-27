@@ -73,6 +73,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     
+    /// <summary>
+    /// DbSet of <see cref="Reminder"/>
+    /// </summary>
+    public virtual DbSet<Reminder> Reminders => Set<Reminder>();
+    
     /// <inheritdoc />
     public AleTrackDbContext(){}
     

@@ -104,7 +104,7 @@ try
     
     Log.Information("Successfully building up application");
 
-    await application.ApplyMigrationsAsync();
+    // await application.ApplyMigrationsAsync();
     
     // Map health checks endpoints before authentication/authorization middlewares
     application.MapHealthChecks("/health/live");

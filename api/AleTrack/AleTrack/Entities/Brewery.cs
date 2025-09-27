@@ -45,4 +45,9 @@ public sealed class Brewery : PublicEntity
     /// List of related products
     /// </summary>
     public List<Product> Products { get; set; } = [];
+    
+    /// <summary>
+    /// Related reminders
+    /// </summary>
+    public List<Reminder> Reminders { get; set; } = [];
 }
