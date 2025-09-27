@@ -173,7 +173,7 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
                 />
             </FormControl>
 
-            <SectionHeader text="Nastavení zobrazení" headerVariant="subtitle2" />
+            <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2" />
 
             {reminder.type === ReminderType.OneTimeEvent && (
                 <Box display="flex" alignItems="center" gap={1} sx={{mt: 1}}>
