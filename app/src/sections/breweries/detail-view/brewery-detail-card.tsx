@@ -3,6 +3,8 @@ import React, {useState, useCallback} from "react";
 
 import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
+import { CollapsibleForm } from "src/components/forms/collapsible-form";
+
 import {ProductsView} from "../../products/view";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
@@ -12,6 +14,7 @@ import {ColorPicker} from "../../../components/color/color-picker";
 import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 import {Country, AddressDto, BreweryDto, UpdateBreweryDto} from "../../../api/Client";
+import {BreweryRemindersView} from "../../reminders/brewery-view/brewery-reminders-view";
 
 type BreweryDetailCardProps = {
     id: string | null;
@@ -152,6 +155,7 @@ export function BreweryDetailCard(
             pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
         >
             <Box display="flex" alignItems="center" gap={2} sx={{mt: 2}}>
+
                 {/* Brewery name */}
                 <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
                     <InputLabel htmlFor="name">{t('breweries.name')}</InputLabel>
@@ -167,6 +171,7 @@ export function BreweryDetailCard(
                     {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
                 </FormControl>
 
+                {/* Brewery color */}
                 <Box display="flex" alignItems="center" gap={2} sx={{mt: 1}}>
                     <ColorPicker
                         color={brewery.color ?? ''}
@@ -188,31 +193,37 @@ export function BreweryDetailCard(
                 </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                    <AddressForm
-                        title={t('address.officialAddress')}
-                        address={brewery.officialAddress ?? new AddressDto()}
-                        errors={errors}
-                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                            ...prev,
-                            officialAddress: newAddress
-                        }))}
-                    />
+            {/* Brewery address */}
+            <CollapsibleForm  title={t('address.address')}>
+                <Box sx={{ display: 'flex', gap: 3 }}>
+                    <Box sx={{ flex: 1, ml: 2 }}>
+                        <AddressForm
+                            title={t('address.officialAddress')}
+                            headerVariant="subtitle2"
+                            address={brewery.officialAddress ?? new AddressDto()}
+                            errors={errors}
+                            onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                                ...prev,
+                                officialAddress: newAddress
+                            }))}
+                        />
+                    </Box>
+                    <Box sx={{ flex: 1, mr: 2 }}>
+                        <AddressForm
+                            title={t('address.contactAddress')}
+                            headerVariant="subtitle2"
+                            address={brewery.contactAddress ?? new AddressDto()}
+                            errors={contactAddressErrors}
+                            onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                                ...prev,
+                                contactAddress: newAddress
+                            }))}
+                        />
+                    </Box>
                 </Box>
-                <Box sx={{ flex: 1 }}>
-                    <AddressForm
-                        title={t('address.contactAddress')}
-                        address={brewery.contactAddress ?? new AddressDto()}
-                        errors={contactAddressErrors}
-                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                            ...prev,
-                            contactAddress: newAddress
-                        }))}
-                    />
-                </Box>
-            </Box>
+            </CollapsibleForm>
 
+            {id && <BreweryRemindersView breweryId={id}/>}
             {id && <ProductsView breweryId={id}/>}
         </DetailCardLayout>
     );

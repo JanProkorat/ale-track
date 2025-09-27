@@ -49,7 +49,7 @@ export function OrderDetailView(
     }, []);
 
     const fetchProducts = async () => {
-        try{
+        try {
 
             const client = new AuthorizedClient();
             await client.fetchProducts({}).then(setProducts)

@@ -42,6 +42,7 @@
     "noDataMessage": "Nebyly nalezeny žádné výsledky odpovídající zadaným filtrům.\nZkontrolujte překlepy nebo zkuste zadat celá slova."
   },
   "address": {
+    "address": "Adresa",
     "officialAddress": "Oficiální adresa",
     "contactAddress": "Kontaktní adresa",
     "street": "Ulice",
@@ -249,5 +250,58 @@
     "English": "Angličtina",
     "German": "Němčina",
     "Czech": "Čeština"
+  },
+  "reminders": {
+    "title": "Připomínky",
+    "new": "Nová připomínka",
+    "fetchError": "Chyba při načítání připomínek",
+    "fetchDetailError": "Chyba při načítání detailu připomínky",
+    "noDataTitle": "Žádná připomínky",
+    "noDataMessage": "Pro zobrazení připomínek si nejdříve alespoň jednu založte",
+    "detailTitle": "Detail připomínky",
+    "name": "Nadpis",
+    "occurrenceDate": "Datum připomenutí",
+    "description": "Popis",
+    "type": "Typ",
+    "numberOfDaysToRemindBefore": "Připomenout dní předem",
+    "reminderRecurrenceType": "Frekvence opakování",
+    "daysToDisplay": "Dny zobrazení",
+    "activeUntilDate": "Platnost do",
+    "saveSuccess": "Připomínka byla úspěšně uložena",
+    "saveError": "Chyba při ukládání připomínky",
+    "deleteSuccess": "Připomínka úspěšně odebrána",
+    "loadDetailError": "Chyba při načítání připomínky",
+    "displaySettings": "Nastavení zobrazení",
+    "days": "Dny",
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky"
+  },
+  "reminderType": {
+    "OneTimeEvent": "Jednorázová",
+    "Regular": "Pravidelná"
+  },
+  "reminderRecurrenceType": {
+    "Weekly": "Týdně",
+    "Monthly": "Měsíčně"
+  },
+  "dayOfWeek": {
+    "Monday": "Pondělí",
+    "Tuesday": "Útetý",
+    "Wednesday": "Středa",
+    "Thursday": "Čtvrtek",
+    "Friday": "Pátek",
+    "Saturday": "Sobota",
+    "Sunday": "Neděle"
+  },
+  "dayOfWeekShort": {
+    "Monday": "Po",
+    "Tuesday": "Út",
+    "Wednesday": "St",
+    "Thursday": "Čt",
+    "Friday": "Pá",
+    "Saturday": "So",
+    "Sunday": "Ne"
+  },
+  "dashboard": {
+    "welcome": "Ahoj, vítejte zpět"
   }
 }
