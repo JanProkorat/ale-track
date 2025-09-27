@@ -201,5 +201,8 @@
   "UserRoleType": {
     "Admin": "Administrator",
     "User": "User"
+  },
+  "dashboard": {
+    "welcome": "Hi, Welcome back"
   }
 }

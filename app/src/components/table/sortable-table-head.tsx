@@ -57,7 +57,7 @@ export function SortableTableHead(
                             minWidth: headCell.minWidth,
                             position: headCell.id == "name" ? 'sticky' : undefined,
                             left: headCell.id == "name" ? 0 : undefined,
-                            zIndex: headCell.id == "name" ? 1 : undefined
+                            zIndex: headCell.id == "name" ? 2 : undefined
                     }}
                     >
                         <TableSortLabel

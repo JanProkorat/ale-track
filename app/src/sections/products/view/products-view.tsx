@@ -6,7 +6,6 @@ import Table from "@mui/material/Table";
 import Button from "@mui/material/Button";
 import Drawer from "@mui/material/Drawer";
 import TableBody from "@mui/material/TableBody";
-import Typography from "@mui/material/Typography";
 import TableContainer from "@mui/material/TableContainer";
 import TablePagination from "@mui/material/TablePagination";
 import {Tab, Tabs, Dialog, DialogTitle, DialogActions} from "@mui/material";
@@ -21,6 +20,7 @@ import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from "../../../components/table/table-no-data";
 import {ProductDetailView} from "../detail-view/product-detail-view";
+import {SectionHeader} from "../../../components/label/section-header";
 import {TableEmptyRows} from "../../../components/table/table-empty-rows";
 import {SortableTableHead} from "../../../components/table/sortable-table-head";
 
@@ -109,10 +109,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
     return (
         <Box >
             {/* Nadpis a tlačítko */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', mb: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                    {t('products.title')}
-                </Typography>
+            <SectionHeader text={t('products.title')} sx={{mb: 2}}>
                 <Button
                     variant="contained"
                     color="inherit"
@@ -123,8 +120,8 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                 >
                     {t('products.new')}
                 </Button>
-            </Box>
-
+            </SectionHeader>
+            
             <Tabs
                 value={filterKind}
                 onChange={(_, newValue) => setFilterKind(newValue)}
@@ -148,7 +145,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                 onFilterType={setFilterType}
             />
 
-            <Scrollbar>
+            <Scrollbar sx={{maxHeight: 1000, overflow: 'auto', mb: 2}}>
                 <TableContainer sx={{overflow: 'unset'}}>
                     <Table stickyHeader>
                         <SortableTableHead

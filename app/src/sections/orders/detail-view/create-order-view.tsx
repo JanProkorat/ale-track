@@ -43,7 +43,7 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     }, []);
 
     const fetchProducts = async () => {
-        try{
+        try {
 
             const client = new AuthorizedClient();
             await client.fetchProducts({}).then(setProducts)

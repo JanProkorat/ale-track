@@ -8,6 +8,8 @@ import { Box, Button, Dialog, IconButton, Typography, DialogTitle, DialogActions
 
 import { Iconify } from "src/components/iconify";
 
+import {SectionHeader} from "../../components/label/section-header";
+
 type DetailCardLayoutProps<T> = {
     id: string | null;
     shouldCheckPendingChanges: boolean;
@@ -141,17 +143,7 @@ export function DetailCardLayout<T>(
             }}
         >
             {/* Header */}
-            <Box sx={{
-                flexShrink: 0,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid #eee',
-                mb: 2
-            }}>
-                <Typography variant="h5" sx={{fontWeight: 'bold'}}>
-                    {title}
-                </Typography>
+            <SectionHeader text={title} headerVariant="h5" sx={{mb: 2}}>
                 <Box sx={{alignItems: 'right'}}>
                     <IconButton
                         onClick={() => setIsResetDialogVisible(true)}
@@ -175,7 +167,7 @@ export function DetailCardLayout<T>(
                         <Iconify icon="solar:trash-bin-trash-bold"/>
                     </IconButton>
                 </Box>
-            </Box>
+            </SectionHeader>
 
             {/* Content */}
             {id === null ? (

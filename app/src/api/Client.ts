@@ -77,6 +77,48 @@ export interface IClient {
     getNumberOfRecordsInEachModuleEndpoint(): Promise<NumberOfRecordsInEachModuleDto>;
 
     /**
+     * Gets all upcoming reminders for all breweries
+     * @return List of reminders
+     */
+    getUpcomingRemindersEndpoint(): Promise<ReminderBreweryDto[]>;
+
+    /**
+     * Creates a reminder
+     * @return Reminder created
+     */
+    createReminderEndpoint(data: CreateReminderDto): Promise<string>;
+
+    /**
+     * Gets filtered reminders list for a brewery
+     * @return List of reminders
+     */
+    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<BreweryReminderDto[]>;
+
+    /**
+     * Gets reminder detail
+     * @return Detail of reminder
+     */
+    getReminderDetailEndpoint(id: string): Promise<ReminderDetailDto>;
+
+    /**
+     * Updates a reminder
+     * @return Reminder updated
+     */
+    updateReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string>;
+
+    /**
+     * Sets ResolvedDate of a reminder
+     * @return Reminder updated
+     */
+    setReminderResolvedDateEndpoint(id: string, setReminderResolvedDateRequest: SetReminderResolvedDateRequest): Promise<string>;
+
+    /**
+     * Deletes a reminder
+     * @return Reminder deleted
+     */
+    deleteReminderEndpoint(id: string): Promise<string>;
+
+    /**
      * Gets product types list
      * @return List of product types
      */
@@ -996,6 +1038,462 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<NumberOfRecordsInEachModuleDto>(null as any);
+    }
+
+    /**
+     * Gets all upcoming reminders for all breweries
+     * @return List of reminders
+     */
+    getUpcomingRemindersEndpoint(): Promise<ReminderBreweryDto[]> {
+        let url_ = this.baseUrl + "/ale-track/reminders";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetUpcomingRemindersEndpoint(_response);
+        });
+    }
+
+    protected processGetUpcomingRemindersEndpoint(response: Response): Promise<ReminderBreweryDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ReminderBreweryDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ReminderBreweryDto[]>(null as any);
+    }
+
+    /**
+     * Creates a reminder
+     * @return Reminder created
+     */
+    createReminderEndpoint(data: CreateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/reminders";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateReminderEndpoint(_response);
+        });
+    }
+
+    protected processCreateReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : <any>null;
+    
+            return result201;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Brewery not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Gets filtered reminders list for a brewery
+     * @return List of reminders
+     */
+    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<BreweryReminderDto[]> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{id}/reminders?";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (parameters === undefined || parameters === null)
+            throw new Error("The parameter 'parameters' must be defined and cannot be null.");
+        else
+            url_ += "Parameters=" + encodeURIComponent("" + parameters) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetBreweryRemindersListEndpoint(_response);
+        });
+    }
+
+    protected processGetBreweryRemindersListEndpoint(response: Response): Promise<BreweryReminderDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(BreweryReminderDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<BreweryReminderDto[]>(null as any);
+    }
+
+    /**
+     * Gets reminder detail
+     * @return Detail of reminder
+     */
+    getReminderDetailEndpoint(id: string): Promise<ReminderDetailDto> {
+        let url_ = this.baseUrl + "/ale-track/reminders/{id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetReminderDetailEndpoint(_response);
+        });
+    }
+
+    protected processGetReminderDetailEndpoint(response: Response): Promise<ReminderDetailDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("reminder not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = ReminderDetailDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ReminderDetailDto>(null as any);
+    }
+
+    /**
+     * Updates a reminder
+     * @return Reminder updated
+     */
+    updateReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateReminderEndpoint(_response);
+        });
+    }
+
+    protected processUpdateReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : <any>null;
+    
+            return result204;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder or Brewery not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets ResolvedDate of a reminder
+     * @return Reminder updated
+     */
+    setReminderResolvedDateEndpoint(id: string, setReminderResolvedDateRequest: SetReminderResolvedDateRequest): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(setReminderResolvedDateRequest);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetReminderResolvedDateEndpoint(_response);
+        });
+    }
+
+    protected processSetReminderResolvedDateEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a reminder
+     * @return Reminder deleted
+     */
+    deleteReminderEndpoint(id: string): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteReminderEndpoint(_response);
+        });
+    }
+
+    protected processDeleteReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
     }
 
     /**
@@ -4327,6 +4825,513 @@ export interface ICreateUserDto {
     userRoles: UserRoleType[];
 }
 
+export class ReminderBreweryDto implements IReminderBreweryDto {
+    breweryId?: string;
+    breweryName?: string;
+    reminders?: UpcomingReminderDto[];
+
+    constructor(data?: IReminderBreweryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.breweryId = _data["breweryId"];
+            this.breweryName = _data["breweryName"];
+            if (Array.isArray(_data["reminders"])) {
+                this.reminders = [] as any;
+                for (let item of _data["reminders"])
+                    this.reminders!.push(UpcomingReminderDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): ReminderBreweryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ReminderBreweryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["breweryId"] = this.breweryId;
+        data["breweryName"] = this.breweryName;
+        if (Array.isArray(this.reminders)) {
+            data["reminders"] = [];
+            for (let item of this.reminders)
+                data["reminders"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+}
+
+export interface IReminderBreweryDto {
+    breweryId?: string;
+    breweryName?: string;
+    reminders?: UpcomingReminderDto[];
+}
+
+export class UpcomingReminderDto implements IUpcomingReminderDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    occurrenceDate?: Date;
+
+    constructor(data?: IUpcomingReminderDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.occurrenceDate = _data["occurrenceDate"] ? new Date(_data["occurrenceDate"].toString()) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): UpcomingReminderDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpcomingReminderDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["occurrenceDate"] = this.occurrenceDate ? formatDate(this.occurrenceDate) : <any>undefined;
+        return data;
+    }
+}
+
+export interface IUpcomingReminderDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    occurrenceDate?: Date;
+}
+
+export class BreweryReminderDto implements IBreweryReminderDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    occurrenceDate?: Date | undefined;
+    isResolved?: boolean;
+    type?: ReminderType;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+
+    constructor(data?: IBreweryReminderDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.occurrenceDate = _data["occurrenceDate"] ? new Date(_data["occurrenceDate"].toString()) : <any>undefined;
+            this.isResolved = _data["isResolved"];
+            this.type = _data["type"];
+            this.recurrenceType = _data["recurrenceType"];
+            if (Array.isArray(_data["daysOfWeek"])) {
+                this.daysOfWeek = [] as any;
+                for (let item of _data["daysOfWeek"])
+                    this.daysOfWeek!.push(item);
+            }
+            if (Array.isArray(_data["daysOfMonth"])) {
+                this.daysOfMonth = [] as any;
+                for (let item of _data["daysOfMonth"])
+                    this.daysOfMonth!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): BreweryReminderDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new BreweryReminderDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["occurrenceDate"] = this.occurrenceDate ? formatDate(this.occurrenceDate) : <any>undefined;
+        data["isResolved"] = this.isResolved;
+        data["type"] = this.type;
+        data["recurrenceType"] = this.recurrenceType;
+        if (Array.isArray(this.daysOfWeek)) {
+            data["daysOfWeek"] = [];
+            for (let item of this.daysOfWeek)
+                data["daysOfWeek"].push(item);
+        }
+        if (Array.isArray(this.daysOfMonth)) {
+            data["daysOfMonth"] = [];
+            for (let item of this.daysOfMonth)
+                data["daysOfMonth"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface IBreweryReminderDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    occurrenceDate?: Date | undefined;
+    isResolved?: boolean;
+    type?: ReminderType;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+}
+
+export enum ReminderType {
+    OneTimeEvent = 0,
+    Regular = 1,
+}
+
+export enum ReminderRecurrenceType {
+    Weekly = 0,
+    Monthly = 1,
+}
+
+export enum DayOfWeek {
+    Sunday = 0,
+    Monday = 1,
+    Tuesday = 2,
+    Wednesday = 3,
+    Thursday = 4,
+    Friday = 5,
+    Saturday = 6,
+}
+
+export class GetBreweryRemindersListRequest extends FilterableRequest implements IGetBreweryRemindersListRequest {
+
+    constructor(data?: IGetBreweryRemindersListRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetBreweryRemindersListRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetBreweryRemindersListRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetBreweryRemindersListRequest extends IFilterableRequest {
+}
+
+export class ReminderDetailDto implements IReminderDetailDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    type?: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore?: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    resolvedDate?: Date | undefined;
+
+    constructor(data?: IReminderDetailDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.type = _data["type"];
+            this.occurrenceDate = _data["occurrenceDate"] ? new Date(_data["occurrenceDate"].toString()) : <any>undefined;
+            this.numberOfDaysToRemindBefore = _data["numberOfDaysToRemindBefore"];
+            this.recurrenceType = _data["recurrenceType"];
+            if (Array.isArray(_data["daysOfWeek"])) {
+                this.daysOfWeek = [] as any;
+                for (let item of _data["daysOfWeek"])
+                    this.daysOfWeek!.push(item);
+            }
+            if (Array.isArray(_data["daysOfMonth"])) {
+                this.daysOfMonth = [] as any;
+                for (let item of _data["daysOfMonth"])
+                    this.daysOfMonth!.push(item);
+            }
+            this.activeUntil = _data["activeUntil"] ? new Date(_data["activeUntil"].toString()) : <any>undefined;
+            this.resolvedDate = _data["resolvedDate"] ? new Date(_data["resolvedDate"].toString()) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): ReminderDetailDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ReminderDetailDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["type"] = this.type;
+        data["occurrenceDate"] = this.occurrenceDate ? formatDate(this.occurrenceDate) : <any>undefined;
+        data["numberOfDaysToRemindBefore"] = this.numberOfDaysToRemindBefore;
+        data["recurrenceType"] = this.recurrenceType;
+        if (Array.isArray(this.daysOfWeek)) {
+            data["daysOfWeek"] = [];
+            for (let item of this.daysOfWeek)
+                data["daysOfWeek"].push(item);
+        }
+        if (Array.isArray(this.daysOfMonth)) {
+            data["daysOfMonth"] = [];
+            for (let item of this.daysOfMonth)
+                data["daysOfMonth"].push(item);
+        }
+        data["activeUntil"] = this.activeUntil ? formatDate(this.activeUntil) : <any>undefined;
+        data["resolvedDate"] = this.resolvedDate ? formatDate(this.resolvedDate) : <any>undefined;
+        return data;
+    }
+}
+
+export interface IReminderDetailDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    type?: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore?: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    resolvedDate?: Date | undefined;
+}
+
+export class GetReminderDetailRequest implements IGetReminderDetailRequest {
+
+    constructor(data?: IGetReminderDetailRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetReminderDetailRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetReminderDetailRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetReminderDetailRequest {
+}
+
+export class SetReminderResolvedDateRequest implements ISetReminderResolvedDateRequest {
+    resolvedDate?: Date | undefined;
+
+    constructor(data?: ISetReminderResolvedDateRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.resolvedDate = _data["resolvedDate"] ? new Date(_data["resolvedDate"].toString()) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): SetReminderResolvedDateRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetReminderResolvedDateRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["resolvedDate"] = this.resolvedDate ? formatDate(this.resolvedDate) : <any>undefined;
+        return data;
+    }
+}
+
+export interface ISetReminderResolvedDateRequest {
+    resolvedDate?: Date | undefined;
+}
+
+export class UpdateReminderDto implements IUpdateReminderDto {
+    name!: string;
+    description?: string | undefined;
+    type!: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore!: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    resolvedDate?: Date | undefined;
+
+    constructor(data?: IUpdateReminderDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.type = _data["type"];
+            this.occurrenceDate = _data["occurrenceDate"] ? new Date(_data["occurrenceDate"].toString()) : <any>undefined;
+            this.numberOfDaysToRemindBefore = _data["numberOfDaysToRemindBefore"];
+            this.recurrenceType = _data["recurrenceType"];
+            if (Array.isArray(_data["daysOfWeek"])) {
+                this.daysOfWeek = [] as any;
+                for (let item of _data["daysOfWeek"])
+                    this.daysOfWeek!.push(item);
+            }
+            if (Array.isArray(_data["daysOfMonth"])) {
+                this.daysOfMonth = [] as any;
+                for (let item of _data["daysOfMonth"])
+                    this.daysOfMonth!.push(item);
+            }
+            this.activeUntil = _data["activeUntil"] ? new Date(_data["activeUntil"].toString()) : <any>undefined;
+            this.resolvedDate = _data["resolvedDate"] ? new Date(_data["resolvedDate"].toString()) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): UpdateReminderDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateReminderDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["type"] = this.type;
+        data["occurrenceDate"] = this.occurrenceDate ? formatDate(this.occurrenceDate) : <any>undefined;
+        data["numberOfDaysToRemindBefore"] = this.numberOfDaysToRemindBefore;
+        data["recurrenceType"] = this.recurrenceType;
+        if (Array.isArray(this.daysOfWeek)) {
+            data["daysOfWeek"] = [];
+            for (let item of this.daysOfWeek)
+                data["daysOfWeek"].push(item);
+        }
+        if (Array.isArray(this.daysOfMonth)) {
+            data["daysOfMonth"] = [];
+            for (let item of this.daysOfMonth)
+                data["daysOfMonth"].push(item);
+        }
+        data["activeUntil"] = this.activeUntil ? formatDate(this.activeUntil) : <any>undefined;
+        data["resolvedDate"] = this.resolvedDate ? formatDate(this.resolvedDate) : <any>undefined;
+        return data;
+    }
+}
+
+export interface IUpdateReminderDto {
+    name: string;
+    description?: string | undefined;
+    type: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    resolvedDate?: Date | undefined;
+}
+
+export class DeleteReminderRequest implements IDeleteReminderRequest {
+
+    constructor(data?: IDeleteReminderRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteReminderRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteReminderRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteReminderRequest {
+}
+
 export enum ProductType {
     PaleDraftBeer = 1,
     PaleLager = 2,
@@ -4347,6 +5352,94 @@ export enum ProductType {
     YeastLager = 17,
     UnfilteredBlendedLager = 18,
     FestiveLager = 19,
+}
+
+export class CreateReminderDto implements ICreateReminderDto {
+    name!: string;
+    description?: string | undefined;
+    type!: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore!: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    breweryId!: string;
+
+    constructor(data?: ICreateReminderDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.type = _data["type"];
+            this.occurrenceDate = _data["occurrenceDate"] ? new Date(_data["occurrenceDate"].toString()) : <any>undefined;
+            this.numberOfDaysToRemindBefore = _data["numberOfDaysToRemindBefore"];
+            this.recurrenceType = _data["recurrenceType"];
+            if (Array.isArray(_data["daysOfWeek"])) {
+                this.daysOfWeek = [] as any;
+                for (let item of _data["daysOfWeek"])
+                    this.daysOfWeek!.push(item);
+            }
+            if (Array.isArray(_data["daysOfMonth"])) {
+                this.daysOfMonth = [] as any;
+                for (let item of _data["daysOfMonth"])
+                    this.daysOfMonth!.push(item);
+            }
+            this.activeUntil = _data["activeUntil"] ? new Date(_data["activeUntil"].toString()) : <any>undefined;
+            this.breweryId = _data["breweryId"];
+        }
+    }
+
+    static fromJS(data: any): CreateReminderDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateReminderDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["type"] = this.type;
+        data["occurrenceDate"] = this.occurrenceDate ? formatDate(this.occurrenceDate) : <any>undefined;
+        data["numberOfDaysToRemindBefore"] = this.numberOfDaysToRemindBefore;
+        data["recurrenceType"] = this.recurrenceType;
+        if (Array.isArray(this.daysOfWeek)) {
+            data["daysOfWeek"] = [];
+            for (let item of this.daysOfWeek)
+                data["daysOfWeek"].push(item);
+        }
+        if (Array.isArray(this.daysOfMonth)) {
+            data["daysOfMonth"] = [];
+            for (let item of this.daysOfMonth)
+                data["daysOfMonth"].push(item);
+        }
+        data["activeUntil"] = this.activeUntil ? formatDate(this.activeUntil) : <any>undefined;
+        data["breweryId"] = this.breweryId;
+        return data;
+    }
+}
+
+export interface ICreateReminderDto {
+    name: string;
+    description?: string | undefined;
+    type: ReminderType;
+    occurrenceDate?: Date | undefined;
+    numberOfDaysToRemindBefore: number;
+    recurrenceType?: ReminderRecurrenceType | undefined;
+    daysOfWeek?: DayOfWeek[] | undefined;
+    daysOfMonth?: number[] | undefined;
+    activeUntil?: Date | undefined;
+    breweryId: string;
 }
 
 export class ProductListItemDto implements IProductListItemDto {

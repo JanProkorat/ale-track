@@ -1,6 +1,7 @@
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
 import React, {useState, useEffect} from 'react';
+import {useParams, useNavigate} from "react-router-dom";
 
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
@@ -22,9 +23,12 @@ export function BreweriesView() {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
 
+    const { breweryId } = useParams<{ breweryId?: string }>();
+    const navigate = useNavigate();
+
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
     const [breweries, setBreweries] = useState<BreweryListItemDto[]>([]);
-    const [selectedBreweryId, setSelectedBreweryId] = useState<string | null>(null);
+    const [selectedBreweryId, setSelectedBreweryId] = useState<string | null>(breweryId ?? null);
     const [createBreweryDrawerVisible, setCreateBreweryDrawerVisible] = useState<boolean>(false);
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
@@ -33,11 +37,32 @@ export function BreweriesView() {
         const loadInitial = async () => {
             const loaded = await fetchBreweries();
             setBreweries(loaded);
-            setSelectedBreweryId(loaded.length > 0 ? loaded[0].id! : null);
+            if (loaded.length > 0) {
+                if (breweryId) {
+                    const exists = loaded.some(b => b.id === breweryId);
+                    if (exists) {
+                        setSelectedBreweryId(breweryId);
+                    } else {
+                        const firstId = loaded[0].id!;
+                        setSelectedBreweryId(firstId);
+                        navigate(`/breweries/${firstId}`, { replace: true });
+                    }
+                } else {
+                    const firstId = loaded[0].id!;
+                    setSelectedBreweryId(firstId);
+                    navigate(`/breweries/${firstId}`, { replace: true });
+                }
+            } else {
+                setSelectedBreweryId(null);
+            }
             setInitialLoading(false);
         };
         void loadInitial();
     }, []);
+
+    useEffect(() => {
+        if (breweryId) setSelectedBreweryId(breweryId);
+    }, [breweryId]);
 
     const fetchBreweries = async () => {
         try {
@@ -73,6 +98,15 @@ export function BreweriesView() {
             setSelectedBreweryId(newData.length > 0 ? newData[0].id! : null);
         })
     }
+
+    const handleBreweryChange = (id: string) => {
+        if (hasDetailChanges) {
+            setPendingBreweryId(id);
+        } else {
+            setSelectedBreweryId(id);
+            navigate(`/breweries/${id}`);
+        }
+    };
 
     return (
         <DashboardContent>
@@ -113,7 +147,7 @@ export function BreweriesView() {
                                         <Card sx={{p: 2}}>
                                             <Tabs
                                                 value={selectedBreweryId}
-                                                onChange={(_, newValue) => setSelectedBreweryId(newValue)}
+                                                onChange={(_, newValue) => handleBreweryChange(newValue)}
                                                 textColor="secondary"
                                                 indicatorColor="secondary"
                                                 variant="fullWidth"
@@ -126,7 +160,7 @@ export function BreweriesView() {
                                                     }}
                                             >
                                                 {breweries.map((brewery) => (
-                                                    <Tab value={brewery.id} label={brewery.name}/>
+                                                    <Tab key={brewery.id} value={brewery.id} label={brewery.name}/>
                                                 ))}
                                             </Tabs>
                                         </Card>

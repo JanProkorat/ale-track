@@ -19,10 +19,10 @@ type DeliveryStateSelectProps = {
 
 export function DeliveryStateSelect({selectedState, states, shouldValidate, onSelect, disabled}: Readonly<DeliveryStateSelectProps>) {
     const {t} = useTranslation();
-    const [vehiclesTouched, setVehiclesTouched] = useState<boolean>(false);
+    const [stateTouched, setStateTouched] = useState<boolean>(false);
 
     return (
-        <FormControl fullWidth sx={{ mt: 1 }} error={(vehiclesTouched || shouldValidate) && !selectedState}>
+        <FormControl fullWidth sx={{ mt: 1 }} error={(stateTouched || shouldValidate) && !selectedState}>
             <InputLabel id="state-select-label">{t('productDeliveries.state')}</InputLabel>
             <Select
                 disabled={disabled}
@@ -38,7 +38,7 @@ export function DeliveryStateSelect({selectedState, states, shouldValidate, onSe
                         key={state}
                         value={state}
                         onClick={() => {
-                            setVehiclesTouched(true);
+                            setStateTouched(true);
                             onSelect(state)
                         }}>
                         <Checkbox checked={selectedState === state} />

@@ -101,7 +101,7 @@ export function NavMobile({
 
 // ----------------------------------------------------------------------
 
-export function NavContent({data, slots, sx}: NavContentProps) {
+export function NavContent({data, slots, sx}: Readonly<NavContentProps>) {
     const pathname = usePathname();
     const {t} = useTranslation();
 
@@ -136,7 +136,7 @@ export function NavContent({data, slots, sx}: NavContentProps) {
                         }}
                     >
                         {data.map((item) => {
-                            const isActived = item.path === pathname;
+                            const isActivated = pathname.includes(item.path);
 
                             return (
                                 <ListItem disableGutters disablePadding key={item.title}>
@@ -144,6 +144,11 @@ export function NavContent({data, slots, sx}: NavContentProps) {
                                         disableGutters
                                         component={RouterLink}
                                         href={item.path}
+                                        onClick={(e) => {
+                                            if (isActivated) {
+                                                e.preventDefault();
+                                            }
+                                        }}
                                         sx={[
                                             (theme) => ({
                                                 pl: 2,
@@ -155,7 +160,7 @@ export function NavContent({data, slots, sx}: NavContentProps) {
                                                 fontWeight: 'fontWeightMedium',
                                                 color: theme.vars.palette.text.secondary,
                                                 minHeight: 44,
-                                                ...(isActived && {
+                                                ...(isActivated && {
                                                     fontWeight: 'fontWeightSemiBold',
                                                     color: theme.vars.palette.primary.main,
                                                     bgcolor: varAlpha(theme.vars.palette.primary.mainChannel, 0.08),
