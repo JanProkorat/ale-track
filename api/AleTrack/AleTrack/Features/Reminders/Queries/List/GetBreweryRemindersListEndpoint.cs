@@ -21,7 +21,7 @@ public record GetBreweryRemindersListRequest : FilterableRequest
 /// <summary>
 /// Represents an API endpoint for retrieving a filtered list of reminders associated with a specific brewery.
 /// </summary>
-public sealed class GetBreweryRemindersListEndpoint(AleTrackDbContext dbContext) : Endpoint<GetBreweryRemindersListRequest, List<BreweryReminderDto>>
+public sealed class GetBreweryRemindersListEndpoint(AleTrackDbContext dbContext) : Endpoint<GetBreweryRemindersListRequest, List<ReminderListItemDto>>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -42,9 +42,9 @@ public sealed class GetBreweryRemindersListEndpoint(AleTrackDbContext dbContext)
 
     public override async Task HandleAsync(GetBreweryRemindersListRequest req, CancellationToken ct)
     {
-        var brewery = await dbContext.Reminders
+        var brewery = await dbContext.BreweryReminders
             .Where(r => r.Brewery.PublicId == req.Id)
-            .Select(r => new BreweryReminderDto
+            .Select(r => new ReminderListItemDto
             {
                 Id = r.PublicId,
                 Name = r.Name,

@@ -53,9 +53,4 @@ public sealed record CreateReminderDto
     /// Date until when the reminder is active. Mandatory for regular reminders, null for one-time event reminders
     /// </summary>
     public DateOnly? ActiveUntil { get; set; }
-    
-    /// <summary>
-    /// PublicId of the brewery the reminder belongs to
-    /// </summary>
-    public Guid BreweryId { get; set; }
 }

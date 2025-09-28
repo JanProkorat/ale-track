@@ -18,6 +18,10 @@ public sealed record CreateClientRequest
     public CreateClientDto Data { get; set; } = null!;
 }
 
+/// <summary>
+/// Endpoint to create a new <see cref="Client"/>.
+/// </summary>
+/// <param name="dbContext"></param>
 public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateClientRequest>
 {
     /// <inheritdoc />
@@ -46,12 +50,14 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         var client = new Client
         {
             Name = req.Data.Name,
+            BusinessName = req.Data.BusinessName,
+            Region = req.Data.Region,
             OfficialAddress = new Address
             {
                 StreetName = req.Data.OfficialAddress.StreetName,
                 StreetNumber = req.Data.OfficialAddress.StreetNumber,
                 City = req.Data.OfficialAddress.City,
-                Country = req.Data.OfficialAddress.Country!,
+                Country = req.Data.OfficialAddress.Country,
                 Zip = req.Data.OfficialAddress.Zip
             },
             ContactAddress = req.Data.ContactAddress is not null ? new Address
@@ -61,7 +67,15 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
                 City = req.Data.ContactAddress.City,
                 Country = req.Data.ContactAddress.Country,
                 Zip = req.Data.ContactAddress.Zip
-            } : null
+            } : null,
+            Contacts = req.Data.Contacts
+                .Select(c => new ClientContact
+                {
+                    Description = c.Description,
+                    Type = c.Type,
+                    Value = c.Value
+                })
+                .ToList()
         };
         
         dbContext.Clients.Add(client);

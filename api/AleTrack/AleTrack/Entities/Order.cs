@@ -47,5 +47,6 @@ public sealed class Order : PublicEntity
     /// <summary>
     /// Related client
     /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
     public Client Client { get; set; } = null!;
 }

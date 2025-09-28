@@ -3,7 +3,7 @@ namespace AleTrack.Common.Utils;
 /// <summary>
 /// Error codes related to endpoints
 /// </summary>
-internal static class ErrorCodes
+public static class ErrorCodes
 {
     /// <summary>
     /// Error code for unspecified errors

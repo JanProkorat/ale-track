@@ -5,16 +5,21 @@ using FluentValidation;
 
 namespace AleTrack.Features.Reminders.Commands.Update;
 
-public sealed class UpdateReminderValidator : Validator<UpdateReminderRequest>
-{
-    public UpdateReminderValidator()
-    {
-        RuleFor(r => r.Id).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.Data).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.Data).SetValidator(new UpdateReminderDtoValidator());
-    }
-}
-
+/// <summary>
+/// Validator for the <see cref="UpdateReminderDto"/> class, ensuring compliance with business rules and validation constraints.
+/// </summary>
+/// <remarks>
+/// The validation rules enforced in this validator are as follows:
+/// - The Name property must not be null and must not exceed 100 characters in length.
+/// - The Description property must not exceed 2000 characters if provided.
+/// - The Type property must not be null.
+/// - If the Type property is set to ReminderType.OneTimeEvent, the OccurrenceDate property must not be null.
+/// - The NumberOfDaysToRemindBefore property must not be null.
+/// - If the Type property is set to ReminderType.Regular, the RecurrenceType property must not be null.
+/// - If the RecurrenceType property is set to Weekly, the DaysOfWeek property must not be null.
+/// - If the RecurrenceType property is set to Monthly, the DaysOfMonth property must not be null.
+/// - If the Type property is set to ReminderType.Regular, the ActiveUntil property must not be null.
+/// </remarks>
 public sealed class UpdateReminderDtoValidator : Validator<UpdateReminderDto>
 {
     public UpdateReminderDtoValidator()

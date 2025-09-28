@@ -6,13 +6,21 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Features.Reminders.Commands.Create;
+namespace AleTrack.Features.Reminders.Commands.Create.Brewery;
 
 /// <summary>
 /// Request to create a new reminder
 /// </summary>
-public record CreateReminderRequest
+public record CreateBreweryReminderRequest
 {
+    /// <summary>
+    /// ID of the brewery to create a reminder for
+    /// </summary>
+    public Guid Id { get; set; }
+    
+    /// <summary>
+    /// Body of the request
+    /// </summary>
     [FromBody]
     public CreateReminderDto Data { get; set; } = null!;
 }
@@ -20,37 +28,37 @@ public record CreateReminderRequest
 /// <summary>
 /// Endpoint to create a new reminder
 /// </summary>
-public sealed class CreateReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateReminderRequest>
+public sealed class CreateBreweryReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateBreweryReminderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
-        Post("reminders");
+        Post("breweries/{id}/reminders");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .Produces<string>(StatusCodes.Status201Created)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(CreateReminderEndpoint))
+            .WithName(nameof(CreateBreweryReminderEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
-                s.Summary = "Creates a reminder";
+                s.Summary = "Creates a brewery reminder";
                 s.Responses[StatusCodes.Status201Created] = "Reminder created";
                 s.Responses[StatusCodes.Status404NotFound] = "Brewery not found";
             }
         );
     }
 
-    public override async Task HandleAsync(CreateReminderRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CreateBreweryReminderRequest req, CancellationToken ct)
     {
-        var brewery = await dbContext.Breweries.FirstOrDefaultAsync(b => b.PublicId == req.Data.BreweryId, ct);
+        var brewery = await dbContext.Breweries.FirstOrDefaultAsync(b => b.PublicId == req.Id, ct);
         if (brewery is null)
-            ThrowHelper.PublicEntityNotFound(nameof(Brewery), req.Data.BreweryId);
+            ThrowHelper.PublicEntityNotFound(nameof(Entities.Brewery), req.Id);
 
-        var reminder = new Reminder
+        var reminder = new BreweryReminder
         {
             Brewery = brewery!,
             Name = req.Data.Name,
@@ -81,7 +89,7 @@ public sealed class CreateReminderEndpoint(AleTrackDbContext dbContext) : Endpoi
             }
         }
 
-        dbContext.Reminders.Add(reminder);
+        dbContext.BreweryReminders.Add(reminder);
         await dbContext.SaveChangesAsync(ct);
         
         await SendAsync(reminder.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);

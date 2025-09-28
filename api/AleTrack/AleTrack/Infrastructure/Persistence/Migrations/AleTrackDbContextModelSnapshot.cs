@@ -58,6 +58,66 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("breweries", (string)null);
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.BreweryReminder", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateOnly?>("ActiveUntil")
+                        .HasColumnType("date");
+
+                    b.Property<long>("BreweryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("brewery_id");
+
+                    b.Property<string>("DaysOfMonth")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DaysOfWeek")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("NumberOfDaysToRemindBefore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("OccurrenceDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int?>("RecurrenceType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ResolvedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BreweryId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("brewery_reminders");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.Client", b =>
                 {
                     b.Property<long>("Id")
@@ -66,6 +126,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BusinessName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("business_name");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -77,12 +146,149 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
+                    b.Property<int>("Region")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(8)
+                        .HasColumnName("region");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.ToTable("clients", (string)null);
+                    b.ToTable("clients");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.ClientContact", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasColumnName("type");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.ToTable("client_contacts");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.ClientNote", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_created");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("client_notes");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.ClientReminder", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateOnly?>("ActiveUntil")
+                        .HasColumnType("date");
+
+                    b.Property<long>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<string>("DaysOfMonth")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DaysOfWeek")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("NumberOfDaysToRemindBefore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("OccurrenceDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int?>("RecurrenceType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ResolvedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("client_reminders");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.DeliveryItem", b =>
@@ -492,65 +698,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("product_deliveries");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.Reminder", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateOnly?>("ActiveUntil")
-                        .HasColumnType("date");
-
-                    b.Property<long>("BreweryId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DaysOfMonth")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DaysOfWeek")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("NumberOfDaysToRemindBefore")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("OccurrenceDate")
-                        .HasColumnType("date");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.Property<int?>("RecurrenceType")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("ResolvedDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BreweryId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("reminders");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.User", b =>
                 {
                     b.Property<long>("Id")
@@ -774,6 +921,17 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.BreweryReminder", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Brewery", "Brewery")
+                        .WithMany("Reminders")
+                        .HasForeignKey("BreweryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Brewery");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.Client", b =>
                 {
                     b.OwnsOne("AleTrack.Entities.Address", "ContactAddress", b1 =>
@@ -864,6 +1022,39 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.ClientContact", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Client", "Client")
+                        .WithMany("Contacts")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.ClientNote", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Client", "Client")
+                        .WithMany("Notes")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.ClientReminder", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Client", "Client")
+                        .WithMany("Reminders")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.DeliveryItem", b =>
                 {
                     b.HasOne("AleTrack.Entities.DeliveryStop", "DeliveryStop")
@@ -927,7 +1118,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasOne("AleTrack.Entities.Client", "Client")
                         .WithMany("Orders")
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Client");
@@ -973,17 +1164,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.Reminder", b =>
-                {
-                    b.HasOne("AleTrack.Entities.Brewery", "Brewery")
-                        .WithMany("Reminders")
-                        .HasForeignKey("BreweryId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("Brewery");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.UserRole", b =>
                 {
                     b.HasOne("AleTrack.Entities.User", "User")
@@ -1021,7 +1201,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.Client", b =>
                 {
+                    b.Navigation("Contacts");
+
+                    b.Navigation("Notes");
+
                     b.Navigation("Orders");
+
+                    b.Navigation("Reminders");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.DeliveryStop", b =>

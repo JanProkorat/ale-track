@@ -1,0 +1,90 @@
+name: Pull Request Tests
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build solution
+      run: dotnet build --no-restore --configuration Release --verbosity minimal
+      
+    - name: Run tests with coverage
+      run: |
+        dotnet test --no-build --configuration Release --verbosity normal \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults \
+          --logger "trx;LogFileName=test-results.trx" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+      
+    - name: Generate coverage report
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.3.8
+      if: always()
+      with:
+        reports: 'TestResults/**/coverage.opencover.xml'
+        targetdir: 'CoverageReport'
+        reporttypes: 'Html;MarkdownSummaryGithub'
+        verbosity: 'Info'
+        
+    - name: Add coverage comment to PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: github.event_name == 'pull_request' && always()
+      with:
+        recreate: true
+        path: CoverageReport/SummaryGithub.md
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ github.run_number }}
+        path: |
+          TestResults/**/*.trx
+          TestResults/**/*.xml
+          
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report-${{ github.run_number }}
+        path: |
+          CoverageReport/
+          TestResults/**/coverage.opencover.xml
+          
+    - name: Check test results
+      if: always()
+      run: |
+        if [ -f "TestResults/test-results.trx" ]; then
+          echo "Tests completed. Checking results..."
+          # Test výsledky jsou již zpracované pomocí dotnet test exit kódu
+        else
+          echo "No test results found!"
+          exit 1
+        fi

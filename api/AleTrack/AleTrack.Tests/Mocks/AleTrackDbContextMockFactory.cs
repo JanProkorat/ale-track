@@ -1,6 +1,8 @@
 using AleTrack.Entities;
+using AleTrack.Entities.BaseEntities;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Moq;
 using Moq.EntityFrameworkCore;
 
@@ -28,6 +30,7 @@ public static class AleTrackDbContextMockFactory
     /// <param name="productDeliveries">The collection of ProductDelivery entities to include in the mocked DbContext.</param>
     /// <param name="deliveryItems">The collection of DeliveryItem entities to include in the mocked DbContext.</param>
     /// <param name="inventoryItems">The collection of InventoryItem entities to include in the mocked DbContext.</param>
+    /// <param name="clientNotes">The collection of ClientNote entities to include in the mocked DbContext.</param>
     /// <returns>A mock of the AleTrackDbContext configured with the provided entity data.</returns>
     public static Mock<AleTrackDbContext> CreateMock(
         ICollection<Client>? clients = null,
@@ -41,7 +44,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<Driver>? drivers = null,
         ICollection<ProductDelivery>? productDeliveries = null,
         ICollection<DeliveryItem>? deliveryItems = null,
-        ICollection<InventoryItem>? inventoryItems = null)
+        ICollection<InventoryItem>? inventoryItems = null,
+        ICollection<ClientNote>? clientNotes = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -57,7 +61,8 @@ public static class AleTrackDbContextMockFactory
             drivers ?? [],
             productDeliveries ?? [],
             deliveryItems ?? [],
-            inventoryItems ?? []);
+            inventoryItems ?? [],
+            clientNotes ?? []);
     }
 
     /// <summary>
@@ -76,6 +81,7 @@ public static class AleTrackDbContextMockFactory
     /// <param name="productDeliveries">The collection of ProductDelivery entities to include in the mock.</param>
     /// <param name="deliveryItems">The collection of DeliveryItem entities to include in the mock.</param>
     /// <param name="inventoryItems">The collection of InventoryItem entities to include in the mock.</param>
+    /// <param name="clientNotes">The collection of ClientNote entities to include in the mock.</param>
     /// <returns>A configured mock instance of the AleTrackDbContext with the provided entity data.</returns>
     private static Mock<AleTrackDbContext> SetupDbContextMock(this Mock<AleTrackDbContext> dbContextMock,
         ICollection<Client> clients,
@@ -89,7 +95,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<Driver> drivers,
         ICollection<ProductDelivery> productDeliveries,
         ICollection<DeliveryItem> deliveryItems,
-        ICollection<InventoryItem> inventoryItems)
+        ICollection<InventoryItem> inventoryItems,
+        ICollection<ClientNote> clientNotes)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -103,6 +110,18 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<ProductDelivery>>(x => x.ProductDeliveries).ReturnsDbSet(productDeliveries);
         dbContextMock.Setup<DbSet<DeliveryItem>>(x => x.DeliveryItems).ReturnsDbSet(deliveryItems);
         dbContextMock.Setup<DbSet<InventoryItem>>(x => x.InventoryItems).ReturnsDbSet(inventoryItems);
+        dbContextMock.Setup<DbSet<ClientNote>>(x => x.ClientNotes).ReturnsDbSet(clientNotes);
+        
+        // Setup for SoftlyDelete method - only for entities that implement ISoftlyDeletable
+        dbContextMock.Setup(d => d.SoftlyDelete(It.IsAny<ISoftlyDeletable>()))
+            .Returns<ISoftlyDeletable>(e =>
+            {
+                e.IsDeleted = true;
+                return dbContextMock.Object.Entry(e);
+            });
+
+        // Add other softly deletable entity types as needed
+        // Note: Only entities that inherit from PublicSoftlyDeletableEntity can be added here
         
         return dbContextMock;
     }

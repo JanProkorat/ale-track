@@ -5,7 +5,7 @@ namespace AleTrack.Features.Reminders.Queries.List;
 /// <summary>
 /// Represents a data transfer object (DTO) that encapsulates information about reminders associated with a brewery.
 /// </summary>
-public sealed record BreweryReminderDto
+public sealed record ReminderListItemDto
 {
     /// <summary>
     /// Public ID of the reminder

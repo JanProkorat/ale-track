@@ -1,5 +1,4 @@
 using AleTrack.Common.Enums;
-using AleTrack.Common.Models;
 using AleTrack.Entities;
 using AleTrack.Features.Breweries.Commands.Create;
 using AleTrack.Tests.Builders;
@@ -17,24 +16,37 @@ public sealed class CreateBreweryTests
         
         var command = new CreateBreweryRequest
         {
-            Data = new CreateBreweryDto
-            {
-                Name = "Test Brewery",
-                OfficialAddress = new AddressDto
-                {
-                    City = "city",
-                    StreetName = "Street",
-                    StreetNumber = "123",
-                    Country = Country.Czechia,
-                    Zip = "12345"
-                }
-            }
+            Data = BreweryBuilder.BuildCreateDto(
+                name: "Test Brewery",
+                officialAddress: AddressBuilder.BuildDto(
+                    city: "city",
+                    streetName: "Street",
+                    streetNumber: "123",
+                    country: Country.Czechia,
+                    zip: "12345"
+                )
+            )
         };
 
         var endpoint = EndpointBuilder<CreateBreweryRequest, CreateBreweryEndpoint>.Create(dbContext.Object);
         await endpoint.HandleAsync(command, CancellationToken.None);
         
-        dbContext.Verify(e => e.Breweries.Add(It.IsAny<Brewery>()), Times.Once);
+        dbContext.Verify(e => e.Breweries.Add(It.Is<Brewery>(b => 
+            b.Name == command.Data.Name &&
+            b.Color == command.Data.Color &&
+            b.OfficialAddress.StreetName == command.Data.OfficialAddress.StreetName &&
+            b.OfficialAddress.StreetNumber == command.Data.OfficialAddress.StreetNumber &&
+            b.OfficialAddress.City == command.Data.OfficialAddress.City &&
+            b.OfficialAddress.Country == command.Data.OfficialAddress.Country &&
+            b.OfficialAddress.Zip == command.Data.OfficialAddress.Zip &&
+            ((b.ContactAddress == null && command.Data.ContactAddress == null) ||
+             (b.ContactAddress != null && command.Data.ContactAddress != null &&
+              b.ContactAddress.StreetName == command.Data.ContactAddress.StreetName &&
+              b.ContactAddress.StreetNumber == command.Data.ContactAddress.StreetNumber &&
+              b.ContactAddress.City == command.Data.ContactAddress.City &&
+              b.ContactAddress.Country == command.Data.ContactAddress.Country &&
+              b.ContactAddress.Zip == command.Data.ContactAddress.Zip))
+        )), Times.Once);
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
