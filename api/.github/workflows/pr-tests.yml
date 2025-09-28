@@ -13,6 +13,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
+    defaults:
+      run:
+        working-directory: ./AleTrack
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -26,19 +30,19 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/AleTrack/**/*.csproj') }}
         restore-keys: |
           ${{ runner.os }}-nuget-
         
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore AleTrack.sln
       
     - name: Build solution
-      run: dotnet build --no-restore --configuration Release --verbosity minimal
+      run: dotnet build AleTrack.sln --no-restore --configuration Release --verbosity minimal
       
     - name: Run tests with coverage
       run: |
-        dotnet test --no-build --configuration Release --verbosity normal \
+        dotnet test AleTrack.Tests/AleTrack.Tests.csproj --no-build --configuration Release --verbosity normal \
           --collect:"XPlat Code Coverage" \
           --results-directory ./TestResults \
           --logger "trx;LogFileName=test-results.trx"
@@ -47,7 +51,7 @@ jobs:
       uses: danielpalme/ReportGenerator-GitHub-Action@5.3.8
       if: always()
       with:
-        reports: 'TestResults/**/coverage.cobertura.xml'
+        reports: 'AleTrack/TestResults/**/coverage.cobertura.xml'
         targetdir: 'CoverageReport'
         reporttypes: 'Html;MarkdownSummaryGithub'
         verbosity: 'Info'
@@ -65,8 +69,8 @@ jobs:
       with:
         name: test-results-${{ github.run_number }}
         path: |
-          TestResults/**/*.trx
-          TestResults/**/*.xml
+          AleTrack/TestResults/**/*.trx
+          AleTrack/TestResults/**/*.xml
           
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
@@ -75,4 +79,4 @@ jobs:
         name: coverage-report-${{ github.run_number }}
         path: |
           CoverageReport/
-          TestResults/**/coverage.cobertura.xml
+          AleTrack/TestResults/**/coverage.cobertura.xml
