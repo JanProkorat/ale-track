@@ -1,0 +1,78 @@
+name: Deploy Migrations
+
+on:
+  push:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  deploy-migrations:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Dev' }}
+    
+    defaults:
+      run:
+        working-directory: ./AleTrack
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/AleTrack/**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+        
+    - name: Restore dependencies
+      run: dotnet restore AleTrack.sln
+      
+    - name: Build solution
+      run: dotnet build AleTrack.sln --no-restore --configuration Release --verbosity minimal
+      
+    - name: Install EF Core tools
+      run: dotnet tool install --global dotnet-ef --version 8.0.*
+      
+    - name: Check for pending migrations
+      id: check-migrations
+      run: |
+        cd AleTrack
+        PENDING=$(dotnet ef migrations list --no-build --configuration Release | grep -c "^[[:space:]]*[^[:space:]]" || echo "0")
+        echo "pending_count=$PENDING" >> $GITHUB_OUTPUT
+        if [ "$PENDING" -gt "0" ]; then
+          echo "Found $PENDING pending migrations"
+          dotnet ef migrations list --no-build --configuration Release
+        else
+          echo "No pending migrations found"
+        fi
+      env:
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        
+    - name: Apply migrations
+      if: steps.check-migrations.outputs.pending_count != '0'
+      run: |
+        cd AleTrack
+        echo "Applying database migrations..."
+        dotnet ef database update --no-build --configuration Release --verbose
+      env:
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        
+    - name: Notify on success
+      if: success() && steps.check-migrations.outputs.pending_count != '0'
+      run: |
+        echo "✅ Database migrations applied successfully to ${{ github.ref == 'refs/heads/main' && 'PRODUCTION' || 'DEV' }} environment"
+        
+    - name: Notify on no migrations
+      if: success() && steps.check-migrations.outputs.pending_count == '0'
+      run: |
+        echo "ℹ️ No pending migrations found for ${{ github.ref == 'refs/heads/main' && 'PRODUCTION' || 'DEV' }} environment"
