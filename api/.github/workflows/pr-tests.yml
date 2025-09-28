@@ -6,6 +6,11 @@ on:
   push:
     branches: [ main, dev ]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 env:
   DOTNET_VERSION: '8.0.x'
 
@@ -58,7 +63,7 @@ jobs:
         
     - name: Add coverage comment to PR
       uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request' && always()
+      if: github.event_name == 'pull_request' && always() && hashFiles('CoverageReport/SummaryGithub.md') != ''
       with:
         recreate: true
         path: CoverageReport/SummaryGithub.md
