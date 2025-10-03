@@ -22,10 +22,10 @@ export function ReminderRecurrenceTypeSelect({selectedType, errors, onSelect, di
 
     return (
         <FormControl fullWidth sx={{ mt: 1 }} error={!!errors.recurrenceType}>
-            <InputLabel id="reminder-type-select-label">{t('reminders.reminderRecurrenceType')}</InputLabel>
+            <InputLabel id="reminder-recurrence-type-select-label">{t('reminders.reminderRecurrenceType')}</InputLabel>
             <Select
                 disabled={disabled}
-                labelId="reminider-type-select-id"
+                labelId="reminder-recurrence-type-select-label"
                 value={selectedType ?? ''}
                 renderValue={() => selectedType !== undefined &&
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>

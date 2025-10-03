@@ -25,7 +25,8 @@ export function SectionHeader({text, headerVariant, children, sx, onClick, bold,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    borderBottom: bottomLineVisible == null || bottomLineVisible ? '1px solid #eee' : undefined
+                    borderBottom: bottomLineVisible == null || bottomLineVisible ? '1px solid #eee' : undefined,
+                    gap: 1
                 },
                 ...(Array.isArray(sx) ? sx : [sx])
             ]}
@@ -34,13 +35,16 @@ export function SectionHeader({text, headerVariant, children, sx, onClick, bold,
                 variant={headerVariant ?? "subtitle1"}
                 sx={{
                     fontWeight: bold === undefined || bold ? 'bold' : undefined,
-                    width: '80%'
+                    flex: 1,
+                    minWidth: 0
                 }}
                 onClick={() => onClick && onClick()}
             >
                 {text}
             </Typography>
-            {children}
+            <Box sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {children}
+            </Box>
         </Box>
     );
 }

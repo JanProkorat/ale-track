@@ -1,26 +1,35 @@
-import { useTranslation } from 'react-i18next';
-import React, {useState, useEffect} from 'react';
+import {useTranslation} from 'react-i18next';
+import {varAlpha} from "minimal-shared/utils";
+import { useParams, useNavigate } from 'react-router-dom';
+import React, {useState, useEffect, useCallback} from 'react';
 
+import Box from "@mui/material/Box";
 import Table from '@mui/material/Table';
+import Drawer from "@mui/material/Drawer";
 import TableBody from '@mui/material/TableBody';
 import TableContainer from '@mui/material/TableContainer';
+import {linearProgressClasses} from "@mui/material/LinearProgress";
+import {Tab, Card, Tabs, Button, Typography, LinearProgress} from "@mui/material";
 
 import {Scrollbar} from 'src/components/scrollbar';
 
-import {ClientDetailView} from "../detail-view";
+import { Region} from "../../../api/Client";
+import {CreateClientView} from "../detail-view";
 import {emptyRows} from '../../../providers/utils';
+import {Iconify} from "../../../components/iconify";
 import {ClientsTableRow} from '../clients-table-row';
 import {useTable} from "../../../providers/TableProvider";
+import {DashboardContent} from "../../../layouts/dashboard";
 import {ClientsTableToolbar} from '../clients-table-toolbar';
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {ClientDetailCard} from "../detail-view/client-detail-card";
+import {useLocalStorage} from '../../../hooks/use-local-storage';
+import {UpdateClientView} from "../detail-view/update-client-view";
 import {TableNoData} from '../../../components/table/table-no-data';
 import {TableEmptyRows} from '../../../components/table/table-empty-rows';
-import {SplitViewLayout} from "../../../layouts/dashboard/split-view-layout";
 import {SortableTableHead} from '../../../components/table/sortable-table-head';
 
-import type {ClientsProps} from '../clients-table-row';
+import type {ClientListItemDto} from "../../../api/Client";
 
 // ----------------------------------------------------------------------
 
@@ -29,10 +38,15 @@ export function ClientsView() {
 
     const { t } = useTranslation();
 
+    const { clientId } = useParams<{ clientId?: string }>();
+    const navigate = useNavigate();
+
+    const [selectedRegion, setSelectedRegion] = useLocalStorage<Region>('clients-selected-region', Region.ZittauCity);
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
     const [filterName, setFilterName] = useState<string>('');
-    const [clients, setClients] = useState<ClientsProps[]>([]);
-    const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+    const [filterRegion, setFilterRegion] = useState<string>(`${selectedRegion}`);
+    const [clients, setClients] = useState<ClientListItemDto[]>([]);
+    const [selectedClientId, setSelectedClientId] = useLocalStorage<string | null>('clients-selected-client-id', clientId ?? null);
     const [createClientDrawerVisible, setCreateClientDrawerVisible] = useState<boolean>(false);
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingClientId, setPendingClientId] = useState<string | null>(null);
@@ -42,67 +56,104 @@ export function ClientsView() {
 
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
-    useEffect(() => {
-        const loadInitial = async () => {
-            const loaded = await fetchClients();
-            setClients(loaded);
-            setSelectedClientId(loaded.length > 0 ? loaded[0].id : null);
-            setInitialLoading(false);
-        };
-        void loadInitial();
-    }, []);
-
-    useEffect(() => {
-        if (!initialLoading) {
-            void fetchClients();
-        }
-    }, [filterName, order, orderBy]);
-
-    const fetchClients = async () => {
+    const fetchClients = useCallback(async () => {
         try {
             const client = new AuthorizedClient();
             const filters: Record<string, string> = {};
 
             if (filterName) filters.name = `startswith:${filterName}`;
+            if (filterRegion) filters.region = `eq:${filterRegion}`;
             filters.sort = `${order}:${orderBy}`;
 
-            const response = await client.fetchClients(filters);
-            return response.map(item => ({
-                id: item.id,
-                name: item.name,
-                streetName: item.streetName,
-                streetNumber: item.streetNumber,
-                city: item.city,
-                zip: item.zip,
-                country: item.country
-            } as ClientsProps));
+            return await client.fetchClients(filters);
         } catch (error) {
             showSnackbar(t('clients.errorFetchingClients'), 'error');
             console.error('Error fetching clients:', error);
             return [];
         }
-    };
+    }, [filterName, filterRegion, order, orderBy, showSnackbar, t]);
 
-    const closeDrawer = () => {
-        fetchClients().then(setClients);
-        setCreateClientDrawerVisible(false);
-    }
+    useEffect(() => {
+        const loadInitial = async () => {
+            const data = await fetchClients();
+            setClients(data);
+            if (data.length > 0) {
+                if (clientId) {
+                    const exists = data.some(c => c.id === clientId);
+                    if (exists) {
+                        setSelectedClientId(clientId);
+                    } else {
+                        const firstId = data[0].id!;
+                        setSelectedClientId(firstId);
+                        navigate(`/clients/${firstId}`, { replace: true });
+                    }
+                } else {
+                    const firstId = data[0].id!;
+                    setSelectedClientId(firstId);
+                    navigate(`/clients/${firstId}`, { replace: true });
+                }
+            } else {
+                setSelectedClientId(null);
+            }
+            if (initialLoading) setInitialLoading(false);
+        };
+        void loadInitial();
+    }, [clientId, fetchClients, navigate, setSelectedClientId, initialLoading]);
+
+    useEffect(() => {
+        if (clientId) setSelectedClientId(clientId);
+    }, [clientId, setSelectedClientId]);
+
+    useEffect(() => {
+        void fetchClients().then((data) => {
+            setClients(data);
+            if (!selectedClientId && data.length > 0) {
+                setSelectedClientId(data[0].id!);
+            }
+            if (selectedClientId && !data.find(client => client.id === selectedClientId)) {
+                setSelectedClientId(data.length > 0 ? data[0].id! : null);
+            }
+
+            if (initialLoading)
+                setInitialLoading(false);
+        });
+    }, [fetchClients, selectedClientId, setSelectedClientId, initialLoading]);
+
+    useEffect(() =>{
+        setFilterRegion(`${selectedRegion}`)
+    }, [selectedRegion])
 
     const handleRowClick = (id: string) => {
         if (hasDetailChanges) {
             setPendingClientId(id);
         } else {
             setSelectedClientId(id);
+            navigate(`/clients/${id}`);
         }
     };
 
-    const handleDisplayedClientChange = (shouldLoadNewData: boolean) => {
-        if (shouldLoadNewData){
-            fetchClients().then(setClients);
+    const handleAfterDeletingClient = async () => {
+        await fetchClients().then((newData) => {
+            setClients(newData);
+            setSelectedClientId(newData.length > 0 ? newData[0].id! : null);
+        })
+    }
 
-            if (pendingClientId !== null)
-                setSelectedClientId(pendingClientId);
+    const handleDisplayedClientChange = (shouldLoadNewData: boolean) => {
+        if (shouldLoadNewData) {
+            fetchClients().then(newData => {
+                setClients(newData);
+                if (pendingClientId !== null) {
+                    setSelectedClientId(pendingClientId);
+                }
+            });
         }
+        setPendingClientId(null);
+    };
+
+    const closeDrawer = () => {
+        fetchClients().then(setClients);
+        setCreateClientDrawerVisible(false);
     }
 
     const clientListCard = (
@@ -125,12 +176,6 @@ export function ClientsView() {
                             rowCount={clients.length}
                             numSelected={table.selected.length}
                             onSort={table.onSort}
-                            onSelectAllRows={(checked) =>
-                                table.onSelectAllRows(
-                                    checked,
-                                    clients.map((client) => client.id)
-                                )
-                            }
                             headLabel={[
                                 {id: 'name', label: t('clients.name')}
                             ]}
@@ -145,9 +190,9 @@ export function ClientsView() {
                                     <ClientsTableRow
                                         key={row.id}
                                         row={row}
-                                        selected={table.selected.includes(row.id)}
-                                        onSelectRow={() => table.onSelectRow(row.id)}
-                                        onRowClick={() => handleRowClick(row.id)}
+                                        selected={table.selected.includes(row.id!)}
+                                        onSelectRow={() => table.onSelectRow(row.id!)}
+                                        onRowClick={() => handleRowClick(row.id!)}
                                         isSelected={selectedClientId === row.id}
                                     />
                                 ))}
@@ -166,23 +211,92 @@ export function ClientsView() {
     );
 
     return (
-        <SplitViewLayout
-            title={t('clients.title')}
-            initialLoading={initialLoading}
-            newLabel={t('clients.new')}
-            onNewClick={() => setCreateClientDrawerVisible(true)}
-            leftContent={clientListCard}
-            rightContent={<ClientDetailCard
-                id={selectedClientId}
-                onDelete={() => fetchClients().then(setClients)}
-                onHasChangesChange={setHasDetailChanges}
-                shouldCheckPendingChanges={pendingClientId !== null}
-                onConfirmed={handleDisplayedClientChange}
-                onProgressbarVisibilityChange={setInitialLoading}
-            />}
-            drawerOpen={createClientDrawerVisible}
-            onDrawerClose={closeDrawer}
-            drawerContent={<ClientDetailView onClose={closeDrawer} />}
-        />
+        <DashboardContent>
+            <Box sx={{mb: 5, display: 'flex', alignItems: 'center'}}>
+                <Typography variant="h4" sx={{flexGrow: 1}}>
+                    {t('clients.title')}
+                </Typography>
+                <Button
+                    variant="contained"
+                    color="inherit"
+                    startIcon={<Iconify icon="mingcute:add-line"/>}
+                    onClick={() => setCreateClientDrawerVisible(true)}
+                >
+                    {t('clients.new')}
+                </Button>
+            </Box>
+
+            <Box sx={{display: 'flex'}}>
+                <Box sx={{flexGrow: 1}}>
+                    <Box sx={{position: 'relative', alignItems: "center"}}>
+                        {initialLoading ?
+                            <LinearProgress
+                                sx={{
+                                    zIndex: 1,
+                                    position: 'absolute',
+                                    top: 190,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: '40%',
+                                    bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+                                    [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                                }}
+                            /> :
+                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
+                                <Card sx={{p: 2}}>
+                                    <Tabs
+                                        value={selectedRegion}
+                                        onChange={(_, newValue) => setSelectedRegion(newValue)}
+                                        textColor="secondary"
+                                        indicatorColor="secondary"
+                                        variant="fullWidth"
+                                    >
+                                        {Object.keys(Region)
+                                            .filter(key => isNaN(Number(key)))
+                                            .map((region) => {
+                                                const regionEnumValue = Region[region as keyof typeof Region];
+                                                return (
+                                                    <Tab key={region} value={regionEnumValue} label={t('region.' + region)}/>
+                                                );
+                                            })
+                                        }
+                                    </Tabs>
+                                </Card>
+                                <Box sx={{display: 'flex'}}>
+                                    <Box sx={{width: '20%', pr: 2}}>
+                                        <Card>
+                                            {clientListCard}
+                                        </Card>
+                                    </Box>
+                                    <Card sx={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, p: 2}}>
+                                        {selectedClientId ?
+                                            <UpdateClientView
+                                                id={selectedClientId}
+                                                shouldCheckPendingChanges={pendingClientId !== null}
+                                                onDelete={handleAfterDeletingClient}
+                                                onConfirmed={handleDisplayedClientChange}
+                                                onHasChangesChange={setHasDetailChanges}
+                                            /> :
+                                            <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                                                {t('clients.noDetailToDisplay')}
+                                            </Typography>
+                                        }
+                                    </Card>
+                                </Box>
+                            </Box>
+                        }
+                    </Box>
+                </Box>
+            </Box>
+            <Drawer
+                anchor="right"
+                open={createClientDrawerVisible}
+                onClose={closeDrawer}
+            >
+                <Box sx={{width: 700, p: 2}}>
+                    <CreateClientView region={selectedRegion} onClose={closeDrawer} />
+                </Box>
+            </Drawer>
+        </DashboardContent>
     );
 }

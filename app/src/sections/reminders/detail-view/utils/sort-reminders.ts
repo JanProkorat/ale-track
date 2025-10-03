@@ -1,6 +1,6 @@
-import type {BreweryReminderDto} from "../../../../api/Client";
+import type {ReminderListItemDto} from "../../../../api/Client";
 
-export function sortReminders(remindersToSort: BreweryReminderDto[]): BreweryReminderDto[] {
+export function sortReminders(remindersToSort: ReminderListItemDto[]): ReminderListItemDto[] {
     return [...remindersToSort].sort((a, b) => {
         const aResolved = a.isResolved;
         const bResolved = b.isResolved;

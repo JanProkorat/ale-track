@@ -108,9 +108,9 @@ export function VehicleDetailView(
 
             {/* vehicle name */}
             <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="Jméno">{t('vehicles.name')}</InputLabel>
+                <InputLabel htmlFor="vehicle-name">{t('vehicles.name')}</InputLabel>
                 <OutlinedInput
-                    id="name"
+                    id="vehicle-name"
                     value={vehicle.name || ''}
                     onChange={event => setVehicle(prev => new VehicleDto({
                         ...prev,
@@ -121,12 +121,12 @@ export function VehicleDetailView(
                 {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
             </FormControl>
 
-            {/* vehicle name */}
+            {/* vehicle weight */}
             <FormControl fullWidth error={!!errors.maxWeight}>
-                <InputLabel htmlFor="weight">{t('vehicles.maxWeight')}</InputLabel>
+                <InputLabel htmlFor="vehicle-weight">{t('vehicles.maxWeight')}</InputLabel>
                 <OutlinedInput
                     type="number"
-                    id="weight"
+                    id="vehicle-weight"
                     value={vehicle.maxWeight || ''}
                     onChange={event => setVehicle(prev => new VehicleDto({
                         ...prev,

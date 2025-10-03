@@ -1,7 +1,7 @@
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect} from 'react';
 import {useParams, useNavigate} from "react-router-dom";
+import React, {useState, useEffect, useCallback} from 'react';
 
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
@@ -33,6 +33,17 @@ export function BreweriesView() {
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
 
+    const fetchBreweries = useCallback(async () => {
+        try {
+            const client = new AuthorizedClient();
+            return await client.fetchBreweries({});
+        } catch (error) {
+            showSnackbar('Error fetching breweries', 'error');
+            console.error('Error fetching breweries:', error);
+            return [];
+        }
+    }, [showSnackbar]);
+    
     useEffect(() => {
         const loadInitial = async () => {
             const loaded = await fetchBreweries();
@@ -58,22 +69,11 @@ export function BreweriesView() {
             setInitialLoading(false);
         };
         void loadInitial();
-    }, []);
+    }, [breweryId, fetchBreweries, navigate]);
 
     useEffect(() => {
         if (breweryId) setSelectedBreweryId(breweryId);
     }, [breweryId]);
-
-    const fetchBreweries = async () => {
-        try {
-            const client = new AuthorizedClient();
-            return await client.fetchBreweries({});
-        } catch (error) {
-            showSnackbar('Error fetching breweries', 'error');
-            console.error('Error fetching breweries:', error);
-            return [];
-        }
-    };
 
     const closeDrawer = () => {
         fetchBreweries().then(setBreweries);

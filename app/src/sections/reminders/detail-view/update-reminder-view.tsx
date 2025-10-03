@@ -1,7 +1,6 @@
-
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
@@ -29,10 +28,11 @@ import {
 
 type UpdateReminderViewProps = {
     reminderId: string,
+    parentType: "brewery" | "client",
     onClose: (shouldRefresh: boolean) => void
 };
 
-export function UpdateReminderView({reminderId, onClose}: Readonly<UpdateReminderViewProps>) {
+export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<UpdateReminderViewProps>) {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
 
@@ -40,12 +40,7 @@ export function UpdateReminderView({reminderId, onClose}: Readonly<UpdateReminde
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        if (reminderId !== undefined)
-            fetchReminder(reminderId);
-    }, [reminderId])
-
-    const fetchReminder = async (id: string): Promise<void> => {
+    const fetchReminder = useCallback(async (id: string): Promise<void> => {
         try {
             const clientApi = new AuthorizedClient();
             const data = await clientApi.getReminderDetailEndpoint(id);
@@ -65,7 +60,12 @@ export function UpdateReminderView({reminderId, onClose}: Readonly<UpdateReminde
             console.error('Error fetching reminder:', error);
             showSnackbar(t('reminders.loadDetailError'), 'error');
         }
-    }
+    }, [showSnackbar, t])
+
+    useEffect(() => {
+        if (reminderId !== undefined)
+            fetchReminder(reminderId);
+    }, [fetchReminder, reminderId])
 
     const saveReminder = async (): Promise<void> => {
         setErrors({});
@@ -79,7 +79,15 @@ export function UpdateReminderView({reminderId, onClose}: Readonly<UpdateReminde
 
         try {
             const clientApi = new AuthorizedClient();
-            await clientApi.updateReminderEndpoint(reminderId, reminder!.toJSON());
+            switch (parentType) {
+                case "client":
+                    await clientApi.updateClientReminderEndpoint(reminderId, reminder!.toJSON());
+                    break;
+                case "brewery":
+                default:
+                    await clientApi.updateBreweryReminderEndpoint(reminderId, reminder!.toJSON());
+                    break;
+            }
 
             showSnackbar(t('reminders.saveSuccess'), 'success');
             onClose(true);
@@ -184,7 +192,7 @@ export function UpdateReminderView({reminderId, onClose}: Readonly<UpdateReminde
                     </Box>
                     <FormControl fullWidth>
                         <TextField
-                            id="description"
+                            id="update-reminder-description"
                             label={t('reminders.description')}
                             multiline
                             minRows={4}

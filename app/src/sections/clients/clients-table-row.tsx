@@ -2,16 +2,13 @@ import TableRow from '@mui/material/TableRow';
 import Checkbox from '@mui/material/Checkbox';
 import TableCell from '@mui/material/TableCell';
 
+import type {ClientListItemDto} from "../../api/Client";
+
 
 // ----------------------------------------------------------------------
 
-export type ClientsProps = {
-    id: string;
-    name: string;
-};
-
 type ClientsTableRowProps = {
-    row: ClientsProps;
+    row: ClientListItemDto;
     selected: boolean;
     isSelected: boolean;
     onSelectRow: () => void;

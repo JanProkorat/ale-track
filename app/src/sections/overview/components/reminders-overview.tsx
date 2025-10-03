@@ -1,25 +1,26 @@
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Popover from "@mui/material/Popover";
 import ListItem from "@mui/material/ListItem";
-import { EventNote } from "@mui/icons-material";
+import {EventNote} from "@mui/icons-material";
 import Typography from "@mui/material/Typography";
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import LinearProgress, {linearProgressClasses} from "@mui/material/LinearProgress";
-import { List, IconButton, CardContent, ListItemIcon, ListItemText } from "@mui/material";
+import {List, IconButton, CardContent, ListItemIcon, ListItemText} from "@mui/material";
 
 import {useRouter} from "../../../routes/hooks";
+import {SectionType} from "../../../api/Client";
 import {formatDate} from "../../../locales/formatDate";
 import {Scrollbar} from "../../../components/scrollbar";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {SectionHeader} from "../../../components/label/section-header";
 
-import type {ReminderBreweryDto, UpcomingReminderDto} from "../../../api/Client";
+import type { ReminderSectionDto, UpcomingReminderDto} from "../../../api/Client";
 
 export function RemindersOverview() {
     const {t} = useTranslation();
@@ -27,7 +28,7 @@ export function RemindersOverview() {
     const router = useRouter();
 
     const [loading, setLoading] = useState<boolean>(true);
-    const [reminders, setReminders] = useState<ReminderBreweryDto[]>([]);
+    const [reminders, setReminders] = useState<ReminderSectionDto[]>([]);
 
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const [selectedReminder, setSelectedReminder] = useState<UpcomingReminderDto | null>(null);
@@ -42,11 +43,7 @@ export function RemindersOverview() {
         setSelectedReminder(null);
     };
 
-    useEffect(() => {
-        fetchReminders()
-    }, [])
-
-    const fetchReminders = async () => {
+    const fetchReminders = useCallback(async () => {
         try {
             const client = new AuthorizedClient();
             await client.fetchRemindersOverview().then(setReminders);
@@ -55,7 +52,11 @@ export function RemindersOverview() {
             showSnackbar(t('reminders.fetchError'), 'error');
             console.error('Error fetching reminders:', error);
         }
-    };
+    }, [showSnackbar, t])
+
+    useEffect(() => {
+        fetchReminders()
+    }, [fetchReminders])
 
     return (
         <Card sx={{ minHeight: 400, maxHeight: 700 }}>
@@ -80,19 +81,23 @@ export function RemindersOverview() {
                                     {t('reminders.noUpcomingReminders')}
                                 </Typography>
                             )}
-                            {reminders.length > 0 && reminders.map((brewery) => (
-                                <Box key={brewery.breweryId} sx={{ mb: 1 }}>
+                            {reminders.length > 0 && reminders.map((section) => (
+                                <Box key={section.sectionId} sx={{ mb: 1 }}>
                                     <SectionHeader
-                                        text={brewery.breweryName ?? ""}
+                                        text={section.sectionName ?? ""}
                                         headerVariant="subtitle1"
                                         bottomLineVisible={false}
                                     >
-                                        <IconButton onClick={() => router.push(`/breweries/${brewery.breweryId}`)} sx={{ ml: 1 }} size="small" aria-label="open" color="inherit">
+                                        <IconButton
+                                            onClick={() => router.push(`/${section.sectionType === SectionType.Brewery ? "breweries" : "clients"}/${section.sectionId}`)}
+                                            sx={{ ml: 1 }}
+                                            size="small"
+                                            color="inherit">
                                             <OpenInNewIcon />
                                         </IconButton>
                                     </SectionHeader>
                                     <List sx={{ listStyleType: "disc", pl: 2 }}>
-                                        {(brewery.reminders ?? []).map((reminder) => (
+                                        {(section.reminders ?? []).map((reminder) => (
                                             <ListItem
                                                 key={reminder.id}
                                                 onClick={(e) => handleClick(e, reminder)}

@@ -61,13 +61,30 @@
     "new": "Nový klient",
     "deleteConfirm": "Opravdu chcete smazat klienta?",
     "name": "Jméno",
+    "businessName": "Název podniku",
+    "region": "Region",
     "detailTitle": "Detail klienta",
     "saveSuccess": "Klient byl úspěšně uložen",
     "saveError": "Chyba při ukládání klienta",
     "loadListError": "Chyba při načítání klientů",
     "loadDetailError": "Chyba při načítání klienta",
     "noDetailToDisplay": "K zobrazení detailu vyberte klienta ze seznamu",
-    "errorFetchingClients": "Chyba při načítání klientů"
+    "errorFetchingClients": "Chyba při načítání klientů",
+    "contacts": {
+      "title": "Kontakty",
+      "new": "Nový kontakt",
+      "email": "E-mail",
+      "phone": "Tel. číslo",
+      "position": "Pozice",
+      "noDataTitle": "Žádná kontakty",
+      "noDataMessage": "Pro zobrazení kontaktů si nejdříve alespoň jeden založte",
+      "description": "Popis",
+      "type": "Typ",
+      "types": {
+        "email": "E-mail",
+        "phone": "Tel. číslo"
+      }
+    }
   },
   "breweries": {
     "title": "Pivovary",
@@ -303,5 +320,27 @@
   },
   "dashboard": {
     "welcome": "Ahoj, vítejte zpět"
+  },
+  "region": {
+    "ZittauCity": "Žitava",
+    "ZittauRegion": "Žitavsko",
+    "Chemnitz": "Chemnitz",
+    "Leipzig": "Lipsko",
+    "Berlin": "Berlín",
+    "Freiberg": "Freiberg",
+    "Goerlitz": "Görlitz",
+    "Region": "Region",
+    "Other": "Ostatní"
+  },
+  "notes": {
+    "title": "Poznámky",
+    "new": "Nová poznámka",
+    "fetchError": "Chyba při načítání poznámek",
+    "noDataTitle": "Žádné poznámky",
+    "noDataMessage": "Pro zobrazení poznámek si nejdříve alespoň jednu založte",
+    "detailTitle": "Detail poznámky",
+    "saveSuccess": "Poznámka byla úspěšně uložena",
+    "saveError": "Chyba při ukládání poznámky",
+    "deleteSuccess": "Poznámka úspěšně odebrána"
   }
 }

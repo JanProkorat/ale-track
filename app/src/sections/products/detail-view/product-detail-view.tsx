@@ -143,9 +143,9 @@ export function ProductDetailView(
 
             {/* product name */}
             <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="name">{t('products.name')}</InputLabel>
+                <InputLabel htmlFor="product-name">{t('products.name')}</InputLabel>
                 <OutlinedInput
-                    id="name"
+                    id="product-name"
                     value={product.name ?? ''}
                     onChange={event => setProduct(prev => new ProductDto({
                         ...prev,
@@ -180,7 +180,7 @@ export function ProductDetailView(
 
             <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.platoDegree')}</InputLabel>
+                    <InputLabel htmlFor="platoDegree">{t('products.platoDegree')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="platoDegree"
@@ -195,7 +195,7 @@ export function ProductDetailView(
                 </FormControl>
 
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.packageSize')}</InputLabel>
+                    <InputLabel htmlFor="packageSize">{t('products.packageSize')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="packageSize"
@@ -210,7 +210,7 @@ export function ProductDetailView(
                 </FormControl>
 
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.alcoholPercentage')}</InputLabel>
+                    <InputLabel htmlFor="alcoholPercentage">{t('products.alcoholPercentage')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="alcoholPercentage"
@@ -228,7 +228,7 @@ export function ProductDetailView(
 
             <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.priceVat')}</InputLabel>
+                    <InputLabel htmlFor="priceVat">{t('products.priceVat')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="priceVat"
@@ -243,7 +243,7 @@ export function ProductDetailView(
                 </FormControl>
 
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.priceUnitVat')}</InputLabel>
+                    <InputLabel htmlFor="priceUnitVat">{t('products.priceUnitVat')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="priceUnitVat"
@@ -258,7 +258,7 @@ export function ProductDetailView(
                 </FormControl>
 
                 <FormControl variant="outlined">
-                    <InputLabel htmlFor="weight">{t('products.priceUnitNoVat')}</InputLabel>
+                    <InputLabel htmlFor="priceUnitNoVat">{t('products.priceUnitNoVat')}</InputLabel>
                     <OutlinedInput
                         type="number"
                         id="priceUnitNoVat"
@@ -275,7 +275,7 @@ export function ProductDetailView(
 
             <FormControl fullWidth>
                 <TextField
-                    id="description"
+                    id="product-description"
                     label={t('products.description')}
                     multiline
                     minRows={4}
