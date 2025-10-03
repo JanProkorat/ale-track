@@ -53,7 +53,7 @@ export function CreateClientView({ region, onClose }: Readonly<CreateClientViewP
     }
 
     const handleChangeContacts = (contacts: {type: ContactType, description: string | undefined, value: string}[]) => {
-        // Vymaž validační chyby při změnách kontaktů
+        // Clear validation errors when contacts change
         setContactValidationErrors({});
 
         setClient(prev => new CreateClientDto({
