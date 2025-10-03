@@ -20,15 +20,16 @@ import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
 import {ReminderRecurrenceTypeSelect} from "./components/reminder-recurrence-type-select";
 import {ReminderType, CreateReminderDto, ReminderRecurrenceType} from "../../../api/Client";
 
-import type { DayOfWeek} from "../../../api/Client";
+import type {DayOfWeek} from "../../../api/Client";
 
 type CreateReminderViewProps = {
-    breweryId: string,
+    parentId: string,
+    parentType: "brewery" | "client",
     selectedType: ReminderType,
     onClose: (shouldRefresh: boolean) => void
 };
 
-export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<CreateReminderViewProps>) {
+function CreateReminderView({parentId, parentType, selectedType, onClose}: Readonly<CreateReminderViewProps>) {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
@@ -37,7 +38,6 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
         name: "",
         type: selectedType,
         activeUntil: undefined,
-        breweryId,
         daysOfMonth: [],
         daysOfWeek: [],
         description: "",
@@ -64,7 +64,16 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
 
         try {
             const clientApi = new AuthorizedClient();
-            await clientApi.createReminderEndpoint(reminder.toJSON());
+            switch (parentType) {
+                case "client":
+                    await clientApi.createClientReminderEndpoint(parentId, reminder.toJSON());
+                    break;
+                case "brewery":
+                default:
+                    await clientApi.createBreweryReminderEndpoint(parentId, reminder.toJSON());
+                    break;
+            }
+
             triggerRefresh();
 
             showSnackbar(t('reminders.saveSuccess'), 'success');
@@ -100,7 +109,7 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
             daysOfWeek: type === ReminderType.OneTimeEvent ? undefined : prev.daysOfWeek,
             daysOfMonth: type === ReminderType.OneTimeEvent ? undefined : prev.daysOfMonth,
             activeUntil: type === ReminderType.OneTimeEvent ? undefined : prev.activeUntil,
-            occurrenceDate: type == ReminderType.Regular ? undefined: prev.occurrenceDate
+            occurrenceDate: type == ReminderType.Regular ? undefined : prev.occurrenceDate
         }))
     }
 
@@ -149,39 +158,39 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
             onSaveAndClose={saveReminder}
         >
             <Box display="flex" alignItems="center" gap={1} sx={{mt: 1}}>
-                <NameInput name={reminder.name ?? ''} setName={handleNameSet} errors={errors} />
+                <NameInput name={reminder.name ?? ''} setName={handleNameSet} errors={errors}/>
 
-                <ReminderTypeSelect selectedType={reminder.type} errors={errors} onSelect={handleTypeSelect} />
+                <ReminderTypeSelect selectedType={reminder.type} errors={errors} onSelect={handleTypeSelect}/>
             </Box>
 
-            <FormControl fullWidth>
+            <FormControl fullWidth sx={{mt: 2}}>
                 <TextField
-                    id="description"
+                    id="create-reminder-description"
                     label={t('reminders.description')}
                     multiline
                     minRows={4}
                     maxRows={10}
                     value={reminder.description ?? ''}
                     onChange={(e) =>
-                        setReminder(prev => new CreateReminderDto({ ...prev, description: e.target.value }))
+                        setReminder(prev => new CreateReminderDto({...prev, description: e.target.value}))
                     }
                     slotProps={{
                         input: {
-                            inputProps: { maxLength: 2000 }
+                            inputProps: {maxLength: 2000}
                         }
                     }}
                 />
             </FormControl>
 
-            <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2" />
+            <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2" sx={{mt: 2}}/>
 
             {reminder.type === ReminderType.OneTimeEvent && (
-                <Box display="flex" alignItems="center" gap={1} sx={{mt: 1}}>
+                <Box display="flex" alignItems="center" gap={2} sx={{mt: 2}}>
                     <ReminderDatePicker
                         selectedDate={reminder.occurrenceDate}
                         label={t('reminders.occurrenceDate')}
                         onDatePicked={handleOccurrenceDateSelect}
-                        sx={{ minWidth: '50%' }}
+                        sx={{minWidth: '50%'}}
                     />
 
                     <ReminderDaysInput
@@ -193,18 +202,18 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
             )}
             {reminder.type == ReminderType.Regular && (
                 <Box display="flex" gap={1} sx={{mt: 1}}>
-                    <Box sx={{minWidth: "40%"}} gap={1} alignItems="center" >
+                    <Box sx={{minWidth: "40%"}} gap={1} alignItems="center">
                         <ReminderRecurrenceTypeSelect
                             selectedType={reminder.recurrenceType ?? ReminderRecurrenceType.Weekly}
                             errors={errors}
                             onSelect={handleRecurrenceTypeSelect}
                         />
-                        <Box sx={{mt: 1}} gap={1} alignItems="center" >
+                        <Box sx={{mt: 1}} gap={1} alignItems="center">
                             <ReminderDatePicker
                                 selectedDate={reminder.activeUntil}
                                 label={t('reminders.activeUntilDate')}
                                 onDatePicked={handleActiveUntilDateSelect}
-                                sx={{ minWidth: '100%' }}
+                                sx={{minWidth: '100%'}}
                             />
                         </Box>
                         <ReminderDaysInput
@@ -228,7 +237,9 @@ export function CreateReminderView({breweryId, selectedType, onClose}: Readonly<
                         />
                     )}
                 </Box>
-                )}
+            )}
         </DrawerLayout>
     )
 }
+
+export default CreateReminderView

@@ -2,7 +2,7 @@ import {router} from "../main";
 import {Client} from './Client';
 import { API_BASE_URL } from './api';
 
-import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, BreweryReminderDto, ReminderBreweryDto, InventoryItemListItemDto, BreweryProductListItemDto, ProductDeliveryListItemDto} from './Client';
+import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, InventoryItemListItemDto, BreweryProductListItemDto, ProductDeliveryListItemDto} from './Client';
 
 const baseAddress = API_BASE_URL;
 
@@ -240,7 +240,28 @@ export class AuthorizedClient extends Client {
             throw new Error('Failed to fetch reminders for brewery');
         }
 
-        return await response.json() as Promise<BreweryReminderDto[]>;
+        return await response.json() as Promise<ReminderListItemDto[]>;
+    }
+
+    async fetchRemindersForClient(clientId: string, filters: Record<string, string>) {
+        const url = new URL(`/ale-track/clients/${clientId}/reminders`, baseAddress);
+
+        for (const [key, value] of Object.entries(filters)) {
+            url.searchParams.append(key, value);
+        }
+
+        const response = await authorizedFetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch reminders for brewery');
+        }
+
+        return await response.json() as Promise<ReminderListItemDto[]>;
     }
 
     async fetchRemindersOverview() {
@@ -257,7 +278,7 @@ export class AuthorizedClient extends Client {
             throw new Error('Failed to fetch reminders for overview');
         }
 
-        return await response.json() as Promise<ReminderBreweryDto[]>;
+        return await response.json() as Promise<ReminderSectionDto[]>;
     }
 }
 

@@ -33,53 +33,54 @@ export const DrawerLayout: React.FC<DrawerLayoutProps> = (
                 height: '95vh',
                 maxWidth: width ?? 700,
                 width: '100%',
-                pl: 2,
-                pr: 2,
-                pt: 3
+                p: 3,
+                gap: 3,
             }}
         >
-            {/* Nadpis */}
-            <Box sx={{flexShrink: 0}}>
-                <Typography variant="h5" sx={{fontWeight: 'bold', borderBottom: '1px solid #eee'}}>
+            {/* Header */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600 }}>
                     {title}
                 </Typography>
             </Box>
 
-            {/* Scrollovatelný obsah */}
+            {/* Content */}
             <Box
                 sx={{
-                    flexGrow: 1,
+                    flex: 1,
+                    minHeight: 0,
                     overflowY: 'auto',
-                    my: 3,
-                    pr: 1, // prostor pro scrollbar
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3,
+                    pr: 1,
+                    ...(isLoading && {
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        pt: 2,
+                    }),
                 }}
             >
-                {isLoading ?
+                {isLoading ? (
                     <LinearProgress
                         sx={{
-                            width: 1,
+                            width: '100%',
                             maxWidth: 320,
-                            top: -25,
-                            left: -30,
                             bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-                            [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                            [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
                         }}
                     />
-                    : children }
+                ) : (
+                    children
+                )}
             </Box>
 
-            {/* Spodní tlačítka */}
+            {/* Footer */}
             <Box
                 sx={{
-                    flexShrink: 0,
                     display: 'flex',
                     justifyContent: 'flex-end',
                     gap: 2,
                     pt: 2,
-                    borderTop: '1px solid #eee',
+                    borderTop: 1,
+                    borderColor: 'divider',
                 }}
             >
                 <Button variant="outlined" onClick={onClose}>

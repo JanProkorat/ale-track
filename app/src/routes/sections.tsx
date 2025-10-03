@@ -105,7 +105,7 @@ export const routesSection: RouteObject[] = [
                 </RequireRole>
         },
         {
-            path: 'clients',
+            path: 'clients/:clientId?',
             element:
                 <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
                     <ClientsPage />

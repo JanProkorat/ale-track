@@ -12,23 +12,23 @@ import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
 
 import {useSnackbar} from "src/providers/SnackbarProvider";
 
-import {Iconify} from "../../../components/iconify";
-import {formatDate} from "../../../locales/formatDate";
-import {Scrollbar} from "../../../components/scrollbar";
-import {mapEnumValue} from "../../../utils/format-enum-value";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {sortDaysOfWeek} from "../../../utils/sort-daysof-week";
-import {sortReminders} from "../detail-view/utils/sort-reminders";
-import {CreateReminderView} from "../detail-view/create-reminder-view";
-import {SectionHeader} from "../../../components/label/section-header";
-import {UpdateReminderView} from "../detail-view/update-reminder-view";
-import {CollapsibleForm} from "../../../components/forms/collapsible-form";
+import {Iconify} from "../../../../components/iconify";
+import {formatDate} from "../../../../locales/formatDate";
+import {Scrollbar} from "../../../../components/scrollbar";
+import {mapEnumValue} from "../../../../utils/format-enum-value";
+import {AuthorizedClient} from "../../../../api/AuthorizedClient";
+import {sortDaysOfWeek} from "../../../../utils/sort-daysof-week";
+import {SectionHeader} from "../../../../components/label/section-header";
+import {CollapsibleForm} from "../../../../components/forms/collapsible-form";
+import {sortReminders} from "../../../reminders/detail-view/utils/sort-reminders";
+import CreateReminderView from "../../../reminders/detail-view/create-reminder-view";
+import {UpdateReminderView} from "../../../reminders/detail-view/update-reminder-view";
 import {
     ReminderType,
-    BreweryReminderDto,
+    ReminderListItemDto,
     ReminderRecurrenceType,
-    SetReminderResolvedDateRequest
-} from "../../../api/Client";
+    SetBreweryReminderResolvedDateRequest
+} from "../../../../api/Client";
 
 type BreweryRemindersProps = {
     breweryId: string;
@@ -38,10 +38,10 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
 
-    const [reminders, setReminders] = useState<BreweryReminderDto[]>([]);
-    const [filteredReminders, setFilteredReminders] = useState<BreweryReminderDto[]>([]);
+    const [reminders, setReminders] = useState<ReminderListItemDto[]>([]);
+    const [filteredReminders, setFilteredReminders] = useState<ReminderListItemDto[]>([]);
     const [selectedReminderId, setSelectedReminderId] = useState<string | null | undefined>(undefined);
-    const [selectedReminder, setSelectedReminder] = useState<BreweryReminderDto | null>(null);
+    const [selectedReminder, setSelectedReminder] = useState<ReminderListItemDto | null>(null);
     const [selectedType, setSelectedType] = useState<ReminderType>(ReminderType.OneTimeEvent);
 
     useEffect(() => {
@@ -52,14 +52,10 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
         try {
             const clientApi = new AuthorizedClient();
 
-            return await clientApi.fetchRemindersForBrewery(breweryId, {}).then((data) => {
-                const mapped = data.map(r => new BreweryReminderDto({
+            return await clientApi.fetchRemindersForBrewery(breweryId, {}).then((data) => data.map(r => new ReminderListItemDto({
                     ...r,
                     type: ReminderType[r.type! as unknown as keyof typeof ReminderType]
-                }));
-                return mapped;
-
-            });
+                })));
         } catch (error) {
             console.error('Error fetching reminders:', error);
             showSnackbar(t('reminders.fetchError'), 'error');
@@ -117,7 +113,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
 
     const resolveReminder = async (id: string, isResolved: boolean) => {
         const originalReminders = filteredReminders;
-        const updatedReminders: BreweryReminderDto[] = [];
+        const updatedReminders: ReminderListItemDto[] = [];
 
         originalReminders.map(reminder => {
             if (reminder.id === id)
@@ -129,7 +125,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
 
         try {
             const clientApi = new AuthorizedClient();
-            await clientApi.setReminderResolvedDateEndpoint(id, new SetReminderResolvedDateRequest({
+            await clientApi.setBreweryReminderResolvedDateEndpoint(id, new SetBreweryReminderResolvedDateRequest({
                 resolvedDate: isResolved ? undefined : new Date
             }));
         } catch (error) {
@@ -142,7 +138,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
     const deleteReminder = async (id: string) => {
         try {
             const clientApi = new AuthorizedClient();
-            await clientApi.deleteReminderEndpoint(id).then(() => {
+            await clientApi.deleteBreweryReminderEndpoint(id).then(() => {
                 showSnackbar(t('reminders.deleteSuccess'), 'success');
                 setReminders(prevReminders => {
                     const newReminders = prevReminders.filter(reminder => reminder.id !== id);
@@ -194,7 +190,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
         </Box>
     );
 
-    const reminderHeaderLabel = (reminder: BreweryReminderDto) => {
+    const reminderHeaderLabel = (reminder: ReminderListItemDto) => {
         if (reminder.type === ReminderType.OneTimeEvent) {
             return `${formatDate(reminder.occurrenceDate!)} - ${reminder.name}`;
         }
@@ -230,7 +226,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                     <List>
                                         {filteredReminders.map((reminder, index) => (
                                             <ListItemButton
-                                                key={reminder.id!}
+                                                key={reminder.id}
                                                 alignItems="flex-start"
                                                 divider={index !== reminders.length - 1}
                                                 selected={selectedReminder?.id === reminder.id}
@@ -239,7 +235,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                             >
                                                 <IconButton
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // zabrání, aby kliknutí na ikonu rovnou měnilo selection
+                                                        e.stopPropagation();
                                                         resolveReminder(reminder.id!, reminder.isResolved!)
                                                     }}
                                                     sx={{ p: 2 }}
@@ -278,11 +274,11 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                             <Box>
                                 <SectionHeader text={selectedReminder.name!} headerVariant="h6" bold={false}>
                                     <Box sx={{display: 'flex', alignItems: 'center'}}>
-                                        <IconButton onClick={() => setSelectedReminderId(selectedReminder!.id!)}>
+                                        <IconButton onClick={() => setSelectedReminderId(selectedReminder.id)}>
                                             <Iconify icon="solar:pen-bold"/>
                                         </IconButton>
                                         <IconButton
-                                            onClick={() => deleteReminder(selectedReminder!.id!)}
+                                            onClick={() => deleteReminder(selectedReminder.id!)}
                                             color="error"
                                         >
                                             <Iconify icon="solar:trash-bin-trash-bold"/>
@@ -347,8 +343,8 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
             >
                 <Box sx={{width: 700, p: 2}}>
                     {selectedReminderId === null ?
-                        <CreateReminderView breweryId={breweryId} onClose={closeDrawer} selectedType={selectedType}/> :
-                        <UpdateReminderView reminderId={selectedReminderId!} onClose={closeDrawer}/>
+                        <CreateReminderView parentId={breweryId} parentType="brewery" onClose={closeDrawer} selectedType={selectedType}/> :
+                        <UpdateReminderView reminderId={selectedReminderId!} parentType="brewery" onClose={closeDrawer}/>
                     }
                 </Box>
             </Drawer>

@@ -7,51 +7,52 @@ import Checkbox from "@mui/material/Checkbox";
 import ListItemText from "@mui/material/ListItemText";
 import {Chip, Select, InputLabel, FormControl} from "@mui/material";
 
-import {ReminderType} from "../../../../api/Client";
+import {Region} from "../../../../api/Client";
 import {mapEnumValue} from "../../../../utils/format-enum-value";
 
-type ReminderTypeSelectProps = {
-    selectedType: ReminderType | string | undefined,
+type RegionSelectProps = {
+    selectedRegion: Region | string | undefined,
     errors: Record<string, string>;
-    onSelect: (type: ReminderType) => void,
-    disabled?: boolean
+    onSelect: (region: Region) => void,
+    disabled?: boolean,
+    maxWidth?: number
 }
 
-export function ReminderTypeSelect({selectedType, errors, onSelect, disabled}: Readonly<ReminderTypeSelectProps>) {
+export function RegionSelect({selectedRegion, errors, onSelect, disabled, maxWidth}: Readonly<RegionSelectProps>) {
     const {t} = useTranslation();
 
-    const enumValue = mapEnumValue<ReminderType>(ReminderType, selectedType);
+    const enumValue = mapEnumValue<Region>(Region, selectedRegion);
 
     return (
-        <FormControl fullWidth sx={{ maxWidth: '30%'}} error={!!errors.type}>
-            <InputLabel id="reminder-type-basic-select-label">{t('reminders.type')}</InputLabel>
+        <FormControl fullWidth sx={{ maxWidth: maxWidth != undefined ? `${maxWidth}%` : '15%', mt: 1}} error={!!errors.region}>
+            <InputLabel id="region-select-label">{t('clients.region')}</InputLabel>
             <Select
                 disabled={disabled}
-                labelId="reminder-type-basic-select-label"
+                labelId="region-select-label"
                 value={enumValue ?? ''}
                 renderValue={() => enumValue !== undefined &&
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         <Chip
                             key={enumValue}
-                            label={t('reminderType.' + ReminderType[enumValue])}
+                            label={t('region.' + Region[enumValue])}
                             size="small"
                         />
                     </Box>}
             >
-                {Object.keys(ReminderType)
+                {Object.keys(Region)
                     .filter(key => isNaN(Number(key)))
-                    .map((typeKey) => {
-                        const itemEnumValue = ReminderType[typeKey as keyof typeof ReminderType];
+                    .map((regionKey) => {
+                        const itemEnumValue = Region[regionKey as keyof typeof Region];
                         return (
                             <MenuItem
-                                key={typeKey}
+                                key={regionKey}
                                 value={itemEnumValue}
                                 onClick={() => {
                                     onSelect(itemEnumValue);
                                 }}
                             >
                                 <Checkbox checked={enumValue === itemEnumValue} />
-                                <ListItemText primary={t('reminderType.' + typeKey)} />
+                                <ListItemText primary={t('region.' + regionKey)} />
                             </MenuItem>
                         )
                     })}

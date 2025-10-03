@@ -77,22 +77,34 @@ export interface IClient {
     getNumberOfRecordsInEachModuleEndpoint(): Promise<NumberOfRecordsInEachModuleDto>;
 
     /**
-     * Gets all upcoming reminders for all breweries
+     * Gets all upcoming reminders for all breweries and clients
      * @return List of reminders
      */
-    getUpcomingRemindersEndpoint(): Promise<ReminderBreweryDto[]>;
-
-    /**
-     * Creates a reminder
-     * @return Reminder created
-     */
-    createReminderEndpoint(data: CreateReminderDto): Promise<string>;
+    getUpcomingRemindersEndpoint(): Promise<ReminderSectionDto[]>;
 
     /**
      * Gets filtered reminders list for a brewery
      * @return List of reminders
      */
-    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<BreweryReminderDto[]>;
+    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<ReminderListItemDto[]>;
+
+    /**
+     * Creates a brewery reminder
+     * @return Reminder created
+     */
+    createBreweryReminderEndpoint(id: string, data: CreateReminderDto): Promise<string>;
+
+    /**
+     * Gets filtered reminders list for a client
+     * @return List of reminders
+     */
+    getClientRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<ReminderListItemDto[]>;
+
+    /**
+     * Creates a client reminder
+     * @return Reminder created
+     */
+    createClientReminderEndpoint(id: string, data: CreateReminderDto): Promise<string>;
 
     /**
      * Gets reminder detail
@@ -101,22 +113,40 @@ export interface IClient {
     getReminderDetailEndpoint(id: string): Promise<ReminderDetailDto>;
 
     /**
-     * Updates a reminder
+     * Updates a client reminder
      * @return Reminder updated
      */
-    updateReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string>;
+    updateClientReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string>;
 
     /**
-     * Sets ResolvedDate of a reminder
+     * Sets ResolvedDate of a client reminder
      * @return Reminder updated
      */
-    setReminderResolvedDateEndpoint(id: string, setReminderResolvedDateRequest: SetReminderResolvedDateRequest): Promise<string>;
+    setClientReminderResolvedDateEndpoint(id: string, setClientReminderResolvedDateRequest: SetClientReminderResolvedDateRequest): Promise<string>;
 
     /**
-     * Deletes a reminder
+     * Deletes a client reminder
      * @return Reminder deleted
      */
-    deleteReminderEndpoint(id: string): Promise<string>;
+    deleteClientReminderEndpoint(id: string): Promise<string>;
+
+    /**
+     * Updates a brewery reminder
+     * @return Reminder updated
+     */
+    updateBreweryReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string>;
+
+    /**
+     * Sets ResolvedDate of a brewery reminder
+     * @return Reminder updated
+     */
+    setBreweryReminderResolvedDateEndpoint(id: string, setBreweryReminderResolvedDateRequest: SetBreweryReminderResolvedDateRequest): Promise<string>;
+
+    /**
+     * Deletes a brewery reminder
+     * @return Reminder deleted
+     */
+    deleteBreweryReminderEndpoint(id: string): Promise<string>;
 
     /**
      * Gets product types list
@@ -231,6 +261,30 @@ export interface IClient {
      * @return Order deleted
      */
     deleteOrderEndpoint(id: string): Promise<string>;
+
+    /**
+     * Gets client notes list
+     * @return List of notes for a client
+     */
+    getClientNotesEndpoint(id: string): Promise<NoteDto[]>;
+
+    /**
+     * Creates a client note
+     * @return Note created
+     */
+    createClientNoteEndpoint(id: string, data: CreateNoteDto): Promise<string>;
+
+    /**
+     * Updates a client note
+     * @return Note updated
+     */
+    updateClientNoteEndpoint(id: string, data: UpdateNoteDto): Promise<string>;
+
+    /**
+     * Deletes a client note
+     * @return Note deleted
+     */
+    deleteClientNoteEndpoint(id: string): Promise<string>;
 
     /**
      * Gets countries list
@@ -1041,10 +1095,10 @@ export class Client implements IClient {
     }
 
     /**
-     * Gets all upcoming reminders for all breweries
+     * Gets all upcoming reminders for all breweries and clients
      * @return List of reminders
      */
-    getUpcomingRemindersEndpoint(): Promise<ReminderBreweryDto[]> {
+    getUpcomingRemindersEndpoint(): Promise<ReminderSectionDto[]> {
         let url_ = this.baseUrl + "/ale-track/reminders";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -1060,7 +1114,7 @@ export class Client implements IClient {
         });
     }
 
-    protected processGetUpcomingRemindersEndpoint(response: Response): Promise<ReminderBreweryDto[]> {
+    protected processGetUpcomingRemindersEndpoint(response: Response): Promise<ReminderSectionDto[]> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1084,7 +1138,7 @@ export class Client implements IClient {
             if (Array.isArray(resultData200)) {
                 result200 = [] as any;
                 for (let item of resultData200)
-                    result200!.push(ReminderBreweryDto.fromJS(item));
+                    result200!.push(ReminderSectionDto.fromJS(item));
             }
             else {
                 result200 = <any>null;
@@ -1096,15 +1150,84 @@ export class Client implements IClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<ReminderBreweryDto[]>(null as any);
+        return Promise.resolve<ReminderSectionDto[]>(null as any);
     }
 
     /**
-     * Creates a reminder
+     * Gets filtered reminders list for a brewery
+     * @return List of reminders
+     */
+    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<ReminderListItemDto[]> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{id}/reminders?";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (parameters === undefined || parameters === null)
+            throw new Error("The parameter 'parameters' must be defined and cannot be null.");
+        else
+            url_ += "Parameters=" + encodeURIComponent("" + parameters) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetBreweryRemindersListEndpoint(_response);
+        });
+    }
+
+    protected processGetBreweryRemindersListEndpoint(response: Response): Promise<ReminderListItemDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ReminderListItemDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ReminderListItemDto[]>(null as any);
+    }
+
+    /**
+     * Creates a brewery reminder
      * @return Reminder created
      */
-    createReminderEndpoint(data: CreateReminderDto): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/reminders";
+    createBreweryReminderEndpoint(id: string, data: CreateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{id}/reminders";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(data);
@@ -1119,11 +1242,11 @@ export class Client implements IClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processCreateReminderEndpoint(_response);
+            return this.processCreateBreweryReminderEndpoint(_response);
         });
     }
 
-    protected processCreateReminderEndpoint(response: Response): Promise<string> {
+    protected processCreateBreweryReminderEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1168,11 +1291,11 @@ export class Client implements IClient {
     }
 
     /**
-     * Gets filtered reminders list for a brewery
+     * Gets filtered reminders list for a client
      * @return List of reminders
      */
-    getBreweryRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<BreweryReminderDto[]> {
-        let url_ = this.baseUrl + "/ale-track/breweries/{id}/reminders?";
+    getClientRemindersListEndpoint(id: string, parameters: { [key: string]: string; }): Promise<ReminderListItemDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/reminders?";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{id}", encodeURIComponent("" + id));
@@ -1190,11 +1313,11 @@ export class Client implements IClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetBreweryRemindersListEndpoint(_response);
+            return this.processGetClientRemindersListEndpoint(_response);
         });
     }
 
-    protected processGetBreweryRemindersListEndpoint(response: Response): Promise<BreweryReminderDto[]> {
+    protected processGetClientRemindersListEndpoint(response: Response): Promise<ReminderListItemDto[]> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1218,7 +1341,7 @@ export class Client implements IClient {
             if (Array.isArray(resultData200)) {
                 result200 = [] as any;
                 for (let item of resultData200)
-                    result200!.push(BreweryReminderDto.fromJS(item));
+                    result200!.push(ReminderListItemDto.fromJS(item));
             }
             else {
                 result200 = <any>null;
@@ -1230,7 +1353,78 @@ export class Client implements IClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<BreweryReminderDto[]>(null as any);
+        return Promise.resolve<ReminderListItemDto[]>(null as any);
+    }
+
+    /**
+     * Creates a client reminder
+     * @return Reminder created
+     */
+    createClientReminderEndpoint(id: string, data: CreateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/reminders";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateClientReminderEndpoint(_response);
+        });
+    }
+
+    protected processCreateClientReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : <any>null;
+    
+            return result201;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
     }
 
     /**
@@ -1296,11 +1490,11 @@ export class Client implements IClient {
     }
 
     /**
-     * Updates a reminder
+     * Updates a client reminder
      * @return Reminder updated
      */
-    updateReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+    updateClientReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/reminders/{Id}";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
@@ -1318,11 +1512,212 @@ export class Client implements IClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processUpdateReminderEndpoint(_response);
+            return this.processUpdateClientReminderEndpoint(_response);
         });
     }
 
-    protected processUpdateReminderEndpoint(response: Response): Promise<string> {
+    protected processUpdateClientReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : <any>null;
+    
+            return result204;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder or Client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets ResolvedDate of a client reminder
+     * @return Reminder updated
+     */
+    setClientReminderResolvedDateEndpoint(id: string, setClientReminderResolvedDateRequest: SetClientReminderResolvedDateRequest): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(setClientReminderResolvedDateRequest);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetClientReminderResolvedDateEndpoint(_response);
+        });
+    }
+
+    protected processSetClientReminderResolvedDateEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a client reminder
+     * @return Reminder deleted
+     */
+    deleteClientReminderEndpoint(id: string): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientReminderEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientReminderEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Reminder not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Updates a brewery reminder
+     * @return Reminder updated
+     */
+    updateBreweryReminderEndpoint(id: string, data: UpdateReminderDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/reminders/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateBreweryReminderEndpoint(_response);
+        });
+    }
+
+    protected processUpdateBreweryReminderEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1367,17 +1762,17 @@ export class Client implements IClient {
     }
 
     /**
-     * Sets ResolvedDate of a reminder
+     * Sets ResolvedDate of a brewery reminder
      * @return Reminder updated
      */
-    setReminderResolvedDateEndpoint(id: string, setReminderResolvedDateRequest: SetReminderResolvedDateRequest): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+    setBreweryReminderResolvedDateEndpoint(id: string, setBreweryReminderResolvedDateRequest: SetBreweryReminderResolvedDateRequest): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/reminders/{Id}";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
-        const content_ = JSON.stringify(setReminderResolvedDateRequest);
+        const content_ = JSON.stringify(setBreweryReminderResolvedDateRequest);
 
         let options_: RequestInit = {
             body: content_,
@@ -1389,11 +1784,11 @@ export class Client implements IClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processSetReminderResolvedDateEndpoint(_response);
+            return this.processSetBreweryReminderResolvedDateEndpoint(_response);
         });
     }
 
-    protected processSetReminderResolvedDateEndpoint(response: Response): Promise<string> {
+    protected processSetBreweryReminderResolvedDateEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -1434,11 +1829,11 @@ export class Client implements IClient {
     }
 
     /**
-     * Deletes a reminder
+     * Deletes a brewery reminder
      * @return Reminder deleted
      */
-    deleteReminderEndpoint(id: string): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/reminders/{Id}";
+    deleteBreweryReminderEndpoint(id: string): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/reminders/{Id}";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
@@ -1452,11 +1847,11 @@ export class Client implements IClient {
         };
 
         return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processDeleteReminderEndpoint(_response);
+            return this.processDeleteBreweryReminderEndpoint(_response);
         });
     }
 
-    protected processDeleteReminderEndpoint(response: Response): Promise<string> {
+    protected processDeleteBreweryReminderEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 403) {
@@ -2672,6 +3067,273 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Not Found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Gets client notes list
+     * @return List of notes for a client
+     */
+    getClientNotesEndpoint(id: string): Promise<NoteDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/notes";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientNotesEndpoint(_response);
+        });
+    }
+
+    protected processGetClientNotesEndpoint(response: Response): Promise<NoteDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(NoteDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<NoteDto[]>(null as any);
+    }
+
+    /**
+     * Creates a client note
+     * @return Note created
+     */
+    createClientNoteEndpoint(id: string, data: CreateNoteDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/notes";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateClientNoteEndpoint(_response);
+        });
+    }
+
+    protected processCreateClientNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : <any>null;
+    
+            return result201;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Updates a client note
+     * @return Note updated
+     */
+    updateClientNoteEndpoint(id: string, data: UpdateNoteDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/notes/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateClientNoteEndpoint(_response);
+        });
+    }
+
+    protected processUpdateClientNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : <any>null;
+    
+            return result204;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Note not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a client note
+     * @return Note deleted
+     */
+    deleteClientNoteEndpoint(id: string): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/notes/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientNoteEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Note not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -4825,12 +5487,13 @@ export interface ICreateUserDto {
     userRoles: UserRoleType[];
 }
 
-export class ReminderBreweryDto implements IReminderBreweryDto {
-    breweryId?: string;
-    breweryName?: string;
+export class ReminderSectionDto implements IReminderSectionDto {
+    sectionId?: string;
+    sectionName?: string;
+    sectionType?: SectionType;
     reminders?: UpcomingReminderDto[];
 
-    constructor(data?: IReminderBreweryDto) {
+    constructor(data?: IReminderSectionDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -4841,8 +5504,9 @@ export class ReminderBreweryDto implements IReminderBreweryDto {
 
     init(_data?: any) {
         if (_data) {
-            this.breweryId = _data["breweryId"];
-            this.breweryName = _data["breweryName"];
+            this.sectionId = _data["sectionId"];
+            this.sectionName = _data["sectionName"];
+            this.sectionType = _data["sectionType"];
             if (Array.isArray(_data["reminders"])) {
                 this.reminders = [] as any;
                 for (let item of _data["reminders"])
@@ -4851,17 +5515,18 @@ export class ReminderBreweryDto implements IReminderBreweryDto {
         }
     }
 
-    static fromJS(data: any): ReminderBreweryDto {
+    static fromJS(data: any): ReminderSectionDto {
         data = typeof data === 'object' ? data : {};
-        let result = new ReminderBreweryDto();
+        let result = new ReminderSectionDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["breweryId"] = this.breweryId;
-        data["breweryName"] = this.breweryName;
+        data["sectionId"] = this.sectionId;
+        data["sectionName"] = this.sectionName;
+        data["sectionType"] = this.sectionType;
         if (Array.isArray(this.reminders)) {
             data["reminders"] = [];
             for (let item of this.reminders)
@@ -4871,10 +5536,16 @@ export class ReminderBreweryDto implements IReminderBreweryDto {
     }
 }
 
-export interface IReminderBreweryDto {
-    breweryId?: string;
-    breweryName?: string;
+export interface IReminderSectionDto {
+    sectionId?: string;
+    sectionName?: string;
+    sectionType?: SectionType;
     reminders?: UpcomingReminderDto[];
+}
+
+export enum SectionType {
+    Brewery = 0,
+    Client = 1,
 }
 
 export class UpcomingReminderDto implements IUpcomingReminderDto {
@@ -4925,7 +5596,7 @@ export interface IUpcomingReminderDto {
     occurrenceDate?: Date;
 }
 
-export class BreweryReminderDto implements IBreweryReminderDto {
+export class ReminderListItemDto implements IReminderListItemDto {
     id?: string;
     name?: string;
     description?: string | undefined;
@@ -4936,7 +5607,7 @@ export class BreweryReminderDto implements IBreweryReminderDto {
     daysOfWeek?: DayOfWeek[] | undefined;
     daysOfMonth?: number[] | undefined;
 
-    constructor(data?: IBreweryReminderDto) {
+    constructor(data?: IReminderListItemDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -4967,9 +5638,9 @@ export class BreweryReminderDto implements IBreweryReminderDto {
         }
     }
 
-    static fromJS(data: any): BreweryReminderDto {
+    static fromJS(data: any): ReminderListItemDto {
         data = typeof data === 'object' ? data : {};
-        let result = new BreweryReminderDto();
+        let result = new ReminderListItemDto();
         result.init(data);
         return result;
     }
@@ -4997,7 +5668,7 @@ export class BreweryReminderDto implements IBreweryReminderDto {
     }
 }
 
-export interface IBreweryReminderDto {
+export interface IReminderListItemDto {
     id?: string;
     name?: string;
     description?: string | undefined;
@@ -5054,6 +5725,33 @@ export class GetBreweryRemindersListRequest extends FilterableRequest implements
 }
 
 export interface IGetBreweryRemindersListRequest extends IFilterableRequest {
+}
+
+export class GetClientRemindersListRequest extends FilterableRequest implements IGetClientRemindersListRequest {
+
+    constructor(data?: IGetClientRemindersListRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetClientRemindersListRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientRemindersListRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetClientRemindersListRequest extends IFilterableRequest {
 }
 
 export class ReminderDetailDto implements IReminderDetailDto {
@@ -5178,10 +5876,10 @@ export class GetReminderDetailRequest implements IGetReminderDetailRequest {
 export interface IGetReminderDetailRequest {
 }
 
-export class SetReminderResolvedDateRequest implements ISetReminderResolvedDateRequest {
+export class SetBreweryReminderResolvedDateRequest implements ISetBreweryReminderResolvedDateRequest {
     resolvedDate?: Date | undefined;
 
-    constructor(data?: ISetReminderResolvedDateRequest) {
+    constructor(data?: ISetBreweryReminderResolvedDateRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -5196,9 +5894,9 @@ export class SetReminderResolvedDateRequest implements ISetReminderResolvedDateR
         }
     }
 
-    static fromJS(data: any): SetReminderResolvedDateRequest {
+    static fromJS(data: any): SetBreweryReminderResolvedDateRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new SetReminderResolvedDateRequest();
+        let result = new SetBreweryReminderResolvedDateRequest();
         result.init(data);
         return result;
     }
@@ -5210,7 +5908,7 @@ export class SetReminderResolvedDateRequest implements ISetReminderResolvedDateR
     }
 }
 
-export interface ISetReminderResolvedDateRequest {
+export interface ISetBreweryReminderResolvedDateRequest {
     resolvedDate?: Date | undefined;
 }
 
@@ -5302,9 +6000,45 @@ export interface IUpdateReminderDto {
     resolvedDate?: Date | undefined;
 }
 
-export class DeleteReminderRequest implements IDeleteReminderRequest {
+export class SetClientReminderResolvedDateRequest implements ISetClientReminderResolvedDateRequest {
+    resolvedDate?: Date | undefined;
 
-    constructor(data?: IDeleteReminderRequest) {
+    constructor(data?: ISetClientReminderResolvedDateRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.resolvedDate = _data["resolvedDate"] ? new Date(_data["resolvedDate"].toString()) : <any>undefined;
+        }
+    }
+
+    static fromJS(data: any): SetClientReminderResolvedDateRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetClientReminderResolvedDateRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["resolvedDate"] = this.resolvedDate ? formatDate(this.resolvedDate) : <any>undefined;
+        return data;
+    }
+}
+
+export interface ISetClientReminderResolvedDateRequest {
+    resolvedDate?: Date | undefined;
+}
+
+export class DeleteBreweryReminderRequest implements IDeleteBreweryReminderRequest {
+
+    constructor(data?: IDeleteBreweryReminderRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -5316,9 +6050,9 @@ export class DeleteReminderRequest implements IDeleteReminderRequest {
     init(_data?: any) {
     }
 
-    static fromJS(data: any): DeleteReminderRequest {
+    static fromJS(data: any): DeleteBreweryReminderRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new DeleteReminderRequest();
+        let result = new DeleteBreweryReminderRequest();
         result.init(data);
         return result;
     }
@@ -5329,7 +6063,37 @@ export class DeleteReminderRequest implements IDeleteReminderRequest {
     }
 }
 
-export interface IDeleteReminderRequest {
+export interface IDeleteBreweryReminderRequest {
+}
+
+export class DeleteClientReminderRequest implements IDeleteClientReminderRequest {
+
+    constructor(data?: IDeleteClientReminderRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientReminderRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientReminderRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientReminderRequest {
 }
 
 export enum ProductType {
@@ -5364,7 +6128,6 @@ export class CreateReminderDto implements ICreateReminderDto {
     daysOfWeek?: DayOfWeek[] | undefined;
     daysOfMonth?: number[] | undefined;
     activeUntil?: Date | undefined;
-    breweryId!: string;
 
     constructor(data?: ICreateReminderDto) {
         if (data) {
@@ -5394,7 +6157,6 @@ export class CreateReminderDto implements ICreateReminderDto {
                     this.daysOfMonth!.push(item);
             }
             this.activeUntil = _data["activeUntil"] ? new Date(_data["activeUntil"].toString()) : <any>undefined;
-            this.breweryId = _data["breweryId"];
         }
     }
 
@@ -5424,7 +6186,6 @@ export class CreateReminderDto implements ICreateReminderDto {
                 data["daysOfMonth"].push(item);
         }
         data["activeUntil"] = this.activeUntil ? formatDate(this.activeUntil) : <any>undefined;
-        data["breweryId"] = this.breweryId;
         return data;
     }
 }
@@ -5439,7 +6200,6 @@ export interface ICreateReminderDto {
     daysOfWeek?: DayOfWeek[] | undefined;
     daysOfMonth?: number[] | undefined;
     activeUntil?: Date | undefined;
-    breweryId: string;
 }
 
 export class ProductListItemDto implements IProductListItemDto {
@@ -7018,9 +7778,44 @@ export interface IUpdateOrderItemDto {
     quantity?: number;
 }
 
-export enum Country {
-    Czechia = 1,
-    Germany = 2,
+export class NoteDto implements INoteDto {
+    id?: string;
+    text?: string;
+
+    constructor(data?: INoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.text = _data["text"];
+        }
+    }
+
+    static fromJS(data: any): NoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new NoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["text"] = this.text;
+        return data;
+    }
+}
+
+export interface INoteDto {
+    id?: string;
+    text?: string;
 }
 
 export class CreateOrderDto implements ICreateOrderDto {
@@ -7113,6 +7908,143 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
 export interface ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
+}
+
+export class GetClientNotesRequest implements IGetClientNotesRequest {
+
+    constructor(data?: IGetClientNotesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetClientNotesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientNotesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetClientNotesRequest {
+}
+
+export class DeleteClientNoteRequest implements IDeleteClientNoteRequest {
+
+    constructor(data?: IDeleteClientNoteRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientNoteRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientNoteRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientNoteRequest {
+}
+
+export class UpdateNoteDto implements IUpdateNoteDto {
+    text!: string;
+
+    constructor(data?: IUpdateNoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.text = _data["text"];
+        }
+    }
+
+    static fromJS(data: any): UpdateNoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateNoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["text"] = this.text;
+        return data;
+    }
+}
+
+export interface IUpdateNoteDto {
+    text: string;
+}
+
+export enum Country {
+    Czechia = 1,
+    Germany = 2,
+}
+
+export class CreateNoteDto implements ICreateNoteDto {
+    text!: string;
+
+    constructor(data?: ICreateNoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.text = _data["text"];
+        }
+    }
+
+    static fromJS(data: any): CreateNoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateNoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["text"] = this.text;
+        return data;
+    }
+}
+
+export interface ICreateNoteDto {
+    text: string;
 }
 
 export class InventorySectionDto implements IInventorySectionDto {
@@ -7866,11 +8798,7 @@ export interface IUpdateDriverAvailabilityDto {
 export class ClientListItemDto implements IClientListItemDto {
     id?: string;
     name?: string;
-    streetName?: string;
-    streetNumber?: string;
-    city?: string;
-    zip?: string;
-    country?: Country;
+    region?: Region;
 
     constructor(data?: IClientListItemDto) {
         if (data) {
@@ -7885,11 +8813,7 @@ export class ClientListItemDto implements IClientListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
-            this.streetName = _data["streetName"];
-            this.streetNumber = _data["streetNumber"];
-            this.city = _data["city"];
-            this.zip = _data["zip"];
-            this.country = _data["country"];
+            this.region = _data["region"];
         }
     }
 
@@ -7904,11 +8828,7 @@ export class ClientListItemDto implements IClientListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
-        data["streetName"] = this.streetName;
-        data["streetNumber"] = this.streetNumber;
-        data["city"] = this.city;
-        data["zip"] = this.zip;
-        data["country"] = this.country;
+        data["region"] = this.region;
         return data;
     }
 }
@@ -7916,11 +8836,7 @@ export class ClientListItemDto implements IClientListItemDto {
 export interface IClientListItemDto {
     id?: string;
     name?: string;
-    streetName?: string;
-    streetNumber?: string;
-    city?: string;
-    zip?: string;
-    country?: Country;
+    region?: Region;
 }
 
 export class CreateDriverDto implements ICreateDriverDto {
@@ -8023,11 +8939,26 @@ export interface ICreateDriverAvailabilityDto {
     until?: Date;
 }
 
+export enum Region {
+    ZittauCity = 0,
+    ZittauRegion = 1,
+    Chemnitz = 2,
+    Leipzig = 3,
+    Berlin = 4,
+    Freiberg = 5,
+    Goerlitz = 6,
+    Region = 7,
+    Other = 8,
+}
+
 export class ClientDto implements IClientDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
+    region?: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: ClientContactDto[];
 
     constructor(data?: IClientDto) {
         if (data) {
@@ -8042,8 +8973,15 @@ export class ClientDto implements IClientDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(ClientContactDto.fromJS(item));
+            }
         }
     }
 
@@ -8058,8 +8996,15 @@ export class ClientDto implements IClientDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : <any>undefined);
+        }
         return data;
     }
 }
@@ -8067,8 +9012,11 @@ export class ClientDto implements IClientDto {
 export interface IClientDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
+    region?: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: ClientContactDto[];
 }
 
 export class AddressDto implements IAddressDto {
@@ -8121,6 +9069,55 @@ export interface IAddressDto {
     city: string;
     zip: string;
     country: Country;
+}
+
+export class ClientContactDto implements IClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+
+    constructor(data?: IClientContactDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.description = _data["description"];
+            this.value = _data["value"];
+        }
+    }
+
+    static fromJS(data: any): ClientContactDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientContactDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["description"] = this.description;
+        data["value"] = this.value;
+        return data;
+    }
+}
+
+export interface IClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+}
+
+export enum ContactType {
+    Email = 0,
+    Phone = 1,
 }
 
 export class GetClientDetailRequest implements IGetClientDetailRequest {
@@ -8185,8 +9182,11 @@ export interface IDeleteClientRequest {
 
 export class UpdateClientDto implements IUpdateClientDto {
     name!: string;
+    businessName?: string | undefined;
+    region!: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: UpdateClientContactDto[];
 
     constructor(data?: IUpdateClientDto) {
         if (data) {
@@ -8200,8 +9200,15 @@ export class UpdateClientDto implements IUpdateClientDto {
     init(_data?: any) {
         if (_data) {
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(UpdateClientContactDto.fromJS(item));
+            }
         }
     }
 
@@ -8215,16 +9222,70 @@ export class UpdateClientDto implements IUpdateClientDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : <any>undefined);
+        }
         return data;
     }
 }
 
 export interface IUpdateClientDto {
     name: string;
+    businessName?: string | undefined;
+    region: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: UpdateClientContactDto[];
+}
+
+export class UpdateClientContactDto implements IUpdateClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+
+    constructor(data?: IUpdateClientContactDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.description = _data["description"];
+            this.value = _data["value"];
+        }
+    }
+
+    static fromJS(data: any): UpdateClientContactDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateClientContactDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["description"] = this.description;
+        data["value"] = this.value;
+        return data;
+    }
+}
+
+export interface IUpdateClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
 }
 
 export class BreweryProductListItemDto implements IBreweryProductListItemDto {
@@ -8305,8 +9366,11 @@ export interface IBreweryProductListItemDto {
 
 export class CreateClientDto implements ICreateClientDto {
     name!: string;
+    businessName?: string | undefined;
+    region!: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: CreateClientContactDto[];
 
     constructor(data?: ICreateClientDto) {
         if (data) {
@@ -8320,8 +9384,15 @@ export class CreateClientDto implements ICreateClientDto {
     init(_data?: any) {
         if (_data) {
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(CreateClientContactDto.fromJS(item));
+            }
         }
     }
 
@@ -8335,16 +9406,70 @@ export class CreateClientDto implements ICreateClientDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : <any>undefined);
+        }
         return data;
     }
 }
 
 export interface ICreateClientDto {
     name: string;
+    businessName?: string | undefined;
+    region: Region;
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
+    contacts?: CreateClientContactDto[];
+}
+
+export class CreateClientContactDto implements ICreateClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+
+    constructor(data?: ICreateClientContactDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.description = _data["description"];
+            this.value = _data["value"];
+        }
+    }
+
+    static fromJS(data: any): CreateClientContactDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateClientContactDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["description"] = this.description;
+        data["value"] = this.value;
+        return data;
+    }
+}
+
+export interface ICreateClientContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
 }
 
 export class GetProductsListRequest extends FilterableRequest implements IGetProductsListRequest {

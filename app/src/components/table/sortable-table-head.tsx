@@ -16,7 +16,7 @@ type SortableTableHeadProps = {
     order: 'asc' | 'desc';
     onSort: (id: string) => void;
     headLabel: Record<string, any>[];
-    onSelectAllRows: (checked: boolean) => void;
+    onSelectAllRows?: (checked: boolean) => void;
     checkboxVisible?: boolean;
 };
 
@@ -40,9 +40,8 @@ export function SortableTableHead(
                         <Checkbox
                             indeterminate={numSelected > 0 && numSelected < rowCount}
                             checked={rowCount > 0 && numSelected === rowCount}
-                            onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                                onSelectAllRows(event.target.checked)
-                            }
+                            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {if (onSelectAllRows) onSelectAllRows(event.target.checked)}
+                        }
                         />
                     </TableCell>
                 }

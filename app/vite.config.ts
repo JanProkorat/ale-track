@@ -31,6 +31,17 @@ export default defineConfig({
       },
     ],
   },
-  server: { port: PORT, host: true },
+  server: {
+    port: PORT,
+    host: true,
+    // Lepší konfigurace pro hot reloading
+    hmr: {
+      overlay: false,
+    },
+  },
   preview: { port: PORT, host: true },
+  // Optimalizace pro development
+  optimizeDeps: {
+    include: ['react', 'react-dom', '@mui/material', '@mui/icons-material'],
+  },
 });

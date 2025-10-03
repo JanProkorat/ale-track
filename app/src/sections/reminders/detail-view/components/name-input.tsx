@@ -16,9 +16,9 @@ export function NameInput({name, setName, errors}: Readonly<NameInputProps>) {
 
     return (
       <FormControl fullWidth error={(touched && name == '') || !!errors.name}>
-          <InputLabel htmlFor="name">{t('reminders.name')}</InputLabel>
+          <InputLabel htmlFor="reminder-name">{t('reminders.name')}</InputLabel>
           <OutlinedInput
-              id="name"
+              id="reminder-name"
               value={name}
               onChange={event => setName(event.target.value)}
               onBlur={() => {

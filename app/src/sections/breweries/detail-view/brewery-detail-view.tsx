@@ -94,9 +94,9 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
 
                 {/* brewery name */}
                 <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                    <InputLabel htmlFor="Jméno">{t('breweries.name')}</InputLabel>
+                    <InputLabel htmlFor="brewery-detail-name">{t('breweries.name')}</InputLabel>
                     <OutlinedInput
-                        id="name"
+                        id="brewery-detail-name"
                         value={brewery.name ?? ''}
                         onChange={event => setBrewery(prev => new BreweryDto({
                             ...prev,

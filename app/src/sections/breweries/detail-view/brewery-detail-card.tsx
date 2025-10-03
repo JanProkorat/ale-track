@@ -11,10 +11,10 @@ import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {validateAddress} from "../../../utils/validate-address";
 import {AddressForm} from "../../../components/forms/address-form";
 import {ColorPicker} from "../../../components/color/color-picker";
+import {BreweryRemindersView} from "./components/brewery-reminders-view";
 import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 import {Country, AddressDto, BreweryDto, UpdateBreweryDto} from "../../../api/Client";
-import {BreweryRemindersView} from "../../reminders/brewery-view/brewery-reminders-view";
 
 type BreweryDetailCardProps = {
     id: string | null;
@@ -158,9 +158,9 @@ export function BreweryDetailCard(
 
                 {/* Brewery name */}
                 <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                    <InputLabel htmlFor="name">{t('breweries.name')}</InputLabel>
+                    <InputLabel htmlFor="brewery-card-name">{t('breweries.name')}</InputLabel>
                     <OutlinedInput
-                        id="name"
+                        id="brewery-card-name"
                         value={brewery.name ?? ''}
                         onChange={event => setBrewery(prev => new BreweryDto({
                             ...prev,
