@@ -19,27 +19,9 @@ public sealed class ClientListItemDto
     public string Name { get; set; } = null!;
     
     /// <summary>
-    /// Name of the street
+    /// Related region of the client.
     /// </summary>
-    public string StreetName { get; set; } = null!;
+    public Region Region { get; set; }
     
-    /// <summary>
-    /// Street number
-    /// </summary>
-    public string StreetNumber { get; set; } = null!;
     
-    /// <summary>
-    /// Name of the city
-    /// </summary>
-    public string City { get; set; } = null!;
-    
-    /// <summary>
-    /// Zip code
-    /// </summary>
-    public string Zip { get; set; } = null!;
-    
-    /// <summary>
-    /// Name of related country
-    /// </summary>
-    public Country Country { get; set; }
 }

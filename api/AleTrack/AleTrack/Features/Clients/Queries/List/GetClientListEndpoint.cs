@@ -37,11 +37,7 @@ public sealed class GetClientListEndpoint(AleTrackDbContext dbContext) : Endpoin
             {
                 Id = c.PublicId,
                 Name = c.Name,
-                City = c.OfficialAddress.City,
-                Country = c.OfficialAddress.Country,
-                Zip = c.OfficialAddress.Zip,
-                StreetName = c.OfficialAddress.StreetName,
-                StreetNumber = c.OfficialAddress.StreetNumber
+                Region = c.Region
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

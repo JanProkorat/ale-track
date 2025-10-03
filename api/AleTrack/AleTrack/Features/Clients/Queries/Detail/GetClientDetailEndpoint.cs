@@ -52,6 +52,8 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
             {
                 Id = c.PublicId,
                 Name = c.Name,
+                BusinessName = c.BusinessName,
+                Region = c.Region,
                 OfficialAddress = new AddressDto
                 {
                     City = c.OfficialAddress.City,
@@ -69,7 +71,15 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
                         StreetName = c.ContactAddress.StreetName,
                         StreetNumber = c.ContactAddress.StreetNumber
                     }
-                    : null
+                    : null,
+                Contacts = c.Contacts
+                    .Select(cc => new ClientContactDto
+                    {
+                        Description = cc.Description,
+                        Type = cc.Type,
+                        Value = cc.Value
+                    })
+                    .ToList()
             })
             .FirstOrDefaultAsync(ct);
         
