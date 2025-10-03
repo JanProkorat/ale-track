@@ -76,13 +76,7 @@ export function UpdateClientView(
         } finally {
             setInitialLoading(false);
         }
-    }, [id, showSnackbar, t]);
-
-    useEffect(() => {
-        if (id) {
-            fetchClient();
-        }
-    }, [id, fetchClient]);
+    }, [id]);
 
     const saveClient = async (): Promise<boolean> => {
         setInitialLoading(true);
