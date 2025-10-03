@@ -1,7 +1,7 @@
 import {useTranslation} from 'react-i18next';
 import {varAlpha} from "minimal-shared/utils";
+import React, {useState, useEffect} from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import React, {useState, useEffect, useCallback} from 'react';
 
 import Box from "@mui/material/Box";
 import Table from '@mui/material/Table';
@@ -35,46 +35,42 @@ import type {ClientListItemDto} from "../../../api/Client";
 
 export function ClientsView() {
     const { showSnackbar } = useSnackbar();
-
     const { t } = useTranslation();
-
     const { clientId } = useParams<{ clientId?: string }>();
     const navigate = useNavigate();
 
     const [selectedRegion, setSelectedRegion] = useLocalStorage<Region>('clients-selected-region', Region.ZittauCity);
-    const [initialLoading, setInitialLoading] = useState<boolean>(true);
-    const [filterName, setFilterName] = useState<string>('');
-    const [filterRegion, setFilterRegion] = useState<string>(`${selectedRegion}`);
     const [clients, setClients] = useState<ClientListItemDto[]>([]);
     const [selectedClientId, setSelectedClientId] = useLocalStorage<string | null>('clients-selected-client-id', clientId ?? null);
     const [createClientDrawerVisible, setCreateClientDrawerVisible] = useState<boolean>(false);
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingClientId, setPendingClientId] = useState<string | null>(null);
-
+    const [initialLoading, setInitialLoading] = useState<boolean>(true);
+    const [filterName, setFilterName] = useState<string>('');
     const [order, setOrder] = useState<'asc' | 'desc'>('asc');
     const [orderBy, setOrderBy] = useState<string>('name');
-
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
-    const fetchClients = useCallback(async () => {
+    // Fetch clients for selected region and filter
+    const fetchClients = async () => {
         try {
             const client = new AuthorizedClient();
             const filters: Record<string, string> = {};
-
             if (filterName) filters.name = `startswith:${filterName}`;
-            if (filterRegion) filters.region = `eq:${filterRegion}`;
+            if (selectedRegion !== undefined && selectedRegion !== null) filters.region = `eq:${selectedRegion}`;
             filters.sort = `${order}:${orderBy}`;
-
             return await client.fetchClients(filters);
         } catch (error) {
             showSnackbar(t('clients.errorFetchingClients'), 'error');
             console.error('Error fetching clients:', error);
             return [];
         }
-    }, [filterName, filterRegion, order, orderBy, showSnackbar, t]);
+    };
 
+    // Load clients when region or filter changes (initial load)
     useEffect(() => {
-        const loadInitial = async () => {
+        setInitialLoading(true);
+        const loadClients = async () => {
             const data = await fetchClients();
             setClients(data);
             if (data.length > 0) {
@@ -95,33 +91,11 @@ export function ClientsView() {
             } else {
                 setSelectedClientId(null);
             }
-            if (initialLoading) setInitialLoading(false);
+            setInitialLoading(false);
         };
-        void loadInitial();
-    }, [clientId, fetchClients, navigate, setSelectedClientId, initialLoading]);
-
-    useEffect(() => {
-        if (clientId) setSelectedClientId(clientId);
-    }, [clientId, setSelectedClientId]);
-
-    useEffect(() => {
-        void fetchClients().then((data) => {
-            setClients(data);
-            if (!selectedClientId && data.length > 0) {
-                setSelectedClientId(data[0].id!);
-            }
-            if (selectedClientId && !data.find(client => client.id === selectedClientId)) {
-                setSelectedClientId(data.length > 0 ? data[0].id! : null);
-            }
-
-            if (initialLoading)
-                setInitialLoading(false);
-        });
-    }, [fetchClients, selectedClientId, setSelectedClientId, initialLoading]);
-
-    useEffect(() =>{
-        setFilterRegion(`${selectedRegion}`)
-    }, [selectedRegion])
+        void loadClients();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedRegion, filterName, order, orderBy]);
 
     const handleRowClick = (id: string) => {
         if (hasDetailChanges) {
@@ -136,8 +110,8 @@ export function ClientsView() {
         await fetchClients().then((newData) => {
             setClients(newData);
             setSelectedClientId(newData.length > 0 ? newData[0].id! : null);
-        })
-    }
+        });
+    };
 
     const handleDisplayedClientChange = (shouldLoadNewData: boolean) => {
         if (shouldLoadNewData) {
@@ -152,9 +126,11 @@ export function ClientsView() {
     };
 
     const closeDrawer = () => {
-        fetchClients().then(setClients);
+        fetchClients().then(data => {
+            setClients(data);
+        });
         setCreateClientDrawerVisible(false);
-    }
+    };
 
     const clientListCard = (
         <>
