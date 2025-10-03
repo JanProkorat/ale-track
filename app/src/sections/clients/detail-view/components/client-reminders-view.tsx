@@ -235,7 +235,7 @@ export function ClientRemindersView({clientId}: Readonly<ClientRemindersProps>) 
                                             >
                                                 <IconButton
                                                     onClick={(e) => {
-                                                        e.stopPropagation(); // zabrání, aby kliknutí na ikonu rovnou měnilo selection
+                                                        e.stopPropagation(); // prevents the click on the icon from immediately changing the selection
                                                         resolveReminder(reminder.id!, reminder.isResolved!)
                                                     }}
                                                     sx={{ p: 2 }}
