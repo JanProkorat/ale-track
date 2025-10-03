@@ -231,7 +231,7 @@ export function ClientRemindersView({clientId}: Readonly<ClientRemindersProps>) 
                                                 divider={index !== reminders.length - 1}
                                                 selected={selectedReminder?.id === reminder.id}
                                                 sx={{pt: 0, pb: 0}}
-                                                onClick={() => setSelectedReminder(reminder)}   // <<< tady
+                                                onClick={() => setSelectedReminder(reminder)}   // here
                                             >
                                                 <IconButton
                                                     onClick={(e) => {
