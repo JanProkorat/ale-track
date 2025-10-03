@@ -9,12 +9,12 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.Reminders.Commands.SetResolvedDate;
 
 /// <summary>
-/// Represents a request to set the resolved date of a reminder.
+/// Represents a request to set the resolved date of a client reminder.
 /// </summary>
-public record SetReminderResolvedDateRequest
+public record SetClientReminderResolvedDateRequest
 {
     /// <summary>
-    /// ID of the reminder to set a resolved date for
+    /// ID of the client reminder to set a resolved date for
     /// </summary>
     public Guid Id { get; set; }
     
@@ -25,43 +25,43 @@ public record SetReminderResolvedDateRequest
 }
 
 /// <summary>
-/// Endpoint for handling requests to set the resolved date of a reminder.
+/// Endpoint for handling requests to set the resolved date of a client reminder.
 /// </summary>
-public sealed class SetReminderResolvedDateEndpoint(AleTrackDbContext dbContext) : Endpoint<SetReminderResolvedDateRequest>
+public sealed class SetClientReminderResolvedDateEndpoint(AleTrackDbContext dbContext) : Endpoint<SetClientReminderResolvedDateRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
-        Patch("reminders/{Id:guid}");
+        Patch("clients/reminders/{Id:guid}");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(SetReminderResolvedDateEndpoint))
+            .WithName(nameof(SetClientReminderResolvedDateEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
-                s.Summary = "Sets ResolvedDate of a reminder";
+                s.Summary = "Sets ResolvedDate of a client reminder";
                 s.Responses[StatusCodes.Status202Accepted] = "Reminder updated";
                 s.Responses[StatusCodes.Status404NotFound] = "Reminder not found";
             }
         );
     }
 
-    public override async Task HandleAsync(SetReminderResolvedDateRequest req, CancellationToken ct)
+    public override async Task HandleAsync(SetClientReminderResolvedDateRequest req, CancellationToken ct)
     {
-        var existingReminder = await dbContext.Reminders
-            .Include(r => r.Brewery)
+        var existingReminder = await dbContext.ClientReminders
+            .Include(r => r.Client)
             .FirstOrDefaultAsync(r => r.PublicId == req.Id, ct);
         
         if (existingReminder is null)
-            ThrowHelper.PublicEntityNotFound(nameof(Reminder), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(ClientReminder), req.Id);
         
         existingReminder!.ResolvedDate = req.ResolvedDate;
-        dbContext.Reminders.Update(existingReminder);
+        dbContext.ClientReminders.Update(existingReminder);
         await dbContext.SaveChangesAsync(ct);
         
         await SendAsync(null, statusCode: StatusCodes.Status202Accepted ,cancellation: ct);

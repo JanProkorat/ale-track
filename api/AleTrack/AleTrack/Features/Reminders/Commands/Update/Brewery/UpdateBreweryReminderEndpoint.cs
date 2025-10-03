@@ -6,54 +6,55 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
-namespace AleTrack.Features.Reminders.Commands.Update;
+namespace AleTrack.Features.Reminders.Commands.Update.Brewery;
 
 /// <summary>
-/// Request to update a new reminder
+/// Request to update a brewery reminder
 /// </summary>
-public record UpdateReminderRequest
+public record UpdateBreweryReminderRequest
 {
     /// <summary>
     /// ID of the reminder to update
     /// </summary>
     public Guid Id { get; set; }
 
-    [FromBody] public UpdateReminderDto Data { get; set; } = null!;
+    /// <summary>
+    /// Body of the request
+    /// </summary>
+    [FromBody] 
+    public UpdateReminderDto Data { get; set; } = null!;
 }
 
 /// <summary>
-/// Endpoint to update a new reminder
+/// Endpoint to update a brewery reminder
 /// </summary>
-public sealed class UpdateReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateReminderRequest>
+public sealed class UpdateBreweryReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateBreweryReminderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
-        Put("reminders/{Id:guid}");
+        Put("breweries/reminders/{Id:guid}");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(UpdateReminderEndpoint))
+            .WithName(nameof(UpdateBreweryReminderEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
-                s.Summary = "Updates a reminder";
+                s.Summary = "Updates a brewery reminder";
                 s.Responses[StatusCodes.Status204NoContent] = "Reminder updated";
                 s.Responses[StatusCodes.Status404NotFound] = "Reminder or Brewery not found";
             }
         );
     }
 
-    public override async Task HandleAsync(UpdateReminderRequest req, CancellationToken ct)
+    public override async Task HandleAsync(UpdateBreweryReminderRequest req, CancellationToken ct)
     {
-        var existingReminder = await dbContext.Reminders
-            .Include(r => r.Brewery)
-            .FirstOrDefaultAsync(r => r.PublicId == req.Id, ct);
-
+        var existingReminder = await dbContext.BreweryReminders.FirstOrDefaultAsync(r => r.PublicId == req.Id, ct);
         if (existingReminder is null)
             ThrowHelper.PublicEntityNotFound(nameof(Reminder), req.Id);
 
@@ -85,7 +86,7 @@ public sealed class UpdateReminderEndpoint(AleTrackDbContext dbContext) : Endpoi
             }
         }
 
-        dbContext.Reminders.Update(existingReminder);
+        dbContext.BreweryReminders.Update(existingReminder);
         await dbContext.SaveChangesAsync(ct);
 
         await SendNoContentAsync(ct);

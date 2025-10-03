@@ -2,6 +2,9 @@ using AleTrack.Common.Enums;
 
 namespace AleTrack.Features.Reminders.Commands.Update;
 
+/// <summary>
+/// Data Transfer Object representing the details required to update a reminder.
+/// </summary>
 public sealed class UpdateReminderDto
 {
     /// <summary>

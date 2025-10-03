@@ -5,20 +5,14 @@ using FluentValidation;
 
 namespace AleTrack.Features.Reminders.Commands.Create;
 
-public sealed class CreateReminderValidator : Validator<CreateReminderRequest>
-{
-    public CreateReminderValidator()
-    {
-        RuleFor(r => r.Data).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.Data).SetValidator(new CreateReminderDtoValidator());
-    }
-}
-
+/// <summary>
+/// Validator class for validating instances of <see cref="CreateReminderDto"/>.
+/// Ensures that all required fields are provided and comply with the specified constraints.
+/// </summary>
 public sealed class CreateReminderDtoValidator : Validator<CreateReminderDto>
 {
     public CreateReminderDtoValidator()
     {
-        RuleFor(r => r.BreweryId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Name).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Name).MaximumLength(100).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         

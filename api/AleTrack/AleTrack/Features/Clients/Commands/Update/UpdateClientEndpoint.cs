@@ -52,11 +52,15 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateClientRequest req, CancellationToken ct)
     {
-        var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.Id, ct);
+        var client = await dbContext.Clients
+            .Include(c => c.Contacts)
+            .FirstOrDefaultAsync(c => c.PublicId == req.Id, ct);
         if (client == null)
             ThrowHelper.PublicEntityNotFound(nameof(Client), req.Id);
 
         client!.Name = req.Data.Name;
+        client.BusinessName = req.Data.BusinessName;
+        client.Region = req.Data.Region;
         client.OfficialAddress = new Address
         {
             StreetName = req.Data.OfficialAddress.StreetName,
@@ -77,6 +81,15 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
                 Zip = req.Data.ContactAddress.Zip
             };
         }
+
+        client.Contacts = req.Data.Contacts
+            .Select(c => new ClientContact
+            {
+                Description = c.Description,
+                Type = c.Type,
+                Value = c.Value
+            })
+            .ToList();
         
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);

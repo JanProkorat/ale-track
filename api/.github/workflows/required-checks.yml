@@ -1,0 +1,14 @@
+name: Required Status Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  enforce-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check if tests are required
+      run: |
+        echo "This job ensures that PR tests must pass before merging"
+        echo "Configure this as a required status check in branch protection rules"

@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.Reminders.Commands.Delete;
 
 /// <summary>
-/// Request to delete a new reminder
+/// Request to delete a client reminder
 /// </summary>
-public record DeleteReminderRequest
+public record DeleteClientReminderRequest
 {
     /// <summary>
     /// ID of the reminder to delete
@@ -20,40 +20,40 @@ public record DeleteReminderRequest
 }
 
 /// <summary>
-/// Endpoint to delete a new reminder
+/// Endpoint to delete a client reminder
 /// </summary>
-public sealed class DeleteReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteReminderRequest>
+public sealed class DeleteClientReminderEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteClientReminderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
-        Delete("reminders/{Id:guid}");
+        Delete("clients/reminders/{Id:guid}");
         Description(b => b
             .RequireRole(UserRoleType.User)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(DeleteReminderEndpoint))
+            .WithName(nameof(DeleteClientReminderEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
-                s.Summary = "Deletes a reminder";
+                s.Summary = "Deletes a client reminder";
                 s.Responses[StatusCodes.Status202Accepted] = "Reminder deleted";
                 s.Responses[StatusCodes.Status404NotFound] = "Reminder not found";
             }
         );
     }
 
-    public override async Task HandleAsync(DeleteReminderRequest req, CancellationToken ct)
+    public override async Task HandleAsync(DeleteClientReminderRequest req, CancellationToken ct)
     {
-        var existingReminder = await dbContext.Reminders.FirstOrDefaultAsync(r => r.PublicId == req.Id, ct);
+        var existingReminder = await dbContext.ClientReminders.FirstOrDefaultAsync(r => r.PublicId == req.Id, ct);
         
         if (existingReminder is null)
-            ThrowHelper.PublicEntityNotFound(nameof(Reminder), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(ClientReminder), req.Id);
 
-        dbContext.Reminders.Remove(existingReminder!);
+        dbContext.ClientReminders.Remove(existingReminder!);
         await dbContext.SaveChangesAsync(ct);
 
         await SendAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);

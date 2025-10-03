@@ -1,17 +1,22 @@
 namespace AleTrack.Features.Reminders.Queries.UpcomingList;
 
-public sealed record ReminderBreweryDto
+public sealed record ReminderSectionDto
 {
     /// <summary>
     /// ID of the related brewery.
     /// </summary>
-    public Guid BreweryId { get; set; }
+    public Guid SectionId { get; set; }
 
     /// <summary>
     /// Name of the brewery associated with the reminder
     /// </summary>
-    public string BreweryName { get; set; } = null!;
+    public string SectionName { get; set; } = null!;
 
+    /// <summary>
+    /// Represents the type of the section associated with the reminder.
+    /// </summary>
+    public SectionType SectionType { get; set; }
+    
     /// <summary>
     /// List of upcoming reminders for the brewery.
     /// </summary>

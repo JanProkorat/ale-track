@@ -1,16 +1,13 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
-using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
 /// <summary>
 /// Entity representing a reminder
 /// </summary>
-[Table("reminders")]
-public sealed class Reminder: PublicEntity
+public class Reminder: PublicEntity
 {
     /// <summary>
     /// Name of the reminder
@@ -64,15 +61,4 @@ public sealed class Reminder: PublicEntity
     /// Date when the user set the reminder as resolved
     /// </summary>
     public DateOnly? ResolvedDate { get; set; }
-    
-    /// <summary>
-    /// Id of the brewery the reminder belongs to
-    /// </summary>
-    public long BreweryId { get; set; }
-    
-    /// <summary>
-    /// Refers to the brewery the reminder belongs to
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.NoAction)]
-    public Brewery Brewery { get; set; } = null!;
 }
