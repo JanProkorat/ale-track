@@ -64,8 +64,8 @@ public sealed class UpdateDriverTests
         foreach (var expectedAvailability in command.Data.AvailableDates)
         {
             driver.Availabilities.Should().Contain(a => 
-                a.From == expectedAvailability.From.ToLocalTime() && 
-                a.Until == expectedAvailability.Until.ToLocalTime());
+                a.From == expectedAvailability.From.ToUniversalTime() && 
+                a.Until == expectedAvailability.Until.ToUniversalTime());
         }
         
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
