@@ -70,8 +70,8 @@ public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
         driver.Availabilities = req.Data.AvailableDates
             .Select(d => new DriverAvailability
             {
-                From = d.From.ToLocalTime(),
-                Until = d.Until.ToLocalTime()
+                From = d.From.ToUniversalTime(),
+                Until = d.Until.ToUniversalTime()
             })
             .ToList();
         
