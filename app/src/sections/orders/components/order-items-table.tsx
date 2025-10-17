@@ -38,6 +38,7 @@ export function OrderItemsTable<T extends AllowedItem>({orderProducts, products,
         {id: 'quantity', label: t('productDeliveries.quantity')},
         {id: 'kind', label: t('products.kind')},
         {id: 'size', label: t('products.packageSize')},
+        {id: 'weight', label: t('products.weight')},
         {id: 'priceVat', label: t('products.priceVat')},
         {id: 'priceUnitVat', label: t('products.priceUnitVat')},
         {id: 'type', label: t('products.type')},
@@ -45,7 +46,7 @@ export function OrderItemsTable<T extends AllowedItem>({orderProducts, products,
     ];
 
     return (
-        <Scrollbar>
+        <Scrollbar sx={{overflow: 'auto', mb: 2}}>
             <TableContainer sx={{overflow: 'unset'}}>
                 <Table>
                     <SortableTableHead

@@ -4,7 +4,6 @@ import {useTranslation} from "react-i18next";
 import {Typography} from "@mui/material";
 
 import {UpdateUserView} from "./update-user-view";
-import {CreateUserView} from "./create-user-view";
 import {
     UpdateUserDto
 } from "../../../api/Client";
@@ -119,8 +118,6 @@ export function UserDetailView(
                 onDeleteEntity={deleteUser}
                 onResetEntity={resetUser}
                 deleteConfirmMessage={t('users.deleteConfirm')}
-                resetConfirmMessage={t('common.resetConfirm')}
-                pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
             >
                 {userDetail != null && <UpdateUserView
                     user={userDetail}

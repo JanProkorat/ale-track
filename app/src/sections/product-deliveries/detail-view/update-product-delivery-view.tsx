@@ -113,7 +113,7 @@ export function UpdateProductDeliveryView(
                 display: 'flex',
                 flexDirection: 'column',
                 width: '100%',
-                pl: 2,
+                mt: 2,
                 pr: 2
             }}
         >
@@ -152,8 +152,7 @@ export function UpdateProductDeliveryView(
                             </Tooltip>
                         )}
                     </Box>
-                </Box>
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+
                     <DriversSelect
                         selectedDriverIds={delivery.driverIds}
                         drivers={drivers}
@@ -181,7 +180,6 @@ export function UpdateProductDeliveryView(
                     disabled={disabled}
                 />
 
-                {/* Nadpis a tlačítko pro zastavku */}
                 <Box sx={{
                     display: 'flex',
                     justifyContent: 'space-between',

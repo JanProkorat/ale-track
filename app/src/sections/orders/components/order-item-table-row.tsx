@@ -1,7 +1,9 @@
+import React, {useState} from "react";
 import {useTranslation} from "react-i18next";
 
 import {Chip} from "@mui/material";
 import TableRow from "@mui/material/TableRow";
+import Checkbox from "@mui/material/Checkbox";
 import TableCell from "@mui/material/TableCell";
 import TextField from "@mui/material/TextField";
 import IconButton from "@mui/material/IconButton";
@@ -27,11 +29,33 @@ export function OrderItemTableRow(
         disabled
     }: Readonly<OrderItemTableRowProps>) {
 
+    const [selected, setSelected] = useState<boolean>(false);
     const { t } = useTranslation();
 
     return (
         <TableRow hover tabIndex={-1} role="checkbox">
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.name}</TableCell>
+            <TableCell padding="checkbox">
+                <Checkbox
+                    disableRipple
+                    checked={selected}
+                    onChange={(event: any) => {
+                        event.stopPropagation();
+                        setSelected(!selected);
+                    }}
+                />
+            </TableCell>
+            <TableCell
+                sx={{
+                    whiteSpace: 'nowrap',
+                    minWidth: 'fit-content',
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 1.,
+                    backgroundColor: 'white'
+                }}
+            >
+                {row.name}
+            </TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
                 <TextField
                     disabled={disabled}
@@ -47,7 +71,8 @@ export function OrderItemTableRow(
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
                 <Chip label={t('productKind.' + row.kind)} />
             </TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize}L</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize} L</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.weight} Kg</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceWithVat} Kč</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceForUnitWithVat} Kč</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>

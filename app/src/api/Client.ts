@@ -6214,6 +6214,9 @@ export class ProductListItemDto implements IProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
+    breweryName?: string;
+    breweryId?: string;
 
     constructor(data?: IProductListItemDto) {
         if (data) {
@@ -6237,6 +6240,9 @@ export class ProductListItemDto implements IProductListItemDto {
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.weight = _data["weight"];
+            this.breweryName = _data["breweryName"];
+            this.breweryId = _data["breweryId"];
         }
     }
 
@@ -6260,6 +6266,9 @@ export class ProductListItemDto implements IProductListItemDto {
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["weight"] = this.weight;
+        data["breweryName"] = this.breweryName;
+        data["breweryId"] = this.breweryId;
         return data;
     }
 }
@@ -6276,6 +6285,9 @@ export interface IProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
+    breweryName?: string;
+    breweryId?: string;
 }
 
 export enum ProductKind {
@@ -6300,6 +6312,7 @@ export class ProductDto implements IProductDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
 
     constructor(data?: IProductDto) {
         if (data) {
@@ -6323,6 +6336,7 @@ export class ProductDto implements IProductDto {
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.weight = _data["weight"];
         }
     }
 
@@ -6346,6 +6360,7 @@ export class ProductDto implements IProductDto {
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["weight"] = this.weight;
         return data;
     }
 }
@@ -6362,6 +6377,7 @@ export interface IProductDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
 }
 
 export class GetProductDetailRequest implements IGetProductDetailRequest {
@@ -6622,8 +6638,7 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
     id?: string;
     deliveryDate?: Date;
     state?: ProductDeliveryState;
-    numOfAssignedDrivers?: number;
-    vehicle?: ProductDeliveryListItemDto_VehicleInfoDto | undefined;
+    stopNames?: string[];
 
     constructor(data?: IProductDeliveryListItemDto) {
         if (data) {
@@ -6639,8 +6654,11 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
             this.id = _data["id"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
             this.state = _data["state"];
-            this.numOfAssignedDrivers = _data["numOfAssignedDrivers"];
-            this.vehicle = _data["vehicle"] ? ProductDeliveryListItemDto_VehicleInfoDto.fromJS(_data["vehicle"]) : <any>undefined;
+            if (Array.isArray(_data["stopNames"])) {
+                this.stopNames = [] as any;
+                for (let item of _data["stopNames"])
+                    this.stopNames!.push(item);
+            }
         }
     }
 
@@ -6656,8 +6674,11 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
         data["id"] = this.id;
         data["deliveryDate"] = this.deliveryDate ? formatDate(this.deliveryDate) : <any>undefined;
         data["state"] = this.state;
-        data["numOfAssignedDrivers"] = this.numOfAssignedDrivers;
-        data["vehicle"] = this.vehicle ? this.vehicle.toJSON() : <any>undefined;
+        if (Array.isArray(this.stopNames)) {
+            data["stopNames"] = [];
+            for (let item of this.stopNames)
+                data["stopNames"].push(item);
+        }
         return data;
     }
 }
@@ -6666,48 +6687,7 @@ export interface IProductDeliveryListItemDto {
     id?: string;
     deliveryDate?: Date;
     state?: ProductDeliveryState;
-    numOfAssignedDrivers?: number;
-    vehicle?: ProductDeliveryListItemDto_VehicleInfoDto | undefined;
-}
-
-export class ProductDeliveryListItemDto_VehicleInfoDto implements IProductDeliveryListItemDto_VehicleInfoDto {
-    id?: string;
-    name?: string;
-
-    constructor(data?: IProductDeliveryListItemDto_VehicleInfoDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.name = _data["name"];
-        }
-    }
-
-    static fromJS(data: any): ProductDeliveryListItemDto_VehicleInfoDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ProductDeliveryListItemDto_VehicleInfoDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["name"] = this.name;
-        return data;
-    }
-}
-
-export interface IProductDeliveryListItemDto_VehicleInfoDto {
-    id?: string;
-    name?: string;
+    stopNames?: string[];
 }
 
 export class ProductDeliveryDto implements IProductDeliveryDto {
@@ -7249,7 +7229,7 @@ export interface IUpdateProductDeliveryItemDto {
 export class OrderListItemDto implements IOrderListItemDto {
     id?: string;
     state?: OrderState;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
     clientName?: string;
 
     constructor(data?: IOrderListItemDto) {
@@ -7265,7 +7245,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.state = _data["state"];
-            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
             this.clientName = _data["clientName"];
         }
     }
@@ -7281,7 +7261,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["state"] = this.state;
-        data["deliveryDate"] = this.deliveryDate ? formatDate(this.deliveryDate) : <any>undefined;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
         data["clientName"] = this.clientName;
         return data;
     }
@@ -7290,7 +7270,7 @@ export class OrderListItemDto implements IOrderListItemDto {
 export interface IOrderListItemDto {
     id?: string;
     state?: OrderState;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
     clientName?: string;
 }
 
@@ -7470,7 +7450,8 @@ export class OrderDto implements IOrderDto {
     id?: string;
     client?: ClientInfoDto;
     state?: OrderState;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
     orderItems?: OrderItemDto[];
 
@@ -7488,7 +7469,8 @@ export class OrderDto implements IOrderDto {
             this.id = _data["id"];
             this.client = _data["client"] ? ClientInfoDto.fromJS(_data["client"]) : <any>undefined;
             this.state = _data["state"];
-            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
+            this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : <any>undefined;
             this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : <any>undefined;
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
@@ -7510,7 +7492,8 @@ export class OrderDto implements IOrderDto {
         data["id"] = this.id;
         data["client"] = this.client ? this.client.toJSON() : <any>undefined;
         data["state"] = this.state;
-        data["deliveryDate"] = this.deliveryDate ? formatDate(this.deliveryDate) : <any>undefined;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
+        data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : <any>undefined;
         data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : <any>undefined;
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
@@ -7525,7 +7508,8 @@ export interface IOrderDto {
     id?: string;
     client?: ClientInfoDto;
     state?: OrderState;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
     orderItems?: OrderItemDto[];
 }
@@ -7684,7 +7668,8 @@ export interface IDeleteOrderRequest {
 
 export class UpdateOrderDto implements IUpdateOrderDto {
     clientId!: string;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     state?: OrderState;
     orderItems?: UpdateOrderItemDto[];
 
@@ -7700,7 +7685,8 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     init(_data?: any) {
         if (_data) {
             this.clientId = _data["clientId"];
-            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
+            this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : <any>undefined;
             this.state = _data["state"];
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
@@ -7720,7 +7706,8 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["clientId"] = this.clientId;
-        data["deliveryDate"] = this.deliveryDate ? formatDate(this.deliveryDate) : <any>undefined;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
+        data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : <any>undefined;
         data["state"] = this.state;
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
@@ -7733,7 +7720,8 @@ export class UpdateOrderDto implements IUpdateOrderDto {
 
 export interface IUpdateOrderDto {
     clientId: string;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     state?: OrderState;
     orderItems?: UpdateOrderItemDto[];
 }
@@ -7820,7 +7808,7 @@ export interface INoteDto {
 
 export class CreateOrderDto implements ICreateOrderDto {
     clientId!: string;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
     orderItems?: CreateOrderItemDto[];
 
     constructor(data?: ICreateOrderDto) {
@@ -7835,7 +7823,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     init(_data?: any) {
         if (_data) {
             this.clientId = _data["clientId"];
-            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
@@ -7854,7 +7842,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["clientId"] = this.clientId;
-        data["deliveryDate"] = this.deliveryDate ? formatDate(this.deliveryDate) : <any>undefined;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
             for (let item of this.orderItems)
@@ -7866,7 +7854,7 @@ export class CreateOrderDto implements ICreateOrderDto {
 
 export interface ICreateOrderDto {
     clientId: string;
-    deliveryDate?: Date | undefined;
+    requiredDeliveryDate?: Date | undefined;
     orderItems?: CreateOrderItemDto[];
 }
 
@@ -9300,6 +9288,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
 
     constructor(data?: IBreweryProductListItemDto) {
         if (data) {
@@ -9323,6 +9312,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.weight = _data["weight"];
         }
     }
 
@@ -9346,6 +9336,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["weight"] = this.weight;
         return data;
     }
 }
@@ -9362,6 +9353,7 @@ export interface IBreweryProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number;
     priceForUnitWithoutVat?: number;
+    weight?: number | undefined;
 }
 
 export class CreateClientDto implements ICreateClientDto {

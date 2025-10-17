@@ -35,7 +35,7 @@ export function SortableTableHead(
         <TableHead>
             <TableRow>
                 {
-                    (checkboxVisible === undefined || !checkboxVisible) &&
+                    (checkboxVisible === undefined || checkboxVisible === true) &&
                     <TableCell padding="checkbox">
                         <Checkbox
                             indeterminate={numSelected > 0 && numSelected < rowCount}

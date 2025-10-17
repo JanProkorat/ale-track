@@ -32,10 +32,17 @@ export function UpdateOrderView({order, products, shouldValidate, disabled, onCh
         }));
     };
 
-    const handleDeliveryDateSelect = (date: Date | undefined) => {
+    const handleRequiredDeliveryDateSelect = (date: Date | undefined) => {
         onChange(new UpdateOrderDto({
             ...order,
-            deliveryDate: date!
+            requiredDeliveryDate: date!
+        }));
+    };
+
+    const handleActualDeliveryDateSelect = (date: Date | undefined) => {
+        onChange(new UpdateOrderDto({
+            ...order,
+            actualDeliveryDate: date!
         }));
     };
 
@@ -79,8 +86,22 @@ export function UpdateOrderView({order, products, shouldValidate, disabled, onCh
             }}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, mt: 1}}>
                     <ClientSelect selectedClientId={order.clientId} shouldValidate={shouldValidate} onSelect={handleClientSelect} disabled={disabled}/>
-                    <OrderDeliveryDatePicker selectedDeliveryDate={order.deliveryDate} onDatePicked={handleDeliveryDateSelect} disabled={disabled}/>
-                    <OrderStateSelect selectedState={order.state!} onSelect={handleStateSelect} disabled={disabled}/>
+                    <OrderStateSelect selectedState={order.state!} onSelect={handleStateSelect} />
+                </Box>
+
+                <Box sx={{display: 'flex', alignItems: 'center', gap: 1, mt: 1}}>
+                    <OrderDeliveryDatePicker
+                        label={t('orders.requiredDeliveryDate')}
+                        selectedDeliveryDate={order.requiredDeliveryDate}
+                        onDatePicked={handleRequiredDeliveryDateSelect}
+                        disabled={disabled}
+                    />
+                    <OrderDeliveryDatePicker
+                        label={t('orders.actualDeliveryDate')}
+                        selectedDeliveryDate={order.actualDeliveryDate}
+                        onDatePicked={handleActualDeliveryDateSelect}
+                        disabled={disabled}
+                    />
                 </Box>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>

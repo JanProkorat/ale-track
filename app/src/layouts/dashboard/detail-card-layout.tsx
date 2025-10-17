@@ -4,9 +4,12 @@ import { useState, useEffect} from "react";
 import {useBlocker} from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { Box, Button, Dialog, IconButton, Typography, DialogTitle, DialogActions } from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 
 import { Iconify } from "src/components/iconify";
+import { ResetConfirmationDialog } from "src/components/dialogs/reset-confirmation-dialog";
+import { DeleteConfirmationDialog } from "src/components/dialogs/delete-confirmation-dialog";
+import { PendingChangesConfirmationDialog } from "src/components/dialogs/pending-changes-confirmation-dialog";
 
 import {SectionHeader} from "../../components/label/section-header";
 
@@ -29,8 +32,6 @@ type DetailCardLayoutProps<T> = {
     onResetEntity: () => void;
 
     deleteConfirmMessage: string;
-    resetConfirmMessage: string;
-    pendingChangesConfirmMessage: string;
     disabled?: boolean;
 
     children: ReactNode;
@@ -53,8 +54,6 @@ export function DetailCardLayout<T>(
         onDeleteEntity,
         onResetEntity,
         deleteConfirmMessage,
-        resetConfirmMessage,
-        pendingChangesConfirmMessage,
         disabled,
         children
     }: Readonly<DetailCardLayoutProps<T>>) {
@@ -187,73 +186,34 @@ export function DetailCardLayout<T>(
             )}
 
             {/* Delete confirmation dialog */}
-            <Dialog
+            <DeleteConfirmationDialog
                 open={isDeleteDialogVisible}
                 onClose={() => setIsDeleteDialogVisible(false)}
-            >
-                <DialogTitle>
-                    {deleteConfirmMessage}
-                </DialogTitle>
-                <DialogActions>
-                    <Button onClick={() => setIsDeleteDialogVisible(false)} color="inherit">
-                        {t('common.cancel')}
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="error"
-                        onClick={handleDeleteEntity}
-                    >
-                        {t('common.delete')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                onDelete={handleDeleteEntity}
+                deleteConfirmMessage={deleteConfirmMessage}
+                cancelLabel={t('common.cancel')}
+                deleteLabel={t('common.delete')}
+            />
 
             {/* Reset confirmation dialog */}
-            <Dialog
+            <ResetConfirmationDialog
                 open={isResetDialogVisible}
                 onClose={() => setIsResetDialogVisible(false)}
-            >
-                <DialogTitle>
-                    {resetConfirmMessage}
-                </DialogTitle>
-                <DialogActions>
-                    <Button onClick={() => setIsResetDialogVisible(false)} color="inherit">
-                        {t('common.cancel')}
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleReset}
-                    >
-                        {t('common.reset')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                onReset={handleReset}
+                cancelLabel={t('common.cancel')}
+                resetLabel={t('common.reset')}
+            />
 
             {/* Pending changes confirmation dialog */}
-            <Dialog
+            <PendingChangesConfirmationDialog
                 open={isConfirmDialogOpen}
                 onClose={() => setIsConfirmDialogOpen(false)}
-            >
-                <DialogTitle>
-                    {pendingChangesConfirmMessage}
-                </DialogTitle>
-                <DialogActions>
-                    <Button onClick={() => handleConfirmation(false, false)} color="inherit">
-                        {t('common.cancel')}
-                    </Button>
-                    <Button onClick={() => handleConfirmation(false, true)} color="inherit">
-                        {t('common.discard')}
-                    </Button>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={() => handleConfirmation(true, true)}
-                    >
-                        {t('common.save')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                onSave={() => handleConfirmation(true, true)}
+                onDiscard={() => handleConfirmation(false, true)}
+                cancelLabel={t('common.cancel')}
+                discardLabel={t('common.discard')}
+                saveLabel={t('common.save')}
+            />
         </Box>
     );
 }

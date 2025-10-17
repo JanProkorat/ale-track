@@ -145,7 +145,8 @@
     "packageSize": "Balení",
     "detailTitle": "Detail produktu",
     "saveSuccess": "Produkt byl úspěšně uložen",
-    "saveError": "Chyba při ukládání produktu"
+    "saveError": "Chyba při ukládání produktu",
+    "weight": "Váha"
   },
   "country": {
     "Czechia": "Česko",
@@ -241,7 +242,8 @@
     "fetchError": "Chyba při načítání objednávek",
     "fetchDetailError": "Chyba při načítání detailu objednávky",
     "clientName": "Klient",
-    "deliveryDate": "Datum doručení",
+    "requiredDeliveryDate": "Nejpozdější datum doručení",
+    "actualDeliveryDate": "Skutečné datum doručení",
     "date": "Datum",
     "state": "Stav",
     "noDetailToDisplay": "K zobrazení detailu vyberte objednávku ze seznamu",

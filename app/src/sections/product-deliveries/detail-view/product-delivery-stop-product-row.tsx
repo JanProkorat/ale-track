@@ -1,7 +1,9 @@
+import {useState} from "react";
 import {useTranslation} from "react-i18next";
 
 import {Chip} from "@mui/material";
 import TableRow from "@mui/material/TableRow";
+import Checkbox from "@mui/material/Checkbox";
 import TableCell from "@mui/material/TableCell";
 import TextField from "@mui/material/TextField";
 import IconButton from "@mui/material/IconButton";
@@ -24,13 +26,25 @@ export function ProductDeliveryStopProductRow(
         quantity,
         onDeleteClick,
         onQuantityChange,
-        disabled
+        disabled,
     }: Readonly<ProductDeliveryStopProductRowProps>) {
 
     const { t } = useTranslation();
 
+    const [selected, setSelected] = useState<boolean>(false);
+
     return (
         <TableRow hover tabIndex={-1} role="checkbox">
+            <TableCell padding="checkbox">
+                <Checkbox
+                    disableRipple
+                    checked={selected}
+                    onChange={(event) => {
+                        event.stopPropagation();
+                        setSelected(!selected);
+                    }}
+                />
+            </TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.name}</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
                 <TextField
@@ -47,7 +61,8 @@ export function ProductDeliveryStopProductRow(
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
                 <Chip label={t('productKind.' + row.kind)} />
             </TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize}L</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize} L</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.weight} Kg</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceWithVat} Kč</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceForUnitWithVat} Kč</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>

@@ -4,7 +4,7 @@ import {useTranslation} from "react-i18next";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
 import ListItemText from "@mui/material/ListItemText";
-import {Box, Chip, Select, InputLabel, FormControl} from "@mui/material";
+import {Box, Chip, Select, InputLabel, FormControl, ListSubheader} from "@mui/material";
 
 import type {ProductListItemDto} from "../../../api/Client";
 
@@ -20,6 +20,33 @@ export function OrderProductsSelect({products, shouldValidate, selectedProducts,
     const {t} = useTranslation();
 
     const [productsTouched, setProductsTouched] = useState<boolean>(false);
+
+    const groupedProducts = products.reduce((acc, product) => {
+        const breweryId = product.breweryId || 'Unknown';
+        const breweryName = product.breweryName || 'Unknown Brewery';
+        const kind = product.kind || 'Other';
+        const packageSize = product.packageSize || 0;
+
+        if (!acc[breweryId]) {
+            acc[breweryId] = {
+                name: breweryName,
+                kinds: {}
+            };
+        }
+        if (!acc[breweryId].kinds[kind]) {
+            acc[breweryId].kinds[kind] = {};
+        }
+        if (!acc[breweryId].kinds[kind][packageSize]) {
+            acc[breweryId].kinds[kind][packageSize] = [];
+        }
+        acc[breweryId].kinds[kind][packageSize].push(product);
+        return acc;
+    }, {} as Record<string, { name: string, kinds: Record<string, Record<number, ProductListItemDto[]>> }>);
+
+    // Seřadit brewery podle názvu
+    const sortedBreweries = Object.keys(groupedProducts).sort((a, b) =>
+        groupedProducts[a].name.localeCompare(groupedProducts[b].name)
+    );
 
     return (
         <FormControl fullWidth error={(productsTouched || shouldValidate) && (selectedProducts.length === 0)}>
@@ -38,66 +65,142 @@ export function OrderProductsSelect({products, shouldValidate, selectedProducts,
                     });
                     onProductsChanged(updatedProducts);
                 }}
-                renderValue={(selected) => (
-                    <Box
-                        sx={{
-                            margin: 0,
-                            display: 'flex',
-                            flexWrap: 'nowrap',
-                            gap: 0.5,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '100%',
-                            alignItems: 'center',
-                        }}
-                    >
-                        {selected.map((value) => {
-                            const product = products.find(d => d.id === (value ?? ""));
-                            return (
-                                <Chip
-                                    key={value}
-                                    label={product?.name ?? ""}
-                                    size="small"
-                                    sx={{maxWidth: '100%'}}
-                                />
-                            );
-                        })}
-                    </Box>
-                )}
-            >
-                {products.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                        <Checkbox checked={selectedProducts.map(product => product.productId).includes(item.id!)}/>
+                renderValue={(selected) => {
+                    const maxVisibleChips = 4;
+                    const visibleSelected = selected.slice(0, maxVisibleChips);
+                    const remainingCount = selected.length - maxVisibleChips;
+
+                    return (
                         <Box
                             sx={{
-                                display: 'grid',
-                                gridTemplateColumns: '2fr 1fr 2fr',
+                                margin: 0,
+                                display: 'flex',
+                                flexWrap: 'nowrap',
+                                gap: 0.5,
+                                overflow: 'hidden',
                                 alignItems: 'center',
-                                width: '100%',
-                                gap: 1,
+                                minWidth: 0,
                             }}
                         >
-                            <ListItemText primary={item.name}/>
-                            <ListItemText primary={item.packageSize + "L"}/>
-                            <Box sx={{display: 'flex', gap: 0.5, flexWrap: 'wrap'}}>
+                            {visibleSelected.map((value) => {
+                                const product = products.find(d => d.id === (value ?? ""));
+                                return (
+                                    <Chip
+                                        key={value}
+                                        label={product?.name ?? ""}
+                                        size="small"
+                                        sx={{
+                                            flexShrink: 0,
+                                            maxWidth: '150px',
+                                            '& .MuiChip-label': {
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }
+                                        }}
+                                    />
+                                );
+                            })}
+                            {remainingCount > 0 && (
                                 <Chip
-                                    key={"kind" + item.id!}
-                                    label={t('productKind.' + item.kind)}
+                                    label={`+${remainingCount}`}
                                     size="small"
-                                    sx={{maxWidth: '100%'}}
+                                    variant="outlined"
+                                    sx={{
+                                        flexShrink: 0,
+                                        minWidth: 'auto',
+                                    }}
                                 />
-                                <Chip
-                                    key={"type" + item.id!}
-                                    label={t('productType.' + item.type)}
-                                    size="small"
-                                    sx={{maxWidth: '100%'}}
-                                />
-                            </Box>
+                            )}
                         </Box>
+                    );
+                }}
+            >
+                {sortedBreweries.map((breweryId) => {
+                    const brewery = groupedProducts[breweryId];
+                    const sortedKinds = Object.keys(brewery.kinds).sort((a, b) => {
+                        const kindA = parseInt(a);
+                        const kindB = parseInt(b);
+                        return kindA - kindB;
+                    });
 
-                    </MenuItem>
-                ))}
+                    return [
+                        <ListSubheader
+                            key={`brewery-${breweryId}`}
+                            sx={{
+                                fontWeight: 'bold',
+                                backgroundColor: 'background.paper',
+                                fontSize: '1.1rem',
+                                top: 0,
+                                zIndex: 4,
+                                color: 'primary.main',
+                            }}
+                        >
+                            {brewery.name}
+                        </ListSubheader>,
+                        ...sortedKinds.flatMap((kind) => {
+                            const packageSizes = Object.keys(brewery.kinds[kind]).sort((a, b) => parseFloat(a) - parseFloat(b));
+
+                            return [
+                                <ListSubheader
+                                    key={`kind-${breweryId}-${kind}`}
+                                    sx={{
+                                        pl: 3,
+                                        fontWeight: 'bold',
+                                        backgroundColor: 'background.paper',
+                                        fontSize: '0.95rem',
+                                        top: '48px',
+                                        zIndex: 3
+                                    }}
+                                >
+                                    {t('productKind.' + kind)}
+                                </ListSubheader>,
+                                ...packageSizes.flatMap((packageSize) => {
+                                    const size = parseFloat(packageSize);
+                                    return [
+                                        <ListSubheader
+                                            key={`size-${breweryId}-${kind}-${packageSize}`}
+                                            sx={{
+                                                pl: 5,
+                                                fontWeight: 'medium',
+                                                backgroundColor: 'background.paper',
+                                                fontSize: '0.875rem',
+                                                top: '96px',
+                                                zIndex: 2
+                                            }}
+                                        >
+                                            {packageSize}L
+                                        </ListSubheader>,
+                                        ...brewery.kinds[kind][size].map((item) => (
+                                            <MenuItem key={item.id} value={item.id} sx={{ pl: 7 }}>
+                                                <Checkbox checked={selectedProducts.map(product => product.productId).includes(item.id!)}/>
+                                                <Box
+                                                    sx={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: '2fr 1fr',
+                                                        alignItems: 'center',
+                                                        width: '100%',
+                                                        gap: 1,
+                                                    }}
+                                                >
+                                                    <ListItemText primary={item.name}/>
+                                                    <Box sx={{display: 'flex', gap: 0.5, flexWrap: 'wrap'}}>
+                                                        <Chip
+                                                            key={"type" + item.id!}
+                                                            label={t('productType.' + item.type)}
+                                                            size="small"
+                                                            sx={{maxWidth: '100%'}}
+                                                        />
+                                                    </Box>
+                                                </Box>
+                                            </MenuItem>
+                                        ))
+                                    ];
+                                })
+                            ];
+                        })
+                    ];
+                })}
             </Select>
         </FormControl>
     )
