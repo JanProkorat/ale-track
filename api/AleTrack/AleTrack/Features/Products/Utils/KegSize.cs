@@ -6,7 +6,7 @@ namespace AleTrack.Features.Products.Utils;
 public static class KegSize
 {
     public const double FiveLiters = 5;
-    public const double FifTeenLiters = 15;
+    public const double FifteenLiters = 15;
     public const double ThirtyLiters = 30;
     public const double FiftyLiters = 50;
 }

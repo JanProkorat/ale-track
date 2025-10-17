@@ -48,8 +48,9 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
                 Id = d.PublicId,
                 DeliveryDate = d.Date,
                 State = d.State,
-                NumOfAssignedDrivers = d.Drivers.Count,
-                Vehicle = d.Vehicle != null ? new ProductDeliveryListItemDto.VehicleInfoDto(d.Vehicle.PublicId, d.Vehicle.Name) : null,
+                StopNames = d.Stops
+                    .Select(s => s.Brewery.Name)
+                    .ToList()
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

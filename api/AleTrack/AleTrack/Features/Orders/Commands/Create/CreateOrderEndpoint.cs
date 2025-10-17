@@ -59,7 +59,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             Client = client!,
             State = OrderState.New,
             CreatedDate = DateTime.UtcNow,
-            DeliveryDate = req.Data.DeliveryDate
+            RequiredDeliveryDate = req.Data.RequiredDeliveryDate
         };
 
         foreach (var orderItem in req.Data.OrderItems)

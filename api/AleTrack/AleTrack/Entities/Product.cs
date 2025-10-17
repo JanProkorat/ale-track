@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
+using AleTrack.Features.Products.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
@@ -92,4 +93,25 @@ public sealed class Product : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public Brewery Brewery { get; set; } = null!;
+    
+    /// <summary>
+    /// Weight of the product in kilograms
+    /// </summary>
+    public int? Weight
+    {
+        get
+        {
+            if (PackageSize == null)
+                return null;
+
+            return Kind switch
+            {
+                ProductKind.Bottle when PackageSize == BottleSize.TenLiters => PackageWeight.TwentyKilos,
+                ProductKind.Keg when PackageSize == KegSize.FifteenLiters => PackageWeight.TwentyKilos,
+                ProductKind.Keg when PackageSize == KegSize.ThirtyLiters => PackageWeight.FortyTwoKilos,
+                ProductKind.Keg when PackageSize == KegSize.FiftyLiters => PackageWeight.SixtyTwoKilos,
+                _ => null
+            };
+        }
+    }
 }

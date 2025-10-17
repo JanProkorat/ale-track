@@ -58,4 +58,9 @@ public sealed record ProductDto
     /// Price for unit without VAT
     /// </summary>
     public decimal PriceForUnitWithoutVat { get; set; }
+    
+    /// <summary>
+    /// Weight of the product in kilograms
+    /// </summary>
+    public int? Weight { get; set; }
 }

@@ -14,9 +14,9 @@ public sealed record CreateOrderDto
     public Guid ClientId { get; set; }
     
     /// <summary>
-    /// Date when order should be delivered
+    /// Latest date when order needs to be delivered to the client
     /// </summary>
-    public DateOnly? DeliveryDate { get; set; }
+    public DateOnly? RequiredDeliveryDate { get; set; }
 
     /// <summary>
     /// List of items included in the order

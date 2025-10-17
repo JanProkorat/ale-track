@@ -47,7 +47,7 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
             {
                 State = o.State,
                 Id = o.PublicId,
-                DeliveryDate = o.DeliveryDate,
+                RequiredDeliveryDate = o.RequiredDeliveryDate,
                 ClientName = o.Client.Name
             })
             .ApplyFilterAndSort(req.Parameters)

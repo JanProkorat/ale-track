@@ -78,7 +78,8 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         
         var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
 
-        order.DeliveryDate = req.Data.DeliveryDate;
+        order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
+        order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
         order.State = req.Data.State;
         
         order.OrderItems.Clear();

@@ -8,7 +8,6 @@ namespace AleTrack.Features.Orders.Queries.List;
 /// </summary>
 public sealed record OrderListItemDto
 {
-    
     /// <summary>
     /// Public ID of the order
     /// </summary>
@@ -20,9 +19,9 @@ public sealed record OrderListItemDto
     public OrderState State { get; set; }
     
     /// <summary>
-    /// When the order should be delivered
+    /// Latest date when order needs to be delivered to the client
     /// </summary>
-    public DateOnly? DeliveryDate { get; set; }
+    public DateOnly? RequiredDeliveryDate { get; set; }
     
     /// <summary>
     /// Name of the related client

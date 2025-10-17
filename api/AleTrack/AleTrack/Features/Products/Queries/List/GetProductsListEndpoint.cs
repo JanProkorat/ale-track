@@ -52,7 +52,10 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
                 PackageSize = c.PackageSize,
                 PriceForUnitWithoutVat = c.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = c.PriceForUnitWithVat,
-                PriceWithVat = c.PriceWithVat
+                PriceWithVat = c.PriceWithVat,
+                Weight = c.Weight,
+                BreweryId = c.Brewery.PublicId,
+                BreweryName = c.Brewery.Name
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

@@ -20,14 +20,7 @@ public sealed record ProductDeliveryListItemDto
     public ProductDeliveryState State { get; set; }
 
     /// <summary>
-    /// Number of assigned drivers
+    /// List of brewery names, each representing a delivery stop.
     /// </summary>
-    public int NumOfAssignedDrivers { get; set; }
-    
-    /// <summary>
-    /// Info about related vehicle
-    /// </summary>
-    public VehicleInfoDto? Vehicle { get; set; }
-    
-    public record VehicleInfoDto(Guid Id, string Name);
+    public List<string> StopNames { get; set; } = [];
 }

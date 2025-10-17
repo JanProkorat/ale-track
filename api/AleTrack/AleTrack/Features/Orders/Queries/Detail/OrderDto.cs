@@ -24,10 +24,16 @@ public sealed record OrderDto
     public OrderState State { get; set; }
     
     /// <summary>
-    /// Date when order needs to be delivered to the client
+    /// The latest date when order needs to be delivered to the client
     /// Can be null only in state <see cref="OrderState.New"/>
     /// </summary>
-    public DateOnly? DeliveryDate { get; set; }
+    public DateOnly? RequiredDeliveryDate { get; set; }
+    
+    /// <summary>
+    /// Date when the order was actually delivered to the client
+    /// Null if the order has not been delivered yet
+    /// </summary>
+    public DateOnly? ActualDeliveryDate { get; set; }
     
     /// <summary>
     /// Date when the order was created

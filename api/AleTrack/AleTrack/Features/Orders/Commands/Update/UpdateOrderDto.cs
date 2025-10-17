@@ -15,9 +15,15 @@ public sealed record UpdateOrderDto
     public Guid ClientId { get; set; }
     
     /// <summary>
-    /// Date when the order should be delivered to the client
+    /// Latest date when order needs to be delivered to the client
     /// </summary>
-    public DateOnly? DeliveryDate { get; set; }
+    public DateOnly? RequiredDeliveryDate { get; set; }
+    
+    /// <summary>
+    /// Date when the order was actually delivered to the client
+    /// Null if order has not been delivered yet
+    /// </summary>
+    public DateOnly? ActualDeliveryDate { get; set; }
     
     /// <summary>
     /// State of the order

@@ -58,4 +58,19 @@ public sealed record ProductListItemDto
     /// Price for unit without VAT
     /// </summary>
     public decimal PriceForUnitWithoutVat { get; set; }
+    
+    /// <summary>
+    /// Weight of the product in kilograms
+    /// </summary>
+    public int? Weight { get; set; }
+
+    /// <summary>
+    /// Name of the related brewery
+    /// </summary>
+    public string BreweryName { get; set; } = null!;
+    
+    /// <summary>
+    /// ID of the related brewery
+    /// </summary>
+    public Guid BreweryId { get; set; }
 }

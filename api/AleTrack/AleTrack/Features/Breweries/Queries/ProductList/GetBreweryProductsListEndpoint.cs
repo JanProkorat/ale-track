@@ -68,7 +68,8 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
                 PackageSize = c.PackageSize,
                 PriceForUnitWithoutVat = c.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = c.PriceForUnitWithVat,
-                PriceWithVat = c.PriceWithVat
+                PriceWithVat = c.PriceWithVat,
+                Weight = c.Weight
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

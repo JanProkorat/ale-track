@@ -26,13 +26,6 @@ public sealed class Order : PublicEntity
     public OrderState State { get; set; }
     
     /// <summary>
-    /// Date when order needs to be delivered to the client
-    /// Can be null only in state <see cref="OrderState.New"/>
-    /// </summary>
-    [Column("delivery_date")]
-    public DateOnly? DeliveryDate { get; set; }
-    
-    /// <summary>
     /// Date when the order was created
     /// </summary>
     [Column("created_date")]
@@ -49,4 +42,18 @@ public sealed class Order : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.NoAction)]
     public Client Client { get; set; } = null!;
+
+    /// <summary>
+    /// The latest date when the order needs to be delivered to the client
+    /// Can be null only in state <see cref="OrderState.New"/>
+    /// </summary>
+    [Column("required_delivery_date")]
+    public DateOnly? RequiredDeliveryDate { get; set; }
+    
+    /// <summary>
+    /// Date when the order was actually delivered to the client
+    /// Null if the order has not been delivered yet
+    /// </summary>
+    [Column("actual_delivery_date")]
+    public DateOnly? ActualDeliveryDate { get; set; }
 }

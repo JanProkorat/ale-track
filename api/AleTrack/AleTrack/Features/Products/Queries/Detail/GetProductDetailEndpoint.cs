@@ -58,7 +58,8 @@ public sealed class GetProductDetailEndpoint(AleTrackDbContext dbContext) : Endp
                 PackageSize = c.PackageSize,
                 PriceForUnitWithoutVat = c.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = c.PriceForUnitWithVat,
-                PriceWithVat = c.PriceWithVat
+                PriceWithVat = c.PriceWithVat,
+                Weight = c.Weight
             })
             .FirstOrDefaultAsync(ct);
 

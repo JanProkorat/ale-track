@@ -36,9 +36,9 @@ public sealed class CreateOrderDtoValidator : Validator<CreateOrderDto>
     {
         RuleFor(r => r.ClientId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         
-        RuleFor(r => r.DeliveryDate)
+        RuleFor(r => r.RequiredDeliveryDate)
             .GreaterThan(DateOnly.FromDateTime(DateTime.Today))
-            .When(d => d.DeliveryDate != null)
+            .When(d => d.RequiredDeliveryDate != null)
             .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
 
         RuleFor(r => r.OrderItems)
