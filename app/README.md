@@ -4,7 +4,7 @@ React app for API stored on https://github.com/JanProkorat/AleTrack
 
 ## Run konfigurace
 
-### Požadavky
+### Requirements
 - Node.js >= 20 (viz `package.json` engines)
 - Yarn 1.x nebo npm
 
