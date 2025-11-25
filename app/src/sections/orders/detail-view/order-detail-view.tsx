@@ -1,19 +1,18 @@
 import {useTranslation} from "react-i18next";
-import {useCallback, useEffect, useState} from "react";
+import {useState, useEffect, useCallback} from "react";
 
 import {Typography} from "@mui/material";
 
-import {CreateOrderView} from "./create-order-view";
 import {UpdateOrderView} from "./update-order-view";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 import {
-    OrderState,
-    type ProductListItemDto,
-    UpdateOrderDto,
-    UpdateOrderItemDto
-} from "../../../api/Client";
+  OrderState,
+  UpdateOrderDto,
+  UpdateOrderItemDto,
+  GroupedProductHistoryDto,
+} from '../../../api/Client';
 
 type OrderDetailViewProps = {
     id: string | undefined;
@@ -39,24 +38,27 @@ export function OrderDetailView(
 
     const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
     const [order, setOrder] = useState<UpdateOrderDto | null>(null);
-    const [products, setProducts] = useState<ProductListItemDto[]>([]);
+    const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
     const [disabled, setDisabled] = useState<boolean>(false);
 
     useEffect(() => {
-        void fetchProducts()
-    }, []);
+      if (order === null)
+        return;
 
-    const fetchProducts = async () => {
-        try {
+      void fetchProducts(order.clientId)
+    }, [order]);
 
-            const client = new AuthorizedClient();
-            await client.fetchProducts({}).then(setProducts)
-        } catch (e) {
-            showSnackbar('products.fetchError', 'error');
-            console.error('Error fetching products', e);
-        }
+    const fetchProducts = async (clientId: string) => {
+      try {
+
+        const client = new AuthorizedClient();
+        await client.fetchProductsWithClientHistory(clientId).then(setProducts)
+      } catch (e) {
+        showSnackbar('products.fetchError', 'error');
+        console.error('Error fetching products', e);
+      }
     }
     
     const fetchOrder = useCallback(async () => {
@@ -70,7 +72,7 @@ export function OrderDetailView(
             await client.getOrderDetailEndpoint(id!).then((detail) => {
                 const updateOrder =  new UpdateOrderDto({
                     clientId: detail.client!.id!,
-                    deliveryDate: detail.deliveryDate,
+                    requiredDeliveryDate: detail.requiredDeliveryDate,
                     state: detail.state,
                     orderItems: (detail.orderItems ?? []).map((item) => new UpdateOrderItemDto({
                         productId: item.productId,
@@ -106,8 +108,8 @@ export function OrderDetailView(
             today.setHours(0, 0, 0, 0);
 
             let deliveryDate = null;
-            if (orderToUpdate.deliveryDate !== null && order?.deliveryDate !== undefined){
-                deliveryDate = new Date(orderToUpdate.deliveryDate!);
+            if (orderToUpdate.requiredDeliveryDate !== null && order?.requiredDeliveryDate !== undefined){
+                deliveryDate = new Date(orderToUpdate.requiredDeliveryDate!);
                 deliveryDate.setHours(0, 0, 0, 0);
             }
 
@@ -130,7 +132,7 @@ export function OrderDetailView(
             const client = new AuthorizedClient();
             return await client.updateOrderEndpoint(orderId, orderToUpdate).then(() => {
                 showSnackbar(t('orders.saveSuccess'), 'success');
-                if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.deliveryDate != initialOrder?.deliveryDate) {
+                if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.requiredDeliveryDate != initialOrder?.requiredDeliveryDate) {
                     onConfirmed(true);
                 }
                 setInitialOrder(orderToUpdate);
@@ -176,9 +178,6 @@ export function OrderDetailView(
                 onDeleteEntity={deleteOrder}
                 onResetEntity={resetOrder}
                 deleteConfirmMessage={t('orders.deleteConfirm')}
-                resetConfirmMessage={t('common.resetConfirm')}
-                pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
-                disabled={disabled}
             >
                 {order != null && <UpdateOrderView
                     disabled={disabled}

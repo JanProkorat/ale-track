@@ -45,8 +45,7 @@ export function OrdersView() {
 
     const columns = [
         {id: 'clientName', label: t('orders.clientName')},
-        {id: 'state', label: t('orders.state')},
-        {id: 'deliveryDate', label: t('orders.deliveryDate')}
+        {id: 'deliveryDate', label: t('orders.requiredDeliveryDate')}
     ];
 
     useEffect(() => {
@@ -219,16 +218,16 @@ export function OrdersView() {
                     onProgressbarVisibilityChange={setInitialLoading}
                     onHasChangesChange={setHasDetailChanges}
                 />}
-                leftContentWidth={50}
-                leftContentMaxWidth={40}
+                leftContentWidth={35}
+                leftContentMaxWidth={35}
                 drawerContent={<CreateOrderView
-                    width={850}
+                    width={1100}
                     onClose={closeDrawer}
                     onSave={handleOrderCreated}
                 />}
                 drawerOpen={createOrderDrawerVisible}
                 onDrawerClose={closeDrawer}
-                drawerWidth={850}
+                drawerWidth={1100}
             />
             <Dialog
                 open={pendingOrderIdForConfirmation !== undefined}

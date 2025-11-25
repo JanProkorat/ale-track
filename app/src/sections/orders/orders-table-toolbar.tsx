@@ -43,60 +43,12 @@ export function OrdersTableToolbar(
             fullWidth
             value={filterClientName}
             onChange={(event) => onFilterClientName(event.target.value)}
-            placeholder={t('breweries.name') + `...`}
+            placeholder={t('orders.clientName') + `...`}
             startAdornment={
                 <InputAdornment position="start">
                     <Iconify width={20} icon="eva:search-fill" sx={{color: 'text.disabled'}}/>
                 </InputAdornment>
             }
-        />,
-        <OrderStateSelect selectedState={filterState} onSelect={onFilterState} nullable />,
-        <DatePicker
-            key="delivery-date"
-            disablePast
-            label={t('orders.deliveryDate')}
-            ref={pickerRef}
-            value={filterDate ? dayjs(filterDate) : null}
-            open={open}
-            onOpen={() => setOpen(true)}
-            onClose={() => setOpen(false)}
-            onChange={(value) => {
-                onFilterDate(value ? value.toDate() : undefined);
-                setOpen(false);
-            }}
-            enableAccessibleFieldDOMStructure={false}
-            slots={{
-                textField: (props) => (
-                    <TextField
-                        {...props}
-                        fullWidth
-                        onFocus={() => setOpen(true)}
-                        InputProps={{
-                            ...props.InputProps,
-                            endAdornment: (
-                                <>
-                                    {filterDate && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onFilterDate(undefined)}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                padding: 0,
-                                                marginRight: 4
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
-                                    )}
-                                    {props.InputProps?.endAdornment}
-                                </>
-                            )
-                        }}
-                    />
-                )
-            }}
         />
     ];
 

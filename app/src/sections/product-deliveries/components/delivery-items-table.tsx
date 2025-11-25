@@ -7,9 +7,6 @@ import TableContainer from "@mui/material/TableContainer";
 
 import { useTable } from "src/providers/TableProvider";
 
-import { TableEmptyRows } from "src/components/table/table-empty-rows";
-
-import {emptyRows} from "../../../providers/utils";
 import {TableNoData} from "../../../components/table/table-no-data";
 import {SortableTableHead} from "../../../components/table/sortable-table-head";
 import { CreateProductDeliveryItemDto, UpdateProductDeliveryItemDto} from "../../../api/Client";
@@ -38,15 +35,72 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
         {id: 'quantity', label: t('productDeliveries.quantity')},
         {id: 'kind', label: t('products.kind')},
         {id: 'size', label: t('products.packageSize')},
+        {id: 'weight', label: t('products.weight')},
         {id: 'priceVat', label: t('products.priceVat')},
         {id: 'priceUnitVat', label: t('products.priceUnitVat')},
         {id: 'type', label: t('products.type')},
         {id: ''}
     ];
 
+    const getSortedProducts = () => {
+        const sorted = [...deliveryProducts].sort((a, b) => {
+            const productA = products.find(p => p.id === a.productId);
+            const productB = products.find(p => p.id === b.productId);
+
+            if (!productA || !productB) return 0;
+
+            let compareValueA: string | number;
+            let compareValueB: string | number;
+
+            // Mapping column id to property in product object
+            switch (table.orderBy) {
+                case 'name':
+                    compareValueA = productA.name?.toLowerCase() || '';
+                    compareValueB = productB.name?.toLowerCase() || '';
+                    break;
+                case 'quantity':
+                    compareValueA = a.quantity || 0;
+                    compareValueB = b.quantity || 0;
+                    break;
+                case 'kind':
+                    compareValueA = productA.kind || '';
+                    compareValueB = productB.kind || '';
+                    break;
+                case 'size':
+                    compareValueA = productA.packageSize || 0;
+                    compareValueB = productB.packageSize || 0;
+                    break;
+                case 'priceVat':
+                    compareValueA = productA.priceWithVat || 0;
+                    compareValueB = productB.priceWithVat || 0;
+                    break;
+                case 'priceUnitVat':
+                    compareValueA = productA.priceForUnitWithVat || 0;
+                    compareValueB = productB.priceForUnitWithVat || 0;
+                    break;
+                case 'type':
+                    compareValueA = productA.type || '';
+                    compareValueB = productB.type || '';
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (compareValueA < compareValueB) {
+                return table.order === 'asc' ? -1 : 1;
+            }
+            if (compareValueA > compareValueB) {
+                return table.order === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        return sorted;
+    };
+
     return (
-        <TableContainer sx={{overflow: 'unset', mt: 2}}>
-            <Table>
+        <TableContainer sx={{ mt: 2, maxWidth: '100%', overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 800 }}>
                 <SortableTableHead
                     order={table.order}
                     orderBy={table.orderBy}
@@ -63,13 +117,10 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
                     checkboxVisible
                 />
                 <TableBody>
-                    {deliveryProducts
-                        .slice(
-                            table.page * table.rowsPerPage,
-                            table.page * table.rowsPerPage + table.rowsPerPage
-                        )
+                    {getSortedProducts()
                         .map((row, index) => {
                             const product = products.find(d => d.id === row.productId);
+                            const originalIndex = deliveryProducts.findIndex(p => p.productId === row.productId);
                             return product === undefined ? null :  <ProductDeliveryStopProductRow
                                 disabled={disabled}
                                 key={product.id}
@@ -77,17 +128,17 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
                                 quantity={row.quantity}
                                 onDeleteClick={() => {
                                     const updatedProducts = [...deliveryProducts];
-                                    updatedProducts.splice(index, 1);
+                                    updatedProducts.splice(originalIndex, 1);
                                     onProductsChanged(updatedProducts);
                                 }}
                                 onQuantityChange={(quantity) => {
                                     const updatedProducts = [...deliveryProducts];
-                                    const existing = updatedProducts[index];
+                                    const existing = updatedProducts[originalIndex];
                                     const ctor = existing instanceof UpdateProductDeliveryItemDto
                                         ? UpdateProductDeliveryItemDto
                                         : CreateProductDeliveryItemDto;
 
-                                    updatedProducts[index] = new ctor({
+                                    updatedProducts[originalIndex] = new ctor({
                                         ...existing,
                                         quantity
                                     }) as T;
@@ -95,11 +146,6 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
                                 }}
                             />
                         })}
-
-                    <TableEmptyRows
-                        height={68}
-                        emptyRows={emptyRows(table.page, table.rowsPerPage, deliveryProducts.length)}
-                    />
 
                     {deliveryProducts.length == 0 && <TableNoData colSpan={columns.length}/>}
                 </TableBody>

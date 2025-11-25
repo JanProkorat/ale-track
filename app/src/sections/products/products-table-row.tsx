@@ -64,9 +64,11 @@ export function ProductsTableRow(
                 <Chip label={t('productKind.' + row.kind)}/>
             </TableCell>
             <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.packageSize}L</TableCell>
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.packageSize} L</TableCell>
             <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage}%</TableCell>
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.weight} Kg</TableCell>
+            <TableCell onClick={onRowClick}
+                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage} %</TableCell>
             <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
                 {formatPrice(row.priceWithVat)}
             </TableCell>

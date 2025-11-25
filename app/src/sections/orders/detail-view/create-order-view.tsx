@@ -11,13 +11,10 @@ import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {OrderItemsTable} from "../components/order-items-table";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
 import {OrderProductsSelect} from "../components/order-products-select";
-import {
-    CreateOrderDto, CreateOrderItemDto
-} from "../../../api/Client";
 import {OrderDeliveryDatePicker} from "../components/order-delivery-date-picker";
+import { CreateOrderDto, CreateOrderItemDto, GroupedProductHistoryDto } from '../../../api/Client';
 
-import type { ProductListItemDto
-} from "../../../api/Client";
+
 
 type CreateOrderViewProps = {
     width: number
@@ -30,23 +27,26 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     const {showSnackbar} = useSnackbar();
 
     const [order, setOrder] = useState<CreateOrderDto>(new CreateOrderDto({
-        deliveryDate: undefined,
+        requiredDeliveryDate: undefined,
         orderItems: [],
         clientId: ""
     }))
     
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
-    const [products, setProducts] = useState<ProductListItemDto[]>([]);
+    const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
     useEffect(() => {
-        void fetchProducts()
-    }, []);
+      if (order.clientId === "")
+        return;
 
-    const fetchProducts = async () => {
+      void fetchProducts(order.clientId)
+    }, [order.clientId]);
+
+    const fetchProducts = async (clientId: string) => {
         try {
 
             const client = new AuthorizedClient();
-            await client.fetchProducts({}).then(setProducts)
+            await client.fetchProductsWithClientHistory(clientId).then(setProducts)
         } catch (e) {
             showSnackbar('products.fetchError', 'error');
             console.error('Error fetching products', e);
@@ -58,13 +58,13 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            let deliveryDate = null;
-            if (order.deliveryDate != null) {
-                deliveryDate = new Date(order.deliveryDate);
-                deliveryDate.setHours(0, 0, 0, 0);
+            let requiredDeliveryDate = null;
+            if (order.requiredDeliveryDate != null) {
+                requiredDeliveryDate = new Date(order.requiredDeliveryDate);
+                requiredDeliveryDate.setHours(0, 0, 0, 0);
             }
             
-            if ((deliveryDate != null && deliveryDate < today) ||
+            if ((requiredDeliveryDate != null && requiredDeliveryDate < today) ||
                 !order.clientId ||
                 order.clientId === "" ||
                 order.orderItems!.some(p => !p.quantity || p.quantity <= 0 || !p.productId)
@@ -86,7 +86,7 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     const handleDeliveryDateSelect = (date: Date | undefined) => {
         setOrder(prev => new CreateOrderDto({
             ...prev,
-            deliveryDate: date
+            requiredDeliveryDate: date
         }))
     }
 
@@ -131,7 +131,11 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
             }}>
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 1, mt: 1}}>
                     <ClientSelect selectedClientId={order.clientId} shouldValidate={shouldValidate} onSelect={handleClientSelect} />
-                    <OrderDeliveryDatePicker selectedDeliveryDate={order.deliveryDate} onDatePicked={handleDeliveryDateSelect} />
+                    <OrderDeliveryDatePicker
+                        label={t('orders.requiredDeliveryDate')}
+                        selectedDeliveryDate={order.requiredDeliveryDate}
+                        onDatePicked={handleDeliveryDateSelect}
+                    />
                 </Box>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>
@@ -150,7 +154,7 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
                     onProductsChanged={handleItemsSelect}
                 />
                 
-                <OrderItemsTable 
+                <OrderItemsTable
                     orderProducts={order.orderItems ?? []}
                     products={products}
                     onProductsChanged={handleProductsChanged}

@@ -1,25 +1,23 @@
 import dayjs from "dayjs";
 import React, {useState} from "react";
-import {useTranslation} from "react-i18next";
 
 import TextField from "@mui/material/TextField";
 import {DatePicker} from "@mui/x-date-pickers/DatePicker";
 
 type OrderDeliveryDatePickerProps = {
     selectedDeliveryDate: Date | undefined;
+    label: string;
     onDatePicked: (date: Date | undefined) => void;
     disabled?: boolean;
 }
 
-export function OrderDeliveryDatePicker({selectedDeliveryDate, onDatePicked, disabled}: Readonly<OrderDeliveryDatePickerProps>) {
-    const {t} = useTranslation();
-
+export function OrderDeliveryDatePicker({selectedDeliveryDate, label, onDatePicked, disabled}: Readonly<OrderDeliveryDatePickerProps>) {
     const [deliveryDatePickerOpen, setDeliveryDatePickerOpen] = useState<boolean>(false);
 
     return (
         <DatePicker
             disabled={disabled}
-            label={t('orders.deliveryDate')}
+            label={label}
             value={selectedDeliveryDate ? dayjs(selectedDeliveryDate) : null}
             onChange={(value) => onDatePicked(value ? value.toDate() : undefined)}
             open={deliveryDatePickerOpen}

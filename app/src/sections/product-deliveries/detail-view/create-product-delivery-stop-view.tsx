@@ -6,8 +6,6 @@ import {Box, Collapse, Typography, IconButton} from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
-import { Scrollbar } from "src/components/scrollbar";
-
 import {Iconify} from "../../../components/iconify";
 import {BrewerySelect} from "../components/brewery-select";
 import {ProductsSelect} from "../components/products-select";
@@ -131,12 +129,11 @@ export function CreateProductDeliveryStopView(
                         inputProps={{maxLength: 200}}
                     />
 
-                    <Scrollbar>
-                        <DeliveryItemsTable 
-                            deliveryProducts={productDeliveryStop.products ?? []}
-                            products={products}
-                            onProductsChanged={onProductsChanged} />
-                    </Scrollbar>
+                    <DeliveryItemsTable
+                        deliveryProducts={productDeliveryStop.products ?? []}
+                        products={products}
+                        onProductsChanged={onProductsChanged}
+                    />
                 </Box>
             </Collapse>
         </>

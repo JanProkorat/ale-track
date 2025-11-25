@@ -151,8 +151,6 @@ export function BreweryDetailCard(
             onDeleteEntity={deleteBrewery}
             onResetEntity={resetBrewery}
             deleteConfirmMessage={t('breweries.deleteConfirm', {name: brewery.name})}
-            resetConfirmMessage={t('common.resetConfirm')}
-            pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
         >
             <Box display="flex" alignItems="center" gap={2} sx={{mt: 2}}>
 

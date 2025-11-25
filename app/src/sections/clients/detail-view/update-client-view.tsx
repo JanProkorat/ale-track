@@ -193,8 +193,6 @@ export function UpdateClientView(
                 onDeleteEntity={deleteClient}
                 onResetEntity={resetClient}
                 deleteConfirmMessage={t('clients.deleteConfirm', {name: client?.name ?? ''})}
-                resetConfirmMessage={t('common.resetConfirm')}
-                pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
                 disabled={client === null}
             >
                 <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300}}>
@@ -233,8 +231,6 @@ export function UpdateClientView(
             onDeleteEntity={deleteClient}
             onResetEntity={resetClient}
             deleteConfirmMessage={t('clients.deleteConfirm', {name: client?.name ?? ''})}
-            resetConfirmMessage={t('common.resetConfirm')}
-            pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
             disabled={false}
         >
             <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: 2}}>

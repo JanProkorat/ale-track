@@ -98,6 +98,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
         {id: 'platoDegree', label: t('products.platoDegree')},
         {id: 'kind', label: t('products.kind')},
         {id: 'size', label: t('products.packageSize')},
+        {id: 'weight', label: t('products.weight')},
         {id: 'alcoholPercentage', label: t('products.alcoholPercentage')},
         {id: 'priceVat', label: t('products.priceVat')},
         {id: 'priceUnitVat', label: t('products.priceUnitVat')},

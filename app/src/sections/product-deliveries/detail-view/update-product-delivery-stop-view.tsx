@@ -9,7 +9,6 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import {Iconify} from "../../../components/iconify";
-import {Scrollbar} from "../../../components/scrollbar";
 import {BrewerySelect} from "../components/brewery-select";
 import {ProductsSelect} from "../components/products-select";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
@@ -56,21 +55,21 @@ export function UpdateProductDeliveryStopView(
     const [products, setProducts] = useState<BreweryProductListItemDto[]>([]);
 
     useEffect(() => {
+        const fetchProducts = async (breweryId: string) => {
+            try {
+                const client = new AuthorizedClient();
+                await client.fetchBreweryProducts(breweryId, {}).then(setProducts);
+            } catch (error) {
+                showSnackbar('Error fetching products for delivery', 'error');
+                console.error('Error fetching products for delivery:', error);
+            }
+        };
+
         if (productDeliveryStop.breweryId !== undefined && productDeliveryStop.breweryId !== "") {
             setBreweryName(breweries.find(brewery => brewery.id === productDeliveryStop.breweryId)?.name ?? "");
             void fetchProducts(productDeliveryStop.breweryId);
         }
-    }, [productDeliveryStop.breweryId])
-
-    const fetchProducts = async (breweryId: string) => {
-        try {
-            const client = new AuthorizedClient();
-            await client.fetchBreweryProducts(breweryId, {}).then(setProducts);
-        } catch (error) {
-            showSnackbar('Error fetching products for delivery', 'error');
-            console.error('Error fetching products for delivery:', error);
-        }
-    };
+    }, [productDeliveryStop.breweryId, breweries, showSnackbar])
 
     return (
         <>
@@ -139,13 +138,11 @@ export function UpdateProductDeliveryStopView(
                         disabled={disabled}
                     />
 
-                    <Scrollbar>
-                        <DeliveryItemsTable
-                            disabled={disabled}
-                            deliveryProducts={productDeliveryStop.products ?? []}
-                            products={products}
-                            onProductsChanged={onProductsChanged} />
-                    </Scrollbar>
+                    <DeliveryItemsTable
+                        disabled={disabled}
+                        deliveryProducts={productDeliveryStop.products ?? []}
+                        products={products}
+                        onProductsChanged={onProductsChanged} />
                 </Box>
             </Collapse>
         </>

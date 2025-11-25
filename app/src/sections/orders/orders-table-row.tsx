@@ -33,10 +33,7 @@ export function OrdersTableRow({row, selected, isSelected, onSelectRow, onRowCli
           />
         </TableCell>
         <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.clientName}</TableCell>
-        <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
-          <Chip label={t('orderState.' + row.state)} />
-        </TableCell>
-        <TableCell onClick={onRowClick}>{row.deliveryDate !== null && row.deliveryDate !== undefined ? formatDate(row.deliveryDate) : ""}</TableCell>
+        <TableCell onClick={onRowClick}>{row.requiredDeliveryDate !== null && row.requiredDeliveryDate !== undefined ? formatDate(row.requiredDeliveryDate) : ""}</TableCell>
       </TableRow>
   );
 }
