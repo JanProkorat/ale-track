@@ -44,7 +44,7 @@ export function OrderProductsSelect({
     const calculateMaxChips = (width: number) => {
       const chipWidth = 150; // maxWidth chipu
       const gapWidth = 4; // gap mezi chipy (0.5 * 8px)
-      const paddingAndBuffer = 100; // rezerva pro padding a "+X" chip
+      const paddingAndBuffer = 100; // reserve for padding and "+X" chip
 
       const availableWidth = width - paddingAndBuffer;
       const chipsPerRow = Math.floor(availableWidth / (chipWidth + gapWidth));
