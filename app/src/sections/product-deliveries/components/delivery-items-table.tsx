@@ -49,8 +49,8 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
 
             if (!productA || !productB) return 0;
 
-            let compareValueA: any;
-            let compareValueB: any;
+            let compareValueA: string | number;
+            let compareValueB: string | number;
 
             // Mapping column id to property in product object
             switch (table.orderBy) {

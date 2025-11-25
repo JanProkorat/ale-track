@@ -188,7 +188,7 @@ export function ProductDeliveriesView() {
 
         if (pendingDeliveryId !== null) {
             if (shouldSave) {
-                // Save current delivery and wait for completion
+                // Save the current delivery and wait for completion
                 const saved = await saveCurrentDelivery();
                 if (!saved) {
                     // If save failed, cancel the switch
