@@ -167,7 +167,7 @@ export function ProductDeliveriesView() {
             
             showSnackbar(t('productDeliveries.saveSuccess'), 'success');
             
-            // Pokud se změnil stav nebo datum, načteme nový seznam
+            // If the state or date has changed, reload the list
             if (currentDelivery?.state !== currentInitialDelivery?.state || 
                 currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
                 const updated = await fetchProductDeliveries();
@@ -188,16 +188,16 @@ export function ProductDeliveriesView() {
 
         if (pendingDeliveryId !== null) {
             if (shouldSave) {
-                // Uložíme aktuální dodávku a počkáme na dokončení
+                // Save the current delivery and wait for completion
                 const saved = await saveCurrentDelivery();
                 if (!saved) {
-                    // Pokud se nepodařilo uložit, zrušíme přepnutí
+                    // If saving failed, cancel the switch
                     setPendingDeliveryId(null);
                     return;
                 }
             }
             
-            // Po uložení (nebo při zahazování změn) nastavíme novou dodávku
+            // After saving (or when discarding changes) set the new delivery
             if (pendingDeliveryId === 'new') {
                 setCreateDeliveryDrawerVisible(true);
             } else {
