@@ -191,13 +191,13 @@ export function ProductDeliveriesView() {
                 // Save the current delivery and wait for completion
                 const saved = await saveCurrentDelivery();
                 if (!saved) {
-                    // If save failed, cancel the switch
+                    // If saving failed, cancel the switch
                     setPendingDeliveryId(null);
                     return;
                 }
             }
             
-            // After saving (or when discarding changes), set the new delivery
+            // After saving (or when discarding changes) set the new delivery
             if (pendingDeliveryId === 'new') {
                 setCreateDeliveryDrawerVisible(true);
             } else {
