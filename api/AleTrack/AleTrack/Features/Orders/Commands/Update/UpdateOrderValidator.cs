@@ -42,11 +42,6 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
             .When(d => d.RequiredDeliveryDate != null)
             .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
         
-        RuleFor(r => r.ActualDeliveryDate)
-            .LessThanOrEqualTo(DateOnly.FromDateTime(DateTime.UtcNow))
-            .When(d => d.ActualDeliveryDate != null)
-            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
-        
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new UpdateOrderItemDtoValidator()))
             .When(i => i.OrderItems.Count > 0);
