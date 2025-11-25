@@ -35,6 +35,7 @@ export function OrderProductsSelect({
   const recent = products.recent ?? [];
   const breweries = products.breweries ?? [];
 
+  const MIN_VISIBLE_CHIPS = 1;
   const [maxVisibleChips, setMaxVisibleChips] = useState(4);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -44,12 +45,12 @@ export function OrderProductsSelect({
     const calculateMaxChips = (width: number) => {
       const chipWidth = 150; // maxWidth chipu
       const gapWidth = 4; // gap mezi chipy (0.5 * 8px)
-      const paddingAndBuffer = 100; // rezerva pro padding a "+X" chip
+      const paddingAndBuffer = 100; // reserve for padding and "+X" chip
 
       const availableWidth = width - paddingAndBuffer;
       const chipsPerRow = Math.floor(availableWidth / (chipWidth + gapWidth));
 
-      setMaxVisibleChips(Math.max(1, chipsPerRow));
+      setMaxVisibleChips(Math.max(MIN_VISIBLE_CHIPS, chipsPerRow));
     };
 
     const resizeObserver = new ResizeObserver((entries) => {
