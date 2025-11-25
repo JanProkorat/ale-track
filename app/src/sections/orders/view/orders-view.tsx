@@ -221,13 +221,13 @@ export function OrdersView() {
                 leftContentWidth={35}
                 leftContentMaxWidth={35}
                 drawerContent={<CreateOrderView
-                    width={850}
+                    width={1100}
                     onClose={closeDrawer}
                     onSave={handleOrderCreated}
                 />}
                 drawerOpen={createOrderDrawerVisible}
                 onDrawerClose={closeDrawer}
-                drawerWidth={850}
+                drawerWidth={1100}
             />
             <Dialog
                 open={pendingOrderIdForConfirmation !== undefined}

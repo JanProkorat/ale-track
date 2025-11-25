@@ -11,13 +11,10 @@ import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {OrderItemsTable} from "../components/order-items-table";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
 import {OrderProductsSelect} from "../components/order-products-select";
-import {
-    CreateOrderDto, CreateOrderItemDto
-} from "../../../api/Client";
 import {OrderDeliveryDatePicker} from "../components/order-delivery-date-picker";
+import { CreateOrderDto, CreateOrderItemDto, GroupedProductHistoryDto } from '../../../api/Client';
 
-import type { ProductListItemDto
-} from "../../../api/Client";
+
 
 type CreateOrderViewProps = {
     width: number
@@ -36,17 +33,20 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     }))
     
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
-    const [products, setProducts] = useState<ProductListItemDto[]>([]);
+    const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
     useEffect(() => {
-        void fetchProducts()
-    }, []);
+      if (order.clientId === "")
+        return;
 
-    const fetchProducts = async () => {
+      void fetchProducts(order.clientId)
+    }, [order.clientId]);
+
+    const fetchProducts = async (clientId: string) => {
         try {
 
             const client = new AuthorizedClient();
-            await client.fetchProducts({}).then(setProducts)
+            await client.fetchProductsWithClientHistory(clientId).then(setProducts)
         } catch (e) {
             showSnackbar('products.fetchError', 'error');
             console.error('Error fetching products', e);
@@ -154,7 +154,7 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
                     onProductsChanged={handleItemsSelect}
                 />
                 
-                <OrderItemsTable 
+                <OrderItemsTable
                     orderProducts={order.orderItems ?? []}
                     products={products}
                     onProductsChanged={handleProductsChanged}

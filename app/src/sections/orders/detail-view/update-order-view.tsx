@@ -1,4 +1,4 @@
-import type { OrderState, ProductListItemDto} from "src/api/Client";
+import type { OrderState, GroupedProductHistoryDto} from 'src/api/Client';
 
 import React from "react";
 import {useTranslation} from "react-i18next";
@@ -6,7 +6,7 @@ import {useTranslation} from "react-i18next";
 import Box from "@mui/material/Box";
 import {Typography} from "@mui/material";
 
-import {UpdateOrderDto, UpdateOrderItemDto} from "src/api/Client";
+import { UpdateOrderDto, UpdateOrderItemDto} from 'src/api/Client';
 
 import {ClientSelect} from "../components/client-select";
 import {OrderItemsTable} from "../components/order-items-table";
@@ -16,7 +16,7 @@ import {OrderDeliveryDatePicker} from "../components/order-delivery-date-picker"
 
 type UpdateOrderViewProps = {
     order: UpdateOrderDto;
-    products: ProductListItemDto[]
+    products: GroupedProductHistoryDto
     shouldValidate: boolean,
     disabled: boolean,
     onChange: (updated: UpdateOrderDto) => void;

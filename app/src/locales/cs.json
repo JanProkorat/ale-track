@@ -146,7 +146,8 @@
     "detailTitle": "Detail produktu",
     "saveSuccess": "Produkt byl úspěšně uložen",
     "saveError": "Chyba při ukládání produktu",
-    "weight": "Váha"
+    "weight": "Váha",
+    "recent": "Poslední"
   },
   "country": {
     "Czechia": "Česko",

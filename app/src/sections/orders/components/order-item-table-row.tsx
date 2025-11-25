@@ -30,11 +30,31 @@ export function OrderItemTableRow(
     }: Readonly<OrderItemTableRowProps>) {
 
     const [selected, setSelected] = useState<boolean>(false);
+    const [isHovered, setIsHovered] = useState<boolean>(false);
     const { t } = useTranslation();
 
     return (
-        <TableRow hover tabIndex={-1} role="checkbox">
-            <TableCell padding="checkbox">
+        <TableRow
+            tabIndex={-1}
+            role="checkbox"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            sx={{
+                cursor: 'pointer',
+            }}
+        >
+            <TableCell
+                padding="checkbox"
+                sx={{
+                    position: 'sticky !important',
+                    left: '0 !important',
+                    zIndex: '100 !important',
+                    backgroundColor: isHovered ? '#f5f5f5 !important' : '#fff !important',
+                    backgroundImage: 'none !important',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                    boxShadow: '2px 0 5px -2px rgba(0, 0, 0, 0.1)',
+                }}
+            >
                 <Checkbox
                     disableRipple
                     checked={selected}
@@ -48,10 +68,13 @@ export function OrderItemTableRow(
                 sx={{
                     whiteSpace: 'nowrap',
                     minWidth: 'fit-content',
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 1.,
-                    backgroundColor: 'white'
+                    position: 'sticky !important',
+                    left: '42px !important',
+                    zIndex: '100 !important',
+                    backgroundColor: isHovered ? '#f5f5f5 !important' : '#fff !important',
+                    backgroundImage: 'none !important',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                    boxShadow: '2px 0 5px -2px rgba(0, 0, 0, 0.1)',
                 }}
             >
                 {row.name}
@@ -68,18 +91,51 @@ export function OrderItemTableRow(
                         onQuantityChange(val === "" ? undefined : Number(val));
                     }}/>
             </TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>
                 <Chip label={t('productKind.' + row.kind)} />
             </TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.packageSize} L</TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.weight} Kg</TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceWithVat} Kč</TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.priceForUnitWithVat} Kč</TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>{row.packageSize} L</TableCell>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>{row.weight} Kg</TableCell>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>{row.priceWithVat} Kč</TableCell>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>{row.priceForUnitWithVat} Kč</TableCell>
+            <TableCell sx={{
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>
                 <Chip label={t('productType.' + row.type)} />
             </TableCell>
 
-            <TableCell align="right">
+            <TableCell align="right" sx={{
+                backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+            }}>
                 <IconButton onClick={onDeleteClick} disabled={disabled} color="error">
                     <Iconify icon="solar:trash-bin-trash-bold"/>
                 </IconButton>

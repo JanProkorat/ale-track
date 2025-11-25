@@ -8,11 +8,11 @@ import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 import {
-    OrderState,
-    UpdateOrderDto,
-    UpdateOrderItemDto,
-    type ProductListItemDto
-} from "../../../api/Client";
+  OrderState,
+  UpdateOrderDto,
+  UpdateOrderItemDto,
+  GroupedProductHistoryDto,
+} from '../../../api/Client';
 
 type OrderDetailViewProps = {
     id: string | undefined;
@@ -38,24 +38,27 @@ export function OrderDetailView(
 
     const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
     const [order, setOrder] = useState<UpdateOrderDto | null>(null);
-    const [products, setProducts] = useState<ProductListItemDto[]>([]);
+    const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
     const [disabled, setDisabled] = useState<boolean>(false);
 
     useEffect(() => {
-        void fetchProducts()
-    }, []);
+      if (order === null)
+        return;
 
-    const fetchProducts = async () => {
-        try {
+      void fetchProducts(order.clientId)
+    }, [order]);
 
-            const client = new AuthorizedClient();
-            await client.fetchProducts({}).then(setProducts)
-        } catch (e) {
-            showSnackbar('products.fetchError', 'error');
-            console.error('Error fetching products', e);
-        }
+    const fetchProducts = async (clientId: string) => {
+      try {
+
+        const client = new AuthorizedClient();
+        await client.fetchProductsWithClientHistory(clientId).then(setProducts)
+      } catch (e) {
+        showSnackbar('products.fetchError', 'error');
+        console.error('Error fetching products', e);
+      }
     }
     
     const fetchOrder = useCallback(async () => {
