@@ -52,7 +52,7 @@ export function DeliveryItemsTable<T extends AllowedItem>({deliveryProducts, pro
             let compareValueA: string | number;
             let compareValueB: string | number;
 
-            // Mapování column id na property v product objektu
+            // Mapping column id to property in product object
             switch (table.orderBy) {
                 case 'name':
                     compareValueA = productA.name?.toLowerCase() || '';

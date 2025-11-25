@@ -167,7 +167,7 @@ export function ProductDeliveriesView() {
             
             showSnackbar(t('productDeliveries.saveSuccess'), 'success');
             
-            // If state or date changed, reload the list
+            // If the state or date has changed, reload the list
             if (currentDelivery?.state !== currentInitialDelivery?.state || 
                 currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
                 const updated = await fetchProductDeliveries();
@@ -197,7 +197,7 @@ export function ProductDeliveriesView() {
                 }
             }
             
-            // After saving (or discarding changes) set the new delivery
+            // After saving (or when discarding changes), set the new delivery
             if (pendingDeliveryId === 'new') {
                 setCreateDeliveryDrawerVisible(true);
             } else {
