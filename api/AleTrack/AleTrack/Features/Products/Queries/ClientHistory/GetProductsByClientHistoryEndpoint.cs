@@ -49,70 +49,65 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
     /// <inheritdoc />
     public override async Task HandleAsync(GetProductsByClientHistoryRequest req, CancellationToken ct)
     {
-        // Get all products with their order counts in a single query
-        // Pre-aggregate order counts for products for the given client
-        var orderCountsByProduct = await dbContext.OrderItems
+        // Pre-aggregate order counts for products for the given client directly in the database
+        var orderCountsByProductId = await dbContext.OrderItems
             .Where(oi => oi.Order.Client.PublicId == req.ClientId)
             .GroupBy(oi => oi.ProductId)
             .Select(g => new { ProductId = g.Key, OrderCount = g.Count() })
-            .ToListAsync(ct);
+            .ToDictionaryAsync(x => x.ProductId, x => x.OrderCount, ct);
 
-        var productsWithOrderCounts = await dbContext.Products
-            .Select(p => new
+        // Project products to DTOs in a single server-side query
+        var productsQuery = dbContext.Products
+            .Select(p => new ProductListItemDto
             {
-                Product = p,
-                OrderCount = orderCountsByProduct
-                    .FirstOrDefault(x => x.ProductId == p.Id)?.OrderCount ?? 0
+                Id = p.PublicId,
+                Name = p.Name,
+                Description = p.Description,
+                Kind = p.Kind,
+                AlcoholPercentage = p.AlcoholPercentage,
+                PlatoDegree = p.PlatoDegree,
+                Type = p.Type,
+                PackageSize = p.PackageSize,
+                PriceForUnitWithoutVat = p.PriceForUnitWithoutVat,
+                PriceForUnitWithVat = p.PriceForUnitWithVat,
+                PriceWithVat = p.PriceWithVat,
+                Weight = p.Weight,
+                BreweryId = p.Brewery.PublicId,
+                BreweryName = p.Brewery.Name
             })
-            .Select(x => new
-            {
-                Dto = new ProductListItemDto
-                {
-                    Id = x.Product.PublicId,
-                    Name = x.Product.Name,
-                    Description = x.Product.Description,
-                    Kind = x.Product.Kind,
-                    AlcoholPercentage = x.Product.AlcoholPercentage,
-                    PlatoDegree = x.Product.PlatoDegree,
-                    Type = x.Product.Type,
-                    PackageSize = x.Product.PackageSize,
-                    PriceForUnitWithoutVat = x.Product.PriceForUnitWithoutVat,
-                    PriceForUnitWithVat = x.Product.PriceForUnitWithVat,
-                    PriceWithVat = x.Product.PriceWithVat,
-                    Weight = x.Product.Weight,
-                    BreweryId = x.Product.Brewery.PublicId,
-                    BreweryName = x.Product.Brewery.Name
-                },
-                x.OrderCount
-            })
-            .ToListAsync(ct);
-        
-        // Apply filtering to the DTOs
-        var filteredData = productsWithOrderCounts
-            .Select(x => x.Dto)
-            .AsQueryable()
-            .ApplyFilterAndSort(req.Parameters)
-            .ToList();
-        
-        // Create a lookup for order counts
-        var orderCountLookup = productsWithOrderCounts.ToDictionary(
-            x => x.Dto.Id, 
-            x => x.OrderCount);
-        
+            .ApplyFilterAndSort(req.Parameters);
+
+        var filteredData = await productsQuery.ToListAsync(ct);
+
+        // Create lookup for order counts using product PublicId -> underlying product Id mapping is not available here,
+        // so we assume that OrderItem.ProductId points to the same entity as Product.Id used in the aggregation above.
+        // We need to load Product.Id with PublicId mapping to correctly map counts to DTOs.
+        var productIdByPublicId = await dbContext.Products
+            .Select(p => new { p.Id, p.PublicId })
+            .ToDictionaryAsync(x => x.PublicId, x => x.Id, ct);
+
+        var orderCountLookup = filteredData.ToDictionary(
+            dto => dto.Id,
+            dto => productIdByPublicId.TryGetValue(dto.Id, out var internalId) &&
+                   orderCountsByProductId.TryGetValue(internalId, out var count)
+                ? count
+                : 0);
+
         // Order products by their order count (most ordered first), then by name
         var orderedData = filteredData
-            .OrderByDescending(p => orderCountLookup.GetValueOrDefault(p.Id, 0))
+            .OrderByDescending(p => orderCountLookup.TryGetValue(p.Id, out var count) ? count : 0)
             .ThenBy(p => p.Name)
             .ToList();
 
-        
         // Recent = všechny produkty, které klient již někdy objednal (OrderCount > 0), seřazené dle frekvence a jména
         var recent = orderedData
-            .Where(p => orderCountLookup.GetValueOrDefault(p.Id, 0) > 0)
+            .Where(p => orderCountLookup.TryGetValue(p.Id, out var count) && count > 0)
             .ToList();
         
         // IDs of products in the recent section to exclude from breweries
-        var recentProductIds = recent.Select(p => p.Id).ToHashSet();
+        var recentProductIds = recent
+            .Select(p => p.Id)
+            .ToHashSet();
         
         // Products that the client has never ordered remain in breweries
         var remainingProducts = orderedData
