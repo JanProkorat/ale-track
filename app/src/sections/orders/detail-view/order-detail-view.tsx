@@ -75,8 +75,9 @@ export function OrderDetailView(
                     requiredDeliveryDate: detail.requiredDeliveryDate,
                     state: detail.state,
                     orderItems: (detail.orderItems ?? []).map((item) => new UpdateOrderItemDto({
-                        productId: item.productId,
-                        quantity: item.quantity
+                      productId: item.productId,
+                      quantity: item.quantity,
+                      reminderState: item.reminderState,
                     }))
                 });
 

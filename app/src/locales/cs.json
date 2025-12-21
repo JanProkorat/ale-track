@@ -293,7 +293,10 @@
     "loadDetailError": "Chyba při načítání připomínky",
     "displaySettings": "Nastavení zobrazení",
     "days": "Dny",
-    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky"
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky",
+    "addOrderItemReminder": "Připomenout objednání produktu",
+    "editOrderItemReminder": "Upravit připomínku",
+    "setResolved": "Vyřešit"
   },
   "reminderType": {
     "OneTimeEvent": "Jednorázová",
@@ -345,5 +348,9 @@
     "saveSuccess": "Poznámka byla úspěšně uložena",
     "saveError": "Chyba při ukládání poznámky",
     "deleteSuccess": "Poznámka úspěšně odebrána"
+  },
+  "orderItemReminders": {
+    "title": "Připomínky objednávek",
+    "orderLabel": "Objednat"
   }
 }

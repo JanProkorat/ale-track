@@ -44,6 +44,7 @@ export function ClientSelect({selectedClientId, shouldValidate, disabled, onSele
         <FormControl fullWidth>
             <InputLabel id="clients-select-label" error={shouldValidate && (selectedClientId === null || selectedClientId === "")}>{t('orders.clientSelectLabel')}</InputLabel>
             <Select
+                key="clients-select-key"
                 disabled={disabled}
                 error={shouldValidate && (selectedClientId === null || selectedClientId === "")}
                 labelId="clients-state-select-id"

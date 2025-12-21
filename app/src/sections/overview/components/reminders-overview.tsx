@@ -18,6 +18,7 @@ import {formatDate} from "../../../locales/formatDate";
 import {Scrollbar} from "../../../components/scrollbar";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
+import { mapEnumValue } from '../../../utils/format-enum-value';
 import {SectionHeader} from "../../../components/label/section-header";
 
 import type { ReminderSectionDto, UpcomingReminderDto} from "../../../api/Client";
@@ -64,7 +65,7 @@ export function RemindersOverview() {
                 <SectionHeader text={t('reminders.title')} headerVariant="h6" />
 
                 {loading ? (
-                    <Box sx={{ height: 400, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                    <Box sx={{ minHeight: 400, display: "flex", justifyContent: "center", alignItems: "center" }}>
                         <LinearProgress
                             sx={{
                                 width: "50%",
@@ -74,7 +75,7 @@ export function RemindersOverview() {
                         />
                     </Box>
                 ) : (
-                    <Scrollbar sx={{ height: "100%", ml: 1, mr: 1 }}>
+                    <Scrollbar sx={{ minHeight: 400, ml: 1, mr: 1 }}>
                         <Box sx={{ mt: 2 }}>
                             {reminders.length === 0 && (
                                 <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', mt: 2 }}>
@@ -89,7 +90,7 @@ export function RemindersOverview() {
                                         bottomLineVisible={false}
                                     >
                                         <IconButton
-                                            onClick={() => router.push(`/${section.sectionType === SectionType.Brewery ? "breweries" : "clients"}/${section.sectionId}`)}
+                                            onClick={() => router.push(`/${mapEnumValue(SectionType, section.sectionType) === SectionType.Brewery ? "breweries" : "clients"}/${section.sectionId}`)}
                                             sx={{ ml: 1 }}
                                             size="small"
                                             color="inherit">
