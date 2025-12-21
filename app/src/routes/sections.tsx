@@ -1,6 +1,7 @@
-import  {RouteObject, useLocation } from 'react-router';
+import type {RouteObject} from 'react-router';
 
 import {jwtDecode} from "jwt-decode";
+import  { useLocation } from 'react-router';
 import React, {lazy, Suspense} from 'react';
 import {varAlpha} from 'minimal-shared/utils';
 import {Outlet, Navigate} from 'react-router-dom';
