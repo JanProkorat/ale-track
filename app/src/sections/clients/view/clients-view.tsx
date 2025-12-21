@@ -201,7 +201,7 @@ export function ClientsView() {
                 emptyRows={emptyRows(table.page, table.rowsPerPage, clients.length)}
               />
 
-              {clients.length == 0 && <TableNoData colSpan={1} />}
+              {clients.length === 0 && <TableNoData colSpan={1} />}
             </TableBody>
           </Table>
         </TableContainer>
