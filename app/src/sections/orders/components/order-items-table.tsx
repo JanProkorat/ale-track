@@ -16,7 +16,6 @@ import { SortableTableHead } from '../../../components/table/sortable-table-head
 import {
   CreateOrderItemDto,
   UpdateOrderItemDto,
-  OrderItemReminderState,
 } from '../../../api/Client';
 
 import type { ProductListItemDto, GroupedProductHistoryDto } from '../../../api/Client';
