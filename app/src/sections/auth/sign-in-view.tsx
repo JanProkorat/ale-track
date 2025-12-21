@@ -3,6 +3,7 @@ import type {LoginUserDto} from 'src/api/Client';
 import {useState, useCallback} from 'react';
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
+import { useLocation, useNavigate } from 'react-router';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -23,7 +24,10 @@ import {AuthorizedClient} from "../../api/AuthorizedClient";
 
 export function SignInView() {
     const router = useRouter();
-
+    const location = useLocation();
+    const navigate = useNavigate();
+    const from = (location.state as any)?.from?.pathName || '/dashboard';
+    
     const [showPassword, setShowPassword] = useState(false);
     const [userName, setUserName] = useState<string>("");
     const [password, setPassword] = useState<string>("");
@@ -44,7 +48,7 @@ export function SignInView() {
             const response = await client.loginEndpoint(loginData);
             if (response && response.accessToken) {
                 signIn(response.accessToken);
-                router.push('/dashboard');
+                navigate(from, { replace: true });
             } else {
                 setError(true);
             }

@@ -1,4 +1,4 @@
-import type {RouteObject} from 'react-router';
+import  {RouteObject, useLocation } from 'react-router';
 
 import {jwtDecode} from "jwt-decode";
 import React, {lazy, Suspense} from 'react';
@@ -66,16 +66,46 @@ type RequireRoleProps = {
 
 export const RequireRole = ({ allowedRoles, children }: RequireRoleProps) => {
     const { user, isInitialized } = useAuth();
+    const location = useLocation();
 
     if (!isInitialized) {
-        return null;
+      return (
+        <Box
+          sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <LinearProgress
+            sx={{
+              zIndex: 1,
+              position: 'absolute',
+              top: 190,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '40%',
+              bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+              [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
+            }}
+          />
+        </Box>
+      );
     }
 
     if (!user) {
-        return <Navigate to="/404" replace />;
+      return (
+        <Navigate
+          to="/sign-in"
+          replace
+          state={{ from: location }}
+        />
+      )
     }
 
     const numericState = UserRoleType[user.role as unknown as keyof typeof UserRoleType];
+    // Logged in, but does not have a role for this module -> 404 - TODO: Rework to 403 page later
     if (!allowedRoles.includes(numericState)){
         return <Navigate to="/404" replace />;
     }
@@ -112,7 +142,7 @@ export const routesSection: RouteObject[] = [
                 </RequireRole>
         },
         {
-            path: 'orders',
+            path: 'orders/:orderId?',
             element:
                 <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
                     <OrdersPage />

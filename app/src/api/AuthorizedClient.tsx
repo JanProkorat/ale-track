@@ -2,7 +2,7 @@ import {router} from "../main";
 import { Client } from './Client';
 import { API_BASE_URL } from './api';
 
-import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, InventoryItemListItemDto, GroupedProductHistoryDto, BreweryProductListItemDto, ProductDeliveryListItemDto } from './Client';
+import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, ClientOrderReminderDto, InventoryItemListItemDto, GroupedProductHistoryDto, BreweryProductListItemDto , ProductDeliveryListItemDto } from './Client';
 
 const baseAddress = API_BASE_URL;
 
@@ -194,7 +194,7 @@ export class AuthorizedClient extends Client {
             },
         });
 
-        if (!response.ok) {
+      if (!response.ok) {
             throw new Error('Failed to fetch orders');
         }
 
@@ -296,6 +296,23 @@ export class AuthorizedClient extends Client {
         }
 
         return await response.json() as Promise<ReminderSectionDto[]>;
+    }
+
+    async fetchOrderItemsRemindersOverview() {
+      const url = new URL(`/ale-track/order-items/reminders`, baseAddress);
+
+      const response = await authorizedFetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch reminders for overview');
+      }
+
+      return await response.json() as Promise<ClientOrderReminderDto[]>;
     }
 }
 

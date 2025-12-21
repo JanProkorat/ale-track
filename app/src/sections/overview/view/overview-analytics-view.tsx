@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography';
 import { DashboardContent } from 'src/layouts/dashboard';
 
 import {RemindersOverview} from "../components/reminders-overview";
+import { OrderItemsRemindersView } from '../components/order-items-reminders-view';
 
 // ----------------------------------------------------------------------
 
@@ -22,7 +23,9 @@ export function OverviewAnalyticsView() {
         <Grid size={{ xs: 12, md: 6 }}>
           <RemindersOverview />
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}/>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <OrderItemsRemindersView />
+        </Grid>
       </Grid>
     </DashboardContent>
   );
