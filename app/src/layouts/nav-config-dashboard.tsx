@@ -55,7 +55,7 @@ export const getNavData = ({numberOfRecordsInEachModule, userRole}: NavDataProps
       title: 'orders.title',
       path: '/orders',
       icon: <ShoppingCartTwoToneIcon />,
-      info: numberOfRecordsInEachModule?.clientsCount !== undefined ? (
+      info: numberOfRecordsInEachModule?.ordersCount !== undefined ? (
         <Label color="error" variant="inverted">
           {numberOfRecordsInEachModule.ordersCount}
         </Label>
