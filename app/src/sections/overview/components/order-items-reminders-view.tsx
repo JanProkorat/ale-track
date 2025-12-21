@@ -119,7 +119,7 @@ export function OrderItemsRemindersView() {
                               </Typography>
                             }
                             secondary={
-                              reminder.deliveryDate != undefined
+                              reminder.deliveryDate !== undefined
                                 ? `${t('common.until')}: ${formatDate(reminder.deliveryDate)}`
                                 : undefined
                             }
