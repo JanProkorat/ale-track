@@ -63,9 +63,11 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                     .Select(i => new OrderItemDto
                     {
                         Id = i.PublicId,
+                        OrderId = i.Order.PublicId,
                         Quantity = i.Quantity,
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,
+                        ReminderState = i.ReminderState
                     })
                     .ToList()
             })

@@ -1,4 +1,6 @@
+using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Reminders.Commands.Create;
 
 namespace AleTrack.Features.Orders.Commands.Create;
 
@@ -39,4 +41,9 @@ public sealed record CreateOrderItemDto
     /// Amount of goods ordered
     /// </summary>
     public int Quantity { get; set; }
+    
+    /// <summary>
+    /// State of the reminder for this item.
+    /// </summary>
+    public OrderItemReminderState? ReminderState { get; set; }
 }

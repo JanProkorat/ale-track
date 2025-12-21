@@ -31,6 +31,7 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(AleTrackDbContext dbC
         var result = new NumberOfRecordsInEachModuleDto
         {
             ClientsCount = await dbContext.Clients.CountAsync(ct),
+            OrdersCount = await dbContext.Orders.CountAsync(o => o.State != OrderState.Finished, ct),
             BreweriesCount = await dbContext.Breweries.CountAsync(ct),
             DriversCount = await dbContext.Drivers.CountAsync(ct),
             VehiclesCount = await dbContext.Vehicles.CountAsync(ct),

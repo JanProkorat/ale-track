@@ -13,6 +13,11 @@ public sealed record NumberOfRecordsInEachModuleDto
     public int ClientsCount { get; set; }
 
     /// <summary>
+    /// Total number of unfinished orders in the database.
+    /// </summary>
+    public int OrdersCount { get; set; }
+    
+    /// <summary>
     /// Total number of breweries in the database.
     /// </summary>
     public int BreweriesCount { get; set; }

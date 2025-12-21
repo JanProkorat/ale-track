@@ -60,4 +60,5 @@ public sealed record ReminderDetailDto
     /// <summary>
     /// Date when the user set the reminder as resolved
     /// </summary>
-    public DateOnly? ResolvedDate { get; set; }}
+    public DateOnly? ResolvedDate { get; set; }
+}

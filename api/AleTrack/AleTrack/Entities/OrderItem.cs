@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
 
 namespace AleTrack.Entities;
@@ -31,6 +32,12 @@ public sealed class OrderItem : PublicEntity
     /// </summary>
     [Column("quantity")]
     public int Quantity { get; set; }
+    
+    /// <summary>
+    /// State of the reminder for this item.
+    /// </summary>
+    [Column("reminder_state")]
+    public OrderItemReminderState? ReminderState { get; set; }
     
     /// <summary>
     /// The parent <see cref="Order"/> related to this item.

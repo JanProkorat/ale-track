@@ -92,4 +92,9 @@ public sealed record OrderItemDto
     /// Represents the quantity of the product in the order item.
     /// </summary>
     public int Quantity { get; set; }
+    
+    /// <summary>
+    /// State of the reminder for this item.
+    /// </summary>
+    public OrderItemReminderState? ReminderState { get; set; }
 }

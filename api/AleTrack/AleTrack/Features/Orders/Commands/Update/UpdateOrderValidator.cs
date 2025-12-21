@@ -1,4 +1,5 @@
 using AleTrack.Common.Utils;
+using AleTrack.Features.Reminders.Commands.Update;
 using FastEndpoints;
 using FluentValidation;
 
@@ -62,5 +63,6 @@ public sealed class UpdateOrderItemDtoValidator : Validator<UpdateOrderItemDto>
     {
         RuleFor(r => r.ProductId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        RuleFor(r => r.ReminderState).IsInEnum().When(r => r.ReminderState != null);
     }
 }

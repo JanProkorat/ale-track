@@ -93,7 +93,8 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             order.OrderItems.Add(new OrderItem
             {
                 Product = relatedProduct!,
-                Quantity = orderItem.Quantity
+                Quantity = orderItem.Quantity,
+                ReminderState = orderItem.ReminderState
             });
         }
         

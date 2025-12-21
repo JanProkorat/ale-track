@@ -9,5 +9,6 @@ namespace AleTrack.Features.Reminders.Queries.UpcomingList;
 public enum SectionType
 {
     Brewery,
-    Client
+    Client,
+    OrderItem
 }

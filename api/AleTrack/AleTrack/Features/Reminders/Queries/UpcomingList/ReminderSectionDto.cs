@@ -3,12 +3,12 @@ namespace AleTrack.Features.Reminders.Queries.UpcomingList;
 public sealed record ReminderSectionDto
 {
     /// <summary>
-    /// ID of the related brewery.
+    /// ID of the related parent - brewery or a client.
     /// </summary>
     public Guid SectionId { get; set; }
 
     /// <summary>
-    /// Name of the brewery associated with the reminder
+    /// Name of the parent associated with the reminder
     /// </summary>
     public string SectionName { get; set; } = null!;
 

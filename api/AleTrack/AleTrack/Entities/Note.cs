@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Entities.BaseEntities;
 
 namespace AleTrack.Entities;
@@ -13,5 +14,6 @@ public abstract class Note : PublicEntity
     /// </summary>
     [Required]
     [MaxLength(1000)]
+    [Column("text")]
     public string Text { get; set; } = null!;
 }

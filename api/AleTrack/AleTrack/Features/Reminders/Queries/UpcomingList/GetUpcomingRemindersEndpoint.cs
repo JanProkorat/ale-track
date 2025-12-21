@@ -33,7 +33,7 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
 
         var breweryReminders = await GetBreweryReminders(todayDate, ct);
         var clientReminders = await GetClientReminders(todayDate, ct);
-
+        
         var allCandidates = breweryReminders.Concat(clientReminders);
 
         var data = ProcessReminders(allCandidates, today);
@@ -41,6 +41,25 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
         await SendAsync(data, cancellation: ct);
     }
 
+    private async Task<List<(OrderItem orderItem, string sectionName, Guid sectionId, SectionType sectionType)>> GetOrderItemReminders(DateOnly todayDate, CancellationToken ct)
+    {
+        var candidates = await dbContext.OrderItems
+            .Where(o => (o.Order.RequiredDeliveryDate == null || o.Order.RequiredDeliveryDate > todayDate) && o.ReminderState == OrderItemReminderState.Added)
+            .Include(i => i.Product)
+                .ThenInclude(p => p.Brewery)
+            .Include(i => i.Order)
+            .ToListAsync(ct);
+        
+        return candidates
+            .Select(i => (
+                orderItem: i,
+                sectionName: i.Product.Brewery.Name,
+                sectionId: i.Order.PublicId,
+                sectionType: SectionType.OrderItem
+            ))
+            .ToList();
+    }
+    
     private async Task<List<(Reminder reminder, string sectionName, Guid sectionId, SectionType sectionType)>> GetBreweryReminders(DateOnly todayDate, CancellationToken ct)
     {
         var candidates = await dbContext.BreweryReminders
@@ -53,12 +72,14 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
             .Include(r => r.Brewery)
             .ToListAsync(ct);
 
-        return candidates.Select(r => (
-            reminder: (Reminder)r,
-            sectionName: r.Brewery.Name,
-            sectionId: r.Brewery.PublicId,
-            sectionType: SectionType.Brewery
-        )).ToList();
+        return candidates
+            .Select(r => (
+                reminder: (Reminder)r,
+                sectionName: r.Brewery.Name,
+                sectionId: r.Brewery.PublicId,
+                sectionType: SectionType.Brewery
+            ))
+            .ToList();
     }
 
     private async Task<List<(Reminder reminder, string sectionName, Guid sectionId, SectionType sectionType)>> GetClientReminders(DateOnly todayDate, CancellationToken ct)
@@ -73,12 +94,14 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
             .Include(r => r.Client)
             .ToListAsync(ct);
 
-        return candidates.Select(r => (
-            reminder: (Reminder)r,
-            sectionName: r.Client.Name,
-            sectionId: r.Client.PublicId,
-            sectionType: SectionType.Client
-        )).ToList();
+        return candidates
+            .Select(r => (
+                reminder: (Reminder)r,
+                sectionName: r.Client.Name,
+                sectionId: r.Client.PublicId,
+                sectionType: SectionType.Client
+            ))
+            .ToList();
     }
 
     private static List<ReminderSectionDto> ProcessReminders(
