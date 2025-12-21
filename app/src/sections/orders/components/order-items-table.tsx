@@ -139,7 +139,7 @@ export function OrderItemsTable<T extends AllowedItem>({
               emptyRows={emptyRows(table.page, table.rowsPerPage, orderProducts.length)}
             />
 
-            {orderProducts.length == 0 && <TableNoData colSpan={columns.length} />}
+            {orderProducts.length === 0 && <TableNoData colSpan={columns.length} />}
           </TableBody>
         </Table>
       </TableContainer>
