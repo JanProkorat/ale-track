@@ -214,7 +214,7 @@ export function OrdersView() {
                 emptyRows={emptyRows(table.page, table.rowsPerPage, orders.length)}
               />
 
-              {orders.length == 0 && <TableNoData colSpan={columns.length} />}
+              {orders.length === 0 && <TableNoData colSpan={columns.length} />}
             </TableBody>
           </Table>
         </TableContainer>
