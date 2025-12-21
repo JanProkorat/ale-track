@@ -113,7 +113,7 @@ export function OrderItemTableRow({
           variant="outlined"
           type="number"
           value={quantity ?? ''}
-          error={quantity == undefined || quantity == 0}
+          error={quantity === undefined || quantity === 0}
           sx={{ backgroundColor: 'white' }}
           onChange={(event) => {
             const val = event.target.value;
