@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AleTrack API [Dev]",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/AleTrack/AleTrack/bin/Debug/net8.0/AleTrack.dll",
+      "cwd": "${workspaceFolder}/AleTrack/AleTrack",
+
+      "preLaunchTask": "build",
+
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "JWT_Issuer": "AleTrackAPI",
+        "DB_PASSWORD": "${env:DB_PASSWORD}"
+      },
+
+      "args": [
+        "--urls",
+        "http://localhost:8080"
+      ],
+
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      }
+    }
+  ]
+}

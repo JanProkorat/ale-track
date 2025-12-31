@@ -57,22 +57,8 @@ public sealed class CreateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
             DisplayOrder = lastDisplayOrder + 1,
             Color = req.Data.Color,
             Name = req.Data.Name,
-            OfficialAddress = new Address
-            {
-                StreetName = req.Data.OfficialAddress.StreetName,
-                StreetNumber = req.Data.OfficialAddress.StreetNumber,
-                City = req.Data.OfficialAddress.City,
-                Country = req.Data.OfficialAddress.Country,
-                Zip = req.Data.OfficialAddress.Zip
-            },
-            ContactAddress = req.Data.ContactAddress is not null ? new Address
-            {
-                StreetName = req.Data.ContactAddress.StreetName,
-                StreetNumber = req.Data.ContactAddress.StreetNumber,
-                City = req.Data.ContactAddress.City,
-                Country = req.Data.ContactAddress.Country,
-                Zip = req.Data.ContactAddress.Zip
-            } : null
+            OfficialAddress = req.Data.OfficialAddress.ToDbEntity(),
+            ContactAddress = req.Data.ContactAddress?.ToDbEntity()
         };
         
         dbContext.Breweries.Add(brewery);

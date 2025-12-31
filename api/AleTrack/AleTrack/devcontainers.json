@@ -1,0 +1,10 @@
+{
+  "name": "AleTrack .NET API",
+  "image": "mcr.microsoft.com/dotnet/sdk:8.0",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "remoteEnv": {
+    "DB_PASSWORD": "${localEnv:DB_PASSWORD}"
+  }
+}
