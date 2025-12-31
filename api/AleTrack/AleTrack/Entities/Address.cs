@@ -49,4 +49,16 @@ public class Address
     [Required]
     [Column("country")]
     public Country Country { get; set; }
+
+    /// <summary>
+    /// Latitude related to this address
+    /// </summary>
+    [Column("latitude")]
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude related to this address
+    /// </summary>
+    [Column("longitude")]
+    public decimal? Longitude { get; set; }
 }

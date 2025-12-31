@@ -31,4 +31,14 @@ public sealed record AddressDto
     /// Related country
     /// </summary>
     public Country Country { get; set; }
+
+    /// <summary>
+    /// Latitude related to this address
+    /// </summary>
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude related to this address
+    /// </summary>
+    public decimal? Longitude { get; set; }
 }

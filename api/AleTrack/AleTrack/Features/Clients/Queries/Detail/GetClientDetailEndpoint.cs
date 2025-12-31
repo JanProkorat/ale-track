@@ -48,29 +48,17 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         var client = await dbContext.Clients
             .Where(c => c.PublicId == req.Id)
+            .Include(c => c.OfficialAddress)
+            .Include(c => c.ContactAddress)
             .Select(c => new ClientDto
             {
                 Id = c.PublicId,
                 Name = c.Name,
                 BusinessName = c.BusinessName,
                 Region = c.Region,
-                OfficialAddress = new AddressDto
-                {
-                    City = c.OfficialAddress.City,
-                    Country = c.OfficialAddress.Country,
-                    Zip = c.OfficialAddress.Zip,
-                    StreetName = c.OfficialAddress.StreetName,
-                    StreetNumber = c.OfficialAddress.StreetNumber
-                },
+                OfficialAddress = c.OfficialAddress.ToDto(),
                 ContactAddress = c.ContactAddress != null
-                    ? new AddressDto
-                    {
-                        City = c.ContactAddress.City,
-                        Country = c.ContactAddress.Country,
-                        Zip = c.ContactAddress.Zip,
-                        StreetName = c.ContactAddress.StreetName,
-                        StreetNumber = c.ContactAddress.StreetNumber
-                    }
+                    ? c.ContactAddress.ToDto()
                     : null,
                 Contacts = c.Contacts
                     .Select(cc => new ClientContactDto

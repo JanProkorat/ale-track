@@ -52,22 +52,8 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
             Name = req.Data.Name,
             BusinessName = req.Data.BusinessName,
             Region = req.Data.Region,
-            OfficialAddress = new Address
-            {
-                StreetName = req.Data.OfficialAddress.StreetName,
-                StreetNumber = req.Data.OfficialAddress.StreetNumber,
-                City = req.Data.OfficialAddress.City,
-                Country = req.Data.OfficialAddress.Country,
-                Zip = req.Data.OfficialAddress.Zip
-            },
-            ContactAddress = req.Data.ContactAddress is not null ? new Address
-            {
-                StreetName = req.Data.ContactAddress.StreetName,
-                StreetNumber = req.Data.ContactAddress.StreetNumber,
-                City = req.Data.ContactAddress.City,
-                Country = req.Data.ContactAddress.Country,
-                Zip = req.Data.ContactAddress.Zip
-            } : null,
+            OfficialAddress = req.Data.OfficialAddress.ToDbEntity(),
+            ContactAddress = req.Data.ContactAddress?.ToDbEntity(),
             Contacts = req.Data.Contacts
                 .Select(c => new ClientContact
                 {

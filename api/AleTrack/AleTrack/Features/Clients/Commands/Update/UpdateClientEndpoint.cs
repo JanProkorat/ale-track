@@ -61,26 +61,10 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         client!.Name = req.Data.Name;
         client.BusinessName = req.Data.BusinessName;
         client.Region = req.Data.Region;
-        client.OfficialAddress = new Address
-        {
-            StreetName = req.Data.OfficialAddress.StreetName,
-            StreetNumber = req.Data.OfficialAddress.StreetNumber,
-            City = req.Data.OfficialAddress.City,
-            Country = req.Data.OfficialAddress.Country,
-            Zip = req.Data.OfficialAddress.Zip
-        };
+        client.OfficialAddress = req.Data.OfficialAddress.ToDbEntity();
 
         if (req.Data.ContactAddress is not null)
-        {
-            client.ContactAddress = new Address
-            {
-                StreetName = req.Data.ContactAddress.StreetName,
-                StreetNumber = req.Data.ContactAddress.StreetNumber,
-                City = req.Data.ContactAddress.City,
-                Country = req.Data.ContactAddress.Country,
-                Zip = req.Data.ContactAddress.Zip
-            };
-        }
+            client.ContactAddress = req.Data.ContactAddress.ToDbEntity();
 
         client.Contacts = req.Data.Contacts
             .Select(c => new ClientContact
