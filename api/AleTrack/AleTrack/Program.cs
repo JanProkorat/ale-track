@@ -84,19 +84,19 @@ try
     // Add user Authorization
     services.AddUserAuthorization();
     
-    services.AddCors(options =>
+    builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowFrontend", policy =>
         {
-            policy.WithOrigins("https://ale-track.netlify.app")
+            policy
+                .WithOrigins(
+                    "https://ale-track.netlify.app",
+                    "http://localhost:3039",
+                    "https://*.app.github.dev",
+                    "https://*.github.dev"
+                )
                 .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-            
-            policy.WithOrigins("http://localhost:3039")
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
+                .AllowAnyMethod();
         });
     });
     
