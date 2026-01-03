@@ -45,8 +45,6 @@ public sealed class GetBreweryDetailEndpoint(AleTrackDbContext dbContext) : Endp
     {
         var breweries = await dbContext.Breweries
             .Where(c => c.PublicId == req.Id)
-            .Include(c => c.OfficialAddress)
-            .Include(c => c.ContactAddress)
             .Select(c => new BreweryDto
             {
                 Id = c.PublicId,
