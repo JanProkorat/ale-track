@@ -878,14 +878,12 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                                 .HasColumnName("contact_address_country");
 
                             b1.Property<decimal?>("Latitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("latitude");
+                                .HasColumnName("contact_address_latitude");
 
                             b1.Property<decimal?>("Longitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("longitude");
+                                .HasColumnName("contact_address_longitude");
 
                             b1.Property<string>("StreetName")
                                 .IsRequired()
@@ -929,14 +927,12 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                                 .HasColumnName("official_address_country");
 
                             b1.Property<decimal?>("Latitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("latitude");
+                                .HasColumnName("official_address_latitude");
 
                             b1.Property<decimal?>("Longitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("longitude");
+                                .HasColumnName("official_address_longitude");
 
                             b1.Property<string>("StreetName")
                                 .IsRequired()
@@ -999,14 +995,12 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                                 .HasColumnName("contact_address_country");
 
                             b1.Property<decimal?>("Latitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("latitude");
+                                .HasColumnName("contact_address_latitude");
 
                             b1.Property<decimal?>("Longitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("longitude");
+                                .HasColumnName("contact_address_longitude");
 
                             b1.Property<string>("StreetName")
                                 .IsRequired()
@@ -1050,14 +1044,12 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                                 .HasColumnName("official_address_country");
 
                             b1.Property<decimal?>("Latitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("latitude");
+                                .HasColumnName("official_address_latitude");
 
                             b1.Property<decimal?>("Longitude")
-                                .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("numeric")
-                                .HasColumnName("longitude");
+                                .HasColumnName("official_address_longitude");
 
                             b1.Property<string>("StreetName")
                                 .IsRequired()
