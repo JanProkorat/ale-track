@@ -16,6 +16,9 @@ public static class ModelBuilderExtensions
         ownedNavigationBuilder.Property(a => a.City).HasColumnName($"{prefix}_{ToSnakeCase(nameof(Address.City))}");
         ownedNavigationBuilder.Property(a => a.Zip).HasColumnName($"{prefix}_{ToSnakeCase(nameof(Address.Zip))}");
         ownedNavigationBuilder.Property(a => a.Country).HasColumnName($"{prefix}_{ToSnakeCase(nameof(Address.Country))}");
+        ownedNavigationBuilder.Property(a => a.Latitude).HasColumnName($"{prefix}_{ToSnakeCase(nameof(Address.Latitude))}");
+        ownedNavigationBuilder.Property(a => a.Longitude).HasColumnName($"{prefix}_{ToSnakeCase(nameof(Address.Longitude))}");
+
 
         return ownedNavigationBuilder;
     }
