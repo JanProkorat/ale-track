@@ -448,7 +448,7 @@ export class Client implements IClient {
 
     constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
         this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "http://localhost:8080";
+        this.baseUrl = baseUrl ?? "https://aletrack.onrender.com";
     }
 
     /**
@@ -5094,13 +5094,9 @@ export class GetVehicleDetailRequest implements IGetVehicleDetailRequest {
 export interface IGetVehicleDetailRequest {
 }
 
-/** the dto used to send an error response to the client */
 export class ErrorResponse implements IErrorResponse {
-    /** the http status code sent to the client. default is 400. */
     statusCode?: number;
-    /** the message for the error response */
     message?: string;
-    /** the collection of errors for the current context */
     errors?: { [key: string]: string[]; };
 
     constructor(data?: IErrorResponse) {
@@ -5152,13 +5148,9 @@ export class ErrorResponse implements IErrorResponse {
     }
 }
 
-/** the dto used to send an error response to the client */
 export interface IErrorResponse {
-    /** the http status code sent to the client. default is 400. */
     statusCode?: number;
-    /** the message for the error response */
     message?: string;
-    /** the collection of errors for the current context */
     errors?: { [key: string]: string[]; };
 }
 
@@ -9508,6 +9500,8 @@ export class AddressDto implements IAddressDto {
     city!: string;
     zip!: string;
     country!: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
 
     constructor(data?: IAddressDto) {
         if (data) {
@@ -9525,6 +9519,8 @@ export class AddressDto implements IAddressDto {
             this.city = _data["city"];
             this.zip = _data["zip"];
             this.country = _data["country"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
         }
     }
 
@@ -9542,6 +9538,8 @@ export class AddressDto implements IAddressDto {
         data["city"] = this.city;
         data["zip"] = this.zip;
         data["country"] = this.country;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         return data;
     }
 }
@@ -9552,6 +9550,8 @@ export interface IAddressDto {
     city: string;
     zip: string;
     country: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
 }
 
 export class ClientContactDto implements IClientContactDto {
