@@ -2,6 +2,7 @@ import './locales/i18n';
 import 'dayjs/locale/cs';
 import 'dayjs/locale/en';
 import 'dayjs/locale/de';
+import './leaflet-init';
 
 import eruda from 'eruda';
 import {createRoot} from 'react-dom/client';
