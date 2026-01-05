@@ -3,6 +3,7 @@ import 'dayjs/locale/cs';
 import 'dayjs/locale/en';
 import 'dayjs/locale/de';
 
+import eruda from 'eruda';
 import {createRoot} from 'react-dom/client';
 import { useTranslation } from 'react-i18next';
 import {Outlet, RouterProvider, createBrowserRouter} from 'react-router';
@@ -17,6 +18,10 @@ import {AuthProvider} from "./context/AuthContext";
 import {SnackbarProvider} from "./providers/SnackbarProvider";
 import {CurrencyProvider} from "./providers/currency-provider";
 import {EntityStatsProvider} from "./providers/EntityStatsContext";
+
+if (process.env.NODE_ENV === 'development') {
+  eruda.init();
+}
 
 // ----------------------------------------------------------------------
 

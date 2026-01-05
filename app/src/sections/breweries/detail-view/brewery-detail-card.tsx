@@ -193,31 +193,29 @@ export function BreweryDetailCard(
 
             {/* Brewery address */}
             <CollapsibleForm  title={t('address.address')}>
-                <Box sx={{ display: 'flex', gap: 3 }}>
-                    <Box sx={{ flex: 1, ml: 2 }}>
-                        <AddressForm
-                            title={t('address.officialAddress')}
-                            headerVariant="subtitle2"
-                            address={brewery.officialAddress ?? new AddressDto()}
-                            errors={errors}
-                            onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                                ...prev,
-                                officialAddress: newAddress
-                            }))}
-                        />
-                    </Box>
-                    <Box sx={{ flex: 1, mr: 2 }}>
-                        <AddressForm
-                            title={t('address.contactAddress')}
-                            headerVariant="subtitle2"
-                            address={brewery.contactAddress ?? new AddressDto()}
-                            errors={contactAddressErrors}
-                            onChange={(newAddress) => setBrewery(prev => new BreweryDto({
-                                ...prev,
-                                contactAddress: newAddress
-                            }))}
-                        />
-                    </Box>
+                <Box sx={{ flex: 1, ml: 2, mr: 2 }}>
+                    <AddressForm
+                        title={t('address.officialAddress')}
+                        headerVariant="subtitle2"
+                        address={brewery.officialAddress ?? new AddressDto()}
+                        errors={errors}
+                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            officialAddress: newAddress
+                        }))}
+                    />
+                </Box>
+                <Box sx={{ flex: 1, ml: 2, mr: 2 }}>
+                    <AddressForm
+                        title={t('address.contactAddress')}
+                        headerVariant="subtitle2"
+                        address={brewery.contactAddress ?? new AddressDto()}
+                        errors={contactAddressErrors}
+                        onChange={(newAddress) => setBrewery(prev => new BreweryDto({
+                            ...prev,
+                            contactAddress: newAddress
+                        }))}
+                    />
                 </Box>
             </CollapsibleForm>
 
