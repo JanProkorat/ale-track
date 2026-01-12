@@ -70,7 +70,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         ContactAddress = s.ClientOrder.Client.ContactAddress != null 
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,
-                        Orderid = s.ClientOrder.PublicId,
+                        OrderId = s.ClientOrder.PublicId,
                         Products = s.ClientOrder.OrderItems
                             .Select(oi => new OutgoingShipmentProductDto
                             {

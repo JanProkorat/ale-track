@@ -76,10 +76,6 @@ public sealed record OutgoingShipmentStopDto
 
     /// <summary>
     /// Products to be delivered at this stop
-
-/// <summary>
-/// Data transfer object representing a product included in an outgoing shipment.
-/// </summary>
     public List<OutgoingShipmentProductDto> Products { get; set; } = [];
 }
 
