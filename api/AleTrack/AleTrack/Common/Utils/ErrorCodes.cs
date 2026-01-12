@@ -55,5 +55,18 @@ public static class ErrorCodes
     /// </summary>
     public const string ValidationEnumError = "ALIDATION_NOT_ENUM_PROPERTY";
     
+    /// <summary>
+    /// Error code for bad request errors
+    /// </summary>
     public const string BadRequestError = "BAD_REQUEST_ERROR";
+
+    /// <summary>
+    /// Error code for case when an order is already assigned to an outgoing shipment
+    /// </summary>
+    public const string OrderAlreadyAssignedToOutgoingShipment = "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment is not prepared with all required data
+    /// </summary>
+    public const string ShipmentNotPrepared = "SHIPMENT_NOT_PREPARED";
 }

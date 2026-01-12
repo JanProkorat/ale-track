@@ -95,6 +95,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<ClientReminder> ClientReminders => Set<ClientReminder>();
     
+    /// <summary>
+    /// DbSet of <see cref="OutgoingShipment"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipment> OutgoingShipments => Set<OutgoingShipment>();
+
     /// <inheritdoc />
     public AleTrackDbContext(){}
     
@@ -110,23 +115,61 @@ public class AleTrackDbContext : DbContext
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AleTrackDbContext).Assembly);
     }
 
-    /// <summary>
-    /// Softly delete the selected entity if it is not softly deleted already
-    /// </summary>
-    /// <param name="entity">Entity, which should be softly deleted</param>
-    /// <typeparam name="TEntity">type of softly deleted entity</typeparam>
-    /// <returns><see cref="EntityEntry"/> with generic type of softly deleted entity</returns>
-    public virtual EntityEntry<TEntity> SoftlyDelete<TEntity>(TEntity entity) where TEntity : class, ISoftlyDeletable
+     /// <inheritdoc />
+    public override int SaveChanges()
     {
-        if (entity.IsDeleted)
-            return Entry(entity);
-        
-        entity.IsDeleted = true;
+        SoftlyDeleteBySettingFlag();
+        SoftlyDeleteBySettingEnumState();
+        return base.SaveChanges();
+    }
 
-        Attach(entity);
-        var entityEntry = Entry(entity);
-        entityEntry.Property(e => e.IsDeleted).IsModified = true;
-        
-        return entityEntry;
+    /// <inheritdoc />
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        SoftlyDeleteBySettingFlag();
+        SoftlyDeleteBySettingEnumState();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Softly delete entities implementing <see cref="ISoftlyDeletable"/> by setting their deletion flag
+    /// </summary>
+    private void SoftlyDeleteBySettingFlag()
+    {
+        var entries = ChangeTracker
+            .Entries()
+            .Where(e =>
+                e.State == EntityState.Deleted &&
+                e.Entity is ISoftlyDeletable);
+
+        foreach (var entry in entries)
+        {
+            var entity = (ISoftlyDeletable)entry.Entity;
+
+            entity.IsDeleted = true;
+
+            entry.State = EntityState.Modified;
+        }
+    }
+
+    /// <summary>
+    /// Softly delete entities implementing <see cref="IEnumSoftlyDeletable"/> by setting their enum state
+    /// </summary>
+    private void SoftlyDeleteBySettingEnumState()
+    {
+        var entries = ChangeTracker
+            .Entries()
+            .Where(e =>
+                e.State == EntityState.Deleted &&
+                e.Entity is IEnumSoftlyDeletable);
+
+        foreach (var entry in entries)
+        {
+            var entity = (IEnumSoftlyDeletable)entry.Entity;
+
+            entity.SoftDelete();
+
+            entry.State = EntityState.Modified;
+        }
     }
 }

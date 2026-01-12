@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 
 namespace AleTrack.Common.Utils;
@@ -81,5 +82,29 @@ public static class ThrowHelper
             new Dictionary<string, object>
             {
                 { "message", message }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an order is already assigned to an outgoing shipment.
+    /// </summary>
+    /// <param name="orderIds">Ids of the orders that are already assigned to an outgoing shipment.</param>
+    /// <exception cref="AleTrackException"></exception>
+    public static void OrderAlreadyAssignedToOutgoingShipment(List<Guid> orderIds)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.OrderAlreadyAssignedToOutgoingShipment,
+            new Dictionary<string, object>
+            {
+                { nameof(orderIds), orderIds }
+            });
+
+    
+    public static void ShipmentNotPrepared(OutgoingShipmentState state)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentNotPrepared,
+            new Dictionary<string, object>
+            {
+                { nameof(state), state }
             });
 }
