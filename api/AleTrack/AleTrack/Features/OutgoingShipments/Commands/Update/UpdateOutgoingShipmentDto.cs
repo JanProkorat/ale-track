@@ -3,6 +3,9 @@ using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Update;
 
+/// <summary>
+/// Data transfer object for updating an existing outgoing shipment.
+/// </summary>
 public sealed record UpdateOutgoingShipmentDto
 {
     /// <summary>

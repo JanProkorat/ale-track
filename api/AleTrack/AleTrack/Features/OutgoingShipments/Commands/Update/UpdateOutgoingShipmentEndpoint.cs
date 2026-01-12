@@ -32,11 +32,11 @@ public sealed record UpdateOutgoingShipmentRequest
 public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOutgoingShipmentRequest>
 {
     /// <summary>
-    /// States in which the OutgoingShipment can have null data
+    /// States in which the OutgoingShipment has to have filled all data
     /// </summary>
-    private readonly OutgoingShipmentState[] statesWithAllowedNullData = [
-        OutgoingShipmentState.Cancelled, 
-        OutgoingShipmentState.Created
+    private readonly OutgoingShipmentState[] statesWithFilledData = [
+        OutgoingShipmentState.Delivered, 
+        OutgoingShipmentState.InTransit
     ];
 
     /// <inheritdoc />
@@ -67,7 +67,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         .Include(os => os.Drivers)
         .Include(os => os.Vehicle)
         .Include(os => os.Stops)
-            .ThenInclude(s => s.Order)
+            .ThenInclude(s => s.ClientOrder)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -82,7 +82,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.Drivers = drivers;
         outgoingShipment.Stops = stops;
 
-        if (!statesWithAllowedNullData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
+        if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
+            ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
+
+        if (statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(req.Data.State);
         
         outgoingShipment.State = req.Data.State;

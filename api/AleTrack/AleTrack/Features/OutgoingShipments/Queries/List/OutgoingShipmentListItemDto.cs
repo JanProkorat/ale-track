@@ -2,6 +2,9 @@ using AleTrack.Common.Enums;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.List;
 
+/// <summary>
+/// Represents an outgoing shipment item returned in shipment list queries.
+/// </summary>
 public sealed record OutgoingShipmentListItemDto
 {
     /// <summary>

@@ -98,7 +98,14 @@ public static class ThrowHelper
                 { nameof(orderIds), orderIds }
             });
 
-    
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an outgoing shipment is not in the required prepared state.
+    /// </summary>
+    /// <param name="state">The current state of the outgoing shipment that caused the error.</param>
+    /// <exception cref="AleTrackException">
+    /// Thrown to indicate that the shipment is not prepared, with a status code of 400 and an error code of "SHIPMENT_NOT_PREPARED".
+    /// Includes the provided shipment state in the exception's error properties.
+    /// </exception>
     public static void ShipmentNotPrepared(OutgoingShipmentState state)
         => throw new AleTrackException(
             StatusCodes.Status400BadRequest,
@@ -107,4 +114,13 @@ public static class ThrowHelper
             {
                 { nameof(state), state }
             });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an outgoing shipment cannot be marked as loaded without any stops.
+    /// </summary>
+    /// <exception cref="AleTrackException"></exception>
+    public static void ShipmentCannotBeLoadedWithoutStops()
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentCannotBeLoadedWithoutStops);
 }

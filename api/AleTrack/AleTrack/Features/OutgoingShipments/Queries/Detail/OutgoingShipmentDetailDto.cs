@@ -39,6 +39,9 @@ public sealed record OutgoingShipmentDetailDto
     public List<OutgoingShipmentStopDto> Stops { get; set; } = [];
 }
 
+/// <summary>
+/// Data transfer object representing a stop in an outgoing shipment route
+/// </summary>
 public sealed record OutgoingShipmentStopDto
 {
     /// <summary>
@@ -69,11 +72,14 @@ public sealed record OutgoingShipmentStopDto
     /// <summary>
     /// ID of the order associated with this stop
     /// </summary>
-    public Guid Orderid { get; set; }
+    public Guid OrderId { get; set; }
 
     /// <summary>
     /// Products to be delivered at this stop
-    /// </summary>
+
+/// <summary>
+/// Data transfer object representing a product included in an outgoing shipment.
+/// </summary>
     public List<OutgoingShipmentProductDto> Products { get; set; } = [];
 }
 
