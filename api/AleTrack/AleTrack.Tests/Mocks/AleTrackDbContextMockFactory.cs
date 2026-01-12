@@ -45,7 +45,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<ProductDelivery>? productDeliveries = null,
         ICollection<DeliveryItem>? deliveryItems = null,
         ICollection<InventoryItem>? inventoryItems = null,
-        ICollection<ClientNote>? clientNotes = null)
+        ICollection<ClientNote>? clientNotes = null,
+        ICollection<OutgoingShipment>? outgoingShipments = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -62,7 +63,8 @@ public static class AleTrackDbContextMockFactory
             productDeliveries ?? [],
             deliveryItems ?? [],
             inventoryItems ?? [],
-            clientNotes ?? []);
+            clientNotes ?? [],
+            outgoingShipments ?? []);
     }
 
     /// <summary>
@@ -96,7 +98,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<ProductDelivery> productDeliveries,
         ICollection<DeliveryItem> deliveryItems,
         ICollection<InventoryItem> inventoryItems,
-        ICollection<ClientNote> clientNotes)
+        ICollection<ClientNote> clientNotes,
+        ICollection<OutgoingShipment> outgoingShipments)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -111,18 +114,8 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<DeliveryItem>>(x => x.DeliveryItems).ReturnsDbSet(deliveryItems);
         dbContextMock.Setup<DbSet<InventoryItem>>(x => x.InventoryItems).ReturnsDbSet(inventoryItems);
         dbContextMock.Setup<DbSet<ClientNote>>(x => x.ClientNotes).ReturnsDbSet(clientNotes);
-        
-        // Setup for SoftlyDelete method - only for entities that implement ISoftlyDeletable
-        dbContextMock.Setup(d => d.SoftlyDelete(It.IsAny<ISoftlyDeletable>()))
-            .Returns<ISoftlyDeletable>(e =>
-            {
-                e.IsDeleted = true;
-                return dbContextMock.Object.Entry(e);
-            });
-
-        // Add other softly deletable entity types as needed
-        // Note: Only entities that inherit from PublicSoftlyDeletableEntity can be added here
-        
+        dbContextMock.Setup<DbSet<OutgoingShipment>>(x => x.OutgoingShipments).ReturnsDbSet(outgoingShipments);
+                
         return dbContextMock;
     }
 }

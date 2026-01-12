@@ -1,4 +1,6 @@
-namespace AleTrack.Features.OutgoingShipments.Commands;
+using AleTrack.Features.OutgoingShipments.Utils;
+
+namespace AleTrack.Features.OutgoingShipments.Commands.Create;
 
 public sealed record CreateOutgoingShipmentDto
 {
@@ -16,4 +18,9 @@ public sealed record CreateOutgoingShipmentDto
     /// List of driver IDs that will be assigned to the shipment
     /// </summary>
     public List<Guid> DriverIds { get; set; } = [];
+
+    /// <summary>
+    /// List of client order shipments to be included in the outgoing shipment
+    /// </summary>
+    public List<ClientOrderShipmentDto> ClientOrderShipments { get; set; } = [];
 }

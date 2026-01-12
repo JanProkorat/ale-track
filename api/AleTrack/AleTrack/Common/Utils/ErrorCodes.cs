@@ -52,8 +52,26 @@ public static class ErrorCodes
     
     /// <summary>
     /// Error code for case when property should be enum value, but is not
-    /// </summary>
-    public const string ValidationEnumError = "ALIDATION_NOT_ENUM_PROPERTY";
+/// </summary>
+    public const string ValidationEnumError = "VALIDATION_NOT_ENUM_PROPERTY";
     
+    /// <summary>
+    /// Error code for bad request errors
+    /// </summary>
     public const string BadRequestError = "BAD_REQUEST_ERROR";
+
+    /// <summary>
+    /// Error code for case when an order is already assigned to an outgoing shipment
+    /// </summary>
+    public const string OrderAlreadyAssignedToOutgoingShipment = "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment is not prepared with all required data
+    /// </summary>
+    public const string ShipmentNotPrepared = "SHIPMENT_NOT_PREPARED";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment cannot be marked as loaded without any stops
+    /// </summary>
+    public const string ShipmentCannotBeLoadedWithoutStops = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS";
 }

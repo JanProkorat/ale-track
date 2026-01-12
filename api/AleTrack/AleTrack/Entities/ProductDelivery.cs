@@ -10,7 +10,7 @@ namespace AleTrack.Entities;
 /// Entity representing action when driver goes to <see cref="Brewery"/> and delivers <see cref="Product"/> to be stored in the inventory
 /// </summary>
 [Table("product_deliveries")]
-public sealed class ProductDelivery : PublicEntity
+public sealed class ProductDelivery : PublicEnumSoftlyDeletableEntity<ProductDeliveryState>
 {
     /// <summary>
     /// Date when drivers will go to brewery for products to fill the inventory
@@ -23,12 +23,6 @@ public sealed class ProductDelivery : PublicEntity
     /// </summary>
     [Column("vehicle_id")]
     public long? VehicleId { get; set; }
-    
-    /// <summary>
-    /// Progress of the delivery
-    /// </summary>
-    [Column("state")]
-    public ProductDeliveryState State { get; set; }
 
     /// <summary>
     /// Note to the delivery
@@ -54,4 +48,7 @@ public sealed class ProductDelivery : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public List<DeliveryStop> Stops { get; set; } = [];
+
+    /// <inheritdoc />
+    protected override ProductDeliveryState CancelledStatus => ProductDeliveryState.Cancelled;
 }

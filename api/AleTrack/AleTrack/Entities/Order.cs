@@ -11,19 +11,13 @@ namespace AleTrack.Entities;
 /// It tracks its current state, creation date, and the expected delivery date.
 /// </summary>
 [Table("orders")]
-public sealed class Order : PublicEntity
+public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
 {
     /// <summary>
     /// ID of related <see cref="Client"/>
     /// </summary>
     [Column("client_id")]
     public long ClientId { get; set; }
-
-    /// <summary>
-    /// State of the order
-    /// </summary>
-    [Column("state")]
-    public OrderState State { get; set; }
     
     /// <summary>
     /// Date when the order was created
@@ -56,4 +50,18 @@ public sealed class Order : PublicEntity
     /// </summary>
     [Column("actual_delivery_date")]
     public DateOnly? ActualDeliveryDate { get; set; }
+
+    /// <summary>
+    /// ID of related <see cref="Entities.OutgoingShipmentStop"/>, if any
+    /// </summary>
+    [Column("outgoing_shipment_stop_id")]
+    public long? OutgoingShipmentStopId { get; set; }
+
+    /// <summary>
+    /// Related <see cref="Entities.OutgoingShipmentStop"/>, if any
+    /// </summary>
+    public OutgoingShipmentStop? OutgoingShipmentStop { get; set; }
+
+    /// <inheritdoc />
+    protected override OrderState CancelledStatus => OrderState.Cancelled;
 }

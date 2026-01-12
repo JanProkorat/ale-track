@@ -24,4 +24,9 @@ public sealed class Vehicle : PublicEntity
     /// </summary>
     [Column("max_weight")]
     public double MaxWeight { get; set; }
+
+    /// <summary>
+    /// List of outgoing shipments associated with this vehicle
+    /// </summary>
+    public ICollection<OutgoingShipment> OutgoingShipments { get; set; } = [];
 }

@@ -7,5 +7,6 @@ public enum ProductDeliveryState
 {
     InPlanning,
     OnTheWay,
-    Finished
+    Finished,
+    Cancelled
 }

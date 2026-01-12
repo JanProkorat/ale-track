@@ -50,7 +50,7 @@ public sealed class DeleteClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         if (client == null)
             ThrowHelper.PublicEntityNotFound(nameof(Client), req.Id);
 
-        dbContext.SoftlyDelete(client!);
+        dbContext.Clients.Remove(client!);
         
         await dbContext.SaveChangesAsync(ct);
         await SendNoContentAsync(ct);

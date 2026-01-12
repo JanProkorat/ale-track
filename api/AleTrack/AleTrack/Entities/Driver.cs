@@ -50,4 +50,9 @@ public sealed class Driver : PublicEntity
     /// Dates when the driver is available
     /// </summary>
     public ICollection<DriverAvailability> Availabilities { get; set; } = [];
+
+    /// <summary>
+    /// List of outgoing shipment drivers associated with this driver
+    /// </summary>
+    public ICollection<OutgoingShipmentDriver> OutgoingShipmentDrivers { get; set; } = [];
 }
