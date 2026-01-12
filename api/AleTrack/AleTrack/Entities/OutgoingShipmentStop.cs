@@ -25,7 +25,7 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// <summary>
     /// ID of the order associated with this stop
     /// </summary>
-    [Column("order_id")]
+    [Column("client_order_id")]
     public long ClientOrderId { get; set; }
 
     /// <summary>
@@ -36,6 +36,5 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// <summary>
     /// Order associated with this stop
     /// </summary>
-    [DeleteBehavior(DeleteBehavior.NoAction)]
     public Order ClientOrder { get; set; } = null!;
 }
