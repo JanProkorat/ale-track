@@ -5,9 +5,9 @@
  */
 const config = {
   semi: true,
-  tabWidth: 2,
+  tabWidth: 5,
   endOfLine: 'lf',
-  printWidth: 100,
+  printWidth: 120,
   singleQuote: true,
   trailingComma: 'es5',
 };

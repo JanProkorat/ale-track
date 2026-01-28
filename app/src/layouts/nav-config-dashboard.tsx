@@ -108,7 +108,7 @@ export const getNavData = ({numberOfRecordsInEachModule, userRole}: NavDataProps
     },
     {
       title: 'Vývozy',
-      path: '/404',
+      path: '/outgoing-shipments',
       icon: <UploadFileTwoToneIcon />,
       allowedRoles: [UserRoleType.User, UserRoleType.Admin]
     },

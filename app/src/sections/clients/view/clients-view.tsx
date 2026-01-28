@@ -107,6 +107,7 @@ export function ClientsView() {
       }
     });
   };
+  
   const fetchClients = async (region?: Region) => {
     try {
       const client = new AuthorizedClient();

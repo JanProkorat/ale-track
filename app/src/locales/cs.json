@@ -352,5 +352,37 @@
   "orderItemReminders": {
     "title": "Připomínky objednávek",
     "orderLabel": "Objednat"
+  },
+  "outgoingShipments": {
+    "title": "Vývozy",
+    "new": "Nový vývoz",
+    "deleteConfirm": "Opravdu chcete smazat vybraný vývoz?",
+    "detailTitle": "Detail vývozu",
+    "saveSuccess": "Vývoz byl úspěšně uložen",
+    "saveError": "Chyba při ukládání vývozu",
+    "loadListError": "Chyba při načítání vývozů",
+    "loadDetailError": "Chyba při načítání vývozu",
+    "noDetailToDisplay": "K zobrazení detailu vyberte vývoz ze seznamu",
+    "shipmentDeleted": "Vývoz úspěšně odebrán",
+    "noShipmentsToDisplay": "Žádný vývoz k zobrazení. Pro zobrazení vývozů si nejdříve alespoň jeden založte",
+    "deliveryDate": "Datum vývozu",
+    "drivers": "Řidiči",
+    "vehicle": "Vozidlo",
+    "stops": "Zastávky",
+    "orders": "Objednávky",
+    "errorFetchingDrivers": "Chyba při načítání řidičů",
+    "errorFetchingVehicles": "Chyba při načítání vozidel",
+    "errorFetchingOrders": "Chyba při načítání objednávek",
+    "route": "Trasa",
+    "noStopsDefined": "Pro zobrazení trasy vyberte alespoň jednu objednávku.",
+    "name": "Název",
+    "weight": "Váha"
+  },
+  "outgoingShipmentState": {
+    "Created": "Plánován",
+    "Loaded": "Naložen",
+    "InTransit": "V přepravě",
+    "Delivered": "Doručen",
+    "Cancelled": "Zrušen"
   }
 }

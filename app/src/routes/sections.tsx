@@ -1,19 +1,19 @@
-import type {RouteObject} from 'react-router';
+import type { RouteObject } from 'react-router';
 
-import {jwtDecode} from "jwt-decode";
-import  { useLocation } from 'react-router';
-import React, {lazy, Suspense} from 'react';
-import {varAlpha} from 'minimal-shared/utils';
-import {Outlet, Navigate} from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
+import { useLocation } from 'react-router';
+import React, { lazy, Suspense } from 'react';
+import { varAlpha } from 'minimal-shared/utils';
+import { Outlet, Navigate } from 'react-router-dom';
 
 import Box from '@mui/material/Box';
-import LinearProgress, {linearProgressClasses} from '@mui/material/LinearProgress';
+import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgress';
 
-import {AuthLayout} from 'src/layouts/auth';
-import {DashboardLayout} from 'src/layouts/dashboard';
+import { AuthLayout } from 'src/layouts/auth';
+import { DashboardLayout } from 'src/layouts/dashboard';
 
-import {UserRoleType} from "../api/Client";
-import {useAuth} from "../context/AuthContext";
+import { UserRoleType } from '../api/Client';
+import { useAuth } from '../context/AuthContext';
 
 // ----------------------------------------------------------------------
 
@@ -28,6 +28,7 @@ export const ProductDeliveriesPage = lazy(() => import('src/pages/product-delive
 export const InventoryPage = lazy(() => import('src/pages/inventory'));
 export const UsersPage = lazy(() => import('src/pages/users'));
 export const OrdersPage = lazy(() => import('src/pages/orders'));
+export const OutgoingShipmentsPage = lazy(() => import('src/pages/outgoing-shipments'));
 
 const renderFallback = () => (
   <Box
@@ -50,68 +51,62 @@ const renderFallback = () => (
 );
 
 const RedirectToStart = () => {
-    const token = localStorage.getItem('authToken');
-    try {
-        const { exp } = jwtDecode<{ exp: number }>(token ?? '');
-        const isExpired = exp * 1000 < Date.now();
-        return <Navigate to={isExpired ? '/sign-in' : '/dashboard'} replace />;
-    } catch {
-        return <Navigate to="/sign-in" replace />;
-    }
+  const token = localStorage.getItem('authToken');
+  try {
+    const { exp } = jwtDecode<{ exp: number }>(token ?? '');
+    const isExpired = exp * 1000 < Date.now();
+    return <Navigate to={isExpired ? '/sign-in' : '/dashboard'} replace />;
+  } catch {
+    return <Navigate to="/sign-in" replace />;
+  }
 };
 
 type RequireRoleProps = {
-    allowedRoles: UserRoleType[];
-    children: React.ReactNode;
+  allowedRoles: UserRoleType[];
+  children: React.ReactNode;
 };
 
 export const RequireRole = ({ allowedRoles, children }: RequireRoleProps) => {
-    const { user, isInitialized } = useAuth();
-    const location = useLocation();
+  const { user, isInitialized } = useAuth();
+  const location = useLocation();
 
-    if (!isInitialized) {
-      return (
-        <Box
+  if (!isInitialized) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearProgress
           sx={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            zIndex: 1,
+            position: 'absolute',
+            top: 190,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '40%',
+            bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+            [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
           }}
-        >
-          <LinearProgress
-            sx={{
-              zIndex: 1,
-              position: 'absolute',
-              top: 190,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '40%',
-              bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-              [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
-            }}
-          />
-        </Box>
-      );
-    }
-
-    if (!user) {
-      return (
-        <Navigate
-          to="/sign-in"
-          replace
-          state={{ from: location }}
         />
-      )
-    }
+      </Box>
+    );
+  }
 
-    const numericState = UserRoleType[user.role as unknown as keyof typeof UserRoleType];
-    // Logged in, but does not have a role for this module -> 404 - TODO: Rework to 403 page later
-    if (!allowedRoles.includes(numericState)){
-        return <Navigate to="/404" replace />;
-    }
+  if (!user) {
+    return <Navigate to="/sign-in" replace state={{ from: location }} />;
+  }
 
-    return <>{children}</>;
+  const numericState = UserRoleType[user.role as unknown as keyof typeof UserRoleType];
+  // Logged in, but does not have a role for this module -> 404 - TODO: Rework to 403 page later
+  if (!allowedRoles.includes(numericState)) {
+    return <Navigate to="/404" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 export const routesSection: RouteObject[] = [
@@ -124,73 +119,90 @@ export const routesSection: RouteObject[] = [
       </DashboardLayout>
     ),
     children: [
-        {
-            path: '/',
-            element: <RedirectToStart />
-        },
-        {
-            path: 'dashboard',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <DashboardPage />
-                </RequireRole>
-        },
-        {
-            path: 'clients/:clientId?',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <ClientsPage />
-                </RequireRole>
-        },
-        {
-            path: 'orders/:orderId?',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <OrdersPage />
-                </RequireRole>
-        },
-        {
-            path: 'breweries/:breweryId?',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <BreweriesPage />
-                </RequireRole>
-        },
-        {
-            path: 'drivers',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <DriversPage />
-                </RequireRole>
-        },
-        {
-            path: 'vehicles',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <VehiclesPage />
-                </RequireRole>
-        },
-        {
-            path: 'product-deliveries',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <ProductDeliveriesPage />
-                </RequireRole>
-        },
-        {
-            path: 'inventory',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-                    <InventoryPage />
-                </RequireRole>
-        },
-        {
-            path: 'users',
-            element:
-                <RequireRole allowedRoles={[UserRoleType.Admin]}>
-                    <UsersPage />
-                </RequireRole>
-        },
+      {
+        path: '/',
+        element: <RedirectToStart />,
+      },
+      {
+        path: 'dashboard',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <DashboardPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'clients/:clientId?',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <ClientsPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'orders/:orderId?',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <OrdersPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'breweries/:breweryId?',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <BreweriesPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'drivers',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <DriversPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'vehicles',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <VehiclesPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'product-deliveries',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <ProductDeliveriesPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'inventory',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <InventoryPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'users',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.Admin]}>
+            <UsersPage />
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'outgoing-shipments/:shipmentId?',
+        element: (
+          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+            <OutgoingShipmentsPage />
+          </RequireRole>
+        ),
+      },
     ],
   },
   {

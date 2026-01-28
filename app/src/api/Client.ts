@@ -245,6 +245,43 @@ export interface IClient {
     deleteProductDeliveryEndpoint(id: string): Promise<string>;
 
     /**
+     * Retrieves a filtered list of existing outgoing shipments
+     * @return Outgoing shipments list retrieved
+     */
+    getOutgoingShipmentsListEndpoint(parameters: { [key: string]: string; }): Promise<OutgoingShipmentListItemDto[]>;
+
+    /**
+     * Creates new outgoing shipment
+     * @return Outgoing shipment created
+     */
+    createOutgoingShipmentEndpoint(data: CreateOutgoingShipmentDto): Promise<string>;
+
+    /**
+     * Retrieves details of an existing outgoing shipment
+     * @return Outgoing shipment details retrieved
+     */
+    getOutgoingShipmentDetailEndpoint(id: string): Promise<OutgoingShipmentDetailDto>;
+
+    /**
+     * Updates an existing outgoing shipment
+     * @return Outgoing shipment updated
+     */
+    updateOutgoingShipmentEndpoint(id: string, data: UpdateOutgoingShipmentDto): Promise<string>;
+
+    /**
+     * Deletes an existing outgoing shipment
+     * @return Outgoing shipment deleted
+     */
+    deleteOutgoingShipmentEndpoint(id: string): Promise<string>;
+
+    /**
+     * Gets filtered order list for outgoing shipments
+     * @param outgoingShipmentId (optional) 
+     * @return List of orders for outgoing shipments retrieved
+     */
+    getOrdersListForOutgoingShipmentsEndpoint(outgoingShipmentId: string | null | undefined, parameters: { [key: string]: string; }): Promise<OutgoingShipmentOrderDto[]>;
+
+    /**
      * Gets filtered order list
      * @return List of orders
      */
@@ -448,7 +485,7 @@ export class Client implements IClient {
 
     constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
         this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "https://aletrack.onrender.com";
+        this.baseUrl = baseUrl ?? "http://localhost:8080";
     }
 
     /**
@@ -2887,6 +2924,385 @@ export class Client implements IClient {
     }
 
     /**
+     * Retrieves a filtered list of existing outgoing shipments
+     * @return Outgoing shipments list retrieved
+     */
+    getOutgoingShipmentsListEndpoint(parameters: { [key: string]: string; }): Promise<OutgoingShipmentListItemDto[]> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments?";
+        if (parameters === undefined || parameters === null)
+            throw new Error("The parameter 'parameters' must be defined and cannot be null.");
+        else
+            url_ += "Parameters=" + encodeURIComponent("" + parameters) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOutgoingShipmentsListEndpoint(_response);
+        });
+    }
+
+    protected processGetOutgoingShipmentsListEndpoint(response: Response): Promise<OutgoingShipmentListItemDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(OutgoingShipmentListItemDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<OutgoingShipmentListItemDto[]>(null as any);
+    }
+
+    /**
+     * Creates new outgoing shipment
+     * @return Outgoing shipment created
+     */
+    createOutgoingShipmentEndpoint(data: CreateOutgoingShipmentDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateOutgoingShipmentEndpoint(_response);
+        });
+    }
+
+    protected processCreateOutgoingShipmentEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : <any>null;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Retrieves details of an existing outgoing shipment
+     * @return Outgoing shipment details retrieved
+     */
+    getOutgoingShipmentDetailEndpoint(id: string): Promise<OutgoingShipmentDetailDto> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOutgoingShipmentDetailEndpoint(_response);
+        });
+    }
+
+    protected processGetOutgoingShipmentDetailEndpoint(response: Response): Promise<OutgoingShipmentDetailDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = OutgoingShipmentDetailDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<OutgoingShipmentDetailDto>(null as any);
+    }
+
+    /**
+     * Updates an existing outgoing shipment
+     * @return Outgoing shipment updated
+     */
+    updateOutgoingShipmentEndpoint(id: string, data: UpdateOutgoingShipmentDto): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateOutgoingShipmentEndpoint(_response);
+        });
+    }
+
+    protected processUpdateOutgoingShipmentEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : <any>null;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes an existing outgoing shipment
+     * @return Outgoing shipment deleted
+     */
+    deleteOutgoingShipmentEndpoint(id: string): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteOutgoingShipmentEndpoint(_response);
+        });
+    }
+
+    protected processDeleteOutgoingShipmentEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : <any>null;
+    
+            return result202;
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Gets filtered order list for outgoing shipments
+     * @param outgoingShipmentId (optional) 
+     * @return List of orders for outgoing shipments retrieved
+     */
+    getOrdersListForOutgoingShipmentsEndpoint(outgoingShipmentId: string | null | undefined, parameters: { [key: string]: string; }): Promise<OutgoingShipmentOrderDto[]> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/orders?";
+        if (outgoingShipmentId !== undefined && outgoingShipmentId !== null)
+            url_ += "OutgoingShipmentId=" + encodeURIComponent("" + outgoingShipmentId) + "&";
+        if (parameters === undefined || parameters === null)
+            throw new Error("The parameter 'parameters' must be defined and cannot be null.");
+        else
+            url_ += "Parameters=" + encodeURIComponent("" + parameters) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOrdersListForOutgoingShipmentsEndpoint(_response);
+        });
+    }
+
+    protected processGetOrdersListForOutgoingShipmentsEndpoint(response: Response): Promise<OutgoingShipmentOrderDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(OutgoingShipmentOrderDto.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<OutgoingShipmentOrderDto[]>(null as any);
+    }
+
+    /**
      * Gets filtered order list
      * @return List of orders
      */
@@ -5094,9 +5510,13 @@ export class GetVehicleDetailRequest implements IGetVehicleDetailRequest {
 export interface IGetVehicleDetailRequest {
 }
 
+/** the dto used to send an error response to the client */
 export class ErrorResponse implements IErrorResponse {
+    /** the http status code sent to the client. default is 400. */
     statusCode?: number;
+    /** the message for the error response */
     message?: string;
+    /** the collection of errors for the current context */
     errors?: { [key: string]: string[]; };
 
     constructor(data?: IErrorResponse) {
@@ -5148,9 +5568,13 @@ export class ErrorResponse implements IErrorResponse {
     }
 }
 
+/** the dto used to send an error response to the client */
 export interface IErrorResponse {
+    /** the http status code sent to the client. default is 400. */
     statusCode?: number;
+    /** the message for the error response */
     message?: string;
+    /** the collection of errors for the current context */
     errors?: { [key: string]: string[]; };
 }
 
@@ -6986,6 +7410,7 @@ export enum ProductDeliveryState {
     InPlanning = 0,
     OnTheWay = 1,
     Finished = 2,
+    Cancelled = 3,
 }
 
 export class CreateProductsDto implements ICreateProductsDto {
@@ -7696,13 +8121,13 @@ export interface IUpdateProductDeliveryItemDto {
     note?: string | undefined;
 }
 
-export class OrderListItemDto implements IOrderListItemDto {
+export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto {
     id?: string;
-    state?: OrderState;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
+    state?: OutgoingShipmentState;
+    deliveryDate?: Date | undefined;
+    name?: string;
 
-    constructor(data?: IOrderListItemDto) {
+    constructor(data?: IOutgoingShipmentListItemDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -7715,14 +8140,14 @@ export class OrderListItemDto implements IOrderListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.state = _data["state"];
-            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
-            this.clientName = _data["clientName"];
+            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.name = _data["name"];
         }
     }
 
-    static fromJS(data: any): OrderListItemDto {
+    static fromJS(data: any): OutgoingShipmentListItemDto {
         data = typeof data === 'object' ? data : {};
-        let result = new OrderListItemDto();
+        let result = new OutgoingShipmentListItemDto();
         result.init(data);
         return result;
     }
@@ -7731,17 +8156,17 @@ export class OrderListItemDto implements IOrderListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["state"] = this.state;
-        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
-        data["clientName"] = this.clientName;
+        data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : <any>undefined;
+        data["name"] = this.name;
         return data;
     }
 }
 
-export interface IOrderListItemDto {
+export interface IOutgoingShipmentListItemDto {
     id?: string;
-    state?: OrderState;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
+    state?: OutgoingShipmentState;
+    deliveryDate?: Date | undefined;
+    name?: string;
 }
 
 export class CreateProductsDeliveryDto implements ICreateProductsDeliveryDto {
@@ -7906,6 +8331,753 @@ export interface ICreateProductDeliveryItemDto {
     productId?: string;
     quantity?: number;
     note?: string | undefined;
+}
+
+export enum OutgoingShipmentState {
+    Created = 0,
+    Loaded = 1,
+    InTransit = 2,
+    Delivered = 3,
+    Cancelled = 4,
+}
+
+export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
+    id?: string;
+    state?: OutgoingShipmentState;
+    name?: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    stops?: OutgoingShipmentStopDto[];
+
+    constructor(data?: IOutgoingShipmentDetailDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.state = _data["state"];
+            this.name = _data["name"];
+            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.vehicleId = _data["vehicleId"];
+            if (Array.isArray(_data["driverIds"])) {
+                this.driverIds = [] as any;
+                for (let item of _data["driverIds"])
+                    this.driverIds!.push(item);
+            }
+            if (Array.isArray(_data["stops"])) {
+                this.stops = [] as any;
+                for (let item of _data["stops"])
+                    this.stops!.push(OutgoingShipmentStopDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentDetailDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentDetailDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["state"] = this.state;
+        data["name"] = this.name;
+        data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : <any>undefined;
+        data["vehicleId"] = this.vehicleId;
+        if (Array.isArray(this.driverIds)) {
+            data["driverIds"] = [];
+            for (let item of this.driverIds)
+                data["driverIds"].push(item);
+        }
+        if (Array.isArray(this.stops)) {
+            data["stops"] = [];
+            for (let item of this.stops)
+                data["stops"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentDetailDto {
+    id?: string;
+    state?: OutgoingShipmentState;
+    name?: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    stops?: OutgoingShipmentStopDto[];
+}
+
+export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
+    order?: number;
+    clientId?: string;
+    clientName?: string;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    orderId?: string;
+    selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    products?: OutgoingShipmentProductDto[];
+
+    constructor(data?: IOutgoingShipmentStopDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.order = _data["order"];
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : <any>undefined;
+            this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : <any>undefined;
+            this.orderId = _data["orderId"];
+            this.selectedAddressKind = _data["selectedAddressKind"];
+            if (Array.isArray(_data["products"])) {
+                this.products = [] as any;
+                for (let item of _data["products"])
+                    this.products!.push(OutgoingShipmentProductDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentStopDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentStopDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["order"] = this.order;
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : <any>undefined;
+        data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : <any>undefined;
+        data["orderId"] = this.orderId;
+        data["selectedAddressKind"] = this.selectedAddressKind;
+        if (Array.isArray(this.products)) {
+            data["products"] = [];
+            for (let item of this.products)
+                data["products"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentStopDto {
+    order?: number;
+    clientId?: string;
+    clientName?: string;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    orderId?: string;
+    selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    products?: OutgoingShipmentProductDto[];
+}
+
+export class AddressDto implements IAddressDto {
+    streetName!: string;
+    streetNumber!: string;
+    city!: string;
+    zip!: string;
+    country!: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+
+    constructor(data?: IAddressDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.streetName = _data["streetName"];
+            this.streetNumber = _data["streetNumber"];
+            this.city = _data["city"];
+            this.zip = _data["zip"];
+            this.country = _data["country"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
+        }
+    }
+
+    static fromJS(data: any): AddressDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new AddressDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["streetName"] = this.streetName;
+        data["streetNumber"] = this.streetNumber;
+        data["city"] = this.city;
+        data["zip"] = this.zip;
+        data["country"] = this.country;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
+        return data;
+    }
+}
+
+export interface IAddressDto {
+    streetName: string;
+    streetNumber: string;
+    city: string;
+    zip: string;
+    country: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+}
+
+export enum Country {
+    Czechia = 1,
+    Germany = 2,
+}
+
+export enum OutgoingShipmentStopAddressKind {
+    Official = 0,
+    Contact = 1,
+}
+
+export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+
+    constructor(data?: IOutgoingShipmentProductDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.kind = _data["kind"];
+            this.type = _data["type"];
+            this.alcoholPercentage = _data["alcoholPercentage"];
+            this.platoDegree = _data["platoDegree"];
+            this.packageSize = _data["packageSize"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentProductDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentProductDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["kind"] = this.kind;
+        data["type"] = this.type;
+        data["alcoholPercentage"] = this.alcoholPercentage;
+        data["platoDegree"] = this.platoDegree;
+        data["packageSize"] = this.packageSize;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentProductDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+}
+
+export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
+
+    constructor(data?: IGetOutgoingShipmentDetailRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetOutgoingShipmentDetailRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetOutgoingShipmentDetailRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetOutgoingShipmentDetailRequest {
+}
+
+export class DeleteOutgoingShipmentRequest implements IDeleteOutgoingShipmentRequest {
+
+    constructor(data?: IDeleteOutgoingShipmentRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteOutgoingShipmentRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteOutgoingShipmentRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteOutgoingShipmentRequest {
+}
+
+export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
+    name!: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    clientOrderShipments!: ClientOrderShipmentDto[];
+    state!: OutgoingShipmentState;
+
+    constructor(data?: IUpdateOutgoingShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.clientOrderShipments = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.vehicleId = _data["vehicleId"];
+            if (Array.isArray(_data["driverIds"])) {
+                this.driverIds = [] as any;
+                for (let item of _data["driverIds"])
+                    this.driverIds!.push(item);
+            }
+            if (Array.isArray(_data["clientOrderShipments"])) {
+                this.clientOrderShipments = [] as any;
+                for (let item of _data["clientOrderShipments"])
+                    this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
+            }
+            this.state = _data["state"];
+        }
+    }
+
+    static fromJS(data: any): UpdateOutgoingShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateOutgoingShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : <any>undefined;
+        data["vehicleId"] = this.vehicleId;
+        if (Array.isArray(this.driverIds)) {
+            data["driverIds"] = [];
+            for (let item of this.driverIds)
+                data["driverIds"].push(item);
+        }
+        if (Array.isArray(this.clientOrderShipments)) {
+            data["clientOrderShipments"] = [];
+            for (let item of this.clientOrderShipments)
+                data["clientOrderShipments"].push(item ? item.toJSON() : <any>undefined);
+        }
+        data["state"] = this.state;
+        return data;
+    }
+}
+
+export interface IUpdateOutgoingShipmentDto {
+    name: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    clientOrderShipments: ClientOrderShipmentDto[];
+    state: OutgoingShipmentState;
+}
+
+export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
+    clientOrderId!: string;
+    order!: number;
+    selectedAddressKind!: OutgoingShipmentStopAddressKind;
+
+    constructor(data?: IClientOrderShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientOrderId = _data["clientOrderId"];
+            this.order = _data["order"];
+            this.selectedAddressKind = _data["selectedAddressKind"];
+        }
+    }
+
+    static fromJS(data: any): ClientOrderShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientOrderShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientOrderId"] = this.clientOrderId;
+        data["order"] = this.order;
+        data["selectedAddressKind"] = this.selectedAddressKind;
+        return data;
+    }
+}
+
+export interface IClientOrderShipmentDto {
+    clientOrderId: string;
+    order: number;
+    selectedAddressKind: OutgoingShipmentStopAddressKind;
+}
+
+export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    items?: UnassignedOrderItemDto[];
+
+    constructor(data?: IOutgoingShipmentOrderDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
+            this.clientName = _data["clientName"];
+            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : <any>undefined;
+            this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : <any>undefined;
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(UnassignedOrderItemDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentOrderDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentOrderDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
+        data["clientName"] = this.clientName;
+        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : <any>undefined;
+        data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : <any>undefined;
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    items?: UnassignedOrderItemDto[];
+}
+
+export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
+    name!: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    clientOrderShipments!: ClientOrderShipmentDto[];
+
+    constructor(data?: ICreateOutgoingShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.clientOrderShipments = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
+            this.vehicleId = _data["vehicleId"];
+            if (Array.isArray(_data["driverIds"])) {
+                this.driverIds = [] as any;
+                for (let item of _data["driverIds"])
+                    this.driverIds!.push(item);
+            }
+            if (Array.isArray(_data["clientOrderShipments"])) {
+                this.clientOrderShipments = [] as any;
+                for (let item of _data["clientOrderShipments"])
+                    this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): CreateOutgoingShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateOutgoingShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : <any>undefined;
+        data["vehicleId"] = this.vehicleId;
+        if (Array.isArray(this.driverIds)) {
+            data["driverIds"] = [];
+            for (let item of this.driverIds)
+                data["driverIds"].push(item);
+        }
+        if (Array.isArray(this.clientOrderShipments)) {
+            data["clientOrderShipments"] = [];
+            for (let item of this.clientOrderShipments)
+                data["clientOrderShipments"].push(item ? item.toJSON() : <any>undefined);
+        }
+        return data;
+    }
+}
+
+export interface ICreateOutgoingShipmentDto {
+    name: string;
+    deliveryDate?: Date | undefined;
+    vehicleId?: string | undefined;
+    driverIds?: string[];
+    clientOrderShipments: ClientOrderShipmentDto[];
+}
+
+export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
+    productId?: string;
+    productName?: string;
+    quantity?: number;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    weight?: number | undefined;
+
+    constructor(data?: IUnassignedOrderItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.productName = _data["productName"];
+            this.quantity = _data["quantity"];
+            this.kind = _data["kind"];
+            this.type = _data["type"];
+            this.alcoholPercentage = _data["alcoholPercentage"];
+            this.platoDegree = _data["platoDegree"];
+            this.packageSize = _data["packageSize"];
+            this.weight = _data["weight"];
+        }
+    }
+
+    static fromJS(data: any): UnassignedOrderItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UnassignedOrderItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["productName"] = this.productName;
+        data["quantity"] = this.quantity;
+        data["kind"] = this.kind;
+        data["type"] = this.type;
+        data["alcoholPercentage"] = this.alcoholPercentage;
+        data["platoDegree"] = this.platoDegree;
+        data["packageSize"] = this.packageSize;
+        data["weight"] = this.weight;
+        return data;
+    }
+}
+
+export interface IUnassignedOrderItemDto {
+    productId?: string;
+    productName?: string;
+    quantity?: number;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    weight?: number | undefined;
+}
+
+export class GetOrdersListForOutgoingShipmentsRequest extends FilterableRequest implements IGetOrdersListForOutgoingShipmentsRequest {
+
+    constructor(data?: IGetOrdersListForOutgoingShipmentsRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetOrdersListForOutgoingShipmentsRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetOrdersListForOutgoingShipmentsRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetOrdersListForOutgoingShipmentsRequest extends IFilterableRequest {
+}
+
+export class OrderListItemDto implements IOrderListItemDto {
+    id?: string;
+    state?: OrderState;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+
+    constructor(data?: IOrderListItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.state = _data["state"];
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
+            this.clientName = _data["clientName"];
+        }
+    }
+
+    static fromJS(data: any): OrderListItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderListItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["state"] = this.state;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
+        data["clientName"] = this.clientName;
+        return data;
+    }
+}
+
+export interface IOrderListItemDto {
+    id?: string;
+    state?: OrderState;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
 }
 
 export enum OrderState {
@@ -8481,47 +9653,6 @@ export interface IUpdateNoteDto {
     text: string;
 }
 
-export enum Country {
-    Czechia = 1,
-    Germany = 2,
-}
-
-export class CreateNoteDto implements ICreateNoteDto {
-    text!: string;
-
-    constructor(data?: ICreateNoteDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.text = _data["text"];
-        }
-    }
-
-    static fromJS(data: any): CreateNoteDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new CreateNoteDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["text"] = this.text;
-        return data;
-    }
-}
-
-export interface ICreateNoteDto {
-    text: string;
-}
-
 export class InventorySectionDto implements IInventorySectionDto {
     id?: string;
     name?: string;
@@ -8572,6 +9703,42 @@ export interface IInventorySectionDto {
     id?: string;
     name?: string;
     items?: InventoryItemListItemDto[];
+}
+
+export class CreateNoteDto implements ICreateNoteDto {
+    text!: string;
+
+    constructor(data?: ICreateNoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.text = _data["text"];
+        }
+    }
+
+    static fromJS(data: any): CreateNoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateNoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["text"] = this.text;
+        return data;
+    }
+}
+
+export interface ICreateNoteDto {
+    text: string;
 }
 
 export class InventoryItemListItemDto implements IInventoryItemListItemDto {
@@ -9492,66 +10659,6 @@ export interface IClientDto {
     officialAddress?: AddressDto;
     contactAddress?: AddressDto | undefined;
     contacts?: ClientContactDto[];
-}
-
-export class AddressDto implements IAddressDto {
-    streetName!: string;
-    streetNumber!: string;
-    city!: string;
-    zip!: string;
-    country!: Country;
-    latitude?: number | undefined;
-    longitude?: number | undefined;
-
-    constructor(data?: IAddressDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.streetName = _data["streetName"];
-            this.streetNumber = _data["streetNumber"];
-            this.city = _data["city"];
-            this.zip = _data["zip"];
-            this.country = _data["country"];
-            this.latitude = _data["latitude"];
-            this.longitude = _data["longitude"];
-        }
-    }
-
-    static fromJS(data: any): AddressDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AddressDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["streetName"] = this.streetName;
-        data["streetNumber"] = this.streetNumber;
-        data["city"] = this.city;
-        data["zip"] = this.zip;
-        data["country"] = this.country;
-        data["latitude"] = this.latitude;
-        data["longitude"] = this.longitude;
-        return data;
-    }
-}
-
-export interface IAddressDto {
-    streetName: string;
-    streetNumber: string;
-    city: string;
-    zip: string;
-    country: Country;
-    latitude?: number | undefined;
-    longitude?: number | undefined;
 }
 
 export class ClientContactDto implements IClientContactDto {
