@@ -14,6 +14,7 @@ import { DeleteConfirmationDialog } from 'src/components/dialogs/delete-confirma
 import { PendingChangesConfirmationDialog } from 'src/components/dialogs/pending-changes-confirmation-dialog';
 
 import { Iconify } from '../../../components/iconify';
+import { useApiCall } from '../../../hooks/use-api-call';
 import { DashboardContent } from '../../../layouts/dashboard';
 import { AuthorizedClient } from '../../../api/AuthorizedClient';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
@@ -34,6 +35,7 @@ import {
 export function OutgoingShipmentsView() {
   const { t } = useTranslation();
   const { showSnackbar } = useSnackbar();
+  const { executeApiCall, executeApiCallWithDefault } = useApiCall();
 
   const [initialLoading, setInitialLoading] = useState<boolean>(false);
   const [outgoingShipments, setOutgoingShipments] = useState<OutgoingShipmentListItemDto[]>([]);
@@ -66,48 +68,37 @@ export function OutgoingShipmentsView() {
   }, [blocker.state]);
 
   const fetchOutgoingShipments = useCallback(async () => {
-    try {
-      const client = new AuthorizedClient();
+    const client = new AuthorizedClient();
 
-      return await client.fetchOutgoingShipments();
-    } catch (error) {
-      showSnackbar(t('outgoingShipments.loadListError'), 'error');
-      console.error('Error fetching outgoing shipments:', error);
-      return [];
-    }
-  }, [showSnackbar, t]);
+    return await executeApiCallWithDefault(() => client.fetchOutgoingShipments(), []);
+  }, [executeApiCallWithDefault]);
 
   const fetchShipment = useCallback(
     async (shipmentId: string) => {
-      try {
-        const client = new AuthorizedClient();
-        const data = await client.getOutgoingShipmentDetailEndpoint(shipmentId);
+      const client = new AuthorizedClient();
+      const data = await executeApiCall(() => client.getOutgoingShipmentDetailEndpoint(shipmentId));
 
-        if (data) {
-          const updateRequest = new UpdateOutgoingShipmentDto({
-            name: data.name!,
-            deliveryDate: data.deliveryDate!,
-            state: data.state!,
-            vehicleId: data.vehicleId!,
-            driverIds: data.driverIds!,
-            clientOrderShipments: (data.stops ?? []).map(
-              (stop) =>
-                new ClientOrderShipmentDto({
-                  order: stop.order!,
-                  clientOrderId: stop.orderId!,
-                  selectedAddressKind: stop.selectedAddressKind!,
-                })
-            ),
-          });
-          setCurrentShipment(updateRequest);
-          setCurrentInitialShipment(updateRequest);
-        }
-      } catch (error) {
-        console.error('Error fetching outgoing shipment:', error);
-        showSnackbar(t('outgoingShipments.loadDetailError'), 'error');
+      if (data) {
+        const updateRequest = new UpdateOutgoingShipmentDto({
+          name: data.name!,
+          deliveryDate: data.deliveryDate!,
+          state: data.state!,
+          vehicleId: data.vehicleId!,
+          driverIds: data.driverIds!,
+          clientOrderShipments: (data.stops ?? []).map(
+            (stop) =>
+              new ClientOrderShipmentDto({
+                order: stop.order!,
+                clientOrderId: stop.orderId!,
+                selectedAddressKind: stop.selectedAddressKind!,
+              })
+          ),
+        });
+        setCurrentShipment(updateRequest);
+        setCurrentInitialShipment(updateRequest);
       }
     },
-    [showSnackbar, t]
+    [executeApiCall]
   );
 
   useEffect(() => {
@@ -127,16 +118,16 @@ export function OutgoingShipmentsView() {
 
   const fetchOrders = useCallback(
     async (shipmentId: string) => {
-      try {
-        const client = new AuthorizedClient();
-        const fetchedOrders = await client.fetOrdersForOutgoingShipments(shipmentId, {});
+      const client = new AuthorizedClient();
+      const fetchedOrders = await executeApiCall(() =>
+        client.fetOrdersForOutgoingShipments(shipmentId, {})
+      );
+      
+      if (fetchedOrders) {
         setOrders(fetchedOrders);
-      } catch (error) {
-        showSnackbar(t('outgoingShipments.errorFetchingOrders'), 'error');
-        console.error('Error fetching orders for a dropdown:', error);
       }
     },
-    [showSnackbar, t]
+    [executeApiCall]
   );
 
   useEffect(() => {
@@ -147,15 +138,15 @@ export function OutgoingShipmentsView() {
   }, [selectedShipmentId, fetchShipment, fetchOrders]);
 
   const fetchMultiselectData = useCallback(async () => {
-    try {
-      const client = new AuthorizedClient();
-      await client.fetchDrivers({}).then(setDrivers);
-      await client.fetchVehicles({}).then(setVehicles);
-    } catch (error) {
-      showSnackbar(t('outgoingShipments.errorFetchingData'), 'error');
-      console.error('Error fetching data for multiselects:', error);
-    }
-  }, [showSnackbar, t]);
+    const client = new AuthorizedClient();
+    const [driversData, vehiclesData] = await Promise.all([
+      executeApiCallWithDefault(() => client.fetchDrivers({}), []),
+      executeApiCallWithDefault(() => client.fetchVehicles({}), []),
+    ]);
+
+    setDrivers(driversData);
+    setVehicles(vehiclesData);
+  }, [executeApiCallWithDefault]);
 
   useEffect(() => {
     void fetchMultiselectData();
@@ -182,68 +173,68 @@ export function OutgoingShipmentsView() {
       return false;
     }
 
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-      const deliveryDate = currentShipment.deliveryDate
-        ? new Date(currentShipment.deliveryDate)
-        : undefined;
-      deliveryDate?.setHours(0, 0, 0, 0);
+    const deliveryDate = currentShipment.deliveryDate
+      ? new Date(currentShipment.deliveryDate)
+      : undefined;
+    deliveryDate?.setHours(0, 0, 0, 0);
 
-      const formattedState = mapEnumValue(OutgoingShipmentState, currentShipment.state);
-      if (formattedState === OutgoingShipmentState.Loaded && currentShipment.clientOrderShipments.length == 0) {
-        showSnackbar(t('common.validationError'), 'error');
-        setErrors({ orders: t('common.required') });
-        return false;
-      }
-
-      if ((formattedState !== OutgoingShipmentState.Created
-        && formattedState !== OutgoingShipmentState.Loaded
-        && formattedState !== OutgoingShipmentState.Cancelled)
-        && (deliveryDate === undefined
-          || deliveryDate < today
-          || currentShipment.vehicleId == undefined
-          || currentShipment.driverIds?.length == 0
-          || currentShipment.clientOrderShipments.length == 0)
-      ) {
-        const validationErrors: Record<string, string> = {};
-        if (deliveryDate === undefined || deliveryDate < today) validationErrors.deliveryDate = t('common.required');
-        if (currentShipment.vehicleId == undefined) validationErrors.vehicle = t('common.required');
-        if (currentShipment.driverIds?.length == 0) validationErrors.drivers = t('common.required');
-        if (currentShipment.clientOrderShipments.length == 0) validationErrors.orders = t('common.required');
-
-        showSnackbar(t('common.validationError'), 'error');
-        setErrors(validationErrors);
-        return false;
-      }
-
-      setErrors({});
-
-      currentShipment.deliveryDate = deliveryDate;
-
-      const client = new AuthorizedClient();
-      await client.updateOutgoingShipmentEndpoint(selectedShipmentId, currentShipment);
-
-      showSnackbar(t('outgoingShipments.saveSuccess'), 'success');
-
-      // If the state or date has changed, reload the list
-      if (
-        currentShipment?.state !== currentInitialShipment?.state ||
-        currentShipment?.name !== currentInitialShipment?.name ||
-        currentShipment?.deliveryDate !== currentInitialShipment?.deliveryDate
-      ) {
-        const updated = await fetchOutgoingShipments();
-        setOutgoingShipments(updated);
-      }
-
-      setCurrentInitialShipment(currentShipment);
-      return true;
-    } catch (error) {
-      showSnackbar(t('productDeliveries.saveError'), 'error');
-      console.error('Error saving product delivery:', error);
+    const formattedState = mapEnumValue(OutgoingShipmentState, currentShipment.state);
+    if (formattedState === OutgoingShipmentState.Loaded && currentShipment.clientOrderShipments.length == 0) {
+      showSnackbar(t('common.validationError'), 'error');
+      setErrors({ orders: t('common.required') });
       return false;
     }
+
+    if ((formattedState !== OutgoingShipmentState.Created
+      && formattedState !== OutgoingShipmentState.Loaded
+      && formattedState !== OutgoingShipmentState.Cancelled)
+      && (deliveryDate === undefined
+        || deliveryDate < today
+        || currentShipment.vehicleId == undefined
+        || currentShipment.driverIds?.length == 0
+        || currentShipment.clientOrderShipments.length == 0)
+    ) {
+      const validationErrors: Record<string, string> = {};
+      if (deliveryDate === undefined || deliveryDate < today) validationErrors.deliveryDate = t('common.required');
+      if (currentShipment.vehicleId == undefined) validationErrors.vehicle = t('common.required');
+      if (currentShipment.driverIds?.length == 0) validationErrors.drivers = t('common.required');
+      if (currentShipment.clientOrderShipments.length == 0) validationErrors.orders = t('common.required');
+
+      showSnackbar(t('common.validationError'), 'error');
+      setErrors(validationErrors);
+      return false;
+    }
+
+    setErrors({});
+
+    currentShipment.deliveryDate = deliveryDate;
+
+    const client = new AuthorizedClient();
+    const success = await executeApiCall(() =>
+      client.updateOutgoingShipmentEndpoint(selectedShipmentId, currentShipment)
+    );
+
+    if (!success) {
+      return false;
+    }
+
+    showSnackbar(t('outgoingShipments.saveSuccess'), 'success');
+
+    // If the state or date has changed, reload the list
+    if (
+      currentShipment?.state !== currentInitialShipment?.state ||
+      currentShipment?.name !== currentInitialShipment?.name ||
+      currentShipment?.deliveryDate !== currentInitialShipment?.deliveryDate
+    ) {
+      const updated = await fetchOutgoingShipments();
+      setOutgoingShipments(updated);
+    }
+
+    setCurrentInitialShipment(currentShipment);
+    return true;
   };
 
   const handleNewShipmentClick = () => {
@@ -267,20 +258,19 @@ export function OutgoingShipmentsView() {
   };
 
   const deleteShipment = async () => {
-    try {
-      const client = new AuthorizedClient();
-      await client.deleteOutgoingShipmentEndpoint(selectedShipmentId!).then(() => {
-        showSnackbar(t('outgoingShipments.shipmentDeleted'), 'success');
-        const filtered = outgoingShipments.filter(d => d.id !== selectedShipmentId);
-        setOutgoingShipments(filtered);
-        setSelectedShipmentId(filtered.length > 0 ? filtered[0].id : undefined);
-      });
-    } catch (error) {
-      showSnackbar(t('outgoingShipments.deleteError'), 'error');
-      console.error('Error deleting outgoing shipment:', error);
-    } finally {
-      setIsDeleteDialogVisible(false);
+    const client = new AuthorizedClient();
+    const success = await executeApiCall(() =>
+      client.deleteOutgoingShipmentEndpoint(selectedShipmentId!)
+    );
+
+    if (success) {
+      showSnackbar(t('outgoingShipments.shipmentDeleted'), 'success');
+      const filtered = outgoingShipments.filter(d => d.id !== selectedShipmentId);
+      setOutgoingShipments(filtered);
+      setSelectedShipmentId(filtered.length > 0 ? filtered[0].id : undefined);
     }
+
+    setIsDeleteDialogVisible(false);
   }
 
   const handlePendingChangesConfirmation = async (shouldSave: boolean, shouldLoadNewDetail: boolean) => {

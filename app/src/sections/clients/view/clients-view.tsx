@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { varAlpha } from 'minimal-shared/utils';
-import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Table from '@mui/material/Table';
@@ -18,6 +18,7 @@ import { CreateClientView } from '../detail-view';
 import { emptyRows } from '../../../providers/utils';
 import { Iconify } from '../../../components/iconify';
 import { ClientsTableRow } from '../clients-table-row';
+import { useApiCall } from '../../../hooks/use-api-call';
 import { useTable } from '../../../providers/TableProvider';
 import { DashboardContent } from '../../../layouts/dashboard';
 import { ClientsTableToolbar } from '../clients-table-toolbar';
@@ -35,6 +36,7 @@ import type { ClientListItemDto } from '../../../api/Client';
 // ----------------------------------------------------------------------
 
 export function ClientsView() {
+  const { executeApiCallWithDefault } = useApiCall();
   const { showSnackbar } = useSnackbar();
   const { t } = useTranslation();
   const { clientId } = useParams<{ clientId?: string }>();
@@ -59,6 +61,34 @@ export function ClientsView() {
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [orderBy, setOrderBy] = useState<string>('name');
   const table = useTable({ order, setOrder, orderBy, setOrderBy });
+
+  const fetchClients = useCallback(async (region?: Region) => {
+    const client = new AuthorizedClient();
+    const filters: Record<string, string> = {};
+    if (filterName) filters.name = `startswith:${filterName}`;
+    if (region !== undefined && region !== null) filters.region = `eq:${region}`;
+    filters.sort = `${order}:${orderBy}`;
+    
+    return await executeApiCallWithDefault(
+      () => client.fetchClients(filters),
+      [],
+      t('clients.errorFetchingClients')
+    );
+  }, [executeApiCallWithDefault, filterName, order, orderBy, t]);
+  
+  const fetchWithFilters = useCallback(async () => {
+    await fetchClients(selectedRegion).then((data) => {
+      setClients(data);
+      if (data.length > 0) {
+        const firstId = data[0].id!;
+        setSelectedClientId(firstId);
+        navigate(`/clients/${firstId}`, { replace: true });
+      } else if (selectedClientId !== null) {
+        setSelectedClientId(null);
+        navigate(`/clients`, { replace: true });
+      }
+    });
+  }, [fetchClients, navigate, selectedClientId, selectedRegion, setSelectedClientId]);
 
   useEffect(() => {
     setInitialLoading(true);
@@ -85,43 +115,14 @@ export function ClientsView() {
     }
 
     setInitialLoading(false);
-  }, [clientId]);
+  }, [clientId, fetchClients, fetchWithFilters, navigate, selectedRegion, setSelectedClientId, setSelectedRegion, showSnackbar, t]);
 
   useEffect(() => {
     if (suppressRegionEffect)
       return;
 
     fetchWithFilters();
-  }, [selectedRegion, filterName, order, orderBy, suppressRegionEffect]);
-
-  const fetchWithFilters = async () => {
-    await fetchClients(selectedRegion).then((data) => {
-      setClients(data);
-      if (data.length > 0) {
-        const firstId = data[0].id!;
-        setSelectedClientId(firstId);
-        navigate(`/clients/${firstId}`, { replace: true });
-      } else if (selectedClientId !== null) {
-        setSelectedClientId(null);
-        navigate(`/clients`, { replace: true });
-      }
-    });
-  };
-  
-  const fetchClients = async (region?: Region) => {
-    try {
-      const client = new AuthorizedClient();
-      const filters: Record<string, string> = {};
-      if (filterName) filters.name = `startswith:${filterName}`;
-      if (region !== undefined && region !== null) filters.region = `eq:${region}`;
-      filters.sort = `${order}:${orderBy}`;
-      return await client.fetchClients(filters);
-    } catch (error) {
-      showSnackbar(t('clients.errorFetchingClients'), 'error');
-      console.error('Error fetching clients:', error);
-      return [];
-    }
-  };
+  }, [selectedRegion, filterName, order, orderBy, suppressRegionEffect, fetchWithFilters]);
 
   const handleRowClick = (id: string) => {
     if (hasDetailChanges) {

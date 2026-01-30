@@ -1,16 +1,17 @@
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect, useCallback} from "react";
+import React, {useState, useCallback} from "react";
 
 import {linearProgressClasses} from "@mui/material/LinearProgress";
 import {Box, InputLabel, Typography, FormControl, OutlinedInput, FormHelperText, LinearProgress} from "@mui/material";
 
 import {NotesView} from "../../notes/view/notes-view";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {RegionSelect} from "./components/region-select";
 import {ContactsForm} from "./components/contacts-form";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {validateAddress} from "../../../utils/validate-address";
+import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
 import {ClientRemindersView} from "./components/client-reminders-view";
 import {CollapsibleForm} from "../../../components/forms/collapsible-form";
@@ -38,6 +39,7 @@ export function UpdateClientView(
         onHasChangesChange,
     }: Readonly<UpdateClientViewProps>) {
     const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
 
@@ -49,34 +51,32 @@ export function UpdateClientView(
     const [contactValidationErrors, setContactValidationErrors] = useState<ContactValidationErrors>({});
 
     const fetchClient = useCallback(async () => {
-        try {
-            setInitialLoading(true);
-            const clientApi = new AuthorizedClient();
+        setInitialLoading(true);
+        const clientApi = new AuthorizedClient();
 
-            const data = await clientApi.getClientDetailEndpoint(id);
-            if (data) {
-                const clientToUpdate = new UpdateClientDto({
-                    name: data.name!,
-                    region: data.region!,
-                    businessName: data.businessName,
-                    officialAddress: data.officialAddress,
-                    contactAddress: data.contactAddress,
-                    contacts: (data.contacts ?? []).map((contact) => new UpdateClientContactDto({
-                        value: contact.value,
-                        type: contact.type,
-                        description: contact.description
-                    }))
-                });
-                setClient(clientToUpdate);
-                setInitialClient(clientToUpdate);
-            }
-        } catch (error) {
-            console.error('Error fetching client:', error);
-            showSnackbar(t('clients.loadDetailError'), 'error');
-        } finally {
-            setInitialLoading(false);
+        const data = await executeApiCall(
+            () => clientApi.getClientDetailEndpoint(id),
+            t('clients.loadDetailError')
+        );
+
+        if (data) {
+            const clientToUpdate = new UpdateClientDto({
+                name: data.name!,
+                region: data.region!,
+                businessName: data.businessName,
+                officialAddress: data.officialAddress,
+                contactAddress: data.contactAddress,
+                contacts: (data.contacts ?? []).map((contact) => new UpdateClientContactDto({
+                    value: contact.value,
+                    type: contact.type,
+                    description: contact.description
+                }))
+            });
+            setClient(clientToUpdate);
+            setInitialClient(clientToUpdate);
         }
-    }, [id]);
+        setInitialLoading(false);
+    }, [id, executeApiCall, t]);
 
     const saveClient = async (): Promise<boolean> => {
         setInitialLoading(true);
@@ -112,41 +112,49 @@ export function UpdateClientView(
         setContactAddressErrors({});
         setContactValidationErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
 
-            const updateDto = new UpdateClientDto({
-                name: client!.name,
-                officialAddress: client!.officialAddress!,
-                contactAddress: client!.contactAddress,
-                region: client!.region,
-                businessName: client!.businessName,
-                contacts: (client?.contacts ?? []).map(contact => new UpdateClientContactDto({
-                    value: contact.value,
-                    type: contact.type,
-                    description: contact.description
-                }))
-            });
+        const updateDto = new UpdateClientDto({
+            name: client!.name,
+            officialAddress: client!.officialAddress!,
+            contactAddress: client!.contactAddress,
+            region: client!.region,
+            businessName: client!.businessName,
+            contacts: (client?.contacts ?? []).map(contact => new UpdateClientContactDto({
+                value: contact.value,
+                type: contact.type,
+                description: contact.description
+            }))
+        });
 
-            await clientApi.updateClientEndpoint(id, updateDto.toJSON());
+        const result = await executeApiCall(
+            () => clientApi.updateClientEndpoint(id, updateDto.toJSON()),
+            t('clients.saveError')
+        );
+
+        setInitialLoading(false);
+
+        if (result) {
             showSnackbar(t('clients.saveSuccess'), 'success');
             onConfirmed(true);
             return true;
-        } catch (error) {
-            console.error('Error saving client:', error);
-            showSnackbar(t('clients.saveError'), 'error');
-            return false;
-        } finally {
-            setInitialLoading(false);
         }
+        
+        return false;
     }
 
     const deleteClient = useCallback(async () => {
         const clientApi = new AuthorizedClient();
-        await clientApi.deleteClientEndpoint(id);
-        triggerRefresh();
-        showSnackbar('Client deleted', 'success');
-    }, [id, showSnackbar, triggerRefresh]);
+        
+        const result = await executeApiCall(
+            () => clientApi.deleteClientEndpoint(id)
+        );
+
+        if (result) {
+            triggerRefresh();
+            showSnackbar('Client deleted', 'success');
+        }
+    }, [id, executeApiCall, showSnackbar, triggerRefresh]);
 
     const resetClient = useCallback(() => {
         setClient(initialClient);

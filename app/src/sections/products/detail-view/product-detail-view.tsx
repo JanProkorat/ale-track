@@ -1,10 +1,11 @@
-import {useState, useEffect} from "react";
 import {useTranslation} from "react-i18next";
+import {useState, useEffect, useCallback} from "react";
 
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {useCurrency} from "../../../providers/currency-provider";
@@ -36,6 +37,7 @@ export function ProductDetailView(
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
     const {selectedCurrency, formatPriceValue, formatPriceToDefault} = useCurrency();
+    const {executeApiCall} = useApiCall();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [product, setProduct] = useState<ProductDto>(new ProductDto());
@@ -43,35 +45,33 @@ export function ProductDetailView(
     const [productKinds, setProductKinds] = useState<string[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        const clientApi = new AuthorizedClient();
+
+        if (id !== null && id !== undefined) {
+            const data = await executeApiCall(() => clientApi.getProductDetailEndpoint(id));
+            if (data) {
+                setProduct(data);
+            }
+        }
+
+        const types = await executeApiCall(() => clientApi.getProductTypeListEndpoint());
+        if (types) {
+            setProductTypes(types);
+        }
+
+        const kinds = await executeApiCall(() => clientApi.getProductKindListEndpoint());
+        if (kinds) {
+            setProductKinds(kinds);
+        }
+
+        setIsLoading(false);
+    }, [executeApiCall, id]);
+
     useEffect(() => {
         void fetchData();
-    }, [id]);
-
-    const fetchData = async () => {
-        try {
-            setIsLoading(true);
-            const clientApi = new AuthorizedClient();
-
-            if (id !== null && id !== undefined) {
-                const data = await clientApi.getProductDetailEndpoint(id);
-                if (data) {
-                    setProduct(data);
-                }
-            }
-
-            const types = await clientApi.getProductTypeListEndpoint();
-            setProductTypes(types);
-
-            const kinds = await clientApi.getProductKindListEndpoint();
-            setProductKinds(kinds);
-
-        } catch (error) {
-            showSnackbar(t('products.fetchDetailError'), 'error')
-            console.error('Error fetching product:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }
+    }, [fetchData]);
 
     const saveProduct = async (): Promise<void> => {
         const {name, priceWithVat} = product;
@@ -88,48 +88,45 @@ export function ProductDetailView(
 
         setErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
+        let result;
 
-            if (id === null) {
-                const createDto = new CreateProductDto({
-                    name: product.name!,
-                    priceWithVat: product.priceWithVat!,
-                    description: product.description!,
-                    kind: product.kind!,
-                    alcoholPercentage: product.alcoholPercentage!,
-                    packageSize: product.packageSize!,
-                    platoDegree: product.platoDegree!,
-                    type: product.type!,
-                    priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
-                    priceForUnitWithVat: product.priceForUnitWithVat!,
-                });
+        if (id === null) {
+            const createDto = new CreateProductDto({
+                name: product.name!,
+                priceWithVat: product.priceWithVat!,
+                description: product.description!,
+                kind: product.kind!,
+                alcoholPercentage: product.alcoholPercentage!,
+                packageSize: product.packageSize!,
+                platoDegree: product.platoDegree!,
+                type: product.type!,
+                priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
+                priceForUnitWithVat: product.priceForUnitWithVat!,
+            });
 
-                await clientApi.createProductsEndpoint(breweryId, new CreateProductsDto({products: [createDto]}));
-            } else {
-                const updateDto = new UpdateProductDto({
-                    name: product.name!,
-                    priceWithVat: product.priceWithVat!,
-                    description: product.description!,
-                    kind: product.kind!,
-                    alcoholPercentage: product.alcoholPercentage!,
-                    packageSize: product.packageSize!,
-                    platoDegree: product.platoDegree!,
-                    type: product.type!,
-                    priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
-                    priceForUnitWithVat: product.priceForUnitWithVat!,
+            result = await executeApiCall(() => clientApi.createProductsEndpoint(breweryId, new CreateProductsDto({products: [createDto]})));
+        } else {
+            const updateDto = new UpdateProductDto({
+                name: product.name!,
+                priceWithVat: product.priceWithVat!,
+                description: product.description!,
+                kind: product.kind!,
+                alcoholPercentage: product.alcoholPercentage!,
+                packageSize: product.packageSize!,
+                platoDegree: product.platoDegree!,
+                type: product.type!,
+                priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
+                priceForUnitWithVat: product.priceForUnitWithVat!,
 
-                });
+            });
 
-                await clientApi.updateProductEndpoint(id, updateDto.toJSON());
-            }
+            result = await executeApiCall(() => clientApi.updateProductEndpoint(id, updateDto.toJSON()));
+        }
 
+        if (result) {
             showSnackbar(t('products.saveSuccess'), 'success');
             onClose(true);
-        } catch (error) {
-            console.error('Error saving vehicle:', error);
-            showSnackbar(t('products.saveError'), 'error');
-            return;
         }
     }
 

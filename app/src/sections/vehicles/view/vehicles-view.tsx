@@ -1,5 +1,5 @@
 import {useTranslation} from 'react-i18next';
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -21,6 +21,7 @@ import {Scrollbar} from 'src/components/scrollbar';
 
 import {emptyRows} from '../../../providers/utils';
 import {VehiclesTableRow} from '../vehicles-table-row';
+import {useApiCall} from "../../../hooks/use-api-call";
 import {useTable} from "../../../providers/TableProvider";
 import {VehiclesTableToolbar} from '../vehicles-table-toolbar';
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
@@ -38,6 +39,7 @@ import type {VehiclesProps} from '../vehicles-table-row';
 export function VehiclesView() {
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const {executeApiCall, executeApiCallWithDefault} = useApiCall();
 
     const {t} = useTranslation();
 
@@ -51,41 +53,32 @@ export function VehiclesView() {
 
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
+    const fetchVehicles = useCallback(async () => {
+        const vehicle = new AuthorizedClient();
+        const filters: Record<string, string> = {};
+
+        if (filterName) filters.name = `startswith:${filterName}`;
+        filters.sort = `${order}:${orderBy}`;
+
+        const response = await executeApiCallWithDefault(() => vehicle.fetchVehicles(filters), []);
+        setVehicles(response.map(item => ({
+            id: item.id,
+            name: item.name,
+            maxWeight: item.maxWeight,
+        } as VehiclesProps)));
+    }, [executeApiCallWithDefault, filterName, order, orderBy]);
+
     useEffect(() => {
         void fetchVehicles();
-    }, [filterName, order, orderBy]);
-
-    const fetchVehicles = async () => {
-        try {
-            const vehicle = new AuthorizedClient();
-            const filters: Record<string, string> = {};
-
-            if (filterName) filters.name = `startswith:${filterName}`;
-            filters.sort = `${order}:${orderBy}`;
-
-            const response = await vehicle.fetchVehicles(filters);
-            setVehicles(response.map(item => ({
-                id: item.id,
-                name: item.name,
-                maxWeight: item.maxWeight,
-            } as VehiclesProps)));
-        } catch (error) {
-            showSnackbar('Error fetching vehicles', 'error');
-            console.error('Error fetching vehicles:', error);
-        }
-    };
+    }, [fetchVehicles]);
 
     const handleDeleteVehicle = async () => {
         if (vehicleIdToDelete) {
-            try {
-                const vehicle = new AuthorizedClient();
-                await vehicle.deleteVehicleEndpoint(vehicleIdToDelete);
+            const vehicle = new AuthorizedClient();
+            const result = await executeApiCall(() => vehicle.deleteVehicleEndpoint(vehicleIdToDelete));
+            if (result) {
                 triggerRefresh();
                 showSnackbar('Vehicle deleted', 'success');
-            } catch (e) {
-                showSnackbar('Error deleting vehicles', 'error');
-                console.error('Error deleting vehicle', e);
-            } finally {
                 setVehicleIdToDelete(null);
                 void fetchVehicles();
             }

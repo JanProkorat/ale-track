@@ -1,5 +1,5 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import Table from "@mui/material/Table";
@@ -13,6 +13,7 @@ import {Tab, Tabs, Dialog, DialogTitle, DialogActions} from "@mui/material";
 import {emptyRows} from "../../../providers/utils";
 import {Iconify} from "../../../components/iconify";
 import {ProductsTableRow} from "../products-table-row";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {ProductsTableToolbar} from "../products-table-toolbar";
@@ -33,6 +34,7 @@ type ProductsViewProps = {
 export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
     const {t} = useTranslation();
     const { showSnackbar } = useSnackbar();
+    const {executeApiCall, executeApiCallWithDefault} = useApiCall();
 
     const [productKinds, setProductKinds] = useState<string[]>([]);
     const [products, setProducts] = useState<BreweryProductListItemDto[]>([]);
@@ -48,38 +50,29 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
 
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
+    const fetchProducts = useCallback(async () => {
+        const client = new AuthorizedClient();
+        const filters: Record<string, string> = {};
+
+        filters.kind = `eq:${filterKind}`;
+        if (filterName) filters.name = `startswith:${filterName}`;
+        filters.sort = `${order}:${orderBy}`;
+
+        await executeApiCallWithDefault(() => client.getProductKindListEndpoint(), []).then((result) => setProductKinds(result))
+        const response = await executeApiCallWithDefault(() => client.fetchBreweryProducts(breweryId, filters), []);
+        setProducts(response);
+    }, [breweryId, executeApiCallWithDefault, filterKind, filterName, order, orderBy]);
+
     useEffect(() => {
         void fetchProducts();
-    }, [filterKind, filterName, breweryId, order, orderBy]);
-
-    const fetchProducts = async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
-
-            filters.kind = `eq:${filterKind}`;
-            if (filterName) filters.name = `startswith:${filterName}`;
-            filters.sort = `${order}:${orderBy}`;
-
-            await client.getProductKindListEndpoint().then((result) => setProductKinds(result))
-            const response = await client.fetchBreweryProducts(breweryId, filters);
-            setProducts(response);
-        } catch (error) {
-            showSnackbar('Error fetching products', 'error');
-            console.error('Error fetching products:', error);
-        }
-    };
+    }, [fetchProducts]);
 
     const handleDeleteProduct = async () => {
         if (productIdToDelete) {
-            try {
-                const client = new AuthorizedClient();
-                await client.deleteProductEndpoint(productIdToDelete);
+            const client = new AuthorizedClient();
+            const result = await executeApiCall(() => client.deleteProductEndpoint(productIdToDelete));
+            if (result) {
                 showSnackbar(t('product.deleteSuccess'), 'success');
-            } catch (e) {
-                showSnackbar(t('product.deleteError'), 'error');
-                console.error('Error deleting product', e);
-            } finally {
                 setProductIdToDelete(null);
                 void fetchProducts();
             }

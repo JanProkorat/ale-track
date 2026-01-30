@@ -6,9 +6,9 @@ import Box from "@mui/material/Box";
 import {Typography, LinearProgress} from "@mui/material";
 import {linearProgressClasses} from "@mui/material/LinearProgress";
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {ProductDeliveryState} from "../../../api/Client";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {UpdateProductDeliveryView} from "./update-product-delivery-view";
 
 import type {DriverDto, BreweryDto, VehicleDto, UpdateProductDeliveryDto} from "../../../api/Client";
@@ -24,8 +24,8 @@ export function ProductDeliveryDetailView(
         onDeliveryChange,
     }: Readonly<ProductDeliveryDetailVProps>
 ) {
-    const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
+    const {executeApiCall} = useApiCall();
 
     const [detailLoading, setDetailLoading] = useState<boolean>(false);
     const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
@@ -35,20 +35,23 @@ export function ProductDeliveryDetailView(
     const [disabled, setDisabled] = useState<boolean>(false);
 
     const fetchMultiselectData = useCallback(async () => {
-        try {
-            setDetailLoading(true);
-            const client = new AuthorizedClient();
-            await client.fetchBreweries({}).then(setBreweries);
-            await client.fetchDrivers({}).then(setDrivers);
-            await client.fetchVehicles({}).then(setVehicles);
-            await client.getProductDeliveryStateListEndpoint().then((values) => setProductDeliveryStates(values.map(state => state as unknown as ProductDeliveryState)));
-        } catch (error) {
-            showSnackbar(t('productDeliveries.errorFetchingData'), 'error');
-            console.error('Error fetching data for multiselects:', error);
-        } finally {
-            setDetailLoading(false);
-        }
-    }, [showSnackbar, t]);
+        setDetailLoading(true);
+        const client = new AuthorizedClient();
+        
+        const breweriesResult = await executeApiCall(() => client.fetchBreweries({}));
+        if (breweriesResult) setBreweries(breweriesResult);
+        
+        const driversResult = await executeApiCall(() => client.fetchDrivers({}));
+        if (driversResult) setDrivers(driversResult);
+        
+        const vehiclesResult = await executeApiCall(() => client.fetchVehicles({}));
+        if (vehiclesResult) setVehicles(vehiclesResult);
+        
+        const statesResult = await executeApiCall(() => client.getProductDeliveryStateListEndpoint());
+        if (statesResult) setProductDeliveryStates(statesResult.map(state => state as unknown as ProductDeliveryState));
+        
+        setDetailLoading(false);
+    }, [executeApiCall]);
 
     useEffect(() => {
         void fetchMultiselectData();

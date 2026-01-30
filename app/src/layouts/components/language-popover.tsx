@@ -25,7 +25,7 @@ export function LanguagePopover({data = [], sx, ...other}: LanguagePopoverProps)
     const {open, anchorEl, onClose, onOpen} = usePopover();
     const {t} = useTranslation();
 
-    const [locale, setLocale] = useState(() => localStorage.getItem('i18nextLng') ?? data[0].value);
+    const [locale, setLocale] = useState(() => localStorage.getItem('i18nextLng') ?? i18n.language);
 
     const handleChangeLang = useCallback(
         (newLang: string) => {

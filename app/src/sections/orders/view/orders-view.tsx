@@ -1,10 +1,12 @@
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import TableBody from '@mui/material/TableBody';
 import { Table, Button, Dialog, DialogTitle, DialogActions, TableContainer } from '@mui/material';
+
+import { useApiCall } from 'src/hooks/use-api-call';
 
 import { TableNoData } from 'src/components/table/table-no-data';
 import { TableEmptyRows } from 'src/components/table/table-empty-rows';
@@ -15,7 +17,6 @@ import { Scrollbar } from '../../../components/scrollbar';
 import { useTable } from '../../../providers/TableProvider';
 import { OrdersTableToolbar } from '../orders-table-toolbar';
 import { AuthorizedClient } from '../../../api/AuthorizedClient';
-import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { OrderDetailView } from '../detail-view/order-detail-view';
 import { CreateOrderView } from '../detail-view/create-order-view';
 import { SplitViewLayout } from '../../../layouts/dashboard/split-view-layout';
@@ -25,9 +26,9 @@ import type { OrderState, OrderListItemDto } from '../../../api/Client';
 
 export function OrdersView() {
   const { t } = useTranslation();
-  const { showSnackbar } = useSnackbar();
   const { orderId } = useParams<{ orderId?: string }>();
   const navigate = useNavigate();
+  const { executeApiCallWithDefault } = useApiCall();
 
   const [orders, setOrders] = useState<OrderListItemDto[]>([]);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
@@ -53,6 +54,27 @@ export function OrdersView() {
     { id: 'deliveryDate', label: t('orders.requiredDeliveryDate') },
   ];
 
+  const fetchOrders = useCallback(async () => {
+    const filters: Record<string, string> = {};
+
+    if (filterDate !== null) {
+      filters.deliveryDate = `eq:${dayjs(filterDate).format('YYYY-MM-DD')}`;
+    }
+
+    if (filterClientName !== null) {
+      filters.clientName = `startswith:${filterClientName}`;
+    }
+
+    if (filterState !== null) {
+      filters.state = `eq:${filterState}`;
+    }
+
+    filters.sort = `${order}:${orderBy}`;
+
+    const client = new AuthorizedClient();
+    return await executeApiCallWithDefault(() => client.fetchOrders(filters), []);
+  }, [executeApiCallWithDefault, filterClientName, filterDate, filterState, order, orderBy]);
+
   useEffect(() => {
     void fetchOrders().then((data) => {
       setOrders(data);
@@ -76,34 +98,7 @@ export function OrdersView() {
       }
       setInitialLoading(false);
     });
-  }, [orderId, filterDate, filterState, orderBy, order, filterClientName]);
-
-  const fetchOrders = async () => {
-    try {
-      const filters: Record<string, string> = {};
-
-      if (filterDate !== null) {
-        filters.deliveryDate = `eq:${dayjs(filterDate).format('YYYY-MM-DD')}`;
-      }
-
-      if (filterClientName !== null) {
-        filters.clientName = `startswith:${filterClientName}`;
-      }
-
-      if (filterState !== null) {
-        filters.state = `eq:${filterState}`;
-      }
-
-      filters.sort = `${order}:${orderBy}`;
-
-      const client = new AuthorizedClient();
-      return await client.fetchOrders(filters);
-    } catch (e) {
-      showSnackbar('orders.fetchError', 'error');
-      console.error('Error fetching orders', e);
-      return [];
-    }
-  };
+  }, [fetchOrders, navigate, orderId]);
 
   const handleRowClick = (id: string) => {
     if (selectedOrderId === id) return;

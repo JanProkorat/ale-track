@@ -12,6 +12,7 @@ import { NavMobile, NavDesktop } from './nav';
 import { dashboardLayoutVars } from './css-vars';
 import {useAuth} from "../../context/AuthContext";
 import {getNavData} from "../nav-config-dashboard";
+import {useApiCall} from "../../hooks/use-api-call";
 import { MenuButton } from '../components/menu-button';
 import {AuthorizedClient} from "../../api/AuthorizedClient";
 import { AccountPopover } from '../components/account-popover';
@@ -74,22 +75,22 @@ export function DashboardLayout({
   const theme = useTheme();
   const { refreshKey } = useEntityStatsRefresh();
   const { user } = useAuth();
+  const { executeApiCall } = useApiCall();
 
   const [navCounts, setNavCounts] = useState<NumberOfRecordsInEachModuleDto | undefined>(undefined);
 
   useEffect(() => {
     const fetchInventoryCount = async () => {
-      try {
-        const client = new AuthorizedClient();
-        const data = await client.getNumberOfRecordsInEachModuleEndpoint();
+      const client = new AuthorizedClient();
+      const data = await executeApiCall(() => client.getNumberOfRecordsInEachModuleEndpoint());
+      
+      if (data) {
         setNavCounts(data);
-      } catch (error) {
-        console.error('error while fetching navigation counts:', error);
       }
     };
 
     fetchInventoryCount();
-  }, [refreshKey]);
+  }, [refreshKey, executeApiCall]);
 
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
 

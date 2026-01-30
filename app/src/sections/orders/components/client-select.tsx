@@ -1,5 +1,5 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
@@ -7,8 +7,8 @@ import Checkbox from "@mui/material/Checkbox";
 import ListItemText from "@mui/material/ListItemText";
 import {Chip, Select, InputLabel, FormControl} from "@mui/material";
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 
 import type { ClientListItemDto} from "../../../api/Client";
 
@@ -21,24 +21,19 @@ type ClientSelectProps = {
 
 export function ClientSelect({selectedClientId, shouldValidate, disabled, onSelect}: Readonly<ClientSelectProps>) {
     const {t} = useTranslation();
-    const { showSnackbar } = useSnackbar();
+    const {executeApiCallWithDefault} = useApiCall();
 
     const [clients, setClients] = useState<ClientListItemDto[]>([]);
 
+    const fetchClients = useCallback(async () => {
+        const client = new AuthorizedClient();
+        const loadedClients = await executeApiCallWithDefault(() => client.fetchClients({}), []);
+        setClients(loadedClients);
+    }, [executeApiCallWithDefault]);
+
     useEffect(() => {
         void fetchClients();
-    }, [])
-
-    const fetchClients = async () => {
-        try {
-            const client = new AuthorizedClient();
-            await client.fetchClients({}).then(loadedClients => setClients(loadedClients));
-        }
-        catch(e){
-            showSnackbar('clients.loadListError', 'error');
-            console.error('Error fetching clients', e);
-        }
-    }
+    }, [fetchClients])
 
     return (
         <FormControl fullWidth>

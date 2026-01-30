@@ -1,9 +1,10 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from '@mui/material';
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {ColorPicker} from "../../../components/color/color-picker";
@@ -25,6 +26,7 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const {executeApiCall} = useApiCall();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -36,11 +38,20 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
         color: '#aabbcc'
     }))
 
+    const fetchDriver = useCallback(async () => {
+        setIsLoading(true);
+        const clientApi = new AuthorizedClient();
+        const data = await executeApiCall(() => clientApi.getDriverDetailEndpoint(id!));
+        if (data) {
+            setDriver(data);
+        }
+        setIsLoading(false);
+    }, [executeApiCall, id]);
 
     useEffect(() => {
         if (id !== null && id !== undefined)
             void fetchDriver()
-    }, [id]);
+    }, [fetchDriver, id]);
 
     const saveDriver = async () => {
         const {firstName, lastName} = driver;
@@ -76,52 +87,36 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
 
         setErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
+        let result;
 
-            if (id === null) {
-                const createDto = new CreateDriverDto({
-                    firstName: driver.firstName!,
-                    lastName: driver.lastName!,
-                    phoneNumber: driver.phoneNumber,
-                    availableDates: driver.availableDates,
-                    color: driver.color!
-                });
+        if (id === null) {
+            const createDto = new CreateDriverDto({
+                firstName: driver.firstName!,
+                lastName: driver.lastName!,
+                phoneNumber: driver.phoneNumber,
+                availableDates: driver.availableDates,
+                color: driver.color!
+            });
 
-                await clientApi.createDriverEndpoint(createDto.toJSON());
+            result = await executeApiCall(() => clientApi.createDriverEndpoint(createDto.toJSON()));
+            if (result) {
                 triggerRefresh();
-            } else {
-                const updateDto = new UpdateDriverDto({
-                    firstName: driver.firstName!,
-                    lastName: driver.lastName!,
-                    phoneNumber: driver.phoneNumber,
-                    availableDates: driver.availableDates,
-                    color: driver.color!
-                });
-                await clientApi.updateDriverEndpoint(id, updateDto.toJSON());
             }
+        } else {
+            const updateDto = new UpdateDriverDto({
+                firstName: driver.firstName!,
+                lastName: driver.lastName!,
+                phoneNumber: driver.phoneNumber,
+                availableDates: driver.availableDates,
+                color: driver.color!
+            });
+            result = await executeApiCall(() => clientApi.updateDriverEndpoint(id, updateDto.toJSON()));
+        }
 
+        if (result) {
             showSnackbar(t('drivers.saveSuccess'), 'success');
             onClose();
-        } catch (error) {
-            console.error('Error saving driver:', error);
-            showSnackbar(t('drivers.saveError'), 'error');
-        }
-    }
-
-    const fetchDriver = async () => {
-        try {
-            setIsLoading(true);
-            const clientApi = new AuthorizedClient();
-
-            const data = await clientApi.getDriverDetailEndpoint(id!);
-            if (data) {
-                setDriver(data);
-            }
-        } catch (error) {
-            console.error('Error fetching driver:', error);
-        } finally {
-            setIsLoading(false);
         }
     }
 

@@ -1,18 +1,19 @@
 import {useTranslation} from "react-i18next";
 import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect} from 'react';
 import {useParams, useNavigate} from "react-router-dom";
+import React, {useState, useEffect, useCallback} from 'react';
 
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
 import {linearProgressClasses} from "@mui/material/LinearProgress";
 import {Box, Tab, Tabs, Button, Typography, LinearProgress} from "@mui/material";
 
+import { useApiCall } from "src/hooks/use-api-call";
+
 import {BreweryDetailView} from "../detail-view";
 import {Iconify} from "../../../components/iconify";
 import {DashboardContent} from "../../../layouts/dashboard";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {BreweryDetailCard} from "../detail-view/brewery-detail-card";
 
 import type {BreweryListItemDto} from "../../../api/Client";
@@ -20,7 +21,7 @@ import type {BreweryListItemDto} from "../../../api/Client";
 // ----------------------------------------------------------------------
 
 export function BreweriesView() {
-    const {showSnackbar} = useSnackbar();
+    const {executeApiCallWithDefault} = useApiCall();
     const {t} = useTranslation();
 
     const { breweryId } = useParams<{ breweryId?: string }>();
@@ -32,6 +33,15 @@ export function BreweriesView() {
     const [createBreweryDrawerVisible, setCreateBreweryDrawerVisible] = useState<boolean>(false);
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
+
+    const fetchBreweries = useCallback(async () => {
+        const client = new AuthorizedClient();
+        return await executeApiCallWithDefault(
+            () => client.fetchBreweries({}),
+            [],
+            'Error fetching breweries'
+        );
+    }, [executeApiCallWithDefault]);
 
     useEffect(() => {
         const loadInitial = async () => {
@@ -58,22 +68,11 @@ export function BreweriesView() {
             setInitialLoading(false);
         };
         void loadInitial();
-    }, []);
+    }, [breweryId, fetchBreweries, navigate]);
 
     useEffect(() => {
         if (breweryId) setSelectedBreweryId(breweryId);
     }, [breweryId]);
-
-    const fetchBreweries = async () => {
-        try {
-            const client = new AuthorizedClient();
-            return await client.fetchBreweries({});
-        } catch (error) {
-            showSnackbar('Error fetching breweries', 'error');
-            console.error('Error fetching breweries:', error);
-            return [];
-        }
-    };
 
     const closeDrawer = () => {
         fetchBreweries().then(setBreweries);

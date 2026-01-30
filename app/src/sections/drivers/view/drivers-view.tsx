@@ -1,5 +1,5 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -17,6 +17,7 @@ import TablePagination from "@mui/material/TablePagination";
 import {emptyRows} from "../../../providers/utils";
 import {Iconify} from "../../../components/iconify";
 import {DriversTableRow} from "../drivers-table-row";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {DashboardContent} from "../../../layouts/dashboard";
@@ -35,6 +36,7 @@ import type {DriversProps} from "../drivers-table-row";
 export function DriversView() {
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const {executeApiCall, executeApiCallWithDefault} = useApiCall();
 
     const {t} = useTranslation();
 
@@ -50,44 +52,35 @@ export function DriversView() {
     const table = useTable({order, setOrder, orderBy, setOrderBy});
     const notFound = !drivers.length;
 
+    const fetchDrivers = useCallback(async () => {
+        const client = new AuthorizedClient();
+        const filters: Record<string, string> = {};
+
+        if (filterFirstName) filters.firstName = `startswith:${filterFirstName}`;
+        if (filterLastName) filters.lastName = `startswith:${filterLastName}`;
+        filters.sort = `${order}:${orderBy}`;
+
+        const response = await executeApiCallWithDefault(() => client.fetchDrivers(filters), []);
+        setDrivers(response.map(item => ({
+            id: item.id,
+            firstName: item.firstName,
+            lastName: item.lastName,
+            color: item.color,
+            availableDates: item.availableDates,
+        } as DriversProps)));
+    }, [executeApiCallWithDefault, filterFirstName, filterLastName, order, orderBy]);
+
     useEffect(() => {
         void fetchDrivers();
-    }, [filterFirstName, filterLastName, order, orderBy]);
-
-    const fetchDrivers = async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
-
-            if (filterFirstName) filters.firstName = `startswith:${filterFirstName}`;
-            if (filterLastName) filters.lastName = `startswith:${filterLastName}`;
-            filters.sort = `${order}:${orderBy}`;
-
-            const response = await client.fetchDrivers(filters);
-            setDrivers(response.map(item => ({
-                id: item.id,
-                firstName: item.firstName,
-                lastName: item.lastName,
-                color: item.color,
-                availableDates: item.availableDates,
-            } as DriversProps)));
-        } catch (error) {
-            showSnackbar('Error fetching drivers', 'error');
-            console.error('Error fetching drivers:', error);
-        }
-    };
+    }, [fetchDrivers]);
 
     const handleDeleteDriver = async () => {
         if (driverIdToDelete) {
-            try {
-                const client = new AuthorizedClient();
-                await client.deleteDriverEndpoint(driverIdToDelete);
+            const client = new AuthorizedClient();
+            const result = await executeApiCall(() => client.deleteDriverEndpoint(driverIdToDelete));
+            if (result) {
                 triggerRefresh();
                 showSnackbar('Driver deleted', 'success');
-            } catch (e) {
-                showSnackbar('Error deleting drivers', 'error');
-                console.error('Error deleting drivers', e);
-            } finally {
                 setDriverIdToDelete(null);
                 void fetchDrivers();
             }

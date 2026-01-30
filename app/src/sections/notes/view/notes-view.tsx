@@ -11,6 +11,7 @@ import ListItemButton from "@mui/material/ListItemButton";
 import {List, Typography, ListItemIcon, ListItemText} from "@mui/material";
 
 import {Iconify} from "../../../components/iconify";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {NoteDto, SectionType} from "../../../api/Client";
 import NoteDetailView from "./components/note-detail-view";
@@ -26,6 +27,7 @@ type NotesViewProps = {
 export function NotesView({parentId, parentType}: Readonly<NotesViewProps>) {
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
+    const { executeApiCall, executeApiCallWithDefault } = useApiCall();
 
     const [notes, setNotes] = useState<NoteDto[]>([]);
     const [selectedNote, setSelectedNote] = useState<NoteDto | null>(null);
@@ -34,15 +36,9 @@ export function NotesView({parentId, parentType}: Readonly<NotesViewProps>) {
     const open = Boolean(anchorEl);
 
     const fetchClientNotes = useCallback(async () => {
-        try {
-            const client = new AuthorizedClient();
-            return await client.getClientNotesEndpoint(parentId);
-        } catch (error) {
-            showSnackbar(t('notes.fetchError'), 'error');
-            console.error('Error fetching notes:', error);
-            return [];
-        }
-    }, [parentId, showSnackbar, t]);
+        const client = new AuthorizedClient();
+        return await executeApiCallWithDefault(() => client.getClientNotesEndpoint(parentId), []);
+    }, [parentId, executeApiCallWithDefault]);
 
     useEffect(() => {
         if (parentType === SectionType.Client)
@@ -57,18 +53,15 @@ export function NotesView({parentId, parentType}: Readonly<NotesViewProps>) {
     }
 
     const handleDeleteNote = async (noteId: string) => {
-        try {
-            const client = new AuthorizedClient();
-            await client.deleteClientNoteEndpoint(noteId).then(() => {
-                setNotes((prevNotes) => prevNotes.filter((note) => note.id !== noteId));
-                if (selectedNote?.id === noteId) {
-                    setSelectedNote(null);
-                }
-                showSnackbar(t('notes.deleteSuccess'), 'success');
-            });
-        } catch (error) {
-            showSnackbar(t('notes.deleteError'), 'error');
-            console.error('Error deleting note:', error);
+        const client = new AuthorizedClient();
+        const success = await executeApiCall(() => client.deleteClientNoteEndpoint(noteId));
+        
+        if (success) {
+            setNotes((prevNotes) => prevNotes.filter((note) => note.id !== noteId));
+            if (selectedNote?.id === noteId) {
+                setSelectedNote(null);
+            }
+            showSnackbar(t('notes.deleteSuccess'), 'success');
         }
     }
 

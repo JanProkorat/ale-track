@@ -7,6 +7,7 @@ import Box from '@mui/material/Box';
 
 import { ClientOrderShipmentDto, CreateOutgoingShipmentDto, OutgoingShipmentStopAddressKind } from 'src/api/Client';
 
+import { useApiCall } from '../../../hooks/use-api-call';
 import { OrdersSelect } from '../components/orders-select';
 import { WeightInfoBox } from '../components/weight-info-box';
 import { AuthorizedClient } from '../../../api/AuthorizedClient';
@@ -35,6 +36,7 @@ export function CreateOutgoingShipmentView({
 }: Readonly<CreateOutgoingShipmentProps>) {
   const { t } = useTranslation();
   const { showSnackbar } = useSnackbar();
+  const { executeApiCall, executeApiCallWithDefault } = useApiCall();
 
   const [orders, setOrders] = useState<OutgoingShipmentOrderDto[]>([]);
   const [shouldValidate, setShouldValidate] = useState<boolean>(false);
@@ -52,40 +54,39 @@ export function CreateOutgoingShipmentView({
   );
 
   const fetchOrders = useCallback(async () => {
-    try {
-      const client = new AuthorizedClient();
-      const fetchedOrders = await client.fetOrdersForOutgoingShipments(null, {});
-      setOrders(fetchedOrders);
-    } catch (error) {
-      showSnackbar(t('outgoingShipments.errorFetchingOrders'), 'error');
-      console.error('Error fetching orders for a dropdown:', error);
-    }
-  }, [showSnackbar, t]);
+    const client = new AuthorizedClient();
+    const fetchedOrders = await executeApiCallWithDefault(
+      () => client.fetOrdersForOutgoingShipments(null, {}),
+      []
+    );
+    setOrders(fetchedOrders);
+  }, [executeApiCallWithDefault]);
 
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
 
   const handleSave = async () => {
-    try {
-      if (
-        shipment.name === ""
-      ) {
-        setShouldValidate(true);
-        showSnackbar(t('common.validationError'), 'error');
-        return;
-      }
-      setShouldValidate(false);
+    if (
+      shipment.name === ""
+    ) {
+      setShouldValidate(true);
+      showSnackbar(t('common.validationError'), 'error');
+      return;
+    }
+    setShouldValidate(false);
 
-      const cleanedDelivery = new CreateOutgoingShipmentDto({
-        ...shipment,
-      });
+    const cleanedDelivery = new CreateOutgoingShipmentDto({
+      ...shipment,
+    });
 
-      const client = new AuthorizedClient();
-      await client.createOutgoingShipmentEndpoint(cleanedDelivery).then(onSave);
-    } catch (error) {
-      showSnackbar(t('outgoingShipments.saveError'), 'error');
-      console.error('Error creating new outgoing shipment:', error);
+    const client = new AuthorizedClient();
+    const newShipmentId = await executeApiCall(() =>
+      client.createOutgoingShipmentEndpoint(cleanedDelivery)
+    );
+
+    if (newShipmentId) {
+      onSave(newShipmentId);
     }
   };
 

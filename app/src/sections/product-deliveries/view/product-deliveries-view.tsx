@@ -10,6 +10,7 @@ import { Box, Button, IconButton, Typography, LinearProgress } from "@mui/materi
 import { DashboardContent } from "src/layouts/dashboard";
 
 import { Iconify } from "../../../components/iconify";
+import { useApiCall } from "../../../hooks/use-api-call";
 import { AuthorizedClient } from "../../../api/AuthorizedClient";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { SectionHeader } from "../../../components/label/section-header";
@@ -29,6 +30,7 @@ import type { ProductDeliveryListItemDto } from "../../../api/Client";
 export function ProductDeliveriesView() {
     const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
+    const { executeApiCall, executeApiCallWithDefault } = useApiCall();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(false);
     const [deliveries, setDeliveries] = useState<ProductDeliveryListItemDto[]>([]);
@@ -45,52 +47,41 @@ export function ProductDeliveriesView() {
     const hasDetailChanges = JSON.stringify(currentDelivery) !== JSON.stringify(currentInitialDelivery);
 
     const fetchProductDeliveries = useCallback(async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
+        const client = new AuthorizedClient();
+        const filters: Record<string, string> = {};
 
-            filters.sort = 'asc:deliveryDate';
+        filters.sort = 'asc:deliveryDate';
 
-            return await client.fetchProductDeliveries(filters);
-        } catch (error) {
-            showSnackbar(t('productDeliveries.loadListError'), 'error');
-            console.error('Error fetching product deliveries:', error);
-            return [];
-        }
-    }, [showSnackbar, t]);
+        return await executeApiCallWithDefault(() => client.fetchProductDeliveries(filters), []);
+    }, [executeApiCallWithDefault]);
 
     const fetchDelivery = useCallback(async (deliveryId: string) => {
-        try {
-            const client = new AuthorizedClient();
-            const data = await client.getProductDeliveryDetailEndpoint(deliveryId);
+        const client = new AuthorizedClient();
+        const data = await executeApiCall(() => client.getProductDeliveryDetailEndpoint(deliveryId));
 
-            if (data) {
-                const updateRequest = new UpdateProductDeliveryDto({
-                    deliveryDate: data.deliveryDate!,
-                    note: data.note,
-                    state: data.state,
-                    driverIds: data.drivers!.map(driver => driver.id!),
-                    vehicleId: data.vehicle!.id,
-                    stops: (data.stops ?? []).map((stop) => new UpdateProductDeliveryStopDto({
-                        publicId: stop.id,
-                        breweryId: stop.brewery!.id,
-                        note: stop.note,
-                        products: (stop.products ?? []).map((product) => new UpdateProductDeliveryItemDto({
-                            productId: product.productId,
-                            quantity: product.quantity,
-                            note: product.note
-                        }))
+        if (data) {
+            const updateRequest = new UpdateProductDeliveryDto({
+                deliveryDate: data.deliveryDate!,
+                note: data.note,
+                state: data.state,
+                driverIds: data.drivers!.map(driver => driver.id!),
+                vehicleId: data.vehicle!.id,
+                stops: (data.stops ?? []).map((stop) => new UpdateProductDeliveryStopDto({
+                    publicId: stop.id,
+                    breweryId: stop.brewery!.id,
+                    note: stop.note,
+                    products: (stop.products ?? []).map((product) => new UpdateProductDeliveryItemDto({
+                        productId: product.productId,
+                        quantity: product.quantity,
+                        note: product.note
                     }))
-                });
+                }))
+            });
 
-                setCurrentDelivery(updateRequest);
-                setCurrentInitialDelivery(updateRequest);
-            }
-        } catch (error) {
-            console.error('Error fetching delivery:', error);
-            showSnackbar(t('productDeliveries.loadDetailError'), 'error');
+            setCurrentDelivery(updateRequest);
+            setCurrentInitialDelivery(updateRequest);
         }
-    }, [showSnackbar, t]);
+    }, [executeApiCall]);
 
     useEffect(() => {
         setInitialLoading(true);
@@ -139,32 +130,32 @@ export function ProductDeliveriesView() {
             return false;
         }
 
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-            const deliveryDate = new Date(currentDelivery.deliveryDate);
-            deliveryDate.setHours(0, 0, 0, 0);
+        const deliveryDate = new Date(currentDelivery.deliveryDate);
+        deliveryDate.setHours(0, 0, 0, 0);
 
-            if (
-                !currentDelivery.deliveryDate ||
-                deliveryDate < today ||
-                !currentDelivery.vehicleId ||
-                !currentDelivery.driverIds?.length ||
-                !currentDelivery.stops?.length ||
-                currentDelivery.stops.some(stop =>
-                    !stop.breweryId ||
-                    !stop.products?.length ||
-                    stop.products.some(p => !p.quantity || p.quantity <= 0)
-                )
-            ) {
-                showSnackbar(t('common.validationError'), 'error');
-                return false;
-            }
+        if (
+            !currentDelivery.deliveryDate ||
+            deliveryDate < today ||
+            !currentDelivery.vehicleId ||
+            !currentDelivery.driverIds?.length ||
+            !currentDelivery.stops?.length ||
+            currentDelivery.stops.some(stop =>
+                !stop.breweryId ||
+                !stop.products?.length ||
+                stop.products.some(p => !p.quantity || p.quantity <= 0)
+            )
+        ) {
+            showSnackbar(t('common.validationError'), 'error');
+            return false;
+        }
 
-            const client = new AuthorizedClient();
-            await client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery);
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery));
 
+        if (result) {
             showSnackbar(t('productDeliveries.saveSuccess'), 'success');
 
             // If the state or date has changed, reload the list
@@ -176,11 +167,8 @@ export function ProductDeliveriesView() {
 
             setCurrentInitialDelivery(currentDelivery);
             return true;
-        } catch (error) {
-            showSnackbar(t('productDeliveries.saveError'), 'error');
-            console.error('Error saving product delivery:', error);
-            return false;
         }
+        return false;
     };
 
     const handlePendingChangesConfirmation = async (shouldSave: boolean) => {
@@ -229,20 +217,15 @@ export function ProductDeliveriesView() {
     }
 
     const deleteDelivery = async () => {
-        try {
-            const client = new AuthorizedClient();
-            await client.deleteProductDeliveryEndpoint(selectedDeliveryId!).then(() => {
-                showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');
-                const filtered = deliveries.filter(d => d.id !== selectedDeliveryId);
-                setDeliveries(filtered);
-                setSelectedDeliveryId(filtered.length > 0 ? filtered[0].id : undefined);
-            });
-        } catch (error) {
-            showSnackbar(t('productDeliveries.deleteError'), 'error');
-            console.error('Error deleting product delivery:', error);
-        } finally {
-            setIsDeleteDialogVisible(false);
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.deleteProductDeliveryEndpoint(selectedDeliveryId!));
+        if (result) {
+            showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');
+            const filtered = deliveries.filter(d => d.id !== selectedDeliveryId);
+            setDeliveries(filtered);
+            setSelectedDeliveryId(filtered.length > 0 ? filtered[0].id : undefined);
         }
+        setIsDeleteDialogVisible(false);
     }
 
     return (

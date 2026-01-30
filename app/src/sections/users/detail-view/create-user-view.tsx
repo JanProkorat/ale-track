@@ -4,9 +4,9 @@ import {useTranslation} from "react-i18next";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import {Checkbox, FormGroup, FormLabel, IconButton, Typography, FormControl} from "@mui/material";
+import {Checkbox, FormGroup, FormLabel, FormControl} from "@mui/material";
 
-import {Iconify} from "../../../components/iconify";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {
@@ -22,6 +22,7 @@ type CreateUserViewProps = {
 export function CreateUserView({onClose, onSave}: Readonly<CreateUserViewProps>) {
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
+    const { executeApiCall } = useApiCall();
     
     const [user, setUser] = useState<CreateUserDto>(new CreateUserDto({
         userName: "",
@@ -34,25 +35,24 @@ export function CreateUserView({onClose, onSave}: Readonly<CreateUserViewProps>)
     const [passwordTouched, setPasswordTouched] = useState<boolean>(false);
 
     const handleSave = async () => {
-        try {
-            if (
-                !user.userName ||
-                user.userName === "" ||
-                !user.password ||
-                user.password === "" ||
-                user.userRoles.length === 0
-            ) {
-                setShouldValidate(true);
-                showSnackbar(t('common.validationError'), 'error');
-                return;
-            }
-            setShouldValidate(false);
+        if (
+            !user.userName ||
+            user.userName === "" ||
+            !user.password ||
+            user.password === "" ||
+            user.userRoles.length === 0
+        ) {
+            setShouldValidate(true);
+            showSnackbar(t('common.validationError'), 'error');
+            return;
+        }
+        setShouldValidate(false);
 
-            const client = new AuthorizedClient();
-            await client.createUserEndpoint(user).then(onSave)
-        } catch (error) {
-            showSnackbar(t('users.saveError'), 'error');
-            console.error('Error creating new product delivery:', error);
+        const client = new AuthorizedClient();
+        const newUserId = await executeApiCall(() => client.createUserEndpoint(user));
+        
+        if (newUserId) {
+            onSave(newUserId);
         }
     }
 

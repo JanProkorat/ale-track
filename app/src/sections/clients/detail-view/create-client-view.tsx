@@ -1,11 +1,12 @@
 import {useState} from "react";
 import {useTranslation} from 'react-i18next';
 
-import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
+import {Box, InputLabel, FormControl, OutlinedInput} from "@mui/material";
 
 import { validateAddress } from "src/utils/validate-address";
 import { validateContacts, type ContactValidationErrors } from "src/utils/validate-contacts";
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {RegionSelect} from "./components/region-select";
 import {ContactsForm} from "./components/contacts-form";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
@@ -25,6 +26,7 @@ type CreateClientViewProps = {
 
 export function CreateClientView({ region, onClose }: Readonly<CreateClientViewProps>) {
     const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
 
@@ -98,16 +100,17 @@ export function CreateClientView({ region, onClose }: Readonly<CreateClientViewP
         setContactAddressErrors({});
         setContactValidationErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
 
-            await clientApi.createClientEndpoint(client.toJSON());
+        const result = await executeApiCall(
+            () => clientApi.createClientEndpoint(client.toJSON()),
+            t('clients.saveError')
+        );
+
+        if (result) {
             triggerRefresh();
             showSnackbar(t('clients.saveSuccess'), 'success');
             onClose();
-        } catch (error) {
-            console.error('Error saving client:', error);
-            showSnackbar(t('clients.saveError'), 'error');
         }
     }
 

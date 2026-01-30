@@ -1,5 +1,5 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import {useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
@@ -10,36 +10,31 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import {Iconify} from "../../../components/iconify";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {InventoryItemView} from "./inventory-item-view";
 import {DashboardContent} from "../../../layouts/dashboard";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 
 import type {InventorySectionDto} from "../../../api/Client";
 
 export function InventoryView() {
     const {t} = useTranslation();
-    const {showSnackbar} = useSnackbar();
+    const { executeApiCallWithDefault } = useApiCall();
 
     const [inventorySections, setInventorySections] = useState<InventorySectionDto[]>([])
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
+    const fetchInventoryItems = useCallback(async () => {
+        const client = new AuthorizedClient();
+        const data = await executeApiCallWithDefault(() => client.fetchInventoryItems({}), []);
+        const sortedData = [...data].sort((a, b) => a.name!.localeCompare(b.name!));
+        setInventorySections(sortedData);
+        setExpandedSections(data.reduce((acc, section) => ({ ...acc, [section.id as string]: true }), {}));
+    }, [executeApiCallWithDefault]);
+
     useEffect(() => {
         void fetchInventoryItems();
-    }, []);
-
-    const fetchInventoryItems = async () => {
-        try {
-            const client = new AuthorizedClient();
-            const data = await client.fetchInventoryItems({});
-            const sortedData = [...data].sort((a, b) => a.name!.localeCompare(b.name!));
-            setInventorySections(sortedData);
-            setExpandedSections(data.reduce((acc, section) => ({ ...acc, [section.id as string]: true }), {}));
-        } catch (e) {
-            showSnackbar('inventory.fetchError', 'error');
-            console.error('Error fetching inventory items', e);
-        }
-    }
+    }, [executeApiCallWithDefault, fetchInventoryItems]);
 
     return (
         <DashboardContent>

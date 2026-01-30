@@ -4,9 +4,11 @@ import {useTranslation} from "react-i18next";
 import Box from "@mui/material/Box";
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
+import { useApiCall } from "src/hooks/use-api-call";
+
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {validateAddress} from "../../../utils/validate-address";
+import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
 import {ColorPicker} from "../../../components/color/color-picker";
 import {DrawerLayout} from '../../../layouts/components/drawer-layout';
@@ -19,6 +21,7 @@ type BreweryDetailViewProps = {
 
 export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>) {
     const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
 
@@ -61,24 +64,24 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
         setErrors({});
         setContactAddressErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
 
-            const createDto = new CreateBreweryDto({
-                name: brewery.name!,
-                color: brewery.color!,
-                officialAddress: brewery.officialAddress!,
-                contactAddress: brewery.contactAddress
-            });
-            await clientApi.createBreweryEndpoint(createDto.toJSON());
+        const createDto = new CreateBreweryDto({
+            name: brewery.name!,
+            color: brewery.color!,
+            officialAddress: brewery.officialAddress!,
+            contactAddress: brewery.contactAddress
+        });
+
+        const result = await executeApiCall(
+            () => clientApi.createBreweryEndpoint(createDto.toJSON()),
+            t('breweries.saveError')
+        );
+
+        if (result) {
             triggerRefresh();
-
             showSnackbar(t('breweries.saveSuccess'), 'success');
             onClose();
-        } catch (error) {
-            console.error('Error saving brewery:', error);
-            showSnackbar(t('breweries.saveError'), 'error');
-            return;
         }
     }
 

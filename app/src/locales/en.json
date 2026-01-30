@@ -203,6 +203,24 @@
     },
     "dashboard": {
       "welcome": "Hi, Welcome back"
+    },
+    "errors": {
+      "UNEXPECTED_ERROR": "An unexpected error occurred. Please try again.",
+      "VALIDATION_ERROR": "Validation error. Please check your input.",
+      "VALIDATION_NOT_NULL_ERROR": "Required field cannot be empty.",
+      "VALIDATION_NOT_EMPTY_ERROR": "This field cannot be empty.",
+      "VALIDATION_MAX_LENGTH_ERROR": "The value exceeds the maximum allowed length.",
+      "VALIDATION_MAX_VALUE_EXCEEDED_ERROR": "The value exceeds the maximum allowed value.",
+      "VALIDATION_MINVALUE_NOT_MATCHED_ERROR": "The value is less than the minimum allowed value.",
+      "ENTITY_NOT_FOUND": "The requested item was not found.",
+      "ENTITY_ALREADY_EXISTS": "This item already exists.",
+      "VALIDATION_NOT_ENUM_PROPERTY": "Invalid value provided.",
+      "BAD_REQUEST_ERROR": "Invalid request. Please check your input.",
+      "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT": "This order is already assigned to an outgoing shipment.",
+      "SHIPMENT_NOT_PREPARED": "The shipment is not prepared with all required data.",
+      "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS": "Cannot mark shipment as loaded without any stops.",
+      "SHIPMENT_ALREADY_DELIVERED": "This shipment has already been delivered.",
+      "SHIPMENT_ALREADY_CANCELLED": "This shipment has already been cancelled."
     }
   }
 }

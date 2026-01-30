@@ -201,5 +201,23 @@
   "UserRoleType": {
     "Admin": "Administrator",
     "User": "Benutzer"
+  },
+  "errors": {
+    "UNEXPECTED_ERROR": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+    "VALIDATION_ERROR": "Validierungsfehler. Bitte überprüfen Sie Ihre Eingabe.",
+    "VALIDATION_NOT_NULL_ERROR": "Pflichtfeld darf nicht leer sein.",
+    "VALIDATION_NOT_EMPTY_ERROR": "Dieses Feld darf nicht leer sein.",
+    "VALIDATION_MAX_LENGTH_ERROR": "Der Wert überschreitet die maximal zulässige Länge.",
+    "VALIDATION_MAX_VALUE_EXCEEDED_ERROR": "Der Wert überschreitet den maximal zulässigen Wert.",
+    "VALIDATION_MINVALUE_NOT_MATCHED_ERROR": "Der Wert ist kleiner als der minimal zulässige Wert.",
+    "ENTITY_NOT_FOUND": "Das angeforderte Element wurde nicht gefunden.",
+    "ENTITY_ALREADY_EXISTS": "Dieses Element existiert bereits.",
+    "VALIDATION_NOT_ENUM_PROPERTY": "Ungültiger Wert angegeben.",
+    "BAD_REQUEST_ERROR": "Ungültige Anfrage. Bitte überprüfen Sie Ihre Eingabe.",
+    "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT": "Diese Bestellung ist bereits einer ausgehenden Sendung zugeordnet.",
+    "SHIPMENT_NOT_PREPARED": "Die Sendung ist nicht mit allen erforderlichen Daten vorbereitet.",
+    "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS": "Die Sendung kann nicht als geladen markiert werden ohne Stopps.",
+    "SHIPMENT_ALREADY_DELIVERED": "Diese Sendung wurde bereits geliefert.",
+    "SHIPMENT_ALREADY_CANCELLED": "Diese Sendung wurde bereits storniert."
   }
 }
