@@ -1,9 +1,8 @@
-import {useTranslation} from "react-i18next";
-import React, {useState, useEffect, useContext, createContext} from "react";
+import React, {useState, useEffect, useContext, useCallback, createContext} from "react";
 
 import {ExchangeRateDto} from "../api/Client";
-import {useSnackbar} from "./SnackbarProvider";
 import {useAuth} from "../context/AuthContext";
+import {useApiCall} from "../hooks/use-api-call";
 import {AuthorizedClient} from "../api/AuthorizedClient";
 
 interface CurrencyContextType {
@@ -26,71 +25,60 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const [selectedCurrency, setSelectedCurrency] = useState<ExchangeRateDto>(() => {
         const stored = localStorage.getItem("selectedCurrency");
         if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                return new ExchangeRateDto(parsed);
-            } catch {
-                return czechRate;
-            }
+            const parsed = JSON.parse(stored);
+            return new ExchangeRateDto(parsed);
         }
         return czechRate;
     });
     const [rates, setRates] = useState<ExchangeRateDto[]>([czechRate]);
-    const { t } = useTranslation();
-    const {showSnackbar} = useSnackbar();
     const { user } = useAuth();
+    const { executeApiCallWithDefault } = useApiCall();
 
-    const changeCurrency = (currencyCode: string) => {
+    const changeCurrency = useCallback((currencyCode: string) => {
         const found = rates.find(rate => rate.currencyCode === currencyCode);
         const newCurrency = found ?? czechRate;
         setSelectedCurrency(newCurrency);
         localStorage.setItem("selectedCurrency", JSON.stringify(newCurrency));
-    };
+    }, [rates]);
 
-    const formatPrice = (value: number | undefined) => {
-        const amount = formatPriceValue(value);
-        const currency =
-            selectedCurrency.currencyCode === czechRate.currencyCode
-                ? "Kč"
-                : "€";
-        return `${amount.toFixed(2)} ${currency}`;
-    }
-
-    const formatPriceValue = (value: number | undefined) => {
+    const formatPriceValue = useCallback((value: number | undefined) => {
         const amount =
             (value ?? 0) /
             (selectedCurrency.currencyCode === czechRate.currencyCode
                 ? 1
                 : selectedCurrency.rate ?? 1);
         return parseFloat(amount.toFixed(2));
-    }
+    }, [selectedCurrency]);
 
-    const formatPriceToDefault = (value: number | undefined) => {
+    const formatPrice = useCallback((value: number | undefined) => {
+        const amount = formatPriceValue(value);
+        const currency =
+            selectedCurrency.currencyCode === czechRate.currencyCode
+                ? "Kč"
+                : "€";
+        return `${amount.toFixed(2)} ${currency}`;
+    }, [selectedCurrency, formatPriceValue]);
+
+    const formatPriceToDefault = useCallback((value: number | undefined) => {
         const amount = ((value ?? 0) * (selectedCurrency.rate ?? 1)).toFixed(2);
         return parseFloat(amount);
-    }
+    }, [selectedCurrency]);
+
+    const fetchRates = useCallback(async (userPresent: boolean) => {
+        if (!userPresent) return;
+
+        const client = new AuthorizedClient();
+        const res = await executeApiCallWithDefault(() => client.getExchangeRatesEndpoint(), []);
+        res.push(czechRate);
+        setRates(res);
+    }, [executeApiCallWithDefault]);
 
     useEffect(() => {
         void fetchRates(user !== null);
 
         const interval = setInterval(() => fetchRates(user !== null), 24 * 60 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [user]);
-
-    const fetchRates = async (userPresent: boolean) => {
-        if (!userPresent) return;
-
-        try {
-            const client = new AuthorizedClient();
-            const res = await client.getExchangeRatesEndpoint();
-            res.push(czechRate);
-            setRates(res);
-        }
-        catch (error) {
-            console.error('Error fetching exchange rates:', error);
-            showSnackbar(t('exchangeRates.fetchError'), 'error');
-        }
-    };
+    }, [user, fetchRates]);
 
     return (
         <CurrencyContext.Provider value={React.useMemo(() => ({

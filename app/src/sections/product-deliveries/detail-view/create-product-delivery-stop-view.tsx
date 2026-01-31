@@ -1,16 +1,16 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import {useState, useEffect, useCallback} from "react";
 
 import TextField from "@mui/material/TextField";
-import {Box, Collapse, Typography, IconButton} from "@mui/material";
+import {Box, Collapse, IconButton, Typography} from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import {Iconify} from "../../../components/iconify";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {BrewerySelect} from "../components/brewery-select";
 import {ProductsSelect} from "../components/products-select";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DeliveryItemsTable} from "../components/delivery-items-table";
 
 import type {
@@ -44,27 +44,25 @@ export function CreateProductDeliveryStopView(
         shouldValidate
     }: Readonly<CreateProductDeliveryStopViewProps>) {
     const {t} = useTranslation();
-    const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
 
     const [isExpanded, setIsExpanded] = useState<boolean>(true);
     const [breweryName, setBreweryName] = useState<string | undefined>(undefined);
     const [products, setProducts] = useState<BreweryProductListItemDto[]>([]);
 
+    const fetchProducts = useCallback(async (breweryId: string) => {
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.fetchBreweryProducts(breweryId, {}));
+        if (result) {
+            setProducts(result);
+        }
+    }, [executeApiCall]);
+
     useEffect(() => {
         if (productDeliveryStop.breweryId !== undefined && productDeliveryStop.breweryId !== "") {
             void fetchProducts(productDeliveryStop.breweryId);
         }
-    }, [productDeliveryStop.breweryId])
-
-    const fetchProducts = async (breweryId: string) => {
-        try {
-            const client = new AuthorizedClient();
-            await client.fetchBreweryProducts(breweryId, {}).then(setProducts);
-        } catch (error) {
-            showSnackbar('Error fetching products for delivery', 'error');
-            console.error('Error fetching products for delivery:', error);
-        }
-    };
+    }, [fetchProducts, productDeliveryStop.breweryId]);
 
     return (
         <>

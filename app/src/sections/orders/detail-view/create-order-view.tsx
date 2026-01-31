@@ -1,8 +1,10 @@
  import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import { useState, useEffect, useCallback} from "react";
 
 import Box from "@mui/material/Box";
 import { Typography} from "@mui/material";
+
+import { useApiCall } from "src/hooks/use-api-call";
 
 import { useSnackbar } from "src/providers/SnackbarProvider";
 
@@ -14,8 +16,6 @@ import {OrderProductsSelect} from "../components/order-products-select";
 import {OrderDeliveryDatePicker} from "../components/order-delivery-date-picker";
 import { CreateOrderDto, CreateOrderItemDto, GroupedProductHistoryDto } from '../../../api/Client';
 
-
-
 type CreateOrderViewProps = {
     width: number
     onClose: () => void
@@ -25,6 +25,7 @@ type CreateOrderViewProps = {
 export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderViewProps>) {
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
 
     const [order, setOrder] = useState<CreateOrderDto>(new CreateOrderDto({
         requiredDeliveryDate: undefined,
@@ -35,51 +36,46 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
     const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
+    const fetchProducts = useCallback(async (clientId: string) => {
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
+        if (result) {
+            setProducts(result);
+        }
+    }, [executeApiCall]);
+
     useEffect(() => {
       if (order.clientId === "")
         return;
 
       void fetchProducts(order.clientId)
-    }, [order.clientId]);
-
-    const fetchProducts = async (clientId: string) => {
-        try {
-
-            const client = new AuthorizedClient();
-            await client.fetchProductsWithClientHistory(clientId).then(setProducts)
-        } catch (e) {
-            showSnackbar('products.fetchError', 'error');
-            console.error('Error fetching products', e);
-        }
-    }
+    }, [fetchProducts, order.clientId]);
     
     const handleSave = async () => {
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-            let requiredDeliveryDate = null;
-            if (order.requiredDeliveryDate != null) {
-                requiredDeliveryDate = new Date(order.requiredDeliveryDate);
-                requiredDeliveryDate.setHours(0, 0, 0, 0);
-            }
-            
-            if ((requiredDeliveryDate != null && requiredDeliveryDate < today) ||
-                !order.clientId ||
-                order.clientId === "" ||
-                order.orderItems!.some(p => !p.quantity || p.quantity <= 0 || !p.productId)
-            ) {
-                setShouldValidate(true);
-                showSnackbar(t('common.validationError'), 'error');
-                return;
-            }
-            setShouldValidate(false);
+        let requiredDeliveryDate = null;
+        if (order.requiredDeliveryDate != null) {
+            requiredDeliveryDate = new Date(order.requiredDeliveryDate);
+            requiredDeliveryDate.setHours(0, 0, 0, 0);
+        }
+        
+        if ((requiredDeliveryDate != null && requiredDeliveryDate < today) ||
+            !order.clientId ||
+            order.clientId === "" ||
+            order.orderItems!.some(p => !p.quantity || p.quantity <= 0 || !p.productId)
+        ) {
+            setShouldValidate(true);
+            showSnackbar(t('common.validationError'), 'error');
+            return;
+        }
+        setShouldValidate(false);
 
-            const client = new AuthorizedClient();
-            await client.createOrderEndpoint(order).then(onSave)
-        } catch (error) {
-            showSnackbar(t('orders.saveError'), 'error');
-            console.error('Error creating new product delivery:', error);
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.createOrderEndpoint(order));
+        if (result) {
+            onSave(result);
         }
     }
 

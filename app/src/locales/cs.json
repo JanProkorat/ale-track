@@ -12,6 +12,7 @@
     "saveAndClose": "Uložit a zavřít",
     "required": "Toto pole je povinné",
     "validationError": "Vyplňte prosím všechna povinná pole",
+    "maxLength": "Maximální délka je {{count}} znaků",
     "from": "Od",
     "until": "Do",
     "selectDate": "Kliknutím vyber datum",
@@ -113,7 +114,9 @@
     "saveSuccess": "Řidič byl úspěšně uložen",
     "saveError": "Chyba při ukládání řidiče",
     "available": "K dispozici",
-    "color": "Barva"
+    "color": "Barva",
+    "notAvailable": "Není k dispozici",
+    "dateIntervalsOverlap": "Časové intervaly se překrývají"
   },
   "vehicles": {
     "title": "Vozidla",
@@ -265,6 +268,10 @@
   "exchangeRates": {
     "fetchError": "Error při načítání kurzů měn"
   },
+  "clientOrders": {
+    "fetchError": "Chyba při načítání objednávek klienta",
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky objednávek"
+  },
   "languages": {
     "language": "Jazyk",
     "English": "Angličtina",
@@ -352,5 +359,55 @@
   "orderItemReminders": {
     "title": "Připomínky objednávek",
     "orderLabel": "Objednat"
+  },
+  "outgoingShipments": {
+    "title": "Vývozy",
+    "new": "Nový vývoz",
+    "deleteConfirm": "Opravdu chcete smazat vybraný vývoz?",
+    "detailTitle": "Detail vývozu",
+    "saveSuccess": "Vývoz byl úspěšně uložen",
+    "saveError": "Chyba při ukládání vývozu",
+    "loadListError": "Chyba při načítání vývozů",
+    "loadDetailError": "Chyba při načítání vývozu",
+    "noDetailToDisplay": "K zobrazení detailu vyberte vývoz ze seznamu",
+    "shipmentDeleted": "Vývoz úspěšně odebrán",
+    "noShipmentsToDisplay": "Žádný vývoz k zobrazení. Pro zobrazení vývozů si nejdříve alespoň jeden založte",
+    "deliveryDate": "Datum vývozu",
+    "drivers": "Řidiči",
+    "vehicle": "Vozidlo",
+    "stops": "Zastávky",
+    "orders": "Objednávky",
+    "errorFetchingDrivers": "Chyba při načítání řidičů",
+    "errorFetchingVehicles": "Chyba při načítání vozidel",
+    "errorFetchingOrders": "Chyba při načítání objednávek",
+    "route": "Trasa",
+    "noStopsDefined": "Pro zobrazení trasy vyberte alespoň jednu objednávku.",
+    "name": "Název",
+    "weight": "Váha"
+  },
+  "outgoingShipmentState": {
+    "Created": "Plánován",
+    "Loaded": "Naložen",
+    "InTransit": "V přepravě",
+    "Delivered": "Doručen",
+    "Cancelled": "Zrušen"
+  },
+  "errors": {
+    "UNEXPECTED_ERROR": "Nastala neočekávaná chyba. Zkuste to prosím znovu.",
+    "VALIDATION_ERROR": "Chyba validace. Zkontrolujte prosím zadané údaje.",
+    "VALIDATION_NOT_NULL_ERROR": "Povinné pole nesmí být prázdné.",
+    "VALIDATION_NOT_EMPTY_ERROR": "Toto pole nesmí být prázdné.",
+    "VALIDATION_MAX_LENGTH_ERROR": "Hodnota překračuje maximální povolenou délku.",
+    "VALIDATION_MAX_VALUE_EXCEEDED_ERROR": "Hodnota překračuje maximální povolenou hodnotu.",
+    "VALIDATION_MINVALUE_NOT_MATCHED_ERROR": "Hodnota je menší než minimální povolená hodnota.",
+    "ENTITY_NOT_FOUND": "Požadovaná položka nebyla nalezena.",
+    "ENTITY_ALREADY_EXISTS": "Tato položka již existuje.",
+    "VALIDATION_NOT_ENUM_PROPERTY": "Neplatná hodnota.",
+    "BAD_REQUEST_ERROR": "Neplatný požadavek. Zkontrolujte prosím zadané údaje.",
+    "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT": "Tato objednávka je již přiřazena k odchozí zásilce.",
+    "SHIPMENT_NOT_PREPARED": "Zásilka není připravena se všemi požadovanými údaji.",
+    "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS": "Nelze označit zásilku jako naloženou bez zastávek.",
+    "SHIPMENT_ALREADY_DELIVERED": "Tato zásilka již byla doručena.",
+    "SHIPMENT_ALREADY_CANCELLED": "Tato zásilka již byla zrušena."
   }
 }

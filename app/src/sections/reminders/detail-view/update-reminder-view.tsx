@@ -8,6 +8,7 @@ import {FormControl, LinearProgress} from "@mui/material";
 import {linearProgressClasses} from "@mui/material/LinearProgress";
 
 import {NameInput} from "./components/name-input";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {validateReminder} from "./utils/validate-reminder";
 import {mapEnumValue} from "../../../utils/format-enum-value";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
@@ -35,6 +36,7 @@ type UpdateReminderViewProps = {
 export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<UpdateReminderViewProps>) {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
+    const {executeApiCall} = useApiCall();
 
     const [reminder, setReminder] = useState<UpdateReminderDto | undefined>(undefined);
 
@@ -77,25 +79,33 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
             return;
         }
 
-        try {
-            const clientApi = new AuthorizedClient();
-            switch (parentType) {
-                case "client":
-                    await clientApi.updateClientReminderEndpoint(reminderId, reminder!.toJSON());
-                    break;
-                case "brewery":
-                default:
-                    await clientApi.updateBreweryReminderEndpoint(reminderId, reminder!.toJSON());
-                    break;
-            }
+        const clientApi = new AuthorizedClient();
+        let hasError = false;
+        
+        switch (parentType) {
+            case "client":
+                await executeApiCall(
+                    () => clientApi.updateClientReminderEndpoint(reminderId, reminder!.toJSON()),
+                    undefined,
+                    { onError: () => { hasError = true; } }
+                );
+                break;
+            case "brewery":
+            default:
+                await executeApiCall(
+                    () => clientApi.updateBreweryReminderEndpoint(reminderId, reminder!.toJSON()),
+                    undefined,
+                    { onError: () => { hasError = true; } }
+                );
+                break;
+        }
 
-            showSnackbar(t('reminders.saveSuccess'), 'success');
-            onClose(true);
-        } catch (error) {
-            console.error('Error saving reminder:', error);
-            showSnackbar(t('reminders.saveError'), 'error');
+        if (hasError) {
             return;
         }
+
+        showSnackbar(t('reminders.saveSuccess'), 'success');
+        onClose(true);
     }
 
     const handleOccurrenceDateSelect = (date: Date) => {

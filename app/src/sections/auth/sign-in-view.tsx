@@ -13,17 +13,15 @@ import Typography from '@mui/material/Typography';
 import InputAdornment from '@mui/material/InputAdornment';
 import LinearProgress, {linearProgressClasses} from '@mui/material/LinearProgress';
 
-import {useRouter} from 'src/routes/hooks';
-
 import {Iconify} from 'src/components/iconify';
 
 import {useAuth} from "../../context/AuthContext";
+import {useApiCall} from "../../hooks/use-api-call";
 import {AuthorizedClient} from "../../api/AuthorizedClient";
 
 // ----------------------------------------------------------------------
 
 export function SignInView() {
-    const router = useRouter();
     const location = useLocation();
     const navigate = useNavigate();
     const from = (location.state as any)?.from?.pathName || '/dashboard';
@@ -36,28 +34,26 @@ export function SignInView() {
 
     const { signIn } = useAuth();
     const {t} = useTranslation();
+    const { executeApiCall } = useApiCall();
 
     const handleSignIn = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setError(false);
+        setIsLoading(true);
+        setError(false);
 
-            const client = new AuthorizedClient();
-            const loginData = {userName, password} as LoginUserDto;
+        const client = new AuthorizedClient();
+        const loginData = {userName, password} as LoginUserDto;
 
-            const response = await client.loginEndpoint(loginData);
-            if (response && response.accessToken) {
-                signIn(response.accessToken);
-                navigate(from, { replace: true });
-            } else {
-                setError(true);
-            }
-        } catch (err) {
+        const response = await executeApiCall(() => client.loginEndpoint(loginData));
+        
+        if (response && response.accessToken) {
+            signIn(response.accessToken);
+            navigate(from, { replace: true });
+        } else {
             setError(true);
-        } finally {
-            setIsLoading(false);
         }
-    }, [userName, password, signIn, router]);
+        
+        setIsLoading(false);
+    }, [userName, password, signIn, navigate, from, executeApiCall]);
 
     const renderForm = (
         <Box

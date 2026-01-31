@@ -1,8 +1,9 @@
-import {useState, useEffect} from "react";
 import {useTranslation} from "react-i18next";
+import {useState, useEffect, useCallback} from "react";
 
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
+import {useApiCall} from "../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DrawerLayout} from '../../../layouts/components/drawer-layout';
@@ -26,6 +27,7 @@ export function VehicleDetailView(
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const {executeApiCall} = useApiCall();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [vehicle, setVehicle] = useState<VehicleDto>(new VehicleDto({
@@ -34,26 +36,20 @@ export function VehicleDetailView(
     }));
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    const fetchVehicle = useCallback(async () => {
+        setIsLoading(true);
+        const clientApi = new AuthorizedClient();
+        const data = await executeApiCall(() => clientApi.getVehicleDetailEndpoint(id!));
+        if (data) {
+            setVehicle(data);
+        }
+        setIsLoading(false);
+    }, [executeApiCall, id]);
+
     useEffect(() => {
         if (id !== null)
             void fetchVehicle()
-    }, [id]);
-
-    const fetchVehicle = async () => {
-        try {
-            setIsLoading(true);
-            const clientApi = new AuthorizedClient();
-
-            const data = await clientApi.getVehicleDetailEndpoint(id!);
-            if (data) {
-                setVehicle(data);
-            }
-        } catch (error) {
-            console.error('Error fetching vehicle:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }
+    }, [fetchVehicle, id]);
 
     const saveVehicle = async (): Promise<void> => {
         const {name, maxWeight} = vehicle;
@@ -70,31 +66,40 @@ export function VehicleDetailView(
 
         setErrors({});
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
+        let result;
 
-            if (id === null) {
-                const createDto = new CreateVehicleDto({
-                    name: vehicle.name!,
-                    maxWeight: vehicle.maxWeight!
-                });
+        if (id === null) {
+            const createDto = new CreateVehicleDto({
+                name: vehicle.name!,
+                maxWeight: vehicle.maxWeight!
+            });
 
-                await clientApi.createVehicleEndpoint(createDto.toJSON());
+            result = await executeApiCall(() => clientApi.createVehicleEndpoint(createDto.toJSON()));
+            if (result) {
                 triggerRefresh();
-            } else {
-                const updateDto = new UpdateVehicleDto({
-                    name: vehicle.name!,
-                    maxWeight: vehicle.maxWeight!
-                });
-
-                await clientApi.updateVehicleEndpoint(id, updateDto.toJSON());
             }
+        } else {
+            const updateDto = new UpdateVehicleDto({
+                name: vehicle.name!,
+                maxWeight: vehicle.maxWeight!
+            });
 
+            let hasError = false;
+            await executeApiCall(
+                () => clientApi.updateVehicleEndpoint(id, updateDto.toJSON()),
+                undefined,
+                { onError: () => { hasError = true; } }
+            );
+            
+            if (!hasError) {
+                result = true;
+            }
+        }
+
+        if (result) {
             showSnackbar(t('vehicles.saveSuccess'), 'success');
             onSave();
-        } catch (error) {
-            console.error('Error saving vehicle:', error);
-            showSnackbar(t('vehicles.saveError'), 'error');
         }
     }
 

@@ -2,7 +2,6 @@ import React from "react";
 
 import FactoryTwoToneIcon from '@mui/icons-material/FactoryTwoTone';
 import ArchiveTwoToneIcon from '@mui/icons-material/ArchiveTwoTone';
-import InventoryTwoToneIcon from '@mui/icons-material/InventoryTwoTone';
 import UploadFileTwoToneIcon from '@mui/icons-material/UploadFileTwoTone';
 import ShoppingCartTwoToneIcon from '@mui/icons-material/ShoppingCartTwoTone';
 import LocalShippingTwoToneIcon from '@mui/icons-material/LocalShippingTwoTone';
@@ -73,17 +72,17 @@ export const getNavData = ({numberOfRecordsInEachModule, userRole}: NavDataProps
       ) : undefined,
       allowedRoles: [UserRoleType.User, UserRoleType.Admin]
     },
-    {
-      title: 'Sklad',
-      path: '/inventory',
-      icon: <InventoryTwoToneIcon />,
-      info: numberOfRecordsInEachModule?.inventoryItemsCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.inventoryItemsCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
+    // {
+    //   title: 'Sklad',
+    //   path: '/inventory',
+    //   icon: <InventoryTwoToneIcon />,
+    //   info: numberOfRecordsInEachModule?.inventoryItemsCount !== undefined ? (
+    //       <Label color="error" variant="inverted">
+    //         {numberOfRecordsInEachModule.inventoryItemsCount}
+    //       </Label>
+    //   ) : undefined,
+    //   allowedRoles: [UserRoleType.User, UserRoleType.Admin]
+    // },
     {
       title: 'drivers.title',
       path: '/drivers',
@@ -108,15 +107,25 @@ export const getNavData = ({numberOfRecordsInEachModule, userRole}: NavDataProps
     },
     {
       title: 'Vývozy',
-      path: '/404',
+      path: '/outgoing-shipments',
       icon: <UploadFileTwoToneIcon />,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
+      allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+      info: numberOfRecordsInEachModule?.outgoingShipmentsCount !== undefined ? (
+          <Label color="error" variant="inverted">
+            {numberOfRecordsInEachModule.outgoingShipmentsCount}
+          </Label>
+      ) : undefined,
     },
     {
       title: 'Dovážky zboží',
       path: '/product-deliveries',
       icon: <ArchiveTwoToneIcon />,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
+      allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+      info: numberOfRecordsInEachModule?.productDeliveriesCount !== undefined ? (
+          <Label color="error" variant="inverted">
+            {numberOfRecordsInEachModule.productDeliveriesCount}
+          </Label>
+      ) : undefined,
     },
     {
       title: 'Uživatelé',

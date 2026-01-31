@@ -4,6 +4,7 @@ import {useTranslation} from "react-i18next";
 import {Typography} from "@mui/material";
 
 import {UpdateUserView} from "./update-user-view";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {
     UpdateUserDto
 } from "../../../api/Client";
@@ -33,38 +34,41 @@ export function UserDetailView(
 }: Readonly<UserDetailViewProps>) {
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
+    const { executeApiCall } = useApiCall();
 
     const [initialUser, setInitialUser] = useState<UpdateUserDto | null>(null);
     const [userDetail, setUserDetail] = useState<UpdateUserDto | null>(null);
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
 
+    const updateUser = useCallback(async (userId: string, userToUpdate: UpdateUserDto) => {
+        if (userToUpdate.userRoles.length === 0) {
+            setShouldValidate(true);
+            showSnackbar(t('common.validationError'), 'error');
+            return false;
+        }
+        setShouldValidate(false);
+
+        const client = new AuthorizedClient();
+        let hasError = false;
+        await executeApiCall(
+            () => client.updateUserEndpoint(userId, userToUpdate),
+            undefined,
+            { onError: () => { hasError = true; } }
+        );
+
+        if (hasError) {
+            return false;
+        }
+
+        showSnackbar(t('users.saveSuccess'), 'success');
+        setInitialUser(userToUpdate);
+        return true;
+    }, [executeApiCall, showSnackbar, t]);
+
     const saveUser = useCallback(async () => {
         setShouldValidate(true);
         return await updateUser(user!.id!, userDetail!);
-    }, [userDetail, user]);
-
-    const updateUser = async (userId: string, userToUpdate: UpdateUserDto) => {
-        try {
-            if (userToUpdate.userRoles.length === 0) {
-                setShouldValidate(true);
-                showSnackbar(t('common.validationError'), 'error');
-                return false;
-            }
-            setShouldValidate(false);
-
-            const client = new AuthorizedClient();
-            return await client.updateUserEndpoint(userId, userToUpdate).then(() => {
-                showSnackbar(t('users.saveSuccess'), 'success');
-                setInitialUser(userToUpdate);
-                return true;
-            });
-
-        } catch (error) {
-            showSnackbar(t('users.saveError'), 'error');
-            console.error('Error saving user:', error);
-            return false;
-        }
-    }
+    }, [userDetail, user, updateUser]);
 
     const fetchUser = useCallback(async () => {
         if (user === null || user === undefined) {
@@ -81,16 +85,19 @@ export function UserDetailView(
         setUserDetail(detail);
         onProgressbarVisibilityChange(false);
 
-    }, [user, onProgressbarVisibilityChange, showSnackbar, t]);
+    }, [user, onProgressbarVisibilityChange]);
 
     const deleteUser = useCallback(async () => {
         if (user === null || user === undefined) {
             return;
         }
         const client = new AuthorizedClient();
-        await client.deleteUserEndpoint(user.id!);
-        showSnackbar(t('users.userDeleted'), 'success');
-    }, [user, showSnackbar]);
+        const success = await executeApiCall(() => client.deleteUserEndpoint(user.id!));
+        
+        if (success) {
+            showSnackbar(t('users.userDeleted'), 'success');
+        }
+    }, [user, executeApiCall, showSnackbar, t]);
 
     const resetUser = useCallback(() => {
         setUserDetail(initialUser);

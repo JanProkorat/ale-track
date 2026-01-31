@@ -2,7 +2,7 @@ import {router} from "../main";
 import { Client } from './Client';
 import { API_BASE_URL } from './api';
 
-import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, ClientOrderReminderDto, InventoryItemListItemDto, GroupedProductHistoryDto, BreweryProductListItemDto , ProductDeliveryListItemDto } from './Client';
+import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, ClientOrderReminderDto, InventoryItemListItemDto, GroupedProductHistoryDto, OutgoingShipmentOrderDto , BreweryProductListItemDto , ProductDeliveryListItemDto , OutgoingShipmentListItemDto } from './Client';
 
 const baseAddress = API_BASE_URL;
 
@@ -313,6 +313,48 @@ export class AuthorizedClient extends Client {
       }
 
       return await response.json() as Promise<ClientOrderReminderDto[]>;
+    }
+    
+    async fetchOutgoingShipments() {
+      const url = new URL(`/ale-track/outgoing-shipments`, baseAddress);
+
+      const response = await authorizedFetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch outgoing shipments');
+      }
+
+      return await response.json() as Promise<OutgoingShipmentListItemDto[]>;
+    }
+
+    async fetOrdersForOutgoingShipments(outgoingShipmentId: string | null ,filters: Record<string, string>) {
+      const url = new URL(`/ale-track/outgoing-shipments/orders`, baseAddress);
+
+      if (outgoingShipmentId) {
+        url.searchParams.append('OutgoingShipmentId', outgoingShipmentId);
+      }
+
+      for (const [key, value] of Object.entries(filters)) {
+        url.searchParams.append(key, value);
+      }
+
+      const response = await authorizedFetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch orders for outgoing shipment');
+      }
+
+      return (await response.json()) as Promise<OutgoingShipmentOrderDto[]>;
     }
 }
 

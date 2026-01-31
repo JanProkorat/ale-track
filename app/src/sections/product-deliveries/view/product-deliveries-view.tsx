@@ -1,34 +1,36 @@
-import {useTranslation} from "react-i18next";
-import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import { varAlpha } from "minimal-shared/utils";
+import React, { useState, useEffect, useCallback } from "react";
 
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
-import {linearProgressClasses} from "@mui/material/LinearProgress";
-import {Box,Button, IconButton, Typography, LinearProgress} from "@mui/material";
+import { linearProgressClasses } from "@mui/material/LinearProgress";
+import { Box, Button, IconButton, Typography, LinearProgress } from "@mui/material";
 
 import { DashboardContent } from "src/layouts/dashboard";
 
-import {Iconify} from "../../../components/iconify";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {SectionHeader} from "../../../components/label/section-header";
-import {ProductDeliverySelect} from "../components/product-delivery-select";
-import {CreateProductDeliveryView} from "../detail-view/create-product-delivery-view";
-import {ProductDeliveryDetailView} from "../detail-view/product-delivery-detail-view";
-import {ResetConfirmationDialog} from "../../../components/dialogs/reset-confirmation-dialog";
-import {DeleteConfirmationDialog} from "../../../components/dialogs/delete-confirmation-dialog";
-import {PendingChangesConfirmationDialog} from "../../../components/dialogs/pending-changes-confirmation-dialog";
+import { Iconify } from "../../../components/iconify";
+import { useApiCall } from "../../../hooks/use-api-call";
+import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { SectionHeader } from "../../../components/label/section-header";
+import { ProductDeliverySelect } from "../components/product-delivery-select";
+import { CreateProductDeliveryView } from "../detail-view/create-product-delivery-view";
+import { ProductDeliveryDetailView } from "../detail-view/product-delivery-detail-view";
+import { ResetConfirmationDialog } from "../../../components/dialogs/reset-confirmation-dialog";
+import { DeleteConfirmationDialog } from "../../../components/dialogs/delete-confirmation-dialog";
+import { PendingChangesConfirmationDialog } from "../../../components/dialogs/pending-changes-confirmation-dialog";
 import {
     UpdateProductDeliveryDto, UpdateProductDeliveryStopDto,
     UpdateProductDeliveryItemDto
 } from "../../../api/Client";
 
-import type { ProductDeliveryListItemDto} from "../../../api/Client";
+import type { ProductDeliveryListItemDto } from "../../../api/Client";
 
 export function ProductDeliveriesView() {
-    const {t} = useTranslation();
+    const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
+    const { executeApiCall, executeApiCallWithDefault } = useApiCall();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(false);
     const [deliveries, setDeliveries] = useState<ProductDeliveryListItemDto[]>([]);
@@ -38,59 +40,48 @@ export function ProductDeliveriesView() {
     const [isPendingChangesDialogOpen, setIsPendingChangesDialogOpen] = useState<boolean>(false);
     const [isResetDialogVisible, setIsResetDialogVisible] = useState<boolean>(false);
     const [createDeliveryDrawerVisible, setCreateDeliveryDrawerVisible] = useState<boolean>(false);
-    
+
     const [currentDelivery, setCurrentDelivery] = useState<UpdateProductDeliveryDto | undefined>(undefined);
     const [currentInitialDelivery, setCurrentInitialDelivery] = useState<UpdateProductDeliveryDto | undefined>(undefined);
 
     const hasDetailChanges = JSON.stringify(currentDelivery) !== JSON.stringify(currentInitialDelivery);
 
     const fetchProductDeliveries = useCallback(async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
+        const client = new AuthorizedClient();
+        const filters: Record<string, string> = {};
 
-            filters.sort = 'asc:deliveryDate';
+        filters.sort = 'asc:deliveryDate';
 
-            return await client.fetchProductDeliveries(filters);
-        } catch (error) {
-            showSnackbar(t('productDeliveries.loadListError'), 'error');
-            console.error('Error fetching product deliveries:', error);
-            return [];
-        }
-    }, [showSnackbar, t]);
+        return await executeApiCallWithDefault(() => client.fetchProductDeliveries(filters), []);
+    }, [executeApiCallWithDefault]);
 
     const fetchDelivery = useCallback(async (deliveryId: string) => {
-        try {
-            const client = new AuthorizedClient();
-            const data = await client.getProductDeliveryDetailEndpoint(deliveryId);
+        const client = new AuthorizedClient();
+        const data = await executeApiCall(() => client.getProductDeliveryDetailEndpoint(deliveryId));
 
-            if (data) {
-                const updateRequest = new UpdateProductDeliveryDto({
-                    deliveryDate: data.deliveryDate!,
-                    note: data.note,
-                    state: data.state,
-                    driverIds: data.drivers!.map(driver => driver.id!),
-                    vehicleId: data.vehicle!.id,
-                    stops: (data.stops ?? []).map((stop) => new UpdateProductDeliveryStopDto({
-                        publicId: stop.id,
-                        breweryId: stop.brewery!.id,
-                        note: stop.note,
-                        products: (stop.products ?? []).map((product) => new UpdateProductDeliveryItemDto({
-                            productId: product.productId,
-                            quantity: product.quantity,
-                            note: product.note
-                        }))
+        if (data) {
+            const updateRequest = new UpdateProductDeliveryDto({
+                deliveryDate: data.deliveryDate!,
+                note: data.note,
+                state: data.state,
+                driverIds: data.drivers!.map(driver => driver.id!),
+                vehicleId: data.vehicle!.id,
+                stops: (data.stops ?? []).map((stop) => new UpdateProductDeliveryStopDto({
+                    publicId: stop.id,
+                    breweryId: stop.brewery!.id,
+                    note: stop.note,
+                    products: (stop.products ?? []).map((product) => new UpdateProductDeliveryItemDto({
+                        productId: product.productId,
+                        quantity: product.quantity,
+                        note: product.note
                     }))
-                });
+                }))
+            });
 
-                setCurrentDelivery(updateRequest);
-                setCurrentInitialDelivery(updateRequest);
-            }
-        } catch (error) {
-            console.error('Error fetching delivery:', error);
-            showSnackbar(t('productDeliveries.loadDetailError'), 'error');
+            setCurrentDelivery(updateRequest);
+            setCurrentInitialDelivery(updateRequest);
         }
-    }, [showSnackbar, t]);
+    }, [executeApiCall]);
 
     useEffect(() => {
         setInitialLoading(true);
@@ -139,48 +130,51 @@ export function ProductDeliveriesView() {
             return false;
         }
 
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-            const deliveryDate = new Date(currentDelivery.deliveryDate);
-            deliveryDate.setHours(0, 0, 0, 0);
-            
-            if (
-                !currentDelivery.deliveryDate ||
-                deliveryDate < today ||
-                !currentDelivery.vehicleId ||
-                !currentDelivery.driverIds?.length ||
-                !currentDelivery.stops?.length ||
-                currentDelivery.stops.some(stop =>
-                    !stop.breweryId ||
-                    !stop.products?.length ||
-                    stop.products.some(p => !p.quantity || p.quantity <= 0)
-                )
-            ) {
-                showSnackbar(t('common.validationError'), 'error');
-                return false;
-            }
+        const deliveryDate = new Date(currentDelivery.deliveryDate);
+        deliveryDate.setHours(0, 0, 0, 0);
 
-            const client = new AuthorizedClient();
-            await client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery);
-            
-            showSnackbar(t('productDeliveries.saveSuccess'), 'success');
-            
-            // If the state or date has changed, reload the list
-            if (currentDelivery?.state !== currentInitialDelivery?.state || 
-                currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
-                const updated = await fetchProductDeliveries();
-                setDeliveries(updated);
-            }
-            
-            setCurrentInitialDelivery(currentDelivery);
-            return true;
-        } catch (error) {
-            showSnackbar(t('productDeliveries.saveError'), 'error');
-            console.error('Error saving product delivery:', error);
+        if (
+            !currentDelivery.deliveryDate ||
+            deliveryDate < today ||
+            !currentDelivery.vehicleId ||
+            !currentDelivery.driverIds?.length ||
+            !currentDelivery.stops?.length ||
+            currentDelivery.stops.some(stop =>
+                !stop.breweryId ||
+                !stop.products?.length ||
+                stop.products.some(p => !p.quantity || p.quantity <= 0)
+            )
+        ) {
+            showSnackbar(t('common.validationError'), 'error');
             return false;
         }
+
+        const client = new AuthorizedClient();
+        let hasError = false;
+        await executeApiCall(
+            () => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery),
+            undefined,
+            { onError: () => { hasError = true; } }
+        );
+
+        if (hasError) {
+            return false;
+        }
+        
+        showSnackbar(t('productDeliveries.saveSuccess'), 'success');
+
+        // If the state or date has changed, reload the list
+        if (currentDelivery?.state !== currentInitialDelivery?.state ||
+            currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
+            const updated = await fetchProductDeliveries();
+            setDeliveries(updated);
+        }
+
+        setCurrentInitialDelivery(currentDelivery);
+        return true;
     };
 
     const handlePendingChangesConfirmation = async (shouldSave: boolean) => {
@@ -196,14 +190,14 @@ export function ProductDeliveriesView() {
                     return;
                 }
             }
-            
+
             // After saving (or when discarding changes) set the new delivery
             if (pendingDeliveryId === 'new') {
                 setCreateDeliveryDrawerVisible(true);
             } else {
                 setSelectedDeliveryId(pendingDeliveryId);
             }
-            
+
             setPendingDeliveryId(null);
         }
     };
@@ -229,40 +223,35 @@ export function ProductDeliveriesView() {
     }
 
     const deleteDelivery = async () => {
-        try{
-            const client = new AuthorizedClient();
-            await client.deleteProductDeliveryEndpoint(selectedDeliveryId!).then(() => {
-                showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');
-                const filtered = deliveries.filter(d => d.id !== selectedDeliveryId);
-                setDeliveries(filtered);
-                setSelectedDeliveryId(filtered.length > 0 ? filtered[0].id : undefined);
-            });
-        } catch (error) {
-            showSnackbar(t('productDeliveries.deleteError'), 'error');
-            console.error('Error deleting product delivery:', error);
-        } finally {
-            setIsDeleteDialogVisible(false);
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.deleteProductDeliveryEndpoint(selectedDeliveryId!));
+        if (result) {
+            showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');
+            const filtered = deliveries.filter(d => d.id !== selectedDeliveryId);
+            setDeliveries(filtered);
+            setSelectedDeliveryId(filtered.length > 0 ? filtered[0].id : undefined);
         }
+        setIsDeleteDialogVisible(false);
     }
 
     return (
         <DashboardContent>
-            <Box sx={{mb: 5, display: 'flex', alignItems: 'center'}}>
-                <Typography variant="h4" sx={{flexGrow: 1}}>
+            <Box sx={{ mb: 5, display: 'flex', alignItems: 'center' }}>
+                <Typography variant="h4" sx={{ flexGrow: 1 }}>
                     {t('productDeliveries.title')}
                 </Typography>
                 <Button
                     variant="contained"
                     color="inherit"
-                    startIcon={<Iconify icon="mingcute:add-line"/>}
+                    startIcon={<Iconify icon="mingcute:add-line" />}
                     onClick={handleNewDeliveryClick}
                 >
                     {t('productDeliveries.new')}
                 </Button>
             </Box>
-            <Box sx={{display: 'flex'}}>
-                <Box sx={{flexGrow: 1}}>
-                    <Box sx={{position: 'relative', alignItems: "center"}}>
+            <Box sx={{ display: 'flex' }}>
+                <Box sx={{ flexGrow: 1 }}>
+                    <Box sx={{ position: 'relative', alignItems: "center" }}>
                         {initialLoading ? (
                             <LinearProgress
                                 sx={{
@@ -273,37 +262,37 @@ export function ProductDeliveriesView() {
                                     transform: 'translateX(-50%)',
                                     width: '40%',
                                     bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-                                    [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                                    [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
                                 }}
                             />
                         ) :
-                            <Card sx={{p: 3}}>
-                                <Box sx={{display: 'flex', alignItems: 'center'}}>
-                                    <Box sx={{width:'30%'}}>
+                            <Card sx={{ p: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ width: '30%' }}>
                                         <ProductDeliverySelect deliveries={deliveries} selectedDeliveryId={selectedDeliveryId} onSelect={handleRowClick} />
                                     </Box>
-                                    <SectionHeader text={t('productDeliveries.detailTitle')} headerVariant="h5" sx={{m: 2, ml:3, width: '100%'}}>
-                                        <Box sx={{alignItems: 'right'}}>
+                                    <SectionHeader text={t('productDeliveries.detailTitle')} headerVariant="h5" sx={{ m: 2, ml: 3, width: '100%' }}>
+                                        <Box sx={{ alignItems: 'right' }}>
                                             <IconButton
                                                 onClick={() => setIsResetDialogVisible(true)}
                                                 color="primary"
                                                 disabled={!hasDetailChanges}
                                             >
-                                                <Iconify icon="solar:restart-bold"/>
+                                                <Iconify icon="solar:restart-bold" />
                                             </IconButton>
                                             <IconButton
                                                 onClick={() => void saveCurrentDelivery()}
                                                 color="primary"
                                                 disabled={!hasDetailChanges}
                                             >
-                                                <Iconify icon="solar:floppy-disk-bold"/>
+                                                <Iconify icon="solar:floppy-disk-bold" />
                                             </IconButton>
                                             <IconButton
                                                 onClick={() => setIsDeleteDialogVisible(true)}
                                                 color="error"
                                                 disabled={false}
                                             >
-                                                <Iconify icon="solar:trash-bin-trash-bold"/>
+                                                <Iconify icon="solar:trash-bin-trash-bold" />
                                             </IconButton>
                                         </Box>
                                     </SectionHeader>
@@ -321,7 +310,7 @@ export function ProductDeliveriesView() {
                 open={createDeliveryDrawerVisible}
                 onClose={closeDrawer}
             >
-                <Box sx={{width: 1200, p: 2}}>
+                <Box sx={{ width: 1200, p: 2 }}>
                     <CreateProductDeliveryView
                         width={1200}
                         onClose={closeDrawer}

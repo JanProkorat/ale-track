@@ -19,10 +19,10 @@ import {AuthProvider} from "./context/AuthContext";
 import {SnackbarProvider} from "./providers/SnackbarProvider";
 import {CurrencyProvider} from "./providers/currency-provider";
 import {EntityStatsProvider} from "./providers/EntityStatsContext";
-
-if (process.env.NODE_ENV === 'development') {
-  eruda.init();
-}
+//
+// if (process.env.NODE_ENV === 'development') {
+//   eruda.init();
+// }
 
 // ----------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useCallback} from "react";
 import {
     arrayMove, SortableContext,
     verticalListSortingStrategy,
@@ -19,6 +19,7 @@ import { Typography} from "@mui/material";
 import TextField from "@mui/material/TextField";
 
 import {Iconify} from "../../../components/iconify";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {SortableView} from "../components/sortable-view";
 import {VehicleSelect} from "../components/vehicle-select";
 import {DriversSelect} from "../components/drivers-select";
@@ -45,6 +46,7 @@ type CreateProductDeliveryProps = {
 export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<CreateProductDeliveryProps>) {
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
+    const {executeApiCall} = useApiCall();
 
     const [delivery, setDelivery] = useState<CreateProductsDeliveryDto>(new CreateProductsDeliveryDto({
         deliveryDate: dayjs().toDate(),
@@ -61,22 +63,23 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
     const [drivers, setDrivers] = useState<DriverDto[]>([]);
     const [breweries, setBreweries] = useState<BreweryDto[]>([]);
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
+    
+    const fetchMultiselectData = useCallback(async () => {
+        const client = new AuthorizedClient();
+        
+        const breweriesResult = await executeApiCall(() => client.fetchBreweries({}));
+        if (breweriesResult) setBreweries(breweriesResult);
+        
+        const driversResult = await executeApiCall(() => client.fetchDrivers({}));
+        if (driversResult) setDrivers(driversResult);
+        
+        const vehiclesResult = await executeApiCall(() => client.fetchVehicles({}));
+        if (vehiclesResult) setVehicles(vehiclesResult);
+    }, [executeApiCall]);
 
     useEffect(() => {
         void fetchMultiselectData();
-    }, [])
-    
-    const fetchMultiselectData = async () => {
-        try {
-            const client = new AuthorizedClient();
-            await client.fetchBreweries({}).then(setBreweries);
-            await client.fetchDrivers({}).then(setDrivers);
-            await client.fetchVehicles({}).then(setVehicles);
-        } catch (error) {
-            showSnackbar(t('productDeliveries.errorFetchingData'), 'error');
-            console.error('Error fetching data for multiselects:', error);
-        }
-    };
+    }, [fetchMultiselectData]);
     
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -87,40 +90,38 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
     );
 
     const handleSave = async () => {
-        try {
-            if (
-                !delivery.deliveryDate ||
-                !delivery.vehicleId ||
-                !delivery.driverIds?.length ||
-                !delivery.stops?.length ||
-                delivery.stops.some(stop =>
-                    !stop.breweryId ||
-                    !stop.products?.length ||
-                    stop.products.some(p => !p.quantity || p.quantity <= 0)
-                )
-            ) {
-                setShouldValidate(true);
-                showSnackbar(t('common.validationError'), 'error');
-                return;
-            }
-            setShouldValidate(false);
+        if (
+            !delivery.deliveryDate ||
+            !delivery.vehicleId ||
+            !delivery.driverIds?.length ||
+            !delivery.stops?.length ||
+            delivery.stops.some(stop =>
+                !stop.breweryId ||
+                !stop.products?.length ||
+                stop.products.some(p => !p.quantity || p.quantity <= 0)
+            )
+        ) {
+            setShouldValidate(true);
+            showSnackbar(t('common.validationError'), 'error');
+            return;
+        }
+        setShouldValidate(false);
 
-            const cleanedDelivery = new CreateProductsDeliveryDto({
-                ...delivery,
-                stops: delivery.stops?.map(stop =>
-                    new CreateProductDeliveryStopDto({
-                        breweryId: stop.breweryId,
-                        note: stop.note,
-                        products: stop.products?.map(product => CreateProductDeliveryItemDto.fromJS(product))
-                    })
-                )
-            });
+        const cleanedDelivery = new CreateProductsDeliveryDto({
+            ...delivery,
+            stops: delivery.stops?.map(stop =>
+                new CreateProductDeliveryStopDto({
+                    breweryId: stop.breweryId,
+                    note: stop.note,
+                    products: stop.products?.map(product => CreateProductDeliveryItemDto.fromJS(product))
+                })
+            )
+        });
 
-            const client = new AuthorizedClient();
-            await client.createProductsDeliveryEndpoint(cleanedDelivery).then(onSave)
-        } catch (error) {
-            showSnackbar(t('productDeliveries.saveError'), 'error');
-            console.error('Error creating new product delivery:', error);
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.createProductsDeliveryEndpoint(cleanedDelivery));
+        if (result) {
+            onSave(result);
         }
     }
 

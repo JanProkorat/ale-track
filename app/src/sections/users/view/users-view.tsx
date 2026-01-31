@@ -1,5 +1,5 @@
 import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import {useState, useEffect, useCallback} from "react";
 
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -8,13 +8,13 @@ import {Button, Dialog, DialogTitle, DialogActions } from "@mui/material";
 
 import {UsersTableRow} from "../users-table-row";
 import {emptyRows} from "../../../providers/utils";
+import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {UsersTableToolbar} from "../users-table-toolbar";
 import {useTable} from "../../../providers/TableProvider";
 import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {UserDetailView} from "../detail-view/user-detail-view";
 import {CreateUserView} from "../detail-view/create-user-view";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from "../../../components/table/table-no-data";
 import {TableEmptyRows} from "../../../components/table/table-empty-rows";
 import {SplitViewLayout} from "../../../layouts/dashboard/split-view-layout";
@@ -24,7 +24,7 @@ import type { UserListItemDto} from "../../../api/Client";
 
 export function UsersView() {
     const {t} = useTranslation();
-    const { showSnackbar } = useSnackbar();
+    const { executeApiCallWithDefault } = useApiCall();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(false);
     const [users, setUsers] = useState<UserListItemDto[]>([]);
@@ -41,6 +41,19 @@ export function UsersView() {
 
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
+    const fetchUsers = useCallback(async () => {
+        const client = new AuthorizedClient();
+        const filters: Record<string, string> = {};
+
+        if (filterUserName !== null) {
+            filters.userName = `startsWith:${filterUserName}`;
+        }
+
+        filters.sort = `${order}:${orderBy}`;
+
+        return await executeApiCallWithDefault(() => client.fetchUsers(filters), []);
+    }, [executeApiCallWithDefault, filterUserName, order, orderBy]);
+
     useEffect(() => {
         setInitialLoading(true);
         const loadInitial = async () => {
@@ -50,32 +63,13 @@ export function UsersView() {
             setInitialLoading(false);
         };
         void loadInitial();
-    }, []);
+    }, [fetchUsers]);
 
     useEffect(() => {
         if (!initialLoading) {
             void fetchUsers().then(setUsers);
         }
-    }, [filterUserName, order, orderBy]);
-
-    const fetchUsers = async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
-
-            if (filterUserName !== null) {
-                filters.userName = `startsWith:${filterUserName}`;
-            }
-
-            filters.sort = `${order}:${orderBy}`;
-
-            return await client.fetchUsers(filters);
-        } catch (error) {
-            showSnackbar(t('users.loadListError'), 'error');
-            console.error('Error fetching users:', error);
-            return [];
-        }
-    };
+    }, [fetchUsers, filterUserName, initialLoading, order, orderBy]);
 
     const handleRowClick = (user: UserListItemDto) => {
         if (selectedUser?.id === user.id)

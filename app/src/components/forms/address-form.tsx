@@ -58,7 +58,9 @@ export function AddressForm({ title, address, errors, onChange, headerVariant }:
         // Don't call provider if initial address already had coordinates
         const initialHadCoordinates = 
             initialAddressRef.current?.latitude !== undefined && 
-            initialAddressRef.current?.longitude !== undefined;
+            initialAddressRef.current?.latitude !== null &&
+            initialAddressRef.current?.longitude !== undefined &&
+            initialAddressRef.current?.longitude !== null;
 
         if (isAddressComplete && !initialHadCoordinates) {
             try {
