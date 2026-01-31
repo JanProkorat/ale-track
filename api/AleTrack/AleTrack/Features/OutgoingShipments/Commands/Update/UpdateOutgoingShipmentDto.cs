@@ -9,6 +9,11 @@ namespace AleTrack.Features.OutgoingShipments.Commands.Update;
 public sealed record UpdateOutgoingShipmentDto
 {
     /// <summary>
+    /// Name of the outgoing shipment
+    /// </summary>
+    public string Name { get; set; } = null!;
+    
+    /// <summary>
     /// Date when shipments are going to be delivered
     /// </summary>
     public DateTime? DeliveryDate { get; set; }

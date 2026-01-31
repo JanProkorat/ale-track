@@ -74,4 +74,14 @@ public static class ErrorCodes
     /// Error code for case when an outgoing shipment cannot be marked as loaded without any stops
     /// </summary>
     public const string ShipmentCannotBeLoadedWithoutStops = "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS";
+    
+    /// <summary>
+    /// Error code for case when an outgoing shipment is already delivered
+    /// </summary>
+    public const string ShipmentAlreadyDelivered = "SHIPMENT_ALREADY_DELIVERED";
+    
+    /// <summary>
+    /// Error code for case when an outgoing shipment is already cancelled
+    /// </summary>
+    public const string ShipmentAlreadyCancelled = "SHIPMENT_ALREADY_CANCELLED";
 }

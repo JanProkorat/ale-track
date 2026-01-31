@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
@@ -10,7 +11,15 @@ namespace AleTrack.Entities;
 /// </summary>
 [Table("outgoing_shipments")]
 public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingShipmentState>
-{   
+{
+    /// <summary>
+    /// Name of the outgoing shipment
+    /// </summary>
+    [Column("name")]
+    [MaxLength(100)]
+    [Required]
+    public string Name { get; set; } = null!;
+    
     /// <summary>
     /// Date of delivery
     /// </summary>

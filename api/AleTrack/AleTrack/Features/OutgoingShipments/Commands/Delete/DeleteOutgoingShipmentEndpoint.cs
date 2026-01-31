@@ -56,7 +56,17 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
-        dbContext.OutgoingShipments.Remove(outgoingShipment!);
+        switch (outgoingShipment.State)
+        {
+            case OutgoingShipmentState.Delivered:
+                ThrowHelper.ShipmentAlreadyDeliveredCannotBeDeleted(req.Id);
+                break;
+            case OutgoingShipmentState.Cancelled:
+                ThrowHelper.ShipmentAlreadyCancelled(req.Id);
+                break;
+        }
+
+        dbContext.OutgoingShipments.Remove(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
 
         await SendAsync(null, StatusCodes.Status202Accepted, ct);

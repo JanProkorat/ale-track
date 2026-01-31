@@ -39,6 +39,7 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
             .Select(os => new OutgoingShipmentListItemDto
             {
                 Id = os.PublicId,
+                Name = os.Name,
                 State = os.State,
                 DeliveryDate = os.DeliveryDate
             })

@@ -19,6 +19,11 @@ public sealed record OutgoingShipmentDetailDto
     public OutgoingShipmentState State { get; set; }
 
     /// <summary>
+    /// Name of the outgoing shipment
+    /// </summary>
+    public string Name { get; set; } = null!;
+    
+    /// <summary>
     /// Date when the shipment is scheduled for delivery
     /// </summary>
     public DateTime? DeliveryDate { get; set; }
@@ -73,9 +78,15 @@ public sealed record OutgoingShipmentStopDto
     /// ID of the order associated with this stop
     /// </summary>
     public Guid OrderId { get; set; }
-
+    
+    /// <summary>
+    /// Kind of the selected address for the shipment
+    /// </summary>
+    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    
     /// <summary>
     /// Products to be delivered at this stop
+    /// </summary>
     public List<OutgoingShipmentProductDto> Products { get; set; } = [];
 }
 
