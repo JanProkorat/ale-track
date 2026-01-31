@@ -12,6 +12,7 @@
     "saveAndClose": "Uložit a zavřít",
     "required": "Toto pole je povinné",
     "validationError": "Vyplňte prosím všechna povinná pole",
+    "maxLength": "Maximální délka je {{count}} znaků",
     "from": "Od",
     "until": "Do",
     "selectDate": "Kliknutím vyber datum",
@@ -113,7 +114,9 @@
     "saveSuccess": "Řidič byl úspěšně uložen",
     "saveError": "Chyba při ukládání řidiče",
     "available": "K dispozici",
-    "color": "Barva"
+    "color": "Barva",
+    "notAvailable": "Není k dispozici",
+    "dateIntervalsOverlap": "Časové intervaly se překrývají"
   },
   "vehicles": {
     "title": "Vozidla",
@@ -264,6 +267,10 @@
   },
   "exchangeRates": {
     "fetchError": "Error při načítání kurzů měn"
+  },
+  "clientOrders": {
+    "fetchError": "Chyba při načítání objednávek klienta",
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky objednávek"
   },
   "languages": {
     "language": "Jazyk",

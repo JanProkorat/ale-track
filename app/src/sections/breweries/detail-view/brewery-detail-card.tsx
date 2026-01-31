@@ -107,22 +107,24 @@ export function BreweryDetailCard(
             color: brewery.color!
         });
 
-        const result = await executeApiCall(
+        let hasError = false;
+        await executeApiCall(
             () => clientApi.updateBreweryEndpoint(id!, updateDto.toJSON()),
-            t('breweries.saveError')
+            t('breweries.saveError'),
+            { onError: () => { hasError = true; } }
         );
 
         onProgressbarVisibilityChange(false);
 
-        if (result) {
-            if (brewery.name !== initialBrewery!.name) {
-                onConfirmed(true);
-            }
-            showSnackbar(t('breweries.saveSuccess'), 'success');
-            return true;
+        if (hasError) {
+            return false;
         }
-        
-        return false;
+
+        if (brewery.name !== initialBrewery!.name) {
+            onConfirmed(true);
+        }
+        showSnackbar(t('breweries.saveSuccess'), 'success');
+        return true;
     }, [brewery, id, initialBrewery, onConfirmed, onProgressbarVisibilityChange, showSnackbar, executeApiCall, t]);
 
     const deleteBrewery = useCallback(async () => {

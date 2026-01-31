@@ -213,11 +213,20 @@ export function OutgoingShipmentsView() {
     currentShipment.deliveryDate = deliveryDate;
 
     const client = new AuthorizedClient();
-    const success = await executeApiCall(() =>
-      client.updateOutgoingShipmentEndpoint(selectedShipmentId, currentShipment)
+    
+    // For endpoints that return void (204), we need to check if the call threw an error
+    // executeApiCall returns null both for errors and for successful void responses
+    // We use a flag to track if an error occurred
+    let hasError = false;
+    await executeApiCall(
+      () => client.updateOutgoingShipmentEndpoint(selectedShipmentId, currentShipment),
+      undefined,
+      { 
+        onError: () => { hasError = true; }
+      }
     );
-
-    if (!success) {
+    
+    if (hasError) {
       return false;
     }
 
@@ -232,7 +241,6 @@ export function OutgoingShipmentsView() {
       const updated = await fetchOutgoingShipments();
       setOutgoingShipments(updated);
     }
-
     setCurrentInitialShipment(currentShipment);
     return true;
   };

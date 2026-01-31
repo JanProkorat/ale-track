@@ -85,7 +85,16 @@ export function VehicleDetailView(
                 maxWeight: vehicle.maxWeight!
             });
 
-            result = await executeApiCall(() => clientApi.updateVehicleEndpoint(id, updateDto.toJSON()));
+            let hasError = false;
+            await executeApiCall(
+                () => clientApi.updateVehicleEndpoint(id, updateDto.toJSON()),
+                undefined,
+                { onError: () => { hasError = true; } }
+            );
+            
+            if (!hasError) {
+                result = true;
+            }
         }
 
         if (result) {

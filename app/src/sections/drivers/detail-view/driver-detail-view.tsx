@@ -111,7 +111,17 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
                 availableDates: driver.availableDates,
                 color: driver.color!
             });
-            result = await executeApiCall(() => clientApi.updateDriverEndpoint(id, updateDto.toJSON()));
+            
+            let hasError = false;
+            await executeApiCall(
+                () => clientApi.updateDriverEndpoint(id, updateDto.toJSON()),
+                undefined,
+                { onError: () => { hasError = true; } }
+            );
+            
+            if (!hasError) {
+                result = true;
+            }
         }
 
         if (result) {

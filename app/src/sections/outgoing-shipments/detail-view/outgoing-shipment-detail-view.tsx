@@ -213,7 +213,7 @@ export function OutgoingShipmentDetailView({
             onSelect={handleOrdersSelect}
             disabled={disabled}
           />
-          <Box sx={{ width: '20%' }}>
+          <Box sx={{ width: '40%' }}>
             <WeightInfoBox currentWeight={currentWeight} maxWeight={maxWeight} />
           </Box>
         </Box>

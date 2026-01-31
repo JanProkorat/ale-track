@@ -121,7 +121,16 @@ export function ProductDetailView(
 
             });
 
-            result = await executeApiCall(() => clientApi.updateProductEndpoint(id, updateDto.toJSON()));
+            let hasError = false;
+            await executeApiCall(
+                () => clientApi.updateProductEndpoint(id, updateDto.toJSON()),
+                undefined,
+                { onError: () => { hasError = true; } }
+            );
+            
+            if (!hasError) {
+                result = true;
+            }
         }
 
         if (result) {

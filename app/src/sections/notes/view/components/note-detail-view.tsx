@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import {FormControl} from "@mui/material";
 import TextField from "@mui/material/TextField";
 
+import {useApiCall} from "../../../../hooks/use-api-call";
 import {AuthorizedClient} from "../../../../api/AuthorizedClient";
 import {useSnackbar} from "../../../../providers/SnackbarProvider";
 import {DrawerLayout} from "../../../../layouts/components/drawer-layout";
@@ -23,6 +24,7 @@ type NoteDetailViewProps = {
 function NoteDetailView({noteToUpdate, parentId, parentType, onClose}: Readonly<NoteDetailViewProps>) {
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
+    const {executeApiCall} = useApiCall();
     const {triggerRefresh} = useEntityStatsRefresh();
 
     const [text, setText] = useState<string>(noteToUpdate?.text ?? '');
@@ -51,31 +53,37 @@ function NoteDetailView({noteToUpdate, parentId, parentType, onClose}: Readonly<
             return;
         }
 
-        try {
-            const clientApi = new AuthorizedClient();
+        const clientApi = new AuthorizedClient();
+        let hasError = false;
 
+        switch (parentType) {
+            case SectionType.Client:
+                if (noteToUpdate.id === null || noteToUpdate.id === undefined) {
+                    await executeApiCall(
+                        () => clientApi.createClientNoteEndpoint(parentId, new CreateNoteDto({text})),
+                        undefined,
+                        { onError: () => { hasError = true; } }
+                    );
+                } else {
+                    await executeApiCall(
+                        () => clientApi.updateClientNoteEndpoint(noteToUpdate.id!, new UpdateNoteDto({text})),
+                        undefined,
+                        { onError: () => { hasError = true; } }
+                    );
+                }
+                break;
+            case SectionType.Brewery:
+            default:
+                break;
+        }
 
-            switch (parentType) {
-                case SectionType.Client:
-                    if (noteToUpdate.id === null || noteToUpdate.id === undefined) {
-                        await clientApi.createClientNoteEndpoint(parentId, new CreateNoteDto({text}));
-                    } else {
-                        await clientApi.updateClientNoteEndpoint(noteToUpdate.id, new UpdateNoteDto({text}));
-                    }
-                    break;
-                case SectionType.Brewery:
-                default:
-                    break;
-            }
-
-            triggerRefresh();
-            showSnackbar(t('notes.saveSuccess'), 'success');
-            onClose(true);
-        } catch (error) {
-            console.error('Error saving text:', error);
-            showSnackbar(t('notes.saveError'), 'error');
+        if (hasError) {
             return;
         }
+
+        triggerRefresh();
+        showSnackbar(t('notes.saveSuccess'), 'success');
+        onClose(true);
     };
 
     const handleContentChange = (event: React.ChangeEvent<HTMLInputElement>) => {

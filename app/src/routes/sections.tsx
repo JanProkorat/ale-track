@@ -179,14 +179,14 @@ export const routesSection: RouteObject[] = [
           </RequireRole>
         ),
       },
-      {
-        path: 'inventory',
-        element: (
-          <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
-            <InventoryPage />
-          </RequireRole>
-        ),
-      },
+      // {
+      //   path: 'inventory',
+      //   element: (
+      //     <RequireRole allowedRoles={[UserRoleType.User, UserRoleType.Admin]}>
+      //       <InventoryPage />
+      //     </RequireRole>
+      //   ),
+      // },
       {
         path: 'users',
         element: (

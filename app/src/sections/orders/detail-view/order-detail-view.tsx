@@ -120,16 +120,23 @@ export function OrderDetailView(
         setShouldValidate(false);
 
         const client = new AuthorizedClient();
-        const result = await executeApiCall(() => client.updateOrderEndpoint(orderId, orderToUpdate));
-        if (result) {
-            showSnackbar(t('orders.saveSuccess'), 'success');
-            if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.requiredDeliveryDate != initialOrder?.requiredDeliveryDate) {
-                onConfirmed(true);
-            }
-            setInitialOrder(orderToUpdate);
-            return true;
+        let hasError = false;
+        await executeApiCall(
+            () => client.updateOrderEndpoint(orderId, orderToUpdate),
+            undefined,
+            { onError: () => { hasError = true; } }
+        );
+        
+        if (hasError) {
+            return false;
         }
-        return false;
+        
+        showSnackbar(t('orders.saveSuccess'), 'success');
+        if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.requiredDeliveryDate != initialOrder?.requiredDeliveryDate) {
+            onConfirmed(true);
+        }
+        setInitialOrder(orderToUpdate);
+        return true;
     }, [executeApiCall, initialOrder, onConfirmed, order?.requiredDeliveryDate, showSnackbar, t]);
 
     const saveOrder = useCallback(async () => {

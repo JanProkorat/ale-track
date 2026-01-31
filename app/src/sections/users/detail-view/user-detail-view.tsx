@@ -49,17 +49,20 @@ export function UserDetailView(
         setShouldValidate(false);
 
         const client = new AuthorizedClient();
-        const success = await executeApiCall(() =>
-            client.updateUserEndpoint(userId, userToUpdate)
+        let hasError = false;
+        await executeApiCall(
+            () => client.updateUserEndpoint(userId, userToUpdate),
+            undefined,
+            { onError: () => { hasError = true; } }
         );
 
-        if (success) {
-            showSnackbar(t('users.saveSuccess'), 'success');
-            setInitialUser(userToUpdate);
-            return true;
+        if (hasError) {
+            return false;
         }
 
-        return false;
+        showSnackbar(t('users.saveSuccess'), 'success');
+        setInitialUser(userToUpdate);
+        return true;
     }, [executeApiCall, showSnackbar, t]);
 
     const saveUser = useCallback(async () => {

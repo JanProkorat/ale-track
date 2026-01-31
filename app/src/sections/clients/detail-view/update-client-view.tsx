@@ -127,20 +127,22 @@ export function UpdateClientView(
             }))
         });
 
-        const result = await executeApiCall(
+        let hasError = false;
+        await executeApiCall(
             () => clientApi.updateClientEndpoint(id, updateDto.toJSON()),
-            t('clients.saveError')
+            t('clients.saveError'),
+            { onError: () => { hasError = true; } }
         );
 
         setInitialLoading(false);
 
-        if (result) {
-            showSnackbar(t('clients.saveSuccess'), 'success');
-            onConfirmed(true);
-            return true;
+        if (hasError) {
+            return false;
         }
-        
-        return false;
+
+        showSnackbar(t('clients.saveSuccess'), 'success');
+        onConfirmed(true);
+        return true;
     }
 
     const deleteClient = useCallback(async () => {

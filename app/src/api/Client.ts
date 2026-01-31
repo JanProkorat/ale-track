@@ -5922,6 +5922,8 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
     driversCount?: number;
     vehiclesCount?: number;
     usersCount?: number;
+    outgoingShipmentsCount?: number;
+    productDeliveriesCount?: number;
 
     constructor(data?: INumberOfRecordsInEachModuleDto) {
         if (data) {
@@ -5941,6 +5943,8 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
             this.driversCount = _data["driversCount"];
             this.vehiclesCount = _data["vehiclesCount"];
             this.usersCount = _data["usersCount"];
+            this.outgoingShipmentsCount = _data["outgoingShipmentsCount"];
+            this.productDeliveriesCount = _data["productDeliveriesCount"];
         }
     }
 
@@ -5960,6 +5964,8 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
         data["driversCount"] = this.driversCount;
         data["vehiclesCount"] = this.vehiclesCount;
         data["usersCount"] = this.usersCount;
+        data["outgoingShipmentsCount"] = this.outgoingShipmentsCount;
+        data["productDeliveriesCount"] = this.productDeliveriesCount;
         return data;
     }
 }
@@ -5972,6 +5978,8 @@ export interface INumberOfRecordsInEachModuleDto {
     driversCount?: number;
     vehiclesCount?: number;
     usersCount?: number;
+    outgoingShipmentsCount?: number;
+    productDeliveriesCount?: number;
 }
 
 export class CreateUserDto implements ICreateUserDto {

@@ -153,22 +153,28 @@ export function ProductDeliveriesView() {
         }
 
         const client = new AuthorizedClient();
-        const result = await executeApiCall(() => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery));
+        let hasError = false;
+        await executeApiCall(
+            () => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery),
+            undefined,
+            { onError: () => { hasError = true; } }
+        );
 
-        if (result) {
-            showSnackbar(t('productDeliveries.saveSuccess'), 'success');
-
-            // If the state or date has changed, reload the list
-            if (currentDelivery?.state !== currentInitialDelivery?.state ||
-                currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
-                const updated = await fetchProductDeliveries();
-                setDeliveries(updated);
-            }
-
-            setCurrentInitialDelivery(currentDelivery);
-            return true;
+        if (hasError) {
+            return false;
         }
-        return false;
+        
+        showSnackbar(t('productDeliveries.saveSuccess'), 'success');
+
+        // If the state or date has changed, reload the list
+        if (currentDelivery?.state !== currentInitialDelivery?.state ||
+            currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate) {
+            const updated = await fetchProductDeliveries();
+            setDeliveries(updated);
+        }
+
+        setCurrentInitialDelivery(currentDelivery);
+        return true;
     };
 
     const handlePendingChangesConfirmation = async (shouldSave: boolean) => {
