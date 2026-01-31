@@ -1,3 +1,5 @@
+using AleTrack.Common.Enums;
+
 namespace AleTrack.Features.OutgoingShipments.Utils;
 
 /// <summary>
@@ -14,4 +16,9 @@ public sealed record ClientOrderShipmentDto
     /// Order of the shipment in the delivery sequence
     /// </summary>
     public int Order { get; set; }
+    
+    /// <summary>
+    /// Kind of the selected address for the shipment
+    /// </summary>
+    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
 }

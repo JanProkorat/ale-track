@@ -41,4 +41,14 @@ public sealed record NumberOfRecordsInEachModuleDto
     /// Total count of vehicles in the database
     /// </summary>
     public int UsersCount { get; set; }
+    
+    /// <summary>
+    /// Total count of active outgoing shipments in the database
+    /// </summary>
+    public int OutgoingShipmentsCount { get; set; }
+    
+    /// <summary>
+    /// Total count of active products delivered in the database
+    /// </summary>
+    public int ProductDeliveriesCount { get; set; }
 }

@@ -21,4 +21,9 @@ public sealed record OutgoingShipmentListItemDto
     /// Date when the shipment is scheduled for delivery
     /// </summary>
     public DateTime? DeliveryDate { get; set; }
+    
+    /// <summary>
+    /// Name of the outgoing shipment
+    /// </summary>
+    public string Name { get; set; } = null!;
 }

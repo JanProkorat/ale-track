@@ -53,6 +53,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
             .Where(os => os.PublicId == req.Id)
             .Select(os => new OutgoingShipmentDetailDto
             {
+                Name = os.Name,
                 Id = os.PublicId,
                 State = os.State,
                 DeliveryDate = os.DeliveryDate,
@@ -71,6 +72,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,
                         OrderId = s.ClientOrder.PublicId,
+                        SelectedAddressKind = s.SelectedAddressKind,
                         Products = s.ClientOrder.OrderItems
                             .Select(oi => new OutgoingShipmentProductDto
                             {
@@ -87,6 +89,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                     })
                     .ToList()
             })
+            .AsNoTracking()
             .FirstOrDefaultAsync(ct);
 
         if (outgoingShipment is null)

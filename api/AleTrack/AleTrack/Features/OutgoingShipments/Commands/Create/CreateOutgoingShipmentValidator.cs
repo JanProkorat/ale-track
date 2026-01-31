@@ -26,6 +26,18 @@ public sealed class CreateOutgoingShipmentDtoValidator : AbstractValidator<Creat
 {
     public CreateOutgoingShipmentDtoValidator()
     {   
+        RuleFor(dto => dto.Name)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+        
+        RuleFor(dto => dto.Name)
+            .NotEmpty()
+            .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+        
+        RuleFor(dto => dto.Name)
+            .MaximumLength(100)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        
         RuleFor(dto => dto.ClientOrderShipments)
             .NotEmpty()
             .WithErrorCode(ErrorCodes.ValidationNotEmptyError);

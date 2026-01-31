@@ -34,7 +34,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <summary>
     /// States in which the OutgoingShipment has to have filled all data
     /// </summary>
-    private readonly OutgoingShipmentState[] statesWithFilledData = [
+    private readonly OutgoingShipmentState[] _statesWithFilledData = [
         OutgoingShipmentState.Delivered, 
         OutgoingShipmentState.InTransit
     ];
@@ -61,10 +61,11 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     }
 
     /// <inheritdoc />
-    override public async Task HandleAsync(UpdateOutgoingShipmentRequest req, CancellationToken ct)
+    public override async Task HandleAsync(UpdateOutgoingShipmentRequest req, CancellationToken ct)
     {
         var outgoingShipment = await dbContext.OutgoingShipments
         .Include(os => os.Drivers)
+            .ThenInclude(od => od.Driver)
         .Include(os => os.Vehicle)
         .Include(os => os.Stops)
             .ThenInclude(s => s.ClientOrder)
@@ -78,6 +79,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment!, ct);
 
         outgoingShipment!.DeliveryDate = req.Data.DeliveryDate;
+        outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
         outgoingShipment.Stops = stops;
@@ -85,7 +87,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
 
-        if (statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
+        if (_statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(req.Data.State);
         
         outgoingShipment.State = req.Data.State;
@@ -128,10 +130,16 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 ThrowHelper.PublicEntitiesNotFound(nameof(Entities.Order), notFoundOrderIds);
 
             stops.AddRange(fetchedOrders
+                .Select(o => new
+                {
+                    order = o,
+                    requestOrder = clientOrderShipments.First(cos => cos.ClientOrderId == o.PublicId)
+                })
                 .Select(o => new OutgoingShipmentStop
                 {
-                    ClientOrder = o,
-                    Order = clientOrderShipments.First(cos => cos.ClientOrderId == o.PublicId).Order
+                    ClientOrder = o.order,
+                    Order = o.requestOrder.Order,
+                    SelectedAddressKind = o.requestOrder.SelectedAddressKind
                 }));
         }
 

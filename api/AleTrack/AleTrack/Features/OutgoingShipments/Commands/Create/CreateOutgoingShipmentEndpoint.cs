@@ -48,7 +48,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     }
 
     /// <inheritdoc />
-    override public async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
     {
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
@@ -56,6 +56,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         var outgoingShipment = new OutgoingShipment
         {
+            Name = req.Data.Name,
             DeliveryDate = req.Data.DeliveryDate,
             State = OutgoingShipmentState.Created,
             Vehicle = vehicle,
@@ -69,7 +70,8 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 .Select(cos => new OutgoingShipmentStop
                 {
                     ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
-                    Order = cos.Order
+                    Order = cos.Order,
+                    SelectedAddressKind = cos.SelectedAddressKind
                 })]
         };
 

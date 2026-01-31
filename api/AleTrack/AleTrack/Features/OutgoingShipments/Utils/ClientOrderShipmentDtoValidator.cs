@@ -23,5 +23,13 @@ public sealed class ClientOrderShipmentDtoValidator : Validator<ClientOrderShipm
         RuleFor(dto => dto.Order)
             .GreaterThan(0)
             .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        
+        RuleFor(dto => dto.SelectedAddressKind)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+        
+        RuleFor(dto => dto.SelectedAddressKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
     }
 }

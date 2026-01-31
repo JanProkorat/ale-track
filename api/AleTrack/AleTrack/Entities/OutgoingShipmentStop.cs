@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,6 +29,12 @@ public sealed class OutgoingShipmentStop : PublicEntity
     [Column("client_order_id")]
     public long ClientOrderId { get; set; }
 
+    /// <summary>
+    /// Kind of the selected address for the shipment
+    /// </summary>
+    [Column("selected_address_kind")]
+    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    
     /// <summary>
     /// Outgoing shipment associated with this stop
     /// </summary>
