@@ -42,17 +42,23 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
     /// <inheritdoc />
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
+        var planningState = req.Parameters.GetPlanningState();
+        
         var data = await dbContext.Orders
             .Select(o => new OrderListItemDto
             {
                 State = o.State,
                 Id = o.PublicId,
                 RequiredDeliveryDate = o.RequiredDeliveryDate,
-                ClientName = o.Client.Name
+                ClientName = o.Client.Name,
+                PlanningState = o.PlanningState
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
 
+        if (planningState is not null)
+            data = data.Where(o => o.PlanningState == planningState).ToList();
+        
         await SendOkAsync(data, cancellation: ct);
     }
 }

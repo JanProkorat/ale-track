@@ -12,6 +12,7 @@ public static class AlcoholPercentage
     public const float FourPointFour = 4.4f;
     public const float FourPointSix = 4.6f;
     public const float FourPointEight = 4.8f;
+    public const float FourPointNine = 4.9f;
     public const float Five = 5.0f;
     public const float FivePointTwo = 5.2f;
     public const float FivePointFive = 5.5f;

@@ -59,4 +59,22 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
             && VehicleId.HasValue 
             && Drivers.Count > 0 
             && Stops.Count > 0;
+    
+    /// <summary>
+    /// Planning state of the outgoing shipment
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public PlanningState PlanningState
+    {
+        get
+        {
+            return State switch
+            {
+                OutgoingShipmentState.Created or OutgoingShipmentState.Loaded or OutgoingShipmentState.InTransit => PlanningState.Active,
+                OutgoingShipmentState.Delivered => PlanningState.Finished,
+                OutgoingShipmentState.Cancelled => PlanningState.Cancelled,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+        }
+    }
 }

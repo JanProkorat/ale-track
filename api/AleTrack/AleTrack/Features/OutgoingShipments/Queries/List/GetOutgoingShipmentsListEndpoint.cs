@@ -35,17 +35,23 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
     /// <inheritdoc />
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
+        var planningState = req.Parameters.GetPlanningState();
+
         var outgoingShipments = await dbContext.OutgoingShipments
             .Select(os => new OutgoingShipmentListItemDto
             {
                 Id = os.PublicId,
                 Name = os.Name,
                 State = os.State,
-                DeliveryDate = os.DeliveryDate
+                DeliveryDate = os.DeliveryDate,
+                PlanningState = os.PlanningState
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
 
+        if (planningState is not null)
+            outgoingShipments = outgoingShipments.Where(o => o.PlanningState == planningState).ToList();
+        
         await SendOkAsync(outgoingShipments, ct);
     }
 }

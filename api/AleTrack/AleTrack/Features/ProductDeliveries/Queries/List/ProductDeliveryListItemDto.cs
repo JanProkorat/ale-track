@@ -23,4 +23,9 @@ public sealed record ProductDeliveryListItemDto
     /// List of brewery names, each representing a delivery stop.
     /// </summary>
     public List<string> StopNames { get; set; } = [];
+    
+    /// <summary>
+    /// Planning state of the order
+    /// </summary>
+    public PlanningState PlanningState { get; set; }
 }

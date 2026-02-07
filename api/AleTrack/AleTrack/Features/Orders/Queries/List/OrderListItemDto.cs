@@ -27,4 +27,9 @@ public sealed record OrderListItemDto
     /// Name of the related client
     /// </summary>
     public string ClientName { get; set; } = null!;
+    
+    /// <summary>
+    /// Planning state of the order
+    /// </summary>
+    public PlanningState PlanningState { get; set; }
 }

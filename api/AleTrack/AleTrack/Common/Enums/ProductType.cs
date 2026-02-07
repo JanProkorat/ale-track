@@ -95,5 +95,30 @@ public enum ProductType
     /// <summary>
     /// Sváteční ležák
     /// </summary>
-    FestiveLager = 19
+    FestiveLager = 19,
+    
+    /// <summary>
+    /// Řezaný ležák
+    /// </summary>
+    MixedLager = 20,
+
+    /// <summary>
+    /// Mix (např. mix limonád nebo piv)
+    /// </summary>
+    Mix = 21,
+
+    /// <summary>
+    /// Ochucené nealkoholické pivo
+    /// </summary>
+    NonAlcoholicFlavourBeer = 22,
+
+    /// <summary>
+    /// Originální řemeslný ležák
+    /// </summary>
+    OriginalCraftLager = 23,
+
+    /// <summary>
+    /// Jiný
+    /// </summary>
+    Other = 24
 }

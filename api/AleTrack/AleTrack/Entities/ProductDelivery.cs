@@ -51,4 +51,22 @@ public sealed class ProductDelivery : PublicEnumSoftlyDeletableEntity<ProductDel
 
     /// <inheritdoc />
     protected override ProductDeliveryState CancelledStatus => ProductDeliveryState.Cancelled;
+    
+    /// <summary>
+    /// Planning state of the product delivery
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public PlanningState PlanningState
+    {
+        get
+        {
+            return State switch
+            {
+                ProductDeliveryState.InPlanning or ProductDeliveryState.OnTheWay => PlanningState.Active,
+                ProductDeliveryState.Finished => PlanningState.Finished,
+                ProductDeliveryState.Cancelled => PlanningState.Cancelled,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+        }
+    }
 }

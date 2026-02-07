@@ -13,7 +13,7 @@ internal static class BreweryBuilder
             Name = "Svijany",
             PublicId = Guid.NewGuid(),
             OfficialAddress = new Address
-            {
+            { 
                 StreetName = "Svijany",
                 StreetNumber = "25",
                 City = "Svijany",

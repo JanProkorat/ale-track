@@ -26,4 +26,9 @@ public sealed record OutgoingShipmentListItemDto
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;
+    
+    /// <summary>
+    /// Planning state of the order
+    /// </summary>
+    public PlanningState PlanningState { get; set; }
 }

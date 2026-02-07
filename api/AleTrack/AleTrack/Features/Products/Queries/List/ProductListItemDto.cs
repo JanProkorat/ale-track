@@ -52,17 +52,17 @@ public sealed record ProductListItemDto
     /// <summary>
     /// Price for unit with VAT
     /// </summary>
-    public decimal PriceForUnitWithVat { get; set; }
+    public decimal? PriceForUnitWithVat { get; set; }
     
     /// <summary>
     /// Price for unit without VAT
     /// </summary>
-    public decimal PriceForUnitWithoutVat { get; set; }
+    public decimal? PriceForUnitWithoutVat { get; set; }
     
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public int? Weight { get; set; }
+    public double? Weight { get; set; }
 
     /// <summary>
     /// Name of the related brewery
