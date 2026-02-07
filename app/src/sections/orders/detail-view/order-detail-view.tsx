@@ -1,19 +1,19 @@
-import {useTranslation} from "react-i18next";
-import {useState, useEffect, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import { useState, useEffect, useCallback } from "react";
 
-import {Typography} from "@mui/material";
+import { Box, Typography } from "@mui/material";
 
 import { useApiCall } from "src/hooks/use-api-call";
 
-import {UpdateOrderView} from "./update-order-view";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
+import { UpdateOrderView } from "./update-order-view";
+import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { DetailCardLayout } from "../../../layouts/dashboard/detail-card-layout";
 import {
-  OrderState,
-  UpdateOrderDto,
-  UpdateOrderItemDto,
-  GroupedProductHistoryDto,
+    OrderState,
+    UpdateOrderDto,
+    UpdateOrderItemDto,
+    GroupedProductHistoryDto,
 } from '../../../api/Client';
 
 type OrderDetailViewProps = {
@@ -34,10 +34,10 @@ export function OrderDetailView(
         onHasChangesChange,
         onProgressbarVisibilityChange
     }: Readonly<OrderDetailViewProps>
-){
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
-    const {executeApiCall} = useApiCall();
+) {
+    const { showSnackbar } = useSnackbar();
+    const { t } = useTranslation();
+    const { executeApiCall } = useApiCall();
 
     const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
     const [order, setOrder] = useState<UpdateOrderDto | null>(null);
@@ -47,37 +47,37 @@ export function OrderDetailView(
     const [disabled, setDisabled] = useState<boolean>(false);
 
     const fetchProducts = useCallback(async (clientId: string) => {
-      const client = new AuthorizedClient();
-      const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
-      if (result) {
-        setProducts(result);
-      }
+        const client = new AuthorizedClient();
+        const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
+        if (result) {
+            setProducts(result);
+        }
     }, [executeApiCall]);
 
     useEffect(() => {
-      if (order === null)
-        return;
+        if (order === null)
+            return;
 
-      void fetchProducts(order.clientId)
+        void fetchProducts(order.clientId)
     }, [fetchProducts, order]);
-    
+
     const fetchOrder = useCallback(async () => {
         if (id == null) {
             return;
         }
-        
+
         onProgressbarVisibilityChange(true);
         const client = new AuthorizedClient();
         const detail = await executeApiCall(() => client.getOrderDetailEndpoint(id!));
         if (detail) {
-            const updateOrder =  new UpdateOrderDto({
+            const updateOrder = new UpdateOrderDto({
                 clientId: detail.client!.id!,
                 requiredDeliveryDate: detail.requiredDeliveryDate,
                 state: detail.state,
                 orderItems: (detail.orderItems ?? []).map((item) => new UpdateOrderItemDto({
-                  productId: item.productId,
-                  quantity: item.quantity,
-                  reminderState: item.reminderState,
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    reminderState: item.reminderState,
                 }))
             });
 
@@ -98,7 +98,7 @@ export function OrderDetailView(
         today.setHours(0, 0, 0, 0);
 
         let deliveryDate = null;
-        if (orderToUpdate.requiredDeliveryDate !== null && order?.requiredDeliveryDate !== undefined){
+        if (orderToUpdate.requiredDeliveryDate !== null && order?.requiredDeliveryDate !== undefined) {
             deliveryDate = new Date(orderToUpdate.requiredDeliveryDate!);
             deliveryDate.setHours(0, 0, 0, 0);
         }
@@ -126,11 +126,11 @@ export function OrderDetailView(
             undefined,
             { onError: () => { hasError = true; } }
         );
-        
+
         if (hasError) {
             return false;
         }
-        
+
         showSnackbar(t('orders.saveSuccess'), 'success');
         if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.requiredDeliveryDate != initialOrder?.requiredDeliveryDate) {
             onConfirmed(true);
@@ -158,9 +158,21 @@ export function OrderDetailView(
 
     return (
         <>
-            {id === undefined && <Typography sx={{mt: 2, ml: 2}}>
-                {t('orders.noDetailToDisplay')}
-            </Typography>
+            {id === undefined &&
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: '100%',
+                        alignContent: 'center',
+                        p: 5,
+                        minHeight: 400,
+                    }}
+                >
+                    <Typography variant="subtitle2" sx={{ flexGrow: 1, textAlign: 'center' }}>
+                        {t('orders.noDetailToDisplay')}
+                    </Typography>
+                </Box>
             }
             {id !== undefined && <DetailCardLayout
                 id={id}
@@ -185,7 +197,7 @@ export function OrderDetailView(
                     products={products}
                     shouldValidate={shouldValidate}
                     onChange={setOrder}
-                />} 
+                />}
             </DetailCardLayout>}
         </>
     );

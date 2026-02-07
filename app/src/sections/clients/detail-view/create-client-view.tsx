@@ -120,6 +120,7 @@ export function CreateClientView({ region, onClose }: Readonly<CreateClientViewP
             isLoading={false}
             onClose={onClose}
             onSaveAndClose={saveClient}
+            width={900}
         >
             <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: 2}}>
                 {/* Client name */}

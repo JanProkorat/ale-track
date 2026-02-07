@@ -1,4 +1,3 @@
-import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -11,6 +10,7 @@ import { useApiCall } from 'src/hooks/use-api-call';
 import { TableNoData } from 'src/components/table/table-no-data';
 import { TableEmptyRows } from 'src/components/table/table-empty-rows';
 
+import { PlanningState } from '../../../api/Client';
 import { OrdersTableRow } from '../orders-table-row';
 import { emptyRows } from '../../../providers/utils';
 import { Scrollbar } from '../../../components/scrollbar';
@@ -19,10 +19,11 @@ import { OrdersTableToolbar } from '../orders-table-toolbar';
 import { AuthorizedClient } from '../../../api/AuthorizedClient';
 import { OrderDetailView } from '../detail-view/order-detail-view';
 import { CreateOrderView } from '../detail-view/create-order-view';
+import { PlanningStateTab } from '../../common/planning-state-tab';
 import { SplitViewLayout } from '../../../layouts/dashboard/split-view-layout';
 import { SortableTableHead } from '../../../components/table/sortable-table-head';
 
-import type { OrderState, OrderListItemDto } from '../../../api/Client';
+import type { OrderListItemDto } from '../../../api/Client';
 
 export function OrdersView() {
   const { t } = useTranslation();
@@ -40,9 +41,8 @@ export function OrdersView() {
   >(undefined);
   const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
 
-  const [filterDate, setFilterDate] = useState<Date | null>(null);
   const [filterClientName, setFilterClientName] = useState<string | null>(null);
-  const [filterState, setFilterState] = useState<OrderState | null>(null);
+  const [filterPlanningState, setFilterPlanningState] = useState<PlanningState>(PlanningState.Active);
 
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [orderBy, setOrderBy] = useState<string>('name');
@@ -57,23 +57,17 @@ export function OrdersView() {
   const fetchOrders = useCallback(async () => {
     const filters: Record<string, string> = {};
 
-    if (filterDate !== null) {
-      filters.deliveryDate = `eq:${dayjs(filterDate).format('YYYY-MM-DD')}`;
-    }
+    filters.planningState = `startswith:${PlanningState[filterPlanningState as unknown as keyof typeof PlanningState]}`;
 
     if (filterClientName !== null) {
       filters.clientName = `startswith:${filterClientName}`;
-    }
-
-    if (filterState !== null) {
-      filters.state = `eq:${filterState}`;
     }
 
     filters.sort = `${order}:${orderBy}`;
 
     const client = new AuthorizedClient();
     return await executeApiCallWithDefault(() => client.fetchOrders(filters), []);
-  }, [executeApiCallWithDefault, filterClientName, filterDate, filterState, order, orderBy]);
+  }, [executeApiCallWithDefault, filterClientName, filterPlanningState, order, orderBy]);
 
   useEffect(() => {
     void fetchOrders().then((data) => {
@@ -159,17 +153,10 @@ export function OrdersView() {
     <>
       <OrdersTableToolbar
         numSelected={table.selected.length}
-        filterDate={filterDate}
-        onFilterDate={(value) => {
-          setFilterDate(value ?? null);
-          table.onResetPage();
-        }}
         filterClientName={filterClientName}
         onFilterClientName={setFilterClientName}
-        filterState={filterState}
-        onFilterState={setFilterState}
       />
-
+      <PlanningStateTab onPlanningStateChange={setFilterPlanningState} />
       <Scrollbar>
         <TableContainer sx={{ overflow: 'unset' }}>
           <Table>

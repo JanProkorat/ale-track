@@ -6787,6 +6787,11 @@ export enum ProductType {
     YeastLager = 17,
     UnfilteredBlendedLager = 18,
     FestiveLager = 19,
+    MixedLager = 20,
+    Mix = 21,
+    NonAlcoholicFlavourBeer = 22,
+    OriginalCraftLager = 23,
+    Other = 24,
 }
 
 export class CreateReminderDto implements ICreateReminderDto {
@@ -6883,8 +6888,8 @@ export class ProductListItemDto implements IProductListItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
     breweryName?: string;
     breweryId?: string;
@@ -6954,8 +6959,8 @@ export interface IProductListItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
     breweryName?: string;
     breweryId?: string;
@@ -6966,9 +6971,7 @@ export enum ProductKind {
     Bottle = 2,
     Can = 3,
     Multipack = 4,
-    Duopack = 5,
-    DecorativeBottleOrJug = 6,
-    Other = 7,
+    Other = 5,
 }
 
 export class ProductDto implements IProductDto {
@@ -6981,8 +6984,8 @@ export class ProductDto implements IProductDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
 
     constructor(data?: IProductDto) {
@@ -7046,8 +7049,8 @@ export interface IProductDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
 }
 
@@ -7542,6 +7545,7 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
     deliveryDate?: Date;
     state?: ProductDeliveryState;
     stopNames?: string[];
+    planningState?: PlanningState;
 
     constructor(data?: IProductDeliveryListItemDto) {
         if (data) {
@@ -7562,6 +7566,7 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
                 for (let item of _data["stopNames"])
                     this.stopNames!.push(item);
             }
+            this.planningState = _data["planningState"];
         }
     }
 
@@ -7582,6 +7587,7 @@ export class ProductDeliveryListItemDto implements IProductDeliveryListItemDto {
             for (let item of this.stopNames)
                 data["stopNames"].push(item);
         }
+        data["planningState"] = this.planningState;
         return data;
     }
 }
@@ -7591,6 +7597,13 @@ export interface IProductDeliveryListItemDto {
     deliveryDate?: Date;
     state?: ProductDeliveryState;
     stopNames?: string[];
+    planningState?: PlanningState;
+}
+
+export enum PlanningState {
+    Active = 0,
+    Finished = 1,
+    Cancelled = 2,
 }
 
 export class ProductDeliveryDto implements IProductDeliveryDto {
@@ -8134,6 +8147,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
     state?: OutgoingShipmentState;
     deliveryDate?: Date | undefined;
     name?: string;
+    planningState?: PlanningState;
 
     constructor(data?: IOutgoingShipmentListItemDto) {
         if (data) {
@@ -8150,6 +8164,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
             this.state = _data["state"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : <any>undefined;
             this.name = _data["name"];
+            this.planningState = _data["planningState"];
         }
     }
 
@@ -8166,6 +8181,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
         data["state"] = this.state;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : <any>undefined;
         data["name"] = this.name;
+        data["planningState"] = this.planningState;
         return data;
     }
 }
@@ -8175,6 +8191,7 @@ export interface IOutgoingShipmentListItemDto {
     state?: OutgoingShipmentState;
     deliveryDate?: Date | undefined;
     name?: string;
+    planningState?: PlanningState;
 }
 
 export class CreateProductsDeliveryDto implements ICreateProductsDeliveryDto {
@@ -9045,6 +9062,7 @@ export class OrderListItemDto implements IOrderListItemDto {
     state?: OrderState;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
+    planningState?: PlanningState;
 
     constructor(data?: IOrderListItemDto) {
         if (data) {
@@ -9061,6 +9079,7 @@ export class OrderListItemDto implements IOrderListItemDto {
             this.state = _data["state"];
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : <any>undefined;
             this.clientName = _data["clientName"];
+            this.planningState = _data["planningState"];
         }
     }
 
@@ -9077,6 +9096,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data["state"] = this.state;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : <any>undefined;
         data["clientName"] = this.clientName;
+        data["planningState"] = this.planningState;
         return data;
     }
 }
@@ -9086,6 +9106,7 @@ export interface IOrderListItemDto {
     state?: OrderState;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
+    planningState?: PlanningState;
 }
 
 export enum OrderState {
@@ -10896,8 +10917,8 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
 
     constructor(data?: IBreweryProductListItemDto) {
@@ -10961,8 +10982,8 @@ export interface IBreweryProductListItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     priceWithVat?: number;
-    priceForUnitWithVat?: number;
-    priceForUnitWithoutVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
 }
 

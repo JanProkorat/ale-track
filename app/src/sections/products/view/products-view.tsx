@@ -155,6 +155,8 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                                 )
                             }
                             headLabel={columns}
+                            checkboxVisible
+                            checkboxSticky
                         />
                         <TableBody>
                             {products

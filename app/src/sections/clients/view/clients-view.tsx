@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { varAlpha } from 'minimal-shared/utils';
 import { useParams, useNavigate } from 'react-router-dom';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Table from '@mui/material/Table';
@@ -41,6 +41,7 @@ export function ClientsView() {
   const { t } = useTranslation();
   const { clientId } = useParams<{ clientId?: string }>();
   const navigate = useNavigate();
+  const isInternalNavigationRef = useRef(false);
 
   const [selectedRegion, setSelectedRegion] = useLocalStorage<Region>(
     'clients-selected-region',
@@ -68,29 +69,37 @@ export function ClientsView() {
     if (filterName) filters.name = `startswith:${filterName}`;
     if (region !== undefined && region !== null) filters.region = `eq:${region}`;
     filters.sort = `${order}:${orderBy}`;
-    
+
     return await executeApiCallWithDefault(
       () => client.fetchClients(filters),
       [],
       t('clients.errorFetchingClients')
     );
   }, [executeApiCallWithDefault, filterName, order, orderBy, t]);
-  
-  const fetchWithFilters = useCallback(async () => {
-    await fetchClients(selectedRegion).then((data) => {
+
+  const fetchWithFilters = useCallback(async (region: Region) => {
+    await fetchClients(region).then((data) => {
       setClients(data);
       if (data.length > 0) {
         const firstId = data[0].id!;
         setSelectedClientId(firstId);
+        isInternalNavigationRef.current = true;
         navigate(`/clients/${firstId}`, { replace: true });
       } else if (selectedClientId !== null) {
         setSelectedClientId(null);
+        isInternalNavigationRef.current = true;
         navigate(`/clients`, { replace: true });
       }
     });
-  }, [fetchClients, navigate, selectedClientId, selectedRegion, setSelectedClientId]);
+  }, [fetchClients, navigate, selectedClientId, setSelectedClientId]);
 
   useEffect(() => {
+    // Skip if this is an internal navigation we triggered
+    if (isInternalNavigationRef.current) {
+      isInternalNavigationRef.current = false;
+      return;
+    }
+
     setInitialLoading(true);
     if (clientId) {
       fetchClients().then((data) => {
@@ -109,19 +118,24 @@ export function ClientsView() {
           }
           setClients(data.filter((d) => mapEnumValue(Region, d.region) === regionToSet));
         }
-      }).finally(() => setSuppressRegionEffect(false));
+      }).finally(() => {
+        setSuppressRegionEffect(false);
+        setInitialLoading(false);
+      });
     } else {
-      fetchWithFilters();
+      fetchWithFilters(selectedRegion).finally(() => {
+        setSuppressRegionEffect(false);
+        setInitialLoading(false);
+      });
     }
-
-    setInitialLoading(false);
-  }, [clientId, fetchClients, fetchWithFilters, navigate, selectedRegion, setSelectedClientId, setSelectedRegion, showSnackbar, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   useEffect(() => {
     if (suppressRegionEffect)
       return;
 
-    fetchWithFilters();
+    fetchWithFilters(selectedRegion);
   }, [selectedRegion, filterName, order, orderBy, suppressRegionEffect, fetchWithFilters]);
 
   const handleRowClick = (id: string) => {
@@ -129,6 +143,7 @@ export function ClientsView() {
       setPendingClientId(id);
     } else {
       setSelectedClientId(id);
+      isInternalNavigationRef.current = true;
       navigate(`/clients/${id}`);
     }
   };
@@ -301,7 +316,7 @@ export function ClientsView() {
         </Box>
       </Box>
       <Drawer anchor="right" open={createClientDrawerVisible} onClose={closeDrawer}>
-        <Box sx={{ width: 700, p: 2 }}>
+        <Box sx={{ width: 900, p: 2 }}>
           <CreateClientView region={selectedRegion} onClose={closeDrawer} />
         </Box>
       </Drawer>

@@ -17,30 +17,63 @@ function extractErrorInfo(error: any): {
   errorCode?: ErrorCode;
   message?: string;
   properties?: { [key: string]: any };
+  statusCode?: number;
 } {
+  let statusCode: number | undefined;
+  let message: string | undefined;
+
+  // Check if the error has a status code
+  if (error && typeof error === 'object') {
+    // Check for status property
+    if ('status' in error && typeof error.status === 'number') {
+      statusCode = error.status;
+    }
+
+    // Check for message property (string)
+    if ('message' in error && typeof error.message === 'string') {
+      message = error.message;
+
+      // NSwag throws plain Error with message "Unauthorized" for 401 responses
+      if (message && message.toLowerCase() === 'unauthorized') {
+        statusCode = 401;
+      }
+    }
+  }
+
   // Check if the error has a response body with FailureResponse structure
   if (error && typeof error === 'object') {
-    // Direct FailureResponse object
-    if ('error_code' in error || 'message' in error) {
+    // Direct FailureResponse object (has error_code or structured error_properties)
+    if ('error_code' in error) {
       return {
         errorCode: error.error_code as ErrorCode,
-        message: error.message,
+        message: message || error.message,
         properties: error.error_properties,
+        statusCode,
       };
     }
 
     // Error thrown by fetch with response
     if (error.response && typeof error.response === 'object') {
-      return extractErrorInfo(error.response);
+      const responseInfo = extractErrorInfo(error.response);
+      return {
+        ...responseInfo,
+        statusCode: statusCode || responseInfo.statusCode,
+        message: message || responseInfo.message,
+      };
     }
 
     // Check for result property (from NSwag generated client)
     if (error.result && typeof error.result === 'object') {
-      return extractErrorInfo(error.result);
+      const resultInfo = extractErrorInfo(error.result);
+      return {
+        ...resultInfo,
+        statusCode: statusCode || resultInfo.statusCode,
+        message: message || resultInfo.message,
+      };
     }
   }
 
-  return {};
+  return { statusCode, message };
 }
 
 /**
@@ -62,14 +95,20 @@ export async function handleApiCall<T>(
       console.error('API Error:', error);
 
       // Extract error information from the response
-      const { errorCode, message: backendMessage, properties } = extractErrorInfo(error);
+      const { errorCode, message: backendMessage, properties, statusCode } = extractErrorInfo(error);
 
       // Determine which message to show
       let displayMessage = errorMessage;
-      
-      if (errorCode && translateError) {
+      let finalErrorCode = errorCode;
+
+      // Handle 401 status code specifically
+      if (statusCode === 401 && !errorCode) {
+        finalErrorCode = 'UNAUTHORIZED' as ErrorCode;
+      }
+
+      if (finalErrorCode && translateError) {
         // Use translated error message based on error code
-        displayMessage = translateError(`errors.${errorCode}`);
+        displayMessage = translateError(`errors.${finalErrorCode}`);
       } else if (backendMessage && !errorMessage) {
         // Fallback to backend message if no custom message provided
         displayMessage = backendMessage;
@@ -87,7 +126,7 @@ export async function handleApiCall<T>(
 
       // Call custom error handler if provided
       if (onError) {
-        onError(error as Error, errorCode);
+        onError(error as Error, finalErrorCode);
       }
     }
 

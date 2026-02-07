@@ -1,8 +1,8 @@
-import {router} from "../main";
+import { router } from "../main";
 import { Client } from './Client';
 import { API_BASE_URL } from './api';
 
-import type {UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, ClientOrderReminderDto, InventoryItemListItemDto, GroupedProductHistoryDto, OutgoingShipmentOrderDto , BreweryProductListItemDto , ProductDeliveryListItemDto , OutgoingShipmentListItemDto } from './Client';
+import type { UserListItemDto, OrderListItemDto, ClientListItemDto, DriverListItemDto, BreweryListItemDto, VehicleListItemDto, ProductListItemDto, ReminderSectionDto, ReminderListItemDto, ClientOrderReminderDto, InventoryItemListItemDto, GroupedProductHistoryDto, OutgoingShipmentOrderDto, BreweryProductListItemDto, ProductDeliveryListItemDto, OutgoingShipmentListItemDto } from './Client';
 
 const baseAddress = API_BASE_URL;
 
@@ -194,7 +194,7 @@ export class AuthorizedClient extends Client {
             },
         });
 
-      if (!response.ok) {
+        if (!response.ok) {
             throw new Error('Failed to fetch orders');
         }
 
@@ -299,62 +299,66 @@ export class AuthorizedClient extends Client {
     }
 
     async fetchOrderItemsRemindersOverview() {
-      const url = new URL(`/ale-track/order-items/reminders`, baseAddress);
+        const url = new URL(`/ale-track/order-items/reminders`, baseAddress);
 
-      const response = await authorizedFetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
+        const response = await authorizedFetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch reminders for overview');
-      }
+        if (!response.ok) {
+            throw new Error('Failed to fetch reminders for overview');
+        }
 
-      return await response.json() as Promise<ClientOrderReminderDto[]>;
-    }
-    
-    async fetchOutgoingShipments() {
-      const url = new URL(`/ale-track/outgoing-shipments`, baseAddress);
-
-      const response = await authorizedFetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch outgoing shipments');
-      }
-
-      return await response.json() as Promise<OutgoingShipmentListItemDto[]>;
+        return await response.json() as Promise<ClientOrderReminderDto[]>;
     }
 
-    async fetOrdersForOutgoingShipments(outgoingShipmentId: string | null ,filters: Record<string, string>) {
-      const url = new URL(`/ale-track/outgoing-shipments/orders`, baseAddress);
+    async fetchOutgoingShipments(filters: Record<string, string> = {}) {
+        const url = new URL(`/ale-track/outgoing-shipments`, baseAddress);
 
-      if (outgoingShipmentId) {
-        url.searchParams.append('OutgoingShipmentId', outgoingShipmentId);
-      }
+        Object.keys(filters).forEach(key => {
+            url.searchParams.append(key, filters[key]);
+        });
 
-      for (const [key, value] of Object.entries(filters)) {
-        url.searchParams.append(key, value);
-      }
+        const response = await authorizedFetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
 
-      const response = await authorizedFetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
+        if (!response.ok) {
+            throw new Error('Failed to fetch outgoing shipments');
+        }
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch orders for outgoing shipment');
-      }
+        return await response.json() as Promise<OutgoingShipmentListItemDto[]>;
+    }
 
-      return (await response.json()) as Promise<OutgoingShipmentOrderDto[]>;
+    async fetOrdersForOutgoingShipments(outgoingShipmentId: string | null, filters: Record<string, string>) {
+        const url = new URL(`/ale-track/outgoing-shipments/orders`, baseAddress);
+
+        if (outgoingShipmentId) {
+            url.searchParams.append('OutgoingShipmentId', outgoingShipmentId);
+        }
+
+        for (const [key, value] of Object.entries(filters)) {
+            url.searchParams.append(key, value);
+        }
+
+        const response = await authorizedFetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch orders for outgoing shipment');
+        }
+
+        return (await response.json()) as Promise<OutgoingShipmentOrderDto[]>;
     }
 }
 

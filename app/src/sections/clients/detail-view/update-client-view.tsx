@@ -1,26 +1,26 @@
-import {useTranslation} from "react-i18next";
-import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import { varAlpha } from "minimal-shared/utils";
+import React, { useState, useCallback } from "react";
 
-import {linearProgressClasses} from "@mui/material/LinearProgress";
-import {Box, InputLabel, Typography, FormControl, OutlinedInput, FormHelperText, LinearProgress} from "@mui/material";
+import { linearProgressClasses } from "@mui/material/LinearProgress";
+import { Box, InputLabel, Typography, FormControl, OutlinedInput, FormHelperText, LinearProgress } from "@mui/material";
 
-import {NotesView} from "../../notes/view/notes-view";
-import {useApiCall} from "../../../hooks/use-api-call";
-import {RegionSelect} from "./components/region-select";
-import {ContactsForm} from "./components/contacts-form";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {validateAddress} from "../../../utils/validate-address";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {AddressForm} from "../../../components/forms/address-form";
-import {ClientRemindersView} from "./components/client-reminders-view";
-import {CollapsibleForm} from "../../../components/forms/collapsible-form";
-import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
-import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
-import {validateContacts, type ContactValidationErrors} from "../../../utils/validate-contacts";
-import {AddressDto, SectionType, UpdateClientDto, UpdateClientContactDto} from "../../../api/Client";
+import { NotesView } from "../../notes/view/notes-view";
+import { useApiCall } from "../../../hooks/use-api-call";
+import { RegionSelect } from "./components/region-select";
+import { ContactsForm } from "./components/contacts-form";
+import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { validateAddress } from "../../../utils/validate-address";
+import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { AddressForm } from "../../../components/forms/address-form";
+import { ClientRemindersView } from "./components/client-reminders-view";
+import { CollapsibleForm } from "../../../components/forms/collapsible-form";
+import { useEntityStatsRefresh } from "../../../providers/EntityStatsContext";
+import { DetailCardLayout } from "../../../layouts/dashboard/detail-card-layout";
+import { validateContacts, type ContactValidationErrors } from "../../../utils/validate-contacts";
+import { AddressDto, SectionType, UpdateClientDto, UpdateClientContactDto } from "../../../api/Client";
 
-import type {Region, ContactType} from "../../../api/Client";
+import type { Region, ContactType } from "../../../api/Client";
 
 type UpdateClientViewProps = {
     id: string;
@@ -38,10 +38,10 @@ export function UpdateClientView(
         onConfirmed,
         onHasChangesChange,
     }: Readonly<UpdateClientViewProps>) {
-    const {showSnackbar} = useSnackbar();
-    const {executeApiCall} = useApiCall();
-    const {t} = useTranslation();
-    const {triggerRefresh} = useEntityStatsRefresh();
+    const { showSnackbar } = useSnackbar();
+    const { executeApiCall } = useApiCall();
+    const { t } = useTranslation();
+    const { triggerRefresh } = useEntityStatsRefresh();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
     const [client, setClient] = useState<UpdateClientDto | null>(null);
@@ -81,9 +81,9 @@ export function UpdateClientView(
     const saveClient = async (): Promise<boolean> => {
         setInitialLoading(true);
 
-        const {name} = client as UpdateClientDto;
+        const { name } = client as UpdateClientDto;
         const newErrors = {
-            ...(name ? {} : {name: t('common.required')}),
+            ...(name ? {} : { name: t('common.required') }),
             ...validateAddress(client!.officialAddress)
         };
 
@@ -147,7 +147,7 @@ export function UpdateClientView(
 
     const deleteClient = useCallback(async () => {
         const clientApi = new AuthorizedClient();
-        
+
         const result = await executeApiCall(
             () => clientApi.deleteClientEndpoint(id)
         );
@@ -172,7 +172,7 @@ export function UpdateClientView(
         } as UpdateClientDto))
     }
 
-    const handleChangeContacts = (contacts: {type: ContactType, description: string | undefined, value: string}[]) => {
+    const handleChangeContacts = (contacts: { type: ContactType, description: string | undefined, value: string }[]) => {
         setContactValidationErrors({});
 
         setClient(prev => new UpdateClientDto({
@@ -202,20 +202,20 @@ export function UpdateClientView(
                 onSaveEntity={saveClient}
                 onDeleteEntity={deleteClient}
                 onResetEntity={resetClient}
-                deleteConfirmMessage={t('clients.deleteConfirm', {name: client?.name ?? ''})}
+                deleteConfirmMessage={t('clients.deleteConfirm', { name: client?.name ?? '' })}
                 disabled={client === null}
             >
-                <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300}}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
                     {initialLoading ? (
                         <LinearProgress
                             sx={{
                                 width: '40%',
                                 bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-                                [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                                [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
                             }}
                         />
                     ) : (
-                        <Typography variant="body2" sx={{color: 'text.secondary', textAlign: 'center'}}>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
                             {t('clients.loadDetailError')}
                         </Typography>
                     )}
@@ -240,12 +240,12 @@ export function UpdateClientView(
             onSaveEntity={saveClient}
             onDeleteEntity={deleteClient}
             onResetEntity={resetClient}
-            deleteConfirmMessage={t('clients.deleteConfirm', {name: client?.name ?? ''})}
+            deleteConfirmMessage={t('clients.deleteConfirm', { name: client?.name ?? '' })}
             disabled={false}
         >
-            <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: 2}}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: 2 }}>
                 {/* Client name */}
-                <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
+                <FormControl fullWidth error={!!errors.name} sx={{ mt: 1 }}>
                     <InputLabel htmlFor="client-name">{t('clients.name')}</InputLabel>
                     <OutlinedInput
                         id="client-name"
@@ -260,7 +260,7 @@ export function UpdateClientView(
                 </FormControl>
 
                 {/* Client business name */}
-                <FormControl fullWidth sx={{mt: 1}}>
+                <FormControl fullWidth sx={{ mt: 1 }}>
                     <InputLabel htmlFor="client-business-name">{t('clients.businessName')}</InputLabel>
                     <OutlinedInput
                         id="client-business-name"
@@ -273,7 +273,7 @@ export function UpdateClientView(
                     />
                 </FormControl>
 
-                <RegionSelect selectedRegion={client.region} errors={errors} onSelect={handleRegionSelect}/>
+                <RegionSelect selectedRegion={client.region} errors={errors} onSelect={handleRegionSelect} />
             </Box>
 
             <ContactsForm
@@ -282,8 +282,8 @@ export function UpdateClientView(
                 validationErrors={contactValidationErrors}
             />
 
-            <CollapsibleForm  title={t('address.address')}>
-                <Box sx={{ml: 1, mr: 1, mb: 2}}>
+            <CollapsibleForm title={t('address.address')}>
+                <Box sx={{ ml: 1, mr: 1, mb: 2 }}>
                     {/* Official address section */}
                     <AddressForm
                         title={t('address.officialAddress')}
@@ -309,7 +309,7 @@ export function UpdateClientView(
                     />
                 </Box>
             </CollapsibleForm>
-            
+
             <ClientRemindersView clientId={id} />
             <NotesView parentId={id} parentType={SectionType.Client} />
         </DetailCardLayout>

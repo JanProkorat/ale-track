@@ -175,7 +175,12 @@
     "DarkStrong": "Tmavé silné",
     "FestiveLager": "Sváteční ležák",
     "UnfilteredBlendedLager": "Řezaný nefiltrovaný ležák",
-    "YeastLager": "Kroužkovaný ležák"
+    "YeastLager": "Kroužkovaný ležák",
+    "Other": "Ostatní",
+    "MixedLager": "Řezaný ležák",
+    "Mix": "Mix",
+    "NonAlcoholicFlavourBeer": "Nealkoholické ochucené pivo",
+    "OriginalCraftLager": "Originální řemeslný ležák"
   },
   "productKind": {
     "Keg": "Sud",
@@ -394,6 +399,7 @@
   },
   "errors": {
     "UNEXPECTED_ERROR": "Nastala neočekávaná chyba. Zkuste to prosím znovu.",
+    "UNAUTHORIZED": "Nejste autorizováni. Přihlaste se prosím znovu.",
     "VALIDATION_ERROR": "Chyba validace. Zkontrolujte prosím zadané údaje.",
     "VALIDATION_NOT_NULL_ERROR": "Povinné pole nesmí být prázdné.",
     "VALIDATION_NOT_EMPTY_ERROR": "Toto pole nesmí být prázdné.",
@@ -409,5 +415,10 @@
     "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS": "Nelze označit zásilku jako naloženou bez zastávek.",
     "SHIPMENT_ALREADY_DELIVERED": "Tato zásilka již byla doručena.",
     "SHIPMENT_ALREADY_CANCELLED": "Tato zásilka již byla zrušena."
+  },
+  "PlanningState": {
+    "Active": "Aktivní",
+    "Finished": "Dokončené",
+    "Cancelled": "Zrušené"
   }
 }

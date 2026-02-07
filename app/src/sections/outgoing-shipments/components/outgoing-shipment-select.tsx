@@ -16,8 +16,8 @@ type OutgoingShipmentSelectProps = {
   onSelect: (shipmentId: string) => void
 }
 
-export function OutgoingShipmentSelect({shipments, selectedShipmentId, onSelect}: Readonly<OutgoingShipmentSelectProps>){
-  const {t} = useTranslation();
+export function OutgoingShipmentSelect({ shipments, selectedShipmentId, onSelect }: Readonly<OutgoingShipmentSelectProps>) {
+  const { t } = useTranslation();
 
   return (
     <FormControl fullWidth sx={{ mt: 1 }}>

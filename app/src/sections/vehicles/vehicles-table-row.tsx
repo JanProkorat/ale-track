@@ -3,7 +3,7 @@ import Checkbox from '@mui/material/Checkbox';
 import TableCell from '@mui/material/TableCell';
 import IconButton from "@mui/material/IconButton";
 
-import {Iconify} from 'src/components/iconify';
+import { Iconify } from 'src/components/iconify';
 
 // ----------------------------------------------------------------------
 
@@ -21,7 +21,7 @@ type VehiclesTableRowProps = {
     onDeleteClick: () => void;
 };
 
-export function VehiclesTableRow({row, selected, onSelectRow, onRowClick, onDeleteClick}: Readonly<VehiclesTableRowProps>) {
+export function VehiclesTableRow({ row, selected, onSelectRow, onRowClick, onDeleteClick }: Readonly<VehiclesTableRowProps>) {
 
     return (
         <TableRow hover tabIndex={-1} role="checkbox" selected={selected}>
@@ -37,13 +37,13 @@ export function VehiclesTableRow({row, selected, onSelectRow, onRowClick, onDele
             </TableCell>
 
             <TableCell onClick={onRowClick}>{row.name}</TableCell>
-            <TableCell onClick={onRowClick}>{row.maxWeight}</TableCell>
+            <TableCell onClick={onRowClick}>{row.maxWeight} Kg</TableCell>
 
             <TableCell align="right">
                 <IconButton onClick={() => {
                     onDeleteClick()
                 }} color="error">
-                    <Iconify icon="solar:trash-bin-trash-bold"/>
+                    <Iconify icon="solar:trash-bin-trash-bold" />
                 </IconButton>
             </TableCell>
         </TableRow>

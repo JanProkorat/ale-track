@@ -1,13 +1,13 @@
-import {useTranslation} from "react-i18next";
-import {useState, useEffect, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import { useState, useEffect, useCallback } from "react";
 
-import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
+import { Box, InputLabel, FormControl, OutlinedInput, FormHelperText, InputAdornment } from "@mui/material";
 
-import {useApiCall} from "../../../hooks/use-api-call";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {DrawerLayout} from '../../../layouts/components/drawer-layout';
-import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
+import { useApiCall } from "../../../hooks/use-api-call";
+import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { DrawerLayout } from '../../../layouts/components/drawer-layout';
+import { useEntityStatsRefresh } from "../../../providers/EntityStatsContext";
 import {
     VehicleDto, CreateVehicleDto, UpdateVehicleDto,
 } from "../../../api/Client";
@@ -24,10 +24,10 @@ export function VehicleDetailView(
         onClose,
         onSave,
     }: Readonly<VehicleDetailViewProps>) {
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
-    const {triggerRefresh} = useEntityStatsRefresh();
-    const {executeApiCall} = useApiCall();
+    const { showSnackbar } = useSnackbar();
+    const { t } = useTranslation();
+    const { triggerRefresh } = useEntityStatsRefresh();
+    const { executeApiCall } = useApiCall();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [vehicle, setVehicle] = useState<VehicleDto>(new VehicleDto({
@@ -52,7 +52,7 @@ export function VehicleDetailView(
     }, [fetchVehicle, id]);
 
     const saveVehicle = async (): Promise<void> => {
-        const {name, maxWeight} = vehicle;
+        const { name, maxWeight } = vehicle;
 
         const newErrors: Record<string, string> = {};
         if (!name) newErrors.name = t('common.required');
@@ -91,7 +91,7 @@ export function VehicleDetailView(
                 undefined,
                 { onError: () => { hasError = true; } }
             );
-            
+
             if (!hasError) {
                 result = true;
             }
@@ -110,39 +110,41 @@ export function VehicleDetailView(
             onClose={onClose}
             onSaveAndClose={saveVehicle}
         >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
-            {/* vehicle name */}
-            <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="vehicle-name">{t('vehicles.name')}</InputLabel>
-                <OutlinedInput
-                    id="vehicle-name"
-                    value={vehicle.name || ''}
-                    onChange={event => setVehicle(prev => new VehicleDto({
-                        ...prev,
-                        name: event.target.value
-                    }))}
-                    label={t('vehicles.name')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+                {/* vehicle name */}
+                <FormControl fullWidth error={!!errors.name} sx={{ mt: 1 }}>
+                    <InputLabel htmlFor="vehicle-name">{t('vehicles.name')}</InputLabel>
+                    <OutlinedInput
+                        id="vehicle-name"
+                        value={vehicle.name || ''}
+                        onChange={event => setVehicle(prev => new VehicleDto({
+                            ...prev,
+                            name: event.target.value
+                        }))}
+                        label={t('vehicles.name')}
+                    />
+                    {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
+                </FormControl>
 
-            {/* vehicle weight */}
-            <FormControl fullWidth error={!!errors.maxWeight}>
-                <InputLabel htmlFor="vehicle-weight">{t('vehicles.maxWeight')}</InputLabel>
-                <OutlinedInput
-                    type="number"
-                    id="vehicle-weight"
-                    value={vehicle.maxWeight || ''}
-                    onChange={event => setVehicle(prev => new VehicleDto({
-                        ...prev,
-                        maxWeight: event.target.value === '' ? 0 : parseFloat(event.target.value)
-                    }))}
-                    label={t('vehicles.maxWeight')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+                {/* vehicle weight */}
+                <FormControl fullWidth error={!!errors.maxWeight}>
+                    <InputLabel htmlFor="vehicle-weight">{t('vehicles.maxWeight')}</InputLabel>
+                    <OutlinedInput
+                        type="number"
+                        id="vehicle-weight"
+                        value={vehicle.maxWeight || ''}
+                        endAdornment={<InputAdornment position="end">Kg</InputAdornment>}
+                        onChange={event => setVehicle(prev => new VehicleDto({
+                            ...prev,
+                            maxWeight: event.target.value === '' ? 0 : parseFloat(event.target.value)
+                        }))}
+                        label={t('vehicles.maxWeight')}
+                    />
+                    {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
+                </FormControl>
 
-
+            </Box>
 
         </DrawerLayout>
     );

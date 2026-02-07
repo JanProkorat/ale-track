@@ -1,11 +1,11 @@
-import {useState, type ReactNode} from "react";
+import { useState, type ReactNode } from "react";
 
 import Box from "@mui/material/Box";
-import {Collapse} from "@mui/material";
+import { Collapse } from "@mui/material";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
-import {SectionHeader} from "../label/section-header";
+import { SectionHeader } from "../label/section-header";
 
 type CollapsibleFormProps = {
     title: string;
@@ -14,7 +14,7 @@ type CollapsibleFormProps = {
     children: ReactNode;
 }
 
-export function CollapsibleForm({title, titleVariant, headerChildren, children}: Readonly<CollapsibleFormProps>) {
+export function CollapsibleForm({ title, titleVariant, headerChildren, children }: Readonly<CollapsibleFormProps>) {
     const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
     return (
@@ -29,13 +29,13 @@ export function CollapsibleForm({title, titleVariant, headerChildren, children}:
                 onClick={() => setIsExpanded(prev => !prev)}
             >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {headerChildren}
+                    {isExpanded ? headerChildren : undefined}
                     {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                 </Box>
             </SectionHeader>
-            <Collapse in={isExpanded} sx={{mb: 0.5}}>
+            <Collapse in={isExpanded} sx={{ mb: 0.5 }}>
                 {children}
             </Collapse>
-            </>
+        </>
     )
 }

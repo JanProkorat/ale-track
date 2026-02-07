@@ -1,5 +1,5 @@
-import {useTranslation} from "react-i18next";
-import React, {useState, useEffect, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import React, { useState, useEffect, useCallback } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -7,22 +7,22 @@ import Drawer from "@mui/material/Drawer";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import ListItemButton from "@mui/material/ListItemButton";
-import {Tab, List, Tabs, Typography, ListItemText} from "@mui/material";
+import { Tab, List, Tabs, Typography, ListItemText } from "@mui/material";
 import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
 
-import {useSnackbar} from "src/providers/SnackbarProvider";
+import { useSnackbar } from "src/providers/SnackbarProvider";
 
-import {Iconify} from "../../../../components/iconify";
-import {formatDate} from "../../../../locales/formatDate";
-import {Scrollbar} from "../../../../components/scrollbar";
-import {mapEnumValue} from "../../../../utils/format-enum-value";
-import {AuthorizedClient} from "../../../../api/AuthorizedClient";
-import {sortDaysOfWeek} from "../../../../utils/sort-daysof-week";
-import {SectionHeader} from "../../../../components/label/section-header";
-import {CollapsibleForm} from "../../../../components/forms/collapsible-form";
-import {sortReminders} from "../../../reminders/detail-view/utils/sort-reminders";
+import { Iconify } from "../../../../components/iconify";
+import { formatDate } from "../../../../locales/formatDate";
+import { Scrollbar } from "../../../../components/scrollbar";
+import { mapEnumValue } from "../../../../utils/format-enum-value";
+import { AuthorizedClient } from "../../../../api/AuthorizedClient";
+import { sortDaysOfWeek } from "../../../../utils/sort-daysof-week";
+import { SectionHeader } from "../../../../components/label/section-header";
+import { CollapsibleForm } from "../../../../components/forms/collapsible-form";
+import { sortReminders } from "../../../reminders/detail-view/utils/sort-reminders";
 import CreateReminderView from "../../../reminders/detail-view/create-reminder-view";
-import {UpdateReminderView} from "../../../reminders/detail-view/update-reminder-view";
+import { UpdateReminderView } from "../../../reminders/detail-view/update-reminder-view";
 import {
     ReminderType,
     ReminderListItemDto,
@@ -34,9 +34,9 @@ type BreweryRemindersProps = {
     breweryId: string;
 };
 
-export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps>) {
-    const {t} = useTranslation();
-    const {showSnackbar} = useSnackbar();
+export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersProps>) {
+    const { t } = useTranslation();
+    const { showSnackbar } = useSnackbar();
 
     const [reminders, setReminders] = useState<ReminderListItemDto[]>([]);
     const [filteredReminders, setFilteredReminders] = useState<ReminderListItemDto[]>([]);
@@ -44,24 +44,24 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
     const [selectedReminder, setSelectedReminder] = useState<ReminderListItemDto | null>(null);
     const [selectedType, setSelectedType] = useState<ReminderType>(ReminderType.OneTimeEvent);
 
-    useEffect(() => {
-        void fetchReminders().then((data) => setReminders(data))
-    }, [breweryId]);
-
     const fetchReminders = useCallback(async () => {
         try {
             const clientApi = new AuthorizedClient();
 
             return await clientApi.fetchRemindersForBrewery(breweryId, {}).then((data) => data.map(r => new ReminderListItemDto({
-                    ...r,
-                    type: ReminderType[r.type! as unknown as keyof typeof ReminderType]
-                })));
+                ...r,
+                type: ReminderType[r.type! as unknown as keyof typeof ReminderType]
+            })));
         } catch (error) {
             console.error('Error fetching reminders:', error);
             showSnackbar(t('reminders.fetchError'), 'error');
             return [];
         }
     }, [breweryId, showSnackbar, t]);
+
+    useEffect(() => {
+        void fetchReminders().then((data) => setReminders(data))
+    }, [breweryId, fetchReminders]);
 
     useEffect(() => {
         let type = selectedType;
@@ -83,13 +83,13 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
             setSelectedReminder(filteredData.length > 0 ? filteredData[0] : null);
         }
 
-    }, [reminders]);
+    }, [reminders, selectedReminder, selectedType]);
 
     useEffect(() => {
         const filteredData = reminders.filter(reminder => reminder.type === selectedType);
         setFilteredReminders(filteredData)
         setSelectedReminder(filteredData.length > 0 ? filteredData[0] : null);
-    }, [selectedType])
+    }, [reminders, selectedType])
 
     const closeDrawer = (shouldRefresh: boolean) => {
         if (!shouldRefresh) {
@@ -157,11 +157,11 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
     }
 
     const newButton = (visible: boolean) => (
-        <Box sx={{display: 'flex', alignItems: 'center'}}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Button
                 variant="contained"
                 color="inherit"
-                startIcon={<Iconify icon="mingcute:add-line"/>}
+                startIcon={<Iconify icon="mingcute:add-line" />}
                 size="small"
                 sx={{
                     mb: 1,
@@ -176,15 +176,15 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
     );
 
     const noDataBox = (
-        <Box sx={{py: 5, textAlign: 'center', width: '100%'}}>
-            <Typography variant="h6" sx={{mb: 1}}>
+        <Box sx={{ py: 5, textAlign: 'center', width: '100%' }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>
                 {t('reminders.noDataTitle')}
             </Typography>
 
             <Typography variant="body2" whiteSpace="pre-line">
                 {t('reminders.noDataMessage')}
             </Typography>
-            <Box sx={{mt: 2, display: 'flex', justifyContent: 'center'}}>
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
                 {newButton(filteredReminders.length === 0)}
             </Box>
         </Box>
@@ -220,7 +220,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                     />
                                 ))}
                         </Tabs>
-                        <Box sx={{minHeight: 200, maxHeight: 500, overflow: 'auto', mb: 2}}>
+                        <Box sx={{ minHeight: 200, maxHeight: 500, overflow: 'auto', mb: 2 }}>
                             {filteredReminders.length === 0 ? noDataBox :
                                 <Scrollbar>
                                     <List>
@@ -230,7 +230,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                                 alignItems="flex-start"
                                                 divider={index !== reminders.length - 1}
                                                 selected={selectedReminder?.id === reminder.id}
-                                                sx={{pt: 0, pb: 0}}
+                                                sx={{ pt: 0, pb: 0 }}
                                                 onClick={() => setSelectedReminder(reminder)}   // <<< tady
                                             >
                                                 <IconButton
@@ -241,10 +241,10 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                                     sx={{ p: 2 }}
                                                 >
                                                     <CheckCircleTwoToneIcon
-                                                        sx={{color: reminder.isResolved ? '#4caf50' : undefined}}/>
+                                                        sx={{ color: reminder.isResolved ? '#4caf50' : undefined }} />
                                                 </IconButton>
                                                 <ListItemText
-                                                    sx={{ml: 1, mt: 2}}
+                                                    sx={{ ml: 1, mt: 2 }}
                                                     primary={reminderHeaderLabel(reminder)}
                                                     slotProps={{
                                                         primary: {
@@ -267,25 +267,25 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                         </Box>
                     </Box>
 
-                    <Divider orientation="vertical" flexItem/>
+                    <Divider orientation="vertical" flexItem />
 
                     <Box flex={1} ml={2}>
                         {selectedReminder !== null &&
                             <Box>
                                 <SectionHeader text={selectedReminder.name!} headerVariant="h6" bold={false}>
-                                    <Box sx={{display: 'flex', alignItems: 'center'}}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <IconButton onClick={() => setSelectedReminderId(selectedReminder.id)}>
-                                            <Iconify icon="solar:pen-bold"/>
+                                            <Iconify icon="solar:pen-bold" />
                                         </IconButton>
                                         <IconButton
                                             onClick={() => deleteReminder(selectedReminder.id!)}
                                             color="error"
                                         >
-                                            <Iconify icon="solar:trash-bin-trash-bold"/>
+                                            <Iconify icon="solar:trash-bin-trash-bold" />
                                         </IconButton>
                                     </Box>
                                 </SectionHeader>
-                                <Scrollbar sx={{maxHeight: 500, overflow: 'auto', mb: 2}}>
+                                <Scrollbar sx={{ maxHeight: 500, overflow: 'auto', mb: 2 }}>
                                     <Typography
                                         component="span"
                                         variant="body2"
@@ -303,8 +303,8 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                                 justifyContent: 'space-between',
                                                 alignItems: 'center'
                                             }}>
-                                                <Typography variant="body2" sx={{ml: 1}}>{t('reminders.days')}:</Typography>
-                                                <Typography variant="body2" sx={{ml: 2, mr: 1}}>
+                                                <Typography variant="body2" sx={{ ml: 1 }}>{t('reminders.days')}:</Typography>
+                                                <Typography variant="body2" sx={{ ml: 2, mr: 1 }}>
                                                     {mapEnumValue(ReminderRecurrenceType, selectedReminder.recurrenceType) === ReminderRecurrenceType.Weekly &&
                                                         sortDaysOfWeek(selectedReminder?.daysOfWeek ?? [])
                                                             .map((dayName) => t(`dayOfWeekShort.${dayName}`))
@@ -312,7 +312,7 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                                                     }
                                                     {mapEnumValue(ReminderRecurrenceType, selectedReminder.recurrenceType) === ReminderRecurrenceType.Monthly &&
                                                         (selectedReminder?.daysOfMonth ?? [])
-                                                            .map((dayName) =>`${dayName}.`)
+                                                            .map((dayName) => `${dayName}.`)
                                                             .join(", ")
                                                     }
                                                 </Typography>
@@ -341,10 +341,10 @@ export function BreweryRemindersView({breweryId}: Readonly<BreweryRemindersProps
                 open={selectedReminderId !== undefined}
                 onClose={closeDrawer}
             >
-                <Box sx={{width: 700, p: 2}}>
+                <Box sx={{ width: 700, p: 2 }}>
                     {selectedReminderId === null ?
-                        <CreateReminderView parentId={breweryId} parentType="brewery" onClose={closeDrawer} selectedType={selectedType}/> :
-                        <UpdateReminderView reminderId={selectedReminderId!} parentType="brewery" onClose={closeDrawer}/>
+                        <CreateReminderView parentId={breweryId} parentType="brewery" onClose={closeDrawer} selectedType={selectedType} /> :
+                        <UpdateReminderView reminderId={selectedReminderId!} parentType="brewery" onClose={closeDrawer} />
                     }
                 </Box>
             </Drawer>

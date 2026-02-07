@@ -394,6 +394,7 @@
   },
   "errors": {
     "UNEXPECTED_ERROR": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+    "UNAUTHORIZED": "Sie sind nicht autorisiert. Bitte melden Sie sich erneut an.",
     "VALIDATION_ERROR": "Validierungsfehler. Bitte überprüfen Sie Ihre Eingabe.",
     "VALIDATION_NOT_NULL_ERROR": "Pflichtfeld darf nicht leer sein.",
     "VALIDATION_NOT_EMPTY_ERROR": "Dieses Feld darf nicht leer sein.",
