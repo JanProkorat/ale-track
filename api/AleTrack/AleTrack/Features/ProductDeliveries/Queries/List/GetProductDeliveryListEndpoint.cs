@@ -42,6 +42,8 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
+        var planningState = req.Parameters.GetPlanningState();
+
         var data = await dbContext.ProductDeliveries
             .Select(d => new ProductDeliveryListItemDto
             {
@@ -50,11 +52,15 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
                 State = d.State,
                 StopNames = d.Stops
                     .Select(s => s.Brewery.Name)
-                    .ToList()
+                    .ToList(),
+                PlanningState = d.PlanningState
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
+        if (planningState is not null)
+            data = data.Where(o => o.PlanningState == planningState).ToList();
+
         await SendOkAsync(data, cancellation: ct);
     }
 }

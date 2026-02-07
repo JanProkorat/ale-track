@@ -6,7 +6,5 @@ public enum ProductKind
     Bottle = 2,
     Can = 3,
     Multipack = 4,
-    Duopack = 5,
-    DecorativeBottleOrJug = 6,
-    Other = 7
+    Other = 5
 }

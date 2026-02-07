@@ -64,4 +64,22 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
 
     /// <inheritdoc />
     protected override OrderState CancelledStatus => OrderState.Cancelled;
+
+    /// <summary>
+    /// Planning state of the order
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public PlanningState PlanningState
+    {
+        get
+        {
+            return State switch
+            {
+                OrderState.New or OrderState.Planning or OrderState.Delivering => PlanningState.Active,
+                OrderState.Finished => PlanningState.Finished,
+                OrderState.Cancelled => PlanningState.Cancelled,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+        }
+    }
 }

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Entities;
 
 /// <summary>
-/// Entity representing product sold by a brewery
+/// Entity representing a product sold by a brewery
 /// </summary>
 [Table("products")]
 public sealed class Product : PublicEntity
@@ -80,13 +80,13 @@ public sealed class Product : PublicEntity
     /// Price for unit with VAT
     /// </summary>
     [Column("price_for_unit_with_vat")]
-    public decimal PriceForUnitWithVat { get; set; }
+    public decimal? PriceForUnitWithVat { get; set; }
     
     /// <summary>
     /// Price for unit without VAT
     /// </summary>
     [Column("price_for_unit_without_vat")]
-    public decimal PriceForUnitWithoutVat { get; set; }
+    public decimal? PriceForUnitWithoutVat { get; set; }
     
     /// <summary>
     /// Related Brewery
@@ -97,7 +97,7 @@ public sealed class Product : PublicEntity
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public int? Weight
+    public double? Weight
     {
         get
         {
@@ -106,10 +106,16 @@ public sealed class Product : PublicEntity
 
             return Kind switch
             {
+                ProductKind.Bottle when PackageSize == BottleSize.OneLiter => PackageWeight.OneKilo,
+                ProductKind.Bottle when PackageSize == BottleSize.TwoLiters => PackageWeight.TwoKilos,
                 ProductKind.Bottle when PackageSize == BottleSize.TenLiters => PackageWeight.TwentyKilos,
+                ProductKind.Keg when PackageSize == KegSize.FiveLiters => PackageWeight.FiveKilos,
                 ProductKind.Keg when PackageSize == KegSize.FifteenLiters => PackageWeight.TwentyKilos,
                 ProductKind.Keg when PackageSize == KegSize.ThirtyLiters => PackageWeight.FortyTwoKilos,
                 ProductKind.Keg when PackageSize == KegSize.FiftyLiters => PackageWeight.SixtyTwoKilos,
+                ProductKind.Can when PackageSize == CanSize.ZeroPointThreeThreeLiters => PackageWeight.ZeroPointThree,
+                ProductKind.Can when PackageSize == CanSize.ZeroPointFiveLiters => PackageWeight.ZeroPointFive,
+                ProductKind.Can when PackageSize == CanSize.TwoLiters => PackageWeight.TwoKilos,
                 _ => null
             };
         }

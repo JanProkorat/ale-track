@@ -81,5 +81,5 @@ public record UnassignedOrderItemDto
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public int? Weight { get; set; }
+    public double? Weight { get; set; }
 }

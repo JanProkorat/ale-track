@@ -45,7 +45,7 @@ try
 {
     Log.Information("Seeding started");
     var seeder = services.GetRequiredService<SeedingService>();
-    await seeder.InsertDataAsync();
+    await seeder.InsertProductsToSvijany();
     Log.Information("Seeding finished");
 }
 catch (Exception ex)
