@@ -146,9 +146,8 @@ export function ProductDetailView(
             onClose={() => onClose(false)}
             onSaveAndClose={saveProduct}
         >
-
-            {/* product name */}
-            <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
                 <InputLabel htmlFor="product-name">{t('products.name')}</InputLabel>
                 <OutlinedInput
                     id="product-name"
@@ -231,7 +230,6 @@ export function ProductDetailView(
                 </FormControl>
             </Box>
 
-
             <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
                 <FormControl variant="outlined">
                     <InputLabel htmlFor="priceVat">{t('products.priceVat')}</InputLabel>
@@ -292,6 +290,7 @@ export function ProductDetailView(
                     }
                 />
             </FormControl>
+            </Box>
         </DrawerLayout>
     );
 }

@@ -11,7 +11,7 @@ interface CurrencyContextType {
     defaultCurrency: ExchangeRateDto;
     changeCurrency: (currencyCode: string) => void;
     formatPrice: (value: number | undefined) => string;
-    formatPriceValue: (value: number | undefined) => number;
+    formatPriceValue: (value: number | undefined) => number | undefined;
     formatPriceToDefault: (value: number | undefined) => number;
 }
 
@@ -42,6 +42,9 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, [rates]);
 
     const formatPriceValue = useCallback((value: number | undefined) => {
+        if (!value)
+            return undefined;
+
         const amount =
             (value ?? 0) /
             (selectedCurrency.currencyCode === czechRate.currencyCode
@@ -56,7 +59,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             selectedCurrency.currencyCode === czechRate.currencyCode
                 ? "Kč"
                 : "€";
-        return `${amount.toFixed(2)} ${currency}`;
+        return `${amount?.toFixed(2) ?? ""} ${amount !== undefined ? currency : ""}`;
     }, [selectedCurrency, formatPriceValue]);
 
     const formatPriceToDefault = useCallback((value: number | undefined) => {

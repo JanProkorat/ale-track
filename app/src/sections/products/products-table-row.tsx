@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {useTranslation} from "react-i18next";
 
 import {Chip} from "@mui/material";
@@ -27,12 +28,32 @@ export function ProductsTableRow(
         onRowClick,
         onDeleteClick
     }: Readonly<ProductsTableRowProps>) {
+    const [isHovered, setIsHovered] = useState<boolean>(false);
     const {t} = useTranslation();
     const { formatPrice } = useCurrency();
 
     return (
-        <TableRow hover tabIndex={-1} selected={selected}>
-            <TableCell padding="checkbox">
+        <TableRow 
+            tabIndex={-1} 
+            role="checkbox"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            sx={{
+                cursor: 'pointer',
+            }}
+        >
+            <TableCell 
+                padding="checkbox"
+                sx={{
+                    position: 'sticky !important',
+                    left: '0 !important',
+                    zIndex: '101 !important',
+                    backgroundColor: isHovered ? '#f5f5f5 !important' : '#fff !important',
+                    backgroundImage: 'none !important',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                    boxShadow: '2px 0 5px -2px rgba(0, 0, 0, 0.1)',
+                }}
+            >
                 <Checkbox
                     disableRipple
                     checked={selected}
@@ -48,43 +69,129 @@ export function ProductsTableRow(
                 sx={{
                     whiteSpace: 'nowrap',
                     minWidth: 'fit-content',
-                    position: 'sticky',
-                    left: 0,
-                    zIndex: 1
+                    position: 'sticky !important',
+                    left: '42px !important',
+                    zIndex: '100 !important',
+                    backgroundColor: isHovered ? '#f5f5f5 !important' : '#fff !important',
+                    backgroundImage: 'none !important',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                    boxShadow: '2px 0 5px -2px rgba(0, 0, 0, 0.1)',
                 }}
             >
                 {row.name}
             </TableCell>
-            <TableCell onClick={onRowClick} sx={{
-                whiteSpace: 'nowrap',
-                minWidth: 'fit-content'
-            }}>{row.platoDegree != undefined ? row.platoDegree + "%" : ""}</TableCell>
-
-            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+            <TableCell 
+                onClick={onRowClick} 
+                sx={{
+                    whiteSpace: 'nowrap',
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
+                {row.platoDegree != undefined ? row.platoDegree + "%" : ""}
+            </TableCell>
+            <TableCell 
+                onClick={onRowClick} 
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
                 <Chip label={t('productKind.' + row.kind)}/>
             </TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.packageSize} L</TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.weight} Kg</TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>{row.alcoholPercentage} %</TableCell>
-            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+            <TableCell 
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+                >
+                    {row.packageSize ? row.packageSize + " L" : ""}
+            </TableCell>
+            <TableCell 
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
+                {row.weight ? row.weight + " Kg" : ""}
+            </TableCell>
+            <TableCell 
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
+                {row.alcoholPercentage ? row.alcoholPercentage + "%" : ""}
+            </TableCell>
+            <TableCell 
+                onClick={onRowClick} 
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
                 {formatPrice(row.priceWithVat)}
             </TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+            <TableCell 
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
                 {formatPrice(row.priceForUnitWithVat)}
             </TableCell>
-            <TableCell onClick={onRowClick}
-                       sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+            <TableCell 
+                onClick={onRowClick}
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
                 {formatPrice(row.priceForUnitWithoutVat)}
             </TableCell>
-            <TableCell onClick={onRowClick} sx={{whiteSpace: 'nowrap', minWidth: 'fit-content'}}>
+            <TableCell 
+                onClick={onRowClick} 
+                sx={{
+                    whiteSpace: 'nowrap', 
+                    minWidth: 'fit-content',
+                    backgroundColor: isHovered ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                }}
+            >
                 <Chip label={t('productType.' + row.type)}/>
             </TableCell>
 
-            <TableCell align="right">
+            <TableCell 
+                align="right"
+                sx={{
+                    position: 'sticky !important',
+                    right: '0 !important',
+                    zIndex: '101 !important',
+                    backgroundColor: isHovered ? '#f5f5f5 !important' : '#fff !important',
+                    backgroundImage: 'none !important',
+                    transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+                    boxShadow: '-2px 0 5px -2px rgba(0, 0, 0, 0.1)',
+                }}
+            >
                 <IconButton onClick={onDeleteClick} color="error">
                     <Iconify icon="solar:trash-bin-trash-bold"/>
                 </IconButton>

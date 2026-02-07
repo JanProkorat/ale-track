@@ -41,7 +41,7 @@ export function SortableTableHead({
             sx={{
               position: checkboxSticky ? 'sticky' : undefined,
               left: checkboxSticky ? 0 : undefined,
-              zIndex: checkboxSticky ? 3 : undefined,
+              zIndex: checkboxSticky ? 103 : undefined,
             }}
           >
             <Checkbox
@@ -54,7 +54,7 @@ export function SortableTableHead({
           </TableCell>
         )}
 
-        {headLabel.map((headCell) => (
+        {headLabel.map((headCell, index) => (
           <TableCell
             key={headCell.id}
             align={headCell.align || 'left'}
@@ -62,9 +62,16 @@ export function SortableTableHead({
             sx={{
               width: headCell.width,
               minWidth: headCell.minWidth,
-              position: headCell.id == 'name' && checkboxSticky ? 'sticky' : undefined,
+              position: 
+                headCell.id == 'name' && checkboxSticky ? 'sticky' : 
+                headCell.id == '' && index === headLabel.length - 1 ? 'sticky' : 
+                undefined,
               left: headCell.id == 'name' && checkboxSticky ? 42 : undefined,
-              zIndex: headCell.id == 'name' && checkboxSticky ? 2 : undefined,
+              right: headCell.id == '' && index === headLabel.length - 1 ? 0 : undefined,
+              zIndex: 
+                headCell.id == 'name' && checkboxSticky ? 102 : 
+                headCell.id == '' && index === headLabel.length - 1 ? 103 : 
+                undefined,
             }}
           >
             <TableSortLabel

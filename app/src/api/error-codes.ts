@@ -1,8 +1,10 @@
 /**
- * Error codes returned from the backend API
+ * Error codes returned from the backend API or generated client-side
  */
 export const ErrorCodes = {
   UNEXPECTED_ERROR: 'UNEXPECTED_ERROR',
+  UNAUTHORIZED: 'UNAUTHORIZED', // Client-side code generated from 401 status
+
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   VALIDATION_NOT_NULL_ERROR: 'VALIDATION_NOT_NULL_ERROR',
   VALIDATION_NOT_EMPTY_ERROR: 'VALIDATION_NOT_EMPTY_ERROR',

@@ -1,8 +1,8 @@
 import type { Breakpoint } from '@mui/material/styles';
 
 import { merge } from 'es-toolkit';
-import {useState, useEffect} from "react";
 import { useBoolean } from 'minimal-shared/hooks';
+import { useState, useEffect, useCallback } from "react";
 
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
@@ -10,17 +10,17 @@ import { useTheme } from '@mui/material/styles';
 
 import { NavMobile, NavDesktop } from './nav';
 import { dashboardLayoutVars } from './css-vars';
-import {useAuth} from "../../context/AuthContext";
-import {getNavData} from "../nav-config-dashboard";
-import {useApiCall} from "../../hooks/use-api-call";
+import { useAuth } from "../../context/AuthContext";
+import { getNavData } from "../nav-config-dashboard";
+import { useApiCall } from "../../hooks/use-api-call";
 import { MenuButton } from '../components/menu-button';
-import {AuthorizedClient} from "../../api/AuthorizedClient";
+import { AuthorizedClient } from "../../api/AuthorizedClient";
 import { AccountPopover } from '../components/account-popover';
-import {useEntityStatsRefresh} from "../../providers/EntityStatsContext";
-import { MainSection , HeaderSection , LayoutSection , layoutClasses } from '../core';
+import { useEntityStatsRefresh } from "../../providers/EntityStatsContext";
+import { MainSection, HeaderSection, LayoutSection, layoutClasses } from '../core';
 
-import type {NumberOfRecordsInEachModuleDto} from "../../api/Client";
-import type { MainSectionProps , HeaderSectionProps , LayoutSectionProps } from '../core';
+import type { NumberOfRecordsInEachModuleDto } from "../../api/Client";
+import type { MainSectionProps, HeaderSectionProps, LayoutSectionProps } from '../core';
 
 // ----------------------------------------------------------------------
 
@@ -79,18 +79,18 @@ export function DashboardLayout({
 
   const [navCounts, setNavCounts] = useState<NumberOfRecordsInEachModuleDto | undefined>(undefined);
 
-  useEffect(() => {
-    const fetchInventoryCount = async () => {
-      const client = new AuthorizedClient();
-      const data = await executeApiCall(() => client.getNumberOfRecordsInEachModuleEndpoint());
-      
-      if (data) {
-        setNavCounts(data);
-      }
-    };
+  const fetchInventoryCount = useCallback(async () => {
+    const client = new AuthorizedClient();
+    const data = await executeApiCall(() => client.getNumberOfRecordsInEachModuleEndpoint());
 
+    if (data) {
+      setNavCounts(data);
+    }
+  }, [executeApiCall]);
+
+  useEffect(() => {
     fetchInventoryCount();
-  }, [refreshKey, executeApiCall]);
+  }, [refreshKey, fetchInventoryCount]);
 
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
 
@@ -152,7 +152,7 @@ export function DashboardLayout({
 
   const renderMain = () => <MainSection {...slotProps?.main}>{children}</MainSection>;
 
-  const navData = getNavData({ numberOfRecordsInEachModule: navCounts, userRole: user?.role});
+  const navData = getNavData({ numberOfRecordsInEachModule: navCounts, userRole: user?.role });
 
   return (
     <LayoutSection

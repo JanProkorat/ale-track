@@ -1,7 +1,7 @@
 import { useBlocker } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { varAlpha } from 'minimal-shared/utils';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import Drawer from '@mui/material/Drawer';
 import { linearProgressClasses } from '@mui/material/LinearProgress';
@@ -70,7 +70,7 @@ export function OutgoingShipmentsView() {
   const fetchOutgoingShipments = useCallback(async () => {
     const client = new AuthorizedClient();
 
-    return await executeApiCallWithDefault(() => client.fetchOutgoingShipments(), []);
+    return await executeApiCallWithDefault(() => client.fetchOutgoingShipments({}), []);
   }, [executeApiCallWithDefault]);
 
   const fetchShipment = useCallback(
@@ -116,13 +116,26 @@ export function OutgoingShipmentsView() {
     void loadInitial();
   }, [fetchOutgoingShipments, fetchShipment]);
 
+  useEffect(() => {
+    const refetchShipments = async () => {
+      const loaded = await fetchOutgoingShipments();
+      setOutgoingShipments(loaded);
+      const firstId = loaded.length > 0 ? loaded[0].id : undefined;
+      setSelectedShipmentId(firstId);
+      if (firstId) {
+        await fetchShipment(firstId);
+      }
+    };
+    void refetchShipments();
+  }, [fetchOutgoingShipments, fetchShipment]);
+
   const fetchOrders = useCallback(
     async (shipmentId: string) => {
       const client = new AuthorizedClient();
       const fetchedOrders = await executeApiCall(() =>
         client.fetOrdersForOutgoingShipments(shipmentId, {})
       );
-      
+
       if (fetchedOrders) {
         setOrders(fetchedOrders);
       }
@@ -213,7 +226,7 @@ export function OutgoingShipmentsView() {
     currentShipment.deliveryDate = deliveryDate;
 
     const client = new AuthorizedClient();
-    
+
     // For endpoints that return void (204), we need to check if the call threw an error
     // executeApiCall returns null both for errors and for successful void responses
     // We use a flag to track if an error occurred
@@ -221,11 +234,11 @@ export function OutgoingShipmentsView() {
     await executeApiCall(
       () => client.updateOutgoingShipmentEndpoint(selectedShipmentId, currentShipment),
       undefined,
-      { 
+      {
         onError: () => { hasError = true; }
       }
     );
-    
+
     if (hasError) {
       return false;
     }
