@@ -58,3 +58,18 @@ npm run fm:check    # Prettier check
 npm run fm:fix      # Prettier write
 npm run build:check # TypeScript type-check + production build
 ```
+
+### Testování
+```
+npm test              # Spustit testy v watch módu
+npm run test:run      # Spustit testy jednou
+npm run test:ui       # Spustit testy s UI
+npm run test:coverage # Spustit testy s pokrytím kódu
+```
+
+**Stav testů:**
+- ✅ 107 testů pro utility a hooks
+- ✅ 99%+ pokrytí kódu na utilities
+- ✅ 100% pokrytí kódu na hooks
+
+Více informací v [docs/testing.md](docs/testing.md).

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { it, vi, expect, describe } from 'vitest';
 
 // Mock the i18next module
 vi.mock('i18next', () => ({

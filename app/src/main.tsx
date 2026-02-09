@@ -4,7 +4,6 @@ import 'dayjs/locale/en';
 import 'dayjs/locale/de';
 import './leaflet-init';
 
-import eruda from 'eruda';
 import {createRoot} from 'react-dom/client';
 import { useTranslation } from 'react-i18next';
 import {Outlet, RouterProvider, createBrowserRouter} from 'react-router';

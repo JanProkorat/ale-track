@@ -1,6 +1,9 @@
-import { ReactElement } from 'react';
-import { render, RenderOptions } from '@testing-library/react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import type { ReactElement } from 'react';
+import type { RenderOptions } from '@testing-library/react';
+
+import { render } from '@testing-library/react';
+
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 
 // Create a default theme for testing
 const defaultTheme = createTheme();

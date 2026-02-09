@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { it, expect, describe } from 'vitest';
+
 import { mapEnumValue, mapEnumFromString } from 'src/utils/format-enum-value';
 
 describe('format-enum-value utilities', () => {

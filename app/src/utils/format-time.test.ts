@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { fDateTime, fDate, fToNow } from 'src/utils/format-time';
+import { it, expect, describe } from 'vitest';
+
+import { fDate, fToNow, fDateTime } from 'src/utils/format-time';
 
 describe('format-time utilities', () => {
   describe('fDateTime', () => {

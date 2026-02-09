@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { fNumber, fCurrency, fPercent, fShortenNumber } from 'src/utils/format-number';
+import { it, expect, describe } from 'vitest';
+
+import { fNumber, fPercent, fCurrency, fShortenNumber } from 'src/utils/format-number';
 
 describe('format-number utilities', () => {
   describe('fNumber', () => {

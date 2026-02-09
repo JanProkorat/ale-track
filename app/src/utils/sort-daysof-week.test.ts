@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { it, vi, expect, describe } from 'vitest';
 
 // Mock the API Client module
 vi.mock('src/api/Client', () => ({

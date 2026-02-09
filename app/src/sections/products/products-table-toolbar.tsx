@@ -4,10 +4,10 @@ import {useTranslation} from "react-i18next";
 import OutlinedInput from "@mui/material/OutlinedInput";
 import InputAdornment from "@mui/material/InputAdornment";
 
-import {ProductType} from "../../api/Client";
 import {Iconify} from "../../components/iconify";
 import {TableToolbar} from "../../components/table/table-toolbar";
-import {ProductTypeSelect} from "./detail-view/components/product-type-select";
+
+import type {ProductType} from "../../api/Client";
 
 type ProductsTableToolbarProps = {
     numSelected: number;

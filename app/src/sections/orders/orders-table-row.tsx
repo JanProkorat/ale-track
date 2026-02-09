@@ -1,6 +1,5 @@
 import {useTranslation} from "react-i18next";
 
-import {Chip} from "@mui/material";
 import TableRow from "@mui/material/TableRow";
 import Checkbox from "@mui/material/Checkbox";
 import TableCell from "@mui/material/TableCell";

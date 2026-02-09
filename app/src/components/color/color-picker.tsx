@@ -4,7 +4,7 @@ import React, {useRef, useState} from "react";
 
 import Box from "@mui/material/Box";
 import Popover from "@mui/material/Popover";
-import {FormControl, OutlinedInput, FormHelperText, InputAdornment, InputLabel} from "@mui/material";
+import {InputLabel, FormControl, OutlinedInput, FormHelperText, InputAdornment} from "@mui/material";
 
 import {Iconify} from "../iconify";
 
