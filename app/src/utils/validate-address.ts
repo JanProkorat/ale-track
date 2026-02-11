@@ -12,7 +12,7 @@ export function validateAddress(address: AddressDto | undefined): Record<string,
     if (!streetNumber) validationErrors.streetNumber = t('common.required');
     if (!city) validationErrors.city = t('common.required');
     if (!zip) validationErrors.zip = t('common.required');
-    if (!country) validationErrors.country = t('common.required');
+    if (country === null || country === undefined) validationErrors.country = t('common.required');
 
     return validationErrors;
 };

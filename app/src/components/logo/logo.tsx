@@ -6,7 +6,6 @@ import {Link as RouterLink} from 'react-router-dom';
 
 import {styled} from '@mui/system';
 import Link from '@mui/material/Link';
-import {useTheme} from '@mui/material/styles';
 
 import {logoClasses} from "./classes";
 import fullLogo from './logo-full.png';
