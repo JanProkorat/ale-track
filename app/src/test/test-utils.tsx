@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { RenderOptions } from '@testing-library/react';
 
 import { render } from '@testing-library/react';
@@ -20,7 +20,7 @@ export function renderWithProviders(
   ui: ReactElement,
   { theme = defaultTheme, ...renderOptions }: CustomRenderOptions = {}
 ) {
-  function Wrapper({ children }: { children: React.ReactNode }) {
+  function Wrapper({ children }: { children: ReactNode }) {
     return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
   }
 

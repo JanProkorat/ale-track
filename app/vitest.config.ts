@@ -12,6 +12,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
+      all: true,
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'node_modules/',
         'src/test/',
@@ -20,6 +22,8 @@ export default defineConfig({
         '**/mockData',
         '**/_mock',
         'dist/',
+        '**/*.test.{ts,tsx}',
+        '**/*.spec.{ts,tsx}',
       ],
       thresholds: {
         lines: 70,

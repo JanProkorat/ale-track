@@ -25,7 +25,7 @@ describe('validate-address utilities', () => {
         streetNumber: '123',
         city: 'Prague',
         zip: '11000',
-        country: Country.Germany, // Use Germany (1) instead of Czechia (0) to avoid falsy issue
+        country: Country.Czechia,
       };
 
       const errors = validateAddress(address);
@@ -103,7 +103,7 @@ describe('validate-address utilities', () => {
         streetNumber: undefined,
         city: 'Prague',
         zip: '11000',
-        country: Country.Germany, // Use Germany (1) instead of Czechia (0)
+        country: Country.Czechia,
       };
 
       const errors = validateAddress(address as any);

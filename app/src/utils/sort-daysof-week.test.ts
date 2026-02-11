@@ -71,7 +71,7 @@ describe('sort-daysof-week utilities', () => {
     });
 
     it('should handle empty array', () => {
-      const days: typeof DayOfWeek[] = [];
+      const days: any[] = [];
       const sorted = sortDaysOfWeek(days);
 
       expect(sorted).toEqual([]);
