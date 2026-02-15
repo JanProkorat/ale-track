@@ -1,5 +1,7 @@
 import { it, vi, expect, describe } from 'vitest';
 
+import { AddressDto } from 'src/api/Client';
+
 // Mock the i18next module
 vi.mock('i18next', () => ({
   t: (key: string) => key, // Return the key as-is for testing
@@ -20,13 +22,13 @@ const { Country } = await import('src/api/Client');
 describe('validate-address utilities', () => {
   describe('validateAddress', () => {
     it('should return empty errors for valid complete address', () => {
-      const address = {
+      const address = new AddressDto({
         streetName: 'Main Street',
         streetNumber: '123',
         city: 'Prague',
         zip: '11000',
         country: Country.Czechia,
-      };
+      });
 
       const errors = validateAddress(address);
       expect(Object.keys(errors)).toHaveLength(0);

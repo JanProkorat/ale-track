@@ -5,7 +5,6 @@ import { useBoolean } from 'minimal-shared/hooks';
 import { useState, useEffect, useCallback } from "react";
 
 import Box from '@mui/material/Box';
-import Alert from '@mui/material/Alert';
 import { useTheme } from '@mui/material/styles';
 
 import { NavMobile, NavDesktop } from './nav';
@@ -104,11 +103,6 @@ export function DashboardLayout({
     const navData = getNavData({ numberOfRecordsInEachModule: navCounts, userRole: user?.role });
 
     const headerSlots: HeaderSectionProps['slots'] = {
-      topArea: (
-        <Alert severity="info" sx={{ display: 'none', borderRadius: 0 }}>
-          This is an info Alert.
-        </Alert>
-      ),
       leftArea: (
         <>
           {/** @slot Nav mobile */}
@@ -121,9 +115,6 @@ export function DashboardLayout({
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
-          {/** @slot Language popover */}
-          {/*<LanguagePopover data={languages} />*/}
-
           {/** @slot Account drawer */}
           <AccountPopover />
         </Box>
