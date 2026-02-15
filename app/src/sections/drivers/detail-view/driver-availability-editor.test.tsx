@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { it, vi, expect, describe, beforeEach, afterEach } from 'vitest';
+import { it, vi, expect, describe, afterEach, beforeEach } from 'vitest';
 
 import { createTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';

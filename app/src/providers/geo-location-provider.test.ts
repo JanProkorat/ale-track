@@ -1,4 +1,4 @@
-import { it, vi, expect, describe, beforeEach, afterAll } from 'vitest';
+import { it, vi, expect, afterAll, describe, beforeEach } from 'vitest';
 
 import { Country, AddressDto } from 'src/api/Client';
 
