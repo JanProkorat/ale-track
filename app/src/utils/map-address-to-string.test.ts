@@ -1,7 +1,5 @@
 import { it, vi, expect, describe } from 'vitest';
 
-import { AddressDto } from 'src/api/Client';
-
 // Mock the i18next module
 vi.mock('i18next', () => ({
   t: (key: string) => key, // Return the key as-is for testing
@@ -35,52 +33,52 @@ describe('map-address-to-string utilities', () => {
     });
 
     it('should handle missing street number', () => {
-      const address = new AddressDto({
+      const address = {
         streetName: 'Main Street',
         streetNumber: "",
         city: 'Prague',
         zip: '11000',
         country: Country.Czechia,
-      });
+      };
 
       const result = addressToString(address);
       expect(result).toBe('Main Street, 11000 Prague, Czech Republic');
     });
 
     it('should handle missing street name', () => {
-      const address = new AddressDto({
+      const address = {
         streetName: "",
         streetNumber: '123',
         city: 'Prague',
         zip: '11000',
         country: Country.Czechia,
-      });
+      };
 
       const result = addressToString(address);
       expect(result).toBe('123, 11000 Prague, Czech Republic');
     });
 
     it('should handle missing zip', () => {
-      const address = new AddressDto({
+      const address = {
         streetName: 'Main Street',
         streetNumber: '123',
         city: 'Prague',
         zip: "",
         country: Country.Czechia,
-      });
+      };
 
       const result = addressToString(address);
       expect(result).toBe('Main Street 123, Prague, Czech Republic');
     });
 
     it('should handle missing city', () => {
-      const address = new AddressDto({
+      const address = {
         streetName: 'Main Street',
         streetNumber: '123',
         city: "",
         zip: '11000',
         country: Country.Czechia,
-      });
+      };
 
       const result = addressToString(address);
       expect(result).toBe('Main Street 123, 11000, Czech Republic');
@@ -100,13 +98,13 @@ describe('map-address-to-string utilities', () => {
     });
 
     it('should handle minimal address with only country', () => {
-      const address = new AddressDto({
+      const address = {
         streetName: "",
         streetNumber: "",
         city: "",
         zip: "",
         country: Country.Czechia,
-      });
+      };
 
       const result = addressToString(address);
       expect(result).toBe('Czech Republic');
