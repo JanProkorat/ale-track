@@ -1,5 +1,3 @@
-import { useMap } from "react-leaflet";
-
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 
 type FullscreenControlProps = {
@@ -7,7 +5,6 @@ type FullscreenControlProps = {
 };
 
 export function FullscreenControl({ onClick }: FullscreenControlProps) {
-  const map = useMap();
 
   return (
     <div className="leaflet-top leaflet-right">
@@ -23,7 +20,7 @@ export function FullscreenControl({ onClick }: FullscreenControlProps) {
             color: "black",
           }}
         >
-            <FullscreenIcon />
+          <FullscreenIcon />
         </button>
       </div>
     </div>
