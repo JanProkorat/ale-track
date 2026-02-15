@@ -29,7 +29,6 @@ describe('validateReminder', () => {
         const dto = new CreateReminderDto({
             name: 'Test',
             type: ReminderType.OneTimeEvent,
-            numberOfDaysToRemindBefore: undefined as unknown as number,
             occurrenceDate: new Date(),
         });
 
