@@ -105,7 +105,7 @@ describe('ProductsSelect', () => {
         const checkboxes = within(listbox).getAllByRole('checkbox');
 
         // At least one checkbox should be checked (the one for p1)
-        const checked = checkboxes.filter((cb) => cb.getAttribute('aria-checked') === 'true' || (cb as HTMLInputElement).checked);
+        const checked = checkboxes.filter((cb: HTMLElement) => cb.getAttribute('aria-checked') === 'true' || (cb as HTMLInputElement).checked);
         expect(checked.length).toBeGreaterThanOrEqual(1);
     });
 

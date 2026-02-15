@@ -233,8 +233,8 @@ describe('ProductsView', () => {
         // Click the first delete button (trash icon)
         const deleteButtons = screen
             .getAllByTestId('iconify')
-            .filter((el) => el.textContent === 'solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .filter((el: HTMLElement) => el.textContent === 'solar:trash-bin-trash-bold')
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {
@@ -251,8 +251,8 @@ describe('ProductsView', () => {
 
         const deleteButtons = screen
             .getAllByTestId('iconify')
-            .filter((el) => el.textContent === 'solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .filter((el: HTMLElement) => el.textContent === 'solar:trash-bin-trash-bold')
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {
@@ -277,8 +277,8 @@ describe('ProductsView', () => {
 
         const deleteButtons = screen
             .getAllByTestId('iconify')
-            .filter((el) => el.textContent === 'solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .filter((el: HTMLElement) => el.textContent === 'solar:trash-bin-trash-bold')
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {

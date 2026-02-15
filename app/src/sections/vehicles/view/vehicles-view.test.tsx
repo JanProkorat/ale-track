@@ -170,7 +170,7 @@ describe('VehiclesView', () => {
         });
 
         const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+            (btn: HTMLElement) => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
         );
         fireEvent.click(deleteButtons[0]);
 
@@ -192,7 +192,7 @@ describe('VehiclesView', () => {
         });
 
         const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+            (btn: HTMLElement) => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
         );
         fireEvent.click(deleteButtons[0]);
 
@@ -218,7 +218,7 @@ describe('VehiclesView', () => {
         });
 
         const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+            (btn: HTMLElement) => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
         );
         fireEvent.click(deleteButtons[0]);
 

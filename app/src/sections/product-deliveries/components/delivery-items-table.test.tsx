@@ -133,8 +133,8 @@ describe('DeliveryItemsTable', () => {
         // Sorted by name ascending: Lager (p2), Pilsner (p1)
         // Click the first delete button to delete Lager (p2)
         const deleteButtons = screen.getAllByTestId('iconify')
-            .filter((el) => el.textContent === 'solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .filter((el: HTMLElement) => el.textContent === 'solar:trash-bin-trash-bold')
+            .map((el: HTMLElement) => el.closest('button')!);
         deleteButtons[0].click();
 
         expect(mockOnProductsChanged).toHaveBeenCalledTimes(1);

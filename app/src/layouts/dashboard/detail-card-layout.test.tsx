@@ -120,7 +120,7 @@ describe('DetailCardLayout', () => {
         // Find the delete button (the one with trash icon)
         const deleteIconButtons = screen.getAllByRole('button');
         // The last iconbutton in the header is the delete button
-        const deleteButton = deleteIconButtons.find((btn) =>
+        const deleteButton = deleteIconButtons.find((btn: HTMLElement) =>
             btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
         );
         expect(deleteButton).toBeDefined();
@@ -133,7 +133,7 @@ describe('DetailCardLayout', () => {
         renderWithProviders(
             <DetailCardLayout {...defaultProps} entity={{ name: 'Changed' }} />
         );
-        const resetButton = screen.getAllByRole('button').find((btn) =>
+        const resetButton = screen.getAllByRole('button').find((btn: HTMLElement) =>
             btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:restart-bold'
         );
         expect(resetButton).toBeDefined();
@@ -143,7 +143,7 @@ describe('DetailCardLayout', () => {
 
     it('disables save and reset buttons when no changes', () => {
         renderWithProviders(<DetailCardLayout {...defaultProps} />);
-        const resetButton = screen.getAllByRole('button').find((btn) =>
+        const resetButton = screen.getAllByRole('button').find((btn: HTMLElement) =>
             btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:restart-bold'
         );
         expect(resetButton).toBeDisabled();

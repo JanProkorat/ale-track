@@ -378,7 +378,7 @@ describe('ProductDeliveriesView', () => {
         // Click the delete icon button (trash icon in the section header area)
         const deleteButtons = screen
             .getAllByText('solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {
@@ -395,7 +395,7 @@ describe('ProductDeliveriesView', () => {
 
         const deleteButtons = screen
             .getAllByText('solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {
@@ -420,7 +420,7 @@ describe('ProductDeliveriesView', () => {
 
         const deleteButtons = screen
             .getAllByText('solar:trash-bin-trash-bold')
-            .map((el) => el.closest('button')!);
+            .map((el: HTMLElement) => el.closest('button')!);
         fireEvent.click(deleteButtons[0]);
 
         await waitFor(() => {

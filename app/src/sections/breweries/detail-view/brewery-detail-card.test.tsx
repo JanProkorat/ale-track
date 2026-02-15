@@ -235,7 +235,7 @@ describe('BreweryDetailCard', () => {
         await waitFor(() => {
             const allBtns = screen.getAllByRole('button');
             const enabledPrimaryBtns = allBtns.filter(
-                (btn) =>
+                (btn: HTMLElement) =>
                     btn.classList.contains('MuiIconButton-colorPrimary') &&
                     !btn.hasAttribute('disabled')
             );
@@ -245,7 +245,7 @@ describe('BreweryDetailCard', () => {
         // Click the save button (second enabled primary icon button)
         const allBtns = screen.getAllByRole('button');
         const enabledPrimaryBtns = allBtns.filter(
-            (btn) =>
+            (btn: HTMLElement) =>
                 btn.classList.contains('MuiIconButton-colorPrimary') &&
                 !btn.hasAttribute('disabled')
         );

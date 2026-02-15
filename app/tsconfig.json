@@ -28,12 +28,7 @@
     "src"
   ],
   "exclude": [
-    "node_modules",
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/**/*.spec.ts",
-    "src/**/*.spec.tsx",
-    "src/test"
+    "node_modules"
   ],
   "references": [
     {

@@ -180,7 +180,7 @@ describe('OrderProductsSelect', () => {
         // Find checkboxes - the one associated with r1 should be checked
         const checkboxes = screen.getAllByRole('checkbox');
         const checkedCheckboxes = checkboxes.filter(
-            (cb) => (cb as HTMLInputElement).checked
+            (cb: HTMLElement) => (cb as HTMLInputElement).checked
         );
         expect(checkedCheckboxes.length).toBeGreaterThanOrEqual(1);
     });

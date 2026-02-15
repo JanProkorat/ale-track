@@ -131,7 +131,7 @@ describe('SignInView', () => {
 
         // Click the visibility toggle button (icon button inside the password field)
         const toggleButtons = screen.getAllByRole('button');
-        const toggleButton = toggleButtons.find((btn) => btn !== screen.getByRole('button', { name: 'signIn.signInLabel' }));
+        const toggleButton = toggleButtons.find((btn: HTMLElement) => btn !== screen.getByRole('button', { name: 'signIn.signInLabel' }));
         expect(toggleButton).toBeDefined();
 
         await user.click(toggleButton!);
