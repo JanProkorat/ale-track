@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { it, vi, expect, describe, beforeEach } from 'vitest';
+import { it, vi, expect, describe, beforeEach, afterEach } from 'vitest';
 
 import { createTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
@@ -35,7 +35,9 @@ const mockOnChange = vi.fn();
 const createSlot = (from: Date, until: Date): DriverAvailabilityDto =>
     new DriverAvailabilityDto({ from, until });
 
-const tomorrow = dayjs().add(1, 'day').startOf('day');
+// Freeze time to a fixed date for deterministic tests
+const FIXED_DATE = '2024-01-15T12:00:00.000Z';
+const tomorrow = dayjs('2024-01-16').startOf('day');
 const slot1 = createSlot(
     tomorrow.hour(8).toDate(),
     tomorrow.hour(16).toDate()
@@ -47,7 +49,12 @@ const slot2 = createSlot(
 
 describe('DriverAvailabilityEditor', () => {
     beforeEach(() => {
+        vi.setSystemTime(new Date(FIXED_DATE));
         vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     // --- Empty state ---
