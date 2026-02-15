@@ -68,7 +68,9 @@ describe('SortableTableHead', () => {
         renderHead({ numSelected: 3, rowCount: 10 });
         const checkbox = screen.getByRole('checkbox');
         expect(checkbox).not.toBeChecked();
-    }); it('calls onSelectAllRows when checkbox is clicked', () => {
+    });
+
+    it('calls onSelectAllRows when checkbox is clicked', () => {
         const onSelectAllRows = vi.fn();
         renderHead({ onSelectAllRows });
         fireEvent.click(screen.getByRole('checkbox'));
