@@ -7,7 +7,7 @@ import { scrollbarClasses } from './classes';
 
 import type { ScrollbarProps } from './types';
 
-// ----------------------------------------------------------------------
+// -----------<-----------------------------------------------------------
 
 export function Scrollbar({
   sx,

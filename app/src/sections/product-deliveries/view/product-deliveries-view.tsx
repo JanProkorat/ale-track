@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { varAlpha } from "minimal-shared/utils";
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import Card from "@mui/material/Card";
 import Drawer from "@mui/material/Drawer";
@@ -163,7 +163,7 @@ export function ProductDeliveriesView() {
         if (hasError) {
             return false;
         }
-        
+
         showSnackbar(t('productDeliveries.saveSuccess'), 'success');
 
         // If the state or date has changed, reload the list

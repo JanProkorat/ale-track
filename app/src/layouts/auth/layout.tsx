@@ -4,13 +4,13 @@ import { merge } from 'es-toolkit';
 
 import Box from "@mui/material/Box";
 
-import {languages} from "../dashboard";
 import { AuthContent } from './content';
-import {LanguagePopover} from "../components/language-popover";
-import { MainSection , LayoutSection , HeaderSection } from '../core';
+import { languages } from "../dashboard";
+import { LanguagePopover } from "../components/language-popover";
+import { MainSection, LayoutSection, HeaderSection } from '../core';
 
 import type { AuthContentProps } from './content';
-import type { MainSectionProps , HeaderSectionProps , LayoutSectionProps } from '../core';
+import type { MainSectionProps, HeaderSectionProps, LayoutSectionProps } from '../core';
 
 // ----------------------------------------------------------------------
 
@@ -37,19 +37,10 @@ export function AuthLayout({
 
     const headerSlots: HeaderSectionProps['slots'] = {
       rightArea: (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
-            {/** @slot Searchbar */}
-            {/*<Searchbar />*/}
-
-            {/** @slot Language popover */}
-            <LanguagePopover data={languages} />
-
-            {/** @slot Notifications popover */}
-            {/*<NotificationsPopover data={_notifications} />*/}
-
-            {/** @slot Account drawer */}
-            {/*<AccountPopover />*/}
-          </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+          {/** @slot Language popover */}
+          <LanguagePopover data={languages} />
+        </Box>
       ),
     };
 
