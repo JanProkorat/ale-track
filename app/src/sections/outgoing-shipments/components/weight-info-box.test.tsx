@@ -53,7 +53,9 @@ describe('WeightInfoBox', () => {
 
         const labels = screen.getAllByText('outgoingShipments.weight (Kg)');
         expect(labels[0]).not.toHaveClass('Mui-error');
-    }); it('should always be disabled', () => {
+    });
+
+    it('should always be disabled', () => {
         render(<WeightInfoBox currentWeight={10} maxWeight={100} />);
 
         const input = screen.getByRole('textbox');
