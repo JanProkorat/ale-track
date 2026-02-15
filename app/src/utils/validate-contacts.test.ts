@@ -1,23 +1,21 @@
-import { it, vi, expect, describe } from 'vitest';
+import { it, expect, describe } from 'vitest';
 
-// Mock the API Client module
-vi.mock('src/api/Client', () => ({
-  ContactType: {
-    Email: 0,
-    Phone: 1,
-  },
-}));
+import { validateContacts } from './validate-contacts';
+import { ContactType, UpdateClientContactDto } from '../api/Client';
 
-// Import after mocks are set up
-const { validateContacts } = await import('src/utils/validate-contacts');
-const { ContactType } = await import('src/api/Client');
+function contact(overrides: { type?: any; value?: any }) {
+  const dto = new UpdateClientContactDto();
+  dto.type = overrides.type;
+  dto.value = overrides.value;
+  return dto;
+}
 
 describe('validate-contacts utilities', () => {
   describe('validateContacts', () => {
     it('should return no errors for valid contacts', () => {
       const contacts = [
-        { type: ContactType.Email, value: 'test@example.com' },
-        { type: ContactType.Phone, value: '+420123456789' },
+        contact({ type: ContactType.Email, value: 'test@example.com' }),
+        contact({ type: ContactType.Phone, value: '+420123456789' }),
       ];
 
       const result = validateContacts(contacts);
@@ -26,7 +24,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return error for contact with missing type', () => {
-      const contacts = [{ type: undefined as any, value: 'test@example.com' }];
+      const contacts = [contact({ type: undefined, value: 'test@example.com' })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -34,7 +32,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return error for contact with null type', () => {
-      const contacts = [{ type: null as any, value: 'test@example.com' }];
+      const contacts = [contact({ type: null, value: 'test@example.com' })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -42,7 +40,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return error for contact with missing value', () => {
-      const contacts = [{ type: ContactType.Email, value: undefined as any }];
+      const contacts = [contact({ type: ContactType.Email, value: undefined })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -50,7 +48,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return error for contact with empty string value', () => {
-      const contacts = [{ type: ContactType.Email, value: '' }];
+      const contacts = [contact({ type: ContactType.Email, value: '' })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -58,7 +56,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return error for contact with whitespace-only value', () => {
-      const contacts = [{ type: ContactType.Email, value: '   ' }];
+      const contacts = [contact({ type: ContactType.Email, value: '   ' })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -67,9 +65,9 @@ describe('validate-contacts utilities', () => {
 
     it('should return errors for multiple invalid contacts', () => {
       const contacts = [
-        { type: undefined as any, value: 'test@example.com' },
-        { type: ContactType.Phone, value: '' },
-        { type: ContactType.Email, value: 'valid@example.com' }, // valid
+        contact({ type: undefined, value: 'test@example.com' }),
+        contact({ type: ContactType.Phone, value: '' }),
+        contact({ type: ContactType.Email, value: 'valid@example.com' }), // valid
       ];
 
       const result = validateContacts(contacts);
@@ -80,7 +78,7 @@ describe('validate-contacts utilities', () => {
     });
 
     it('should return both type and value errors when both are missing', () => {
-      const contacts = [{ type: undefined as any, value: '' }];
+      const contacts = [contact({ type: undefined, value: '' })];
 
       const result = validateContacts(contacts);
       expect(result.hasErrors).toBe(true);
@@ -102,10 +100,10 @@ describe('validate-contacts utilities', () => {
 
     it('should validate with correct index for mixed valid and invalid contacts', () => {
       const contacts = [
-        { type: ContactType.Email, value: 'valid1@example.com' }, // index 0 - valid
-        { type: undefined as any, value: '' }, // index 1 - invalid
-        { type: ContactType.Phone, value: '+420123456789' }, // index 2 - valid
-        { type: ContactType.Email, value: '' }, // index 3 - invalid
+        contact({ type: ContactType.Email, value: 'valid1@example.com' }), // index 0 - valid
+        contact({ type: undefined, value: '' }), // index 1 - invalid
+        contact({ type: ContactType.Phone, value: '+420123456789' }), // index 2 - valid
+        contact({ type: ContactType.Email, value: '' }), // index 3 - invalid
       ];
 
       const result = validateContacts(contacts);

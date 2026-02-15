@@ -28,7 +28,7 @@ describe('validate-address utilities', () => {
         country: Country.Czechia,
       };
 
-      const errors = validateAddress(address);
+      const errors = validateAddress(address as any);
       expect(Object.keys(errors)).toHaveLength(0);
     });
 

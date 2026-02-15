@@ -19,7 +19,7 @@ import { OrdersTableToolbar } from '../orders-table-toolbar';
 import { AuthorizedClient } from '../../../api/AuthorizedClient';
 import { OrderDetailView } from '../detail-view/order-detail-view';
 import { CreateOrderView } from '../detail-view/create-order-view';
-import { PlanningStateTab } from '../../common/planning-state-tab';
+import { PlanningStateTab } from '../components/planning-state-tab';
 import { SplitViewLayout } from '../../../layouts/dashboard/split-view-layout';
 import { SortableTableHead } from '../../../components/table/sortable-table-head';
 

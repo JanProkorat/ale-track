@@ -1,26 +1,26 @@
-import {uuidv4} from "minimal-shared";
-import React, {useEffect} from "react";
-import {useTranslation} from "react-i18next";
-import {arrayMove, SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable";
-import {useSensor, DndContext, useSensors, closestCenter, PointerSensor} from "@dnd-kit/core";
+import { uuidv4 } from "minimal-shared";
+import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useSensor, DndContext, useSensors, closestCenter, PointerSensor } from "@dnd-kit/core";
 
 import Box from "@mui/material/Box";
-import {Typography} from "@mui/material";
 import Button from "@mui/material/Button";
+import { Typography } from "@mui/material";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
-import {Iconify} from "../../../components/iconify";
-import {SortableView} from "../components/sortable-view";
-import {DriversSelect} from "../components/drivers-select";
-import {VehicleSelect} from "../components/vehicle-select";
-import {DeliveryDatePicker} from "../components/delivery-date-picker";
-import {DeliveryStateSelect} from "../components/delivery-state-select";
-import {UpdateProductDeliveryStopView} from "./update-product-delivery-stop-view";
-import { ProductDeliveryState, UpdateProductDeliveryDto, UpdateProductDeliveryStopDto} from "../../../api/Client";
+import { Iconify } from "../../../components/iconify";
+import { SortableView } from "../components/sortable-view";
+import { DriversSelect } from "../components/drivers-select";
+import { VehicleSelect } from "../components/vehicle-select";
+import { DeliveryDatePicker } from "../components/delivery-date-picker";
+import { DeliveryStateSelect } from "../components/delivery-state-select";
+import { UpdateProductDeliveryStopView } from "./update-product-delivery-stop-view";
+import { ProductDeliveryState, UpdateProductDeliveryDto, UpdateProductDeliveryStopDto } from "../../../api/Client";
 
-import type {DriverDto, BreweryDto, VehicleDto} from "../../../api/Client";
+import type { DriverDto, BreweryDto, VehicleDto } from "../../../api/Client";
 
 type UpdateProductDeliveryViewProps = {
     delivery: UpdateProductDeliveryDto,
@@ -44,17 +44,17 @@ export function UpdateProductDeliveryView(
         disabled,
         onChange
     }: Readonly<UpdateProductDeliveryViewProps>) {
-    const {t} = useTranslation();
+    const { t } = useTranslation();
 
     const [isWarningVisible, setIsWarningVisible] = React.useState<boolean>(false);
 
     useEffect(() => {
-            const numericState = ProductDeliveryState[delivery.state! as unknown as keyof typeof ProductDeliveryState];
-            if (numericState === ProductDeliveryState.Finished)
-                setIsWarningVisible(true);
-            else if (isWarningVisible)
-                setIsWarningVisible(false);
-    }, [delivery.state])
+        const numericState = ProductDeliveryState[delivery.state! as unknown as keyof typeof ProductDeliveryState];
+        if (numericState === ProductDeliveryState.Finished)
+            setIsWarningVisible(true);
+        else if (isWarningVisible)
+            setIsWarningVisible(false);
+    }, [delivery.state, isWarningVisible])
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -93,7 +93,7 @@ export function UpdateProductDeliveryView(
     };
 
     const handleAddStop = () => {
-        const newStop = new UpdateProductDeliveryStopDto({publicId: "new-stop-" + uuidv4(), products: []});
+        const newStop = new UpdateProductDeliveryStopDto({ publicId: "new-stop-" + uuidv4(), products: [] });
         onChange(new UpdateProductDeliveryDto({
             ...delivery,
             stops: [...delivery.stops ?? [], newStop],
@@ -124,7 +124,7 @@ export function UpdateProductDeliveryView(
                 flexDirection: 'column',
                 gap: 3,
             }}>
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <DeliveryDatePicker
                         selectedDeliveryDate={delivery.deliveryDate}
                         onDatePicked={handleDeliveryDateSelect}
@@ -176,7 +176,7 @@ export function UpdateProductDeliveryView(
                     rows={3}
                     value={delivery.note}
                     onChange={(event) => handleUpdateNote(event.target.value)}
-                    inputProps={{maxLength: 200}}
+                    inputProps={{ maxLength: 200 }}
                     disabled={disabled}
                 />
 
@@ -186,16 +186,16 @@ export function UpdateProductDeliveryView(
                     alignItems: 'center',
                     borderBottom: '1px solid #eee'
                 }}>
-                    <Typography variant="subtitle1" sx={{fontWeight: 'bold'}}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                         {t('productDeliveries.stopTitle')}
                     </Typography>
                     <Button
                         disabled={disabled}
                         variant="contained"
                         color="inherit"
-                        startIcon={<Iconify icon="mingcute:add-line"/>}
+                        startIcon={<Iconify icon="mingcute:add-line" />}
                         size="small"
-                        sx={{mb: 1}}
+                        sx={{ mb: 1 }}
                         onClick={handleAddStop}
                     >
                         {t('productDeliveries.newStop')}
@@ -207,14 +207,14 @@ export function UpdateProductDeliveryView(
                         flexGrow: 1,
                         overflowY: 'auto',
                         display: 'grid',
-                        gridTemplateColumns: {xs: '1fr', sm: '1fr'},
+                        gridTemplateColumns: { xs: '1fr', sm: '1fr' },
                         gap: 2,
                     }}
                 >
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
-                        onDragEnd={({active, over}) => {
+                        onDragEnd={({ active, over }) => {
                             if (active.id !== over?.id) {
                                 const oldIndex = delivery.stops!.findIndex((s) => s.publicId === active.id);
                                 const newIndex = delivery.stops!.findIndex((s) => s.publicId === over?.id);

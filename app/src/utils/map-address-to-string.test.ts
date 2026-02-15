@@ -35,7 +35,7 @@ describe('map-address-to-string utilities', () => {
     it('should handle missing street number', () => {
       const address = {
         streetName: 'Main Street',
-        streetNumber: undefined,
+        streetNumber: "",
         city: 'Prague',
         zip: '11000',
         country: Country.Czechia,
@@ -47,7 +47,7 @@ describe('map-address-to-string utilities', () => {
 
     it('should handle missing street name', () => {
       const address = {
-        streetName: undefined,
+        streetName: "",
         streetNumber: '123',
         city: 'Prague',
         zip: '11000',
@@ -63,7 +63,7 @@ describe('map-address-to-string utilities', () => {
         streetName: 'Main Street',
         streetNumber: '123',
         city: 'Prague',
-        zip: undefined,
+        zip: "",
         country: Country.Czechia,
       };
 
@@ -75,7 +75,7 @@ describe('map-address-to-string utilities', () => {
       const address = {
         streetName: 'Main Street',
         streetNumber: '123',
-        city: undefined,
+        city: "",
         zip: '11000',
         country: Country.Czechia,
       };
@@ -99,10 +99,10 @@ describe('map-address-to-string utilities', () => {
 
     it('should handle minimal address with only country', () => {
       const address = {
-        streetName: undefined,
-        streetNumber: undefined,
-        city: undefined,
-        zip: undefined,
+        streetName: "",
+        streetNumber: "",
+        city: "",
+        zip: "",
         country: Country.Czechia,
       };
 
