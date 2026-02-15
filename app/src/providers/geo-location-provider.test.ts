@@ -1,4 +1,4 @@
-import { it, vi, expect, describe, beforeEach } from 'vitest';
+import { it, vi, expect, describe, beforeEach, afterAll } from 'vitest';
 
 import { Country, AddressDto } from 'src/api/Client';
 
@@ -24,6 +24,10 @@ describe('GeoLocationProvider', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         provider = new GeoLocationProvider();
+    });
+
+    afterAll(() => {
+        vi.unstubAllGlobals();
     });
 
     it('should return coordinates for a valid address', async () => {
