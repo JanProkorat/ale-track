@@ -10,234 +10,243 @@ import { VehiclesView } from './vehicles-view';
 
 const cssVarsTheme = createTheme({ cssVariables: { cssVarPrefix: '' } });
 function renderView(ui: React.ReactElement) {
-    return renderWithProviders(ui, { theme: cssVarsTheme });
+     return renderWithProviders(ui, { theme: cssVarsTheme });
 }
 
 const mockT = (key: string) => key;
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: mockT }),
+     useTranslation: () => ({ t: mockT }),
 }));
 
 vi.mock('minimal-shared/utils', () => ({
-    varAlpha: () => 'rgba(0,0,0,0.16)',
-    mergeClasses: (classes: string[]) => classes.filter(Boolean).join(' '),
+     varAlpha: () => 'rgba(0,0,0,0.16)',
+     mergeClasses: (classes: string[]) => classes.filter(Boolean).join(' '),
 }));
 
 vi.mock('../../../components/iconify', () => ({
-    Iconify: ({ icon }: { icon: string }) => <span data-testid="iconify">{icon}</span>,
+     Iconify: ({ icon }: { icon: string }) => <span data-testid="iconify">{icon}</span>,
 }));
 
 const mockShowSnackbar = vi.fn();
 vi.mock('../../../providers/SnackbarProvider', () => ({
-    useSnackbar: () => ({ showSnackbar: mockShowSnackbar }),
+     useSnackbar: () => ({ showSnackbar: mockShowSnackbar }),
 }));
 
 const mockTriggerRefresh = vi.fn();
 vi.mock('../../../providers/EntityStatsContext', () => ({
-    useEntityStatsRefresh: () => ({ triggerRefresh: mockTriggerRefresh }),
+     useEntityStatsRefresh: () => ({ triggerRefresh: mockTriggerRefresh }),
 }));
 
 const mockExecuteApiCall = vi.fn();
 const mockExecuteApiCallWithDefault = vi.fn();
 vi.mock('../../../hooks/use-api-call', () => ({
-    useApiCall: () => ({
-        executeApiCall: mockExecuteApiCall,
-        executeApiCallWithDefault: mockExecuteApiCallWithDefault,
-    }),
+     useApiCall: () => ({
+          executeApiCall: mockExecuteApiCall,
+          executeApiCallWithDefault: mockExecuteApiCallWithDefault,
+     }),
 }));
 
 const mockFetchVehicles = vi.fn();
 const mockDeleteVehicle = vi.fn();
 vi.mock('../../../api/AuthorizedClient', () => ({
-    AuthorizedClient: class {
-        fetchVehicles = mockFetchVehicles;
-        deleteVehicleEndpoint = mockDeleteVehicle;
-    },
+     AuthorizedClient: class {
+          fetchVehicles = mockFetchVehicles;
+          deleteVehicleEndpoint = mockDeleteVehicle;
+     },
 }));
 
 vi.mock('../detail-view/vehicle-detail-view', () => ({
-    VehicleDetailView: ({ id, onClose, onSave }: { id: string | null; onClose: () => void; onSave: () => void }) => (
-        <div data-testid="vehicle-detail-view">
-            <span>id:{id ?? 'null'}</span>
-            <button onClick={onClose}>closeDetail</button>
-            <button onClick={onSave}>saveDetail</button>
-        </div>
-    ),
+     VehicleDetailView: ({ id, onClose, onSave }: { id: string | null; onClose: () => void; onSave: () => void }) => (
+          <div data-testid="vehicle-detail-view">
+               <span>id:{id ?? 'null'}</span>
+               <button onClick={onClose}>closeDetail</button>
+               <button onClick={onSave}>saveDetail</button>
+          </div>
+     ),
 }));
 
 function createVehicles(): VehicleDto[] {
-    return [
-        new VehicleDto({ id: 'v1', name: 'Truck A', maxWeight: 1500 }),
-        new VehicleDto({ id: 'v2', name: 'Van B', maxWeight: 2000 }),
-    ];
+     return [
+          new VehicleDto({ id: 'v1', name: 'Truck A', maxWeight: 1500 }),
+          new VehicleDto({ id: 'v2', name: 'Van B', maxWeight: 2000 }),
+     ];
 }
 
 describe('VehiclesView', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mockExecuteApiCallWithDefault.mockImplementation((fn: () => Promise<unknown>) => fn());
-        mockExecuteApiCall.mockImplementation((fn: () => Promise<unknown>) => fn());
-        mockFetchVehicles.mockResolvedValue(createVehicles());
-    });
+     beforeEach(() => {
+          vi.clearAllMocks();
+          mockExecuteApiCallWithDefault.mockImplementation((fn: () => Promise<unknown>) => fn());
+          mockExecuteApiCall.mockImplementation((fn: () => Promise<unknown>) => fn());
+          mockFetchVehicles.mockResolvedValue(createVehicles());
+     });
 
-    it('should render the title', async () => {
-        renderView(<VehiclesView />);
+     it('should render the title', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.title')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.title')).toBeInTheDocument();
+          });
+     });
 
-    it('should render new vehicle button', async () => {
-        renderView(<VehiclesView />);
+     it('should render new vehicle button', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.new')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.new')).toBeInTheDocument();
+          });
+     });
 
-    it('should fetch and display vehicles in table', async () => {
-        renderView(<VehiclesView />);
+     it('should fetch and display vehicles in table', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Truck A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Truck A')).toBeInTheDocument();
+          });
 
-        expect(screen.getByText('Van B')).toBeInTheDocument();
-    });
+          expect(screen.getByText('Van B')).toBeInTheDocument();
+     });
 
-    it('should render table headers', async () => {
-        renderView(<VehiclesView />);
+     it('should render table headers', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.name')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.name')).toBeInTheDocument();
+          });
 
-        expect(screen.getByText('vehicles.maxWeight')).toBeInTheDocument();
-    });
+          expect(screen.getByText('vehicles.maxWeight')).toBeInTheDocument();
+     });
 
-    it('should show empty state when no vehicles', async () => {
-        mockFetchVehicles.mockResolvedValue([]);
+     it('should show empty state when no vehicles', async () => {
+          mockFetchVehicles.mockResolvedValue([]);
 
-        renderView(<VehiclesView />);
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('table.noDataTitle')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('table.noDataTitle')).toBeInTheDocument();
+          });
+     });
 
-    it('should render filter toolbar', async () => {
-        renderView(<VehiclesView />);
+     it('should render filter toolbar', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByPlaceholderText('vehicles.name...')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByPlaceholderText('vehicles.name...')).toBeInTheDocument();
+          });
+     });
 
-    it('should open create drawer when new button is clicked', async () => {
-        renderView(<VehiclesView />);
+     it('should open create drawer when new button is clicked', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.new')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.new')).toBeInTheDocument();
+          });
 
-        screen.getByText('vehicles.new').click();
+          screen.getByText('vehicles.new').click();
 
-        await waitFor(() => {
-            expect(screen.getByText('id:null')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('id:null')).toBeInTheDocument();
+          });
+     });
 
-    it('should open detail drawer when row is clicked', async () => {
-        renderView(<VehiclesView />);
+     it('should open detail drawer when row is clicked', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Truck A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Truck A')).toBeInTheDocument();
+          });
 
-        screen.getByText('Truck A').click();
+          screen.getByText('Truck A').click();
 
-        await waitFor(() => {
-            expect(screen.getByText('id:v1')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('id:v1')).toBeInTheDocument();
+          });
+     });
 
-    it('should show delete confirmation dialog when delete is clicked', async () => {
-        renderView(<VehiclesView />);
+     it('should show delete confirmation dialog when delete is clicked', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Truck A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Truck A')).toBeInTheDocument();
+          });
 
-        const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
-        );
-        fireEvent.click(deleteButtons[0]);
+          const deleteButtons = screen
+               .getAllByRole('button')
+               .filter(
+                    (btn: HTMLElement) =>
+                         btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+               );
+          fireEvent.click(deleteButtons[0]);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
+          });
 
-        expect(screen.getByText('common.cancel')).toBeInTheDocument();
-        expect(screen.getByText('common.delete')).toBeInTheDocument();
-    });
+          expect(screen.getByText('common.cancel')).toBeInTheDocument();
+          expect(screen.getByText('common.delete')).toBeInTheDocument();
+     });
 
-    it('should delete vehicle when confirmed', async () => {
-        mockDeleteVehicle.mockResolvedValue({});
+     it('should delete vehicle when confirmed', async () => {
+          mockDeleteVehicle.mockResolvedValue({});
 
-        renderView(<VehiclesView />);
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Truck A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Truck A')).toBeInTheDocument();
+          });
 
-        const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
-        );
-        fireEvent.click(deleteButtons[0]);
+          const deleteButtons = screen
+               .getAllByRole('button')
+               .filter(
+                    (btn: HTMLElement) =>
+                         btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+               );
+          fireEvent.click(deleteButtons[0]);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
+          });
 
-        screen.getByText('common.delete').click();
+          screen.getByText('common.delete').click();
 
-        await waitFor(() => {
-            expect(mockDeleteVehicle).toHaveBeenCalledWith('v1');
-        });
+          await waitFor(() => {
+               expect(mockDeleteVehicle).toHaveBeenCalledWith('v1');
+          });
 
-        expect(mockShowSnackbar).toHaveBeenCalledWith('Vehicle deleted', 'success');
-        expect(mockTriggerRefresh).toHaveBeenCalled();
-    });
+          expect(mockShowSnackbar).toHaveBeenCalledWith('vehicles.deleteSuccess', 'success');
+          expect(mockTriggerRefresh).toHaveBeenCalled();
+     });
 
-    it('should close delete dialog when cancel is clicked', async () => {
-        renderView(<VehiclesView />);
+     it('should close delete dialog when cancel is clicked', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Truck A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Truck A')).toBeInTheDocument();
+          });
 
-        const deleteButtons = screen.getAllByRole('button').filter(
-            btn => btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
-        );
-        fireEvent.click(deleteButtons[0]);
+          const deleteButtons = screen
+               .getAllByRole('button')
+               .filter(
+                    (btn: HTMLElement) =>
+                         btn.querySelector('[data-testid="iconify"]')?.textContent === 'solar:trash-bin-trash-bold'
+               );
+          fireEvent.click(deleteButtons[0]);
 
-        await waitFor(() => {
-            expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('vehicles.deleteConfirm')).toBeInTheDocument();
+          });
 
-        screen.getByText('common.cancel').click();
+          screen.getByText('common.cancel').click();
 
-        await waitFor(() => {
-            expect(screen.queryByText('vehicles.deleteConfirm')).not.toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.queryByText('vehicles.deleteConfirm')).not.toBeInTheDocument();
+          });
+     });
 
-    it('should call fetchVehicles on mount', async () => {
-        renderView(<VehiclesView />);
+     it('should call fetchVehicles on mount', async () => {
+          renderView(<VehiclesView />);
 
-        await waitFor(() => {
-            expect(mockFetchVehicles).toHaveBeenCalled();
-        });
-    });
+          await waitFor(() => {
+               expect(mockFetchVehicles).toHaveBeenCalled();
+          });
+     });
 });

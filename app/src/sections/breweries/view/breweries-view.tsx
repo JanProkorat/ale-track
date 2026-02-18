@@ -1,194 +1,198 @@
-import {useTranslation} from "react-i18next";
-import {varAlpha} from "minimal-shared/utils";
-import {useParams, useNavigate} from "react-router-dom";
-import React, {useState, useEffect, useCallback} from 'react';
+import { useTranslation } from 'react-i18next';
+import { varAlpha } from 'minimal-shared/utils';
+import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 
-import Card from "@mui/material/Card";
-import Drawer from "@mui/material/Drawer";
-import {linearProgressClasses} from "@mui/material/LinearProgress";
-import {Box, Tab, Tabs, Button, Typography, LinearProgress} from "@mui/material";
+import Card from '@mui/material/Card';
+import Drawer from '@mui/material/Drawer';
+import { linearProgressClasses } from '@mui/material/LinearProgress';
+import { Box, Tab, Tabs, Button, Typography, LinearProgress } from '@mui/material';
 
-import { useApiCall } from "src/hooks/use-api-call";
+import { useApiCall } from 'src/hooks/use-api-call';
 
-import {BreweryDetailView} from "../detail-view";
-import {Iconify} from "../../../components/iconify";
-import {DashboardContent} from "../../../layouts/dashboard";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {BreweryDetailCard} from "../detail-view/brewery-detail-card";
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
 
-import type {BreweryListItemDto} from "../../../api/Client";
+import { BreweryDetailView } from '../detail-view';
+import { Iconify } from '../../../components/iconify';
+import { DashboardContent } from '../../../layouts/dashboard';
+import { BreweryDetailCard } from '../detail-view/brewery-detail-card';
+
+import type { BreweryListItemDto } from '../../../api/Client';
 
 // ----------------------------------------------------------------------
 
 export function BreweriesView() {
-    const {executeApiCallWithDefault} = useApiCall();
-    const {t} = useTranslation();
+     const { executeApiCallWithDefault } = useApiCall();
+     const { t } = useTranslation();
+     const client = useAuthorizedClient();
 
-    const { breweryId } = useParams<{ breweryId?: string }>();
-    const navigate = useNavigate();
+     const { breweryId } = useParams<{ breweryId?: string }>();
+     const navigate = useNavigate();
 
-    const [initialLoading, setInitialLoading] = useState<boolean>(true);
-    const [breweries, setBreweries] = useState<BreweryListItemDto[]>([]);
-    const [selectedBreweryId, setSelectedBreweryId] = useState<string | null>(breweryId ?? null);
-    const [createBreweryDrawerVisible, setCreateBreweryDrawerVisible] = useState<boolean>(false);
-    const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
-    const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
+     const [initialLoading, setInitialLoading] = useState<boolean>(true);
+     const [breweries, setBreweries] = useState<BreweryListItemDto[]>([]);
+     const [selectedBreweryId, setSelectedBreweryId] = useState<string | null>(breweryId ?? null);
+     const [createBreweryDrawerVisible, setCreateBreweryDrawerVisible] = useState<boolean>(false);
+     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
+     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
 
-    const fetchBreweries = useCallback(async () => {
-        const client = new AuthorizedClient();
-        return await executeApiCallWithDefault(
-            () => client.fetchBreweries({}),
-            [],
-            'Error fetching breweries'
-        );
-    }, [executeApiCallWithDefault]);
+     const fetchBreweries = useCallback(
+          async () => await executeApiCallWithDefault(() => client.fetchBreweries({}), [], 'Error fetching breweries'),
+          [executeApiCallWithDefault, client]
+     );
 
-    useEffect(() => {
-        const loadInitial = async () => {
-            const loaded = await fetchBreweries();
-            setBreweries(loaded);
-            if (loaded.length > 0) {
-                if (breweryId) {
-                    const exists = loaded.some(b => b.id === breweryId);
-                    if (exists) {
-                        setSelectedBreweryId(breweryId);
+     useEffect(() => {
+          const loadInitial = async () => {
+               const loaded = await fetchBreweries();
+               setBreweries(loaded);
+               if (loaded.length > 0) {
+                    if (breweryId) {
+                         const exists = loaded.some((b) => b.id === breweryId);
+                         if (exists) {
+                              setSelectedBreweryId(breweryId);
+                         } else {
+                              const firstId = loaded[0].id!;
+                              setSelectedBreweryId(firstId);
+                              navigate(`/breweries/${firstId}`, { replace: true });
+                         }
                     } else {
-                        const firstId = loaded[0].id!;
-                        setSelectedBreweryId(firstId);
-                        navigate(`/breweries/${firstId}`, { replace: true });
+                         const firstId = loaded[0].id!;
+                         setSelectedBreweryId(firstId);
+                         navigate(`/breweries/${firstId}`, { replace: true });
                     }
-                } else {
-                    const firstId = loaded[0].id!;
-                    setSelectedBreweryId(firstId);
-                    navigate(`/breweries/${firstId}`, { replace: true });
-                }
-            } else {
-                setSelectedBreweryId(null);
-            }
-            setInitialLoading(false);
-        };
-        void loadInitial();
-    }, [breweryId, fetchBreweries, navigate]);
+               } else {
+                    setSelectedBreweryId(null);
+               }
+               setInitialLoading(false);
+          };
+          void loadInitial();
+     }, [breweryId, fetchBreweries, navigate]);
 
-    useEffect(() => {
-        if (breweryId) setSelectedBreweryId(breweryId);
-    }, [breweryId]);
+     useEffect(() => {
+          if (breweryId) setSelectedBreweryId(breweryId);
+     }, [breweryId]);
 
-    const closeDrawer = () => {
-        fetchBreweries().then(setBreweries);
-        setCreateBreweryDrawerVisible(false);
-    }
+     const closeDrawer = () => {
+          fetchBreweries().then(setBreweries);
+          setCreateBreweryDrawerVisible(false);
+     };
 
-    const handleDisplayedBreweryChange = (shouldLoadNewData: boolean) => {
-        if (shouldLoadNewData) {
-            fetchBreweries().then(newBreweries => {
-                setBreweries(newBreweries);
-                if (pendingBreweryId !== null) {
-                    setSelectedBreweryId(pendingBreweryId);
-                }
-            });
-        }
-        setPendingBreweryId(null);
-    };
+     const handleDisplayedBreweryChange = (shouldLoadNewData: boolean) => {
+          if (shouldLoadNewData) {
+               fetchBreweries().then((newBreweries) => {
+                    setBreweries(newBreweries);
+                    if (pendingBreweryId !== null) {
+                         setSelectedBreweryId(pendingBreweryId);
+                    }
+               });
+          }
+          setPendingBreweryId(null);
+     };
 
-    const handleAfterDeletingBrewery = async () => {
-        await fetchBreweries().then((newData) => {
-            setBreweries(newData);
-            setSelectedBreweryId(newData.length > 0 ? newData[0].id! : null);
-        })
-    }
+     const handleAfterDeletingBrewery = async () => {
+          await fetchBreweries().then((newData) => {
+               setBreweries(newData);
+               setSelectedBreweryId(newData.length > 0 ? newData[0].id! : null);
+          });
+     };
 
-    const handleBreweryChange = (id: string) => {
-        if (hasDetailChanges) {
-            setPendingBreweryId(id);
-        } else {
-            setSelectedBreweryId(id);
-            navigate(`/breweries/${id}`);
-        }
-    };
+     const handleBreweryChange = (id: string) => {
+          if (hasDetailChanges) {
+               setPendingBreweryId(id);
+          } else {
+               setSelectedBreweryId(id);
+               navigate(`/breweries/${id}`);
+          }
+     };
 
-    return (
-        <DashboardContent>
-            <Box sx={{mb: 5, display: 'flex', alignItems: 'center'}}>
-                <Typography variant="h4" sx={{flexGrow: 1}}>
-                    {t('breweries.title')}
-                </Typography>
-                <Button
-                    variant="contained"
-                    color="inherit"
-                    startIcon={<Iconify icon="mingcute:add-line"/>}
-                    onClick={() => setCreateBreweryDrawerVisible(true)}
-                >
-                    {t('breweries.new')}
-                </Button>
-            </Box>
+     return (
+          <DashboardContent>
+               <Box sx={{ mb: 5, display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="h4" sx={{ flexGrow: 1 }}>
+                         {t('breweries.title')}
+                    </Typography>
+                    <Button
+                         variant="contained"
+                         color="inherit"
+                         startIcon={<Iconify icon="mingcute:add-line" />}
+                         onClick={() => setCreateBreweryDrawerVisible(true)}
+                    >
+                         {t('breweries.new')}
+                    </Button>
+               </Box>
 
-            <Box sx={{display: 'flex'}}>
-                <Box sx={{flexGrow: 1}}>
-                    <Box sx={{position: 'relative', alignItems: "center"}}>
-                        {initialLoading ? (
-                                <LinearProgress
-                                    sx={{
-                                        zIndex: 1,
-                                        position: 'absolute',
-                                        top: 190,
-                                        left: '50%',
-                                        transform: 'translateX(-50%)',
-                                        width: '40%',
-                                        bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-                                        [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
-                                    }}
-                                />
-                            ) :
-                            <Box sx={{display: 'flex', flexDirection: 'column', gap: 2}}>
-                                {breweries.length === 0 ? <div>no items placeholder</div> :
-                                    <>
-                                        <Card sx={{p: 2}}>
-                                            <Tabs
-                                                value={selectedBreweryId}
-                                                onChange={(_, newValue) => handleBreweryChange(newValue)}
-                                                textColor="secondary"
-                                                indicatorColor="secondary"
-                                                variant="fullWidth"
-                                                slotProps={{
-                                                    indicator: {
-                                                        style: {
-                                                            backgroundColor: breweries.find(b => b.id === selectedBreweryId)?.color || 'inherit'
-                                                        }
-                                                    }
-                                                }}
-                                            >
-                                                {breweries.map((brewery) => (
-                                                    <Tab key={brewery.id} value={brewery.id} label={brewery.name}/>
-                                                ))}
-                                            </Tabs>
-                                        </Card>
-                                        <Card sx={{p: 3}}>
-                                            <BreweryDetailCard
-                                                id={selectedBreweryId}
-                                                onDelete={handleAfterDeletingBrewery}
-                                                onHasChangesChange={setHasDetailChanges}
-                                                shouldCheckPendingChanges={pendingBreweryId !== null}
-                                                onConfirmed={handleDisplayedBreweryChange}
-                                                onProgressbarVisibilityChange={setInitialLoading}
-                                            />
-                                        </Card>
-                                    </>
-                                }
-                            </Box>}
+               <Box sx={{ display: 'flex' }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                         <Box sx={{ position: 'relative', alignItems: 'center' }}>
+                              {initialLoading ? (
+                                   <LinearProgress
+                                        sx={{
+                                             zIndex: 1,
+                                             position: 'absolute',
+                                             top: 190,
+                                             left: '50%',
+                                             transform: 'translateX(-50%)',
+                                             width: '40%',
+                                             bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+                                             [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
+                                        }}
+                                   />
+                              ) : (
+                                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        {breweries.length === 0 ? (
+                                             <div>no items placeholder</div>
+                                        ) : (
+                                             <>
+                                                  <Card sx={{ p: 2 }}>
+                                                       <Tabs
+                                                            value={selectedBreweryId}
+                                                            onChange={(_, newValue) => handleBreweryChange(newValue)}
+                                                            textColor="secondary"
+                                                            indicatorColor="secondary"
+                                                            variant="fullWidth"
+                                                            slotProps={{
+                                                                 indicator: {
+                                                                      style: {
+                                                                           backgroundColor:
+                                                                                breweries.find(
+                                                                                     (b) => b.id === selectedBreweryId
+                                                                                )?.color || 'inherit',
+                                                                      },
+                                                                 },
+                                                            }}
+                                                       >
+                                                            {breweries.map((brewery) => (
+                                                                 <Tab
+                                                                      key={brewery.id}
+                                                                      value={brewery.id}
+                                                                      label={brewery.name}
+                                                                 />
+                                                            ))}
+                                                       </Tabs>
+                                                  </Card>
+                                                  <Card sx={{ p: 3 }}>
+                                                       <BreweryDetailCard
+                                                            id={selectedBreweryId}
+                                                            onDelete={handleAfterDeletingBrewery}
+                                                            onHasChangesChange={setHasDetailChanges}
+                                                            shouldCheckPendingChanges={pendingBreweryId !== null}
+                                                            onConfirmed={handleDisplayedBreweryChange}
+                                                            onProgressbarVisibilityChange={setInitialLoading}
+                                                       />
+                                                  </Card>
+                                             </>
+                                        )}
+                                   </Box>
+                              )}
+                         </Box>
                     </Box>
-                </Box>
-            </Box>
+               </Box>
 
-            <Drawer
-                anchor="right"
-                open={createBreweryDrawerVisible}
-                onClose={closeDrawer}
-            >
-                <Box sx={{width: 700, p: 2}}>
-                    <BreweryDetailView onClose={closeDrawer}/>
-                </Box>
-            </Drawer>
-        </DashboardContent>
-    );
+               <Drawer anchor="right" open={createBreweryDrawerVisible} onClose={closeDrawer}>
+                    <Box sx={{ width: 700, p: 2 }}>
+                         <BreweryDetailView onClose={closeDrawer} />
+                    </Box>
+               </Drawer>
+          </DashboardContent>
+     );
 }

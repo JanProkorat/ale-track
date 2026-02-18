@@ -1,9 +1,8 @@
 import type { OutgoingShipmentState } from 'src/api/Client';
 
-import { fireEvent } from '@testing-library/react';
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
-import { screen, render, within } from 'src/test/test-utils';
+import { screen, render, within, fireEvent } from 'src/test/test-utils';
 
 import { ShipmentStateSelect } from './shipment-state-select';
 

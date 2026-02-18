@@ -1,231 +1,228 @@
-import {useTranslation} from "react-i18next";
-import {useState, useEffect, useCallback} from "react";
+import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react';
 
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableContainer from "@mui/material/TableContainer";
-import {Button, Dialog, DialogTitle, DialogActions } from "@mui/material";
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableContainer from '@mui/material/TableContainer';
 
-import {UsersTableRow} from "../users-table-row";
-import {emptyRows} from "../../../providers/utils";
-import {useApiCall} from "../../../hooks/use-api-call";
-import {Scrollbar} from "../../../components/scrollbar";
-import {UsersTableToolbar} from "../users-table-toolbar";
-import {useTable} from "../../../providers/TableProvider";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {UserDetailView} from "../detail-view/user-detail-view";
-import {CreateUserView} from "../detail-view/create-user-view";
-import {TableNoData} from "../../../components/table/table-no-data";
-import {TableEmptyRows} from "../../../components/table/table-empty-rows";
-import {SplitViewLayout} from "../../../layouts/dashboard/split-view-layout";
-import {SortableTableHead} from "../../../components/table/sortable-table-head";
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
 
-import type { UserListItemDto} from "../../../api/Client";
+import { UsersTableRow } from '../users-table-row';
+import { emptyRows } from '../../../providers/utils';
+import { useApiCall } from '../../../hooks/use-api-call';
+import { Scrollbar } from '../../../components/scrollbar';
+import { UsersTableToolbar } from '../users-table-toolbar';
+import { useTable } from '../../../providers/TableProvider';
+import { UserDetailView } from '../detail-view/user-detail-view';
+import { CreateUserView } from '../detail-view/create-user-view';
+import { TableNoData } from '../../../components/table/table-no-data';
+import { TableEmptyRows } from '../../../components/table/table-empty-rows';
+import { SplitViewLayout } from '../../../layouts/dashboard/split-view-layout';
+import { SortableTableHead } from '../../../components/table/sortable-table-head';
+import { DiscardChangesDialog } from '../../../components/dialogs/discard-changes-dialog';
+
+import type { UserListItemDto } from '../../../api/Client';
 
 export function UsersView() {
-    const {t} = useTranslation();
-    const { executeApiCallWithDefault } = useApiCall();
+     const client = useAuthorizedClient();
+     const { t } = useTranslation();
+     const { executeApiCallWithDefault } = useApiCall();
 
-    const [initialLoading, setInitialLoading] = useState<boolean>(false);
-    const [users, setUsers] = useState<UserListItemDto[]>([]);
-    const [selectedUser, setSelectedUser] = useState<UserListItemDto | undefined>(undefined);
-    const [pendingUser, setPendingUser] = useState<UserListItemDto | null>(null);
-    const [pendingUserForConfirmation, setPendingUserForConfirmation] = useState<UserListItemDto | null | undefined>(undefined);
-    const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
-    const [createUserDrawerVisible, setCreateUserDrawerVisible] = useState<boolean>(false);
+     const [initialLoading, setInitialLoading] = useState<boolean>(false);
+     const [users, setUsers] = useState<UserListItemDto[]>([]);
+     const [selectedUser, setSelectedUser] = useState<UserListItemDto | undefined>(undefined);
+     const [pendingUser, setPendingUser] = useState<UserListItemDto | null>(null);
+     const [pendingUserForConfirmation, setPendingUserForConfirmation] = useState<UserListItemDto | null | undefined>(
+          undefined
+     );
+     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
+     const [createUserDrawerVisible, setCreateUserDrawerVisible] = useState<boolean>(false);
 
-    const [filterUserName, setFilterUserName] = useState<string | null>(null);
+     const [filterUserName, setFilterUserName] = useState<string | null>(null);
 
-    const [order, setOrder] = useState<'asc' | 'desc'>('asc');
-    const [orderBy, setOrderBy] = useState<string>('userName');
+     const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+     const [orderBy, setOrderBy] = useState<string>('userName');
 
-    const table = useTable({order, setOrder, orderBy, setOrderBy});
+     const table = useTable({ order, setOrder, orderBy, setOrderBy });
 
-    const fetchUsers = useCallback(async () => {
-        const client = new AuthorizedClient();
-        const filters: Record<string, string> = {};
+     const fetchUsers = useCallback(async () => {
+          const filters: Record<string, string> = {};
 
-        if (filterUserName !== null) {
-            filters.userName = `startsWith:${filterUserName}`;
-        }
+          if (filterUserName !== null) {
+               filters.userName = `startsWith:${filterUserName}`;
+          }
 
-        filters.sort = `${order}:${orderBy}`;
+          filters.sort = `${order}:${orderBy}`;
 
-        return await executeApiCallWithDefault(() => client.fetchUsers(filters), []);
-    }, [executeApiCallWithDefault, filterUserName, order, orderBy]);
+          return await executeApiCallWithDefault(() => client.fetchUsers(filters), []);
+     }, [client, executeApiCallWithDefault, filterUserName, order, orderBy]);
 
-    useEffect(() => {
-        setInitialLoading(true);
-        const loadInitial = async () => {
-            const loaded = await fetchUsers();
-            setUsers(loaded);
-            setSelectedUser(loaded.length > 0 ? loaded[0] : undefined);
-            setInitialLoading(false);
-        };
-        void loadInitial();
-    }, [fetchUsers]);
+     useEffect(() => {
+          setInitialLoading(true);
+          const loadInitial = async () => {
+               const loaded = await fetchUsers();
+               setUsers(loaded);
+               setSelectedUser(loaded.length > 0 ? loaded[0] : undefined);
+               setInitialLoading(false);
+          };
+          void loadInitial();
+     }, [fetchUsers]);
 
-    useEffect(() => {
-        if (!initialLoading) {
-            void fetchUsers().then(setUsers);
-        }
-    }, [fetchUsers, filterUserName, initialLoading, order, orderBy]);
+     useEffect(() => {
+          if (!initialLoading) {
+               void fetchUsers().then(setUsers);
+          }
+     }, [fetchUsers, filterUserName, initialLoading, order, orderBy]);
 
-    const handleRowClick = (user: UserListItemDto) => {
-        if (selectedUser?.id === user.id)
-            return;
+     const handleRowClick = useCallback(
+          (id: string) => {
+               const user = users.find((u) => u.id === id);
+               if (!user || selectedUser?.id === id) return;
+               if (hasDetailChanges) {
+                    setPendingUser(user);
+               } else {
+                    setSelectedUser(user);
+               }
+          },
+          [users, selectedUser?.id, hasDetailChanges]
+     );
 
-        updateSelectedUser(user)
-    };
+     const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
 
-    const updateSelectedUser = (user: UserListItemDto) => {
-        if (hasDetailChanges) {
-            setPendingUser(user);
-        } else {
-            setSelectedUser(user);
-        }
-    }
+     const updateSelectedUser = (user: UserListItemDto) => {
+          if (hasDetailChanges) {
+               setPendingUser(user);
+          } else {
+               setSelectedUser(user);
+          }
+     };
 
-    const handleNewUserClick = () => {
-        if (selectedUser !== undefined && selectedUser !== null && hasDetailChanges) {
-            setPendingUserForConfirmation(null);
-        } else {
-            setCreateUserDrawerVisible(true)
-        }
-    }
+     const handleNewUserClick = () => {
+          if (selectedUser !== undefined && selectedUser !== null && hasDetailChanges) {
+               setPendingUserForConfirmation(null);
+          } else {
+               setCreateUserDrawerVisible(true);
+          }
+     };
 
-    const handleDeleteUser = async () => {
-        await fetchUsers().then((newData) => {
-            setUsers(newData);
-            setSelectedUser(newData.length > 0 ? newData[0]: undefined);
-        })
-    }
+     const handleDeleteUser = async () => {
+          await fetchUsers().then((newData) => {
+               setUsers(newData);
+               setSelectedUser(newData.length > 0 ? newData[0] : undefined);
+          });
+     };
 
-    const handleUserCreated = async (newUserId: string) => {
-        await fetchUsers().then((data) => {
-            setUsers(data)
-            setSelectedUser(data.find(u => u.id === newUserId))
-            setCreateUserDrawerVisible(false);
-        });
-    }
+     const handleUserCreated = async (newUserId: string) => {
+          await fetchUsers().then((data) => {
+               setUsers(data);
+               setSelectedUser(data.find((u) => u.id === newUserId));
+               setCreateUserDrawerVisible(false);
+          });
+     };
 
-    const closeDrawer = () => {
-        fetchUsers().then(setUsers);
-        setCreateUserDrawerVisible(false);
-    }
+     const closeDrawer = () => {
+          fetchUsers().then(setUsers);
+          setCreateUserDrawerVisible(false);
+     };
 
-    const userListCard = (
-        <>
-            <UsersTableToolbar
-                numSelected={table.selected.length}
-                filterUserName={filterUserName}
-                onFilterUserName={(value: string | null) => {
-                    setFilterUserName(value ?? null);
-                    table.onResetPage();
-                }}
-            />
+     const handleDiscardChanges = () => {
+          setHasDetailChanges(false);
 
-            <Scrollbar>
-                <TableContainer sx={{overflow: 'unset'}}>
-                    <Table>
-                        <SortableTableHead
-                            order={table.order}
-                            orderBy={table.orderBy}
-                            rowCount={users.length}
-                            numSelected={table.selected.length}
-                            onSort={table.onSort}
-                            onSelectAllRows={(checked) =>
-                                table.onSelectAllRows(
-                                    checked,
-                                    users.map((user) => user.id!)
-                                )
-                            }
-                            headLabel={[
-                                {id: 'userName', label: t('users.userName')}
-                            ]}
-                        />
-                        <TableBody>
-                            {users
-                                .slice(
-                                    table.page * table.rowsPerPage,
-                                    table.page * table.rowsPerPage + table.rowsPerPage
-                                )
-                                .map((row) => (
-                                    <UsersTableRow
-                                        key={row.id}
-                                        row={row}
-                                        selected={table.selected.includes(row.id!)}
-                                        onSelectRow={() => table.onSelectRow(row.id!)}
-                                        onRowClick={() => handleRowClick(row)}
-                                        isSelected={selectedUser?.id === row.id}
-                                    />
-                                ))}
+          if (pendingUserForConfirmation === null) {
+               setSelectedUser(undefined);
+          } else {
+               setSelectedUser(pendingUserForConfirmation!);
+          }
 
-                            <TableEmptyRows
-                                height={68}
-                                emptyRows={emptyRows(table.page, table.rowsPerPage, users.length)}
-                            />
+          setPendingUserForConfirmation(undefined);
+     };
 
-                            {users.length == 0 && <TableNoData colSpan={1} />}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Scrollbar>
-        </>
-    );
+     const userListCard = (
+          <>
+               <UsersTableToolbar
+                    numSelected={table.selected.length}
+                    filterUserName={filterUserName}
+                    onFilterUserName={(value: string | null) => {
+                         setFilterUserName(value ?? null);
+                         table.onResetPage();
+                    }}
+               />
 
-    return (
-        <>
-            <SplitViewLayout
-                title={t('users.title')}
-                initialLoading={initialLoading}
-                newLabel={t('users.new')}
-                onNewClick={handleNewUserClick}
-                leftContentWidth={30}
-                minHeight={350}
-                leftContent={userListCard}
-                rightContent={<UserDetailView
-                    user={selectedUser}
-                    shouldCheckPendingChanges={pendingUser !== null}
-                    onDelete={handleDeleteUser}
-                    onProgressbarVisibilityChange={setInitialLoading}
-                />}
-                drawerContent={<CreateUserView
-                    onClose={closeDrawer}
-                    onSave={handleUserCreated}
-                />}
-                onDrawerClose={closeDrawer}
-                drawerOpen={createUserDrawerVisible}
-            />
+               <Scrollbar>
+                    <TableContainer sx={{ overflow: 'unset' }}>
+                         <Table>
+                              <SortableTableHead
+                                   order={table.order}
+                                   orderBy={table.orderBy}
+                                   rowCount={users.length}
+                                   numSelected={table.selected.length}
+                                   onSort={table.onSort}
+                                   onSelectAllRows={(checked) =>
+                                        table.onSelectAllRows(
+                                             checked,
+                                             users.map((user) => user.id!)
+                                        )
+                                   }
+                                   headLabel={[{ id: 'userName', label: t('users.userName') }]}
+                              />
+                              <TableBody>
+                                   {users
+                                        .slice(
+                                             table.page * table.rowsPerPage,
+                                             table.page * table.rowsPerPage + table.rowsPerPage
+                                        )
+                                        .map((row) => (
+                                             <UsersTableRow
+                                                  key={row.id}
+                                                  row={row}
+                                                  selected={table.selected.includes(row.id!)}
+                                                  onSelectRow={handleSelectRow}
+                                                  onRowClick={handleRowClick}
+                                                  isSelected={selectedUser?.id === row.id}
+                                             />
+                                        ))}
 
-            <Dialog
-                open={pendingUserForConfirmation !== undefined}
-                onClose={() => setPendingUserForConfirmation(undefined)}
-            >
-                <DialogTitle>
-                    {t('common.unsavedChangesLossConfirm')}
-                </DialogTitle>
-                <DialogActions>
-                    <Button onClick={() => setPendingUserForConfirmation(undefined)} variant="contained" color="primary">
-                        {t('common.cancel')}
-                    </Button>
-                    <Button
-                        color="inherit"
-                        onClick={() => {
-                            setHasDetailChanges(false);
+                                   <TableEmptyRows
+                                        height={68}
+                                        emptyRows={emptyRows(table.page, table.rowsPerPage, users.length)}
+                                   />
 
-                            if (pendingUserForConfirmation === null) {
-                                setSelectedUser(undefined);
-                            } else {
-                                updateSelectedUser(pendingUserForConfirmation!);
-                            }
+                                   {users.length == 0 && <TableNoData colSpan={1} />}
+                              </TableBody>
+                         </Table>
+                    </TableContainer>
+               </Scrollbar>
+          </>
+     );
 
-                            setPendingUserForConfirmation(undefined);
-                        }}
-                    >
-                        {t('common.continue')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </>
-    );}
+     return (
+          <>
+               <SplitViewLayout
+                    title={t('users.title')}
+                    initialLoading={initialLoading}
+                    newLabel={t('users.new')}
+                    onNewClick={handleNewUserClick}
+                    leftContentWidth={30}
+                    minHeight={350}
+                    leftContent={userListCard}
+                    rightContent={
+                         <UserDetailView
+                              user={selectedUser}
+                              shouldCheckPendingChanges={pendingUser !== null}
+                              onDelete={handleDeleteUser}
+                              onProgressbarVisibilityChange={setInitialLoading}
+                         />
+                    }
+                    drawerContent={<CreateUserView onClose={closeDrawer} onSave={handleUserCreated} />}
+                    onDrawerClose={closeDrawer}
+                    drawerOpen={createUserDrawerVisible}
+               />
+
+               <DiscardChangesDialog
+                    open={pendingUserForConfirmation !== undefined}
+                    onClose={() => setPendingUserForConfirmation(undefined)}
+                    onDiscard={handleDiscardChanges}
+               />
+          </>
+     );
+}

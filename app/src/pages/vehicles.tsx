@@ -1,15 +1,15 @@
 import { CONFIG } from 'src/config-global';
 
-import {VehiclesView} from "../sections/vehicles/view";
+import { VehiclesView } from '../sections/vehicles/view';
 
 // ----------------------------------------------------------------------
 
 export default function Page() {
-    return (
-        <>
-            <title>{`Vehicles - ${CONFIG.appName}`}</title>
+     return (
+          <>
+               <title>{`Vehicles - ${CONFIG.appName}`}</title>
 
-            <VehiclesView />
-        </>
-    );
+               <VehiclesView />
+          </>
+     );
 }

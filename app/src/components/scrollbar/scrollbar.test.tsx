@@ -1,7 +1,6 @@
-import { screen } from '@testing-library/react';
 import { it, vi, expect, describe } from 'vitest';
 
-import { renderWithProviders } from 'src/test/test-utils';
+import { screen, renderWithProviders } from 'src/test/test-utils';
 
 import { Scrollbar } from './scrollbar';
 

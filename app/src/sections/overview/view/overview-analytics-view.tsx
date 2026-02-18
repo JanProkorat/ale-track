@@ -1,32 +1,32 @@
-import {useTranslation} from "react-i18next";
+import { useTranslation } from 'react-i18next';
 
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 
 import { DashboardContent } from 'src/layouts/dashboard';
 
-import {RemindersOverview} from "../components/reminders-overview";
+import { RemindersOverview } from '../components/reminders-overview';
 import { OrderItemsRemindersView } from '../components/order-items-reminders-view';
 
 // ----------------------------------------------------------------------
 
 export function OverviewAnalyticsView() {
-    const {t} = useTranslation();
+     const { t } = useTranslation();
 
-    return (
-    <DashboardContent maxWidth="xl">
-      <Typography variant="h4" sx={{ mb: { xs: 3, md: 5 } }}>
-          {t('dashboard.welcome')} 👋
-      </Typography>
+     return (
+          <DashboardContent maxWidth="xl">
+               <Typography variant="h4" sx={{ mb: { xs: 3, md: 5 } }}>
+                    {t('dashboard.welcome')} 👋
+               </Typography>
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <RemindersOverview />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <OrderItemsRemindersView />
-        </Grid>
-      </Grid>
-    </DashboardContent>
-  );
+               <Grid container spacing={3}>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                         <RemindersOverview />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                         <OrderItemsRemindersView />
+                    </Grid>
+               </Grid>
+          </DashboardContent>
+     );
 }

@@ -40,6 +40,20 @@ const commonRules = () => ({
     '@typescript-eslint/no-empty-object-type': 0,
     '@typescript-eslint/consistent-type-imports': 1,
     '@typescript-eslint/no-unused-vars': [1, { args: 'none' }],
+    // performance
+    'no-console': [1, { allow: ['warn', 'error'] }],
+    // test imports
+    'no-restricted-imports': [
+        2,
+        {
+            patterns: [
+                {
+                    group: ['@testing-library/react'],
+                    message: 'Import from "src/test/test-utils" instead of "@testing-library/react".',
+                },
+            ],
+        },
+    ],
 });
 
 /**
@@ -190,4 +204,10 @@ export default [
     ...eslintTs.configs.recommended,
     reactPlugin.configs.flat.recommended,
     customConfig,
+    {
+        files: ['src/test/**'],
+        rules: {
+            'no-restricted-imports': 'off',
+        },
+    },
 ];

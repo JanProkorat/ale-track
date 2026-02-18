@@ -16,33 +16,33 @@ const mockT = (key: string) => key;
 
 // Mock react-i18next (partial)
 vi.mock('react-i18next', async (importOriginal) => {
-    const actual = (await importOriginal()) as Record<string, unknown>;
-    return {
-        ...actual,
-        useTranslation: () => ({ t: mockT }),
-    };
+     const actual = (await importOriginal()) as Record<string, unknown>;
+     return {
+          ...actual,
+          useTranslation: () => ({ t: mockT }),
+     };
 });
 
 // Mock react-router-dom
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => {
-    const actual = (await importOriginal()) as Record<string, unknown>;
-    return {
-        ...actual,
-        useParams: () => ({}),
-        useNavigate: () => mockNavigate,
-        useBlocker: () => ({ state: 'idle' }),
-    };
+     const actual = (await importOriginal()) as Record<string, unknown>;
+     return {
+          ...actual,
+          useParams: () => ({}),
+          useNavigate: () => mockNavigate,
+          useBlocker: () => ({ state: 'idle' }),
+     };
 });
 
 // Mock useApiCall
 const mockExecuteApiCallWithDefault = vi.fn();
 const mockExecuteApiCall = vi.fn();
 vi.mock('../../../hooks/use-api-call', () => ({
-    useApiCall: () => ({
-        executeApiCallWithDefault: mockExecuteApiCallWithDefault,
-        executeApiCall: mockExecuteApiCall,
-    }),
+     useApiCall: () => ({
+          executeApiCallWithDefault: mockExecuteApiCallWithDefault,
+          executeApiCall: mockExecuteApiCall,
+     }),
 }));
 
 // Mock AuthorizedClient
@@ -54,215 +54,213 @@ const mockCreateOrderEndpoint = vi.fn();
 const mockFetchProductsWithClientHistory = vi.fn();
 const mockFetchClients = vi.fn();
 vi.mock('../../../api/AuthorizedClient', () => ({
-    AuthorizedClient: class MockAuthorizedClient {
-        fetchOrders = mockFetchOrders;
-        getOrderDetailEndpoint = mockGetOrderDetailEndpoint;
-        deleteOrderEndpoint = mockDeleteOrderEndpoint;
-        updateOrderEndpoint = mockUpdateOrderEndpoint;
-        createOrderEndpoint = mockCreateOrderEndpoint;
-        fetchProductsWithClientHistory = mockFetchProductsWithClientHistory;
-        fetchClients = mockFetchClients;
-    },
+     AuthorizedClient: class MockAuthorizedClient {
+          fetchOrders = mockFetchOrders;
+          getOrderDetailEndpoint = mockGetOrderDetailEndpoint;
+          deleteOrderEndpoint = mockDeleteOrderEndpoint;
+          updateOrderEndpoint = mockUpdateOrderEndpoint;
+          createOrderEndpoint = mockCreateOrderEndpoint;
+          fetchProductsWithClientHistory = mockFetchProductsWithClientHistory;
+          fetchClients = mockFetchClients;
+     },
 }));
 
 // Mock SnackbarProvider
 const mockShowSnackbar = vi.fn();
 vi.mock('../../../providers/SnackbarProvider', () => ({
-    useSnackbar: () => ({
-        showSnackbar: mockShowSnackbar,
-    }),
+     useSnackbar: () => ({
+          showSnackbar: mockShowSnackbar,
+     }),
 }));
 
 // Mock minimal-shared/utils (partial)
 vi.mock('minimal-shared/utils', async (importOriginal) => {
-    const actual = (await importOriginal()) as Record<string, unknown>;
-    return {
-        ...actual,
-        varAlpha: () => 'rgba(0,0,0,0.16)',
-    };
+     const actual = (await importOriginal()) as Record<string, unknown>;
+     return {
+          ...actual,
+          varAlpha: () => 'rgba(0,0,0,0.16)',
+     };
 });
 
 // Mock heavy child components
 vi.mock('../detail-view/order-detail-view', () => ({
-    OrderDetailView: ({ id }: { id?: string }) => (
-        <div data-testid="order-detail-view">{id ?? 'no-id'}</div>
-    ),
+     OrderDetailView: ({ id }: { id?: string }) => <div data-testid="order-detail-view">{id ?? 'no-id'}</div>,
 }));
 
 vi.mock('../detail-view/create-order-view', () => ({
-    CreateOrderView: ({ onClose, onSave }: { onClose: () => void; onSave: (id: string) => void }) => (
-        <div data-testid="create-order-view">
-            <button onClick={onClose}>mock-close</button>
-            <button onClick={() => onSave('new-order-id')}>mock-save</button>
-        </div>
-    ),
+     CreateOrderView: ({ onClose, onSave }: { onClose: () => void; onSave: (id: string) => void }) => (
+          <div data-testid="create-order-view">
+               <button onClick={onClose}>mock-close</button>
+               <button onClick={() => onSave('new-order-id')}>mock-save</button>
+          </div>
+     ),
 }));
 
 // PlanningStateTab lives at ../components/planning-state-tab
 vi.mock('../components/planning-state-tab', () => ({
-    PlanningStateTab: ({ onPlanningStateChange }: { onPlanningStateChange: (state: number) => void }) => (
-        <div data-testid="planning-state-tab">
-            <button onClick={() => onPlanningStateChange(0)}>PlanningState.Active</button>
-            <button onClick={() => onPlanningStateChange(1)}>PlanningState.Finished</button>
-            <button onClick={() => onPlanningStateChange(2)}>PlanningState.Cancelled</button>
-        </div>
-    ),
+     PlanningStateTab: ({ onPlanningStateChange }: { onPlanningStateChange: (state: number) => void }) => (
+          <div data-testid="planning-state-tab">
+               <button onClick={() => onPlanningStateChange(0)}>PlanningState.Active</button>
+               <button onClick={() => onPlanningStateChange(1)}>PlanningState.Finished</button>
+               <button onClick={() => onPlanningStateChange(2)}>PlanningState.Cancelled</button>
+          </div>
+     ),
 }));
 
 // --- Test data ---
 const mockOrders: OrderListItemDto[] = [
-    new OrderListItemDto({
-        id: 'order-1',
-        clientName: 'Test Client A',
-        requiredDeliveryDate: new Date('2026-03-15'),
-        planningState: PlanningState.Active,
-    }),
-    new OrderListItemDto({
-        id: 'order-2',
-        clientName: 'Test Client B',
-        requiredDeliveryDate: new Date('2026-03-20'),
-        planningState: PlanningState.Active,
-    }),
+     new OrderListItemDto({
+          id: 'order-1',
+          clientName: 'Test Client A',
+          requiredDeliveryDate: new Date('2026-03-15'),
+          planningState: PlanningState.Active,
+     }),
+     new OrderListItemDto({
+          id: 'order-2',
+          clientName: 'Test Client B',
+          requiredDeliveryDate: new Date('2026-03-20'),
+          planningState: PlanningState.Active,
+     }),
 ];
 
 describe('OrdersView', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        mockExecuteApiCallWithDefault.mockImplementation((fn: () => Promise<unknown>) => fn());
-        mockFetchOrders.mockResolvedValue(mockOrders);
-    });
+     beforeEach(() => {
+          vi.clearAllMocks();
+          mockExecuteApiCallWithDefault.mockImplementation((fn: () => Promise<unknown>) => fn());
+          mockFetchOrders.mockResolvedValue(mockOrders);
+     });
 
-    // --- Title & new button ---
+     // --- Title & new button ---
 
-    it('should render the page title', async () => {
-        render(<OrdersView />);
+     it('should render the page title', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('orders.title')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('orders.title')).toBeInTheDocument();
+          });
+     });
 
-    it('should render the new order button', async () => {
-        render(<OrdersView />);
+     it('should render the new order button', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'orders.new' })).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByRole('button', { name: 'orders.new' })).toBeInTheDocument();
+          });
+     });
 
-    // --- Fetch on mount ---
+     // --- Fetch on mount ---
 
-    it('should fetch orders on mount', async () => {
-        render(<OrdersView />);
+     it('should fetch orders on mount', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(mockFetchOrders).toHaveBeenCalled();
-        });
-    });
+          await waitFor(() => {
+               expect(mockFetchOrders).toHaveBeenCalled();
+          });
+     });
 
-    it('should navigate to the first order when no orderId param', async () => {
-        render(<OrdersView />);
+     it('should navigate to the first order when no orderId param', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/orders/order-1', { replace: true });
-        });
-    });
+          await waitFor(() => {
+               expect(mockNavigate).toHaveBeenCalledWith('/orders/order-1', { replace: true });
+          });
+     });
 
-    // --- Display orders in table ---
+     // --- Display orders in table ---
 
-    it('should display order rows in the table', async () => {
-        render(<OrdersView />);
+     it('should display order rows in the table', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Test Client A')).toBeInTheDocument();
-            expect(screen.getByText('Test Client B')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('Test Client A')).toBeInTheDocument();
+               expect(screen.getByText('Test Client B')).toBeInTheDocument();
+          });
+     });
 
-    // --- Empty state ---
+     // --- Empty state ---
 
-    it('should show empty state when no orders', async () => {
-        mockFetchOrders.mockResolvedValue([]);
+     it('should show empty state when no orders', async () => {
+          mockFetchOrders.mockResolvedValue([]);
 
-        render(<OrdersView />);
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('table.noDataTitle')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('table.noDataTitle')).toBeInTheDocument();
+          });
+     });
 
-    // --- Create drawer ---
+     // --- Create drawer ---
 
-    it('should open create drawer when new button is clicked', async () => {
-        render(<OrdersView />);
+     it('should open create drawer when new button is clicked', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Test Client A')).toBeInTheDocument();
-        });
+          await waitFor(() => {
+               expect(screen.getByText('Test Client A')).toBeInTheDocument();
+          });
 
-        fireEvent.click(screen.getByRole('button', { name: 'orders.new' }));
+          fireEvent.click(screen.getByRole('button', { name: 'orders.new' }));
 
-        await waitFor(() => {
-            expect(screen.getByTestId('create-order-view')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByTestId('create-order-view')).toBeInTheDocument();
+          });
+     });
 
-    // --- Planning state tabs ---
+     // --- Planning state tabs ---
 
-    it('should render planning state tabs', async () => {
-        render(<OrdersView />);
+     it('should render planning state tabs', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('PlanningState.Active')).toBeInTheDocument();
-            expect(screen.getByText('PlanningState.Finished')).toBeInTheDocument();
-            expect(screen.getByText('PlanningState.Cancelled')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('PlanningState.Active')).toBeInTheDocument();
+               expect(screen.getByText('PlanningState.Finished')).toBeInTheDocument();
+               expect(screen.getByText('PlanningState.Cancelled')).toBeInTheDocument();
+          });
+     });
 
-    // --- Filter toolbar ---
+     // --- Filter toolbar ---
 
-    it('should render the client name filter', async () => {
-        render(<OrdersView />);
+     it('should render the client name filter', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByPlaceholderText('orders.clientName...')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByPlaceholderText('orders.clientName...')).toBeInTheDocument();
+          });
+     });
 
-    it('should refetch orders when filter changes', async () => {
-        render(<OrdersView />);
+     it('should refetch orders when filter changes', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(mockFetchOrders).toHaveBeenCalledTimes(1);
-        });
+          await waitFor(() => {
+               expect(mockFetchOrders).toHaveBeenCalledTimes(1);
+          });
 
-        fireEvent.change(screen.getByPlaceholderText('orders.clientName...'), {
-            target: { value: 'Test' },
-        });
+          fireEvent.change(screen.getByPlaceholderText('orders.clientName...'), {
+               target: { value: 'Test' },
+          });
 
-        await waitFor(() => {
-            expect(mockFetchOrders).toHaveBeenCalledTimes(2);
-        });
-    });
+          await waitFor(() => {
+               expect(mockFetchOrders).toHaveBeenCalledTimes(2);
+          });
+     });
 
-    // --- Detail view rendering ---
+     // --- Detail view rendering ---
 
-    it('should render order detail view component', async () => {
-        render(<OrdersView />);
+     it('should render order detail view component', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByTestId('order-detail-view')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByTestId('order-detail-view')).toBeInTheDocument();
+          });
+     });
 
-    // --- Table headers ---
+     // --- Table headers ---
 
-    it('should render table column headers', async () => {
-        render(<OrdersView />);
+     it('should render table column headers', async () => {
+          render(<OrdersView />);
 
-        await waitFor(() => {
-            expect(screen.getByText('orders.clientName')).toBeInTheDocument();
-            expect(screen.getByText('orders.requiredDeliveryDate')).toBeInTheDocument();
-        });
-    });
+          await waitFor(() => {
+               expect(screen.getByText('orders.clientName')).toBeInTheDocument();
+               expect(screen.getByText('orders.requiredDeliveryDate')).toBeInTheDocument();
+          });
+     });
 });

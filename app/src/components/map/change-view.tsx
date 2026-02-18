@@ -1,20 +1,20 @@
-import type { LatLngExpression } from "leaflet";
+import type { LatLngExpression } from 'leaflet';
 
-import { useEffect } from "react";
-import { useMap } from "react-leaflet";
+import { useEffect } from 'react';
+import { useMap } from 'react-leaflet';
 
 type ChangeViewProps = {
-  center: LatLngExpression;
+     center: LatLngExpression;
 };
 
 function ChangeView({ center }: ChangeViewProps) {
-  const map = useMap();
+     const map = useMap();
 
-  useEffect(() => {
-    map.setView(center);
-  }, [center, map]);
+     useEffect(() => {
+          map.setView(center);
+     }, [center, map]);
 
-  return null;
+     return null;
 }
 
 export default ChangeView;

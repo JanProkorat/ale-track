@@ -1,7 +1,6 @@
 import { it, vi, expect, describe, beforeEach } from 'vitest';
-import { screen, within, fireEvent } from '@testing-library/react';
 
-import { renderWithProviders } from 'src/test/test-utils';
+import { screen, within, fireEvent, renderWithProviders } from 'src/test/test-utils';
 
 import { SortableTableHead } from './sortable-table-head';
 
