@@ -1,296 +1,349 @@
-import {useTranslation} from "react-i18next";
-import {useState, useEffect, useCallback} from "react";
+import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react';
 
-import TextField from "@mui/material/TextField";
-import InputAdornment from "@mui/material/InputAdornment";
-import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import { Box, InputLabel, FormControl, OutlinedInput, FormHelperText } from '@mui/material';
 
-import {useAuthorizedClient} from "src/api/use-authorized-client";
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
 
-import {useApiCall} from "../../../hooks/use-api-call";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {useCurrency} from "../../../providers/currency-provider";
-import {ProductTypeSelect} from "./components/product-type-select";
-import {ProductKindSelect} from "./components/product-kind-select";
-import {DrawerLayout} from "../../../layouts/components/drawer-layout";
-import {
-    ProductDto,
-    CreateProductDto,
-    UpdateProductDto,
-    CreateProductsDto
-} from "../../../api/Client";
+import { useApiCall } from '../../../hooks/use-api-call';
+import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { useCurrency } from '../../../providers/currency-provider';
+import { ProductTypeSelect } from './components/product-type-select';
+import { ProductKindSelect } from './components/product-kind-select';
+import { DrawerLayout } from '../../../layouts/components/drawer-layout';
+import { ProductDto, CreateProductDto, UpdateProductDto, CreateProductsDto } from '../../../api/Client';
 
-import type {
-    ProductType} from "../../../api/Client";
+import type { ProductType } from '../../../api/Client';
 
 type ProductDetailViewProps = {
-    id: string | null,
-    breweryId: string,
-    onClose: (shouldReloadData: boolean) => void,
+     id: string | null;
+     breweryId: string;
+     onClose: (shouldReloadData: boolean) => void;
 };
 
-export function ProductDetailView(
-    {
-        id,
-        breweryId,
-        onClose,
-    }: Readonly<ProductDetailViewProps>) {
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
-    const {selectedCurrency, formatPriceValue, formatPriceToDefault} = useCurrency();
-    const {executeApiCall} = useApiCall();
-    const clientApi = useAuthorizedClient();
+export function ProductDetailView({ id, breweryId, onClose }: Readonly<ProductDetailViewProps>) {
+     const { showSnackbar } = useSnackbar();
+     const { t } = useTranslation();
+     const { selectedCurrency, formatPriceValue, formatPriceToDefault } = useCurrency();
+     const { executeApiCall } = useApiCall();
+     const clientApi = useAuthorizedClient();
 
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [product, setProduct] = useState<ProductDto>(new ProductDto());
-    const [productTypes, setProductTypes] = useState<ProductType[]>([]);
-    const [productKinds, setProductKinds] = useState<string[]>([]);
-    const [errors, setErrors] = useState<Record<string, string>>({});
+     const [isLoading, setIsLoading] = useState<boolean>(false);
+     const [product, setProduct] = useState<ProductDto>(new ProductDto());
+     const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+     const [productKinds, setProductKinds] = useState<string[]>([]);
+     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
+     const fetchData = useCallback(async () => {
+          setIsLoading(true);
 
-        if (id !== null && id !== undefined) {
-            const data = await executeApiCall(() => clientApi.getProductDetailEndpoint(id));
-            if (data) {
-                setProduct(data);
-            }
-        }
+          if (id !== null && id !== undefined) {
+               const data = await executeApiCall(() => clientApi.getProductDetailEndpoint(id));
+               if (data) {
+                    setProduct(data);
+               }
+          }
 
-        const types = await executeApiCall(() => clientApi.getProductTypeListEndpoint());
-        if (types) {
-            setProductTypes(types);
-        }
+          const types = await executeApiCall(() => clientApi.getProductTypeListEndpoint());
+          if (types) {
+               setProductTypes(types);
+          }
 
-        const kinds = await executeApiCall(() => clientApi.getProductKindListEndpoint());
-        if (kinds) {
-            setProductKinds(kinds);
-        }
+          const kinds = await executeApiCall(() => clientApi.getProductKindListEndpoint());
+          if (kinds) {
+               setProductKinds(kinds);
+          }
 
-        setIsLoading(false);
-    }, [executeApiCall, id, clientApi]);
+          setIsLoading(false);
+     }, [executeApiCall, id, clientApi]);
 
-    useEffect(() => {
-        void fetchData();
-    }, [fetchData]);
+     useEffect(() => {
+          void fetchData();
+     }, [fetchData]);
 
-    const saveProduct = async (): Promise<void> => {
-        const {name, priceWithVat} = product;
+     const saveProduct = async (): Promise<void> => {
+          const { name, priceWithVat } = product;
 
-        const newErrors: Record<string, string> = {};
-        if (!name) newErrors.name = t('common.required');
-        if (!priceWithVat) newErrors.priceWithVat = t('common.required');
+          const newErrors: Record<string, string> = {};
+          if (!name) newErrors.name = t('common.required');
+          if (!priceWithVat) newErrors.priceWithVat = t('common.required');
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            showSnackbar(t('common.validationError'), 'error');
-            return;
-        }
+          if (Object.keys(newErrors).length > 0) {
+               setErrors(newErrors);
+               showSnackbar(t('common.validationError'), 'error');
+               return;
+          }
 
-        setErrors({});
+          setErrors({});
 
-        let result;
+          let result;
 
-        if (id === null) {
-            const createDto = new CreateProductDto({
-                name: product.name!,
-                priceWithVat: product.priceWithVat!,
-                description: product.description!,
-                kind: product.kind!,
-                alcoholPercentage: product.alcoholPercentage!,
-                packageSize: product.packageSize!,
-                platoDegree: product.platoDegree!,
-                type: product.type!,
-                priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
-                priceForUnitWithVat: product.priceForUnitWithVat!,
-            });
+          if (id === null) {
+               const createDto = new CreateProductDto({
+                    name: product.name!,
+                    priceWithVat: product.priceWithVat!,
+                    description: product.description!,
+                    kind: product.kind!,
+                    alcoholPercentage: product.alcoholPercentage!,
+                    packageSize: product.packageSize!,
+                    platoDegree: product.platoDegree!,
+                    type: product.type!,
+                    priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
+                    priceForUnitWithVat: product.priceForUnitWithVat!,
+               });
 
-            result = await executeApiCall(() => clientApi.createProductsEndpoint(breweryId, new CreateProductsDto({products: [createDto]})));
-        } else {
-            const updateDto = new UpdateProductDto({
-                name: product.name!,
-                priceWithVat: product.priceWithVat!,
-                description: product.description!,
-                kind: product.kind!,
-                alcoholPercentage: product.alcoholPercentage!,
-                packageSize: product.packageSize!,
-                platoDegree: product.platoDegree!,
-                type: product.type!,
-                priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
-                priceForUnitWithVat: product.priceForUnitWithVat!,
+               result = await executeApiCall(() =>
+                    clientApi.createProductsEndpoint(breweryId, new CreateProductsDto({ products: [createDto] }))
+               );
+          } else {
+               const updateDto = new UpdateProductDto({
+                    name: product.name!,
+                    priceWithVat: product.priceWithVat!,
+                    description: product.description!,
+                    kind: product.kind!,
+                    alcoholPercentage: product.alcoholPercentage!,
+                    packageSize: product.packageSize!,
+                    platoDegree: product.platoDegree!,
+                    type: product.type!,
+                    priceForUnitWithoutVat: product.priceForUnitWithoutVat!,
+                    priceForUnitWithVat: product.priceForUnitWithVat!,
+               });
 
-            });
+               let hasError = false;
+               await executeApiCall(() => clientApi.updateProductEndpoint(id, updateDto.toJSON()), undefined, {
+                    onError: () => {
+                         hasError = true;
+                    },
+               });
 
-            let hasError = false;
-            await executeApiCall(
-                () => clientApi.updateProductEndpoint(id, updateDto.toJSON()),
-                undefined,
-                { onError: () => { hasError = true; } }
-            );
-            
-            if (!hasError) {
-                result = true;
-            }
-        }
+               if (!hasError) {
+                    result = true;
+               }
+          }
 
-        if (result) {
-            showSnackbar(t('products.saveSuccess'), 'success');
-            onClose(true);
-        }
-    }
+          if (result) {
+               showSnackbar(t('products.saveSuccess'), 'success');
+               onClose(true);
+          }
+     };
 
-    return (
-        <DrawerLayout
-            title={t('products.detailTitle')}
-            isLoading={isLoading}
-            onClose={() => onClose(false)}
-            onSaveAndClose={saveProduct}
-        >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="product-name">{t('products.name')}</InputLabel>
-                <OutlinedInput
-                    id="product-name"
-                    value={product.name ?? ''}
-                    onChange={event => setProduct(prev => new ProductDto({
-                        ...prev,
-                        name: event.target.value
-                    }))}
-                    label={t('products.name')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+     return (
+          <DrawerLayout
+               title={t('products.detailTitle')}
+               isLoading={isLoading}
+               onClose={() => onClose(false)}
+               onSaveAndClose={saveProduct}
+          >
+               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <FormControl fullWidth error={!!errors.name} sx={{ mt: 1 }}>
+                         <InputLabel htmlFor="product-name">{t('products.name')}</InputLabel>
+                         <OutlinedInput
+                              id="product-name"
+                              value={product.name ?? ''}
+                              onChange={(event) =>
+                                   setProduct(
+                                        (prev) =>
+                                             new ProductDto({
+                                                  ...prev,
+                                                  name: event.target.value,
+                                             })
+                                   )
+                              }
+                              label={t('products.name')}
+                         />
+                         {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
+                    </FormControl>
 
-            <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                <ProductTypeSelect
-                    types={productTypes}
-                    selectedType={product.type}
-                    shouldValidate={false}
-                    onSelect={type => setProduct(prev => new ProductDto({
-                        ...prev,
-                        type: type === product.type ? undefined : type
-                    }))}
-                />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                         <ProductTypeSelect
+                              types={productTypes}
+                              selectedType={product.type}
+                              shouldValidate={false}
+                              onSelect={(type) =>
+                                   setProduct(
+                                        (prev) =>
+                                             new ProductDto({
+                                                  ...prev,
+                                                  type: type === product.type ? undefined : type,
+                                             })
+                                   )
+                              }
+                         />
 
-                <ProductKindSelect
-                    kinds={productKinds}
-                    selectedKind={product.kind}
-                    shouldValidate={false}
-                    onSelect={kind => setProduct(prev => new ProductDto({
-                        ...prev,
-                        kind: kind === product.kind ? undefined : kind
-                    }))}
-                />
-            </Box>
+                         <ProductKindSelect
+                              kinds={productKinds}
+                              selectedKind={product.kind}
+                              shouldValidate={false}
+                              onSelect={(kind) =>
+                                   setProduct(
+                                        (prev) =>
+                                             new ProductDto({
+                                                  ...prev,
+                                                  kind: kind === product.kind ? undefined : kind,
+                                             })
+                                   )
+                              }
+                         />
+                    </Box>
 
-            <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="platoDegree">{t('products.platoDegree')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="platoDegree"
-                        label={t('products.platoDegree')}
-                        endAdornment={<InputAdornment position="end">%</InputAdornment>}
-                        value={product.platoDegree ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            platoDegree: parseFloat(event.target.value)
-                        }))}
-                    />
-                </FormControl>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="platoDegree">{t('products.platoDegree')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="platoDegree"
+                                   label={t('products.platoDegree')}
+                                   endAdornment={<InputAdornment position="end">%</InputAdornment>}
+                                   value={product.platoDegree ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       platoDegree: parseFloat(event.target.value),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
 
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="packageSize">{t('products.packageSize')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="packageSize"
-                        label={t('products.packageSize')}
-                        endAdornment={<InputAdornment position="end">L</InputAdornment>}
-                        value={product.packageSize ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            packageSize: parseFloat(event.target.value)
-                        }))}
-                    />
-                </FormControl>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="packageSize">{t('products.packageSize')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="packageSize"
+                                   label={t('products.packageSize')}
+                                   endAdornment={<InputAdornment position="end">L</InputAdornment>}
+                                   value={product.packageSize ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       packageSize: parseFloat(event.target.value),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
 
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="alcoholPercentage">{t('products.alcoholPercentage')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="alcoholPercentage"
-                        label={t('products.alcoholPercentage')}
-                        endAdornment={<InputAdornment position="end">%</InputAdornment>}
-                        value={product.alcoholPercentage ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            alcoholPercentage: parseFloat(event.target.value)
-                        }))}
-                    />
-                </FormControl>
-            </Box>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="alcoholPercentage">{t('products.alcoholPercentage')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="alcoholPercentage"
+                                   label={t('products.alcoholPercentage')}
+                                   endAdornment={<InputAdornment position="end">%</InputAdornment>}
+                                   value={product.alcoholPercentage ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       alcoholPercentage: parseFloat(event.target.value),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
+                    </Box>
 
-            <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="priceVat">{t('products.priceVat')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="priceVat"
-                        label={t('products.priceVat')}
-                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
-                        value={formatPriceValue(product.priceWithVat) ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            priceWithVat: formatPriceToDefault(parseFloat(event.target.value))
-                        }))}
-                    />
-                </FormControl>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="priceVat">{t('products.priceVat')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="priceVat"
+                                   label={t('products.priceVat')}
+                                   endAdornment={
+                                        <InputAdornment position="end">
+                                             {selectedCurrency.currencyCode == 'CZK' ? 'Kč' : '€'}
+                                        </InputAdornment>
+                                   }
+                                   value={formatPriceValue(product.priceWithVat) ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       priceWithVat: formatPriceToDefault(
+                                                            parseFloat(event.target.value)
+                                                       ),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
 
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="priceUnitVat">{t('products.priceUnitVat')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="priceUnitVat"
-                        label={t('products.priceUnitVat')}
-                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
-                        value={formatPriceValue(product.priceForUnitWithVat) ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            priceForUnitWithVat: formatPriceToDefault(parseFloat(event.target.value))
-                        }))}
-                    />
-                </FormControl>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="priceUnitVat">{t('products.priceUnitVat')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="priceUnitVat"
+                                   label={t('products.priceUnitVat')}
+                                   endAdornment={
+                                        <InputAdornment position="end">
+                                             {selectedCurrency.currencyCode == 'CZK' ? 'Kč' : '€'}
+                                        </InputAdornment>
+                                   }
+                                   value={formatPriceValue(product.priceForUnitWithVat) ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       priceForUnitWithVat: formatPriceToDefault(
+                                                            parseFloat(event.target.value)
+                                                       ),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
 
-                <FormControl variant="outlined">
-                    <InputLabel htmlFor="priceUnitNoVat">{t('products.priceUnitNoVat')}</InputLabel>
-                    <OutlinedInput
-                        type="number"
-                        id="priceUnitNoVat"
-                        label={t('products.priceUnitNoVat')}
-                        endAdornment={<InputAdornment position="end">{selectedCurrency.currencyCode == "CZK" ? "Kč" : "€"}</InputAdornment>}
-                        value={formatPriceValue(product.priceForUnitWithoutVat) ?? undefined}
-                        onChange={event => setProduct(prev => new ProductDto({
-                            ...prev,
-                            priceForUnitWithoutVat: formatPriceToDefault(parseFloat(event.target.value))
-                        }))}
-                    />
-                </FormControl>
-            </Box>
+                         <FormControl variant="outlined">
+                              <InputLabel htmlFor="priceUnitNoVat">{t('products.priceUnitNoVat')}</InputLabel>
+                              <OutlinedInput
+                                   type="number"
+                                   id="priceUnitNoVat"
+                                   label={t('products.priceUnitNoVat')}
+                                   endAdornment={
+                                        <InputAdornment position="end">
+                                             {selectedCurrency.currencyCode == 'CZK' ? 'Kč' : '€'}
+                                        </InputAdornment>
+                                   }
+                                   value={formatPriceValue(product.priceForUnitWithoutVat) ?? undefined}
+                                   onChange={(event) =>
+                                        setProduct(
+                                             (prev) =>
+                                                  new ProductDto({
+                                                       ...prev,
+                                                       priceForUnitWithoutVat: formatPriceToDefault(
+                                                            parseFloat(event.target.value)
+                                                       ),
+                                                  })
+                                        )
+                                   }
+                              />
+                         </FormControl>
+                    </Box>
 
-            <FormControl fullWidth>
-                <TextField
-                    id="product-description"
-                    label={t('products.description')}
-                    multiline
-                    minRows={4}
-                    maxRows={10}
-                    value={product.description ?? ''}
-                    onChange={(e) =>
-                        setProduct(prev => new ProductDto({ ...prev, description: e.target.value }))
-                    }
-                />
-            </FormControl>
-            </Box>
-        </DrawerLayout>
-    );
+                    <FormControl fullWidth>
+                         <TextField
+                              id="product-description"
+                              label={t('products.description')}
+                              multiline
+                              minRows={4}
+                              maxRows={10}
+                              value={product.description ?? ''}
+                              onChange={(e) =>
+                                   setProduct((prev) => new ProductDto({ ...prev, description: e.target.value }))
+                              }
+                         />
+                    </FormControl>
+               </Box>
+          </DrawerLayout>
+     );
 }

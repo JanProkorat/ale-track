@@ -10,58 +10,39 @@ import { DeliveryDatePicker } from './delivery-date-picker';
 
 const mockT = vi.fn((key: string) => key);
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: mockT }),
+     useTranslation: () => ({ t: mockT }),
 }));
 
 const testTheme = createTheme({ cssVariables: { cssVarPrefix: '' } });
 const render = (ui: React.ReactElement) =>
-    baseRender(
-        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>,
-        { theme: testTheme }
-    );
+     baseRender(<LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>, { theme: testTheme });
 
 const mockOnDatePicked = vi.fn();
 
 describe('DeliveryDatePicker', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
+     beforeEach(() => {
+          vi.clearAllMocks();
+     });
 
-    it('should render the label', () => {
-        render(
-            <DeliveryDatePicker
-                selectedDeliveryDate={undefined}
-                onDatePicked={mockOnDatePicked}
-            />
-        );
+     it('should render the label', () => {
+          render(<DeliveryDatePicker selectedDeliveryDate={undefined} onDatePicked={mockOnDatePicked} />);
 
-        const labels = screen.getAllByText('productDeliveries.deliveryDate');
-        expect(labels.length).toBeGreaterThanOrEqual(1);
-    });
+          const labels = screen.getAllByText('productDeliveries.deliveryDate');
+          expect(labels.length).toBeGreaterThanOrEqual(1);
+     });
 
-    it('should display the date input field', () => {
-        const testDate = new Date(2025, 5, 15);
-        render(
-            <DeliveryDatePicker
-                selectedDeliveryDate={testDate}
-                onDatePicked={mockOnDatePicked}
-            />
-        );
+     it('should display the date input field', () => {
+          const testDate = new Date(2025, 5, 15);
+          render(<DeliveryDatePicker selectedDeliveryDate={testDate} onDatePicked={mockOnDatePicked} />);
 
-        const input = screen.getByRole('textbox');
-        expect(input).toBeInTheDocument();
-    });
+          const input = screen.getByRole('textbox');
+          expect(input).toBeInTheDocument();
+     });
 
-    it('should be disabled when disabled prop is true', () => {
-        render(
-            <DeliveryDatePicker
-                selectedDeliveryDate={undefined}
-                onDatePicked={mockOnDatePicked}
-                disabled
-            />
-        );
+     it('should be disabled when disabled prop is true', () => {
+          render(<DeliveryDatePicker selectedDeliveryDate={undefined} onDatePicked={mockOnDatePicked} disabled />);
 
-        const input = screen.getByRole('textbox');
-        expect(input).toBeDisabled();
-    });
+          const input = screen.getByRole('textbox');
+          expect(input).toBeDisabled();
+     });
 });

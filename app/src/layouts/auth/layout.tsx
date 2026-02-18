@@ -2,11 +2,11 @@ import type { CSSObject, Breakpoint } from '@mui/material/styles';
 
 import { merge } from 'es-toolkit';
 
-import Box from "@mui/material/Box";
+import Box from '@mui/material/Box';
 
 import { AuthContent } from './content';
-import { languages } from "../dashboard";
-import { LanguagePopover } from "../components/language-popover";
+import { languages } from '../dashboard';
+import { LanguagePopover } from '../components/language-popover';
 import { MainSection, LayoutSection, HeaderSection } from '../core';
 
 import type { AuthContentProps } from './content';
@@ -17,111 +17,105 @@ import type { MainSectionProps, HeaderSectionProps, LayoutSectionProps } from '.
 type LayoutBaseProps = Pick<LayoutSectionProps, 'sx' | 'children' | 'cssVars'>;
 
 export type AuthLayoutProps = LayoutBaseProps & {
-  layoutQuery?: Breakpoint;
-  slotProps?: {
-    header?: HeaderSectionProps;
-    main?: MainSectionProps;
-    content?: AuthContentProps;
-  };
+     layoutQuery?: Breakpoint;
+     slotProps?: {
+          header?: HeaderSectionProps;
+          main?: MainSectionProps;
+          content?: AuthContentProps;
+     };
 };
 
-export function AuthLayout({
-  sx,
-  cssVars,
-  children,
-  slotProps,
-  layoutQuery = 'md',
-}: AuthLayoutProps) {
-  const renderHeader = () => {
-    const headerSlotProps: HeaderSectionProps['slotProps'] = { container: { maxWidth: false } };
+export function AuthLayout({ sx, cssVars, children, slotProps, layoutQuery = 'md' }: AuthLayoutProps) {
+     const renderHeader = () => {
+          const headerSlotProps: HeaderSectionProps['slotProps'] = { container: { maxWidth: false } };
 
-    const headerSlots: HeaderSectionProps['slots'] = {
-      rightArea: (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
-          {/** @slot Language popover */}
-          <LanguagePopover data={languages} />
-        </Box>
-      ),
-    };
+          const headerSlots: HeaderSectionProps['slots'] = {
+               rightArea: (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0, sm: 0.75 } }}>
+                         {/** @slot Language popover */}
+                         <LanguagePopover data={languages} />
+                    </Box>
+               ),
+          };
 
-    return (
-      <HeaderSection
-        disableElevation
-        layoutQuery={layoutQuery}
-        {...slotProps?.header}
-        slots={{ ...headerSlots, ...slotProps?.header?.slots }}
-        slotProps={merge(headerSlotProps, slotProps?.header?.slotProps ?? {})}
-        sx={[
-          { position: { [layoutQuery]: 'fixed' } },
-          ...(Array.isArray(slotProps?.header?.sx)
-            ? (slotProps?.header?.sx ?? [])
-            : [slotProps?.header?.sx]),
-        ]}
-      />
-    );
-  };
+          return (
+               <HeaderSection
+                    disableElevation
+                    layoutQuery={layoutQuery}
+                    {...slotProps?.header}
+                    slots={{ ...headerSlots, ...slotProps?.header?.slots }}
+                    slotProps={merge(headerSlotProps, slotProps?.header?.slotProps ?? {})}
+                    sx={[
+                         { position: { [layoutQuery]: 'fixed' } },
+                         ...(Array.isArray(slotProps?.header?.sx)
+                              ? (slotProps?.header?.sx ?? [])
+                              : [slotProps?.header?.sx]),
+                    ]}
+               />
+          );
+     };
 
-  const renderFooter = () => null;
+     const renderFooter = () => null;
 
-  const renderMain = () => (
-    <MainSection
-      {...slotProps?.main}
-      sx={[
-        (theme) => ({
-          alignItems: 'center',
-          p: theme.spacing(3, 2, 10, 2),
-          [theme.breakpoints.up(layoutQuery)]: {
-            justifyContent: 'center',
-            p: theme.spacing(10, 0, 10, 0),
-          },
-        }),
-        ...(Array.isArray(slotProps?.main?.sx)
-          ? (slotProps?.main?.sx ?? [])
-          : [slotProps?.main?.sx]),
-      ]}
-    >
-      <AuthContent id="test-auth" {...slotProps?.content}>{children}</AuthContent>
-    </MainSection>
-  );
+     const renderMain = () => (
+          <MainSection
+               {...slotProps?.main}
+               sx={[
+                    (theme) => ({
+                         alignItems: 'center',
+                         p: theme.spacing(3, 2, 10, 2),
+                         [theme.breakpoints.up(layoutQuery)]: {
+                              justifyContent: 'center',
+                              p: theme.spacing(10, 0, 10, 0),
+                         },
+                    }),
+                    ...(Array.isArray(slotProps?.main?.sx) ? (slotProps?.main?.sx ?? []) : [slotProps?.main?.sx]),
+               ]}
+          >
+               <AuthContent id="test-auth" {...slotProps?.content}>
+                    {children}
+               </AuthContent>
+          </MainSection>
+     );
 
-  return (
-    <LayoutSection
-      /** **************************************
-       * @Header
-       *************************************** */
-      headerSection={renderHeader()}
-      /** **************************************
-       * @Footer
-       *************************************** */
-      footerSection={renderFooter()}
-      /** **************************************
-       * @Styles
-       *************************************** */
-      cssVars={{ '--layout-auth-content-width': '420px', ...cssVars }}
-      sx={[
-        (theme) => ({
-          position: 'relative',
-          '&::before': backgroundStyles(),
-        }),
-        ...(Array.isArray(sx) ? sx : [sx]),
-      ]}
-    >
-      {renderMain()}
-    </LayoutSection>
-  );
+     return (
+          <LayoutSection
+               /** **************************************
+                * @Header
+                *************************************** */
+               headerSection={renderHeader()}
+               /** **************************************
+                * @Footer
+                *************************************** */
+               footerSection={renderFooter()}
+               /** **************************************
+                * @Styles
+                *************************************** */
+               cssVars={{ '--layout-auth-content-width': '420px', ...cssVars }}
+               sx={[
+                    (theme) => ({
+                         position: 'relative',
+                         '&::before': backgroundStyles(),
+                    }),
+                    ...(Array.isArray(sx) ? sx : [sx]),
+               ]}
+          >
+               {renderMain()}
+          </LayoutSection>
+     );
 }
 
 // ----------------------------------------------------------------------
 
 const backgroundStyles = (): CSSObject => ({
-  zIndex: 1,
-  opacity: 0.24,
-  width: '100%',
-  height: '100%',
-  content: "''",
-  position: 'absolute',
-  backgroundSize: 'cover',
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'center center',
-  backgroundImage: 'url(/assets/background/overlay.jpg)',
+     zIndex: 1,
+     opacity: 0.24,
+     width: '100%',
+     height: '100%',
+     content: "''",
+     position: 'absolute',
+     backgroundSize: 'cover',
+     backgroundRepeat: 'no-repeat',
+     backgroundPosition: 'center center',
+     backgroundImage: 'url(/assets/background/overlay.jpg)',
 });

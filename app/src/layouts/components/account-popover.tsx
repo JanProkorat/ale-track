@@ -1,7 +1,7 @@
-import type {IconButtonProps} from '@mui/material/IconButton';
+import type { IconButtonProps } from '@mui/material/IconButton';
 
-import {useState, useCallback} from 'react';
-import {useTranslation} from "react-i18next";
+import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -11,114 +11,114 @@ import Divider from '@mui/material/Divider';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 
-import {useRouter} from 'src/routes/hooks';
+import { useRouter } from 'src/routes/hooks';
 
-import {useAuth} from "../../context/AuthContext";
-import {languages, currencies} from "../dashboard";
-import {LanguagePopover} from "./language-popover";
-import {CurrencyPopover} from "./currency-popover";
+import { useAuth } from '../../context/AuthContext';
+import { languages, currencies } from '../dashboard';
+import { LanguagePopover } from './language-popover';
+import { CurrencyPopover } from './currency-popover';
 
 // ----------------------------------------------------------------------
 
 export type AccountPopoverProps = IconButtonProps;
 
-export function AccountPopover({sx, ...other}: AccountPopoverProps) {
-    const router = useRouter();
-    const { t } = useTranslation();
+export function AccountPopover({ sx, ...other }: AccountPopoverProps) {
+     const router = useRouter();
+     const { t } = useTranslation();
 
-    const {signOut, user} = useAuth();
+     const { signOut, user } = useAuth();
 
-    const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
+     const [openPopover, setOpenPopover] = useState<HTMLButtonElement | null>(null);
 
-    const handleOpenPopover = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-        setOpenPopover(event.currentTarget);
-    }, []);
+     const handleOpenPopover = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+          setOpenPopover(event.currentTarget);
+     }, []);
 
-    const handleClosePopover = useCallback(() => {
-        setOpenPopover(null);
-    }, []);
+     const handleClosePopover = useCallback(() => {
+          setOpenPopover(null);
+     }, []);
 
-    const handleSignOut = useCallback(() => {
-        signOut().then(() => router.push('/'));
-    }, [router, signOut]);
+     const handleSignOut = useCallback(() => {
+          signOut().then(() => router.push('/'));
+     }, [router, signOut]);
 
-    return (
-        <>
-            <IconButton
-                onClick={handleOpenPopover}
-                sx={{
-                    p: '2px',
-                    width: 40,
-                    height: 40,
-                    background: (theme) =>
-                        `conic-gradient(${theme.vars.palette.primary.light}, ${theme.vars.palette.warning.light}, ${theme.vars.palette.primary.light})`,
-                    ...sx,
-                }}
-                {...other}
-            >
-                <Avatar src="/assets/images/avatar/avatar-25.webp" alt={user?.name} sx={{width: 1, height: 1}}>
-                    {user?.name}
-                </Avatar>
-            </IconButton>
-
-            <Popover
-                open={!!openPopover}
-                anchorEl={openPopover}
-                onClose={handleClosePopover}
-                anchorOrigin={{vertical: 'bottom', horizontal: 'right'}}
-                transformOrigin={{vertical: 'top', horizontal: 'right'}}
-                slotProps={{
-                    paper: {
-                        sx: {width: 200},
-                    },
-                }}
-            >
-                <Box sx={{ p: 2, pb: 1.5, display: 'flex', justifyContent: 'center' }}>
-                    <Typography variant="subtitle2" noWrap>
-                        {user?.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : ""}
-                    </Typography>
-                </Box>
-
-                <Divider sx={{borderStyle: 'dashed'}}/>
-
-                <Box
+     return (
+          <>
+               <IconButton
+                    onClick={handleOpenPopover}
                     sx={{
-                        pt: 2,
-                        pr: 2,
-                        pl: 2,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                         p: '2px',
+                         width: 40,
+                         height: 40,
+                         background: (theme) =>
+                              `conic-gradient(${theme.vars.palette.primary.light}, ${theme.vars.palette.warning.light}, ${theme.vars.palette.primary.light})`,
+                         ...sx,
                     }}
-                >
-                    <Typography variant="subtitle2" noWrap>
-                        {t('languages.language')}
-                    </Typography>
-                    <LanguagePopover data={languages} />
-                </Box>
-                
-                <Box
-                    sx={{
-                        pr: 2,
-                        pl: 2,
-                        pb: 1.5,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                    }}
-                >
-                    <Typography variant="subtitle2" noWrap>
-                        {t('common.currency')}
-                    </Typography>
-                    <CurrencyPopover data={currencies} />
-                </Box>
+                    {...other}
+               >
+                    <Avatar src="/assets/images/avatar/avatar-25.webp" alt={user?.name} sx={{ width: 1, height: 1 }}>
+                         {user?.name}
+                    </Avatar>
+               </IconButton>
 
-                <Box sx={{p: 1}}>
-                    <Button fullWidth color="error" size="medium" variant="text" onClick={handleSignOut}>
-                        Logout
-                    </Button>
-                </Box>
-            </Popover>
-        </>
-    );
+               <Popover
+                    open={!!openPopover}
+                    anchorEl={openPopover}
+                    onClose={handleClosePopover}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    slotProps={{
+                         paper: {
+                              sx: { width: 200 },
+                         },
+                    }}
+               >
+                    <Box sx={{ p: 2, pb: 1.5, display: 'flex', justifyContent: 'center' }}>
+                         <Typography variant="subtitle2" noWrap>
+                              {user?.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : ''}
+                         </Typography>
+                    </Box>
+
+                    <Divider sx={{ borderStyle: 'dashed' }} />
+
+                    <Box
+                         sx={{
+                              pt: 2,
+                              pr: 2,
+                              pl: 2,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                         }}
+                    >
+                         <Typography variant="subtitle2" noWrap>
+                              {t('languages.language')}
+                         </Typography>
+                         <LanguagePopover data={languages} />
+                    </Box>
+
+                    <Box
+                         sx={{
+                              pr: 2,
+                              pl: 2,
+                              pb: 1.5,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                         }}
+                    >
+                         <Typography variant="subtitle2" noWrap>
+                              {t('common.currency')}
+                         </Typography>
+                         <CurrencyPopover data={currencies} />
+                    </Box>
+
+                    <Box sx={{ p: 1 }}>
+                         <Button fullWidth color="error" size="medium" variant="text" onClick={handleSignOut}>
+                              Logout
+                         </Button>
+                    </Box>
+               </Popover>
+          </>
+     );
 }

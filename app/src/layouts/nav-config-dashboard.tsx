@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react';
 
 import FactoryTwoToneIcon from '@mui/icons-material/FactoryTwoTone';
 import ArchiveTwoToneIcon from '@mui/icons-material/ArchiveTwoTone';
@@ -7,141 +7,149 @@ import ShoppingCartTwoToneIcon from '@mui/icons-material/ShoppingCartTwoTone';
 import LocalShippingTwoToneIcon from '@mui/icons-material/LocalShippingTwoTone';
 import AccountCircleTwoToneIcon from '@mui/icons-material/AccountCircleTwoTone';
 
-import {Label} from 'src/components/label';
-import {SvgColor} from 'src/components/svg-color';
+import { Label } from 'src/components/label';
+import { SvgColor } from 'src/components/svg-color';
 
-import {UserRoleType} from "../api/Client";
+import { UserRoleType } from '../api/Client';
 
-import type {NumberOfRecordsInEachModuleDto} from "../api/Client";
+import type { NumberOfRecordsInEachModuleDto } from '../api/Client';
 
 // ----------------------------------------------------------------------
 
 const icon = (name: string) => <SvgColor src={`/assets/icons/navbar/${name}.svg`} />;
 
 export type NavItem = {
-  title: string;
-  path: string;
-  icon: React.ReactNode;
-  info?: React.ReactNode;
-  allowedRoles: UserRoleType[];
+     title: string;
+     path: string;
+     icon: React.ReactNode;
+     info?: React.ReactNode;
+     allowedRoles: UserRoleType[];
 };
 
 export type NavDataProps = {
-  numberOfRecordsInEachModule: NumberOfRecordsInEachModuleDto | undefined;
-  userRole: UserRoleType | undefined;
-}
+     numberOfRecordsInEachModule: NumberOfRecordsInEachModuleDto | undefined;
+     userRole: UserRoleType | undefined;
+};
 
-export const getNavData = ({numberOfRecordsInEachModule, userRole}: NavDataProps): NavItem[] => {
-  const menuItems: NavItem[] = [
-    {
-      title: 'Dashboard',
-      path: '/dashboard',
-      icon: icon('ic-analytics'),
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    {
-      title: 'clients.title',
-      path: '/clients',
-      icon: icon('ic-clients'),
-      info: numberOfRecordsInEachModule?.clientsCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.clientsCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    {
-      title: 'orders.title',
-      path: '/orders',
-      icon: <ShoppingCartTwoToneIcon />,
-      info: numberOfRecordsInEachModule?.ordersCount !== undefined ? (
-        <Label color="error" variant="inverted">
-          {numberOfRecordsInEachModule.ordersCount}
-        </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    {
-      title: 'breweries.title',
-      path: '/breweries',
-      icon:  <FactoryTwoToneIcon/>,
-      info: numberOfRecordsInEachModule?.breweriesCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.breweriesCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    // {
-    //   title: 'Sklad',
-    //   path: '/inventory',
-    //   icon: <InventoryTwoToneIcon />,
-    //   info: numberOfRecordsInEachModule?.inventoryItemsCount !== undefined ? (
-    //       <Label color="error" variant="inverted">
-    //         {numberOfRecordsInEachModule.inventoryItemsCount}
-    //       </Label>
-    //   ) : undefined,
-    //   allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    // },
-    {
-      title: 'drivers.title',
-      path: '/drivers',
-      icon: icon('ic-drivers'),
-      info: numberOfRecordsInEachModule?.driversCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.driversCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    {
-      title: 'Vozidla',
-      path: '/vehicles',
-      icon: <LocalShippingTwoToneIcon />,
-      info: numberOfRecordsInEachModule?.vehiclesCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.vehiclesCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin]
-    },
-    {
-      title: 'Vývozy',
-      path: '/outgoing-shipments',
-      icon: <UploadFileTwoToneIcon />,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin],
-      info: numberOfRecordsInEachModule?.outgoingShipmentsCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.outgoingShipmentsCount}
-          </Label>
-      ) : undefined,
-    },
-    {
-      title: 'Dovážky zboží',
-      path: '/product-deliveries',
-      icon: <ArchiveTwoToneIcon />,
-      allowedRoles: [UserRoleType.User, UserRoleType.Admin],
-      info: numberOfRecordsInEachModule?.productDeliveriesCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.productDeliveriesCount}
-          </Label>
-      ) : undefined,
-    },
-    {
-      title: 'Uživatelé',
-      path: '/users',
-      icon: <AccountCircleTwoToneIcon />,
-      info: numberOfRecordsInEachModule?.usersCount !== undefined ? (
-          <Label color="error" variant="inverted">
-            {numberOfRecordsInEachModule.usersCount}
-          </Label>
-      ) : undefined,
-      allowedRoles: [UserRoleType.Admin]
-    }
-  ];
-  
-  return menuItems.filter((menuItem) => {
-    const numericState = UserRoleType[userRole as unknown as keyof typeof UserRoleType];
-    return menuItem.allowedRoles.includes(numericState)
-  });
-}
+export const getNavData = ({ numberOfRecordsInEachModule, userRole }: NavDataProps): NavItem[] => {
+     const menuItems: NavItem[] = [
+          {
+               title: 'Dashboard',
+               path: '/dashboard',
+               icon: icon('ic-analytics'),
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          {
+               title: 'clients.title',
+               path: '/clients',
+               icon: icon('ic-clients'),
+               info:
+                    numberOfRecordsInEachModule?.clientsCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.clientsCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          {
+               title: 'orders.title',
+               path: '/orders',
+               icon: <ShoppingCartTwoToneIcon />,
+               info:
+                    numberOfRecordsInEachModule?.ordersCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.ordersCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          {
+               title: 'breweries.title',
+               path: '/breweries',
+               icon: <FactoryTwoToneIcon />,
+               info:
+                    numberOfRecordsInEachModule?.breweriesCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.breweriesCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          // {
+          //   title: 'Sklad',
+          //   path: '/inventory',
+          //   icon: <InventoryTwoToneIcon />,
+          //   info: numberOfRecordsInEachModule?.inventoryItemsCount !== undefined ? (
+          //       <Label color="error" variant="inverted">
+          //         {numberOfRecordsInEachModule.inventoryItemsCount}
+          //       </Label>
+          //   ) : undefined,
+          //   allowedRoles: [UserRoleType.User, UserRoleType.Admin]
+          // },
+          {
+               title: 'drivers.title',
+               path: '/drivers',
+               icon: icon('ic-drivers'),
+               info:
+                    numberOfRecordsInEachModule?.driversCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.driversCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          {
+               title: 'Vozidla',
+               path: '/vehicles',
+               icon: <LocalShippingTwoToneIcon />,
+               info:
+                    numberOfRecordsInEachModule?.vehiclesCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.vehiclesCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+          },
+          {
+               title: 'Vývozy',
+               path: '/outgoing-shipments',
+               icon: <UploadFileTwoToneIcon />,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+               info:
+                    numberOfRecordsInEachModule?.outgoingShipmentsCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.outgoingShipmentsCount}
+                         </Label>
+                    ) : undefined,
+          },
+          {
+               title: 'Dovážky zboží',
+               path: '/product-deliveries',
+               icon: <ArchiveTwoToneIcon />,
+               allowedRoles: [UserRoleType.User, UserRoleType.Admin],
+               info:
+                    numberOfRecordsInEachModule?.productDeliveriesCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.productDeliveriesCount}
+                         </Label>
+                    ) : undefined,
+          },
+          {
+               title: 'Uživatelé',
+               path: '/users',
+               icon: <AccountCircleTwoToneIcon />,
+               info:
+                    numberOfRecordsInEachModule?.usersCount !== undefined ? (
+                         <Label color="error" variant="inverted">
+                              {numberOfRecordsInEachModule.usersCount}
+                         </Label>
+                    ) : undefined,
+               allowedRoles: [UserRoleType.Admin],
+          },
+     ];
+
+     return menuItems.filter((menuItem) => {
+          const numericState = UserRoleType[userRole as unknown as keyof typeof UserRoleType];
+          return menuItem.allowedRoles.includes(numericState);
+     });
+};
