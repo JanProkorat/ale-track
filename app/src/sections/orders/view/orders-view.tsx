@@ -6,6 +6,7 @@ import TableBody from '@mui/material/TableBody';
 import { Table, Button, Dialog, DialogTitle, DialogActions, TableContainer } from '@mui/material';
 
 import { useApiCall } from 'src/hooks/use-api-call';
+
 import { useAuthorizedClient } from 'src/api/use-authorized-client';
 
 import { TableNoData } from 'src/components/table/table-no-data';
@@ -67,7 +68,7 @@ export function OrdersView() {
     filters.sort = `${order}:${orderBy}`;
 
     return await executeApiCallWithDefault(() => client.fetchOrders(filters), []);
-  }, [executeApiCallWithDefault, filterClientName, filterPlanningState, order, orderBy]);
+  }, [executeApiCallWithDefault, filterClientName, filterPlanningState, order, orderBy, client]);
 
   useEffect(() => {
     void fetchOrders().then((data) => {

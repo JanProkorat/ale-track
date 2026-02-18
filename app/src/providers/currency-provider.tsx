@@ -74,7 +74,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const res = await executeApiCallWithDefault(() => client.getExchangeRatesEndpoint(), []);
         res.push(czechRate);
         setRates(res);
-    }, [executeApiCallWithDefault]);
+    }, [executeApiCallWithDefault, client]);
 
     useEffect(() => {
         void fetchRates(user !== null);

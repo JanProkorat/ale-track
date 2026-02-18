@@ -5,11 +5,12 @@ import React, { useState, useCallback } from "react";
 import { linearProgressClasses } from "@mui/material/LinearProgress";
 import { Box, InputLabel, Typography, FormControl, OutlinedInput, FormHelperText, LinearProgress } from "@mui/material";
 
+import { useAuthorizedClient } from "src/api/use-authorized-client";
+
 import { NotesView } from "../../notes/view/notes-view";
 import { useApiCall } from "../../../hooks/use-api-call";
 import { RegionSelect } from "./components/region-select";
 import { ContactsForm } from "./components/contacts-form";
-import { useAuthorizedClient } from "src/api/use-authorized-client";
 import { validateAddress } from "../../../utils/validate-address";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { AddressForm } from "../../../components/forms/address-form";
@@ -76,7 +77,7 @@ export function UpdateClientView(
             setInitialClient(clientToUpdate);
         }
         setInitialLoading(false);
-    }, [id, executeApiCall, t]);
+    }, [id, executeApiCall, t, clientApi]);
 
     const saveClient = async (): Promise<boolean> => {
         setInitialLoading(true);
@@ -152,7 +153,7 @@ export function UpdateClientView(
             triggerRefresh();
             showSnackbar('Client deleted', 'success');
         }
-    }, [id, executeApiCall, showSnackbar, triggerRefresh]);
+    }, [id, executeApiCall, showSnackbar, triggerRefresh, clientApi]);
 
     const resetClient = useCallback(() => {
         setClient(initialClient);

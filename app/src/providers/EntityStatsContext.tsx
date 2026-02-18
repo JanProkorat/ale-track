@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback, useMemo, createContext } from 'react';
+import React, { useMemo, useState, useContext, useCallback, createContext } from 'react';
 
 const EntityStatsContext = createContext<{
     refreshKey: number;

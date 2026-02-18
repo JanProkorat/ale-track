@@ -11,6 +11,8 @@ import TableContainer from '@mui/material/TableContainer';
 import { linearProgressClasses } from '@mui/material/LinearProgress';
 import { Tab, Card, Tabs, Button, Typography, LinearProgress } from '@mui/material';
 
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
+
 import { Scrollbar } from 'src/components/scrollbar';
 
 import { Region } from '../../../api/Client';
@@ -23,7 +25,6 @@ import { useTable } from '../../../providers/TableProvider';
 import { DashboardContent } from '../../../layouts/dashboard';
 import { ClientsTableToolbar } from '../clients-table-toolbar';
 import { mapEnumValue } from '../../../utils/format-enum-value';
-import { useAuthorizedClient } from 'src/api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { useLocalStorage } from '../../../hooks/use-local-storage';
 import { UpdateClientView } from '../detail-view/update-client-view';
@@ -75,7 +76,7 @@ export function ClientsView() {
       [],
       t('clients.errorFetchingClients')
     );
-  }, [executeApiCallWithDefault, filterName, order, orderBy, t]);
+  }, [executeApiCallWithDefault, filterName, order, orderBy, t, client]);
 
   const fetchWithFilters = useCallback(async (region: Region) => {
     await fetchClients(region).then((data) => {

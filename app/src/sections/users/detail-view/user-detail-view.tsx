@@ -3,12 +3,13 @@ import {useTranslation} from "react-i18next";
 
 import {Typography} from "@mui/material";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import {UpdateUserView} from "./update-user-view";
 import {useApiCall} from "../../../hooks/use-api-call";
 import {
     UpdateUserDto
 } from "../../../api/Client";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 

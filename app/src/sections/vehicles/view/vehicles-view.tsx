@@ -15,6 +15,7 @@ import TableContainer from '@mui/material/TableContainer';
 import TablePagination from '@mui/material/TablePagination';
 
 import {DashboardContent} from 'src/layouts/dashboard';
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 
 import {Iconify} from 'src/components/iconify';
 import {Scrollbar} from 'src/components/scrollbar';
@@ -24,7 +25,6 @@ import {VehiclesTableRow} from '../vehicles-table-row';
 import {useApiCall} from "../../../hooks/use-api-call";
 import {useTable} from "../../../providers/TableProvider";
 import {VehiclesTableToolbar} from '../vehicles-table-toolbar';
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from '../../../components/table/table-no-data';
 import {VehicleDetailView} from "../detail-view/vehicle-detail-view";
@@ -66,7 +66,7 @@ export function VehiclesView() {
             name: item.name,
             maxWeight: item.maxWeight,
         } as VehiclesProps)));
-    }, [executeApiCallWithDefault, filterName, order, orderBy]);
+    }, [client, executeApiCallWithDefault, filterName, order, orderBy]);
 
     useEffect(() => {
         void fetchVehicles();

@@ -4,8 +4,9 @@ import React, {useState, useEffect, useCallback} from "react";
 import Box from "@mui/material/Box";
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from '@mui/material';
 
-import {useApiCall} from "../../../hooks/use-api-call";
 import {useAuthorizedClient} from "src/api/use-authorized-client";
+
+import {useApiCall} from "../../../hooks/use-api-call";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {ColorPicker} from "../../../components/color/color-picker";
 import {DriverAvailabilityEditor} from "./driver-availability-editor";
@@ -46,7 +47,7 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
             setDriver(data);
         }
         setIsLoading(false);
-    }, [executeApiCall, id]);
+    }, [executeApiCall, id, clientApi]);
 
     useEffect(() => {
         if (id !== null && id !== undefined)

@@ -53,7 +53,7 @@ export function SignInView() {
         }
         
         setIsLoading(false);
-    }, [userName, password, signIn, navigate, from, executeApiCall]);
+    }, [userName, password, signIn, navigate, from, executeApiCall, client]);
 
     const renderForm = (
         <Box

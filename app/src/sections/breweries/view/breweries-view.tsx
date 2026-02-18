@@ -9,6 +9,7 @@ import {linearProgressClasses} from "@mui/material/LinearProgress";
 import {Box, Tab, Tabs, Button, Typography, LinearProgress} from "@mui/material";
 
 import { useApiCall } from "src/hooks/use-api-call";
+
 import { useAuthorizedClient } from "src/api/use-authorized-client";
 
 import {BreweryDetailView} from "../detail-view";
@@ -35,13 +36,11 @@ export function BreweriesView() {
     const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
 
-    const fetchBreweries = useCallback(async () => {
-        return await executeApiCallWithDefault(
+    const fetchBreweries = useCallback(async () => await executeApiCallWithDefault(
             () => client.fetchBreweries({}),
             [],
             'Error fetching breweries'
-        );
-    }, [executeApiCallWithDefault]);
+        ), [executeApiCallWithDefault, client]);
 
     useEffect(() => {
         const loadInitial = async () => {

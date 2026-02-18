@@ -6,8 +6,8 @@ import {FormControl} from "@mui/material";
 import TextField from "@mui/material/TextField";
 
 import {useApiCall} from "../../../../hooks/use-api-call";
-import {useAuthorizedClient} from "../../../../api/use-authorized-client";
 import {useSnackbar} from "../../../../providers/SnackbarProvider";
+import {useAuthorizedClient} from "../../../../api/use-authorized-client";
 import {DrawerLayout} from "../../../../layouts/components/drawer-layout";
 import {useEntityStatsRefresh} from "../../../../providers/EntityStatsContext";
 import {SectionType, CreateNoteDto, UpdateNoteDto} from "../../../../api/Client";

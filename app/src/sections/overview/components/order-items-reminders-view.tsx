@@ -15,8 +15,8 @@ import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgr
 import { useRouter } from '../../../routes/hooks';
 import { formatDate } from '../../../locales/formatDate';
 import { Scrollbar } from '../../../components/scrollbar';
-import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { SectionHeader } from '../../../components/label/section-header';
 
 import type { ClientOrderReminderDto } from '../../../api/Client';
@@ -40,7 +40,7 @@ export function OrderItemsRemindersView() {
     } finally {
       setLoading(false);
     }
-  }, [showSnackbar, t]);
+  }, [showSnackbar, t, client]);
 
   useEffect(() => {
     fetchReminders().then(setClientOrderReminder);

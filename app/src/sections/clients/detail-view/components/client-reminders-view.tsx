@@ -56,7 +56,7 @@ export function ClientRemindersView({ clientId }: Readonly<ClientRemindersProps>
             showSnackbar(t('reminders.fetchError'), 'error');
             return [];
         }
-    }, [clientId, showSnackbar, t]);
+    }, [clientId, showSnackbar, t, clientApi]);
 
     useEffect(() => {
         void fetchReminders().then((data) => setReminders(data))

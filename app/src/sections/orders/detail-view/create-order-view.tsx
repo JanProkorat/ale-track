@@ -9,10 +9,10 @@ import { useApiCall } from "src/hooks/use-api-call";
 import { useSnackbar } from "src/providers/SnackbarProvider";
 
 import {ClientSelect} from "../components/client-select";
-import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import {OrderItemsTable} from "../components/order-items-table";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
 import {OrderProductsSelect} from "../components/order-products-select";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import {OrderDeliveryDatePicker} from "../components/order-delivery-date-picker";
 import { CreateOrderDto, CreateOrderItemDto, GroupedProductHistoryDto } from '../../../api/Client';
 

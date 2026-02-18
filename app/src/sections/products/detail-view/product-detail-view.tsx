@@ -5,8 +5,9 @@ import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
-import {useApiCall} from "../../../hooks/use-api-call";
 import {useAuthorizedClient} from "src/api/use-authorized-client";
+
+import {useApiCall} from "../../../hooks/use-api-call";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {useCurrency} from "../../../providers/currency-provider";
 import {ProductTypeSelect} from "./components/product-type-select";
@@ -67,7 +68,7 @@ export function ProductDetailView(
         }
 
         setIsLoading(false);
-    }, [executeApiCall, id]);
+    }, [executeApiCall, id, clientApi]);
 
     useEffect(() => {
         void fetchData();

@@ -16,8 +16,8 @@ import { PendingChangesConfirmationDialog } from 'src/components/dialogs/pending
 import { Iconify } from '../../../components/iconify';
 import { useApiCall } from '../../../hooks/use-api-call';
 import { DashboardContent } from '../../../layouts/dashboard';
-import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { SectionHeader } from '../../../components/label/section-header';
 import { OutgoingShipmentSelect } from '../components/outgoing-shipment-select';
 import { CreateOutgoingShipmentView } from '../detail-view/create-outgoing-shipment-view';
@@ -68,9 +68,7 @@ export function OutgoingShipmentsView() {
     }
   }, [blocker.state]);
 
-  const fetchOutgoingShipments = useCallback(async () => {
-    return await executeApiCallWithDefault(() => client.fetchOutgoingShipments({}), []);
-  }, [client, executeApiCallWithDefault]);
+  const fetchOutgoingShipments = useCallback(async () => await executeApiCallWithDefault(() => client.fetchOutgoingShipments({}), []), [client, executeApiCallWithDefault]);
 
   const fetchShipment = useCallback(
     async (shipmentId: string) => {

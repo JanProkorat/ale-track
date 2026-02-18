@@ -13,8 +13,8 @@ import { useAuth } from "../../context/AuthContext";
 import { getNavData } from "../nav-config-dashboard";
 import { useApiCall } from "../../hooks/use-api-call";
 import { MenuButton } from '../components/menu-button';
-import { useAuthorizedClient } from "../../api/use-authorized-client";
 import { AccountPopover } from '../components/account-popover';
+import { useAuthorizedClient } from "../../api/use-authorized-client";
 import { useEntityStatsRefresh } from "../../providers/EntityStatsContext";
 import { MainSection, HeaderSection, LayoutSection, layoutClasses } from '../core';
 
@@ -85,7 +85,7 @@ export function DashboardLayout({
     if (data) {
       setNavCounts(data);
     }
-  }, [executeApiCall]);
+  }, [executeApiCall, client]);
 
   useEffect(() => {
     fetchInventoryCount();

@@ -10,6 +10,8 @@ import TableContainer from "@mui/material/TableContainer";
 import TablePagination from "@mui/material/TablePagination";
 import {Tab, Tabs, Dialog, DialogTitle, DialogActions} from "@mui/material";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import {emptyRows} from "../../../providers/utils";
 import {Iconify} from "../../../components/iconify";
 import {ProductsTableRow} from "../products-table-row";
@@ -17,7 +19,6 @@ import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {ProductsTableToolbar} from "../products-table-toolbar";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from "../../../components/table/table-no-data";
 import {ProductDetailView} from "../detail-view/product-detail-view";
@@ -61,7 +62,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
         await executeApiCallWithDefault(() => client.getProductKindListEndpoint(), []).then((result) => setProductKinds(result))
         const response = await executeApiCallWithDefault(() => client.fetchBreweryProducts(breweryId, filters), []);
         setProducts(response);
-    }, [breweryId, executeApiCallWithDefault, filterKind, filterName, order, orderBy]);
+    }, [breweryId, client, executeApiCallWithDefault, filterKind, filterName, order, orderBy]);
 
     useEffect(() => {
         void fetchProducts();

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-
 import type { ThemeProviderProps as MuiThemeProviderProps } from '@mui/material/styles';
+
+import { useMemo } from 'react';
 
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider as ThemeVarsProvider } from '@mui/material/styles';

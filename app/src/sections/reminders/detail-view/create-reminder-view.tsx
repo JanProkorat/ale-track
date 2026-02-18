@@ -7,13 +7,13 @@ import TextField from "@mui/material/TextField";
 
 import {NameInput} from "./components/name-input";
 import {validateReminder} from "./utils/validate-reminder";
-import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DaysOfWeekPicker} from "./components/days-of-week-picker";
 import {ReminderDaysInput} from "./components/reminder-days-input";
 import {DaysOfMonthPicker} from "./components/days-of-month-picker";
 import {ReminderDatePicker} from "./components/reminder-date-picker";
 import {ReminderTypeSelect} from "./components/reminder-type-select";
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
 import {SectionHeader} from "../../../components/label/section-header";
 import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";

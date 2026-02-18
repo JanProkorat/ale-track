@@ -10,9 +10,9 @@ import { ClientOrderShipmentDto, CreateOutgoingShipmentDto, OutgoingShipmentStop
 import { useApiCall } from '../../../hooks/use-api-call';
 import { OrdersSelect } from '../components/orders-select';
 import { WeightInfoBox } from '../components/weight-info-box';
-import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { ShipmentNameInput } from '../components/shipment-name-input';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { DrawerLayout } from '../../../layouts/components/drawer-layout';
 import { ShipmentRoutePlanner } from '../components/shipment-route-planner';
 import { ShipmentDriversSelect } from '../components/shipment-drivers-select';

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import {jwtDecode} from 'jwt-decode';
-import { useState, useEffect, useContext, useCallback, useMemo, createContext } from 'react';
+import { useMemo, useState, useEffect, useContext, useCallback, createContext } from 'react';
 
 import type {UserRoleType} from "../api/Client";
 

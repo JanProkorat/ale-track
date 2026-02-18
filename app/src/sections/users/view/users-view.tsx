@@ -6,13 +6,14 @@ import TableBody from "@mui/material/TableBody";
 import TableContainer from "@mui/material/TableContainer";
 import {Button, Dialog, DialogTitle, DialogActions } from "@mui/material";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import {UsersTableRow} from "../users-table-row";
 import {emptyRows} from "../../../providers/utils";
 import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {UsersTableToolbar} from "../users-table-toolbar";
 import {useTable} from "../../../providers/TableProvider";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {UserDetailView} from "../detail-view/user-detail-view";
 import {CreateUserView} from "../detail-view/create-user-view";
 import {TableNoData} from "../../../components/table/table-no-data";
@@ -52,7 +53,7 @@ export function UsersView() {
         filters.sort = `${order}:${orderBy}`;
 
         return await executeApiCallWithDefault(() => client.fetchUsers(filters), []);
-    }, [executeApiCallWithDefault, filterUserName, order, orderBy]);
+    }, [client, executeApiCallWithDefault, filterUserName, order, orderBy]);
 
     useEffect(() => {
         setInitialLoading(true);

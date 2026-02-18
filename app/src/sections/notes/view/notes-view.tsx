@@ -12,11 +12,11 @@ import {List, Typography, ListItemIcon, ListItemText} from "@mui/material";
 
 import {Iconify} from "../../../components/iconify";
 import {useApiCall} from "../../../hooks/use-api-call";
-import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {Scrollbar} from "../../../components/scrollbar";
 import {NoteDto, SectionType} from "../../../api/Client";
 import NoteDetailView from "./components/note-detail-view";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {CollapsibleForm} from "../../../components/forms/collapsible-form";
 
 type NotesViewProps = {
@@ -36,9 +36,7 @@ export function NotesView({parentId, parentType}: Readonly<NotesViewProps>) {
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const open = Boolean(anchorEl);
 
-    const fetchClientNotes = useCallback(async () => {
-        return await executeApiCallWithDefault(() => client.getClientNotesEndpoint(parentId), []);
-    }, [parentId, executeApiCallWithDefault]);
+    const fetchClientNotes = useCallback(async () => await executeApiCallWithDefault(() => client.getClientNotesEndpoint(parentId), []), [parentId, executeApiCallWithDefault, client]);
 
     useEffect(() => {
         if (parentType === SectionType.Client)

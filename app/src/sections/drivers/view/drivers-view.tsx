@@ -14,6 +14,8 @@ import DialogActions from "@mui/material/DialogActions";
 import TableContainer from "@mui/material/TableContainer";
 import TablePagination from "@mui/material/TablePagination";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import {emptyRows} from "../../../providers/utils";
 import {Iconify} from "../../../components/iconify";
 import {DriversTableRow} from "../drivers-table-row";
@@ -22,7 +24,6 @@ import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {DashboardContent} from "../../../layouts/dashboard";
 import {DriversTableToolbar} from "../drivers-table-toolbar";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DriverDetailView} from "../detail-view/driver-detail-view";
 import {TableNoData} from "../../../components/table/table-no-data";
@@ -68,7 +69,7 @@ export function DriversView() {
             color: item.color,
             availableDates: item.availableDates,
         } as DriversProps)));
-    }, [executeApiCallWithDefault, filterFirstName, filterLastName, order, orderBy]);
+    }, [executeApiCallWithDefault, filterFirstName, filterLastName, order, orderBy, client]);
 
     useEffect(() => {
         void fetchDrivers();
@@ -146,7 +147,7 @@ export function DriversView() {
                                         onSelectAllRows={(checked) =>
                                             table.onSelectAllRows(
                                                 checked,
-                                                drivers.map((client) => client.id)
+                                                drivers.map((driver) => driver.id)
                                             )
                                         }
                                         headLabel={[

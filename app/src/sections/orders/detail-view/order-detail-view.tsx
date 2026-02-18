@@ -6,8 +6,8 @@ import { Box, Typography } from "@mui/material";
 import { useApiCall } from "src/hooks/use-api-call";
 
 import { UpdateOrderView } from "./update-order-view";
-import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { DetailCardLayout } from "../../../layouts/dashboard/detail-card-layout";
 import {
     OrderState,

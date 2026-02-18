@@ -6,10 +6,11 @@ import {Box, InputLabel, FormControl, OutlinedInput} from "@mui/material";
 import { validateAddress } from "src/utils/validate-address";
 import { validateContacts, type ContactValidationErrors } from "src/utils/validate-contacts";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import {useApiCall} from "../../../hooks/use-api-call";
 import {RegionSelect} from "./components/region-select";
 import {ContactsForm} from "./components/contacts-form";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
 import {DrawerLayout} from '../../../layouts/components/drawer-layout';

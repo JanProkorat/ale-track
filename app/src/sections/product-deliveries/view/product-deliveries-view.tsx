@@ -11,8 +11,8 @@ import { DashboardContent } from "src/layouts/dashboard";
 
 import { Iconify } from "../../../components/iconify";
 import { useApiCall } from "../../../hooks/use-api-call";
-import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { SectionHeader } from "../../../components/label/section-header";
 import { ProductDeliverySelect } from "../components/product-delivery-select";
 import { CreateProductDeliveryView } from "../detail-view/create-product-delivery-view";
@@ -53,7 +53,7 @@ export function ProductDeliveriesView() {
         filters.sort = 'asc:deliveryDate';
 
         return await executeApiCallWithDefault(() => client.fetchProductDeliveries(filters), []);
-    }, [executeApiCallWithDefault]);
+    }, [executeApiCallWithDefault, client]);
 
     const fetchDelivery = useCallback(async (deliveryId: string) => {
         const data = await executeApiCall(() => client.getProductDeliveryDetailEndpoint(deliveryId));
@@ -80,7 +80,7 @@ export function ProductDeliveriesView() {
             setCurrentDelivery(updateRequest);
             setCurrentInitialDelivery(updateRequest);
         }
-    }, [executeApiCall]);
+    }, [executeApiCall, client]);
 
     useEffect(() => {
         setInitialLoading(true);

@@ -5,10 +5,11 @@ import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/
 
 import { useApiCall } from "src/hooks/use-api-call";
 
+import {useAuthorizedClient} from "src/api/use-authorized-client";
+
 import { CollapsibleForm } from "src/components/forms/collapsible-form";
 
 import {ProductsView} from "../../products/view";
-import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {validateAddress} from "../../../utils/validate-address";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";

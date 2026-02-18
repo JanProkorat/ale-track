@@ -7,8 +7,9 @@ import Checkbox from "@mui/material/Checkbox";
 import ListItemText from "@mui/material/ListItemText";
 import {Chip, Select, InputLabel, FormControl} from "@mui/material";
 
-import {useApiCall} from "../../../hooks/use-api-call";
 import {useAuthorizedClient} from "src/api/use-authorized-client";
+
+import {useApiCall} from "../../../hooks/use-api-call";
 
 import type { ClientListItemDto} from "../../../api/Client";
 
@@ -45,23 +46,23 @@ export function ClientSelect({selectedClientId, shouldValidate, disabled, onSele
                 labelId="clients-state-select-id"
                 value={selectedClientId}
                 renderValue={(selected) => {
-                    const client = clients.find(c => c.id === selected);
-                    return client ? (
+                    const selectedClient = clients.find(c => c.id === selected);
+                    return selectedClient ? (
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            <Chip key={client.id} label={client.name} size="small" />
+                            <Chip key={selectedClient.id} label={selectedClient.name} size="small" />
                         </Box>
                     ) : null;
                 }}
             >
-                {clients.map((client) => (
+                {clients.map((clientItem) => (
                     <MenuItem
-                        key={client.id}
-                        value={client.id}
+                        key={clientItem.id}
+                        value={clientItem.id}
                         onClick={() => {
-                            onSelect(client.id!)
+                            onSelect(clientItem.id!)
                         }}>
-                        <Checkbox checked={selectedClientId === client.id} />
-                        <ListItemText primary={client.name} />
+                        <Checkbox checked={selectedClientId === clientItem.id} />
+                        <ListItemText primary={clientItem.name} />
                     </MenuItem>
                 ))}
             </Select>

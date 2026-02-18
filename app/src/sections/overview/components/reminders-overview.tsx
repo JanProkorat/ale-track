@@ -16,9 +16,9 @@ import {useRouter} from "../../../routes/hooks";
 import {SectionType} from "../../../api/Client";
 import {formatDate} from "../../../locales/formatDate";
 import {Scrollbar} from "../../../components/scrollbar";
-import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import { mapEnumValue } from '../../../utils/format-enum-value';
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {SectionHeader} from "../../../components/label/section-header";
 
 import type { ReminderSectionDto, UpcomingReminderDto} from "../../../api/Client";
@@ -53,7 +53,7 @@ export function RemindersOverview() {
             showSnackbar(t('reminders.fetchError'), 'error');
             console.error('Error fetching reminders:', error);
         }
-    }, [showSnackbar, t])
+    }, [showSnackbar, t, client])
 
     useEffect(() => {
         fetchReminders()

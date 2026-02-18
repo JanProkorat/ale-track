@@ -11,9 +11,9 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import {Iconify} from "../../../components/iconify";
 import {useApiCall} from "../../../hooks/use-api-call";
-import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {InventoryItemView} from "./inventory-item-view";
 import {DashboardContent} from "../../../layouts/dashboard";
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 
 import type {InventorySectionDto} from "../../../api/Client";
 
@@ -30,7 +30,7 @@ export function InventoryView() {
         const sortedData = [...data].sort((a, b) => a.name!.localeCompare(b.name!));
         setInventorySections(sortedData);
         setExpandedSections(data.reduce((acc, section) => ({ ...acc, [section.id as string]: true }), {}));
-    }, [executeApiCallWithDefault]);
+    }, [executeApiCallWithDefault, client]);
 
     useEffect(() => {
         void fetchInventoryItems();
