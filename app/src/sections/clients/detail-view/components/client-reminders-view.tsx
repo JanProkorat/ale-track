@@ -11,12 +11,12 @@ import { Tab, List, Tabs, Typography, ListItemText } from "@mui/material";
 import CheckCircleTwoToneIcon from '@mui/icons-material/CheckCircleTwoTone';
 
 import { useSnackbar } from "src/providers/SnackbarProvider";
+import { useAuthorizedClient } from "src/api/use-authorized-client";
 
 import { Iconify } from "../../../../components/iconify";
 import { formatDate } from "../../../../locales/formatDate";
 import { Scrollbar } from "../../../../components/scrollbar";
 import { mapEnumValue } from "../../../../utils/format-enum-value";
-import { AuthorizedClient } from "../../../../api/AuthorizedClient";
 import { sortDaysOfWeek } from "../../../../utils/sort-daysof-week";
 import { SectionHeader } from "../../../../components/label/section-header";
 import { CollapsibleForm } from "../../../../components/forms/collapsible-form";
@@ -37,6 +37,7 @@ type ClientRemindersProps = {
 export function ClientRemindersView({ clientId }: Readonly<ClientRemindersProps>) {
     const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
+    const clientApi = useAuthorizedClient();
 
     const [reminders, setReminders] = useState<ReminderListItemDto[]>([]);
     const [filteredReminders, setFilteredReminders] = useState<ReminderListItemDto[]>([]);
@@ -46,8 +47,6 @@ export function ClientRemindersView({ clientId }: Readonly<ClientRemindersProps>
 
     const fetchReminders = useCallback(async () => {
         try {
-            const clientApi = new AuthorizedClient();
-
             return await clientApi.fetchRemindersForClient(clientId, {}).then((data) => data.map(r => new ReminderListItemDto({
                 ...r,
                 type: ReminderType[r.type! as unknown as keyof typeof ReminderType]
@@ -124,7 +123,6 @@ export function ClientRemindersView({ clientId }: Readonly<ClientRemindersProps>
         setFilteredReminders(sortReminders(updatedReminders));
 
         try {
-            const clientApi = new AuthorizedClient();
             await clientApi.setClientReminderResolvedDateEndpoint(id, new SetClientReminderResolvedDateRequest({
                 resolvedDate: isResolved ? undefined : new Date
             }));
@@ -137,7 +135,6 @@ export function ClientRemindersView({ clientId }: Readonly<ClientRemindersProps>
 
     const deleteReminder = async (id: string) => {
         try {
-            const clientApi = new AuthorizedClient();
             await clientApi.deleteClientReminderEndpoint(id).then(() => {
                 showSnackbar(t('reminders.deleteSuccess'), 'success');
                 setReminders(prevReminders => {

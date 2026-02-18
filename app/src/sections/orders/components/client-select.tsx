@@ -8,7 +8,7 @@ import ListItemText from "@mui/material/ListItemText";
 import {Chip, Select, InputLabel, FormControl} from "@mui/material";
 
 import {useApiCall} from "../../../hooks/use-api-call";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 
 import type { ClientListItemDto} from "../../../api/Client";
 
@@ -22,14 +22,14 @@ type ClientSelectProps = {
 export function ClientSelect({selectedClientId, shouldValidate, disabled, onSelect}: Readonly<ClientSelectProps>) {
     const {t} = useTranslation();
     const {executeApiCallWithDefault} = useApiCall();
+    const client = useAuthorizedClient();
 
     const [clients, setClients] = useState<ClientListItemDto[]>([]);
 
     const fetchClients = useCallback(async () => {
-        const client = new AuthorizedClient();
         const loadedClients = await executeApiCallWithDefault(() => client.fetchClients({}), []);
         setClients(loadedClients);
-    }, [executeApiCallWithDefault]);
+    }, [executeApiCallWithDefault, client]);
 
     useEffect(() => {
         void fetchClients();

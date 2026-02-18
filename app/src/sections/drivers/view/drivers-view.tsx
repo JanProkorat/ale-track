@@ -22,7 +22,7 @@ import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {DashboardContent} from "../../../layouts/dashboard";
 import {DriversTableToolbar} from "../drivers-table-toolbar";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DriverDetailView} from "../detail-view/driver-detail-view";
 import {TableNoData} from "../../../components/table/table-no-data";
@@ -34,6 +34,7 @@ import {SortableTableHead} from "../../../components/table/sortable-table-head";
 import type {DriversProps} from "../drivers-table-row";
 
 export function DriversView() {
+    const client = useAuthorizedClient();
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
     const {executeApiCall, executeApiCallWithDefault} = useApiCall();
@@ -53,7 +54,6 @@ export function DriversView() {
     const notFound = !drivers.length;
 
     const fetchDrivers = useCallback(async () => {
-        const client = new AuthorizedClient();
         const filters: Record<string, string> = {};
 
         if (filterFirstName) filters.firstName = `startswith:${filterFirstName}`;
@@ -76,7 +76,6 @@ export function DriversView() {
 
     const handleDeleteDriver = async () => {
         if (driverIdToDelete) {
-            const client = new AuthorizedClient();
             const result = await executeApiCall(() => client.deleteDriverEndpoint(driverIdToDelete));
             if (result) {
                 triggerRefresh();
@@ -86,6 +85,10 @@ export function DriversView() {
             }
         }
     }
+
+    const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
+    const handleRowClick = useCallback((id: string) => setSelectedDriverId(id), []);
+    const handleDeleteClick = useCallback((id: string) => setDriverIdToDelete(id), []);
 
     const closeDrawer = () => {
         void fetchDrivers();
@@ -164,9 +167,9 @@ export function DriversView() {
                                                     key={row.id}
                                                     row={row}
                                                     selected={table.selected.includes(row.id)}
-                                                    onSelectRow={() => table.onSelectRow(row.id)}
-                                                    onRowClick={() => setSelectedDriverId(row.id)}
-                                                    onDeleteClick={() => setDriverIdToDelete(row.id)}
+                                                    onSelectRow={handleSelectRow}
+                                                    onRowClick={handleRowClick}
+                                                    onDeleteClick={handleDeleteClick}
                                                 />
                                             ))}
 

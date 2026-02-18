@@ -8,7 +8,7 @@ import { useApiCall } from "src/hooks/use-api-call";
 import { CollapsibleForm } from "src/components/forms/collapsible-form";
 
 import {ProductsView} from "../../products/view";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {validateAddress} from "../../../utils/validate-address";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
@@ -40,6 +40,7 @@ export function BreweryDetailCard(
     const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [brewery, setBrewery] = useState<BreweryDto>(new BreweryDto({
         name: '',
@@ -58,8 +59,6 @@ export function BreweryDetailCard(
     const [contactAddressErrors, setContactAddressErrors] = useState<Record<string, string>>({});
 
     const fetchBrewery = useCallback(async () => {
-        const clientApi = new AuthorizedClient();
-
         const data = await executeApiCall(
             () => clientApi.getBreweryDetailEndpoint(id!),
             t('breweries.loadDetailError')
@@ -70,7 +69,7 @@ export function BreweryDetailCard(
             setInitialBrewery(new BreweryDto(data));
         }
         onProgressbarVisibilityChange(false);
-    }, [id, onProgressbarVisibilityChange, executeApiCall, t]);
+    }, [clientApi, id, onProgressbarVisibilityChange, executeApiCall, t]);
 
     const saveBrewery = useCallback(async (): Promise<boolean> => {
         onProgressbarVisibilityChange(true);
@@ -99,7 +98,6 @@ export function BreweryDetailCard(
         setErrors({});
         setContactAddressErrors({});
 
-        const clientApi = new AuthorizedClient();
         const updateDto = new UpdateBreweryDto({
             name: brewery.name!,
             officialAddress: brewery.officialAddress!,
@@ -125,20 +123,18 @@ export function BreweryDetailCard(
         }
         showSnackbar(t('breweries.saveSuccess'), 'success');
         return true;
-    }, [brewery, id, initialBrewery, onConfirmed, onProgressbarVisibilityChange, showSnackbar, executeApiCall, t]);
+    }, [clientApi, brewery, id, initialBrewery, onConfirmed, onProgressbarVisibilityChange, showSnackbar, executeApiCall, t]);
 
     const deleteBrewery = useCallback(async () => {
-        const client = new AuthorizedClient();
-        
         const result = await executeApiCall(
-            () => client.deleteBreweryEndpoint(id!)
+            () => clientApi.deleteBreweryEndpoint(id!)
         );
 
         if (result) {
             triggerRefresh();
             showSnackbar('Brewery deleted', 'success');
         }
-    }, [id, showSnackbar, executeApiCall, triggerRefresh]);
+    }, [clientApi, id, showSnackbar, executeApiCall, triggerRefresh]);
 
     const resetBrewery = useCallback(() => {
         setBrewery(initialBrewery!);

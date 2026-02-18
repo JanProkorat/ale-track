@@ -6,7 +6,7 @@ import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/mater
 
 import { useApiCall } from "src/hooks/use-api-call";
 
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {validateAddress} from "../../../utils/validate-address";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
@@ -24,6 +24,7 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
     const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [brewery, setBrewery] = useState<BreweryDto>(new BreweryDto({
         name: '',
@@ -63,8 +64,6 @@ export function BreweryDetailView({ onClose }: Readonly<BreweryDetailViewProps>)
 
         setErrors({});
         setContactAddressErrors({});
-
-        const clientApi = new AuthorizedClient();
 
         const createDto = new CreateBreweryDto({
             name: brewery.name!,

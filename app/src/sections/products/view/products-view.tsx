@@ -17,7 +17,7 @@ import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {useTable} from "../../../providers/TableProvider";
 import {ProductsTableToolbar} from "../products-table-toolbar";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from "../../../components/table/table-no-data";
 import {ProductDetailView} from "../detail-view/product-detail-view";
@@ -32,6 +32,7 @@ type ProductsViewProps = {
 };
 
 export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
+    const client = useAuthorizedClient();
     const {t} = useTranslation();
     const { showSnackbar } = useSnackbar();
     const {executeApiCall, executeApiCallWithDefault} = useApiCall();
@@ -51,7 +52,6 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
     const fetchProducts = useCallback(async () => {
-        const client = new AuthorizedClient();
         const filters: Record<string, string> = {};
 
         filters.kind = `eq:${filterKind}`;
@@ -69,7 +69,6 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
 
     const handleDeleteProduct = async () => {
         if (productIdToDelete) {
-            const client = new AuthorizedClient();
             const result = await executeApiCall(() => client.deleteProductEndpoint(productIdToDelete));
             if (result) {
                 showSnackbar(t('product.deleteSuccess'), 'success');
@@ -78,6 +77,10 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
             }
         }
     }
+
+    const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
+    const handleRowClick = useCallback((id: string) => setSelectedProductId(id), []);
+    const handleDeleteClick = useCallback((id: string) => setProductIdToDelete(id), []);
 
     const closeDrawer = (shouldReloadData: boolean) => {
         setSelectedProductId(undefined);
@@ -169,9 +172,9 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                                         key={row.id}
                                         row={row}
                                         selected={table.selected.includes(row.id!)}
-                                        onSelectRow={() => table.onSelectRow(row.id!)}
-                                        onRowClick={() => setSelectedProductId(row.id!)}
-                                        onDeleteClick={() => setProductIdToDelete(row.id!)}
+                                        onSelectRow={handleSelectRow}
+                                        onRowClick={handleRowClick}
+                                        onDeleteClick={handleDeleteClick}
                                     />
                                 ))}
 

@@ -8,7 +8,7 @@ import {useApiCall} from "../../../hooks/use-api-call";
 import {
     UpdateUserDto
 } from "../../../api/Client";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
 
@@ -35,6 +35,7 @@ export function UserDetailView(
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
     const { executeApiCall } = useApiCall();
+    const client = useAuthorizedClient();
 
     const [initialUser, setInitialUser] = useState<UpdateUserDto | null>(null);
     const [userDetail, setUserDetail] = useState<UpdateUserDto | null>(null);
@@ -48,7 +49,6 @@ export function UserDetailView(
         }
         setShouldValidate(false);
 
-        const client = new AuthorizedClient();
         let hasError = false;
         await executeApiCall(
             () => client.updateUserEndpoint(userId, userToUpdate),
@@ -63,7 +63,7 @@ export function UserDetailView(
         showSnackbar(t('users.saveSuccess'), 'success');
         setInitialUser(userToUpdate);
         return true;
-    }, [executeApiCall, showSnackbar, t]);
+    }, [client, executeApiCall, showSnackbar, t]);
 
     const saveUser = useCallback(async () => {
         setShouldValidate(true);
@@ -91,13 +91,12 @@ export function UserDetailView(
         if (user === null || user === undefined) {
             return;
         }
-        const client = new AuthorizedClient();
         const success = await executeApiCall(() => client.deleteUserEndpoint(user.id!));
         
         if (success) {
             showSnackbar(t('users.userDeleted'), 'success');
         }
-    }, [user, executeApiCall, showSnackbar, t]);
+    }, [client, user, executeApiCall, showSnackbar, t]);
 
     const resetUser = useCallback(() => {
         setUserDetail(initialUser);

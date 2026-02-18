@@ -9,7 +9,7 @@ import { validateContacts, type ContactValidationErrors } from "src/utils/valida
 import {useApiCall} from "../../../hooks/use-api-call";
 import {RegionSelect} from "./components/region-select";
 import {ContactsForm} from "./components/contacts-form";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {AddressForm} from "../../../components/forms/address-form";
 import {DrawerLayout} from '../../../layouts/components/drawer-layout';
@@ -29,6 +29,7 @@ export function CreateClientView({ region, onClose }: Readonly<CreateClientViewP
     const {executeApiCall} = useApiCall();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [client, setClient] = useState<CreateClientDto>(new CreateClientDto({
         name: '',
@@ -99,8 +100,6 @@ export function CreateClientView({ region, onClose }: Readonly<CreateClientViewP
         setErrors({});
         setContactAddressErrors({});
         setContactValidationErrors({});
-
-        const clientApi = new AuthorizedClient();
 
         const result = await executeApiCall(
             () => clientApi.createClientEndpoint(client.toJSON()),

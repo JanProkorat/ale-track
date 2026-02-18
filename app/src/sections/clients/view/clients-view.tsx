@@ -23,7 +23,7 @@ import { useTable } from '../../../providers/TableProvider';
 import { DashboardContent } from '../../../layouts/dashboard';
 import { ClientsTableToolbar } from '../clients-table-toolbar';
 import { mapEnumValue } from '../../../utils/format-enum-value';
-import { AuthorizedClient } from '../../../api/AuthorizedClient';
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { useLocalStorage } from '../../../hooks/use-local-storage';
 import { UpdateClientView } from '../detail-view/update-client-view';
@@ -36,6 +36,7 @@ import type { ClientListItemDto } from '../../../api/Client';
 // ----------------------------------------------------------------------
 
 export function ClientsView() {
+  const client = useAuthorizedClient();
   const { executeApiCallWithDefault } = useApiCall();
   const { showSnackbar } = useSnackbar();
   const { t } = useTranslation();
@@ -64,7 +65,6 @@ export function ClientsView() {
   const table = useTable({ order, setOrder, orderBy, setOrderBy });
 
   const fetchClients = useCallback(async (region?: Region) => {
-    const client = new AuthorizedClient();
     const filters: Record<string, string> = {};
     if (filterName) filters.name = `startswith:${filterName}`;
     if (region !== undefined && region !== null) filters.region = `eq:${region}`;
@@ -138,7 +138,7 @@ export function ClientsView() {
     fetchWithFilters(selectedRegion);
   }, [selectedRegion, filterName, order, orderBy, suppressRegionEffect, fetchWithFilters]);
 
-  const handleRowClick = (id: string) => {
+  const handleRowClick = useCallback((id: string) => {
     if (hasDetailChanges) {
       setPendingClientId(id);
     } else {
@@ -146,7 +146,9 @@ export function ClientsView() {
       isInternalNavigationRef.current = true;
       navigate(`/clients/${id}`);
     }
-  };
+  }, [hasDetailChanges, navigate, setSelectedClientId]);
+
+  const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
 
   const handleAfterDeletingClient = async () => {
     await fetchClients().then((newData) => {
@@ -207,8 +209,8 @@ export function ClientsView() {
                     key={row.id}
                     row={row}
                     selected={table.selected.includes(row.id!)}
-                    onSelectRow={() => table.onSelectRow(row.id!)}
-                    onRowClick={() => handleRowClick(row.id!)}
+                    onSelectRow={handleSelectRow}
+                    onRowClick={handleRowClick}
                     isSelected={selectedClientId === row.id}
                   />
                 ))}

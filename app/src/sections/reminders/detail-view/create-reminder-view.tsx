@@ -7,7 +7,7 @@ import TextField from "@mui/material/TextField";
 
 import {NameInput} from "./components/name-input";
 import {validateReminder} from "./utils/validate-reminder";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DaysOfWeekPicker} from "./components/days-of-week-picker";
 import {ReminderDaysInput} from "./components/reminder-days-input";
@@ -33,6 +33,7 @@ function CreateReminderView({parentId, parentType, selectedType, onClose}: Reado
     const {showSnackbar} = useSnackbar();
     const {t} = useTranslation();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [reminder, setReminder] = useState<CreateReminderDto>(new CreateReminderDto({
         name: "",
@@ -63,7 +64,6 @@ function CreateReminderView({parentId, parentType, selectedType, onClose}: Reado
         }
 
         try {
-            const clientApi = new AuthorizedClient();
             switch (parentType) {
                 case "client":
                     await clientApi.createClientReminderEndpoint(parentId, reminder.toJSON());

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useCallback, createContext } from 'react';
+import React, { useState, useContext, useCallback, useMemo, createContext } from 'react';
 
 const EntityStatsContext = createContext<{
     refreshKey: number;
@@ -15,8 +15,10 @@ export const EntityStatsProvider = ({ children }: { children: React.ReactNode })
         setRefreshKey((prev) => prev + 1);
     }, []);
 
+    const value = useMemo(() => ({ refreshKey, triggerRefresh }), [refreshKey, triggerRefresh]);
+
     return (
-        <EntityStatsContext.Provider value={{ refreshKey, triggerRefresh }}>
+        <EntityStatsContext.Provider value={value}>
             {children}
         </EntityStatsContext.Provider>
     );

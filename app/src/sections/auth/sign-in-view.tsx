@@ -17,7 +17,7 @@ import {Iconify} from 'src/components/iconify';
 
 import {useAuth} from "../../context/AuthContext";
 import {useApiCall} from "../../hooks/use-api-call";
-import {AuthorizedClient} from "../../api/AuthorizedClient";
+import {useAuthorizedClient} from "../../api/use-authorized-client";
 
 // ----------------------------------------------------------------------
 
@@ -35,12 +35,12 @@ export function SignInView() {
     const { signIn } = useAuth();
     const {t} = useTranslation();
     const { executeApiCall } = useApiCall();
+    const client = useAuthorizedClient();
 
     const handleSignIn = useCallback(async () => {
         setIsLoading(true);
         setError(false);
 
-        const client = new AuthorizedClient();
         const loginData = {userName, password} as LoginUserDto;
 
         const response = await executeApiCall(() => client.loginEndpoint(loginData));

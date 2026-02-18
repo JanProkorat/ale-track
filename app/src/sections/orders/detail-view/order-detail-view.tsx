@@ -6,7 +6,7 @@ import { Box, Typography } from "@mui/material";
 import { useApiCall } from "src/hooks/use-api-call";
 
 import { UpdateOrderView } from "./update-order-view";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { DetailCardLayout } from "../../../layouts/dashboard/detail-card-layout";
 import {
@@ -38,6 +38,7 @@ export function OrderDetailView(
     const { showSnackbar } = useSnackbar();
     const { t } = useTranslation();
     const { executeApiCall } = useApiCall();
+    const client = useAuthorizedClient();
 
     const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
     const [order, setOrder] = useState<UpdateOrderDto | null>(null);
@@ -47,12 +48,11 @@ export function OrderDetailView(
     const [disabled, setDisabled] = useState<boolean>(false);
 
     const fetchProducts = useCallback(async (clientId: string) => {
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
         if (result) {
             setProducts(result);
         }
-    }, [executeApiCall]);
+    }, [client, executeApiCall]);
 
     useEffect(() => {
         if (order === null)
@@ -67,7 +67,6 @@ export function OrderDetailView(
         }
 
         onProgressbarVisibilityChange(true);
-        const client = new AuthorizedClient();
         const detail = await executeApiCall(() => client.getOrderDetailEndpoint(id!));
         if (detail) {
             const updateOrder = new UpdateOrderDto({
@@ -91,7 +90,7 @@ export function OrderDetailView(
                 setDisabled(false);
         }
         onProgressbarVisibilityChange(false);
-    }, [disabled, executeApiCall, id, onProgressbarVisibilityChange]);
+    }, [client, disabled, executeApiCall, id, onProgressbarVisibilityChange]);
 
     const updateOrder = useCallback(async (orderId: string, orderToUpdate: UpdateOrderDto) => {
         const today = new Date();
@@ -119,7 +118,6 @@ export function OrderDetailView(
         }
         setShouldValidate(false);
 
-        const client = new AuthorizedClient();
         let hasError = false;
         await executeApiCall(
             () => client.updateOrderEndpoint(orderId, orderToUpdate),
@@ -137,7 +135,7 @@ export function OrderDetailView(
         }
         setInitialOrder(orderToUpdate);
         return true;
-    }, [executeApiCall, initialOrder, onConfirmed, order?.requiredDeliveryDate, showSnackbar, t]);
+    }, [client, executeApiCall, initialOrder, onConfirmed, order?.requiredDeliveryDate, showSnackbar, t]);
 
     const saveOrder = useCallback(async () => {
         setShouldValidate(true);
@@ -145,12 +143,11 @@ export function OrderDetailView(
     }, [id, order, updateOrder]);
 
     const deleteOrder = useCallback(async () => {
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.deleteOrderEndpoint(id!));
         if (result) {
             showSnackbar(t('orders.deleteSuccess'), 'success');
         }
-    }, [executeApiCall, id, showSnackbar, t]);
+    }, [client, executeApiCall, id, showSnackbar, t]);
 
     const resetOrder = useCallback(() => {
         setOrder(initialOrder);

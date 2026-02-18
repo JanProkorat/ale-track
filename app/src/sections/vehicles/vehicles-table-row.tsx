@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import TableRow from '@mui/material/TableRow';
 import Checkbox from '@mui/material/Checkbox';
 import TableCell from '@mui/material/TableCell';
@@ -16,12 +18,12 @@ export type VehiclesProps = {
 type VehiclesTableRowProps = {
     row: VehiclesProps;
     selected: boolean;
-    onSelectRow: () => void;
-    onRowClick: () => void;
-    onDeleteClick: () => void;
+    onSelectRow: (id: string) => void;
+    onRowClick: (id: string) => void;
+    onDeleteClick: (id: string) => void;
 };
 
-export function VehiclesTableRow({ row, selected, onSelectRow, onRowClick, onDeleteClick }: Readonly<VehiclesTableRowProps>) {
+export const VehiclesTableRow = memo(function VehiclesTableRow({ row, selected, onSelectRow, onRowClick, onDeleteClick }: Readonly<VehiclesTableRowProps>) {
 
     return (
         <TableRow hover tabIndex={-1} role="checkbox" selected={selected}>
@@ -31,21 +33,19 @@ export function VehiclesTableRow({ row, selected, onSelectRow, onRowClick, onDel
                     checked={selected}
                     onChange={(event) => {
                         event.stopPropagation();
-                        onSelectRow();
+                        onSelectRow(row.id);
                     }}
                 />
             </TableCell>
 
-            <TableCell onClick={onRowClick}>{row.name}</TableCell>
-            <TableCell onClick={onRowClick}>{row.maxWeight} Kg</TableCell>
+            <TableCell onClick={() => onRowClick(row.id)}>{row.name}</TableCell>
+            <TableCell onClick={() => onRowClick(row.id)}>{row.maxWeight} Kg</TableCell>
 
             <TableCell align="right">
-                <IconButton onClick={() => {
-                    onDeleteClick()
-                }} color="error">
+                <IconButton onClick={() => onDeleteClick(row.id)} color="error">
                     <Iconify icon="solar:trash-bin-trash-bold" />
                 </IconButton>
             </TableCell>
         </TableRow>
     );
-}
+});

@@ -24,7 +24,7 @@ import {VehiclesTableRow} from '../vehicles-table-row';
 import {useApiCall} from "../../../hooks/use-api-call";
 import {useTable} from "../../../providers/TableProvider";
 import {VehiclesTableToolbar} from '../vehicles-table-toolbar';
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {TableNoData} from '../../../components/table/table-no-data';
 import {VehicleDetailView} from "../detail-view/vehicle-detail-view";
@@ -37,6 +37,7 @@ import type {VehiclesProps} from '../vehicles-table-row';
 // ----------------------------------------------------------------------
 
 export function VehiclesView() {
+    const client = useAuthorizedClient();
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
     const {executeApiCall, executeApiCallWithDefault} = useApiCall();
@@ -54,13 +55,12 @@ export function VehiclesView() {
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
     const fetchVehicles = useCallback(async () => {
-        const vehicle = new AuthorizedClient();
         const filters: Record<string, string> = {};
 
         if (filterName) filters.name = `startswith:${filterName}`;
         filters.sort = `${order}:${orderBy}`;
 
-        const response = await executeApiCallWithDefault(() => vehicle.fetchVehicles(filters), []);
+        const response = await executeApiCallWithDefault(() => client.fetchVehicles(filters), []);
         setVehicles(response.map(item => ({
             id: item.id,
             name: item.name,
@@ -74,8 +74,7 @@ export function VehiclesView() {
 
     const handleDeleteVehicle = async () => {
         if (vehicleIdToDelete) {
-            const vehicle = new AuthorizedClient();
-            const result = await executeApiCall(() => vehicle.deleteVehicleEndpoint(vehicleIdToDelete));
+            const result = await executeApiCall(() => client.deleteVehicleEndpoint(vehicleIdToDelete));
             if (result) {
                 triggerRefresh();
                 showSnackbar('Vehicle deleted', 'success');
@@ -84,6 +83,10 @@ export function VehiclesView() {
             }
         }
     }
+
+    const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
+    const handleRowClick = useCallback((id: string) => setSelectedVehicleId(id), []);
+    const handleDeleteClick = useCallback((id: string) => setVehicleIdToDelete(id), []);
 
     const closeDrawer = () => {
         setSelectedVehicleId(undefined);
@@ -156,9 +159,9 @@ export function VehiclesView() {
                                             key={row.id}
                                             row={row}
                                             selected={table.selected.includes(row.id)}
-                                            onSelectRow={() => table.onSelectRow(row.id)}
-                                            onRowClick={() => setSelectedVehicleId(row.id)}
-                                            onDeleteClick={() => setVehicleIdToDelete(row.id)}
+                                            onSelectRow={handleSelectRow}
+                                            onRowClick={handleRowClick}
+                                            onDeleteClick={handleDeleteClick}
                                         />
                                     ))}
 

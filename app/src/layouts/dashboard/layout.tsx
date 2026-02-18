@@ -13,7 +13,7 @@ import { useAuth } from "../../context/AuthContext";
 import { getNavData } from "../nav-config-dashboard";
 import { useApiCall } from "../../hooks/use-api-call";
 import { MenuButton } from '../components/menu-button';
-import { AuthorizedClient } from "../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../api/use-authorized-client";
 import { AccountPopover } from '../components/account-popover';
 import { useEntityStatsRefresh } from "../../providers/EntityStatsContext";
 import { MainSection, HeaderSection, LayoutSection, layoutClasses } from '../core';
@@ -75,11 +75,11 @@ export function DashboardLayout({
   const { refreshKey } = useEntityStatsRefresh();
   const { user } = useAuth();
   const { executeApiCall } = useApiCall();
+  const client = useAuthorizedClient();
 
   const [navCounts, setNavCounts] = useState<NumberOfRecordsInEachModuleDto | undefined>(undefined);
 
   const fetchInventoryCount = useCallback(async () => {
-    const client = new AuthorizedClient();
     const data = await executeApiCall(() => client.getNumberOfRecordsInEachModuleEndpoint());
 
     if (data) {

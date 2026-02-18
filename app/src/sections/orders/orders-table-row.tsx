@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import TableRow from "@mui/material/TableRow";
 import Checkbox from "@mui/material/Checkbox";
 import TableCell from "@mui/material/TableCell";
@@ -10,11 +12,11 @@ type OrdersTableRowProps = {
   row: OrderListItemDto;
   selected: boolean;
   isSelected: boolean;
-  onSelectRow: () => void;
-  onRowClick: () => void;
+  onSelectRow: (id: string) => void;
+  onRowClick: (id: string) => void;
 };
 
-export function OrdersTableRow({ row, selected, isSelected, onSelectRow, onRowClick }: Readonly<OrdersTableRowProps>) {
+export const OrdersTableRow = memo(function OrdersTableRow({ row, selected, isSelected, onSelectRow, onRowClick }: Readonly<OrdersTableRowProps>) {
 
   return (
     <TableRow hover tabIndex={-1} role="checkbox" selected={selected} sx={{ bgcolor: isSelected ? 'primary.lighter' : undefined }}>
@@ -24,12 +26,12 @@ export function OrdersTableRow({ row, selected, isSelected, onSelectRow, onRowCl
           checked={selected}
           onChange={(event) => {
             event.stopPropagation();
-            onSelectRow();
+            onSelectRow(row.id!);
           }}
         />
       </TableCell>
-      <TableCell onClick={onRowClick} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.clientName}</TableCell>
-      <TableCell onClick={onRowClick}>{row.requiredDeliveryDate !== null && row.requiredDeliveryDate !== undefined ? formatDate(row.requiredDeliveryDate) : ""}</TableCell>
+      <TableCell onClick={() => onRowClick(row.id!)} sx={{ whiteSpace: 'nowrap', minWidth: 'fit-content' }}>{row.clientName}</TableCell>
+      <TableCell onClick={() => onRowClick(row.id!)}>{row.requiredDeliveryDate !== null && row.requiredDeliveryDate !== undefined ? formatDate(row.requiredDeliveryDate) : ""}</TableCell>
     </TableRow>
   );
-}
+});

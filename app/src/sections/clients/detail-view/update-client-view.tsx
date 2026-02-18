@@ -9,7 +9,7 @@ import { NotesView } from "../../notes/view/notes-view";
 import { useApiCall } from "../../../hooks/use-api-call";
 import { RegionSelect } from "./components/region-select";
 import { ContactsForm } from "./components/contacts-form";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "src/api/use-authorized-client";
 import { validateAddress } from "../../../utils/validate-address";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { AddressForm } from "../../../components/forms/address-form";
@@ -42,6 +42,7 @@ export function UpdateClientView(
     const { executeApiCall } = useApiCall();
     const { t } = useTranslation();
     const { triggerRefresh } = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(true);
     const [client, setClient] = useState<UpdateClientDto | null>(null);
@@ -52,7 +53,6 @@ export function UpdateClientView(
 
     const fetchClient = useCallback(async () => {
         setInitialLoading(true);
-        const clientApi = new AuthorizedClient();
 
         const data = await executeApiCall(
             () => clientApi.getClientDetailEndpoint(id),
@@ -112,8 +112,6 @@ export function UpdateClientView(
         setContactAddressErrors({});
         setContactValidationErrors({});
 
-        const clientApi = new AuthorizedClient();
-
         const updateDto = new UpdateClientDto({
             name: client!.name,
             officialAddress: client!.officialAddress!,
@@ -146,8 +144,6 @@ export function UpdateClientView(
     }
 
     const deleteClient = useCallback(async () => {
-        const clientApi = new AuthorizedClient();
-
         const result = await executeApiCall(
             () => clientApi.deleteClientEndpoint(id)
         );

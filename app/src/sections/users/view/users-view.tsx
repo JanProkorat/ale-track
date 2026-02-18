@@ -12,7 +12,7 @@ import {useApiCall} from "../../../hooks/use-api-call";
 import {Scrollbar} from "../../../components/scrollbar";
 import {UsersTableToolbar} from "../users-table-toolbar";
 import {useTable} from "../../../providers/TableProvider";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {UserDetailView} from "../detail-view/user-detail-view";
 import {CreateUserView} from "../detail-view/create-user-view";
 import {TableNoData} from "../../../components/table/table-no-data";
@@ -23,6 +23,7 @@ import {SortableTableHead} from "../../../components/table/sortable-table-head";
 import type { UserListItemDto} from "../../../api/Client";
 
 export function UsersView() {
+    const client = useAuthorizedClient();
     const {t} = useTranslation();
     const { executeApiCallWithDefault } = useApiCall();
 
@@ -42,7 +43,6 @@ export function UsersView() {
     const table = useTable({order, setOrder, orderBy, setOrderBy});
 
     const fetchUsers = useCallback(async () => {
-        const client = new AuthorizedClient();
         const filters: Record<string, string> = {};
 
         if (filterUserName !== null) {
@@ -71,12 +71,17 @@ export function UsersView() {
         }
     }, [fetchUsers, filterUserName, initialLoading, order, orderBy]);
 
-    const handleRowClick = (user: UserListItemDto) => {
-        if (selectedUser?.id === user.id)
-            return;
+    const handleRowClick = useCallback((id: string) => {
+        const user = users.find(u => u.id === id);
+        if (!user || selectedUser?.id === id) return;
+        if (hasDetailChanges) {
+            setPendingUser(user);
+        } else {
+            setSelectedUser(user);
+        }
+    }, [users, selectedUser?.id, hasDetailChanges]);
 
-        updateSelectedUser(user)
-    };
+    const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
 
     const updateSelectedUser = (user: UserListItemDto) => {
         if (hasDetailChanges) {
@@ -155,8 +160,8 @@ export function UsersView() {
                                         key={row.id}
                                         row={row}
                                         selected={table.selected.includes(row.id!)}
-                                        onSelectRow={() => table.onSelectRow(row.id!)}
-                                        onRowClick={() => handleRowClick(row)}
+                                        onSelectRow={handleSelectRow}
+                                        onRowClick={handleRowClick}
                                         isSelected={selectedUser?.id === row.id}
                                     />
                                 ))}

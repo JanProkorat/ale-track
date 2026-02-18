@@ -1,11 +1,6 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Box from '@mui/material/Box';
-import MenuItem from '@mui/material/MenuItem';
-import Checkbox from '@mui/material/Checkbox';
-import ListItemText from '@mui/material/ListItemText';
-import { Chip, Select, InputLabel, FormControl } from '@mui/material';
+import { MultiSelect } from 'src/components/forms/multi-select';
 
 import type { VehicleDto } from '../../../api/Client';
 
@@ -20,33 +15,24 @@ type ShipmentVehicleSelectProps = {
 export function ShipmentVehicleSelect({vehicles, selectedVehicleId, shouldValidate, onSelect, disabled}: Readonly<ShipmentVehicleSelectProps>) {
   const { t } = useTranslation();
 
+  const handleSelect = (ids: string[]) => {
+    const id = ids[0];
+    const vehicle = id ? vehicles.find((v) => v.id === id) : undefined;
+    onSelect(vehicle?.id, vehicle?.maxWeight);
+  };
+
   return (
-    <FormControl fullWidth sx={{ mt: 1 }} error={shouldValidate && !selectedVehicleId}>
-      <InputLabel id="shipment-velicle-select-label">{t('outgoingShipments.vehicle')}</InputLabel>
-      <Select
-        disabled={disabled}
-        labelId="shipment-velicle-select-id"
-        value={selectedVehicleId ?? ''}
-        renderValue={() => selectedVehicleId !== undefined &&
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            <Chip key={selectedVehicleId} label={vehicles.find(vehicle => vehicle.id === selectedVehicleId)?.name ?? ""} size="small"/>
-          </Box>}
-      >
-        {vehicles.map((vehicle) => (
-          <MenuItem
-            key={vehicle.id}
-            value={vehicle.id}
-            onClick={() => {
-              onSelect(
-                vehicle.id === selectedVehicleId ? undefined : vehicle.id,
-                vehicle.id === selectedVehicleId ? undefined : vehicle.maxWeight
-              );
-            }}>
-            <Checkbox checked={selectedVehicleId === vehicle.id} />
-            <ListItemText primary={vehicle.name} />
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  )
+    <MultiSelect
+      label={t('outgoingShipments.vehicle')}
+      labelId="shipment-vehicle-select-label"
+      items={vehicles}
+      selectedIds={selectedVehicleId ? [selectedVehicleId] : []}
+      getId={(v) => v.id!}
+      getLabel={(v) => v.name!}
+      onSelect={handleSelect}
+      shouldValidate={shouldValidate}
+      disabled={disabled}
+      multiple={false}
+    />
+  );
 }

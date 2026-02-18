@@ -11,21 +11,21 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import {Iconify} from "../../../components/iconify";
 import {useApiCall} from "../../../hooks/use-api-call";
+import {useAuthorizedClient} from "../../../api/use-authorized-client";
 import {InventoryItemView} from "./inventory-item-view";
 import {DashboardContent} from "../../../layouts/dashboard";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
 
 import type {InventorySectionDto} from "../../../api/Client";
 
 export function InventoryView() {
     const {t} = useTranslation();
     const { executeApiCallWithDefault } = useApiCall();
+    const client = useAuthorizedClient();
 
     const [inventorySections, setInventorySections] = useState<InventorySectionDto[]>([])
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
     const fetchInventoryItems = useCallback(async () => {
-        const client = new AuthorizedClient();
         const data = await executeApiCallWithDefault(() => client.fetchInventoryItems({}), []);
         const sortedData = [...data].sort((a, b) => a.name!.localeCompare(b.name!));
         setInventorySections(sortedData);

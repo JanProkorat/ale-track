@@ -5,7 +5,7 @@ import Box from "@mui/material/Box";
 import {InputLabel, FormControl, OutlinedInput, FormHelperText} from '@mui/material';
 
 import {useApiCall} from "../../../hooks/use-api-call";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {ColorPicker} from "../../../components/color/color-picker";
 import {DriverAvailabilityEditor} from "./driver-availability-editor";
@@ -27,6 +27,7 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
     const {showSnackbar} = useSnackbar();
     const {triggerRefresh} = useEntityStatsRefresh();
     const {executeApiCall} = useApiCall();
+    const clientApi = useAuthorizedClient();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -40,7 +41,6 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
 
     const fetchDriver = useCallback(async () => {
         setIsLoading(true);
-        const clientApi = new AuthorizedClient();
         const data = await executeApiCall(() => clientApi.getDriverDetailEndpoint(id!));
         if (data) {
             setDriver(data);
@@ -87,7 +87,6 @@ export const DriverDetailView: React.FC<DriverDetailViewProps> = (
 
         setErrors({});
 
-        const clientApi = new AuthorizedClient();
         let result;
 
         if (id === null) {

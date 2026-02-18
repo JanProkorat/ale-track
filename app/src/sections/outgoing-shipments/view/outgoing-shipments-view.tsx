@@ -16,7 +16,7 @@ import { PendingChangesConfirmationDialog } from 'src/components/dialogs/pending
 import { Iconify } from '../../../components/iconify';
 import { useApiCall } from '../../../hooks/use-api-call';
 import { DashboardContent } from '../../../layouts/dashboard';
-import { AuthorizedClient } from '../../../api/AuthorizedClient';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { SectionHeader } from '../../../components/label/section-header';
 import { OutgoingShipmentSelect } from '../components/outgoing-shipment-select';
@@ -36,6 +36,7 @@ export function OutgoingShipmentsView() {
   const { t } = useTranslation();
   const { showSnackbar } = useSnackbar();
   const { executeApiCall, executeApiCallWithDefault } = useApiCall();
+  const client = useAuthorizedClient();
 
   const [initialLoading, setInitialLoading] = useState<boolean>(false);
   const [outgoingShipments, setOutgoingShipments] = useState<OutgoingShipmentListItemDto[]>([]);
@@ -68,14 +69,11 @@ export function OutgoingShipmentsView() {
   }, [blocker.state]);
 
   const fetchOutgoingShipments = useCallback(async () => {
-    const client = new AuthorizedClient();
-
     return await executeApiCallWithDefault(() => client.fetchOutgoingShipments({}), []);
-  }, [executeApiCallWithDefault]);
+  }, [client, executeApiCallWithDefault]);
 
   const fetchShipment = useCallback(
     async (shipmentId: string) => {
-      const client = new AuthorizedClient();
       const data = await executeApiCall(() => client.getOutgoingShipmentDetailEndpoint(shipmentId));
 
       if (data) {
@@ -98,7 +96,7 @@ export function OutgoingShipmentsView() {
         setCurrentInitialShipment(updateRequest);
       }
     },
-    [executeApiCall]
+    [client, executeApiCall]
   );
 
   useEffect(() => {
@@ -131,7 +129,6 @@ export function OutgoingShipmentsView() {
 
   const fetchOrders = useCallback(
     async (shipmentId: string) => {
-      const client = new AuthorizedClient();
       const fetchedOrders = await executeApiCall(() =>
         client.fetOrdersForOutgoingShipments(shipmentId, {})
       );
@@ -140,7 +137,7 @@ export function OutgoingShipmentsView() {
         setOrders(fetchedOrders);
       }
     },
-    [executeApiCall]
+    [client, executeApiCall]
   );
 
   useEffect(() => {
@@ -151,7 +148,6 @@ export function OutgoingShipmentsView() {
   }, [selectedShipmentId, fetchShipment, fetchOrders]);
 
   const fetchMultiselectData = useCallback(async () => {
-    const client = new AuthorizedClient();
     const [driversData, vehiclesData] = await Promise.all([
       executeApiCallWithDefault(() => client.fetchDrivers({}), []),
       executeApiCallWithDefault(() => client.fetchVehicles({}), []),
@@ -159,7 +155,7 @@ export function OutgoingShipmentsView() {
 
     setDrivers(driversData);
     setVehicles(vehiclesData);
-  }, [executeApiCallWithDefault]);
+  }, [client, executeApiCallWithDefault]);
 
   useEffect(() => {
     void fetchMultiselectData();
@@ -225,8 +221,6 @@ export function OutgoingShipmentsView() {
 
     currentShipment.deliveryDate = deliveryDate;
 
-    const client = new AuthorizedClient();
-
     // For endpoints that return void (204), we need to check if the call threw an error
     // executeApiCall returns null both for errors and for successful void responses
     // We use a flag to track if an error occurred
@@ -279,7 +273,6 @@ export function OutgoingShipmentsView() {
   };
 
   const deleteShipment = async () => {
-    const client = new AuthorizedClient();
     const success = await executeApiCall(() =>
       client.deleteOutgoingShipmentEndpoint(selectedShipmentId!)
     );

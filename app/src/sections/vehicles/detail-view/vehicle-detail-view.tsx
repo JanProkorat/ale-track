@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Box, InputLabel, FormControl, OutlinedInput, FormHelperText, InputAdornment } from "@mui/material";
 
 import { useApiCall } from "../../../hooks/use-api-call";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "src/api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { DrawerLayout } from '../../../layouts/components/drawer-layout';
 import { useEntityStatsRefresh } from "../../../providers/EntityStatsContext";
@@ -28,6 +28,7 @@ export function VehicleDetailView(
     const { t } = useTranslation();
     const { triggerRefresh } = useEntityStatsRefresh();
     const { executeApiCall } = useApiCall();
+    const clientApi = useAuthorizedClient();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [vehicle, setVehicle] = useState<VehicleDto>(new VehicleDto({
@@ -38,13 +39,12 @@ export function VehicleDetailView(
 
     const fetchVehicle = useCallback(async () => {
         setIsLoading(true);
-        const clientApi = new AuthorizedClient();
         const data = await executeApiCall(() => clientApi.getVehicleDetailEndpoint(id!));
         if (data) {
             setVehicle(data);
         }
         setIsLoading(false);
-    }, [executeApiCall, id]);
+    }, [clientApi, executeApiCall, id]);
 
     useEffect(() => {
         if (id !== null)
@@ -66,7 +66,6 @@ export function VehicleDetailView(
 
         setErrors({});
 
-        const clientApi = new AuthorizedClient();
         let result;
 
         if (id === null) {

@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import TableRow from '@mui/material/TableRow';
 import Checkbox from '@mui/material/Checkbox';
 import TableCell from '@mui/material/TableCell';
@@ -11,11 +13,11 @@ type ClientsTableRowProps = {
     row: ClientListItemDto;
     selected: boolean;
     isSelected: boolean;
-    onSelectRow: () => void;
-    onRowClick: () => void;
+    onSelectRow: (id: string) => void;
+    onRowClick: (id: string) => void;
 };
 
-export function ClientsTableRow({row, selected, isSelected, onSelectRow, onRowClick}: Readonly<ClientsTableRowProps>) {
+export const ClientsTableRow = memo(function ClientsTableRow({row, selected, isSelected, onSelectRow, onRowClick}: Readonly<ClientsTableRowProps>) {
 
     return (
         <TableRow hover tabIndex={-1} role="checkbox" selected={selected} sx={{bgcolor: isSelected ? 'primary.lighter' : undefined}}>
@@ -25,12 +27,12 @@ export function ClientsTableRow({row, selected, isSelected, onSelectRow, onRowCl
                     checked={selected}
                     onChange={(event) => {
                         event.stopPropagation();
-                        onSelectRow();
+                        onSelectRow(row.id!);
                     }}
                 />
             </TableCell>
 
-            <TableCell onClick={onRowClick}>{row.name}</TableCell>
+            <TableCell onClick={() => onRowClick(row.id!)}>{row.name}</TableCell>
         </TableRow>
     );
-}
+});

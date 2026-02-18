@@ -9,11 +9,11 @@ import {linearProgressClasses} from "@mui/material/LinearProgress";
 import {Box, Tab, Tabs, Button, Typography, LinearProgress} from "@mui/material";
 
 import { useApiCall } from "src/hooks/use-api-call";
+import { useAuthorizedClient } from "src/api/use-authorized-client";
 
 import {BreweryDetailView} from "../detail-view";
 import {Iconify} from "../../../components/iconify";
 import {DashboardContent} from "../../../layouts/dashboard";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
 import {BreweryDetailCard} from "../detail-view/brewery-detail-card";
 
 import type {BreweryListItemDto} from "../../../api/Client";
@@ -23,6 +23,7 @@ import type {BreweryListItemDto} from "../../../api/Client";
 export function BreweriesView() {
     const {executeApiCallWithDefault} = useApiCall();
     const {t} = useTranslation();
+    const client = useAuthorizedClient();
 
     const { breweryId } = useParams<{ breweryId?: string }>();
     const navigate = useNavigate();
@@ -35,7 +36,6 @@ export function BreweriesView() {
     const [pendingBreweryId, setPendingBreweryId] = useState<string | null>(null);
 
     const fetchBreweries = useCallback(async () => {
-        const client = new AuthorizedClient();
         return await executeApiCallWithDefault(
             () => client.fetchBreweries({}),
             [],

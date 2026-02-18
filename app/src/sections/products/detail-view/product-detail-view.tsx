@@ -6,7 +6,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 import {Box, InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
 
 import {useApiCall} from "../../../hooks/use-api-call";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {useCurrency} from "../../../providers/currency-provider";
 import {ProductTypeSelect} from "./components/product-type-select";
@@ -38,6 +38,7 @@ export function ProductDetailView(
     const {t} = useTranslation();
     const {selectedCurrency, formatPriceValue, formatPriceToDefault} = useCurrency();
     const {executeApiCall} = useApiCall();
+    const clientApi = useAuthorizedClient();
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [product, setProduct] = useState<ProductDto>(new ProductDto());
@@ -47,7 +48,6 @@ export function ProductDetailView(
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
-        const clientApi = new AuthorizedClient();
 
         if (id !== null && id !== undefined) {
             const data = await executeApiCall(() => clientApi.getProductDetailEndpoint(id));
@@ -88,7 +88,6 @@ export function ProductDetailView(
 
         setErrors({});
 
-        const clientApi = new AuthorizedClient();
         let result;
 
         if (id === null) {

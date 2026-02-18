@@ -15,7 +15,7 @@ import LinearProgress, { linearProgressClasses } from '@mui/material/LinearProgr
 import { useRouter } from '../../../routes/hooks';
 import { formatDate } from '../../../locales/formatDate';
 import { Scrollbar } from '../../../components/scrollbar';
-import { AuthorizedClient } from '../../../api/AuthorizedClient';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { SectionHeader } from '../../../components/label/section-header';
 
@@ -25,13 +25,13 @@ export function OrderItemsRemindersView() {
   const { t } = useTranslation();
   const { showSnackbar } = useSnackbar();
   const router = useRouter();
+  const client = useAuthorizedClient();
 
   const [loading, setLoading] = useState<boolean>(true);
   const [clientOrderReminder, setClientOrderReminder] = useState<ClientOrderReminderDto[]>([]);
 
   const fetchReminders = useCallback(async () => {
     try {
-      const client = new AuthorizedClient();
       return await client.fetchOrderItemsRemindersOverview();
     } catch (error) {
       showSnackbar(t('clientOrders.fetchError'), 'error');

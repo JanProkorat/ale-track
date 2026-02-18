@@ -10,7 +10,7 @@ import { ClientOrderShipmentDto, CreateOutgoingShipmentDto, OutgoingShipmentStop
 import { useApiCall } from '../../../hooks/use-api-call';
 import { OrdersSelect } from '../components/orders-select';
 import { WeightInfoBox } from '../components/weight-info-box';
-import { AuthorizedClient } from '../../../api/AuthorizedClient';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
 import { useSnackbar } from '../../../providers/SnackbarProvider';
 import { ShipmentNameInput } from '../components/shipment-name-input';
 import { DrawerLayout } from '../../../layouts/components/drawer-layout';
@@ -37,6 +37,7 @@ export function CreateOutgoingShipmentView({
   const { t } = useTranslation();
   const { showSnackbar } = useSnackbar();
   const { executeApiCall, executeApiCallWithDefault } = useApiCall();
+  const client = useAuthorizedClient();
 
   const [orders, setOrders] = useState<OutgoingShipmentOrderDto[]>([]);
   const [shouldValidate, setShouldValidate] = useState<boolean>(false);
@@ -54,13 +55,12 @@ export function CreateOutgoingShipmentView({
   );
 
   const fetchOrders = useCallback(async () => {
-    const client = new AuthorizedClient();
     const fetchedOrders = await executeApiCallWithDefault(
       () => client.fetOrdersForOutgoingShipments(null, {}),
       []
     );
     setOrders(fetchedOrders);
-  }, [executeApiCallWithDefault]);
+  }, [client, executeApiCallWithDefault]);
 
   useEffect(() => {
     void fetchOrders();
@@ -80,7 +80,6 @@ export function CreateOutgoingShipmentView({
       ...shipment,
     });
 
-    const client = new AuthorizedClient();
     const newShipmentId = await executeApiCall(() =>
       client.createOutgoingShipmentEndpoint(cleanedDelivery)
     );

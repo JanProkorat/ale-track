@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import {jwtDecode} from 'jwt-decode';
-import { useState, useEffect, useContext, createContext } from 'react';
+import { useState, useEffect, useContext, useCallback, useMemo, createContext } from 'react';
 
 import type {UserRoleType} from "../api/Client";
 
@@ -31,78 +31,70 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const authTokenLocalStorageKey = 'authToken';
+
+function decodeAndMapToken(token: string): User | null {
+    try {
+        const decodedToken = jwtDecode<any>(token);
+        const tokenUser: User = {
+            name: '',
+            exp: decodedToken.exp ?? 0,
+            role: decodedToken[claimMappingRoleKey] as UserRoleType
+        };
+        Object.entries(decodedToken).forEach(([key, value]) => {
+            if (key in claimMappings) {
+                const mappedKey = claimMappings[key as keyof typeof claimMappings];
+                tokenUser[mappedKey] = mappedKey === 'role' ? value as UserRoleType : value;
+            } else {
+                tokenUser[key] = value;
+            }
+        });
+        return tokenUser;
+    } catch {
+        return null;
+    }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isInitialized, setInitialized] = useState(false);
 
-    const authTokenLocalStorageKey = 'authToken';
-
     useEffect(() => {
         const token = localStorage.getItem(authTokenLocalStorageKey);
         if (token) {
-            try {
-                const decodedToken = jwtDecode<any>(token);
-                const tokenUser: User = {
-                    name: '',
-                    exp: decodedToken.exp ?? 0,
-                    role: decodedToken[claimMappingRoleKey] as UserRoleType
-                };
-
-                Object.entries(decodedToken).forEach(([key, value]) => {
-                    if (key in claimMappings) {
-                        const mappedKey = claimMappings[key as keyof typeof claimMappings];
-                        tokenUser[mappedKey] = mappedKey === 'role' ? value as UserRoleType : value;
-                    } else {
-                        tokenUser[key] = value;
-                    }
-                });
-                const isExpired = tokenUser.exp * 1000 < Date.now();
-                if (!isExpired) {
-                    setUser(tokenUser);
-                } else {
-                    localStorage.removeItem(authTokenLocalStorageKey);
-                }
-            } catch {
+            const tokenUser = decodeAndMapToken(token);
+            if (tokenUser && tokenUser.exp * 1000 >= Date.now()) {
+                setUser(tokenUser);
+            } else {
                 localStorage.removeItem(authTokenLocalStorageKey);
             }
         }
         setInitialized(true);
     }, []);
 
-    const signIn = (token: string) => {
+    const signIn = useCallback((token: string) => {
         localStorage.setItem(authTokenLocalStorageKey, token);
-        try {
-            const decodedToken = jwtDecode<any>(token);
-
-            const tokenUser: User = {
-                name: '',
-                exp: decodedToken.exp ?? 0,
-                role: decodedToken[claimMappingRoleKey] as UserRoleType
-            };
-
-            Object.entries(decodedToken).forEach(([key, value]) => {
-                if (key in claimMappings) {
-                    const mappedKey = claimMappings[key as keyof typeof claimMappings];
-                    tokenUser[mappedKey] = mappedKey === 'role' ? value as UserRoleType : value;
-                } else {
-                    tokenUser[key] = value;
-                }
-            });
-
+        const tokenUser = decodeAndMapToken(token);
+        if (tokenUser) {
             setUser(tokenUser);
-        } catch {
+        } else {
             localStorage.removeItem(authTokenLocalStorageKey);
             setUser(null);
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         localStorage.removeItem(authTokenLocalStorageKey);
         setUser(null);
-    };
+    }, []);
+
+    const value = useMemo(
+        () => ({ user, isInitialized, isAuthenticated: !!user, signIn, signOut }),
+        [user, isInitialized, signIn, signOut]
+    );
 
     return (
-        <AuthContext.Provider value={{ user, isInitialized, isAuthenticated: !!user, signIn, signOut }}>
+        <AuthContext.Provider value={value}>
         {children}
         </AuthContext.Provider>
     );

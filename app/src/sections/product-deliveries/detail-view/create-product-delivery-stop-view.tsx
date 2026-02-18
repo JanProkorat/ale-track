@@ -10,7 +10,7 @@ import {Iconify} from "../../../components/iconify";
 import {useApiCall} from "../../../hooks/use-api-call";
 import {BrewerySelect} from "../components/brewery-select";
 import {ProductsSelect} from "../components/products-select";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {DeliveryItemsTable} from "../components/delivery-items-table";
 
 import type {
@@ -45,18 +45,18 @@ export function CreateProductDeliveryStopView(
     }: Readonly<CreateProductDeliveryStopViewProps>) {
     const {t} = useTranslation();
     const {executeApiCall} = useApiCall();
+    const client = useAuthorizedClient();
 
     const [isExpanded, setIsExpanded] = useState<boolean>(true);
     const [breweryName, setBreweryName] = useState<string | undefined>(undefined);
     const [products, setProducts] = useState<BreweryProductListItemDto[]>([]);
 
     const fetchProducts = useCallback(async (breweryId: string) => {
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.fetchBreweryProducts(breweryId, {}));
         if (result) {
             setProducts(result);
         }
-    }, [executeApiCall]);
+    }, [executeApiCall, client]);
 
     useEffect(() => {
         if (productDeliveryStop.breweryId !== undefined && productDeliveryStop.breweryId !== "") {

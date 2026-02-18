@@ -3,7 +3,7 @@ import React, {useState, useEffect, useContext, useCallback, createContext} from
 import {ExchangeRateDto} from "../api/Client";
 import {useAuth} from "../context/AuthContext";
 import {useApiCall} from "../hooks/use-api-call";
-import {AuthorizedClient} from "../api/AuthorizedClient";
+import {useAuthorizedClient} from "../api/use-authorized-client";
 
 interface CurrencyContextType {
     selectedCurrency: ExchangeRateDto;
@@ -33,6 +33,7 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const [rates, setRates] = useState<ExchangeRateDto[]>([czechRate]);
     const { user } = useAuth();
     const { executeApiCallWithDefault } = useApiCall();
+    const client = useAuthorizedClient();
 
     const changeCurrency = useCallback((currencyCode: string) => {
         const found = rates.find(rate => rate.currencyCode === currencyCode);
@@ -70,7 +71,6 @@ export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const fetchRates = useCallback(async (userPresent: boolean) => {
         if (!userPresent) return;
 
-        const client = new AuthorizedClient();
         const res = await executeApiCallWithDefault(() => client.getExchangeRatesEndpoint(), []);
         res.push(czechRate);
         setRates(res);

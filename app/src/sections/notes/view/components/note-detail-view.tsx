@@ -6,7 +6,7 @@ import {FormControl} from "@mui/material";
 import TextField from "@mui/material/TextField";
 
 import {useApiCall} from "../../../../hooks/use-api-call";
-import {AuthorizedClient} from "../../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "../../../../api/use-authorized-client";
 import {useSnackbar} from "../../../../providers/SnackbarProvider";
 import {DrawerLayout} from "../../../../layouts/components/drawer-layout";
 import {useEntityStatsRefresh} from "../../../../providers/EntityStatsContext";
@@ -26,6 +26,7 @@ function NoteDetailView({noteToUpdate, parentId, parentType, onClose}: Readonly<
     const {t} = useTranslation();
     const {executeApiCall} = useApiCall();
     const {triggerRefresh} = useEntityStatsRefresh();
+    const clientApi = useAuthorizedClient();
 
     const [text, setText] = useState<string>(noteToUpdate?.text ?? '');
 
@@ -53,7 +54,6 @@ function NoteDetailView({noteToUpdate, parentId, parentType, onClose}: Readonly<
             return;
         }
 
-        const clientApi = new AuthorizedClient();
         let hasError = false;
 
         switch (parentType) {

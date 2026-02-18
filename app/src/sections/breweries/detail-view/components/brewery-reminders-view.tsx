@@ -16,7 +16,7 @@ import { Iconify } from "../../../../components/iconify";
 import { formatDate } from "../../../../locales/formatDate";
 import { Scrollbar } from "../../../../components/scrollbar";
 import { mapEnumValue } from "../../../../utils/format-enum-value";
-import { AuthorizedClient } from "../../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../../../api/use-authorized-client";
 import { sortDaysOfWeek } from "../../../../utils/sort-daysof-week";
 import { SectionHeader } from "../../../../components/label/section-header";
 import { CollapsibleForm } from "../../../../components/forms/collapsible-form";
@@ -37,6 +37,7 @@ type BreweryRemindersProps = {
 export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersProps>) {
     const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
+    const clientApi = useAuthorizedClient();
 
     const [reminders, setReminders] = useState<ReminderListItemDto[]>([]);
     const [filteredReminders, setFilteredReminders] = useState<ReminderListItemDto[]>([]);
@@ -46,8 +47,6 @@ export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersPro
 
     const fetchReminders = useCallback(async () => {
         try {
-            const clientApi = new AuthorizedClient();
-
             return await clientApi.fetchRemindersForBrewery(breweryId, {}).then((data) => data.map(r => new ReminderListItemDto({
                 ...r,
                 type: ReminderType[r.type! as unknown as keyof typeof ReminderType]
@@ -57,7 +56,7 @@ export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersPro
             showSnackbar(t('reminders.fetchError'), 'error');
             return [];
         }
-    }, [breweryId, showSnackbar, t]);
+    }, [breweryId, clientApi, showSnackbar, t]);
 
     useEffect(() => {
         void fetchReminders().then((data) => setReminders(data))
@@ -124,7 +123,6 @@ export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersPro
         setFilteredReminders(sortReminders(updatedReminders));
 
         try {
-            const clientApi = new AuthorizedClient();
             await clientApi.setBreweryReminderResolvedDateEndpoint(id, new SetBreweryReminderResolvedDateRequest({
                 resolvedDate: isResolved ? undefined : new Date
             }));
@@ -137,7 +135,6 @@ export function BreweryRemindersView({ breweryId }: Readonly<BreweryRemindersPro
 
     const deleteReminder = async (id: string) => {
         try {
-            const clientApi = new AuthorizedClient();
             await clientApi.deleteBreweryReminderEndpoint(id).then(() => {
                 showSnackbar(t('reminders.deleteSuccess'), 'success');
                 setReminders(prevReminders => {

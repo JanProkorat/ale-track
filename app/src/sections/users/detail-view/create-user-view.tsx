@@ -7,7 +7,7 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import { Checkbox, FormGroup, FormLabel, FormControl } from "@mui/material";
 
 import { useApiCall } from "../../../hooks/use-api-call";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "src/api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import {
     UserRoleType, CreateUserDto
@@ -23,6 +23,7 @@ export function CreateUserView({ onClose, onSave }: Readonly<CreateUserViewProps
     const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
     const { executeApiCall } = useApiCall();
+    const client = useAuthorizedClient();
 
     const [user, setUser] = useState<CreateUserDto>(new CreateUserDto({
         userName: "",
@@ -48,7 +49,6 @@ export function CreateUserView({ onClose, onSave }: Readonly<CreateUserViewProps
         }
         setShouldValidate(false);
 
-        const client = new AuthorizedClient();
         const newUserId = await executeApiCall(() => client.createUserEndpoint(user));
 
         if (newUserId) {

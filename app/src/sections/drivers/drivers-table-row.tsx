@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import Box from "@mui/material/Box";
 import TableRow from "@mui/material/TableRow";
 import Checkbox from "@mui/material/Checkbox";
@@ -19,12 +21,12 @@ export type DriversProps = {
 type DriversTableRowProps = {
     row: DriversProps;
     selected: boolean;
-    onSelectRow: () => void;
-    onRowClick: () => void;
-    onDeleteClick: () => void;
+    onSelectRow: (id: string) => void;
+    onRowClick: (id: string) => void;
+    onDeleteClick: (id: string) => void;
 };
 
-export function DriversTableRow(
+export const DriversTableRow = memo(function DriversTableRow(
     {
         row,
         selected,
@@ -41,14 +43,14 @@ export function DriversTableRow(
                     checked={selected}
                     onChange={(event) => {
                         event.stopPropagation();
-                        onSelectRow();
+                        onSelectRow(row.id);
                     }}
                 />
             </TableCell>
 
-            <TableCell onClick={onRowClick}>{row.firstName}</TableCell>
-            <TableCell onClick={onRowClick}>{row.lastName}</TableCell>
-            <TableCell align="center" onClick={onRowClick}>
+            <TableCell onClick={() => onRowClick(row.id)}>{row.firstName}</TableCell>
+            <TableCell onClick={() => onRowClick(row.id)}>{row.lastName}</TableCell>
+            <TableCell align="center" onClick={() => onRowClick(row.id)}>
                 <Box
                     sx={{
                         width: 16,
@@ -62,12 +64,10 @@ export function DriversTableRow(
             </TableCell>
 
             <TableCell align="center">
-                <IconButton onClick={() => {
-                    onDeleteClick()
-                }} color="error">
+                <IconButton onClick={() => onDeleteClick(row.id)} color="error">
                     <Iconify icon="solar:trash-bin-trash-bold"/>
                 </IconButton>
             </TableCell>
         </TableRow>
     );
-}
+});

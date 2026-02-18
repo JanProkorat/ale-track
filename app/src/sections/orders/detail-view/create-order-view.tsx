@@ -9,7 +9,7 @@ import { useApiCall } from "src/hooks/use-api-call";
 import { useSnackbar } from "src/providers/SnackbarProvider";
 
 import {ClientSelect} from "../components/client-select";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import {OrderItemsTable} from "../components/order-items-table";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
 import {OrderProductsSelect} from "../components/order-products-select";
@@ -26,6 +26,7 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
     const {executeApiCall} = useApiCall();
+    const client = useAuthorizedClient();
 
     const [order, setOrder] = useState<CreateOrderDto>(new CreateOrderDto({
         requiredDeliveryDate: undefined,
@@ -37,12 +38,11 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
     const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
     const fetchProducts = useCallback(async (clientId: string) => {
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
         if (result) {
             setProducts(result);
         }
-    }, [executeApiCall]);
+    }, [client, executeApiCall]);
 
     useEffect(() => {
       if (order.clientId === "")
@@ -72,7 +72,6 @@ export function CreateOrderView({width, onClose, onSave}: Readonly<CreateOrderVi
         }
         setShouldValidate(false);
 
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.createOrderEndpoint(order));
         if (result) {
             onSave(result);

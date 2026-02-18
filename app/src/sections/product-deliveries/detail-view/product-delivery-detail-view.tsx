@@ -8,7 +8,7 @@ import {linearProgressClasses} from "@mui/material/LinearProgress";
 
 import {useApiCall} from "../../../hooks/use-api-call";
 import {ProductDeliveryState} from "../../../api/Client";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {UpdateProductDeliveryView} from "./update-product-delivery-view";
 
 import type {DriverDto, BreweryDto, VehicleDto, UpdateProductDeliveryDto} from "../../../api/Client";
@@ -26,6 +26,7 @@ export function ProductDeliveryDetailView(
 ) {
     const {t} = useTranslation();
     const {executeApiCall} = useApiCall();
+    const client = useAuthorizedClient();
 
     const [detailLoading, setDetailLoading] = useState<boolean>(false);
     const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
@@ -36,8 +37,6 @@ export function ProductDeliveryDetailView(
 
     const fetchMultiselectData = useCallback(async () => {
         setDetailLoading(true);
-        const client = new AuthorizedClient();
-        
         const breweriesResult = await executeApiCall(() => client.fetchBreweries({}));
         if (breweriesResult) setBreweries(breweriesResult);
         
@@ -51,7 +50,7 @@ export function ProductDeliveryDetailView(
         if (statesResult) setProductDeliveryStates(statesResult.map(state => state as unknown as ProductDeliveryState));
         
         setDetailLoading(false);
-    }, [executeApiCall]);
+    }, [executeApiCall, client]);
 
     useEffect(() => {
         void fetchMultiselectData();

@@ -6,6 +6,7 @@ import TableBody from '@mui/material/TableBody';
 import { Table, Button, Dialog, DialogTitle, DialogActions, TableContainer } from '@mui/material';
 
 import { useApiCall } from 'src/hooks/use-api-call';
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
 
 import { TableNoData } from 'src/components/table/table-no-data';
 import { TableEmptyRows } from 'src/components/table/table-empty-rows';
@@ -16,7 +17,6 @@ import { emptyRows } from '../../../providers/utils';
 import { Scrollbar } from '../../../components/scrollbar';
 import { useTable } from '../../../providers/TableProvider';
 import { OrdersTableToolbar } from '../orders-table-toolbar';
-import { AuthorizedClient } from '../../../api/AuthorizedClient';
 import { OrderDetailView } from '../detail-view/order-detail-view';
 import { CreateOrderView } from '../detail-view/create-order-view';
 import { PlanningStateTab } from '../components/planning-state-tab';
@@ -30,6 +30,7 @@ export function OrdersView() {
   const { orderId } = useParams<{ orderId?: string }>();
   const navigate = useNavigate();
   const { executeApiCallWithDefault } = useApiCall();
+  const client = useAuthorizedClient();
 
   const [orders, setOrders] = useState<OrderListItemDto[]>([]);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
@@ -65,7 +66,6 @@ export function OrdersView() {
 
     filters.sort = `${order}:${orderBy}`;
 
-    const client = new AuthorizedClient();
     return await executeApiCallWithDefault(() => client.fetchOrders(filters), []);
   }, [executeApiCallWithDefault, filterClientName, filterPlanningState, order, orderBy]);
 
@@ -94,11 +94,17 @@ export function OrdersView() {
     });
   }, [fetchOrders, navigate, orderId]);
 
-  const handleRowClick = (id: string) => {
+  const handleRowClick = useCallback((id: string) => {
     if (selectedOrderId === id) return;
+    if (hasDetailChanges) {
+      setPendingOrderId(id);
+    } else {
+      setSelectedOrderId(id);
+      navigate(`/orders/${id}`);
+    }
+  }, [selectedOrderId, hasDetailChanges, navigate]);
 
-    updateSelectedId(id);
-  };
+  const handleSelectRow = useCallback((id: string) => table.onSelectRow(id), [table]);
 
   const updateSelectedId = (id: string) => {
     if (hasDetailChanges) {
@@ -185,8 +191,8 @@ export function OrdersView() {
                     key={row.id}
                     row={row}
                     selected={table.selected.includes(row.id!)}
-                    onSelectRow={() => table.onSelectRow(row.id!)}
-                    onRowClick={() => handleRowClick(row.id!)}
+                    onSelectRow={handleSelectRow}
+                    onRowClick={handleRowClick}
                     isSelected={selectedOrderId === row.id}
                   />
                 ))}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {useTranslation} from "react-i18next";
 
 import {Chip} from "@mui/material";
@@ -15,12 +15,12 @@ import type {BreweryProductListItemDto} from "../../api/Client";
 type ProductsTableRowProps = {
     row: BreweryProductListItemDto;
     selected: boolean;
-    onSelectRow: () => void;
-    onRowClick: () => void;
-    onDeleteClick: () => void;
+    onSelectRow: (id: string) => void;
+    onRowClick: (id: string) => void;
+    onDeleteClick: (id: string) => void;
 };
 
-export function ProductsTableRow(
+export const ProductsTableRow = memo(function ProductsTableRow(
     {
         row,
         selected,
@@ -59,13 +59,13 @@ export function ProductsTableRow(
                     checked={selected}
                     onChange={(event) => {
                         event.stopPropagation();
-                        onSelectRow();
+                        onSelectRow(row.id!);
                     }}
                 />
             </TableCell>
 
             <TableCell
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap',
                     minWidth: 'fit-content',
@@ -81,7 +81,7 @@ export function ProductsTableRow(
                 {row.name}
             </TableCell>
             <TableCell 
-                onClick={onRowClick} 
+                onClick={() => onRowClick(row.id!)} 
                 sx={{
                     whiteSpace: 'nowrap',
                     minWidth: 'fit-content',
@@ -92,7 +92,7 @@ export function ProductsTableRow(
                 {row.platoDegree != undefined ? row.platoDegree + "%" : ""}
             </TableCell>
             <TableCell 
-                onClick={onRowClick} 
+                onClick={() => onRowClick(row.id!)} 
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -103,7 +103,7 @@ export function ProductsTableRow(
                 <Chip label={t('productKind.' + row.kind)}/>
             </TableCell>
             <TableCell 
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -114,7 +114,7 @@ export function ProductsTableRow(
                     {row.packageSize ? row.packageSize + " L" : ""}
             </TableCell>
             <TableCell 
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -125,7 +125,7 @@ export function ProductsTableRow(
                 {row.weight ? row.weight + " Kg" : ""}
             </TableCell>
             <TableCell 
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -136,7 +136,7 @@ export function ProductsTableRow(
                 {row.alcoholPercentage ? row.alcoholPercentage + "%" : ""}
             </TableCell>
             <TableCell 
-                onClick={onRowClick} 
+                onClick={() => onRowClick(row.id!)} 
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -147,7 +147,7 @@ export function ProductsTableRow(
                 {formatPrice(row.priceWithVat)}
             </TableCell>
             <TableCell 
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -158,7 +158,7 @@ export function ProductsTableRow(
                 {formatPrice(row.priceForUnitWithVat)}
             </TableCell>
             <TableCell 
-                onClick={onRowClick}
+                onClick={() => onRowClick(row.id!)}
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -169,7 +169,7 @@ export function ProductsTableRow(
                 {formatPrice(row.priceForUnitWithoutVat)}
             </TableCell>
             <TableCell 
-                onClick={onRowClick} 
+                onClick={() => onRowClick(row.id!)} 
                 sx={{
                     whiteSpace: 'nowrap', 
                     minWidth: 'fit-content',
@@ -192,10 +192,10 @@ export function ProductsTableRow(
                     boxShadow: '-2px 0 5px -2px rgba(0, 0, 0, 0.1)',
                 }}
             >
-                <IconButton onClick={onDeleteClick} color="error">
+                <IconButton onClick={() => onDeleteClick(row.id!)} color="error">
                     <Iconify icon="solar:trash-bin-trash-bold"/>
                 </IconButton>
             </TableCell>
         </TableRow>
     );
-}
+});

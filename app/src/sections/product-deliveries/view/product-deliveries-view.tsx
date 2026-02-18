@@ -11,7 +11,7 @@ import { DashboardContent } from "src/layouts/dashboard";
 
 import { Iconify } from "../../../components/iconify";
 import { useApiCall } from "../../../hooks/use-api-call";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { SectionHeader } from "../../../components/label/section-header";
 import { ProductDeliverySelect } from "../components/product-delivery-select";
@@ -31,6 +31,7 @@ export function ProductDeliveriesView() {
     const { t } = useTranslation();
     const { showSnackbar } = useSnackbar();
     const { executeApiCall, executeApiCallWithDefault } = useApiCall();
+    const client = useAuthorizedClient();
 
     const [initialLoading, setInitialLoading] = useState<boolean>(false);
     const [deliveries, setDeliveries] = useState<ProductDeliveryListItemDto[]>([]);
@@ -47,7 +48,6 @@ export function ProductDeliveriesView() {
     const hasDetailChanges = JSON.stringify(currentDelivery) !== JSON.stringify(currentInitialDelivery);
 
     const fetchProductDeliveries = useCallback(async () => {
-        const client = new AuthorizedClient();
         const filters: Record<string, string> = {};
 
         filters.sort = 'asc:deliveryDate';
@@ -56,7 +56,6 @@ export function ProductDeliveriesView() {
     }, [executeApiCallWithDefault]);
 
     const fetchDelivery = useCallback(async (deliveryId: string) => {
-        const client = new AuthorizedClient();
         const data = await executeApiCall(() => client.getProductDeliveryDetailEndpoint(deliveryId));
 
         if (data) {
@@ -152,7 +151,6 @@ export function ProductDeliveriesView() {
             return false;
         }
 
-        const client = new AuthorizedClient();
         let hasError = false;
         await executeApiCall(
             () => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery),
@@ -223,7 +221,6 @@ export function ProductDeliveriesView() {
     }
 
     const deleteDelivery = async () => {
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.deleteProductDeliveryEndpoint(selectedDeliveryId!));
         if (result) {
             showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');

@@ -1,5 +1,5 @@
 import { uuidv4 } from "minimal-shared";
-import React, { useRef, useState, useContext, useCallback, createContext } from 'react';
+import React, { useRef, useState, useContext, useCallback, useMemo, createContext } from 'react';
 
 import { Alert, Snackbar } from '@mui/material';
 
@@ -44,12 +44,14 @@ export const SnackbarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSnackbars(prev => [...prev, { id, message, severity }]);
     }, []);
 
-    const handleClose = (id: string) => {
+    const handleClose = useCallback((id: string) => {
         setSnackbars(prev => prev.filter(snackbar => snackbar.id !== id));
-    };
+    }, []);
+
+    const value = useMemo(() => ({ showSnackbar }), [showSnackbar]);
 
     return (
-        <SnackbarContext.Provider value={{ showSnackbar }}>
+        <SnackbarContext.Provider value={value}>
             {children}
             {snackbars.map((snackbar, index) => (
                 <Snackbar

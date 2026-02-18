@@ -11,7 +11,7 @@ import { NameInput } from "./components/name-input";
 import { useApiCall } from "../../../hooks/use-api-call";
 import { validateReminder } from "./utils/validate-reminder";
 import { mapEnumValue } from "../../../utils/format-enum-value";
-import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useAuthorizedClient } from "../../../api/use-authorized-client";
 import { useSnackbar } from "../../../providers/SnackbarProvider";
 import { DaysOfWeekPicker } from "./components/days-of-week-picker";
 import { ReminderDaysInput } from "./components/reminder-days-input";
@@ -37,6 +37,7 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
     const { showSnackbar } = useSnackbar();
     const { t } = useTranslation();
     const { executeApiCall } = useApiCall();
+    const clientApi = useAuthorizedClient();
 
     const [reminder, setReminder] = useState<UpdateReminderDto | undefined>(undefined);
 
@@ -44,7 +45,6 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
 
     const fetchReminder = useCallback(async (id: string): Promise<void> => {
         try {
-            const clientApi = new AuthorizedClient();
             const data = await clientApi.getReminderDetailEndpoint(id);
 
             const mappedType = mapEnumValue<ReminderType>(ReminderType, data.type);
@@ -62,7 +62,7 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
             console.error('Error fetching reminder:', error);
             showSnackbar(t('reminders.loadDetailError'), 'error');
         }
-    }, [showSnackbar, t])
+    }, [clientApi, showSnackbar, t])
 
     useEffect(() => {
         if (reminderId !== undefined)
@@ -79,7 +79,6 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
             return;
         }
 
-        const clientApi = new AuthorizedClient();
         let hasError = false;
 
         switch (parentType) {

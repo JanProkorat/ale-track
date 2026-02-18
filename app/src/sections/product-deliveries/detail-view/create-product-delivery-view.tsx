@@ -23,7 +23,7 @@ import {useApiCall} from "../../../hooks/use-api-call";
 import {SortableView} from "../components/sortable-view";
 import {VehicleSelect} from "../components/vehicle-select";
 import {DriversSelect} from "../components/drivers-select";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
+import {useAuthorizedClient} from "src/api/use-authorized-client";
 import {useSnackbar} from "../../../providers/SnackbarProvider";
 import {DeliveryDatePicker} from "../components/delivery-date-picker";
 import {DrawerLayout} from "../../../layouts/components/drawer-layout";
@@ -47,6 +47,7 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
     const {t} = useTranslation();
     const {showSnackbar} = useSnackbar();
     const {executeApiCall} = useApiCall();
+    const client = useAuthorizedClient();
 
     const [delivery, setDelivery] = useState<CreateProductsDeliveryDto>(new CreateProductsDeliveryDto({
         deliveryDate: dayjs().toDate(),
@@ -65,8 +66,6 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
     
     const fetchMultiselectData = useCallback(async () => {
-        const client = new AuthorizedClient();
-        
         const breweriesResult = await executeApiCall(() => client.fetchBreweries({}));
         if (breweriesResult) setBreweries(breweriesResult);
         
@@ -75,7 +74,7 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
         
         const vehiclesResult = await executeApiCall(() => client.fetchVehicles({}));
         if (vehiclesResult) setVehicles(vehiclesResult);
-    }, [executeApiCall]);
+    }, [executeApiCall, client]);
 
     useEffect(() => {
         void fetchMultiselectData();
@@ -118,7 +117,6 @@ export function CreateProductDeliveryView({width, onClose, onSave}: Readonly<Cre
             )
         });
 
-        const client = new AuthorizedClient();
         const result = await executeApiCall(() => client.createProductsDeliveryEndpoint(cleanedDelivery));
         if (result) {
             onSave(result);
