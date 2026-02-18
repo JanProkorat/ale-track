@@ -1,26 +1,26 @@
-import {useTranslation} from "react-i18next";
-import {varAlpha} from "minimal-shared/utils";
-import React, {useState, useEffect, useCallback} from "react";
+import { useTranslation } from "react-i18next";
+import { varAlpha } from "minimal-shared/utils";
+import React, { useState, useEffect, useCallback } from "react";
 
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
-import {FormControl, LinearProgress} from "@mui/material";
-import {linearProgressClasses} from "@mui/material/LinearProgress";
+import { FormControl, LinearProgress } from "@mui/material";
+import { linearProgressClasses } from "@mui/material/LinearProgress";
 
-import {NameInput} from "./components/name-input";
-import {useApiCall} from "../../../hooks/use-api-call";
-import {validateReminder} from "./utils/validate-reminder";
-import {mapEnumValue} from "../../../utils/format-enum-value";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {DaysOfWeekPicker} from "./components/days-of-week-picker";
-import {ReminderDaysInput} from "./components/reminder-days-input";
-import {DaysOfMonthPicker} from "./components/days-of-month-picker";
-import {ReminderTypeSelect} from "./components/reminder-type-select";
-import {ReminderDatePicker} from "./components/reminder-date-picker";
-import {DrawerLayout} from "../../../layouts/components/drawer-layout";
-import {SectionHeader} from "../../../components/label/section-header";
-import {ReminderRecurrenceTypeSelect} from "./components/reminder-recurrence-type-select";
+import { NameInput } from "./components/name-input";
+import { useApiCall } from "../../../hooks/use-api-call";
+import { validateReminder } from "./utils/validate-reminder";
+import { mapEnumValue } from "../../../utils/format-enum-value";
+import { AuthorizedClient } from "../../../api/AuthorizedClient";
+import { useSnackbar } from "../../../providers/SnackbarProvider";
+import { DaysOfWeekPicker } from "./components/days-of-week-picker";
+import { ReminderDaysInput } from "./components/reminder-days-input";
+import { DaysOfMonthPicker } from "./components/days-of-month-picker";
+import { ReminderTypeSelect } from "./components/reminder-type-select";
+import { ReminderDatePicker } from "./components/reminder-date-picker";
+import { DrawerLayout } from "../../../layouts/components/drawer-layout";
+import { SectionHeader } from "../../../components/label/section-header";
+import { ReminderRecurrenceTypeSelect } from "./components/reminder-recurrence-type-select";
 import {
     ReminderType,
     type DayOfWeek,
@@ -33,10 +33,10 @@ type UpdateReminderViewProps = {
     onClose: (shouldRefresh: boolean) => void
 };
 
-export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<UpdateReminderViewProps>) {
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
-    const {executeApiCall} = useApiCall();
+export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly<UpdateReminderViewProps>) {
+    const { showSnackbar } = useSnackbar();
+    const { t } = useTranslation();
+    const { executeApiCall } = useApiCall();
 
     const [reminder, setReminder] = useState<UpdateReminderDto | undefined>(undefined);
 
@@ -81,7 +81,7 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
 
         const clientApi = new AuthorizedClient();
         let hasError = false;
-        
+
         switch (parentType) {
             case "client":
                 await executeApiCall(
@@ -160,7 +160,6 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
     }
 
     const handleTypeSelect = (type: ReminderType) => {
-        console.log(1, type, reminder?.daysOfWeek, reminder?.daysOfMonth)
         setReminder(prev => new UpdateReminderDto({
             ...prev!,
             type,
@@ -189,16 +188,16 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
                             ml: 2,
                             mt: 5,
                             bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
-                            [`& .${linearProgressClasses.bar}`]: {bgcolor: 'text.primary'},
+                            [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
                         }}
                     />
                 </Box>
                 :
                 <>
-                    <Box display="flex" alignItems="center" gap={1} sx={{mt: 1}}>
-                        <NameInput name={reminder?.name ?? ''} setName={handleNameSet} errors={errors}/>
+                    <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
+                        <NameInput name={reminder?.name ?? ''} setName={handleNameSet} errors={errors} />
 
-                        <ReminderTypeSelect selectedType={reminder.type} errors={errors} onSelect={handleTypeSelect}/>
+                        <ReminderTypeSelect selectedType={reminder.type} errors={errors} onSelect={handleTypeSelect} />
                     </Box>
                     <FormControl fullWidth>
                         <TextField
@@ -209,25 +208,25 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
                             maxRows={10}
                             value={reminder.description ?? ''}
                             onChange={(e) =>
-                                setReminder(prev => new UpdateReminderDto({...prev!, description: e.target.value}))
+                                setReminder(prev => new UpdateReminderDto({ ...prev!, description: e.target.value }))
                             }
                             slotProps={{
                                 input: {
-                                    inputProps: {maxLength: 2000}
+                                    inputProps: { maxLength: 2000 }
                                 }
                             }}
                         />
                     </FormControl>
 
-                    <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2"/>
+                    <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2" />
 
                     {reminder.type === ReminderType.OneTimeEvent && (
-                        <Box display="flex" alignItems="center" gap={1} sx={{mt: 1}}>
+                        <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
                             <ReminderDatePicker
                                 selectedDate={reminder.occurrenceDate}
                                 label={t('reminders.occurrenceDate')}
                                 onDatePicked={handleOccurrenceDateSelect}
-                                sx={{minWidth: '50%'}}
+                                sx={{ minWidth: '50%' }}
                             />
 
                             <ReminderDaysInput
@@ -238,19 +237,19 @@ export function UpdateReminderView({reminderId, parentType, onClose}: Readonly<U
                         </Box>
                     )}
                     {reminder.type == ReminderType.Regular && (
-                        <Box display="flex" gap={1} sx={{mt: 1}}>
-                            <Box sx={{minWidth: "40%"}} gap={1} alignItems="center">
+                        <Box display="flex" gap={1} sx={{ mt: 1 }}>
+                            <Box sx={{ minWidth: "40%" }} gap={1} alignItems="center">
                                 <ReminderRecurrenceTypeSelect
                                     selectedType={reminder.recurrenceType ?? ReminderRecurrenceType.Weekly}
                                     errors={errors}
                                     onSelect={handleRecurrenceTypeSelect}
                                 />
-                                <Box sx={{mt: 1}} gap={1} alignItems="center">
+                                <Box sx={{ mt: 1 }} gap={1} alignItems="center">
                                     <ReminderDatePicker
                                         selectedDate={reminder.activeUntil}
                                         label={t('reminders.activeUntilDate')}
                                         onDatePicked={handleActiveUntilDateSelect}
-                                        sx={{minWidth: '100%'}}
+                                        sx={{ minWidth: '100%' }}
                                     />
                                 </Box>
                                 <ReminderDaysInput

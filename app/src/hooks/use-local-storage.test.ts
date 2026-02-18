@@ -1,7 +1,8 @@
-import { act, renderHook } from '@testing-library/react';
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
 import { useLocalStorage } from 'src/hooks/use-local-storage';
+
+import { act, renderHook } from 'src/test/test-utils';
 
 describe('useLocalStorage hook', () => {
   beforeEach(() => {
@@ -123,7 +124,7 @@ describe('useLocalStorage hook', () => {
     it('should return initial value when localStorage contains invalid JSON', () => {
       window.localStorage.setItem('test-key', 'invalid-json{{{');
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
       const { result } = renderHook(() => useLocalStorage('test-key', 'fallback'));
 
@@ -141,7 +142,7 @@ describe('useLocalStorage hook', () => {
 
       // Mock localStorage.setItem to throw an error
       const originalSetItem = window.localStorage.setItem;
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
       window.localStorage.setItem = vi.fn(() => {
         throw new Error('QuotaExceededError');
       });

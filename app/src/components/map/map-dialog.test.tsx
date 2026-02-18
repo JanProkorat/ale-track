@@ -1,7 +1,6 @@
-import { screen, fireEvent } from '@testing-library/react';
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
-import { renderWithProviders } from 'src/test/test-utils';
+import { screen, fireEvent, renderWithProviders } from 'src/test/test-utils';
 
 import { MapDialog } from './map-dialog';
 

@@ -1,7 +1,6 @@
 import { it, vi, expect, describe } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
 
-import { renderWithProviders } from 'src/test/test-utils';
+import { screen, fireEvent, renderWithProviders } from 'src/test/test-utils';
 
 import { MenuButton } from './menu-button';
 

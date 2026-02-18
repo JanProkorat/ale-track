@@ -1,6 +1,7 @@
 import { MemoryRouter } from 'react-router';
 import { it, expect, describe } from 'vitest';
-import { render } from '@testing-library/react';
+
+import { render } from 'src/test/test-utils';
 
 import { RouterLink } from './router-link';
 

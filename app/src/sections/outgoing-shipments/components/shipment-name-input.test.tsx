@@ -1,7 +1,6 @@
-import { fireEvent } from '@testing-library/react';
 import { it, vi, expect, describe, beforeEach } from 'vitest';
 
-import { screen, render } from 'src/test/test-utils';
+import { screen, render, fireEvent } from 'src/test/test-utils';
 
 import { ShipmentNameInput } from './shipment-name-input';
 

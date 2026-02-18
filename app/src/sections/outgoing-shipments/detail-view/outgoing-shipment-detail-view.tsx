@@ -6,7 +6,7 @@ import Box from '@mui/material/Box';
 
 import { mapEnumValue } from 'src/utils/format-enum-value';
 
-import { OutgoingShipmentState , ClientOrderShipmentDto, UpdateOutgoingShipmentDto, OutgoingShipmentStopAddressKind } from 'src/api/Client';
+import { OutgoingShipmentState, ClientOrderShipmentDto, UpdateOutgoingShipmentDto, OutgoingShipmentStopAddressKind } from 'src/api/Client';
 
 import { OrdersSelect } from '../components/orders-select';
 import { WeightInfoBox } from '../components/weight-info-box';
@@ -124,7 +124,6 @@ export function OutgoingShipmentDetailView({
 
   const handleOrdersSelect = (selectedOrders: [string, number][]) => {
     // Calculate total weight from all selected orders
-    console.log("Selected Orders:", selectedOrders);
     const totalWeight = selectedOrders.reduce((sum, [, weight]) => sum + weight, 0);
     setCurrentWeight(totalWeight);
 

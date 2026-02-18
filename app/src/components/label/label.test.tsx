@@ -1,9 +1,8 @@
-import { screen } from '@testing-library/react';
 import { it, vi, expect, describe } from 'vitest';
 
 import { createTheme } from '@mui/material/styles';
 
-import { renderWithProviders } from 'src/test/test-utils';
+import { screen, renderWithProviders } from 'src/test/test-utils';
 
 import { Label } from './label';
 
