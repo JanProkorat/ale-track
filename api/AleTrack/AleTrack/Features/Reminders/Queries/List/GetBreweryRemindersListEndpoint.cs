@@ -59,6 +59,6 @@ public sealed class GetBreweryRemindersListEndpoint(AleTrackDbContext dbContext)
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(brewery, cancellation: ct);
+        await Send.ResponseAsync(brewery, cancellation: ct);
     }
 }

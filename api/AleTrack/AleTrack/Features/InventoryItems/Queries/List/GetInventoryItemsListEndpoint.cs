@@ -66,6 +66,6 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.ResponseAsync(data, cancellation: ct);
     }
 }

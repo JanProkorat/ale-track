@@ -67,6 +67,6 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         dbContext.Clients.Add(client);
         await dbContext.SaveChangesAsync(ct);
         
-        await SendAsync(client.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(client.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

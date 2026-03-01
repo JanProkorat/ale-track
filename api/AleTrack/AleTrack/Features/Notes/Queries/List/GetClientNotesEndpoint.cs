@@ -52,6 +52,6 @@ public sealed class GetClientNotesEndpoint(AleTrackDbContext dbContext) : Endpoi
             })
             .ToListAsync(ct);
         
-        await SendAsync(notes, cancellation: ct);
+        await Send.ResponseAsync(notes, cancellation: ct);
     }
 }

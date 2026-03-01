@@ -63,6 +63,6 @@ public sealed class CreateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(ct);
         
-        await SendAsync(user.PublicId.ToString(), StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(user.PublicId.ToString(), StatusCodes.Status201Created, cancellation: ct);
     }
 }

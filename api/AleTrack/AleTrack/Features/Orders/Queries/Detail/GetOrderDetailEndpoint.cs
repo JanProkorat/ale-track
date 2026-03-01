@@ -76,6 +76,6 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
-        await SendAsync(order!, cancellation: ct);
+        await Send.ResponseAsync(order!, cancellation: ct);
     }
 }

@@ -73,6 +73,6 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
 
-        await SendOkAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

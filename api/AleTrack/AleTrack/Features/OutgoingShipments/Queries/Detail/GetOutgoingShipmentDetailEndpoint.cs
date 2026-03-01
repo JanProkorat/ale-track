@@ -95,6 +95,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
-        await SendAsync(outgoingShipment!, cancellation: ct);
+        await Send.ResponseAsync(outgoingShipment!, cancellation: ct);
     }
 }

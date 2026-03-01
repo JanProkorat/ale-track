@@ -42,6 +42,6 @@ public sealed class GetClientListEndpoint(AleTrackDbContext dbContext) : Endpoin
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.ResponseAsync(data, cancellation: ct);
     }
 }

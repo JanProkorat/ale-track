@@ -71,7 +71,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
 
         var accessToken = jwtService.GenerateToken(user);
         
-        await SendAsync(new LoginResponse
+        await Send.ResponseAsync(new LoginResponse
         {
             AccessToken = accessToken
         }, cancellation: ct);

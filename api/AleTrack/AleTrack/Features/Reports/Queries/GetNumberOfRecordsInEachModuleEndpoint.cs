@@ -57,6 +57,6 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(AleTrackDbContext dbC
             ProductDeliveriesCount = await dbContext.ProductDeliveries.CountAsync(o => !_finishedProductDeliveryStates.Contains(o.State), ct)
         };
 
-        await SendOkAsync(result, ct);
+        await Send.OkAsync(result, ct);
     }
 }

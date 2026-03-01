@@ -145,6 +145,6 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
             Breweries = breweries
         };
 
-        await SendAsync(response, cancellation: ct);
+        await Send.ResponseAsync(response, cancellation: ct);
     }
 }

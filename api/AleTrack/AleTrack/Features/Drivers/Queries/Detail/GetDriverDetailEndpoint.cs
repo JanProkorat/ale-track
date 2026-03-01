@@ -64,6 +64,6 @@ public sealed class GetDriverDetailEndpoint(AleTrackDbContext dbContext) : Endpo
         if (breweries is null)
             ThrowHelper.PublicEntityNotFound(nameof(Driver), req.Id);
 
-        await SendOkAsync(breweries!, ct);
+        await Send.OkAsync(breweries!, ct);
     }
 }

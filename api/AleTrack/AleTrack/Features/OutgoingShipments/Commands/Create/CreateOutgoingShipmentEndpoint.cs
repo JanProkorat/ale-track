@@ -77,7 +77,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
-        await SendAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 
     private async Task<List<Entities.Order>> GetOrdersAsync(List<ClientOrderShipmentDto> clientOrderShipments, CancellationToken ct)
