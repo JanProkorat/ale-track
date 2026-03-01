@@ -31,6 +31,6 @@ public sealed class GetProductDeliveryStateListEndpoint : EndpointWithoutRequest
     {
         var data = Enum.GetValues<ProductDeliveryState>();
         
-        await Send.ResponseAsync(data, cancellation: ct);
+        await SendAsync(data, cancellation: ct);
     }
 }

@@ -61,6 +61,6 @@ public sealed class DeleteUserEndpoint(AleTrackDbContext dbContext, IAppContext 
         dbContext.Users.Remove(user!);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
+        await SendAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

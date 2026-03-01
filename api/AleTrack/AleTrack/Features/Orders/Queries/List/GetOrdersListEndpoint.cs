@@ -59,6 +59,6 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
         if (planningState is not null)
             data = data.Where(o => o.PlanningState == planningState).ToList();
         
-        await Send.OkAsync(data, cancellation: ct);
+        await SendOkAsync(data, cancellation: ct);
     }
 }

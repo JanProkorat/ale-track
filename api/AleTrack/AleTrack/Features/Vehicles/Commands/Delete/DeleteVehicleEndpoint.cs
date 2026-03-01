@@ -51,6 +51,6 @@ public sealed class DeleteVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
         
         dbContext.Vehicles.Remove(vehicle!);
         await dbContext.SaveChangesAsync(ct);
-        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
+        await SendAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

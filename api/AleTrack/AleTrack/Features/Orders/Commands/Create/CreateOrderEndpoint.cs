@@ -79,7 +79,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         client!.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(ct);
-        await Send.ResponseAsync(order.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await SendAsync(order.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 
     private async Task<List<Product>> GetExistingProductsAsync(List<CreateOrderItemDto> orderItems, CancellationToken ct)

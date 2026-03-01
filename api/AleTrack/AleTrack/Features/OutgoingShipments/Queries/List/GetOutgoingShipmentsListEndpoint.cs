@@ -52,6 +52,6 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
         if (planningState is not null)
             outgoingShipments = outgoingShipments.Where(o => o.PlanningState == planningState).ToList();
         
-        await Send.OkAsync(outgoingShipments, ct);
+        await SendOkAsync(outgoingShipments, ct);
     }
 }

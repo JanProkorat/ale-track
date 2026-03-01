@@ -75,6 +75,6 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
         dbContext.Users.Update(user);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

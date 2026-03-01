@@ -54,6 +54,6 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         dbContext.Orders.Remove(order!);
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
+        await SendAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

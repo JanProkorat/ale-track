@@ -59,6 +59,6 @@ public sealed class GetClientRemindersListEndpoint(AleTrackDbContext dbContext) 
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await Send.ResponseAsync(client, cancellation: ct);
+        await SendAsync(client, cancellation: ct);
     }
 }

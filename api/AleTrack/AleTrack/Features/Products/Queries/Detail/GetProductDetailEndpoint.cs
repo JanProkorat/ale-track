@@ -66,6 +66,6 @@ public sealed class GetProductDetailEndpoint(AleTrackDbContext dbContext) : Endp
         if (breweries is null)
             ThrowHelper.PublicEntityNotFound(nameof(Product), req.Id);
 
-        await Send.OkAsync(breweries!, ct);
+        await SendOkAsync(breweries!, ct);
     }
 }

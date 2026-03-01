@@ -57,6 +57,6 @@ public sealed class GetOrderItemsRemindersListEndpoint(AleTrackDbContext dbConte
             })
             .ToListAsync(ct);
         
-        await Send.ResponseAsync(reminders, cancellation: ct);
+        await SendAsync(reminders, cancellation: ct);
     }
 }

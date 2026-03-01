@@ -63,6 +63,6 @@ public sealed class UpdateClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
         dbContext.ClientNotes.Update(existingNote);
         await dbContext.SaveChangesAsync(ct);
 
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

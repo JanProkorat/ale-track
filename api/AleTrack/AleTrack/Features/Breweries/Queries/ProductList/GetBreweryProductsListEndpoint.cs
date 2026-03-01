@@ -74,6 +74,6 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await Send.ResponseAsync(data, cancellation: ct);
+        await SendAsync(data, cancellation: ct);
     }
 }

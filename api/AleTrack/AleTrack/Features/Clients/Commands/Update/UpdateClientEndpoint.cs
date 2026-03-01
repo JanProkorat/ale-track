@@ -76,6 +76,6 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
             .ToList();
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

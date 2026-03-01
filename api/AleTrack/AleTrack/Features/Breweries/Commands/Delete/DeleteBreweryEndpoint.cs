@@ -53,6 +53,6 @@ public sealed class DeleteBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
         dbContext.Breweries.Remove(brewery!);
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }
