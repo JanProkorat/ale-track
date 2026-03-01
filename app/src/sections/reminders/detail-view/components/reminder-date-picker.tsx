@@ -1,3 +1,5 @@
+import type { Theme, SxProps } from '@mui/material/styles';
+
 import dayjs from 'dayjs';
 import React, { useState } from 'react';
 
@@ -8,7 +10,7 @@ type ReminderDatePickerProps = {
      selectedDate: Date | undefined;
      onDatePicked: (date: Date) => void;
      label: string;
-     sx?: { minWidth: string };
+     sx?: SxProps<Theme>;
 };
 
 export function ReminderDatePicker({ selectedDate, onDatePicked, label, sx }: Readonly<ReminderDatePickerProps>) {

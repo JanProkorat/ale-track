@@ -262,12 +262,12 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
                          <SectionHeader text={t('reminders.displaySettings')} headerVariant="subtitle2" />
 
                          {reminder.type === ReminderType.OneTimeEvent && (
-                              <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
+                              <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} alignItems="center" gap={1} sx={{ mt: 1 }}>
                                    <ReminderDatePicker
                                         selectedDate={reminder.occurrenceDate}
                                         label={t('reminders.occurrenceDate')}
                                         onDatePicked={handleOccurrenceDateSelect}
-                                        sx={{ minWidth: '50%' }}
+                                        sx={{ minWidth: { xs: '100%', md: '50%' } }}
                                    />
 
                                    <ReminderDaysInput
@@ -278,8 +278,8 @@ export function UpdateReminderView({ reminderId, parentType, onClose }: Readonly
                               </Box>
                          )}
                          {reminder.type == ReminderType.Regular && (
-                              <Box display="flex" gap={1} sx={{ mt: 1 }}>
-                                   <Box sx={{ minWidth: '40%' }} gap={1} alignItems="center">
+                              <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={1} sx={{ mt: 1 }}>
+                                   <Box sx={{ minWidth: { xs: '100%', md: '40%' } }} gap={1} alignItems="center">
                                         <ReminderRecurrenceTypeSelect
                                              selectedType={reminder.recurrenceType ?? ReminderRecurrenceType.Weekly}
                                              errors={errors}

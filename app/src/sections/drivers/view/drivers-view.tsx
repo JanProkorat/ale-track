@@ -121,8 +121,8 @@ export function DriversView() {
                     </Button>
                </Box>
 
-               <Box sx={{ display: 'flex' }}>
-                    <Box sx={{ width: '40%', pr: 2 }}>
+               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+                    <Box sx={{ width: { xs: '100%', md: '40%' }, pr: { xs: 0, md: 2 }, pb: { xs: 2, md: 0 } }}>
                          <Card>
                               <DriversTableToolbar
                                    numSelected={table.selected.length}
@@ -218,7 +218,7 @@ export function DriversView() {
                     open={selectedDriverId !== undefined}
                     onClose={() => setSelectedDriverId(undefined)}
                >
-                    <Box sx={{ width: 700, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 700 }, p: 2 }}>
                          <DriverDetailView id={selectedDriverId!} onClose={closeDrawer} />
                     </Box>
                </Drawer>

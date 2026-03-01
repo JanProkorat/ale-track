@@ -189,7 +189,7 @@ export function BreweriesView() {
                </Box>
 
                <Drawer anchor="right" open={createBreweryDrawerVisible} onClose={closeDrawer}>
-                    <Box sx={{ width: 700, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 700 }, p: 2 }}>
                          <BreweryDetailView onClose={closeDrawer} />
                     </Box>
                </Drawer>

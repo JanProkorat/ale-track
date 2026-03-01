@@ -185,7 +185,7 @@ export function NotesView({ parentId, parentType }: Readonly<NotesViewProps>) {
                     </Scrollbar>
                )}
                <Drawer anchor="right" open={noteToUpdate != null} onClose={closeDrawer}>
-                    <Box sx={{ width: 700, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 700 }, p: 2 }}>
                          <NoteDetailView
                               noteToUpdate={noteToUpdate!}
                               parentId={parentId}
