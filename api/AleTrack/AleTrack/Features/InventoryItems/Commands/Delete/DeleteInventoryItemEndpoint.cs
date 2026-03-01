@@ -52,6 +52,6 @@ public sealed class DeleteInventoryItemEndpoint(AleTrackDbContext dbContext) : E
 
         dbContext.InventoryItems.Remove(inventoryItem!);
         await dbContext.SaveChangesAsync(ct);
-        await SendAsync(null, StatusCodes.Status202Accepted, ct);
+        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

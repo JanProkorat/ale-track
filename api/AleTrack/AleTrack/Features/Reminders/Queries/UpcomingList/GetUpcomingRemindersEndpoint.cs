@@ -38,7 +38,7 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
 
         var data = ProcessReminders(allCandidates, today);
 
-        await SendAsync(data, cancellation: ct);
+        await Send.ResponseAsync(data, cancellation: ct);
     }
 
     private async Task<List<(OrderItem orderItem, string sectionName, Guid sectionId, SectionType sectionType)>> GetOrderItemReminders(DateOnly todayDate, CancellationToken ct)

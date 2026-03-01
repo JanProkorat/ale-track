@@ -89,6 +89,6 @@ public sealed class UpdateClientReminderEndpoint(AleTrackDbContext dbContext) : 
         dbContext.ClientReminders.Update(existingReminder);
         await dbContext.SaveChangesAsync(ct);
 
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 }

@@ -60,6 +60,6 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.ResponseAsync(data, cancellation: ct);
     }
 }

@@ -35,6 +35,6 @@ public sealed class GetProductTypeListEndpoint : EndpointWithoutRequest<ProductT
     {
         var productTypes = Enum.GetValues<ProductType>();
         
-        await SendAsync(productTypes, cancellation: ct);
+        await Send.ResponseAsync(productTypes, cancellation: ct);
     }
 }

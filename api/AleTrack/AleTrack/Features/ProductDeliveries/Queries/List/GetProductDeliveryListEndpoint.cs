@@ -61,6 +61,6 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
         if (planningState is not null)
             data = data.Where(o => o.PlanningState == planningState).ToList();
 
-        await SendOkAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

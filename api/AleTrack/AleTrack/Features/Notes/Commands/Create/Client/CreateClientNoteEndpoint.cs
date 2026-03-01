@@ -71,6 +71,6 @@ public sealed class CreateClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
         client!.Notes.Add(note);
         await dbContext.SaveChangesAsync(ct);
         
-        await SendAsync(note.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(note.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

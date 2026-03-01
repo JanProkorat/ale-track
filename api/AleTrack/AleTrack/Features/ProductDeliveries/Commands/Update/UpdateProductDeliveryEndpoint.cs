@@ -106,7 +106,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
             await CreateInventoryItemsAsync(delivery.Stops, ct);
         
         await dbContext.SaveChangesAsync(ct);
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 
     private async Task CreateInventoryItemsAsync(ICollection<DeliveryStop> deliveryStops, CancellationToken cancellationToken)

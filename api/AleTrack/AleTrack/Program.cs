@@ -88,9 +88,15 @@ try
     {
         options.AddPolicy("AllowFrontend", policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.WithOrigins(
+                    "https://dev--ale-track.netlify.app",
+                    "https://ale-track.netlify.app",
+                    "http://localhost:3039",
+                    "https://scaling-adventure-qv5v9p77grq269p-3039.app.github.dev"
+                )
                 .AllowAnyHeader()
-                .AllowAnyMethod();
+                .AllowAnyMethod()
+                .AllowCredentials();
         });
     });
     

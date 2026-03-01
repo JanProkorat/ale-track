@@ -52,6 +52,6 @@ public sealed class DeleteDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
         
         dbContext.Drivers.Remove(driver!);
         await dbContext.SaveChangesAsync(ct);
-        await SendAsync(null, StatusCodes.Status202Accepted, ct);
+        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

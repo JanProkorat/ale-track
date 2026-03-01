@@ -77,7 +77,7 @@ public sealed class CreateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
         dbContext.InventoryItems.Add(inventoryItem);
         await dbContext.SaveChangesAsync(ct);
 
-        await SendAsync(inventoryItem.PublicId, cancellation: ct);
+        await Send.ResponseAsync(inventoryItem.PublicId, cancellation: ct);
     }
 
     private async Task<Product?> GetProductAsync(Guid? productId, CancellationToken cancellationToken)
