@@ -56,6 +56,6 @@ public sealed class DeleteBreweryReminderEndpoint(AleTrackDbContext dbContext) :
         dbContext.BreweryReminders.Remove(existingReminder!);
         await dbContext.SaveChangesAsync(ct);
 
-        await Send.ResponseAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
+        await SendAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
     }
 }

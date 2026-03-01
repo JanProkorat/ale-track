@@ -73,6 +73,6 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
         if (client == null)
             ThrowHelper.PublicEntityNotFound(nameof(Client), req.Id);
 
-        await Send.OkAsync(client!, ct);
+        await SendOkAsync(client!, ct);
     }
 }

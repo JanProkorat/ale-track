@@ -69,6 +69,6 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         dbContext.OutgoingShipments.Remove(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
 
-        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
+        await SendAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

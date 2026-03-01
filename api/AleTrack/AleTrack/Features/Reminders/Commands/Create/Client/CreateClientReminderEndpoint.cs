@@ -92,6 +92,6 @@ public sealed class CreateClientReminderEndpoint(AleTrackDbContext dbContext) : 
         dbContext.ClientReminders.Add(reminder);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(reminder.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await SendAsync(reminder.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

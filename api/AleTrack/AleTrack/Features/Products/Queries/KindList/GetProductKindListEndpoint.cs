@@ -28,6 +28,6 @@ internal sealed class GetProductKindListEndpoint : EndpointWithoutRequest<string
     {
         var productKinds = Enum.GetNames<ProductKind>();
         
-        await Send.ResponseAsync(productKinds, cancellation: ct);
+        await SendAsync(productKinds, cancellation: ct);
     }
 }

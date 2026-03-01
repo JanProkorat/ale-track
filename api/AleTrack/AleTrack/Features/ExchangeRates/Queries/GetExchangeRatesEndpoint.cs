@@ -47,6 +47,6 @@ public class GetExchangeRatesEndpoint(AleTrackDbContext dbContext) : EndpointWit
             })
             .ToListAsync(ct);
 
-        await Send.OkAsync(data, cancellation: ct);
+        await SendOkAsync(data, cancellation: ct);
     }
 }

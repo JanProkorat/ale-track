@@ -64,6 +64,6 @@ public sealed class CreateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
         dbContext.Breweries.Add(brewery);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(brewery.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await SendAsync(brewery.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

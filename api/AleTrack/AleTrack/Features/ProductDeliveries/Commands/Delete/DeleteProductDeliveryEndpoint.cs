@@ -54,6 +54,6 @@ public sealed class DeleteProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         dbContext.Remove(delivery!);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
+        await SendAsync(null, StatusCodes.Status202Accepted, ct);
     }
 }

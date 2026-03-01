@@ -56,6 +56,6 @@ public sealed class CreateVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
         dbContext.Vehicles.Add(vehicle);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(vehicle.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await SendAsync(vehicle.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

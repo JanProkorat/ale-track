@@ -74,6 +74,6 @@ public sealed class UpdateVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
         vehicle.MaxWeight = req.Data.MaxWeight;
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

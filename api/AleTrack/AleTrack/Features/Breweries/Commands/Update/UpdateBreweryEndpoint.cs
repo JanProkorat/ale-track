@@ -65,6 +65,6 @@ public sealed class UpdateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
             brewery.ContactAddress = req.Data.ContactAddress.ToDbEntity();
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

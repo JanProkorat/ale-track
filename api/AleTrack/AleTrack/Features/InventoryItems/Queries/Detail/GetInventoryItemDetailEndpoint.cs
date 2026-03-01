@@ -61,6 +61,6 @@ public sealed class GetInventoryItemDetailEndpoint(AleTrackDbContext dbContext) 
         if (item is null)
             ThrowHelper.PublicEntityNotFound(nameof(InventoryItem), req.Id);
 
-        await Send.OkAsync(item!, ct);
+        await SendOkAsync(item!, ct);
     }
 }

@@ -69,6 +69,6 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
         product.PlatoDegree = req.Data.PlatoDegree;
 
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+        await SendNoContentAsync(ct);
     }
 }

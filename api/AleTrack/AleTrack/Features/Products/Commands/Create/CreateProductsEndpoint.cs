@@ -75,6 +75,6 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
         }
         
         await dbContext.SaveChangesAsync(ct);
-        await Send.ResponseAsync("", statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await SendAsync("", statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

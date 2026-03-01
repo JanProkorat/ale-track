@@ -64,6 +64,6 @@ public sealed class SetClientReminderResolvedDateEndpoint(AleTrackDbContext dbCo
         dbContext.ClientReminders.Update(existingReminder);
         await dbContext.SaveChangesAsync(ct);
         
-        await Send.ResponseAsync(null, statusCode: StatusCodes.Status202Accepted ,cancellation: ct);
+        await SendAsync(null, statusCode: StatusCodes.Status202Accepted ,cancellation: ct);
     }
 }

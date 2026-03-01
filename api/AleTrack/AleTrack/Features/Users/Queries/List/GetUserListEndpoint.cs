@@ -43,6 +43,6 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await Send.ResponseAsync(data, cancellation: ct);
+        await SendAsync(data, cancellation: ct);
     }
 }
