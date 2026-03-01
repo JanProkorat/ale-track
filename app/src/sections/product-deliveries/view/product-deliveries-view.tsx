@@ -282,8 +282,8 @@ export function ProductDeliveriesView() {
                                    />
                               ) : (
                                    <Card sx={{ p: 3 }}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                             <Box sx={{ width: '30%' }}>
+                                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'center' } }}>
+                                             <Box sx={{ width: { xs: '100%', md: '30%' } }}>
                                                   <ProductDeliverySelect
                                                        deliveries={deliveries}
                                                        selectedDeliveryId={selectedDeliveryId}
@@ -330,7 +330,7 @@ export function ProductDeliveriesView() {
                     </Box>
                </Box>
                <Drawer anchor="right" open={createDeliveryDrawerVisible} onClose={closeDrawer}>
-                    <Box sx={{ width: 1200, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 1200 }, p: 2 }}>
                          <CreateProductDeliveryView width={1200} onClose={closeDrawer} onSave={handleDeliveryCreated} />
                     </Box>
                </Drawer>

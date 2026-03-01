@@ -196,7 +196,7 @@ export function VehiclesView() {
                     open={selectedVehicleId !== undefined}
                     onClose={() => setSelectedVehicleId(undefined)}
                >
-                    <Box sx={{ width: 700, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 700 }, p: 2 }}>
                          <VehicleDetailView
                               id={selectedVehicleId!}
                               onClose={closeDrawer}

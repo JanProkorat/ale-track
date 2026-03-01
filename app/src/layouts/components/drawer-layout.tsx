@@ -30,9 +30,9 @@ export const DrawerLayout: React.FC<DrawerLayoutProps> = ({
                     display: 'flex',
                     flexDirection: 'column',
                     height: '95vh',
-                    maxWidth: width ?? 700,
+                    maxWidth: { xs: '100vw', md: width ?? 700 },
                     width: '100%',
-                    p: 3,
+                    p: { xs: 2, md: 3 },
                     gap: 3,
                }}
           >

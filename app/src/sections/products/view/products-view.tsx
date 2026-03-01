@@ -208,7 +208,7 @@ export function ProductsView({ breweryId }: Readonly<ProductsViewProps>) {
                     open={selectedProductId !== undefined}
                     onClose={() => setSelectedProductId(undefined)}
                >
-                    <Box sx={{ width: 700, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 700 }, p: 2 }}>
                          <ProductDetailView id={selectedProductId!} breweryId={breweryId} onClose={closeDrawer} />
                     </Box>
                </Drawer>

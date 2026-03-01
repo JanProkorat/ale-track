@@ -173,7 +173,7 @@ export function CreateOutgoingShipmentView({
                          height: '100%',
                     }}
                >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                          <ShipmentDeliveryDatePicker
                               selectedDeliveryDate={shipment.deliveryDate}
                               shouldValidate={shouldValidate}
@@ -193,8 +193,8 @@ export function CreateOutgoingShipmentView({
                          />
                     </Box>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                         <Box sx={{ width: '40%', mt: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                         <Box sx={{ width: { xs: '100%', md: '40%' }, mt: 1 }}>
                               <ShipmentNameInput
                                    shipmentName={shipment.name}
                                    shouldValidate={shouldValidate}
@@ -207,7 +207,7 @@ export function CreateOutgoingShipmentView({
                               shouldValidate={shouldValidate}
                               onSelect={handleOrdersSelect}
                          />
-                         <Box sx={{ width: '20%' }}>
+                         <Box sx={{ width: { xs: '100%', md: '20%' } }}>
                               <WeightInfoBox currentWeight={currentWeight} maxWeight={maxWeight} />
                          </Box>
                     </Box>

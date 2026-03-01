@@ -293,8 +293,8 @@ export function ClientsView() {
                                                        })}
                                              </Tabs>
                                         </Card>
-                                        <Box sx={{ display: 'flex' }}>
-                                             <Box sx={{ width: '20%', pr: 2 }}>
+                                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+                                             <Box sx={{ width: { xs: '100%', md: '20%' }, pr: { xs: 0, md: 2 }, pb: { xs: 2, md: 0 } }}>
                                                   <Card>{clientListCard}</Card>
                                              </Box>
                                              <Card
@@ -331,7 +331,7 @@ export function ClientsView() {
                     </Box>
                </Box>
                <Drawer anchor="right" open={createClientDrawerVisible} onClose={closeDrawer}>
-                    <Box sx={{ width: 900, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 900 }, p: 2 }}>
                          <CreateClientView region={selectedRegion} onClose={closeDrawer} />
                     </Box>
                </Drawer>

@@ -56,13 +56,17 @@ export function SplitViewLayout({
                     </Button>
                </Box>
 
-               <Box sx={{ display: 'flex' }}>
+               <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
                     {leftContent && (
                          <Box
                               sx={{
-                                   width: leftContentWidth ? leftContentWidth + '%' : '20%',
+                                   width: {
+                                        xs: '100%',
+                                        md: leftContentWidth ? leftContentWidth + '%' : '20%',
+                                   },
                                    maxWidth: leftContentMaxWidth ? leftContentMaxWidth + '%' : undefined,
-                                   pr: 2,
+                                   pr: { xs: 0, md: 2 },
+                                   pb: { xs: 2, md: 0 },
                               }}
                          >
                               <Card>{leftContent}</Card>
@@ -76,7 +80,7 @@ export function SplitViewLayout({
                                         sx={{
                                              zIndex: 1,
                                              position: 'absolute',
-                                             top: 190,
+                                             top: { xs: 100, md: 190 },
                                              left: '50%',
                                              transform: 'translateX(-50%)',
                                              width: '40%',
@@ -86,7 +90,12 @@ export function SplitViewLayout({
                                    />
                               )}
                               <Card
-                                   sx={{ display: 'flex', flexDirection: 'column', p: 3, minHeight: minHeight ?? 800 }}
+                                   sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        p: 3,
+                                        minHeight: { xs: 400, md: minHeight ?? 800 },
+                                   }}
                               >
                                    {rightContent}
                               </Card>
@@ -95,7 +104,7 @@ export function SplitViewLayout({
                </Box>
 
                <Drawer anchor="right" open={drawerOpen} onClose={onDrawerClose}>
-                    <Box sx={{ width: drawerWidth ?? 700, p: 2 }}>{drawerContent}</Box>
+                    <Box sx={{ width: { xs: '100vw', md: drawerWidth ?? 700 }, p: 2 }}>{drawerContent}</Box>
                </Drawer>
           </DashboardContent>
      );

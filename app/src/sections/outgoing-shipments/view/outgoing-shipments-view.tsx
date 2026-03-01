@@ -358,8 +358,8 @@ export function OutgoingShipmentsView() {
                                    <Card
                                         sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1, width: '100%' }}
                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                             <Box sx={{ width: '30%' }}>
+                                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'center' } }}>
+                                             <Box sx={{ width: { xs: '100%', md: '30%' } }}>
                                                   <OutgoingShipmentSelect
                                                        shipments={outgoingShipments}
                                                        selectedShipmentId={selectedShipmentId}
@@ -432,7 +432,7 @@ export function OutgoingShipmentsView() {
                     </Box>
                </Box>
                <Drawer anchor="right" open={createShipmentDrawerVisible} onClose={closeDrawer}>
-                    <Box sx={{ width: 1200, p: 2 }}>
+                    <Box sx={{ width: { xs: '100vw', md: 1200 }, p: 2 }}>
                          <CreateOutgoingShipmentView
                               drivers={drivers}
                               vehicles={vehicles}

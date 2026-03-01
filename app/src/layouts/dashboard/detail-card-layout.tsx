@@ -132,8 +132,7 @@ export function DetailCardLayout<T>({
                     display: 'flex',
                     flexDirection: 'column',
                     width: '100%',
-                    pl: 2,
-                    pr: 2,
+                    px: { xs: 1, md: 2 },
                }}
           >
                {/* Header */}
