@@ -12,13 +12,15 @@
     "saveAndClose": "Uložit a zavřít",
     "required": "Toto pole je povinné",
     "validationError": "Vyplňte prosím všechna povinná pole",
+    "maxLength": "Maximální délka je {{count}} znaků",
     "from": "Od",
     "until": "Do",
     "selectDate": "Kliknutím vyber datum",
     "overlappingIntervals": "Dostupnost se překrývá s jiným termínem",
     "resetConfirm": "Opravdu chcete zahodit provedené změny?",
     "pendingChangesConfirm": "Máte neuložené změny. Chcete je před odchodem uložit?",
-    "unsavedChangesLossConfirm": "Máte neuložené změny, které budou ztraceny. Operavdu chcete pokračovat?"
+    "unsavedChangesLossConfirm": "Máte neuložené změny, které budou ztraceny. Operavdu chcete pokračovat?",
+    "currency": "Měna"
   },
   "months": {
     "january": "Leden",
@@ -41,6 +43,7 @@
     "noDataMessage": "Nebyly nalezeny žádné výsledky odpovídající zadaným filtrům.\nZkontrolujte překlepy nebo zkuste zadat celá slova."
   },
   "address": {
+    "address": "Adresa",
     "officialAddress": "Oficiální adresa",
     "contactAddress": "Kontaktní adresa",
     "street": "Ulice",
@@ -59,13 +62,30 @@
     "new": "Nový klient",
     "deleteConfirm": "Opravdu chcete smazat klienta?",
     "name": "Jméno",
+    "businessName": "Název podniku",
+    "region": "Region",
     "detailTitle": "Detail klienta",
     "saveSuccess": "Klient byl úspěšně uložen",
     "saveError": "Chyba při ukládání klienta",
     "loadListError": "Chyba při načítání klientů",
     "loadDetailError": "Chyba při načítání klienta",
     "noDetailToDisplay": "K zobrazení detailu vyberte klienta ze seznamu",
-    "errorFetchingClients": "Chyba při načítání klientů"
+    "errorFetchingClients": "Chyba při načítání klientů",
+    "contacts": {
+      "title": "Kontakty",
+      "new": "Nový kontakt",
+      "email": "E-mail",
+      "phone": "Tel. číslo",
+      "position": "Pozice",
+      "noDataTitle": "Žádná kontakty",
+      "noDataMessage": "Pro zobrazení kontaktů si nejdříve alespoň jeden založte",
+      "description": "Popis",
+      "type": "Typ",
+      "types": {
+        "email": "E-mail",
+        "phone": "Tel. číslo"
+      }
+    }
   },
   "breweries": {
     "title": "Pivovary",
@@ -77,12 +97,14 @@
     "saveError": "Chyba při ukládání pivovaru",
     "loadListError": "Chyba při načítání pivovarů",
     "loadDetailError": "Chyba při načítání pivovaru",
-    "noDetailToDisplay": "K zobrazení detailu vyberte pivovar ze seznamu"
+    "noDetailToDisplay": "K zobrazení detailu vyberte pivovar ze seznamu",
+    "color": "Barva"
   },
   "drivers": {
     "title": "Řidiči",
     "new": "Nový řidič",
     "deleteConfirm": "Opravdu chcete smazat řidiče?",
+    "deleteSuccess": "Řidič byl úspěšně smazán",
     "name": "Jméno",
     "firstName": "Jméno",
     "lastName": "Příjmení",
@@ -93,12 +115,15 @@
     "saveSuccess": "Řidič byl úspěšně uložen",
     "saveError": "Chyba při ukládání řidiče",
     "available": "K dispozici",
-    "color": "Barva"
+    "color": "Barva",
+    "notAvailable": "Není k dispozici",
+    "dateIntervalsOverlap": "Časové intervaly se překrývají"
   },
   "vehicles": {
     "title": "Vozidla",
     "new": "Nové vozidlo",
     "deleteConfirm": "Opravdu chcete smazat vozidlo?",
+    "deleteSuccess": "Vozidlo bylo úspěšně smazáno",
     "name": "Jméno",
     "maxWeight": "Maximální váha",
     "selectDetailInstruction": "Pro zobrazení detailu vozidla vyberte záznam v tabulce.",
@@ -125,7 +150,9 @@
     "packageSize": "Balení",
     "detailTitle": "Detail produktu",
     "saveSuccess": "Produkt byl úspěšně uložen",
-    "saveError": "Chyba při ukládání produktu"
+    "saveError": "Chyba při ukládání produktu",
+    "weight": "Váha",
+    "recent": "Poslední"
   },
   "country": {
     "Czechia": "Česko",
@@ -147,7 +174,15 @@
     "Merchandise": "Propagační předměty",
     "PaleLagerPremium": "Světlý premium ležák",
     "PaleStrong": "Světlé silné",
-    "DarkStrong": "Tmavé silné"
+    "DarkStrong": "Tmavé silné",
+    "FestiveLager": "Sváteční ležák",
+    "UnfilteredBlendedLager": "Řezaný nefiltrovaný ležák",
+    "YeastLager": "Kroužkovaný ležák",
+    "Other": "Ostatní",
+    "MixedLager": "Řezaný ležák",
+    "Mix": "Mix",
+    "NonAlcoholicFlavourBeer": "Nealkoholické ochucené pivo",
+    "OriginalCraftLager": "Originální řemeslný ležák"
   },
   "productKind": {
     "Keg": "Sud",
@@ -218,7 +253,8 @@
     "fetchError": "Chyba při načítání objednávek",
     "fetchDetailError": "Chyba při načítání detailu objednávky",
     "clientName": "Klient",
-    "deliveryDate": "Datum doručení",
+    "requiredDeliveryDate": "Nejpozdější datum doručení",
+    "actualDeliveryDate": "Skutečné datum doručení",
     "date": "Datum",
     "state": "Stav",
     "noDetailToDisplay": "K zobrazení detailu vyberte objednávku ze seznamu",
@@ -235,5 +271,156 @@
     "Delivering": "K doručení",
     "Finished": "Dokončeno",
     "Cancelled": "Zrušeno"
+  },
+  "exchangeRates": {
+    "fetchError": "Error při načítání kurzů měn"
+  },
+  "clientOrders": {
+    "fetchError": "Chyba při načítání objednávek klienta",
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky objednávek"
+  },
+  "languages": {
+    "language": "Jazyk",
+    "English": "Angličtina",
+    "German": "Němčina",
+    "Czech": "Čeština"
+  },
+  "reminders": {
+    "title": "Připomínky",
+    "new": "Nová připomínka",
+    "fetchError": "Chyba při načítání připomínek",
+    "fetchDetailError": "Chyba při načítání detailu připomínky",
+    "noDataTitle": "Žádná připomínky",
+    "noDataMessage": "Pro zobrazení připomínek si nejdříve alespoň jednu založte",
+    "detailTitle": "Detail připomínky",
+    "name": "Nadpis",
+    "occurrenceDate": "Datum připomenutí",
+    "description": "Popis",
+    "type": "Typ",
+    "numberOfDaysToRemindBefore": "Připomenout dní předem",
+    "reminderRecurrenceType": "Frekvence opakování",
+    "daysToDisplay": "Dny zobrazení",
+    "activeUntilDate": "Platnost do",
+    "saveSuccess": "Připomínka byla úspěšně uložena",
+    "saveError": "Chyba při ukládání připomínky",
+    "deleteSuccess": "Připomínka úspěšně odebrána",
+    "loadDetailError": "Chyba při načítání připomínky",
+    "displaySettings": "Nastavení zobrazení",
+    "days": "Dny",
+    "noUpcomingReminders": "Nemáte žádné nadcházející připomínky",
+    "addOrderItemReminder": "Připomenout objednání produktu",
+    "editOrderItemReminder": "Upravit připomínku",
+    "setResolved": "Vyřešit"
+  },
+  "reminderType": {
+    "OneTimeEvent": "Jednorázová",
+    "Regular": "Pravidelná"
+  },
+  "reminderRecurrenceType": {
+    "Weekly": "Týdně",
+    "Monthly": "Měsíčně"
+  },
+  "dayOfWeek": {
+    "Monday": "Pondělí",
+    "Tuesday": "Úterý",
+    "Wednesday": "Středa",
+    "Thursday": "Čtvrtek",
+    "Friday": "Pátek",
+    "Saturday": "Sobota",
+    "Sunday": "Neděle"
+  },
+  "dayOfWeekShort": {
+    "Monday": "Po",
+    "Tuesday": "Út",
+    "Wednesday": "St",
+    "Thursday": "Čt",
+    "Friday": "Pá",
+    "Saturday": "So",
+    "Sunday": "Ne"
+  },
+  "dashboard": {
+    "welcome": "Ahoj, vítejte zpět"
+  },
+  "region": {
+    "ZittauCity": "Žitava",
+    "ZittauRegion": "Žitavsko",
+    "Chemnitz": "Chemnitz",
+    "Leipzig": "Lipsko",
+    "Berlin": "Berlín",
+    "Freiberg": "Freiberg",
+    "Goerlitz": "Görlitz",
+    "Region": "Region",
+    "Other": "Ostatní"
+  },
+  "notes": {
+    "title": "Poznámky",
+    "new": "Nová poznámka",
+    "fetchError": "Chyba při načítání poznámek",
+    "noDataTitle": "Žádné poznámky",
+    "noDataMessage": "Pro zobrazení poznámek si nejdříve alespoň jednu založte",
+    "detailTitle": "Detail poznámky",
+    "saveSuccess": "Poznámka byla úspěšně uložena",
+    "saveError": "Chyba při ukládání poznámky",
+    "deleteSuccess": "Poznámka úspěšně odebrána"
+  },
+  "orderItemReminders": {
+    "title": "Připomínky objednávek",
+    "orderLabel": "Objednat"
+  },
+  "outgoingShipments": {
+    "title": "Vývozy",
+    "new": "Nový vývoz",
+    "deleteConfirm": "Opravdu chcete smazat vybraný vývoz?",
+    "detailTitle": "Detail vývozu",
+    "saveSuccess": "Vývoz byl úspěšně uložen",
+    "saveError": "Chyba při ukládání vývozu",
+    "loadListError": "Chyba při načítání vývozů",
+    "loadDetailError": "Chyba při načítání vývozu",
+    "noDetailToDisplay": "K zobrazení detailu vyberte vývoz ze seznamu",
+    "shipmentDeleted": "Vývoz úspěšně odebrán",
+    "noShipmentsToDisplay": "Žádný vývoz k zobrazení. Pro zobrazení vývozů si nejdříve alespoň jeden založte",
+    "deliveryDate": "Datum vývozu",
+    "drivers": "Řidiči",
+    "vehicle": "Vozidlo",
+    "stops": "Zastávky",
+    "orders": "Objednávky",
+    "errorFetchingDrivers": "Chyba při načítání řidičů",
+    "errorFetchingVehicles": "Chyba při načítání vozidel",
+    "errorFetchingOrders": "Chyba při načítání objednávek",
+    "route": "Trasa",
+    "noStopsDefined": "Pro zobrazení trasy vyberte alespoň jednu objednávku.",
+    "name": "Název",
+    "weight": "Váha"
+  },
+  "outgoingShipmentState": {
+    "Created": "Plánován",
+    "Loaded": "Naložen",
+    "InTransit": "V přepravě",
+    "Delivered": "Doručen",
+    "Cancelled": "Zrušen"
+  },
+  "errors": {
+    "UNEXPECTED_ERROR": "Nastala neočekávaná chyba. Zkuste to prosím znovu.",
+    "UNAUTHORIZED": "Nejste autorizováni. Přihlaste se prosím znovu.",
+    "VALIDATION_ERROR": "Chyba validace. Zkontrolujte prosím zadané údaje.",
+    "VALIDATION_NOT_NULL_ERROR": "Povinné pole nesmí být prázdné.",
+    "VALIDATION_NOT_EMPTY_ERROR": "Toto pole nesmí být prázdné.",
+    "VALIDATION_MAX_LENGTH_ERROR": "Hodnota překračuje maximální povolenou délku.",
+    "VALIDATION_MAX_VALUE_EXCEEDED_ERROR": "Hodnota překračuje maximální povolenou hodnotu.",
+    "VALIDATION_MINVALUE_NOT_MATCHED_ERROR": "Hodnota je menší než minimální povolená hodnota.",
+    "ENTITY_NOT_FOUND": "Požadovaná položka nebyla nalezena.",
+    "ENTITY_ALREADY_EXISTS": "Tato položka již existuje.",
+    "VALIDATION_NOT_ENUM_PROPERTY": "Neplatná hodnota.",
+    "BAD_REQUEST_ERROR": "Neplatný požadavek. Zkontrolujte prosím zadané údaje.",
+    "ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT": "Tato objednávka je již přiřazena k odchozí zásilce.",
+    "SHIPMENT_NOT_PREPARED": "Zásilka není připravena se všemi požadovanými údaji.",
+    "SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS": "Nelze označit zásilku jako naloženou bez zastávek.",
+    "SHIPMENT_ALREADY_DELIVERED": "Tato zásilka již byla doručena.",
+    "SHIPMENT_ALREADY_CANCELLED": "Tato zásilka již byla zrušena."
+  },
+  "PlanningState": {
+    "Active": "Aktivní",
+    "Finished": "Dokončené",
+    "Cancelled": "Zrušené"
   }
 }

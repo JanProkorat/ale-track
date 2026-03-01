@@ -1,144 +1,138 @@
-import {useState, useEffect} from "react";
-import {useTranslation} from "react-i18next";
+import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react';
 
-import {InputLabel, FormControl, OutlinedInput, FormHelperText} from "@mui/material";
+import { Box } from '@mui/material';
 
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {DrawerLayout} from '../../../layouts/components/drawer-layout';
-import {useEntityStatsRefresh} from "../../../providers/EntityStatsContext";
-import {
-    VehicleDto, CreateVehicleDto, UpdateVehicleDto,
-} from "../../../api/Client";
+import { useAuthorizedClient } from 'src/api/use-authorized-client';
+
+import { useApiCall } from '../../../hooks/use-api-call';
+import { FormField } from '../../../components/forms/form-field';
+import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { DrawerLayout } from '../../../layouts/components/drawer-layout';
+import { useEntityStatsRefresh } from '../../../providers/EntityStatsContext';
+import { VehicleDto, CreateVehicleDto, UpdateVehicleDto } from '../../../api/Client';
 
 type VehicleDetailViewProps = {
-    id: string | null,
-    onClose: () => void,
-    onSave: () => void
+     id: string | null;
+     onClose: () => void;
+     onSave: () => void;
 };
 
-export function VehicleDetailView(
-    {
-        id,
-        onClose,
-        onSave,
-    }: Readonly<VehicleDetailViewProps>) {
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
-    const {triggerRefresh} = useEntityStatsRefresh();
+export function VehicleDetailView({ id, onClose, onSave }: Readonly<VehicleDetailViewProps>) {
+     const { showSnackbar } = useSnackbar();
+     const { t } = useTranslation();
+     const { triggerRefresh } = useEntityStatsRefresh();
+     const { executeApiCall } = useApiCall();
+     const clientApi = useAuthorizedClient();
 
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [vehicle, setVehicle] = useState<VehicleDto>(new VehicleDto({
-        name: '',
-        maxWeight: 0,
-    }));
-    const [errors, setErrors] = useState<Record<string, string>>({});
+     const [isLoading, setIsLoading] = useState<boolean>(false);
+     const [vehicle, setVehicle] = useState<VehicleDto>(
+          new VehicleDto({
+               name: '',
+               maxWeight: 0,
+          })
+     );
+     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    useEffect(() => {
-        if (id !== null)
-            void fetchVehicle()
-    }, [id]);
+     const fetchVehicle = useCallback(async () => {
+          setIsLoading(true);
+          const data = await executeApiCall(() => clientApi.getVehicleDetailEndpoint(id!));
+          if (data) {
+               setVehicle(data);
+          }
+          setIsLoading(false);
+     }, [clientApi, executeApiCall, id]);
 
-    const fetchVehicle = async () => {
-        try {
-            setIsLoading(true);
-            const clientApi = new AuthorizedClient();
+     useEffect(() => {
+          if (id !== null) void fetchVehicle();
+     }, [fetchVehicle, id]);
 
-            const data = await clientApi.getVehicleDetailEndpoint(id!);
-            if (data) {
-                setVehicle(data);
-            }
-        } catch (error) {
-            console.error('Error fetching vehicle:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }
+     const saveVehicle = async (): Promise<void> => {
+          const { name, maxWeight } = vehicle;
 
-    const saveVehicle = async (): Promise<void> => {
-        const {name, maxWeight} = vehicle;
+          const newErrors: Record<string, string> = {};
+          if (!name) newErrors.name = t('common.required');
+          if (!maxWeight) newErrors.maxWeight = t('common.required');
 
-        const newErrors: Record<string, string> = {};
-        if (!name) newErrors.name = t('common.required');
-        if (!maxWeight) newErrors.maxWeight = t('common.required');
+          if (Object.keys(newErrors).length > 0) {
+               setErrors(newErrors);
+               showSnackbar(t('common.validationError'), 'error');
+               return;
+          }
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            showSnackbar(t('common.validationError'), 'error');
-            return;
-        }
+          setErrors({});
 
-        setErrors({});
+          let result;
 
-        try {
-            const clientApi = new AuthorizedClient();
-
-            if (id === null) {
-                const createDto = new CreateVehicleDto({
+          if (id === null) {
+               const createDto = new CreateVehicleDto({
                     name: vehicle.name!,
-                    maxWeight: vehicle.maxWeight!
-                });
+                    maxWeight: vehicle.maxWeight!,
+               });
 
-                await clientApi.createVehicleEndpoint(createDto.toJSON());
-                triggerRefresh();
-            } else {
-                const updateDto = new UpdateVehicleDto({
+               result = await executeApiCall(() => clientApi.createVehicleEndpoint(createDto.toJSON()));
+               if (result) {
+                    triggerRefresh();
+               }
+          } else {
+               const updateDto = new UpdateVehicleDto({
                     name: vehicle.name!,
-                    maxWeight: vehicle.maxWeight!
-                });
+                    maxWeight: vehicle.maxWeight!,
+               });
 
-                await clientApi.updateVehicleEndpoint(id, updateDto.toJSON());
-            }
+               let hasError = false;
+               await executeApiCall(() => clientApi.updateVehicleEndpoint(id, updateDto.toJSON()), undefined, {
+                    onError: () => {
+                         hasError = true;
+                    },
+               });
 
-            showSnackbar(t('vehicles.saveSuccess'), 'success');
-            onSave();
-        } catch (error) {
-            console.error('Error saving vehicle:', error);
-            showSnackbar(t('vehicles.saveError'), 'error');
-        }
-    }
+               if (!hasError) {
+                    result = true;
+               }
+          }
 
-    return (
-        <DrawerLayout
-            title={t('vehicles.detailTitle')}
-            isLoading={isLoading}
-            onClose={onClose}
-            onSaveAndClose={saveVehicle}
-        >
+          if (result) {
+               showSnackbar(t('vehicles.saveSuccess'), 'success');
+               onSave();
+          }
+     };
 
-            {/* vehicle name */}
-            <FormControl fullWidth error={!!errors.name} sx={{mt: 1}}>
-                <InputLabel htmlFor="Jméno">{t('vehicles.name')}</InputLabel>
-                <OutlinedInput
-                    id="name"
-                    value={vehicle.name || ''}
-                    onChange={event => setVehicle(prev => new VehicleDto({
-                        ...prev,
-                        name: event.target.value
-                    }))}
-                    label={t('vehicles.name')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
+     return (
+          <DrawerLayout
+               title={t('vehicles.detailTitle')}
+               isLoading={isLoading}
+               onClose={onClose}
+               onSaveAndClose={saveVehicle}
+          >
+               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <FormField
+                         id="vehicle-name"
+                         label={t('vehicles.name')}
+                         value={vehicle.name || ''}
+                         onChange={(value) => setVehicle((prev) => new VehicleDto({ ...prev, name: value }))}
+                         error={errors.name}
+                         sx={{ mt: 1 }}
+                    />
 
-            {/* vehicle name */}
-            <FormControl fullWidth error={!!errors.maxWeight}>
-                <InputLabel htmlFor="weight">{t('vehicles.maxWeight')}</InputLabel>
-                <OutlinedInput
-                    type="number"
-                    id="weight"
-                    value={vehicle.maxWeight || ''}
-                    onChange={event => setVehicle(prev => new VehicleDto({
-                        ...prev,
-                        maxWeight: event.target.value === '' ? 0 : parseFloat(event.target.value)
-                    }))}
-                    label={t('vehicles.maxWeight')}
-                />
-                {errors.name && <FormHelperText>{errors.name}</FormHelperText>}
-            </FormControl>
-
-
-
-        </DrawerLayout>
-    );
+                    <FormField
+                         id="vehicle-weight"
+                         label={t('vehicles.maxWeight')}
+                         value={vehicle.maxWeight || ''}
+                         type="number"
+                         onChange={(value) =>
+                              setVehicle(
+                                   (prev) =>
+                                        new VehicleDto({
+                                             ...prev,
+                                             maxWeight: value === '' ? 0 : parseFloat(value),
+                                        })
+                              )
+                         }
+                         error={errors.maxWeight}
+                         endAdornment="Kg"
+                    />
+               </Box>
+          </DrawerLayout>
+     );
 }

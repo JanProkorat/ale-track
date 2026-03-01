@@ -40,6 +40,20 @@ const commonRules = () => ({
     '@typescript-eslint/no-empty-object-type': 0,
     '@typescript-eslint/consistent-type-imports': 1,
     '@typescript-eslint/no-unused-vars': [1, { args: 'none' }],
+    // performance
+    'no-console': [1, { allow: ['warn', 'error'] }],
+    // test imports
+    'no-restricted-imports': [
+        2,
+        {
+            patterns: [
+                {
+                    group: ['@testing-library/react'],
+                    message: 'Import from "src/test/test-utils" instead of "@testing-library/react".',
+                },
+            ],
+        },
+    ],
 });
 
 /**
@@ -55,6 +69,7 @@ const importRules = () => ({
     'import/no-named-as-default': 0,
     'import/newline-after-import': 2,
     'import/no-named-as-default-member': 0,
+    'import/no-unresolved': [2, { caseSensitive: false }],
     'import/no-cycle': [
         0, // disabled if slow
         { maxDepth: '∞', ignoreExternal: false, allowUnsafeDynamicCyclicDependency: false },
@@ -189,4 +204,10 @@ export default [
     ...eslintTs.configs.recommended,
     reactPlugin.configs.flat.recommended,
     customConfig,
+    {
+        files: ['src/test/**'],
+        rules: {
+            'no-restricted-imports': 'off',
+        },
+    },
 ];

@@ -1,252 +1,368 @@
-import dayjs from "dayjs";
-import {useTranslation} from "react-i18next";
-import React, {useState, useEffect} from "react";
+import { useTranslation } from 'react-i18next';
+import { varAlpha } from 'minimal-shared/utils';
+import { useState, useEffect, useCallback } from 'react';
 
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableContainer from "@mui/material/TableContainer";
-import {Button, Dialog, DialogTitle, DialogActions} from "@mui/material";
+import Card from '@mui/material/Card';
+import Drawer from '@mui/material/Drawer';
+import { linearProgressClasses } from '@mui/material/LinearProgress';
+import { Box, Button, IconButton, Typography, LinearProgress } from '@mui/material';
 
-import {emptyRows} from "../../../providers/utils";
-import {Scrollbar} from "../../../components/scrollbar";
-import {useTable} from "../../../providers/TableProvider";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {TableNoData} from "../../../components/table/table-no-data";
-import {TableEmptyRows} from "../../../components/table/table-empty-rows";
-import {ProductDeliveriesTableRow} from "../product-deliveries-table-row";
-import {SplitViewLayout} from "../../../layouts/dashboard/split-view-layout";
-import {SortableTableHead} from "../../../components/table/sortable-table-head";
-import {ProductDeliveriesTableToolbar} from "../product-deliveries-table-toolbar";
-import {ProductDeliveryDetailView} from "../detail-view/product-delivery-detail-view";
-import {CreateProductDeliveryView} from "../detail-view/create-product-delivery-view";
+import { DashboardContent } from 'src/layouts/dashboard';
 
-import type {ProductDeliveryListItemDto} from "../../../api/Client";
+import { Iconify } from '../../../components/iconify';
+import { useApiCall } from '../../../hooks/use-api-call';
+import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
+import { SectionHeader } from '../../../components/label/section-header';
+import { ProductDeliverySelect } from '../components/product-delivery-select';
+import { CreateProductDeliveryView } from '../detail-view/create-product-delivery-view';
+import { ProductDeliveryDetailView } from '../detail-view/product-delivery-detail-view';
+import { ResetConfirmationDialog } from '../../../components/dialogs/reset-confirmation-dialog';
+import { DeleteConfirmationDialog } from '../../../components/dialogs/delete-confirmation-dialog';
+import { PendingChangesConfirmationDialog } from '../../../components/dialogs/pending-changes-confirmation-dialog';
+import {
+     UpdateProductDeliveryDto,
+     UpdateProductDeliveryStopDto,
+     UpdateProductDeliveryItemDto,
+} from '../../../api/Client';
+
+import type { ProductDeliveryListItemDto } from '../../../api/Client';
 
 export function ProductDeliveriesView() {
-    const {t} = useTranslation();
-    const { showSnackbar } = useSnackbar();
+     const { t } = useTranslation();
+     const { showSnackbar } = useSnackbar();
+     const { executeApiCall, executeApiCallWithDefault } = useApiCall();
+     const client = useAuthorizedClient();
 
-    const [initialLoading, setInitialLoading] = useState<boolean>(false);
-    const [deliveries, setDeliveries] = useState<ProductDeliveryListItemDto[]>([]);
-    const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | undefined>(undefined);
-    const [pendingDeliveryId, setPendingDeliveryId] = useState<string | null>(null);
-    const [hasDetailChanges, setHasDetailChanges] = useState<boolean>(false);
-    const [createDeliveryDrawerVisible, setCreateDeliveryDrawerVisible] = useState<boolean>(false);
-    const [pendingDeliveryIdForConfirmation, setPendingDeliveryIdForConfirmation] = useState<string|null|undefined>(undefined);
+     const [initialLoading, setInitialLoading] = useState<boolean>(false);
+     const [deliveries, setDeliveries] = useState<ProductDeliveryListItemDto[]>([]);
+     const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | undefined>(undefined);
+     const [pendingDeliveryId, setPendingDeliveryId] = useState<string | null>(null);
+     const [isDeleteDialogVisible, setIsDeleteDialogVisible] = useState<boolean>(false);
+     const [isPendingChangesDialogOpen, setIsPendingChangesDialogOpen] = useState<boolean>(false);
+     const [isResetDialogVisible, setIsResetDialogVisible] = useState<boolean>(false);
+     const [createDeliveryDrawerVisible, setCreateDeliveryDrawerVisible] = useState<boolean>(false);
 
-    const [filterDate, setFilterDate] = useState<Date | null>(null);
+     const [currentDelivery, setCurrentDelivery] = useState<UpdateProductDeliveryDto | undefined>(undefined);
+     const [currentInitialDelivery, setCurrentInitialDelivery] = useState<UpdateProductDeliveryDto | undefined>(
+          undefined
+     );
 
-    const [order, setOrder] = useState<'asc' | 'desc'>('desc');
-    const [orderBy, setOrderBy] = useState<string>('deliveryDate');
+     const hasDetailChanges = JSON.stringify(currentDelivery) !== JSON.stringify(currentInitialDelivery);
 
-    const table = useTable({order, setOrder, orderBy, setOrderBy});
+     const fetchProductDeliveries = useCallback(async () => {
+          const filters: Record<string, string> = {};
 
-    useEffect(() => {
-        setInitialLoading(true);
-        const loadInitial = async () => {
-            const loaded = await fetchProductDeliveries();
-            setDeliveries(loaded);
-            setSelectedDeliveryId(loaded.length > 0 ? loaded[0].id : undefined);
-            setInitialLoading(false);
-        };
-        void loadInitial();
-    }, []);
+          filters.sort = 'asc:deliveryDate';
 
-    useEffect(() => {
-        if (!initialLoading) {
-            void fetchProductDeliveries().then(setDeliveries);
-        }
-    }, [filterDate, order, orderBy]);
+          return await executeApiCallWithDefault(() => client.fetchProductDeliveries(filters), []);
+     }, [executeApiCallWithDefault, client]);
 
-    const fetchProductDeliveries = async () => {
-        try {
-            const client = new AuthorizedClient();
-            const filters: Record<string, string> = {};
+     const fetchDelivery = useCallback(
+          async (deliveryId: string) => {
+               const data = await executeApiCall(() => client.getProductDeliveryDetailEndpoint(deliveryId));
 
-            if (filterDate !== null) {
-                filters.deliveryDate = `eq:${dayjs(filterDate).format('YYYY-MM-DD')}`;
-            }
+               if (data) {
+                    const updateRequest = new UpdateProductDeliveryDto({
+                         deliveryDate: data.deliveryDate!,
+                         note: data.note,
+                         state: data.state,
+                         driverIds: data.drivers!.map((driver) => driver.id!),
+                         vehicleId: data.vehicle!.id,
+                         stops: (data.stops ?? []).map(
+                              (stop) =>
+                                   new UpdateProductDeliveryStopDto({
+                                        publicId: stop.id,
+                                        breweryId: stop.brewery!.id,
+                                        note: stop.note,
+                                        products: (stop.products ?? []).map(
+                                             (product) =>
+                                                  new UpdateProductDeliveryItemDto({
+                                                       productId: product.productId,
+                                                       quantity: product.quantity,
+                                                       note: product.note,
+                                                  })
+                                        ),
+                                   })
+                         ),
+                    });
 
-            filters.sort = `${order}:${orderBy}`;
+                    setCurrentDelivery(updateRequest);
+                    setCurrentInitialDelivery(updateRequest);
+               }
+          },
+          [executeApiCall, client]
+     );
 
-            return await client.fetchProductDeliveries(filters);
-        } catch (error) {
-            showSnackbar(t('productDeliveries.loadListError'), 'error');
-            console.error('Error fetching product deliveries:', error);
-            return [];
-        }
-    };
+     useEffect(() => {
+          setInitialLoading(true);
+          const loadInitial = async () => {
+               const loaded = await fetchProductDeliveries();
+               setDeliveries(loaded);
+               const firstId = loaded.length > 0 ? loaded[0].id : undefined;
+               setSelectedDeliveryId(firstId);
+               if (firstId) {
+                    await fetchDelivery(firstId);
+               }
+               setInitialLoading(false);
+          };
+          void loadInitial();
+     }, [fetchProductDeliveries, fetchDelivery]);
 
-    const handleRowClick = (id: string) => {
-        if (selectedDeliveryId === id)
-            return;
+     useEffect(() => {
+          if (selectedDeliveryId) {
+               void fetchDelivery(selectedDeliveryId);
+          }
+     }, [selectedDeliveryId, fetchDelivery]);
 
-        updateSelectedId(id);
-    };
+     const handleRowClick = (id: string) => {
+          if (selectedDeliveryId === id) return;
 
-    const updateSelectedId = (id: string) => {
-        if (hasDetailChanges) {
-            setPendingDeliveryId(id);
-        } else {
-            setSelectedDeliveryId(id);
-        }
-    }
+          if (hasDetailChanges) {
+               setPendingDeliveryId(id);
+               setIsPendingChangesDialogOpen(true);
+          } else {
+               setSelectedDeliveryId(id);
+          }
+     };
 
-    const handleDisplayedDeliveryChange = async (shouldLoadNewData: boolean) => {
-        if (shouldLoadNewData) {
-            const updated = await fetchProductDeliveries();
-            setDeliveries(updated);
+     const handleDeliveryChange = useCallback((delivery: UpdateProductDeliveryDto) => {
+          setCurrentDelivery(delivery);
+     }, []);
 
-            if (pendingDeliveryId !== null)
-                setSelectedDeliveryId(pendingDeliveryId);
-        }
-        setPendingDeliveryId(null);
-    }
+     const handleReset = useCallback(() => {
+          setCurrentDelivery(currentInitialDelivery);
+          setIsResetDialogVisible(false);
+     }, [currentInitialDelivery]);
 
-    const handleDeleteDelivery = async () => {
-        await fetchProductDeliveries().then((newData) => {
-            setDeliveries(newData);
-            setSelectedDeliveryId(newData.length > 0 ? newData[0].id : undefined);
-        })
-    }
+     const saveCurrentDelivery = async (): Promise<boolean> => {
+          if (!selectedDeliveryId || !currentDelivery) {
+               return false;
+          }
 
-    const handleDeliveryCreated = async (newDeliveryId: string) => {
-        await fetchProductDeliveries().then(setDeliveries);
-        setSelectedDeliveryId(newDeliveryId);
-        setCreateDeliveryDrawerVisible(false);
-    }
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
 
-    const handleNewDeliveryClick = () => {
-        if (selectedDeliveryId !== undefined && selectedDeliveryId !== null && hasDetailChanges) {
-            setPendingDeliveryIdForConfirmation(null);
-        } else {
-            setCreateDeliveryDrawerVisible(true)
-        }
-    }
+          const deliveryDate = new Date(currentDelivery.deliveryDate);
+          deliveryDate.setHours(0, 0, 0, 0);
 
-    const closeDrawer = () => {
-        fetchProductDeliveries().then(setDeliveries);
-        setCreateDeliveryDrawerVisible(false);
-    }
+          if (
+               !currentDelivery.deliveryDate ||
+               deliveryDate < today ||
+               !currentDelivery.vehicleId ||
+               !currentDelivery.driverIds?.length ||
+               !currentDelivery.stops?.length ||
+               currentDelivery.stops.some(
+                    (stop) =>
+                         !stop.breweryId ||
+                         !stop.products?.length ||
+                         stop.products.some((p) => !p.quantity || p.quantity <= 0)
+               )
+          ) {
+               showSnackbar(t('common.validationError'), 'error');
+               return false;
+          }
 
-    const deliveriesListCard = (
-        <>
-            <ProductDeliveriesTableToolbar
-                numSelected={table.selected.length}
-                filterDate={filterDate}
-                onFilterDate={(value: string | null) => {
-                    setFilterDate(value != null ? dayjs(value).toDate() : null);
-                    table.onResetPage();
-                }}
-            />
+          let hasError = false;
+          await executeApiCall(
+               () => client.updateProductDeliveryEndpoint(selectedDeliveryId, currentDelivery),
+               undefined,
+               {
+                    onError: () => {
+                         hasError = true;
+                    },
+               }
+          );
 
-            <Scrollbar>
-                <TableContainer sx={{overflow: 'unset'}}>
-                    <Table>
-                        <SortableTableHead
-                            order={table.order}
-                            orderBy={table.orderBy}
-                            rowCount={deliveries.length}
-                            numSelected={table.selected.length}
-                            onSort={table.onSort}
-                            onSelectAllRows={(checked) =>
-                                table.onSelectAllRows(
-                                    checked,
-                                    deliveries.map((delivery) => delivery.id!)
-                                )
-                            }
-                            headLabel={[
-                                {id: 'deliveryDate', label: t('productDeliveries.deliveryDate')},
-                                {id: 'state', label: t('productDeliveries.state')},
-                            ]}
-                        />
-                        <TableBody>
-                            {deliveries
-                                .slice(
-                                    table.page * table.rowsPerPage,
-                                    table.page * table.rowsPerPage + table.rowsPerPage
-                                )
-                                .map((row) => (
-                                    <ProductDeliveriesTableRow
-                                        key={row.id}
-                                        row={row}
-                                        selected={table.selected.includes(row.id!)}
-                                        onSelectRow={() => table.onSelectRow(row.id!)}
-                                        onRowClick={() => handleRowClick(row.id!)}
-                                        isSelected={selectedDeliveryId === row.id}
-                                    />
-                                ))}
+          if (hasError) {
+               return false;
+          }
 
-                            <TableEmptyRows
-                                height={68}
-                                emptyRows={emptyRows(table.page, table.rowsPerPage, deliveries.length)}
-                            />
+          showSnackbar(t('productDeliveries.saveSuccess'), 'success');
 
-                            {deliveries.length == 0 && <TableNoData colSpan={2} />}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Scrollbar>
-        </>
-    );
+          // If the state or date has changed, reload the list
+          if (
+               currentDelivery?.state !== currentInitialDelivery?.state ||
+               currentDelivery?.deliveryDate !== currentInitialDelivery?.deliveryDate
+          ) {
+               const updated = await fetchProductDeliveries();
+               setDeliveries(updated);
+          }
 
-    return (
-        <>
-            <SplitViewLayout
-                title={t('productDeliveries.title')}
-                initialLoading={initialLoading}
-                newLabel={t('productDeliveries.new')}
-                onNewClick={handleNewDeliveryClick}
-                leftContentWidth={30}
-                leftContent={deliveriesListCard}
-                rightContent={<ProductDeliveryDetailView
-                    id={selectedDeliveryId}
-                    shouldCheckPendingChanges={pendingDeliveryId !== null}
-                    onDelete={handleDeleteDelivery}
-                    onConfirmed={handleDisplayedDeliveryChange}
-                    onProgressbarVisibilityChange={setInitialLoading}
-                    onHasChangesChange={setHasDetailChanges}
-                />}
-                drawerContent={<CreateProductDeliveryView
-                    width={850}
-                    onClose={closeDrawer}
-                    onSave={handleDeliveryCreated}
-                />}
-                onDrawerClose={closeDrawer}
-                drawerOpen={createDeliveryDrawerVisible}
-                drawerWidth={850}
-            />
+          setCurrentInitialDelivery(currentDelivery);
+          return true;
+     };
 
-            <Dialog
-                open={pendingDeliveryIdForConfirmation !== undefined}
-                onClose={() => setPendingDeliveryIdForConfirmation(undefined)}
-            >
-                <DialogTitle>
-                    {t('common.unsavedChangesLossConfirm')}
-                </DialogTitle>
-                <DialogActions>
-                    <Button onClick={() => setPendingDeliveryIdForConfirmation(undefined)} variant="contained" color="primary">
-                        {t('common.cancel')}
-                    </Button>
+     const handlePendingChangesConfirmation = async (shouldSave: boolean) => {
+          setIsPendingChangesDialogOpen(false);
+
+          if (pendingDeliveryId !== null) {
+               if (shouldSave) {
+                    // Save the current delivery and wait for completion
+                    const saved = await saveCurrentDelivery();
+                    if (!saved) {
+                         // If saving failed, cancel the switch
+                         setPendingDeliveryId(null);
+                         return;
+                    }
+               }
+
+               // After saving (or when discarding changes) set the new delivery
+               if (pendingDeliveryId === 'new') {
+                    setCreateDeliveryDrawerVisible(true);
+               } else {
+                    setSelectedDeliveryId(pendingDeliveryId);
+               }
+
+               setPendingDeliveryId(null);
+          }
+     };
+
+     const handleDeliveryCreated = async (newDeliveryId: string) => {
+          await fetchProductDeliveries().then(setDeliveries);
+          setSelectedDeliveryId(newDeliveryId);
+          setCreateDeliveryDrawerVisible(false);
+     };
+
+     const handleNewDeliveryClick = () => {
+          if (hasDetailChanges) {
+               setPendingDeliveryId('new');
+               setIsPendingChangesDialogOpen(true);
+          } else {
+               setCreateDeliveryDrawerVisible(true);
+          }
+     };
+
+     const closeDrawer = () => {
+          fetchProductDeliveries().then(setDeliveries);
+          setCreateDeliveryDrawerVisible(false);
+     };
+
+     const deleteDelivery = async () => {
+          const result = await executeApiCall(() => client.deleteProductDeliveryEndpoint(selectedDeliveryId!));
+          if (result) {
+               showSnackbar(t('productDeliveries.deliveryDeleted'), 'success');
+               const filtered = deliveries.filter((d) => d.id !== selectedDeliveryId);
+               setDeliveries(filtered);
+               setSelectedDeliveryId(filtered.length > 0 ? filtered[0].id : undefined);
+          }
+          setIsDeleteDialogVisible(false);
+     };
+
+     return (
+          <DashboardContent>
+               <Box sx={{ mb: 5, display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="h4" sx={{ flexGrow: 1 }}>
+                         {t('productDeliveries.title')}
+                    </Typography>
                     <Button
-                        color="inherit"
-                        onClick={() => {
-                            setHasDetailChanges(false);
-
-                            if (pendingDeliveryIdForConfirmation === null) {
-                                setSelectedDeliveryId(undefined);
-                            } else {
-                                updateSelectedId(pendingDeliveryIdForConfirmation!);
-                            }
-
-                            setPendingDeliveryIdForConfirmation(undefined);
-                        }}
+                         variant="contained"
+                         color="inherit"
+                         startIcon={<Iconify icon="mingcute:add-line" />}
+                         onClick={handleNewDeliveryClick}
                     >
-                        {t('common.continue')}
+                         {t('productDeliveries.new')}
                     </Button>
-                </DialogActions>
-            </Dialog>
-        </>
-    );
+               </Box>
+               <Box sx={{ display: 'flex' }}>
+                    <Box sx={{ flexGrow: 1 }}>
+                         <Box sx={{ position: 'relative', alignItems: 'center' }}>
+                              {initialLoading ? (
+                                   <LinearProgress
+                                        sx={{
+                                             zIndex: 1,
+                                             position: 'absolute',
+                                             top: 190,
+                                             left: '50%',
+                                             transform: 'translateX(-50%)',
+                                             width: '40%',
+                                             bgcolor: (theme) => varAlpha(theme.vars.palette.text.primaryChannel, 0.16),
+                                             [`& .${linearProgressClasses.bar}`]: { bgcolor: 'text.primary' },
+                                        }}
+                                   />
+                              ) : (
+                                   <Card sx={{ p: 3 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                             <Box sx={{ width: '30%' }}>
+                                                  <ProductDeliverySelect
+                                                       deliveries={deliveries}
+                                                       selectedDeliveryId={selectedDeliveryId}
+                                                       onSelect={handleRowClick}
+                                                  />
+                                             </Box>
+                                             <SectionHeader
+                                                  text={t('productDeliveries.detailTitle')}
+                                                  headerVariant="h5"
+                                                  sx={{ m: 2, ml: 3, width: '100%' }}
+                                             >
+                                                  <Box sx={{ alignItems: 'right' }}>
+                                                       <IconButton
+                                                            onClick={() => setIsResetDialogVisible(true)}
+                                                            color="primary"
+                                                            disabled={!hasDetailChanges}
+                                                       >
+                                                            <Iconify icon="solar:restart-bold" />
+                                                       </IconButton>
+                                                       <IconButton
+                                                            onClick={() => void saveCurrentDelivery()}
+                                                            color="primary"
+                                                            disabled={!hasDetailChanges}
+                                                       >
+                                                            <Iconify icon="solar:floppy-disk-bold" />
+                                                       </IconButton>
+                                                       <IconButton
+                                                            onClick={() => setIsDeleteDialogVisible(true)}
+                                                            color="error"
+                                                            disabled={false}
+                                                       >
+                                                            <Iconify icon="solar:trash-bin-trash-bold" />
+                                                       </IconButton>
+                                                  </Box>
+                                             </SectionHeader>
+                                        </Box>
+                                        <ProductDeliveryDetailView
+                                             delivery={currentDelivery}
+                                             onDeliveryChange={handleDeliveryChange}
+                                        />
+                                   </Card>
+                              )}
+                         </Box>
+                    </Box>
+               </Box>
+               <Drawer anchor="right" open={createDeliveryDrawerVisible} onClose={closeDrawer}>
+                    <Box sx={{ width: 1200, p: 2 }}>
+                         <CreateProductDeliveryView width={1200} onClose={closeDrawer} onSave={handleDeliveryCreated} />
+                    </Box>
+               </Drawer>
+               {/* Delete confirmation dialog */}
+               <DeleteConfirmationDialog
+                    open={isDeleteDialogVisible}
+                    onClose={() => setIsDeleteDialogVisible(false)}
+                    onDelete={deleteDelivery}
+                    deleteConfirmMessage={t('productDeliveries.deleteConfirm')}
+                    cancelLabel={t('common.cancel')}
+                    deleteLabel={t('common.delete')}
+               />
+
+               {/* Reset confirmation dialog */}
+               <ResetConfirmationDialog
+                    open={isResetDialogVisible}
+                    onClose={() => setIsResetDialogVisible(false)}
+                    onReset={handleReset}
+                    cancelLabel={t('common.cancel')}
+                    resetLabel={t('common.reset')}
+               />
+
+               {/* Pending changes confirmation dialog */}
+               <PendingChangesConfirmationDialog
+                    open={isPendingChangesDialogOpen}
+                    onClose={() => setIsPendingChangesDialogOpen(false)}
+                    onSave={() => handlePendingChangesConfirmation(true)}
+                    onDiscard={() => handlePendingChangesConfirmation(false)}
+                    cancelLabel={t('common.cancel')}
+                    discardLabel={t('common.discard')}
+                    saveLabel={t('common.save')}
+               />
+          </DashboardContent>
+     );
 }

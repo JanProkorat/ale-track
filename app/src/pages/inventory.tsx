@@ -1,16 +1,15 @@
 import { CONFIG } from 'src/config-global';
 
-import {InventoryView} from "../sections/inventory/view";
-
+import { InventoryView } from '../sections/inventory/view';
 
 // ----------------------------------------------------------------------
 
 export default function Page() {
-    return (
-        <>
-            <title>{`Inventory - ${CONFIG.appName}`}</title>
+     return (
+          <>
+               <title>{`Inventory - ${CONFIG.appName}`}</title>
 
-            <InventoryView />
-        </>
-    );
+               <InventoryView />
+          </>
+     );
 }

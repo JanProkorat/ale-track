@@ -1,193 +1,205 @@
-import {useTranslation} from "react-i18next";
-import {useCallback, useEffect, useState} from "react";
+import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react';
 
-import {Typography} from "@mui/material";
+import { Box, Typography } from '@mui/material';
 
-import {CreateOrderView} from "./create-order-view";
-import {UpdateOrderView} from "./update-order-view";
-import {AuthorizedClient} from "../../../api/AuthorizedClient";
-import {useSnackbar} from "../../../providers/SnackbarProvider";
-import {DetailCardLayout} from "../../../layouts/dashboard/detail-card-layout";
-import {
-    OrderState,
-    type ProductListItemDto,
-    UpdateOrderDto,
-    UpdateOrderItemDto
-} from "../../../api/Client";
+import { useApiCall } from 'src/hooks/use-api-call';
+
+import { UpdateOrderView } from './update-order-view';
+import { useSnackbar } from '../../../providers/SnackbarProvider';
+import { useAuthorizedClient } from '../../../api/use-authorized-client';
+import { DetailCardLayout } from '../../../layouts/dashboard/detail-card-layout';
+import { OrderState, UpdateOrderDto, UpdateOrderItemDto, GroupedProductHistoryDto } from '../../../api/Client';
 
 type OrderDetailViewProps = {
-    id: string | undefined;
-    shouldCheckPendingChanges: boolean;
-    onDelete: () => void;
-    onConfirmed: (shouldLoadNewDetail: boolean) => void;
-    onHasChangesChange?: (hasChanges: boolean) => void;
-    onProgressbarVisibilityChange: (isVisible: boolean) => void;
+     id: string | undefined;
+     shouldCheckPendingChanges: boolean;
+     onDelete: () => void;
+     onConfirmed: (shouldLoadNewDetail: boolean) => void;
+     onHasChangesChange?: (hasChanges: boolean) => void;
+     onProgressbarVisibilityChange: (isVisible: boolean) => void;
 };
 
-export function OrderDetailView(
-    {
-        id,
-        shouldCheckPendingChanges,
-        onDelete,
-        onConfirmed,
-        onHasChangesChange,
-        onProgressbarVisibilityChange
-    }: Readonly<OrderDetailViewProps>
-){
-    const {showSnackbar} = useSnackbar();
-    const {t} = useTranslation();
+export function OrderDetailView({
+     id,
+     shouldCheckPendingChanges,
+     onDelete,
+     onConfirmed,
+     onHasChangesChange,
+     onProgressbarVisibilityChange,
+}: Readonly<OrderDetailViewProps>) {
+     const { showSnackbar } = useSnackbar();
+     const { t } = useTranslation();
+     const { executeApiCall } = useApiCall();
+     const client = useAuthorizedClient();
 
-    const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
-    const [order, setOrder] = useState<UpdateOrderDto | null>(null);
-    const [products, setProducts] = useState<ProductListItemDto[]>([]);
+     const [initialOrder, setInitialOrder] = useState<UpdateOrderDto | null>(null);
+     const [order, setOrder] = useState<UpdateOrderDto | null>(null);
+     const [products, setProducts] = useState<GroupedProductHistoryDto>(new GroupedProductHistoryDto({}));
 
-    const [shouldValidate, setShouldValidate] = useState<boolean>(false);
-    const [disabled, setDisabled] = useState<boolean>(false);
+     const [shouldValidate, setShouldValidate] = useState<boolean>(false);
+     const [disabled, setDisabled] = useState<boolean>(false);
 
-    useEffect(() => {
-        void fetchProducts()
-    }, []);
+     const fetchProducts = useCallback(
+          async (clientId: string) => {
+               const result = await executeApiCall(() => client.fetchProductsWithClientHistory(clientId));
+               if (result) {
+                    setProducts(result);
+               }
+          },
+          [client, executeApiCall]
+     );
 
-    const fetchProducts = async () => {
-        try{
+     useEffect(() => {
+          if (order === null) return;
 
-            const client = new AuthorizedClient();
-            await client.fetchProducts({}).then(setProducts)
-        } catch (e) {
-            showSnackbar('products.fetchError', 'error');
-            console.error('Error fetching products', e);
-        }
-    }
-    
-    const fetchOrder = useCallback(async () => {
-        if (id == null) {
-            return;
-        }
-        
-        try {
-            onProgressbarVisibilityChange(true);
-            const client = new AuthorizedClient();
-            await client.getOrderDetailEndpoint(id!).then((detail) => {
-                const updateOrder =  new UpdateOrderDto({
+          void fetchProducts(order.clientId);
+     }, [fetchProducts, order]);
+
+     const fetchOrder = useCallback(async () => {
+          if (id == null) {
+               return;
+          }
+
+          onProgressbarVisibilityChange(true);
+          const detail = await executeApiCall(() => client.getOrderDetailEndpoint(id!));
+          if (detail) {
+               const updateOrder = new UpdateOrderDto({
                     clientId: detail.client!.id!,
-                    deliveryDate: detail.deliveryDate,
+                    requiredDeliveryDate: detail.requiredDeliveryDate,
                     state: detail.state,
-                    orderItems: (detail.orderItems ?? []).map((item) => new UpdateOrderItemDto({
-                        productId: item.productId,
-                        quantity: item.quantity
-                    }))
-                });
+                    orderItems: (detail.orderItems ?? []).map(
+                         (item) =>
+                              new UpdateOrderItemDto({
+                                   productId: item.productId,
+                                   quantity: item.quantity,
+                                   reminderState: item.reminderState,
+                              })
+                    ),
+               });
 
-                setInitialOrder(updateOrder);
-                setOrder(updateOrder);
-                setShouldValidate(false);
-                const numericState = OrderState[updateOrder.state! as unknown as keyof typeof OrderState];
-                if (numericState === OrderState.Cancelled || numericState === OrderState.Finished)
-                    setDisabled(true);
-                else if (disabled)
-                    setDisabled(false);
-            });
-        } catch (error) {
-            showSnackbar(t('orders.fetchDetailError'), 'error');
-            console.error('Error fetching order detail:', error);
-        } finally {
-            onProgressbarVisibilityChange(false);
-        }
-    }, [id, onProgressbarVisibilityChange, showSnackbar, t]);
+               setInitialOrder(updateOrder);
+               setOrder(updateOrder);
+               setShouldValidate(false);
+               const numericState = OrderState[updateOrder.state! as unknown as keyof typeof OrderState];
+               if (numericState === OrderState.Cancelled || numericState === OrderState.Finished) setDisabled(true);
+               else if (disabled) setDisabled(false);
+          }
+          onProgressbarVisibilityChange(false);
+     }, [client, disabled, executeApiCall, id, onProgressbarVisibilityChange]);
 
-    const saveOrder = useCallback(async () => {
-        setShouldValidate(true);
-        return await updateOrder(id!, order!);
-    }, [order, id]);
+     const updateOrder = useCallback(
+          async (orderId: string, orderToUpdate: UpdateOrderDto) => {
+               const today = new Date();
+               today.setHours(0, 0, 0, 0);
 
-    const updateOrder = async (orderId: string, orderToUpdate: UpdateOrderDto) => {
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+               let deliveryDate = null;
+               if (orderToUpdate.requiredDeliveryDate !== null && order?.requiredDeliveryDate !== undefined) {
+                    deliveryDate = new Date(orderToUpdate.requiredDeliveryDate!);
+                    deliveryDate.setHours(0, 0, 0, 0);
+               }
 
-            let deliveryDate = null;
-            if (orderToUpdate.deliveryDate !== null && order?.deliveryDate !== undefined){
-                deliveryDate = new Date(orderToUpdate.deliveryDate!);
-                deliveryDate.setHours(0, 0, 0, 0);
-            }
+               if (
+                    (deliveryDate != null && deliveryDate < today) ||
+                    !orderToUpdate.state ||
+                    !orderToUpdate.clientId ||
+                    !orderToUpdate.orderItems ||
+                    orderToUpdate.orderItems.some((item) => !item.productId || !item.quantity || item.quantity <= 0)
+               ) {
+                    setShouldValidate(true);
+                    showSnackbar(t('common.validationError'), 'error');
+                    return false;
+               }
+               setShouldValidate(false);
 
-            if (
-                (deliveryDate != null && deliveryDate < today) ||
-                !orderToUpdate.state ||
-                !orderToUpdate.clientId ||
-                !orderToUpdate.orderItems ||
-                orderToUpdate.orderItems.some(item =>
-                    !item.productId ||
-                    !item.quantity ||
-                    item.quantity <= 0)
-            ) {
-                setShouldValidate(true);
-                showSnackbar(t('common.validationError'), 'error');
-                return false;
-            }
-            setShouldValidate(false);
+               let hasError = false;
+               await executeApiCall(() => client.updateOrderEndpoint(orderId, orderToUpdate), undefined, {
+                    onError: () => {
+                         hasError = true;
+                    },
+               });
 
-            const client = new AuthorizedClient();
-            return await client.updateOrderEndpoint(orderId, orderToUpdate).then(() => {
-                showSnackbar(t('orders.saveSuccess'), 'success');
-                if (orderToUpdate?.state != initialOrder?.state || orderToUpdate?.clientId != initialOrder?.clientId || orderToUpdate?.deliveryDate != initialOrder?.deliveryDate) {
+               if (hasError) {
+                    return false;
+               }
+
+               showSnackbar(t('orders.saveSuccess'), 'success');
+               if (
+                    orderToUpdate?.state != initialOrder?.state ||
+                    orderToUpdate?.clientId != initialOrder?.clientId ||
+                    orderToUpdate?.requiredDeliveryDate != initialOrder?.requiredDeliveryDate
+               ) {
                     onConfirmed(true);
-                }
-                setInitialOrder(orderToUpdate);
-                return true;
-            });
+               }
+               setInitialOrder(orderToUpdate);
+               return true;
+          },
+          [client, executeApiCall, initialOrder, onConfirmed, order?.requiredDeliveryDate, showSnackbar, t]
+     );
 
-        } catch (error) {
-            showSnackbar(t('orders.saveError'), 'error');
-            console.error('Error saving order:', error);
-            return false;
-        }
-    }
+     const saveOrder = useCallback(async () => {
+          setShouldValidate(true);
+          return await updateOrder(id!, order!);
+     }, [id, order, updateOrder]);
 
-    const deleteOrder = useCallback(async () => {
-        const client = new AuthorizedClient();
-        await client.deleteOrderEndpoint(id!);
-        showSnackbar(t('orders.deleteSuccess'), 'success');
-    }, [id, showSnackbar]);
+     const deleteOrder = useCallback(async () => {
+          const result = await executeApiCall(() => client.deleteOrderEndpoint(id!));
+          if (result) {
+               showSnackbar(t('orders.deleteSuccess'), 'success');
+          }
+     }, [client, executeApiCall, id, showSnackbar, t]);
 
-    const resetOrder = useCallback(() => {
-        setOrder(initialOrder);
-    }, [initialOrder]);
+     const resetOrder = useCallback(() => {
+          setOrder(initialOrder);
+     }, [initialOrder]);
 
-    return (
-        <>
-            {id === undefined && <Typography sx={{mt: 2, ml: 2}}>
-                {t('orders.noDetailToDisplay')}
-            </Typography>
-            }
-            {id !== undefined && <DetailCardLayout
-                id={id}
-                shouldCheckPendingChanges={shouldCheckPendingChanges}
-                onDelete={onDelete}
-                onConfirmed={onConfirmed}
-                onHasChangesChange={onHasChangesChange}
-                onProgressbarVisibilityChange={onProgressbarVisibilityChange}
-                title={t('orders.detailTitle')}
-                noDetailMessage={t('orders.noDetailToDisplay')}
-                entity={order}
-                initialEntity={initialOrder}
-                onFetchEntity={fetchOrder}
-                onSaveEntity={saveOrder}
-                onDeleteEntity={deleteOrder}
-                onResetEntity={resetOrder}
-                deleteConfirmMessage={t('orders.deleteConfirm')}
-                resetConfirmMessage={t('common.resetConfirm')}
-                pendingChangesConfirmMessage={t('common.pendingChangesConfirm')}
-                disabled={disabled}
-            >
-                {order != null && <UpdateOrderView
-                    disabled={disabled}
-                    order={order}
-                    products={products}
-                    shouldValidate={shouldValidate}
-                    onChange={setOrder}
-                />} 
-            </DetailCardLayout>}
-        </>
-    );
+     return (
+          <>
+               {id === undefined && (
+                    <Box
+                         sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              width: '100%',
+                              alignContent: 'center',
+                              p: 5,
+                              minHeight: 400,
+                         }}
+                    >
+                         <Typography variant="subtitle2" sx={{ flexGrow: 1, textAlign: 'center' }}>
+                              {t('orders.noDetailToDisplay')}
+                         </Typography>
+                    </Box>
+               )}
+               {id !== undefined && (
+                    <DetailCardLayout
+                         id={id}
+                         shouldCheckPendingChanges={shouldCheckPendingChanges}
+                         onDelete={onDelete}
+                         onConfirmed={onConfirmed}
+                         onHasChangesChange={onHasChangesChange}
+                         onProgressbarVisibilityChange={onProgressbarVisibilityChange}
+                         title={t('orders.detailTitle')}
+                         noDetailMessage={t('orders.noDetailToDisplay')}
+                         entity={order}
+                         initialEntity={initialOrder}
+                         onFetchEntity={fetchOrder}
+                         onSaveEntity={saveOrder}
+                         onDeleteEntity={deleteOrder}
+                         onResetEntity={resetOrder}
+                         deleteConfirmMessage={t('orders.deleteConfirm')}
+                    >
+                         {order != null && (
+                              <UpdateOrderView
+                                   disabled={disabled}
+                                   order={order}
+                                   products={products}
+                                   shouldValidate={shouldValidate}
+                                   onChange={setOrder}
+                              />
+                         )}
+                    </DetailCardLayout>
+               )}
+          </>
+     );
 }

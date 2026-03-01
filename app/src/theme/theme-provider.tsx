@@ -1,5 +1,7 @@
 import type { ThemeProviderProps as MuiThemeProviderProps } from '@mui/material/styles';
 
+import { useMemo } from 'react';
+
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider as ThemeVarsProvider } from '@mui/material/styles';
 
@@ -15,9 +17,7 @@ export type ThemeProviderProps = Partial<MuiThemeProviderProps> & {
 };
 
 export function ThemeProvider({ themeOverrides, children, ...other }: ThemeProviderProps) {
-  const theme = createTheme({
-    themeOverrides,
-  });
+  const theme = useMemo(() => createTheme({ themeOverrides }), [themeOverrides]);
 
   return (
     <ThemeVarsProvider disableTransitionOnChange theme={theme} {...other}>
