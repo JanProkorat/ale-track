@@ -14,10 +14,11 @@ import type { ThemeOptions } from './types';
 
 export type ThemeProviderProps = Partial<MuiThemeProviderProps> & {
   themeOverrides?: ThemeOptions;
+  locales?: object[];
 };
 
-export function ThemeProvider({ themeOverrides, children, ...other }: ThemeProviderProps) {
-  const theme = useMemo(() => createTheme({ themeOverrides }), [themeOverrides]);
+export function ThemeProvider({ themeOverrides, locales, children, ...other }: ThemeProviderProps) {
+  const theme = useMemo(() => createTheme({ themeOverrides, locales }), [themeOverrides, locales]);
 
   return (
     <ThemeVarsProvider disableTransitionOnChange theme={theme} {...other}>
