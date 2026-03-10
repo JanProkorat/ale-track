@@ -20,7 +20,13 @@ export const baseTheme: ThemeOptions = {
       shadows: shadows.light,
       customShadows: customShadows.light,
     },
+    dark: {
+      palette: palette.dark,
+      shadows: shadows.dark,
+      customShadows: customShadows.dark,
+    },
   },
+  defaultColorScheme: 'light',
   components,
   typography,
   shape: { borderRadius: 8 },
@@ -31,10 +37,11 @@ export const baseTheme: ThemeOptions = {
 
 type CreateThemeProps = {
   themeOverrides?: ThemeOptions;
+  locales?: object[];
 };
 
-export function createTheme({ themeOverrides = {} }: CreateThemeProps = {}): Theme {
-  const theme = createMuiTheme(baseTheme, themeOverrides);
+export function createTheme({ themeOverrides = {}, locales = [] }: CreateThemeProps = {}): Theme {
+  const theme = createMuiTheme(baseTheme, themeOverrides, ...locales);
 
   return theme;
 }

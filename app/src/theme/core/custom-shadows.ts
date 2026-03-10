@@ -61,4 +61,5 @@ function createCustomShadows(colorChannel: string): CustomShadows {
 
 export const customShadows: Partial<Record<ThemeColorScheme, CustomShadows>> = {
   light: createCustomShadows(grey['500Channel']),
+  dark: createCustomShadows(common.blackChannel),
 };
