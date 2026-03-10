@@ -2,7 +2,7 @@ import type { OrderListItemDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -84,6 +84,13 @@ export default function OrderListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first order when data loads and nothing is selected
+     useEffect(() => {
+          if (!selectedOrderId && !isLoading && filteredOrders.length > 0) {
+               setSelectedOrderId(filteredOrders[0].id ?? null);
+          }
+     }, [selectedOrderId, isLoading, filteredOrders, setSelectedOrderId]);
 
      const handleCloseDetail = () => setSelectedOrderId(null);
 

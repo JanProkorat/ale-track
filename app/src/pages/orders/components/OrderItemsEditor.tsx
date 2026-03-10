@@ -1,4 +1,4 @@
-import type { ProductListItemDto } from 'src/generated/api-client';
+import type { ProductListItemDto, BreweryGroupDto, KindGroupDto, PackageGroupDto } from 'src/generated/api-client';
 
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import Table from '@mui/material/Table';
-import Paper from '@mui/material/Paper';
+import Divider from '@mui/material/Divider';
 import Popover from '@mui/material/Popover';
 import Collapse from '@mui/material/Collapse';
 import Checkbox from '@mui/material/Checkbox';
@@ -31,7 +31,7 @@ import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutl
 import NotificationsActiveOutlined from '@mui/icons-material/NotificationsActiveOutlined';
 import RemoveCircleOutlineOutlined from '@mui/icons-material/RemoveCircleOutlineOutlined';
 
-import { useProducts } from 'src/hooks/useProducts';
+import { useProductsByClientHistory } from 'src/hooks/useProducts';
 
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { useEnumLabel } from 'src/utils/enumTranslations';
@@ -49,78 +49,41 @@ export interface OrderItemRow {
 }
 
 interface OrderItemsEditorProps {
+     clientId: string;
      items: OrderItemRow[];
      onChange: (items: OrderItemRow[]) => void;
-}
-
-// ---------------------------------------------------------------------------
-// Grouped tree structure
-// ---------------------------------------------------------------------------
-
-interface SizeGroup {
-     size: string;
-     sizeNum: number | undefined;
-     products: ProductListItemDto[];
-}
-
-interface KindGroup {
-     kind: string;
-     sizes: SizeGroup[];
-}
-
-interface BreweryGroup {
-     brewery: string;
-     kinds: KindGroup[];
-}
-
-function buildTree(products: ProductListItemDto[], enumLabel: ReturnType<typeof useEnumLabel>): BreweryGroup[] {
-     const brewMap = new Map<string, Map<string, Map<string, ProductListItemDto[]>>>();
-
-     for (const p of products) {
-          const brew = p.breweryName ?? '—';
-          const kind = p.kind != null ? enumLabel.productKind(p.kind) : '—';
-          const size = p.packageSize != null ? `${p.packageSize} L` : '—';
-
-          if (!brewMap.has(brew)) brewMap.set(brew, new Map());
-          const kindMap = brewMap.get(brew)!;
-          if (!kindMap.has(kind)) kindMap.set(kind, new Map());
-          const sizeMap = kindMap.get(kind)!;
-          if (!sizeMap.has(size)) sizeMap.set(size, []);
-          sizeMap.get(size)!.push(p);
-     }
-
-     const result: BreweryGroup[] = [];
-     for (const [brewery, kindMap] of [...brewMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-          const kinds: KindGroup[] = [];
-          for (const [kind, sizeMap] of [...kindMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-               const sizes: SizeGroup[] = [];
-               for (const [size, prods] of [...sizeMap.entries()].sort(([a], [b]) => {
-                    const na = parseFloat(a) || 0;
-                    const nb = parseFloat(b) || 0;
-                    return na - nb;
-               })) {
-                    sizes.push({
-                         size,
-                         sizeNum: prods[0]?.packageSize ?? undefined,
-                         products: prods.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
-                    });
-               }
-               kinds.push({ kind, sizes });
-          }
-          result.push({ brewery, kinds });
-     }
-     return result;
 }
 
 // ---------------------------------------------------------------------------
 // OrderItemsEditor
 // ---------------------------------------------------------------------------
 
-export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
+export default function OrderItemsEditor({ clientId, items, onChange }: OrderItemsEditorProps) {
      const { t } = useTranslation();
      const enumLabel = useEnumLabel();
      const { formatPrice } = useCurrency();
-     const { data: products = [] } = useProducts();
+     const { data: groupedData } = useProductsByClientHistory(clientId);
+
+     const recentProducts = groupedData?.recent ?? [];
+     const breweryGroups = groupedData?.breweries ?? [];
+
+     // Flat lookup for table rows and chip labels
+     const allProducts = useMemo(() => {
+          const map = new Map<string, ProductListItemDto>();
+          for (const p of recentProducts) {
+               if (p.id) map.set(p.id, p);
+          }
+          for (const bg of breweryGroups) {
+               for (const kg of bg.kinds ?? []) {
+                    for (const pg of kg.packageSizes ?? []) {
+                         for (const p of pg.items ?? []) {
+                              if (p.id) map.set(p.id, p);
+                         }
+                    }
+               }
+          }
+          return map;
+     }, [recentProducts, breweryGroups]);
 
      // Popover state for reminder "Added" → choose null or Resolved
      const [reminderPopover, setReminderPopover] = useState<{ anchor: HTMLElement; productId: string } | null>(null);
@@ -142,9 +105,6 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
 
      // Products already selected (by id)
      const selectedIds = useMemo(() => new Set(items.map((i) => i.productId)), [items]);
-
-     // Grouped tree
-     const tree = useMemo(() => buildTree(products, enumLabel), [products, enumLabel]);
 
      // Toggle a product in the selection
      const toggleProduct = (product: ProductListItemDto) => {
@@ -188,11 +148,98 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
           );
      };
 
+     // --- Render helpers for the pre-grouped tree ---
+
+     const renderProductItem = (product: ProductListItemDto, indent: number) => {
+          const checked = selectedIds.has(product.id ?? '');
+          return (
+               <ListItemButton
+                    key={product.id}
+                    onClick={() => toggleProduct(product)}
+                    sx={{ pl: indent, py: 0.25 }}
+               >
+                    <Checkbox
+                         size="small"
+                         checked={checked}
+                         tabIndex={-1}
+                         disableRipple
+                         sx={{ mr: 1, p: 0 }}
+                    />
+                    <ListItemText
+                         primary={product.name}
+                         primaryTypographyProps={{ fontSize: '0.8125rem' }}
+                    />
+               </ListItemButton>
+          );
+     };
+
+     const renderPackageGroup = (pg: PackageGroupDto, parentKey: string) => {
+          const sizeLabel = pg.size != null ? `${pg.size} L` : '—';
+          const sizeKey = `${parentKey}:s:${sizeLabel}`;
+          const sizeOpen = !collapsed.has(sizeKey);
+
+          return (
+               <Box key={sizeKey}>
+                    <ListItemButton onClick={() => toggleCollapsed(sizeKey)} sx={{ pl: 6, py: 0.25 }}>
+                         <ListItemText
+                              primary={sizeLabel}
+                              primaryTypographyProps={{ fontSize: '0.8125rem', color: 'text.secondary' }}
+                         />
+                         {sizeOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                    </ListItemButton>
+                    <Collapse in={sizeOpen}>
+                         {(pg.items ?? []).map((product) => renderProductItem(product, 8))}
+                    </Collapse>
+               </Box>
+          );
+     };
+
+     const renderKindGroup = (kg: KindGroupDto, parentKey: string) => {
+          const kindLabel = kg.kind != null ? enumLabel.productKind(kg.kind) : '—';
+          const kindKey = `${parentKey}:k:${kindLabel}`;
+          const kindOpen = !collapsed.has(kindKey);
+
+          return (
+               <Box key={kindKey}>
+                    <ListItemButton onClick={() => toggleCollapsed(kindKey)} sx={{ pl: 4, py: 0.25 }}>
+                         <ListItemText
+                              primary={kindLabel}
+                              primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+                         />
+                         {kindOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                    </ListItemButton>
+                    <Collapse in={kindOpen}>
+                         {(kg.packageSizes ?? []).map((pg) => renderPackageGroup(pg, kindKey))}
+                    </Collapse>
+               </Box>
+          );
+     };
+
+     const renderBreweryGroup = (bg: BreweryGroupDto) => {
+          const brewKey = `b:${bg.breweryName ?? '—'}`;
+          const brewOpen = !collapsed.has(brewKey);
+
+          return (
+               <Box key={brewKey}>
+                    <ListItemButton onClick={() => toggleCollapsed(brewKey)} sx={{ py: 0.5 }}>
+                         <ListItemText
+                              primary={bg.breweryName ?? '—'}
+                              primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem' }}
+                         />
+                         {brewOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                    </ListItemButton>
+                    <Collapse in={brewOpen}>
+                         {(bg.kinds ?? []).map((kg) => renderKindGroup(kg, brewKey))}
+                    </Collapse>
+               </Box>
+          );
+     };
+
      return (
           <Box>
                {/* Product picker trigger */}
                <Box
-                    onClick={(e) => setPickerAnchor(e.currentTarget as HTMLElement)}
+                    onClick={(e) => clientId && setPickerAnchor(e.currentTarget as HTMLElement)}
                     sx={{
                          border: '1px solid',
                          borderColor: 'divider',
@@ -205,8 +252,9 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
                          alignItems: 'center',
                          flexWrap: 'wrap',
                          gap: 0.5,
-                         cursor: 'pointer',
-                         '&:hover': { borderColor: 'text.primary' },
+                         cursor: clientId ? 'pointer' : 'default',
+                         opacity: clientId ? 1 : 0.5,
+                         '&:hover': clientId ? { borderColor: 'text.primary' } : undefined,
                     }}
                >
                     {items.length === 0 ? (
@@ -215,7 +263,7 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
                          </Typography>
                     ) : (
                          items.map((item) => {
-                              const product = products.find((p) => p.id === item.productId);
+                              const product = allProducts.get(item.productId);
                               return (
                                    <Chip
                                         key={item.productId}
@@ -228,7 +276,7 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
                     )}
                </Box>
 
-               {/* Product picker popover with collapsible tree */}
+               {/* Product picker popover with recent + brewery tree */}
                <Popover
                     open={Boolean(pickerAnchor)}
                     anchorEl={pickerAnchor}
@@ -246,97 +294,28 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
                     }}
                >
                     <List dense disablePadding>
-                         {tree.map((breweryGroup) => {
-                              const brewKey = `b:${breweryGroup.brewery}`;
-                              const brewOpen = !collapsed.has(brewKey);
+                         {/* Recent (history) section */}
+                         {recentProducts.length > 0 && (
+                              <>
+                                   <ListItemButton
+                                        onClick={() => toggleCollapsed('recent')}
+                                        sx={{ py: 0.5, bgcolor: 'action.hover' }}
+                                   >
+                                        <ListItemText
+                                             primary={t('orders.recentProducts')}
+                                             primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem', color: 'primary.main' }}
+                                        />
+                                        {!collapsed.has('recent') ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+                                   </ListItemButton>
+                                   <Collapse in={!collapsed.has('recent')}>
+                                        {recentProducts.map((product) => renderProductItem(product, 2))}
+                                   </Collapse>
+                                   <Divider />
+                              </>
+                         )}
 
-                              return (
-                                   <Box key={brewKey}>
-                                        {/* Brewery header */}
-                                        <ListItemButton
-                                             onClick={() => toggleCollapsed(brewKey)}
-                                             sx={{ py: 0.5 }}
-                                        >
-                                             <ListItemText
-                                                  primary={breweryGroup.brewery}
-                                                  primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem' }}
-                                             />
-                                             {brewOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                        </ListItemButton>
-
-                                        <Collapse in={brewOpen}>
-                                             {breweryGroup.kinds.map((kindGroup) => {
-                                                  const kindKey = `${brewKey}:k:${kindGroup.kind}`;
-                                                  const kindOpen = !collapsed.has(kindKey);
-
-                                                  return (
-                                                       <Box key={kindKey}>
-                                                            {/* Kind header */}
-                                                            <ListItemButton
-                                                                 onClick={() => toggleCollapsed(kindKey)}
-                                                                 sx={{ pl: 4, py: 0.25 }}
-                                                            >
-                                                                 <ListItemText
-                                                                      primary={kindGroup.kind}
-                                                                      primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
-                                                                 />
-                                                                 {kindOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                                            </ListItemButton>
-
-                                                            <Collapse in={kindOpen}>
-                                                                 {kindGroup.sizes.map((sizeGroup) => {
-                                                                      const sizeKey = `${kindKey}:s:${sizeGroup.size}`;
-                                                                      const sizeOpen = !collapsed.has(sizeKey);
-
-                                                                      return (
-                                                                           <Box key={sizeKey}>
-                                                                                {/* Size header */}
-                                                                                <ListItemButton
-                                                                                     onClick={() => toggleCollapsed(sizeKey)}
-                                                                                     sx={{ pl: 6, py: 0.25 }}
-                                                                                >
-                                                                                     <ListItemText
-                                                                                          primary={sizeGroup.size}
-                                                                                          primaryTypographyProps={{ fontSize: '0.8125rem', color: 'text.secondary' }}
-                                                                                     />
-                                                                                     {sizeOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                                                                </ListItemButton>
-
-                                                                                <Collapse in={sizeOpen}>
-                                                                                     {sizeGroup.products.map((product) => {
-                                                                                          const checked = selectedIds.has(product.id ?? '');
-                                                                                          return (
-                                                                                               <ListItemButton
-                                                                                                    key={product.id}
-                                                                                                    onClick={() => toggleProduct(product)}
-                                                                                                    sx={{ pl: 8, py: 0.25 }}
-                                                                                               >
-                                                                                                    <Checkbox
-                                                                                                         size="small"
-                                                                                                         checked={checked}
-                                                                                                         tabIndex={-1}
-                                                                                                         disableRipple
-                                                                                                         sx={{ mr: 1, p: 0 }}
-                                                                                                    />
-                                                                                                    <ListItemText
-                                                                                                         primary={product.name}
-                                                                                                         primaryTypographyProps={{ fontSize: '0.8125rem' }}
-                                                                                                    />
-                                                                                               </ListItemButton>
-                                                                                          );
-                                                                                     })}
-                                                                                </Collapse>
-                                                                           </Box>
-                                                                      );
-                                                                 })}
-                                                            </Collapse>
-                                                       </Box>
-                                                  );
-                                             })}
-                                        </Collapse>
-                                   </Box>
-                              );
-                         })}
+                         {/* Brewery groups */}
+                         {breweryGroups.map((bg) => renderBreweryGroup(bg))}
                     </List>
                </Popover>
 
@@ -376,7 +355,7 @@ export default function OrderItemsEditor({ items, onChange }: OrderItemsEditorPr
                               </TableHead>
                               <TableBody>
                                    {items.map((item) => {
-                                        const product = products.find((p) => p.id === item.productId);
+                                        const product = allProducts.get(item.productId);
                                         if (!product) return null;
                                         return (
                                              <TableRow key={item.productId}>

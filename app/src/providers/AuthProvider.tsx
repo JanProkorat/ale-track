@@ -1,7 +1,7 @@
 import { jwtDecode } from 'jwt-decode';
 import { useMemo, useState, useEffect, useCallback, createContext } from 'react';
 
-import { apiClient, setApiToken } from 'src/api/apiClient';
+import { apiClient, setApiToken, setRefreshToken, setAuthCallbacks } from 'src/api/apiClient';
 import { LoginUserDto, UserRoleType } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +91,7 @@ function parseUserFromToken(token: string): AuthUser | null {
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'authToken';
+const REFRESH_STORAGE_KEY = 'refreshToken';
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -111,19 +112,43 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                const parsed = parseUserFromToken(token);
                if (parsed) {
                     setApiToken(token);
+                    setRefreshToken(localStorage.getItem(REFRESH_STORAGE_KEY));
                     setUser(parsed);
                } else {
                     // Token expired or invalid — clear
                     localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem(REFRESH_STORAGE_KEY);
                     setApiToken(null);
+                    setRefreshToken(null);
                     setToken(null);
                     setUser(null);
                }
           } else {
                setApiToken(null);
+               setRefreshToken(null);
                setUser(null);
           }
      }, [token]);
+
+     // Wire up callbacks so the fetch layer can silently update tokens
+     useEffect(() => {
+          setAuthCallbacks(
+               (accessToken, refreshToken) => {
+                    localStorage.setItem(STORAGE_KEY, accessToken);
+                    localStorage.setItem(REFRESH_STORAGE_KEY, refreshToken);
+                    setToken(accessToken);
+               },
+               () => {
+                    // Refresh failed — force logout
+                    localStorage.removeItem(STORAGE_KEY);
+                    localStorage.removeItem(REFRESH_STORAGE_KEY);
+                    setApiToken(null);
+                    setRefreshToken(null);
+                    setToken(null);
+                    setUser(null);
+               },
+          );
+     }, []);
 
      const login = useCallback(async (userName: string, password: string) => {
           const dto = new LoginUserDto();
@@ -137,11 +162,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           }
 
           localStorage.setItem(STORAGE_KEY, accessToken);
+          if (response.refreshToken) {
+               localStorage.setItem(REFRESH_STORAGE_KEY, response.refreshToken);
+          }
           setToken(accessToken);
      }, []);
 
      const logout = useCallback(() => {
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(REFRESH_STORAGE_KEY);
+          setRefreshToken(null);
           setToken(null);
      }, []);
 

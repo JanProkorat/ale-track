@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
@@ -25,15 +26,37 @@ export default function BreweryListPage() {
 
      const { data: breweries = [], isLoading } = useBreweries();
 
-     const [selectedId, setSelectedId] = useState<string | null>(null);
+     const [searchParams, setSearchParams] = useSearchParams();
+     const selectedId = searchParams.get('id');
      const [drawerOpen, setDrawerOpen] = useState(false);
 
      const { setDirty } = useUnsavedChanges();
+
+     const setSelectedId = useCallback(
+          (id: string | null) => {
+               setSearchParams((prev) => {
+                    if (id) {
+                         prev.set('id', id);
+                    } else {
+                         prev.delete('id');
+                    }
+                    return prev;
+               }, { replace: true });
+          },
+          [setSearchParams],
+     );
 
      // Auto-select first brewery when data loads
      const activeId = selectedId && breweries.some((b) => b.id === selectedId)
           ? selectedId
           : breweries[0]?.id ?? null;
+
+     // Sync auto-selected id to URL
+     useEffect(() => {
+          if (activeId && activeId !== selectedId) {
+               setSelectedId(activeId);
+          }
+     }, [activeId, selectedId, setSelectedId]);
 
      const handleTabChange = (_e: React.SyntheticEvent, newValue: string) => {
           setSelectedId(newValue);
@@ -42,11 +65,11 @@ export default function BreweryListPage() {
      const handleBreweryCreated = useCallback((breweryId: string) => {
           setDrawerOpen(false);
           setSelectedId(breweryId);
-     }, []);
+     }, [setSelectedId]);
 
      const handleDeleted = useCallback(() => {
           setSelectedId(null);
-     }, []);
+     }, [setSelectedId]);
 
      return (
           <Box>

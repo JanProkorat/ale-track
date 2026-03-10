@@ -16,7 +16,8 @@ body {
 }
 
 input:-webkit-autofill {
-     -webkit-box-shadow: 0 0 0 30px white inset !important;
+     -webkit-box-shadow: 0 0 0 30px var(--palette-background-paper) inset !important;
+     -webkit-text-fill-color: var(--palette-text-primary) !important;
 }
 
 #root {

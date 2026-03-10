@@ -11,6 +11,7 @@ import { apiClient } from 'src/api/apiClient';
 // ---------------------------------------------------------------------------
 
 const PRODUCTS_KEY = 'products';
+const PRODUCTS_BY_CLIENT_HISTORY_KEY = 'products-by-client-history';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -21,6 +22,15 @@ export function useProducts(search?: string) {
           queryKey: [PRODUCTS_KEY, search],
           queryFn: ({ signal }) =>
                apiClient.getProductsListEndpoint(search ? { Name: `contains:${search}` } : {}, signal),
+     });
+}
+
+export function useProductsByClientHistory(clientId: string) {
+     return useQuery({
+          queryKey: [PRODUCTS_BY_CLIENT_HISTORY_KEY, clientId],
+          queryFn: ({ signal }) =>
+               apiClient.getProductsByClientHistoryEndpoint(clientId, {}, signal),
+          enabled: !!clientId,
      });
 }
 

@@ -20,7 +20,13 @@ export const baseTheme: ThemeOptions = {
       shadows: shadows.light,
       customShadows: customShadows.light,
     },
+    dark: {
+      palette: palette.dark,
+      shadows: shadows.dark,
+      customShadows: customShadows.dark,
+    },
   },
+  defaultColorScheme: 'light',
   components,
   typography,
   shape: { borderRadius: 8 },

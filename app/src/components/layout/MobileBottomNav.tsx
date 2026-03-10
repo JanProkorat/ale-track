@@ -24,6 +24,7 @@ import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import useAuth from 'src/hooks/useAuth';
 
 import { navItems, mobileNavItems } from './navConfig';
+import ThemeModeSwitcher from './ThemeModeSwitcher';
 import InlineLanguageSwitcher from './InlineLanguageSwitcher';
 import InlineCurrencySwitcher from './InlineCurrencySwitcher';
 
@@ -209,9 +210,10 @@ export default function MobileBottomNav({ badgeCounts = {} }: MobileBottomNavPro
 
                          <Divider sx={{ mx: 1, my: 0.5 }} />
 
-                         {/* Language + currency */}
+                         {/* Language + theme + currency */}
                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
                               <InlineLanguageSwitcher />
+                              <ThemeModeSwitcher />
                               <InlineCurrencySwitcher />
                          </Box>
 

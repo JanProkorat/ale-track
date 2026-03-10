@@ -64,6 +64,12 @@ export interface IClient {
     deleteUserEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Refresh an access token using a refresh token
+     * @return Token refreshed
+     */
+    refreshTokenEndpoint(data: RefreshTokenDto, signal?: AbortSignal): Promise<LoginResponse>;
+
+    /**
      * Login user into the system
      * @return User logged in
      */
@@ -154,22 +160,10 @@ export interface IClient {
     deleteBreweryReminderEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
-     * Gets product types list
-     * @return List of product types
-     */
-    getProductTypeListEndpoint(signal?: AbortSignal): Promise<ProductType[]>;
-
-    /**
      * Gets filtered products list
      * @return List of products
      */
     getProductsListEndpoint(parameters: { [key: string]: string; }, signal?: AbortSignal): Promise<ProductListItemDto[]>;
-
-    /**
-     * Gets product kinds list
-     * @return List of product kinds
-     */
-    getProductKindListEndpoint(signal?: AbortSignal): Promise<string[]>;
 
     /**
      * Gets product detail
@@ -1051,6 +1045,53 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Refresh an access token using a refresh token
+     * @return Token refreshed
+     */
+    refreshTokenEndpoint(data: RefreshTokenDto, signal?: AbortSignal): Promise<LoginResponse> {
+        let url_ = this.baseUrl + "/ale-track/refresh";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRefreshTokenEndpoint(_response);
+        });
+    }
+
+    protected processRefreshTokenEndpoint(response: Response): Promise<LoginResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = LoginResponse.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<LoginResponse>(null as any);
     }
 
     /**
@@ -2023,66 +2064,6 @@ export class Client implements IClient {
     }
 
     /**
-     * Gets product types list
-     * @return List of product types
-     */
-    getProductTypeListEndpoint(signal?: AbortSignal): Promise<ProductType[]> {
-        let url_ = this.baseUrl + "/ale-track/products/types";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetProductTypeListEndpoint(_response);
-        });
-    }
-
-    protected processGetProductTypeListEndpoint(response: Response): Promise<ProductType[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            if (Array.isArray(resultData200)) {
-                result200 = [] as any;
-                for (let item of resultData200)
-                    result200!.push(item);
-            }
-            else {
-                result200 = null as any;
-            }
-            return result200;
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<ProductType[]>(null as any);
-    }
-
-    /**
      * Gets filtered products list
      * @return List of products
      */
@@ -2144,66 +2125,6 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<ProductListItemDto[]>(null as any);
-    }
-
-    /**
-     * Gets product kinds list
-     * @return List of product kinds
-     */
-    getProductKindListEndpoint(signal?: AbortSignal): Promise<string[]> {
-        let url_ = this.baseUrl + "/ale-track/products/kinds";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetProductKindListEndpoint(_response);
-        });
-    }
-
-    protected processGetProductKindListEndpoint(response: Response): Promise<string[]> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            if (Array.isArray(resultData200)) {
-                result200 = [] as any;
-                for (let item of resultData200)
-                    result200!.push(item);
-            }
-            else {
-                result200 = null as any;
-            }
-            return result200;
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string[]>(null as any);
     }
 
     /**
@@ -5832,6 +5753,7 @@ export enum UserRoleType {
 
 export class LoginResponse implements ILoginResponse {
     accessToken?: string;
+    refreshToken?: string;
 
     constructor(data?: ILoginResponse) {
         if (data) {
@@ -5845,6 +5767,7 @@ export class LoginResponse implements ILoginResponse {
     init(_data?: any) {
         if (_data) {
             this.accessToken = _data["accessToken"];
+            this.refreshToken = _data["refreshToken"];
         }
     }
 
@@ -5858,12 +5781,14 @@ export class LoginResponse implements ILoginResponse {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["accessToken"] = this.accessToken;
+        data["refreshToken"] = this.refreshToken;
         return data;
     }
 }
 
 export interface ILoginResponse {
     accessToken?: string;
+    refreshToken?: string;
 }
 
 export class UpdateUserDto implements IUpdateUserDto {
@@ -5949,6 +5874,42 @@ export class DeleteUserRequest implements IDeleteUserRequest {
 }
 
 export interface IDeleteUserRequest {
+}
+
+export class RefreshTokenDto implements IRefreshTokenDto {
+    refreshToken?: string;
+
+    constructor(data?: IRefreshTokenDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.refreshToken = _data["refreshToken"];
+        }
+    }
+
+    static fromJS(data: any): RefreshTokenDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new RefreshTokenDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["refreshToken"] = this.refreshToken;
+        return data;
+    }
+}
+
+export interface IRefreshTokenDto {
+    refreshToken?: string;
 }
 
 export class LoginUserDto implements ILoginUserDto {
@@ -6844,31 +6805,100 @@ export class DeleteClientReminderRequest implements IDeleteClientReminderRequest
 export interface IDeleteClientReminderRequest {
 }
 
-export enum ProductType {
-    PaleDraftBeer = 1,
-    PaleLager = 2,
-    AmberLager = 3,
-    DarkLager = 4,
-    SpecialBeer = 5,
-    StrongBeerPale = 6,
-    NonAlcoholicBeer = 7,
-    Radler = 8,
-    MixedBeer = 9,
-    WheatBeer = 10,
-    FlavoredBeer = 11,
-    Lemonade = 12,
-    Merchandise = 13,
-    PaleLagerPremium = 14,
-    PaleStrong = 15,
-    DarkStrong = 16,
-    YeastLager = 17,
-    UnfilteredBlendedLager = 18,
-    FestiveLager = 19,
-    MixedLager = 20,
-    Mix = 21,
-    NonAlcoholicFlavourBeer = 22,
-    OriginalCraftLager = 23,
-    Other = 24,
+export class ProductListItemDto implements IProductListItemDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    priceWithVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
+    weight?: number | undefined;
+    breweryName?: string;
+    breweryId?: string;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
+
+    constructor(data?: IProductListItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.kind = _data["kind"];
+            this.type = _data["type"];
+            this.alcoholPercentage = _data["alcoholPercentage"];
+            this.platoDegree = _data["platoDegree"];
+            this.packageSize = _data["packageSize"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.priceForUnitWithVat = _data["priceForUnitWithVat"];
+            this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.weight = _data["weight"];
+            this.breweryName = _data["breweryName"];
+            this.breweryId = _data["breweryId"];
+            this.breweryDisplayOrder = _data["breweryDisplayOrder"];
+            this.displayOrder = _data["displayOrder"];
+        }
+    }
+
+    static fromJS(data: any): ProductListItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ProductListItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["kind"] = this.kind;
+        data["type"] = this.type;
+        data["alcoholPercentage"] = this.alcoholPercentage;
+        data["platoDegree"] = this.platoDegree;
+        data["packageSize"] = this.packageSize;
+        data["priceWithVat"] = this.priceWithVat;
+        data["priceForUnitWithVat"] = this.priceForUnitWithVat;
+        data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["weight"] = this.weight;
+        data["breweryName"] = this.breweryName;
+        data["breweryId"] = this.breweryId;
+        data["breweryDisplayOrder"] = this.breweryDisplayOrder;
+        data["displayOrder"] = this.displayOrder;
+        return data;
+    }
+}
+
+export interface IProductListItemDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    priceWithVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
+    weight?: number | undefined;
+    breweryName?: string;
+    breweryId?: string;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
 }
 
 export class CreateReminderDto implements ICreateReminderDto {
@@ -6955,100 +6985,39 @@ export interface ICreateReminderDto {
     activeUntil?: Date | undefined;
 }
 
-export class ProductListItemDto implements IProductListItemDto {
-    id?: string;
-    name?: string;
-    description?: string | undefined;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    priceWithVat?: number;
-    priceForUnitWithVat?: number | undefined;
-    priceForUnitWithoutVat?: number | undefined;
-    weight?: number | undefined;
-    breweryName?: string;
-    breweryId?: string;
-
-    constructor(data?: IProductListItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.description = _data["description"];
-            this.kind = _data["kind"];
-            this.type = _data["type"];
-            this.alcoholPercentage = _data["alcoholPercentage"];
-            this.platoDegree = _data["platoDegree"];
-            this.packageSize = _data["packageSize"];
-            this.priceWithVat = _data["priceWithVat"];
-            this.priceForUnitWithVat = _data["priceForUnitWithVat"];
-            this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
-            this.weight = _data["weight"];
-            this.breweryName = _data["breweryName"];
-            this.breweryId = _data["breweryId"];
-        }
-    }
-
-    static fromJS(data: any): ProductListItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ProductListItemDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["description"] = this.description;
-        data["kind"] = this.kind;
-        data["type"] = this.type;
-        data["alcoholPercentage"] = this.alcoholPercentage;
-        data["platoDegree"] = this.platoDegree;
-        data["packageSize"] = this.packageSize;
-        data["priceWithVat"] = this.priceWithVat;
-        data["priceForUnitWithVat"] = this.priceForUnitWithVat;
-        data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
-        data["weight"] = this.weight;
-        data["breweryName"] = this.breweryName;
-        data["breweryId"] = this.breweryId;
-        return data;
-    }
-}
-
-export interface IProductListItemDto {
-    id?: string;
-    name?: string;
-    description?: string | undefined;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    priceWithVat?: number;
-    priceForUnitWithVat?: number | undefined;
-    priceForUnitWithoutVat?: number | undefined;
-    weight?: number | undefined;
-    breweryName?: string;
-    breweryId?: string;
-}
-
 export enum ProductKind {
     Keg = 1,
     Bottle = 2,
     Can = 3,
     Multipack = 4,
     Other = 5,
+}
+
+export enum ProductType {
+    PaleDraftBeer = 1,
+    PaleLager = 2,
+    AmberLager = 3,
+    DarkLager = 4,
+    SpecialBeer = 5,
+    StrongBeerPale = 6,
+    NonAlcoholicBeer = 7,
+    Radler = 8,
+    MixedBeer = 9,
+    WheatBeer = 10,
+    FlavoredBeer = 11,
+    Lemonade = 12,
+    Merchandise = 13,
+    PaleLagerPremium = 14,
+    PaleStrong = 15,
+    DarkStrong = 16,
+    YeastLager = 17,
+    UnfilteredBlendedLager = 18,
+    FestiveLager = 19,
+    MixedLager = 20,
+    Mix = 21,
+    NonAlcoholicFlavourBeer = 22,
+    OriginalCraftLager = 23,
+    Other = 24,
 }
 
 export class ProductDto implements IProductDto {
@@ -7220,6 +7189,7 @@ export interface IGroupedProductHistoryDto {
 export class BreweryGroupDto implements IBreweryGroupDto {
     breweryId?: string;
     breweryName?: string;
+    displayOrder?: number;
     kinds?: KindGroupDto[];
 
     constructor(data?: IBreweryGroupDto) {
@@ -7235,6 +7205,7 @@ export class BreweryGroupDto implements IBreweryGroupDto {
         if (_data) {
             this.breweryId = _data["breweryId"];
             this.breweryName = _data["breweryName"];
+            this.displayOrder = _data["displayOrder"];
             if (Array.isArray(_data["kinds"])) {
                 this.kinds = [] as any;
                 for (let item of _data["kinds"])
@@ -7254,6 +7225,7 @@ export class BreweryGroupDto implements IBreweryGroupDto {
         data = typeof data === 'object' ? data : {};
         data["breweryId"] = this.breweryId;
         data["breweryName"] = this.breweryName;
+        data["displayOrder"] = this.displayOrder;
         if (Array.isArray(this.kinds)) {
             data["kinds"] = [];
             for (let item of this.kinds)
@@ -7266,6 +7238,7 @@ export class BreweryGroupDto implements IBreweryGroupDto {
 export interface IBreweryGroupDto {
     breweryId?: string;
     breweryName?: string;
+    displayOrder?: number;
     kinds?: KindGroupDto[];
 }
 
@@ -8451,6 +8424,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     stops?: OutgoingShipmentStopDto[];
+    extraItems?: OutgoingShipmentExtraItemDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -8477,6 +8451,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.stops = [] as any;
                 for (let item of _data["stops"])
                     this.stops!.push(OutgoingShipmentStopDto.fromJS(item));
+            }
+            if (Array.isArray(_data["extraItems"])) {
+                this.extraItems = [] as any;
+                for (let item of _data["extraItems"])
+                    this.extraItems!.push(OutgoingShipmentExtraItemDto.fromJS(item));
             }
         }
     }
@@ -8505,6 +8484,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.stops)
                 data["stops"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.extraItems)) {
+            data["extraItems"] = [];
+            for (let item of this.extraItems)
+                data["extraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -8517,6 +8501,7 @@ export interface IOutgoingShipmentDetailDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     stops?: OutgoingShipmentStopDto[];
+    extraItems?: OutgoingShipmentExtraItemDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -8725,6 +8710,74 @@ export interface IOutgoingShipmentProductDto {
     packageSize?: number | undefined;
 }
 
+export class OutgoingShipmentExtraItemDto implements IOutgoingShipmentExtraItemDto {
+    productId?: string | undefined;
+    productName?: string | undefined;
+    quantity?: number;
+    kind?: ProductKind | undefined;
+    type?: ProductType | undefined;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IOutgoingShipmentExtraItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.productName = _data["productName"];
+            this.quantity = _data["quantity"];
+            this.kind = _data["kind"];
+            this.type = _data["type"];
+            this.alcoholPercentage = _data["alcoholPercentage"];
+            this.platoDegree = _data["platoDegree"];
+            this.packageSize = _data["packageSize"];
+            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentExtraItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentExtraItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["productName"] = this.productName;
+        data["quantity"] = this.quantity;
+        data["kind"] = this.kind;
+        data["type"] = this.type;
+        data["alcoholPercentage"] = this.alcoholPercentage;
+        data["platoDegree"] = this.platoDegree;
+        data["packageSize"] = this.packageSize;
+        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentExtraItemDto {
+    productId?: string | undefined;
+    productName?: string | undefined;
+    quantity?: number;
+    kind?: ProductKind | undefined;
+    type?: ProductType | undefined;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    isLoadingConfirmed?: boolean;
+}
+
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
 
     constructor(data?: IGetOutgoingShipmentDetailRequest) {
@@ -8792,6 +8845,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     driverIds?: string[];
     clientOrderShipments!: ClientOrderShipmentDto[];
     state!: OutgoingShipmentState;
+    extraShipments?: ExtraShipmentDto[];
 
     constructor(data?: IUpdateOutgoingShipmentDto) {
         if (data) {
@@ -8821,6 +8875,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                     this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
             }
             this.state = _data["state"];
+            if (Array.isArray(_data["extraShipments"])) {
+                this.extraShipments = [] as any;
+                for (let item of _data["extraShipments"])
+                    this.extraShipments!.push(ExtraShipmentDto.fromJS(item));
+            }
         }
     }
 
@@ -8847,6 +8906,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                 data["clientOrderShipments"].push(item ? item.toJSON() : undefined as any);
         }
         data["state"] = this.state;
+        if (Array.isArray(this.extraShipments)) {
+            data["extraShipments"] = [];
+            for (let item of this.extraShipments)
+                data["extraShipments"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -8858,12 +8922,14 @@ export interface IUpdateOutgoingShipmentDto {
     driverIds?: string[];
     clientOrderShipments: ClientOrderShipmentDto[];
     state: OutgoingShipmentState;
+    extraShipments?: ExtraShipmentDto[];
 }
 
 export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
     clientOrderId!: string;
     order!: number;
     selectedAddressKind!: OutgoingShipmentStopAddressKind;
+    orderItems?: OrderItemInfoDto[];
 
     constructor(data?: IClientOrderShipmentDto) {
         if (data) {
@@ -8879,6 +8945,11 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
             this.clientOrderId = _data["clientOrderId"];
             this.order = _data["order"];
             this.selectedAddressKind = _data["selectedAddressKind"];
+            if (Array.isArray(_data["orderItems"])) {
+                this.orderItems = [] as any;
+                for (let item of _data["orderItems"])
+                    this.orderItems!.push(OrderItemInfoDto.fromJS(item));
+            }
         }
     }
 
@@ -8894,6 +8965,11 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
         data["clientOrderId"] = this.clientOrderId;
         data["order"] = this.order;
         data["selectedAddressKind"] = this.selectedAddressKind;
+        if (Array.isArray(this.orderItems)) {
+            data["orderItems"] = [];
+            for (let item of this.orderItems)
+                data["orderItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -8902,6 +8978,95 @@ export interface IClientOrderShipmentDto {
     clientOrderId: string;
     order: number;
     selectedAddressKind: OutgoingShipmentStopAddressKind;
+    orderItems?: OrderItemInfoDto[];
+}
+
+export class OrderItemInfoDto implements IOrderItemInfoDto {
+    orderItemId?: string;
+    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IOrderItemInfoDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.orderItemId = _data["orderItemId"];
+            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+        }
+    }
+
+    static fromJS(data: any): OrderItemInfoDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderItemInfoDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["orderItemId"] = this.orderItemId;
+        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        return data;
+    }
+}
+
+export interface IOrderItemInfoDto {
+    orderItemId?: string;
+    isLoadingConfirmed?: boolean;
+}
+
+export class ExtraShipmentDto implements IExtraShipmentDto {
+    productId?: string | undefined;
+    quantity?: number;
+    productName?: string | undefined;
+    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IExtraShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.quantity = _data["quantity"];
+            this.productName = _data["productName"];
+            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+        }
+    }
+
+    static fromJS(data: any): ExtraShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExtraShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["quantity"] = this.quantity;
+        data["productName"] = this.productName;
+        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        return data;
+    }
+}
+
+export interface IExtraShipmentDto {
+    productId?: string | undefined;
+    quantity?: number;
+    productName?: string | undefined;
+    isLoadingConfirmed?: boolean;
 }
 
 export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
@@ -9040,6 +9205,7 @@ export interface ICreateOutgoingShipmentDto {
 }
 
 export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
+    orderItemId?: string;
     productId?: string;
     productName?: string;
     quantity?: number;
@@ -9049,6 +9215,9 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     weight?: number | undefined;
+    isShipmentLoadingConfirmed?: boolean;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
 
     constructor(data?: IUnassignedOrderItemDto) {
         if (data) {
@@ -9061,6 +9230,7 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
 
     init(_data?: any) {
         if (_data) {
+            this.orderItemId = _data["orderItemId"];
             this.productId = _data["productId"];
             this.productName = _data["productName"];
             this.quantity = _data["quantity"];
@@ -9070,6 +9240,9 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
             this.platoDegree = _data["platoDegree"];
             this.packageSize = _data["packageSize"];
             this.weight = _data["weight"];
+            this.isShipmentLoadingConfirmed = _data["isShipmentLoadingConfirmed"];
+            this.breweryDisplayOrder = _data["breweryDisplayOrder"];
+            this.displayOrder = _data["displayOrder"];
         }
     }
 
@@ -9082,6 +9255,7 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["orderItemId"] = this.orderItemId;
         data["productId"] = this.productId;
         data["productName"] = this.productName;
         data["quantity"] = this.quantity;
@@ -9091,11 +9265,15 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
         data["platoDegree"] = this.platoDegree;
         data["packageSize"] = this.packageSize;
         data["weight"] = this.weight;
+        data["isShipmentLoadingConfirmed"] = this.isShipmentLoadingConfirmed;
+        data["breweryDisplayOrder"] = this.breweryDisplayOrder;
+        data["displayOrder"] = this.displayOrder;
         return data;
     }
 }
 
 export interface IUnassignedOrderItemDto {
+    orderItemId?: string;
     productId?: string;
     productName?: string;
     quantity?: number;
@@ -9105,6 +9283,9 @@ export interface IUnassignedOrderItemDto {
     platoDegree?: number | undefined;
     packageSize?: number | undefined;
     weight?: number | undefined;
+    isShipmentLoadingConfirmed?: boolean;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
 }
 
 export class GetOrdersListForOutgoingShipmentsRequest extends FilterableRequest implements IGetOrdersListForOutgoingShipmentsRequest {
@@ -9309,6 +9490,8 @@ export class OrderItemDto implements IOrderItemDto {
     productName?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
 
     constructor(data?: IOrderItemDto) {
         if (data) {
@@ -9327,6 +9510,8 @@ export class OrderItemDto implements IOrderItemDto {
             this.productName = _data["productName"];
             this.quantity = _data["quantity"];
             this.reminderState = _data["reminderState"];
+            this.breweryDisplayOrder = _data["breweryDisplayOrder"];
+            this.displayOrder = _data["displayOrder"];
         }
     }
 
@@ -9345,6 +9530,8 @@ export class OrderItemDto implements IOrderItemDto {
         data["productName"] = this.productName;
         data["quantity"] = this.quantity;
         data["reminderState"] = this.reminderState;
+        data["breweryDisplayOrder"] = this.breweryDisplayOrder;
+        data["displayOrder"] = this.displayOrder;
         return data;
     }
 }
@@ -9356,6 +9543,8 @@ export interface IOrderItemDto {
     productName?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    breweryDisplayOrder?: number;
+    displayOrder?: number;
 }
 
 export enum OrderItemReminderState {
@@ -10997,6 +11186,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
+    displayOrder?: number;
 
     constructor(data?: IBreweryProductListItemDto) {
         if (data) {
@@ -11021,6 +11211,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
             this.weight = _data["weight"];
+            this.displayOrder = _data["displayOrder"];
         }
     }
 
@@ -11045,6 +11236,7 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
         data["weight"] = this.weight;
+        data["displayOrder"] = this.displayOrder;
         return data;
     }
 }
@@ -11062,6 +11254,7 @@ export interface IBreweryProductListItemDto {
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
     weight?: number | undefined;
+    displayOrder?: number;
 }
 
 export class CreateClientDto implements ICreateClientDto {

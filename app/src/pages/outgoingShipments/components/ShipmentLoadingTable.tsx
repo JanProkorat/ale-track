@@ -1,7 +1,7 @@
-import type { OutgoingShipmentStopDto, OutgoingShipmentOrderDto } from 'src/generated/api-client';
+import type { ProductKind , OutgoingShipmentStopDto, OutgoingShipmentOrderDto } from 'src/generated/api-client';
 
-import { useMemo, useState, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMemo, useState, Fragment } from 'react';
 
 import Table from '@mui/material/Table';
 import Checkbox from '@mui/material/Checkbox';
@@ -18,7 +18,7 @@ import TableContainer from '@mui/material/TableContainer';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
-import type { ProductKind } from 'src/generated/api-client';
+import type { ExtraProductEntry } from './AddExtraProductsDrawer';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +36,10 @@ interface AggregatedProduct {
      packageSize?: number;
      totalQuantity: number;
      clients: ClientBreakdown[];
+     /** True if this row comes from extra products (not from order stops) */
+     isExtra?: boolean;
+     displayOrder?: number;
+     breweryDisplayOrder?: number;
 }
 
 interface StopFormRow {
@@ -48,6 +52,14 @@ interface ShipmentLoadingTableProps {
      stops?: OutgoingShipmentStopDto[];
      formStops?: StopFormRow[];
      availableOrders?: OutgoingShipmentOrderDto[];
+     confirmedProductIds?: Set<string>;
+     onConfirmedChange?: (confirmedProductIds: Set<string>) => void;
+     extraPiecesMap?: Record<string, string>;
+     onExtraPiecesMapChange?: (extraPieces: Record<string, string>) => void;
+     extraProducts?: ExtraProductEntry[];
+     weightMap?: Map<string, number>;
+     displayOrderMap?: Map<string, number>;
+     productDisplayOrderMap?: Map<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +70,8 @@ function aggregateProducts(
      stops: OutgoingShipmentStopDto[],
      formStops?: StopFormRow[],
      availableOrders?: OutgoingShipmentOrderDto[],
+     displayOrderMap?: Map<string, number>,
+     productDisplayOrderMap?: Map<string, number>,
 ): AggregatedProduct[] {
      const map = new Map<string, AggregatedProduct>();
 
@@ -82,6 +96,8 @@ function aggregateProducts(
                          packageSize: product.packageSize ?? undefined,
                          totalQuantity: 0,
                          clients: [],
+                         displayOrder: productDisplayOrderMap?.get(pid),
+                         breweryDisplayOrder: displayOrderMap?.get(pid),
                     };
                     map.set(pid, entry);
                }
@@ -113,6 +129,8 @@ function aggregateProducts(
                               packageSize: item.packageSize ?? undefined,
                               totalQuantity: 0,
                               clients: [],
+                              displayOrder: item.displayOrder ?? productDisplayOrderMap?.get(pid),
+                              breweryDisplayOrder: item.breweryDisplayOrder ?? displayOrderMap?.get(pid),
                          };
                          map.set(pid, entry);
                     }
@@ -123,7 +141,15 @@ function aggregateProducts(
           }
      }
 
-     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+     return Array.from(map.values()).sort((a, b) => {
+          const dispA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+          const dispB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+          if (dispA !== dispB) return dispA - dispB;
+          const brewA = a.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+          const brewB = b.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+          if (brewA !== brewB) return brewA - brewB;
+          return a.name.localeCompare(b.name);
+     });
 }
 
 // ---------------------------------------------------------------------------
@@ -150,24 +176,26 @@ function ProductRow({
      product,
      checked,
      onToggle,
-     struckThrough,
-     onToggleStrike,
+     confirmed,
+     onToggleConfirmed,
      extraPieces,
      onExtraPiecesChange,
+     weight,
 }: {
      product: AggregatedProduct;
      checked: boolean;
      onToggle: () => void;
-     struckThrough: boolean;
-     onToggleStrike: () => void;
+     confirmed: boolean;
+     onToggleConfirmed: () => void;
      extraPieces: string;
      onExtraPiecesChange: (value: string) => void;
+     weight: number | undefined;
 }) {
      const { t } = useTranslation();
      const [open, setOpen] = useState(false);
      const enumLabel = useEnumLabel();
 
-     const cellSx = struckThrough ? strikethroughSx : undefined;
+     const cellSx = confirmed ? strikethroughSx : undefined;
      const hasExtra = extraPieces !== '' && Number(extraPieces) > 0;
 
      return (
@@ -176,7 +204,7 @@ function ProductRow({
                     hover
                     sx={{
                          cursor: 'pointer',
-                         opacity: struckThrough ? 0.6 : 1,
+                         opacity: confirmed ? 0.6 : 1,
                          '& > td': {
                               borderBottom: '1px solid',
                               borderColor: open ? 'transparent' : 'divider',
@@ -193,8 +221,8 @@ function ProductRow({
                     <TableCell sx={{ width: 40, px: 0.5 }} onClick={(e) => e.stopPropagation()}>
                          <Checkbox
                               size="small"
-                              checked={struckThrough}
-                              onChange={onToggleStrike}
+                              checked={confirmed}
+                              onChange={onToggleConfirmed}
                          />
                     </TableCell>
                     <TableCell sx={{ width: 40, px: 0.5 }} onClick={() => setOpen(!open)}>
@@ -209,20 +237,24 @@ function ProductRow({
                     <TableCell onClick={() => setOpen(!open)} align="right" sx={{ whiteSpace: 'nowrap', ...cellSx }}>
                          {product.packageSize != null ? `${product.packageSize} L` : '—'}
                     </TableCell>
+                    <TableCell onClick={() => setOpen(!open)} align="right" sx={{ whiteSpace: 'nowrap', ...cellSx }}>
+                         {weight != null ? `${(weight * (product.totalQuantity + (Number(extraPieces) || 0))).toFixed(1)} kg` : '—'}
+                    </TableCell>
                     <TableCell onClick={() => setOpen(!open)} align="right" sx={{ fontWeight: 700, ...cellSx }}>
                          {product.totalQuantity}
                     </TableCell>
-                    <TableCell align="right" sx={{ width: 80 }} onClick={(e) => e.stopPropagation()}>
+                    <TableCell align="right" sx={{ width: 100 }} onClick={(e) => e.stopPropagation()}>
                          <TextField
                               type="number"
                               size="small"
                               value={extraPieces}
                               onChange={(e) => onExtraPiecesChange(e.target.value)}
+                              disabled={confirmed}
                               slotProps={{
                                    input: { sx: { py: 0.25, px: 1, fontSize: '0.8125rem' } },
                                    htmlInput: { min: 0, style: { textAlign: 'right', MozAppearance: 'textfield' } },
                               }}
-                              sx={{ width: 72 }}
+                              sx={{ width: 90 }}
                          />
                     </TableCell>
                </TableRow>
@@ -241,6 +273,7 @@ function ProductRow({
                                    {client.quantity}
                               </TableCell>
                               <TableCell sx={sx} />
+                              <TableCell sx={sx} />
                          </TableRow>
                     );
                })}
@@ -249,7 +282,7 @@ function ProductRow({
                          <TableCell sx={subCellLastSx} />
                          <TableCell sx={subCellLastSx} />
                          <TableCell sx={subCellLastSx} />
-                         <TableCell colSpan={4} sx={{ ...subCellLastSx, fontStyle: 'italic', color: 'info.main' }}>
+                         <TableCell colSpan={5} sx={{ ...subCellLastSx, fontStyle: 'italic', color: 'info.main' }}>
                               {t('outgoingShipments.extraToGarage')}
                          </TableCell>
                          <TableCell align="center" sx={{ ...subCellLastSx, fontStyle: 'italic', color: 'info.main' }}>
@@ -265,15 +298,55 @@ function ProductRow({
 // ShipmentLoadingTable
 // ---------------------------------------------------------------------------
 
-export default function ShipmentLoadingTable({ stops, formStops, availableOrders }: ShipmentLoadingTableProps) {
+export default function ShipmentLoadingTable({ stops, formStops, availableOrders, confirmedProductIds, onConfirmedChange, extraPiecesMap, onExtraPiecesMapChange, extraProducts = [], weightMap, displayOrderMap, productDisplayOrderMap }: ShipmentLoadingTableProps) {
      const { t } = useTranslation();
-     const products = useMemo(
-          () => aggregateProducts(stops ?? [], formStops, availableOrders),
-          [stops, formStops, availableOrders],
-     );
+     const products = useMemo(() => {
+          const aggregated = aggregateProducts(stops ?? [], formStops, availableOrders, displayOrderMap, productDisplayOrderMap);
+          const existingIds = new Set(aggregated.map((p) => p.productId));
+
+          // Append extra products that aren't already in the aggregated list
+          const extras: AggregatedProduct[] = [];
+          for (const ep of extraProducts) {
+               if (!existingIds.has(ep.productId)) {
+                    extras.push({
+                         productId: ep.productId,
+                         name: ep.name,
+                         kind: ep.kind,
+                         packageSize: ep.packageSize,
+                         totalQuantity: 0,
+                         clients: [],
+                         isExtra: true,
+                         displayOrder: productDisplayOrderMap?.get(ep.productId),
+                         breweryDisplayOrder: displayOrderMap?.get(ep.productId),
+                    });
+               }
+          }
+
+          // Sort extras: real products by displayOrder, custom (no productId) at the very end
+          extras.sort((a, b) => {
+               const aIsCustom = a.productId.startsWith('custom:');
+               const bIsCustom = b.productId.startsWith('custom:');
+               if (aIsCustom !== bIsCustom) return aIsCustom ? 1 : -1;
+               const dispA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+               const dispB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+               if (dispA !== dispB) return dispA - dispB;
+               const brewA = a.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+               const brewB = b.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+               if (brewA !== brewB) return brewA - brewB;
+               return a.name.localeCompare(b.name);
+          });
+
+          return [...aggregated, ...extras];
+     }, [stops, formStops, availableOrders, extraProducts, displayOrderMap, productDisplayOrderMap]);
+
+     // Left checkbox — local "checked" state
      const [checked, setChecked] = useState<Set<string>>(() => new Set());
-     const [struckThrough, setStruckThrough] = useState<Set<string>>(() => new Set());
-     const [extraPieces, setExtraPieces] = useState<Record<string, string>>({});
+
+     // Extra pieces — controlled from parent if provided
+     const extraPieces = extraPiecesMap ?? {};
+     const setExtraPieces = (updater: (prev: Record<string, string>) => Record<string, string>) => {
+          onExtraPiecesMapChange?.(updater(extraPieces));
+     };
 
      const allChecked = products.length > 0 && checked.size === products.length;
      const someChecked = checked.size > 0 && checked.size < products.length;
@@ -295,13 +368,13 @@ export default function ShipmentLoadingTable({ stops, formStops, availableOrders
           }
      };
 
-     const toggleStrike = (id: string) => {
-          setStruckThrough((prev) => {
-               const next = new Set(prev);
-               if (next.has(id)) next.delete(id);
-               else next.add(id);
-               return next;
-          });
+     // Right checkbox — controlled "confirmed" state (persisted to DB)
+     const confirmed = confirmedProductIds ?? new Set<string>();
+     const toggleConfirmed = (id: string) => {
+          const next = new Set(confirmed);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          onConfirmedChange?.(next);
      };
 
      if (products.length === 0) {
@@ -330,6 +403,7 @@ export default function ShipmentLoadingTable({ stops, formStops, availableOrders
                               <TableCell>{t('productDeliveries.product')}</TableCell>
                               <TableCell>{t('products.kind')}</TableCell>
                               <TableCell align="right">{t('products.packageSize')}</TableCell>
+                              <TableCell align="right">{t('products.weight')}</TableCell>
                               <TableCell align="right">{t('outgoingShipments.totalQuantity')}</TableCell>
                               <TableCell align="right">{t('outgoingShipments.extraPieces')}</TableCell>
                          </TableRow>
@@ -341,12 +415,13 @@ export default function ShipmentLoadingTable({ stops, formStops, availableOrders
                                         product={product}
                                         checked={checked.has(product.productId)}
                                         onToggle={() => toggleOne(product.productId)}
-                                        struckThrough={struckThrough.has(product.productId)}
-                                        onToggleStrike={() => toggleStrike(product.productId)}
+                                        confirmed={confirmed.has(product.productId)}
+                                        onToggleConfirmed={() => toggleConfirmed(product.productId)}
                                         extraPieces={extraPieces[product.productId] ?? ''}
                                         onExtraPiecesChange={(val) =>
                                              setExtraPieces((prev) => ({ ...prev, [product.productId]: val }))
                                         }
+                                        weight={weightMap?.get(product.productId)}
                                    />
                               </Fragment>
                          ))}

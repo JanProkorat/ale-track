@@ -43,6 +43,7 @@ const MuiCard: Components<Theme>['MuiCard'] = {
       position: 'relative',
       boxShadow: theme.vars.customShadows.card,
       borderRadius: Number(theme.shape.borderRadius) * 2,
+      backgroundColor: theme.vars.palette.background.paper,
     }),
   },
 };

@@ -16,6 +16,7 @@ import useAuth from 'src/hooks/useAuth';
 import { useNotification } from 'src/hooks/useNotification';
 
 import LanguageSwitcher from 'src/components/layout/LanguageSwitcher';
+import ThemeModeSwitcher from 'src/components/layout/ThemeModeSwitcher';
 
 // ---------------------------------------------------------------------------
 // Login Page
@@ -59,8 +60,9 @@ export default function LoginPage() {
                     position: 'relative',
                }}
           >
-               {/* Language flag — top right */}
-               <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+               {/* Language + theme — top right */}
+               <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <ThemeModeSwitcher />
                     <LanguageSwitcher />
                </Box>
 

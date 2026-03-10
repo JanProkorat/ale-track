@@ -10,6 +10,15 @@ import { apiClient } from 'src/api/apiClient';
 
 export type CurrencyCode = 'CZK' | 'EUR';
 
+export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
+     CZK: 'Kč',
+     EUR: '€',
+};
+
+export function currencySymbol(code: string): string {
+     return CURRENCY_SYMBOLS[code as CurrencyCode] ?? code;
+}
+
 interface CurrencyContextValue {
      /** Currently selected currency */
      currency: CurrencyCode;
@@ -96,7 +105,7 @@ export default function CurrencyProvider({ children }: { children: React.ReactNo
           (czk: number | undefined | null): string => {
                if (czk == null) return '-';
                const value = convert(czk);
-               return `${value.toFixed(2)} ${currency}`;
+               return `${value.toFixed(2)} ${CURRENCY_SYMBOLS[currency]}`;
           },
           [convert, currency],
      );

@@ -2,7 +2,7 @@ import type { ProductDeliveryListItemDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -85,6 +85,13 @@ export default function ProductDeliveryListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first delivery when data loads and nothing is selected
+     useEffect(() => {
+          if (!selectedDeliveryId && !isLoading && filteredDeliveries.length > 0) {
+               setSelectedDeliveryId(filteredDeliveries[0].id ?? null);
+          }
+     }, [selectedDeliveryId, isLoading, filteredDeliveries, setSelectedDeliveryId]);
 
      const handleCloseDetail = () => setSelectedDeliveryId(null);
 

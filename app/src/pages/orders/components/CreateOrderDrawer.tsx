@@ -170,6 +170,7 @@ export default function CreateOrderDrawer({
                          </Typography>
 
                          <OrderItemsEditor
+                              clientId={watchedClientId}
                               items={items}
                               onChange={setItems}
                          />

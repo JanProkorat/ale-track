@@ -22,6 +22,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import {
      UpdateOutgoingShipmentDto,
      ClientOrderShipmentDto,
+     OrderItemInfoDto,
+     ExtraShipmentDto,
      OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
@@ -39,7 +41,7 @@ import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import ShipmentInlineForm from './ShipmentInlineForm';
 
 import type { OutgoingShipmentFormValues } from '../outgoingShipmentFormSchema';
-import type { ShipmentInlineFormHandle, FormHeaderState } from './ShipmentInlineForm';
+import type { ShipmentInlineFormHandle, FormHeaderState, ShipmentSubmitExtra } from './ShipmentInlineForm';
 
 // ---------------------------------------------------------------------------
 
@@ -222,7 +224,12 @@ export default function ShipmentInlineDetail({
 
      if (!shipment) return <Box>{header}</Box>;
 
-     const handleSave = (data: OutgoingShipmentFormValues) => {
+     const handleSave = (data: OutgoingShipmentFormValues, extra: ShipmentSubmitExtra) => {
+          const { confirmedProductIds, extraPiecesMap, availableOrders, extraProducts } = extra;
+          // Build a lookup for custom product names
+          const customNameMap = new Map(
+               extraProducts.filter((ep) => ep.isCustom).map((ep) => [ep.productId, ep.name]),
+          );
           const dto = new UpdateOutgoingShipmentDto();
           dto.name = data.name;
           dto.deliveryDate = data.deliveryDate ? new Date(data.deliveryDate) : undefined;
@@ -237,7 +244,38 @@ export default function ShipmentInlineDetail({
                     stopDto.order = s.order ?? (i + 1);
                     stopDto.selectedAddressKind =
                          s.selectedAddressKind as unknown as OutgoingShipmentStopAddressKind;
+
+                    // Map loading confirmations per order item
+                    const order = availableOrders.find((o) => o.id === s.clientOrderId);
+                    if (order?.items) {
+                         stopDto.orderItems = order.items
+                              .filter((item) => item.orderItemId)
+                              .map((item) => {
+                                   const itemDto = new OrderItemInfoDto();
+                                   itemDto.orderItemId = item.orderItemId;
+                                   itemDto.isLoadingConfirmed = confirmedProductIds.has(item.productId ?? '');
+                                   return itemDto;
+                              });
+                    }
+
                     return stopDto;
+               });
+
+          // Map extra pieces to ExtraShipmentDto[]
+          dto.extraShipments = Object.entries(extraPiecesMap)
+               .filter(([, val]) => val !== '' && Number(val) > 0)
+               .map(([productId, val]) => {
+                    const extra = new ExtraShipmentDto();
+                    extra.quantity = Number(val);
+                    const customName = customNameMap.get(productId);
+                    if (customName) {
+                         // Custom product — send name only, no productId
+                         extra.productName = customName;
+                    } else {
+                         extra.productId = productId;
+                    }
+                    extra.isLoadingConfirmed = confirmedProductIds.has(productId);
+                    return extra;
                });
 
           updateMutation.mutate({ id: shipmentId, data: dto });

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +51,16 @@ export default function UserListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first user (sorted by userName ascending) when nothing is selected
+     useEffect(() => {
+          if (!selectedUserId && !isLoading && users.length > 0) {
+               const sorted = [...users].sort((a, b) =>
+                    (a.userName ?? '').localeCompare(b.userName ?? '', undefined, { sensitivity: 'base' }),
+               );
+               setSelectedUserId(sorted[0].id ?? null);
+          }
+     }, [selectedUserId, isLoading, users, setSelectedUserId]);
 
      const handleCloseDetail = () => setSelectedUserId(null);
 

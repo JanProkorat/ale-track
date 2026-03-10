@@ -21,7 +21,8 @@
           "refresh": "Aktualisieren",
           "dateNotInPast": "Datum darf nicht in der Vergangenheit liegen",
           "all": "Alle",
-          "reset": "Zurücksetzen"
+          "reset": "Zurücksetzen",
+          "add": "Hinzufügen"
      },
      "auth": {
           "login": "Anmelden",
@@ -130,6 +131,7 @@
           "createdDate": "Erstellungsdatum",
           "items": "Bestellpositionen",
           "addItem": "Position hinzufügen",
+          "recentProducts": "Kürzlich bestellt",
           "product": "Produkt",
           "quantity": "Menge",
           "reminderState": "Erinnerung",
@@ -196,12 +198,16 @@
           "tabDelivered": "Geliefert",
           "tabCancelled": "Storniert",
           "loading": "Beladung",
-          "totalQuantity": "Gesamt",
-          "extraPieces": "Zusätzlich (Stk.)",
+          "totalQuantity": "Gesamt Stk.",
+          "extraPieces": "Zusätzlich Stk.",
           "extraToGarage": "Zusätzliche Stücke zur Einlagerung in die Garage",
           "routeMap": "Routenkarte",
           "companyHQ": "Firmensitz",
-          "noRouteData": "Keine geokodierte Haltestellen für Routenanzeige verfügbar"
+          "noRouteData": "Keine geokodierte Haltestellen für Routenanzeige verfügbar",
+          "addExtraProducts": "Produkte hinzufügen",
+          "selectProducts": "Produkte auswählen",
+          "amount": "Menge",
+          "customProduct": "Eigenes Produkt"
      },
      "drivers": {
           "title": "Fahrer",

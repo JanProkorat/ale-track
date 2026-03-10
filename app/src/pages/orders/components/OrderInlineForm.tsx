@@ -252,6 +252,7 @@ const OrderInlineForm = forwardRef<OrderInlineFormHandle, OrderInlineFormProps>(
                     {/* Order Items */}
                     <SectionCard title={`${t('orders.items')} (${orderItems?.length ?? 0})`}>
                          <OrderItemsEditor
+                              clientId={watchedClientId}
                               items={orderItems ?? []}
                               onChange={handleItemsChange}
                          />

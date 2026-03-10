@@ -1,10 +1,16 @@
-import { Client } from 'src/generated/api-client';
+import { Client, RefreshTokenDto } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
 // Token management
 // ---------------------------------------------------------------------------
 
 let _token: string | null = null;
+let _refreshToken: string | null = null;
+let _refreshPromise: Promise<boolean> | null = null;
+
+/** Called when tokens should be updated (login, refresh) or cleared (logout). */
+let _onTokenRefreshed: ((accessToken: string, refreshToken: string) => void) | null = null;
+let _onAuthFailed: (() => void) | null = null;
 
 export function setApiToken(token: string | null) {
      _token = token;
@@ -12,6 +18,19 @@ export function setApiToken(token: string | null) {
 
 export function getApiToken(): string | null {
      return _token;
+}
+
+export function setRefreshToken(token: string | null) {
+     _refreshToken = token;
+}
+
+/** Register callbacks so the fetch layer can update AuthProvider state. */
+export function setAuthCallbacks(
+     onRefreshed: (accessToken: string, refreshToken: string) => void,
+     onFailed: () => void,
+) {
+     _onTokenRefreshed = onRefreshed;
+     _onAuthFailed = onFailed;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,7 +47,7 @@ let _pendingDictParams: Record<string, string> | null = null;
 // Authorized fetch — injects JWT Bearer header + fixes dict params
 // ---------------------------------------------------------------------------
 
-const authorizedFetch: typeof window.fetch = (input, init) => {
+function buildFetchArgs(input: RequestInfo | URL, init?: RequestInit): [string, RequestInit] {
      const headers = new Headers(init?.headers);
 
      if (_token) {
@@ -50,7 +69,68 @@ const authorizedFetch: typeof window.fetch = (input, init) => {
           url = urlObj.toString();
      }
 
-     return window.fetch(url, { ...init, headers });
+     return [url, { ...init, headers }];
+}
+
+/** Try to refresh the access token. Returns true on success. */
+async function tryRefresh(): Promise<boolean> {
+     if (!_refreshToken) return false;
+
+     try {
+          const dto = new RefreshTokenDto();
+          dto.refreshToken = _refreshToken;
+
+          const body = JSON.stringify(dto.toJSON());
+          const res = await window.fetch(`${BASE_URL}/ale-track/refresh`, {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+               body,
+          });
+
+          if (!res.ok) return false;
+
+          const data = await res.json();
+          const newAccess = data.accessToken as string | undefined;
+          const newRefresh = data.refreshToken as string | undefined;
+
+          if (!newAccess || !newRefresh) return false;
+
+          _token = newAccess;
+          _refreshToken = newRefresh;
+          _onTokenRefreshed?.(newAccess, newRefresh);
+          return true;
+     } catch {
+          return false;
+     }
+}
+
+const authorizedFetch: typeof window.fetch = async (input, init) => {
+     const [url, opts] = buildFetchArgs(input, init);
+     const response = await window.fetch(url, opts);
+
+     // Don't try refresh for the refresh endpoint itself
+     if (response.status !== 401 || url.includes('/ale-track/refresh')) {
+          return response;
+     }
+
+     // 401 — attempt silent refresh (deduplicate concurrent attempts)
+     if (!_refreshPromise) {
+          _refreshPromise = tryRefresh().finally(() => {
+               _refreshPromise = null;
+          });
+     }
+
+     const refreshed = await _refreshPromise;
+
+     if (refreshed) {
+          // Retry the original request with the new token
+          const [retryUrl, retryOpts] = buildFetchArgs(input, init);
+          return window.fetch(retryUrl, retryOpts);
+     }
+
+     // Refresh failed — force logout
+     _onAuthFailed?.();
+     return response;
 };
 
 // ---------------------------------------------------------------------------
@@ -65,7 +145,7 @@ if (!BASE_URL) {
 
 const rawClient = new Client(BASE_URL, { fetch: authorizedFetch });
 
-// Proxy intercepts *ListEndpoint calls to capture the dict argument
+// Proxy intercepts *Endpoint calls that receive a dict argument to capture it
 // so authorizedFetch can rebuild the URL with proper query params.
 export const apiClient = new Proxy(rawClient, {
      get(target, prop, receiver) {
@@ -74,7 +154,6 @@ export const apiClient = new Proxy(rawClient, {
           if (
                typeof prop === 'string' &&
                prop.includes('Endpoint') &&
-               prop.includes('List') &&
                typeof value === 'function'
           ) {
                return (...args: unknown[]) => {

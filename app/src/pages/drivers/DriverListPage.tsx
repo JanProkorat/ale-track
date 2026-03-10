@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +51,18 @@ export default function DriverListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first driver (sorted by lastName+firstName ascending) when nothing is selected
+     useEffect(() => {
+          if (!selectedDriverId && !isLoading && drivers.length > 0) {
+               const sorted = [...drivers].sort((a, b) => {
+                    const nameA = `${a.lastName ?? ''} ${a.firstName ?? ''}`.trim();
+                    const nameB = `${b.lastName ?? ''} ${b.firstName ?? ''}`.trim();
+                    return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+               });
+               setSelectedDriverId(sorted[0].id ?? null);
+          }
+     }, [selectedDriverId, isLoading, drivers, setSelectedDriverId]);
 
      const handleCloseDetail = () => setSelectedDriverId(null);
 

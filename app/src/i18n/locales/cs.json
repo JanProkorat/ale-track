@@ -21,7 +21,8 @@
           "refresh": "Obnovit",
           "dateNotInPast": "Datum nemůže být v minulosti",
           "all": "Vše",
-          "reset": "Obnovit"
+          "reset": "Obnovit",
+          "add": "Přidat"
      },
      "auth": {
           "login": "Přihlásit se",
@@ -53,7 +54,7 @@
           "inventoryItems": "Skladové položky",
           "totalDrivers": "Řidiči",
           "totalVehicles": "Vozidla",
-          "activeShipments": "Aktivní zásilky",
+          "activeShipments": "Aktivní vývozy",
           "activeDeliveries": "Aktivní dodávky",
           "totalUsers": "Uživatelé",
           "upcomingReminders": "Nadcházející připomínky",
@@ -113,7 +114,7 @@
           "priceWithVat": "Cena s DPH",
           "priceForUnitWithVat": "Jednotková cena s DPH",
           "priceForUnitWithoutVat": "Jednotková cena bez DPH",
-          "weight": "Hmotnost (kg)",
+          "weight": "Hmotnost",
           "brewery": "Pivovar",
           "addAnother": "Přidat další produkt",
           "deleteConfirm": "Opravdu chcete smazat produkt \"{{name}}\"?"
@@ -130,6 +131,7 @@
           "createdDate": "Datum vytvoření",
           "items": "Položky objednávky",
           "addItem": "Přidat položku",
+          "recentProducts": "Nedávno objednané",
           "product": "Produkt",
           "quantity": "Množství",
           "reminderState": "Připomínka",
@@ -178,9 +180,9 @@
           "removeStop": "Odebrat zastávku"
      },
      "outgoingShipments": {
-          "title": "Odchozí zásilky",
-          "addShipment": "Přidat zásilku",
-          "editShipment": "Upravit zásilku",
+          "title": "Vývozy",
+          "addShipment": "Založit vývoz",
+          "editShipment": "Upravit vývoz",
           "name": "Název",
           "deliveryDate": "Datum dodání",
           "state": "Stav",
@@ -190,18 +192,22 @@
           "addStop": "Přidat zastávku",
           "selectOrder": "Vybrat objednávku",
           "addressKind": "Typ adresy",
-          "selectShipment": "Vyberte zásilku",
-          "deleteConfirm": "Opravdu chcete smazat tuto zásilku?",
+          "selectShipment": "Vyberte vývoz",
+          "deleteConfirm": "Opravdu chcete zrušit tento vývoz?",
           "tabActive": "Aktivní",
           "tabDelivered": "Doručené",
           "tabCancelled": "Zrušené",
           "loading": "Nakládka",
           "totalQuantity": "Celkem ks",
-          "extraPieces": "Navíc (ks)",
+          "extraPieces": "Navíc ks",
           "extraToGarage": "Extra kusy k naskladnění do garáže",
           "routeMap": "Mapa trasy",
           "companyHQ": "Sídlo firmy",
-          "noRouteData": "Žádné geokódované zastávky pro zobrazení trasy"
+          "noRouteData": "Žádné geokódované zastávky pro zobrazení trasy",
+          "addExtraProducts": "Přidat produkty",
+          "selectProducts": "Vybrat produkty",
+          "amount": "Množství",
+          "customProduct": "Vlastní produkt"
      },
      "drivers": {
           "title": "Řidiči",
@@ -241,7 +247,7 @@
           "resolved": "Vyřešeno",
           "resolve": "Označit jako vyřešené",
           "unresolve": "Označit jako nevyřešené",
-          "orderItemReminders": "Připomínky položek objednávek",
+          "orderItemReminders": "Připomínky doobjednání produktů",
           "upcoming": "Nadcházející"
      },
      "users": {

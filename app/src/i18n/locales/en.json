@@ -21,7 +21,8 @@
           "refresh": "Refresh",
           "dateNotInPast": "Date cannot be in the past",
           "all": "All",
-          "reset": "Reset"
+          "reset": "Reset",
+          "add": "Add"
      },
      "auth": {
           "login": "Log in",
@@ -113,7 +114,7 @@
           "priceWithVat": "Price (VAT)",
           "priceForUnitWithVat": "Unit Price (VAT)",
           "priceForUnitWithoutVat": "Unit Price (no VAT)",
-          "weight": "Weight (kg)",
+          "weight": "Weight",
           "brewery": "Brewery",
           "addAnother": "Add Another Product",
           "deleteConfirm": "Are you sure you want to delete product \"{{name}}\"?"
@@ -130,6 +131,7 @@
           "createdDate": "Created Date",
           "items": "Order Items",
           "addItem": "Add Item",
+          "recentProducts": "Recently Ordered",
           "product": "Product",
           "quantity": "Quantity",
           "reminderState": "Reminder",
@@ -197,11 +199,15 @@
           "tabCancelled": "Cancelled",
           "loading": "Loading",
           "totalQuantity": "Total Qty",
-          "extraPieces": "Extra (pcs)",
+          "extraPieces": "Extra pcs",
           "extraToGarage": "Extra pieces to store in garage",
           "routeMap": "Route Map",
           "companyHQ": "Company HQ",
-          "noRouteData": "No geocoded stops available for route display"
+          "noRouteData": "No geocoded stops available for route display",
+          "addExtraProducts": "Add products",
+          "selectProducts": "Select products",
+          "amount": "Amount",
+          "customProduct": "Custom product"
      },
      "drivers": {
           "title": "Drivers",

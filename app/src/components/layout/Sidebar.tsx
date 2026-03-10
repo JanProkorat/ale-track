@@ -21,6 +21,7 @@ import useAuth from 'src/hooks/useAuth';
 import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
 
 import { navItems } from './navConfig';
+import ThemeModeSwitcher from './ThemeModeSwitcher';
 import InlineLanguageSwitcher from './InlineLanguageSwitcher';
 import InlineCurrencySwitcher from './InlineCurrencySwitcher';
 
@@ -251,6 +252,9 @@ export default function Sidebar({ open, onClose, variant, mini = false, badgeCou
                                    <InlineLanguageSwitcher />
                                    <InlineCurrencySwitcher />
                               </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'center', pb: 1 }}>
+                                   <ThemeModeSwitcher />
+                              </Box>
                               <Divider sx={{ my: 0.5 }} />
                               <Box sx={{ px: 1, pb: 1 }}>
                                    <Button
@@ -307,6 +311,11 @@ export default function Sidebar({ open, onClose, variant, mini = false, badgeCou
                               <InlineCurrencySwitcher />
                          </Box>
 
+                         {/* Theme mode switch */}
+                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                              <ThemeModeSwitcher />
+                         </Box>
+
                          <Divider sx={{ my: 1 }} />
 
                          {/* Logout */}
@@ -341,7 +350,7 @@ export default function Sidebar({ open, onClose, variant, mini = false, badgeCou
                          boxSizing: 'border-box',
                          borderRight: '1px solid',
                          borderColor: 'divider',
-                         bgcolor: 'background.default',
+                         bgcolor: 'background.paper',
                          transition: 'width 200ms ease-in-out',
                     },
                }}

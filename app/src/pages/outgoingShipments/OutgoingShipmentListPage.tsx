@@ -2,7 +2,7 @@ import type { OutgoingShipmentListItemDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -83,6 +83,13 @@ export default function OutgoingShipmentListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first shipment when data loads and nothing is selected
+     useEffect(() => {
+          if (!selectedShipmentId && !isLoading && filteredShipments.length > 0) {
+               setSelectedShipmentId(filteredShipments[0].id ?? null);
+          }
+     }, [selectedShipmentId, isLoading, filteredShipments, setSelectedShipmentId]);
 
      const handleCloseDetail = () => setSelectedShipmentId(null);
 

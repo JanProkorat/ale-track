@@ -83,6 +83,7 @@ function buildTree(
      enumLabel: ReturnType<typeof useEnumLabel>,
 ): KindGroup[] {
      const kindMap = new Map<string, Map<string, BreweryProductListItemDto[]>>();
+     const kindOrderMap = new Map<string, number>();
 
      for (const p of products) {
           const kind = p.kind != null ? enumLabel.productKind(p.kind) : '—';
@@ -92,10 +93,23 @@ function buildTree(
           const sizeMap = kindMap.get(kind)!;
           if (!sizeMap.has(size)) sizeMap.set(size, []);
           sizeMap.get(size)!.push(p);
+
+          // Track the minimum displayOrder per kind
+          if (p.displayOrder != null) {
+               const current = kindOrderMap.get(kind);
+               if (current == null || p.displayOrder < current) {
+                    kindOrderMap.set(kind, p.displayOrder);
+               }
+          }
      }
 
      const result: KindGroup[] = [];
-     for (const [kind, sizeMap] of [...kindMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+     for (const [kind, sizeMap] of [...kindMap.entries()].sort((a, b) => {
+          const orderA = kindOrderMap.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+          const orderB = kindOrderMap.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return a[0].localeCompare(b[0]);
+     })) {
           const sizes: SizeGroup[] = [];
           for (const [size, prods] of [...sizeMap.entries()].sort(([a], [b]) => {
                const na = parseFloat(a) || 0;

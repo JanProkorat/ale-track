@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -66,6 +66,16 @@ export default function ClientListPage() {
           },
           [setSearchParams],
      );
+
+     // Auto-select first client (sorted by name ascending) when nothing is selected
+     useEffect(() => {
+          if (!selectedClientId && !isLoading && clients.length > 0) {
+               const sorted = [...clients].sort((a, b) =>
+                    (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }),
+               );
+               setSelectedClientId(sorted[0].id ?? null);
+          }
+     }, [selectedClientId, isLoading, clients, setSelectedClientId]);
 
      const handleCloseDetail = () => setSelectedClientId(null);
 
