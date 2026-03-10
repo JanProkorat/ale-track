@@ -61,7 +61,7 @@ public sealed class UpdateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
         inventoryItem.Note = req.Data.Note;
 
         await dbContext.SaveChangesAsync(ct);
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
     
     private async Task<Product?> GetProductAsync(Guid? productId, CancellationToken cancellationToken)

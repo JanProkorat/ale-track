@@ -69,20 +69,26 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         .Include(os => os.Vehicle)
         .Include(os => os.Stops)
             .ThenInclude(s => s.ClientOrder)
+                .ThenInclude(s => s.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+        .Include(os => os.ExtraItems)
+            .ThenInclude(ei => ei.Product)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
-        var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment!, ct);
-        var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment!, ct);
-        var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment!, ct);
+        var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
+        var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
+        var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
+        var extraItems = await GetExtraItemsAsync(req.Data.ExtraShipments, outgoingShipment, ct);
 
-        outgoingShipment!.DeliveryDate = req.Data.DeliveryDate;
+        outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
         outgoingShipment.Stops = stops;
+        outgoingShipment.ExtraItems = extraItems;
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -92,9 +98,22 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         
         outgoingShipment.State = req.Data.State;
 
+        foreach (var requestStop in req.Data.ClientOrderShipments)
+        {
+            var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder.PublicId == requestStop.ClientOrderId);
+            if (relatedStop is null)
+                continue;
+
+            foreach (var requestOrderItem in requestStop.OrderItems)
+            {
+                var relatedItem = relatedStop.ClientOrder.OrderItems.FirstOrDefault(i => i.PublicId == requestOrderItem.OrderItemId);
+                relatedItem?.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
+            }
+        }
+        
         await dbContext.SaveChangesAsync(ct);
 
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 
     private async Task<ICollection<OutgoingShipmentStop>> GetOrderStopsAsync(List<ClientOrderShipmentDto> clientOrderShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
@@ -115,6 +134,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (newOrderIds.Count > 0)
         {
             var fetchedOrders = await dbContext.Orders
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
                 .Where(o => newOrderIds.Contains(o.PublicId))
                 .ToListAsync(ct);
 
@@ -216,5 +237,79 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    private async Task<List<OutgoingShipmentExtraItem>> GetExtraItemsAsync(List<ExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
+    {
+        if (extraShipments.Count == 0)
+            return [];
+
+        // Split into product-linked and free-text items
+        var productShipments = extraShipments.Where(es => es.ProductId is not null).ToList();
+        var freeTextShipments = extraShipments.Where(es => es.ProductId is null).ToList();
+
+        var requestedProductIds = productShipments
+            .Select(es => es.ProductId!.Value)
+            .ToHashSet();
+
+        var existingProductIds = outgoingShipment.ExtraItems
+            .Where(ei => ei.Product is not null)
+            .Select(ei => ei.Product!.PublicId)
+            .ToHashSet();
+
+        var newProductIds = requestedProductIds
+            .Where(id => !existingProductIds.Contains(id))
+            .ToList();
+
+        var extraItems = new List<OutgoingShipmentExtraItem>(
+            outgoingShipment.ExtraItems.Where(ei => ei.Product is not null));
+
+        if (newProductIds.Count > 0)
+        {
+            var fetchedProducts = await dbContext.Products
+                .Where(p => newProductIds.Contains(p.PublicId))
+                .ToListAsync(ct);
+
+            var fetchedProductIds = fetchedProducts
+                .Select(p => p.PublicId)
+                .ToHashSet();
+
+            var notFoundProductIds = newProductIds
+                .Where(id => !fetchedProductIds.Contains(id))
+                .ToList();
+
+            if (notFoundProductIds.Count > 0)
+                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFoundProductIds);
+
+            extraItems.AddRange(fetchedProducts
+                .Select(p => new
+                {
+                    Product = p,
+                    RequestProduct = productShipments.First(es => es.ProductId == p.PublicId)
+                })
+                .Select(p => new OutgoingShipmentExtraItem
+                {
+                    Product = p.Product,
+                    Quantity = p.RequestProduct.Quantity,
+                    IsShipmentLoadingConfirmed = p.RequestProduct.IsLoadingConfirmed
+                }));
+        }
+
+        // Remove product-linked items not in the request
+        extraItems = [.. extraItems.Where(ei => requestedProductIds.Contains(ei.Product!.PublicId))];
+
+        // Update quantities for existing product-linked items
+        foreach (var item in extraItems.Where(ei => existingProductIds.Contains(ei.Product!.PublicId)))
+            item.Quantity = productShipments.First(es => es.ProductId == item.Product!.PublicId).Quantity;
+
+        // Add free-text items (always recreated)
+        extraItems.AddRange(freeTextShipments.Select(es => new OutgoingShipmentExtraItem
+        {
+            ProductName = es.ProductName,
+            Quantity = es.Quantity,
+            IsShipmentLoadingConfirmed = es.IsLoadingConfirmed
+        }));
+
+        return extraItems;
     }
 }

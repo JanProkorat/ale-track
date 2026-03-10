@@ -29,10 +29,19 @@ internal sealed class JwtService(IConfiguration configuration) : IJwtService
         var token = new JwtSecurityToken(
             issuer: _configuration["JWT_Issuer"],
             claims: claims,
-            expires: DateTime.Now.AddHours(24), // Token valid for 24 hours
+            expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: credentials
         );
         
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <inheritdoc/>
+    public string GenerateRefreshToken()
+    {
+        var randomBytes = new byte[64];
+        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToBase64String(randomBytes);
     }
 }

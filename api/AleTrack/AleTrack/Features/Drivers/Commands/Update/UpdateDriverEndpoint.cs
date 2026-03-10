@@ -76,6 +76,6 @@ public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
             .ToList();
         
         await dbContext.SaveChangesAsync(ct);
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 }

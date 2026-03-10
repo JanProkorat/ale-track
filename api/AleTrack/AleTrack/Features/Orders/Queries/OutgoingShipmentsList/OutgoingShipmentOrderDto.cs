@@ -39,6 +39,11 @@ public record OutgoingShipmentOrderDto
 public record UnassignedOrderItemDto
 {
     /// <summary>
+    /// ID of the order item
+    /// </summary>
+    public Guid OrderItemId { get; set; }
+    
+    /// <summary>
     /// ID of related product
     /// </summary>
     public Guid ProductId { get; set; }
@@ -82,4 +87,19 @@ public record UnassignedOrderItemDto
     /// Weight of the product in kilograms
     /// </summary>
     public double? Weight { get; set; }
+    
+    /// <summary>
+    /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
+    /// </summary>
+    public bool IsShipmentLoadingConfirmed { get; set; }
+    
+    /// <summary>
+    /// Display order based on brewery.
+    /// </summary>
+    public int BreweryDisplayOrder { get; set; }
+    
+    /// <summary>
+    /// Display order of the product based on the Product kind
+    /// </summary>
+    public int DisplayOrder { get; set; }
 }

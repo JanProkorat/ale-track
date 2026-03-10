@@ -1,4 +1,5 @@
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Features.Users.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -27,6 +28,11 @@ public sealed record LoginResponse
     /// Valid access token
     /// </summary>
     public string AccessToken { get; set; } = null!;
+
+    /// <summary>
+    /// Refresh token for obtaining new access tokens
+    /// </summary>
+    public string RefreshToken { get; set; } = null!;
 }
 
 /// <summary>
@@ -70,10 +76,22 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
             UserThrowHelper.InvalidPassword();
 
         var accessToken = jwtService.GenerateToken(user);
-        
-        await SendAsync(new LoginResponse
+        var refreshTokenString = jwtService.GenerateRefreshToken();
+        var refreshToken = new RefreshToken
         {
-            AccessToken = accessToken
+            User = user,
+            Token = refreshTokenString,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        dbContext.Set<RefreshToken>().Add(refreshToken);
+        await dbContext.SaveChangesAsync(ct);
+
+        await Send.OkAsync(new LoginResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshTokenString
         }, cancellation: ct);
 
     }

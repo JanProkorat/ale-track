@@ -63,7 +63,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
         dbContext.ProductDeliveries.Add(delivery);
         await dbContext.SaveChangesAsync(ct);
         
-        await SendAsync(delivery.PublicId, StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(delivery.PublicId, StatusCodes.Status201Created, cancellation: ct);
     }
 
     private async Task<List<DeliveryStop>> CreateDeliveryStopsAsync(List<CreateProductDeliveryStopDto> requestStops, CancellationToken cancellationToken)

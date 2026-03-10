@@ -28,6 +28,6 @@ public sealed class GetCountriesEndpoint : EndpointWithoutRequest<List<Country>>
     public override async Task HandleAsync(CancellationToken ct)
     {
         var data = Enum.GetValues<Country>().ToList();
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

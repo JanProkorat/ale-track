@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Users.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,7 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
         var data = await dbContext.Users
+            .Where(u => u.UserName != UserConstants.AdminUserName)
             .Select(u => new UserListItemDto
             {
                 Id = u.PublicId,
@@ -43,6 +45,6 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

@@ -49,6 +49,12 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentStop> Stops { get; set; } = [];
 
+    /// <summary>
+    /// List of extra product items included in this outgoing shipment
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentExtraItem> ExtraItems { get; set; } = [];
+
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;
 

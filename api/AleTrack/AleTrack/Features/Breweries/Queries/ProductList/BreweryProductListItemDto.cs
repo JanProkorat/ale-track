@@ -63,4 +63,9 @@ public sealed record BreweryProductListItemDto
     /// Weight of the product in kilograms
     /// </summary>
     public double? Weight { get; set; }
+    
+    /// <summary>
+    /// Display order of the product based on the Product kind
+    /// </summary>
+    public int DisplayOrder { get; set; }
 }

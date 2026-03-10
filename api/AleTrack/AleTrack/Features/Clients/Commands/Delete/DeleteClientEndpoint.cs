@@ -53,6 +53,6 @@ public sealed class DeleteClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         dbContext.Clients.Remove(client!);
         
         await dbContext.SaveChangesAsync(ct);
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 }

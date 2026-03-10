@@ -73,4 +73,14 @@ public sealed record ProductListItemDto
     /// ID of the related brewery
     /// </summary>
     public Guid BreweryId { get; set; }
+    
+    /// <summary>
+    /// Display order based on brewery.
+    /// </summary>
+    public int BreweryDisplayOrder { get; set; }
+    
+    /// <summary>
+    /// Display order of the product based on the Product kind
+    /// </summary>
+    public int DisplayOrder { get; set; }
 }

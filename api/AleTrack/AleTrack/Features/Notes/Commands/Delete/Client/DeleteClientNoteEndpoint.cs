@@ -56,6 +56,6 @@ public sealed class DeleteClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
         dbContext.ClientNotes.Remove(existingNote!);
         await dbContext.SaveChangesAsync(ct);
 
-        await SendAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
+        await Send.ResponseAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
     }
 }

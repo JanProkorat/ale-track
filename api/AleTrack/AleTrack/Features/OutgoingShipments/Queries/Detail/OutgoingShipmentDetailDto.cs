@@ -42,6 +42,11 @@ public sealed record OutgoingShipmentDetailDto
     /// List of stops during the shipment
     /// </summary>
     public List<OutgoingShipmentStopDto> Stops { get; set; } = [];
+
+    /// <summary>
+    /// List of extra product items included in the shipment
+    /// </summary>
+    public List<OutgoingShipmentExtraItemDto> ExtraItems { get; set; } = [];
 }
 
 /// <summary>
@@ -131,4 +136,55 @@ public sealed record OutgoingShipmentProductDto
     /// Size of the whole package
     /// </summary>
     public double? PackageSize { get; set; }
+}
+
+/// <summary>
+/// Data transfer object representing an extra product item in an outgoing shipment
+/// </summary>
+public sealed record OutgoingShipmentExtraItemDto
+{
+    /// <summary>
+    /// ID of the product
+    /// </summary>
+    public Guid? ProductId { get; set; }
+
+    /// <summary>
+    /// Name of the product
+    /// </summary>
+    public string? ProductName { get; set; }
+
+    /// <summary>
+    /// Quantity of the product
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Kind of the product
+    /// </summary>
+    public ProductKind? Kind { get; set; }
+
+    /// <summary>
+    /// Type of the product
+    /// </summary>
+    public ProductType? Type { get; set; }
+
+    /// <summary>
+    /// How much alcohol product contains
+    /// </summary>
+    public float? AlcoholPercentage { get; set; }
+
+    /// <summary>
+    /// Degree of the beer - 10, 11, 12 etc.
+    /// </summary>
+    public float? PlatoDegree { get; set; }
+
+    /// <summary>
+    /// Size of the whole package
+    /// </summary>
+    public double? PackageSize { get; set; }
+    
+    /// <summary>
+    /// FLag indicating if the loading of the extra item is confirmed
+    /// </summary>
+    public bool IsLoadingConfirmed { get; set; }
 }

@@ -59,6 +59,7 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
                     .Select(dr => new DriverInfoDto(dr.PublicId, dr.FirstName, dr.LastName))
                     .ToList(),
                 Stops = d.Stops
+                    .OrderBy(s => s.Brewery.DisplayOrder)
                     .Select(s => new ProductDeliveryStopDto
                     {
                         Id = s.PublicId,
@@ -75,6 +76,6 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
         if (delivery is null)
             ThrowHelper.PublicEntityNotFound(nameof(ProductDelivery), req.Id);
 
-        await SendAsync(delivery!, cancellation: ct);
+        await Send.OkAsync(delivery!, cancellation: ct);
     }
 }

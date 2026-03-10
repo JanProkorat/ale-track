@@ -53,8 +53,11 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                 ClientOfficialAddress = o.Client.OfficialAddress.ToDto(),
                 ClientContactAddress = o.Client.ContactAddress != null ? o.Client.ContactAddress.ToDto() : null,
                 Items = o.OrderItems
+                    .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
+                    .ThenBy(oi => oi.Product.Name)
                     .Select(oi => new UnassignedOrderItemDto
                     {
+                        OrderItemId = oi.PublicId,
                         ProductId = oi.Product.PublicId,
                         ProductName = oi.Product.Name,
                         Quantity = oi.Quantity,
@@ -63,9 +66,10 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                         PlatoDegree = oi.Product.PlatoDegree,
                         PackageSize = oi.Product.PackageSize,
                         Kind = oi.Product.Kind,
-                        Type = oi.Product.Type
+                        Type = oi.Product.Type,
+                        IsShipmentLoadingConfirmed = oi.IsShipmentLoadingConfirmed,
+                        BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder
                     })
-                    .OrderBy(oi => oi.ProductName)
                     .ToList()
             })
             .OrderBy(o => o.RequiredDeliveryDate)
@@ -73,6 +77,6 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
 
-        await SendOkAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

@@ -5,6 +5,7 @@ namespace AleTrack.Features.Products.Utils;
 /// </summary>
 public static class BottleSize
 {
+    public const double ZeroPointThreeThreeLiters = 0.33;
     public const double ZeroPointFiveLiters = 0.5;
     public const double ZeroPointSeventyFiveLiters = 0.75;
     public const double OneLiter = 1;

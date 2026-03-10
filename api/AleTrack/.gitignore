@@ -88,3 +88,6 @@ ScaffoldingReadMe.txt
 launchSettings.json
 appsettings.Development.Local.json
 
+# Worktrees
+.worktrees/
+

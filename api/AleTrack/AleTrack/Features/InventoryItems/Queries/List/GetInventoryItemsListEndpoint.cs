@@ -41,7 +41,8 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
     {
         var data = await dbContext.InventoryItems
             .Where(i => i.Product != null)
-            .GroupBy(i => new { i.Product!.Brewery.PublicId, i.Product!.Brewery.Name})
+            .GroupBy(i => new { i.Product!.Brewery.PublicId, i.Product!.Brewery.Name, i.Product!.Brewery.DisplayOrder})
+            .OrderBy(g => g.Key.DisplayOrder)
             .Select(g => new InventorySectionDto
             {
                 Id = g.Key.PublicId,
@@ -66,6 +67,6 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

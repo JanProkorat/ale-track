@@ -58,6 +58,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
 
         // Project products to DTOs in a single server-side query
         var productsQuery = dbContext.Products
+            .OrderBy(p => p.Brewery.DisplayOrder)
             .Select(p => new ProductListItemDto
             {
                 Id = p.PublicId,
@@ -73,7 +74,9 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
                 PriceWithVat = p.PriceWithVat,
                 Weight = p.Weight,
                 BreweryId = p.Brewery.PublicId,
-                BreweryName = p.Brewery.Name
+                BreweryName = p.Brewery.Name,
+                BreweryDisplayOrder = p.Brewery.DisplayOrder,
+                DisplayOrder = p.DisplayOrder
             })
             .ApplyFilterAndSort(req.Parameters);
 
@@ -136,7 +139,6 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
                     .OrderBy(x => x.Kind)
                     .ToList()
             })
-            .OrderBy(x => x.BreweryName)
             .ToList();
 
         var response = new GroupedProductHistoryDto
@@ -145,6 +147,6 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
             Breweries = breweries
         };
 
-        await SendAsync(response, cancellation: ct);
+        await Send.OkAsync(response, cancellation: ct);
     }
 }

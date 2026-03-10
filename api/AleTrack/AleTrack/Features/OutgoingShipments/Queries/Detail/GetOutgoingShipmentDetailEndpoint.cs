@@ -31,7 +31,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
         Get("outgoing-shipments/{Id:guid}");
         Description(b => b
             .RequireRole(UserRoleType.User)
-            .Produces<OutgoingShipmentDetailDto>(StatusCodes.Status200OK)
+            .Produces<OutgoingShipmentDetailDto>()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetOutgoingShipmentDetailEndpoint)));
 
@@ -68,12 +68,13 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         ClientId = s.ClientOrder.Client.PublicId,
                         ClientName = s.ClientOrder.Client.Name,
                         OfficialAddress = s.ClientOrder.Client.OfficialAddress.ToDto(),
-                        ContactAddress = s.ClientOrder.Client.ContactAddress != null 
+                        ContactAddress = s.ClientOrder.Client.ContactAddress != null
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,
                         OrderId = s.ClientOrder.PublicId,
                         SelectedAddressKind = s.SelectedAddressKind,
                         Products = s.ClientOrder.OrderItems
+                            .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
                             .Select(oi => new OutgoingShipmentProductDto
                             {
                                 Id = oi.Product.PublicId,
@@ -87,6 +88,21 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                             })
                             .ToList()
                     })
+                    .ToList(),
+                ExtraItems = os.ExtraItems
+                    .OrderBy(ei => ei.Product != null ? ei.Product.Brewery.DisplayOrder : int.MaxValue)
+                    .Select(ei => new OutgoingShipmentExtraItemDto
+                    {
+                        ProductId = ei.Product != null ? ei.Product.PublicId : null,
+                        ProductName = ei.Product != null ? ei.Product.Name : ei.ProductName,
+                        Quantity = ei.Quantity,
+                        Kind = ei.Product != null ? ei.Product.Kind : null,
+                        Type = ei.Product != null ? ei.Product.Type : null,
+                        AlcoholPercentage = ei.Product != null ? ei.Product.AlcoholPercentage : null,
+                        PlatoDegree = ei.Product != null ? ei.Product.PlatoDegree : null,
+                        PackageSize = ei.Product != null ? ei.Product.PackageSize : null,
+                        IsLoadingConfirmed = ei.IsShipmentLoadingConfirmed
+                    })
                     .ToList()
             })
             .AsNoTracking()
@@ -95,6 +111,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
-        await SendAsync(outgoingShipment!, cancellation: ct);
+        await Send.OkAsync(outgoingShipment, cancellation: ct);
     }
 }

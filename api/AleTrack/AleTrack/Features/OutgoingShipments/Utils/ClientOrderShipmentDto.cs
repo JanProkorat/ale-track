@@ -21,4 +21,22 @@ public sealed record ClientOrderShipmentDto
     /// Kind of the selected address for the shipment
     /// </summary>
     public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+
+    /// <summary>
+    /// List of order items to be shipped
+    /// </summary>
+    public List<OrderItemInfoDto> OrderItems { get; set; } = [];
+}
+
+public record OrderItemInfoDto
+{
+    /// <summary>
+    /// ID of the order item
+    /// </summary>
+    public Guid OrderItemId { get; set; }
+    
+    /// <summary>
+    /// FLag indicating if the loading of the order item is confirmed
+    /// </summary>
+    public bool IsLoadingConfirmed { get; set; }
 }

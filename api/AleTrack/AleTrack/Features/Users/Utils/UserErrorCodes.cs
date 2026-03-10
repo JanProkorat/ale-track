@@ -14,4 +14,9 @@ public static class UserErrorCodes
     /// Error code for case when the provided password is incorrect.
     /// </summary>
     public const string InvalidPasswordError = "INVALID_PASSWORD";
+
+    /// <summary>
+    /// Error code for case when the provided refresh token is invalid or expired.
+    /// </summary>
+    public const string InvalidRefreshTokenError = "INVALID_REFRESH_TOKEN";
 }
