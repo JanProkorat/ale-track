@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
@@ -65,7 +65,7 @@ function mapDriverToFormValues(driver: DriverDto): DriverFormValues {
 const DriverInlineForm = forwardRef<DriverInlineFormHandle, DriverInlineFormProps>(
      function DriverInlineForm({ driver, onSubmit, onFormStateChange }, ref) {
           const { t } = useTranslation();
-          const onSubmitRef = { current: onSubmit };
+          const onSubmitRef = useRef(onSubmit);
           onSubmitRef.current = onSubmit;
 
           const [dirty, setDirty] = useState(false);

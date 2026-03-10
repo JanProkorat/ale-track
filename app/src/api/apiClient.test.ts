@@ -8,7 +8,7 @@
 // ---- Replicated helpers ------------------------------------------------
 
 let _token: string | null = null;
-let _pendingDictParams: Record<string, string> | null = null;
+const _dictParamsQueue: (Record<string, string> | null)[] = [];
 
 function buildFetchArgs(input: RequestInfo | URL, init?: RequestInit): [string, RequestInit] {
      const headers = new Headers(init?.headers);
@@ -19,13 +19,11 @@ function buildFetchArgs(input: RequestInfo | URL, init?: RequestInit): [string, 
 
      let url = typeof input === 'string' ? input : (input as Request).url;
 
-     if (_pendingDictParams) {
-          const params = _pendingDictParams;
-          _pendingDictParams = null;
-
+     const pendingParams = _dictParamsQueue.shift() ?? null;
+     if (pendingParams) {
           const urlObj = new URL(url);
           urlObj.searchParams.delete('Parameters');
-          for (const [key, value] of Object.entries(params)) {
+          for (const [key, value] of Object.entries(pendingParams)) {
                urlObj.searchParams.set(key, value);
           }
           url = urlObj.toString();
@@ -52,7 +50,7 @@ function matchesEndpointMethod(prop: unknown, value: unknown): boolean {
 
 beforeEach(() => {
      _token = null;
-     _pendingDictParams = null;
+     _dictParamsQueue.length = 0;
 });
 
 describe('buildFetchArgs', () => {
@@ -83,8 +81,8 @@ describe('buildFetchArgs', () => {
           expect(headers.get('Authorization')).toBe('Bearer tok');
      });
 
-     it('rewrites URL when pendingDictParams is set — removes Parameters and adds individual key-value pairs', () => {
-          _pendingDictParams = { Name: 'test', Status: 'active' };
+     it('rewrites URL when dict params are queued — removes Parameters and adds individual key-value pairs', () => {
+          _dictParamsQueue.push({ Name: 'test', Status: 'active' });
           const inputUrl = `${BASE}/items?Parameters=%5Bobject%20Object%5D&PageSize=10`;
 
           const [url] = buildFetchArgs(inputUrl);
@@ -97,11 +95,11 @@ describe('buildFetchArgs', () => {
           expect(parsed.searchParams.get('PageSize')).toBe('10');
      });
 
-     it('clears pendingDictParams after use (null on second call)', () => {
-          _pendingDictParams = { Key: 'value' };
+     it('consumes dict params from queue (second call is unaffected)', () => {
+          _dictParamsQueue.push({ Key: 'value' });
 
           buildFetchArgs(`${BASE}/first`);
-          expect(_pendingDictParams).toBeNull();
+          expect(_dictParamsQueue.length).toBe(0);
 
           // Second call should NOT rewrite URL
           const [url2] = buildFetchArgs(`${BASE}/second?Parameters=foo`);
@@ -109,7 +107,7 @@ describe('buildFetchArgs', () => {
           expect(parsed2.searchParams.get('Parameters')).toBe('foo');
      });
 
-     it('returns URL unchanged when no pendingDictParams', () => {
+     it('returns URL unchanged when queue is empty', () => {
           const inputUrl = `${BASE}/items?PageSize=10&Parameters=whatever`;
           const [url] = buildFetchArgs(inputUrl);
           expect(url).toBe(inputUrl);

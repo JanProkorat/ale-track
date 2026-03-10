@@ -1,8 +1,8 @@
 import type { Control, FieldErrors, UseFormWatch, UseFormSetValue } from 'react-hook-form';
 
-import { useRef, useEffect } from 'react';
 import { Controller } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useRef, useEffect, useCallback } from 'react';
 
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
@@ -40,13 +40,13 @@ interface AddressFormProps {
  * Resolve a nested error from `FieldErrors` by a dot-separated path such as
  * `"officialAddress.streetName"`.
  */
-function getNestedError(errors: FieldErrors, path: string) {
-     let current: any = errors;
+function getNestedError(errors: FieldErrors, path: string): FieldErrors[string] {
+     let current: unknown = errors;
      for (const segment of path.split('.')) {
-          if (current == null) return undefined;
-          current = current[segment];
+          if (current == null || typeof current !== 'object') return undefined;
+          current = (current as Record<string, unknown>)[segment];
      }
-     return current;
+     return current as FieldErrors[string];
 }
 
 export default function AddressForm({ prefix, control, errors, setValue, watch }: AddressFormProps) {
@@ -54,8 +54,12 @@ export default function AddressForm({ prefix, control, errors, setValue, watch }
      const { geocode, isGeocoding } = useGeocode();
      const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
      const lastGeocodedKey = useRef<string>('');
+     const geocodeRef = useRef(geocode);
+     geocodeRef.current = geocode;
+     const setValueRef = useRef(setValue);
+     setValueRef.current = setValue;
 
-     const fieldName = (field: string) => `${prefix}.${field}`;
+     const fieldName = useCallback((field: string) => `${prefix}.${field}`, [prefix]);
 
      const fieldError = (field: string) => getNestedError(errors, fieldName(field));
 
@@ -72,13 +76,13 @@ export default function AddressForm({ prefix, control, errors, setValue, watch }
      const addressKey = `${streetName}|${streetNumber}|${city}|${zip}|${country}`;
 
      useEffect(() => {
-          if (!setValue || !watch || !allFilled) return undefined;
+          if (!setValueRef.current || !allFilled) return undefined;
           if (addressKey === lastGeocodedKey.current) return undefined;
 
           clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(async () => {
                lastGeocodedKey.current = addressKey;
-               const result = await geocode({
+               const result = await geocodeRef.current({
                     streetName,
                     streetNumber: streetNumber ?? '',
                     city,
@@ -86,17 +90,16 @@ export default function AddressForm({ prefix, control, errors, setValue, watch }
                     country,
                });
                if (result) {
-                    setValue(fieldName('latitude'), result.latitude, { shouldDirty: true });
-                    setValue(fieldName('longitude'), result.longitude, { shouldDirty: true });
+                    setValueRef.current?.(fieldName('latitude'), result.latitude, { shouldDirty: true });
+                    setValueRef.current?.(fieldName('longitude'), result.longitude, { shouldDirty: true });
                } else {
-                    setValue(fieldName('latitude'), undefined, { shouldDirty: true });
-                    setValue(fieldName('longitude'), undefined, { shouldDirty: true });
+                    setValueRef.current?.(fieldName('latitude'), undefined, { shouldDirty: true });
+                    setValueRef.current?.(fieldName('longitude'), undefined, { shouldDirty: true });
                }
           }, 1500);
 
           return () => clearTimeout(debounceRef.current);
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-     }, [addressKey, allFilled]);
+     }, [addressKey, allFilled, prefix, streetName, streetNumber, city, zip, country, fieldName]);
 
      return (
           <Grid container spacing={2}>

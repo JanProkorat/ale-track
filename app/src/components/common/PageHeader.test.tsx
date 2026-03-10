@@ -16,7 +16,7 @@ describe('PageHeader', () => {
      });
 
      it('does not render action container when action is not provided', () => {
-          const { container } = renderWithProviders(<PageHeader title="My Page" />);
+          renderWithProviders(<PageHeader title="My Page" />);
 
           // The action is wrapped in a Box with flexShrink: 0; when no action, only the title Box exists
           const heading = screen.getByRole('heading', { name: 'My Page' });

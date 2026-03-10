@@ -100,7 +100,6 @@ const DeliveryInlineForm = forwardRef<DeliveryInlineFormHandle, DeliveryInlineFo
                reset,
                watch,
                setValue,
-               formState: { errors },
           } = useForm<ProductDeliveryFormValues>({
                resolver: zodResolver(productDeliverySchema),
                defaultValues,

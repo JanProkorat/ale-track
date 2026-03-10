@@ -41,7 +41,10 @@ export function setAuthCallbacks(
 // key-value pairs. We intercept calls to *ListEndpoint methods via a Proxy,
 // capture the dict argument, and rewrite the URL inside the fetch wrapper.
 
-let _pendingDictParams: Record<string, string> | null = null;
+// Queue of dict params — each Proxy-intercepted call pushes here, authorizedFetch
+// shifts from the front. This avoids race conditions when multiple Endpoint calls
+// are made concurrently (each call's fetch consumes its own dict params in order).
+const _dictParamsQueue: (Record<string, string> | null)[] = [];
 
 // ---------------------------------------------------------------------------
 // Authorized fetch — injects JWT Bearer header + fixes dict params
@@ -56,14 +59,12 @@ function buildFetchArgs(input: RequestInfo | URL, init?: RequestInit): [string, 
 
      let url = typeof input === 'string' ? input : (input as Request).url;
 
-     // Fix NSwag dict-parameter serialization
-     if (_pendingDictParams) {
-          const params = _pendingDictParams;
-          _pendingDictParams = null;
-
+     // Fix NSwag dict-parameter serialization — consume from queue
+     const pendingParams = _dictParamsQueue.shift() ?? null;
+     if (pendingParams) {
           const urlObj = new URL(url);
           urlObj.searchParams.delete('Parameters');
-          for (const [key, value] of Object.entries(params)) {
+          for (const [key, value] of Object.entries(pendingParams)) {
                urlObj.searchParams.set(key, value);
           }
           url = urlObj.toString();
@@ -165,7 +166,7 @@ export const apiClient = new Proxy(rawClient, {
                               typeof a === 'object' &&
                               Object.prototype.toString.call(a) === '[object Object]',
                     );
-                    _pendingDictParams = dictArg ? { ...dictArg } : null;
+                    _dictParamsQueue.push(dictArg ? { ...dictArg } : null);
                     return (value as (...a: unknown[]) => unknown).apply(target, args);
                };
           }

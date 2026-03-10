@@ -65,8 +65,8 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
      const { formatPrice } = useCurrency();
      const { data: groupedData } = useProductsByClientHistory(clientId);
 
-     const recentProducts = groupedData?.recent ?? [];
-     const breweryGroups = groupedData?.breweries ?? [];
+     const recentProducts = useMemo(() => groupedData?.recent ?? [], [groupedData?.recent]);
+     const breweryGroups = useMemo(() => groupedData?.breweries ?? [], [groupedData?.breweries]);
 
      // Flat lookup for table rows and chip labels
      const allProducts = useMemo(() => {

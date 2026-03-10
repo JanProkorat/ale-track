@@ -3,7 +3,7 @@ import type { UserListItemDto } from 'src/generated/api-client';
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
@@ -72,7 +72,7 @@ const UserInlineForm = forwardRef<UserInlineFormHandle, UserInlineFormProps>(
      function UserInlineForm({ user, onSubmit, onFormStateChange }, ref) {
           const { t } = useTranslation();
           const enumLabel = useEnumLabel();
-          const onSubmitRef = { current: onSubmit };
+          const onSubmitRef = useRef(onSubmit);
           onSubmitRef.current = onSubmit;
 
           const [dirty, setDirty] = useState(false);

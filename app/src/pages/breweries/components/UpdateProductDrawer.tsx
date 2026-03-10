@@ -117,7 +117,7 @@ export default function UpdateProductDrawer({ open, onClose, product }: UpdatePr
                     priceForUnitWithoutVat: convert(product.priceForUnitWithoutVat ?? 0),
                });
           }
-     }, [product, open, reset]);
+     }, [product, open, reset, convert]);
 
      const onSubmit = (data: ProductFormValues) => {
           if (!product?.id) return;

@@ -61,8 +61,8 @@ export default function App() {
                          <BrowserRouter>
                               <AuthProvider>
                                    <CurrencyProvider>
-                                   <UnsavedChangesProvider>
-                                   <Suspense fallback={<LoadingSpinner />}>
+                                        <UnsavedChangesProvider>
+                                             <Suspense fallback={<LoadingSpinner />}>
                                         <Routes>
                                              <Route path="/login" element={<LoginPage />} />
 
@@ -136,8 +136,8 @@ export default function App() {
                                                   <Route path="*" element={<Navigate to="/" replace />} />
                                              </Route>
                                         </Routes>
-                                   </Suspense>
-                                   </UnsavedChangesProvider>
+                                             </Suspense>
+                                        </UnsavedChangesProvider>
                                    </CurrencyProvider>
                               </AuthProvider>
                          </BrowserRouter>

@@ -48,7 +48,6 @@ export default function CreateDeliveryDrawer({
           reset,
           watch,
           setValue,
-          getValues,
      } = useForm<CreateProductDeliveryFormValues>({
           resolver: zodResolver(createProductDeliverySchema),
           defaultValues: createDefaultValues,

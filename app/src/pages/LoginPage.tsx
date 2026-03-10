@@ -138,9 +138,9 @@ export default function LoginPage() {
                               disabled={!userName || !password}
                               sx={{
                                    py: 1.5,
-                                   bgcolor: '#212B36',
+                                   bgcolor: 'grey.800',
                                    borderRadius: 2,
-                                   '&:hover': { bgcolor: '#2D3843' },
+                                   '&:hover': { bgcolor: 'grey.700' },
                               }}
                          >
                               {t('auth.login')}

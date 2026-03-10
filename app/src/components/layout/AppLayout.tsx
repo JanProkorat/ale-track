@@ -6,8 +6,8 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 
 import { useModuleCounts } from 'src/hooks/useModuleCounts';
 
+import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
-import Sidebar, { SIDEBAR_WIDTH, SIDEBAR_MINI_WIDTH } from './Sidebar';
 
 // ---------------------------------------------------------------------------
 // AppLayout
@@ -28,7 +28,6 @@ export default function AppLayout() {
 
      const showSidebar = !isMobile;
      const sidebarMini = showSidebar && !isDesktop;
-     const sidebarWidth = isDesktop ? SIDEBAR_WIDTH : showSidebar ? SIDEBAR_MINI_WIDTH : 0;
 
      return (
           <Box sx={{ display: 'flex', minHeight: '100dvh' }}>
@@ -36,7 +35,6 @@ export default function AppLayout() {
                {showSidebar && (
                     <Sidebar
                          open
-                         onClose={() => {}}
                          variant="permanent"
                          mini={sidebarMini}
                          badgeCounts={badgeCounts}

@@ -68,7 +68,7 @@ function NavBadgeChip({ count }: { count: number }) {
 
 interface SidebarProps {
      open: boolean;
-     onClose: () => void;
+     onClose?: () => void;
      variant: 'permanent' | 'temporary';
      mini?: boolean;
      badgeCounts?: Record<string, number>;
@@ -144,7 +144,7 @@ export default function Sidebar({ open, onClose, variant, mini = false, badgeCou
                                         onClick={() => {
                                              unsaved.navigate(() => {
                                                   navigate(item.path);
-                                                  if (variant === 'temporary') onClose();
+                                                  if (variant === 'temporary') onClose?.();
                                              });
                                         }}
                                         sx={{

@@ -36,7 +36,6 @@ import DragHandle from '@mui/icons-material/DragIndicator';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
-import { useCurrency } from 'src/providers/CurrencyProvider';
 import { OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 
 import SectionCard from 'src/components/common/SectionCard';
@@ -68,7 +67,6 @@ interface ShipmentStopsEditorProps {
 function StopProductsTable({ products }: { products: OutgoingShipmentProductDto[] }) {
      const { t } = useTranslation();
      const enumLabel = useEnumLabel();
-     const { formatPrice } = useCurrency();
 
      if (products.length === 0) return null;
 
