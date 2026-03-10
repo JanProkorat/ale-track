@@ -1,3 +1,4 @@
+import type { Column } from 'src/components/common/DataTable';
 import type { ClientListItemDto } from 'src/generated/api-client';
 
 import { useMemo } from 'react';
@@ -7,8 +8,6 @@ import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 
 import DataTable from 'src/components/common/DataTable';
-
-import type { Column } from 'src/components/common/DataTable';
 
 // ---------------------------------------------------------------------------
 

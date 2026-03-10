@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
+import i18n from 'src/i18n/i18n';
 import {
      Region,
      Country,
      AddressDto,
      ContactType,
 } from 'src/generated/api-client';
-
-import i18n from 'src/i18n/i18n';
 
 // ---------------------------------------------------------------------------
 // Helpers — extract string keys from TypeScript numeric enums

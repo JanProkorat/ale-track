@@ -1,22 +1,22 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
+import SaveIcon from '@mui/icons-material/Save';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreIcon from '@mui/icons-material/Restore';
-import SaveIcon from '@mui/icons-material/Save';
 import CircularProgress from '@mui/material/CircularProgress';
 
-import { UpdateUserDto } from 'src/generated/api-client';
+import { useUsers, useUpdateUser, useDeleteUser } from 'src/hooks/useUsers';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
-import { useUsers, useUpdateUser, useDeleteUser } from 'src/hooks/useUsers';
+import { UpdateUserDto } from 'src/generated/api-client';
 
 import ConfirmDialog from 'src/components/common/ConfirmDialog';
 import LoadingSpinner from 'src/components/common/LoadingSpinner';
@@ -24,7 +24,7 @@ import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import UserInlineForm from './UserInlineForm';
 
 import type { UserFormValues } from '../userFormSchema';
-import type { UserInlineFormHandle, FormHeaderState } from './UserInlineForm';
+import type { FormHeaderState, UserInlineFormHandle } from './UserInlineForm';
 
 // ---------------------------------------------------------------------------
 

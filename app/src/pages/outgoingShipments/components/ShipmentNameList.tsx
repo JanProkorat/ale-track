@@ -1,3 +1,4 @@
+import type { Column } from 'src/components/common/DataTable';
 import type { OutgoingShipmentListItemDto } from 'src/generated/api-client';
 
 import { useMemo } from 'react';
@@ -10,8 +11,6 @@ import Card from '@mui/material/Card';
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
 import DataTable from 'src/components/common/DataTable';
-
-import type { Column } from 'src/components/common/DataTable';
 
 // ---------------------------------------------------------------------------
 

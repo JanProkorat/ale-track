@@ -15,18 +15,18 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import {
-     UpdateProductDeliveryDto,
-     UpdateProductDeliveryStopDto,
-     UpdateProductDeliveryItemDto,
-} from 'src/generated/api-client';
-
-import { useEnumLabel } from 'src/utils/enumTranslations';
-
-import {
      useProductDelivery,
      useUpdateProductDelivery,
      useDeleteProductDelivery,
 } from 'src/hooks/useProductDeliveries';
+
+import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import {
+     UpdateProductDeliveryDto,
+     UpdateProductDeliveryStopDto,
+     UpdateProductDeliveryItemDto,
+} from 'src/generated/api-client';
 
 import ConfirmDialog from 'src/components/common/ConfirmDialog';
 import LoadingSpinner from 'src/components/common/LoadingSpinner';
@@ -34,7 +34,7 @@ import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import DeliveryInlineForm from './DeliveryInlineForm';
 
 import type { ProductDeliveryFormValues } from '../productDeliveryFormSchema';
-import type { DeliveryInlineFormHandle, FormHeaderState } from './DeliveryInlineForm';
+import type { FormHeaderState, DeliveryInlineFormHandle } from './DeliveryInlineForm';
 
 // ---------------------------------------------------------------------------
 

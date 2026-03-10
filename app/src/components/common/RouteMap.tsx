@@ -1,6 +1,6 @@
 import L from 'leaflet';
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { useState, useEffect } from 'react';
+import { Popup, Marker, useMap, Polyline, TileLayer, MapContainer } from 'react-leaflet';
 
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';

@@ -1,14 +1,15 @@
+import type { DragEndEvent } from '@dnd-kit/core';
 import type { OutgoingShipmentOrderDto } from 'src/generated/api-client';
 
 import dayjs from 'dayjs';
-import { useState, useMemo, useCallback } from 'react';
+import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { useMemo, useState, useCallback } from 'react';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { CSS } from '@dnd-kit/utilities';
+import { arrayMove, useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSensor, DndContext, useSensors, closestCenter, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -22,28 +23,27 @@ import Collapse from '@mui/material/Collapse';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+import LoadingButton from '@mui/lab/LoadingButton';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Autocomplete from '@mui/material/Autocomplete';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import DragHandle from '@mui/icons-material/DragIndicator';
-import LoadingButton from '@mui/lab/LoadingButton';
-import Autocomplete from '@mui/material/Autocomplete';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-
-import {
-     CreateOutgoingShipmentDto,
-     ClientOrderShipmentDto,
-     OutgoingShipmentStopAddressKind,
-} from 'src/generated/api-client';
 
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useCreateOutgoingShipment, useOutgoingShipmentOrders } from 'src/hooks/useOutgoingShipments';
 
-import OrderMultiSelect, { OrderItemsTable } from './OrderMultiSelect';
-import { createOutgoingShipmentSchema, createDefaultValues } from '../outgoingShipmentFormSchema';
+import {
+     ClientOrderShipmentDto,
+     CreateOutgoingShipmentDto,
+     OutgoingShipmentStopAddressKind,
+} from 'src/generated/api-client';
 
-import type { DragEndEvent } from '@dnd-kit/core';
+import OrderMultiSelect, { OrderItemsTable } from './OrderMultiSelect';
+import { createDefaultValues, createOutgoingShipmentSchema } from '../outgoingShipmentFormSchema';
+
 import type { CreateOutgoingShipmentFormValues } from '../outgoingShipmentFormSchema';
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,6 @@
+import type {
+     OrderItemReminderState} from 'src/generated/api-client';
+
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,17 +23,14 @@ import { useCreateOrder } from 'src/hooks/useOrders';
 
 import {
      CreateOrderDto,
-     CreateOrderItemDto,
-     OrderItemReminderState,
+     CreateOrderItemDto
 } from 'src/generated/api-client';
 
+import OrderItemsEditor from './OrderItemsEditor';
 import { createOrderSchema, createDefaultValues } from '../orderFormSchema';
 
-import type { CreateOrderFormValues } from '../orderFormSchema';
-
-import OrderItemsEditor from './OrderItemsEditor';
-
 import type { OrderItemRow } from './OrderItemsEditor';
+import type { CreateOrderFormValues } from '../orderFormSchema';
 
 // ---------------------------------------------------------------------------
 

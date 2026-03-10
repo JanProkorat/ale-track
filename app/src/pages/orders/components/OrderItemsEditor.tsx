@@ -1,7 +1,7 @@
-import type { ProductListItemDto, BreweryGroupDto, KindGroupDto, PackageGroupDto } from 'src/generated/api-client';
+import type { KindGroupDto, BreweryGroupDto, PackageGroupDto, ProductListItemDto } from 'src/generated/api-client';
 
-import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -19,13 +19,13 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+import DeleteIcon from '@mui/icons-material/Delete';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import ListItemButton from '@mui/material/ListItemButton';
-import DeleteIcon from '@mui/icons-material/Delete';
-import TableContainer from '@mui/material/TableContainer';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import ListItemButton from '@mui/material/ListItemButton';
+import TableContainer from '@mui/material/TableContainer';
 import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
 import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
 import NotificationsActiveOutlined from '@mui/icons-material/NotificationsActiveOutlined';
@@ -33,8 +33,9 @@ import RemoveCircleOutlineOutlined from '@mui/icons-material/RemoveCircleOutline
 
 import { useProductsByClientHistory } from 'src/hooks/useProducts';
 
-import { useCurrency } from 'src/providers/CurrencyProvider';
 import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import { useCurrency } from 'src/providers/CurrencyProvider';
 
 import EmptyState from 'src/components/common/EmptyState';
 

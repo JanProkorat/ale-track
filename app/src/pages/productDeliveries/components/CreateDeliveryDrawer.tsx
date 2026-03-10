@@ -14,13 +14,13 @@ import LoadingButton from '@mui/lab/LoadingButton';
 import Autocomplete from '@mui/material/Autocomplete';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
-import { CreateProductsDeliveryDto } from 'src/generated/api-client';
-
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useCreateProductDelivery } from 'src/hooks/useProductDeliveries';
 
-import { createProductDeliverySchema, createDefaultValues } from '../productDeliveryFormSchema';
+import { CreateProductsDeliveryDto } from 'src/generated/api-client';
+
+import { createDefaultValues, createProductDeliverySchema } from '../productDeliveryFormSchema';
 
 import type { CreateProductDeliveryFormValues } from '../productDeliveryFormSchema';
 

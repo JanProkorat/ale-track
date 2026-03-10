@@ -1,15 +1,16 @@
+import type { DragEndEvent } from '@dnd-kit/core';
 import type {
      OutgoingShipmentStopDto,
      OutgoingShipmentOrderDto,
      OutgoingShipmentProductDto,
 } from 'src/generated/api-client';
 
-import { useMemo, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useCallback } from 'react';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { arrayMove, useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSensor, DndContext, useSensors, closestCenter, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
@@ -26,23 +27,21 @@ import TableHead from '@mui/material/TableHead';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ListItemText from '@mui/material/ListItemText';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import DragHandle from '@mui/icons-material/DragIndicator';
-import ListItemText from '@mui/material/ListItemText';
 import ListItemButton from '@mui/material/ListItemButton';
 import TableContainer from '@mui/material/TableContainer';
-
-import { OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import DragHandle from '@mui/icons-material/DragIndicator';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
+
 import { useCurrency } from 'src/providers/CurrencyProvider';
+import { OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 
 import SectionCard from 'src/components/common/SectionCard';
 
 import { addressKindOptions } from '../outgoingShipmentFormSchema';
-
-import type { DragEndEvent } from '@dnd-kit/core';
 
 // ---------------------------------------------------------------------------
 // Types

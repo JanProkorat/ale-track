@@ -10,9 +10,9 @@ import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 import InputAdornment from '@mui/material/InputAdornment';
 
-import { CreateVehicleDto } from 'src/generated/api-client';
-
 import { useCreateVehicle } from 'src/hooks/useVehicles';
+
+import { CreateVehicleDto } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
 

@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import ListItemButton from '@mui/material/ListItemButton';
+
+import { useOutgoingShipments } from 'src/hooks/useOutgoingShipments';
+
+import { useEnumLabel } from 'src/utils/enumTranslations';
 
 import { OutgoingShipmentState } from 'src/generated/api-client';
-import { useOutgoingShipments } from 'src/hooks/useOutgoingShipments';
-import { useEnumLabel } from 'src/utils/enumTranslations';
-import SectionCard from 'src/components/common/SectionCard';
+
 import StatusChip from 'src/components/common/StatusChip';
-import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import EmptyState from 'src/components/common/EmptyState';
+import SectionCard from 'src/components/common/SectionCard';
+import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 function shipmentStateColor(state?: OutgoingShipmentState): 'info' | 'warning' | 'success' | 'default' {
      switch (state) {

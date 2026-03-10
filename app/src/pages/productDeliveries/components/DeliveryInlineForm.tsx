@@ -10,18 +10,18 @@ import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
-import TextField from '@mui/material/TextField';
 import AddIcon from '@mui/icons-material/Add';
+import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-
-import SectionCard from 'src/components/common/SectionCard';
 
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 
+import SectionCard from 'src/components/common/SectionCard';
+
 import DeliveryStopsEditor from './DeliveryStopsEditor';
-import { productDeliverySchema, defaultValues, deliveryStateOptions } from '../productDeliveryFormSchema';
+import { defaultValues, deliveryStateOptions, productDeliverySchema } from '../productDeliveryFormSchema';
 
 import type { StopRow } from './DeliveryStopsEditor';
 import type { ProductDeliveryFormValues } from '../productDeliveryFormSchema';

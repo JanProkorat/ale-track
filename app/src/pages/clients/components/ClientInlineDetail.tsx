@@ -1,22 +1,24 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import type { Region, ContactType} from 'src/generated/api-client';
+
 import { useTranslation } from 'react-i18next';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
+import SaveIcon from '@mui/icons-material/Save';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreIcon from '@mui/icons-material/Restore';
-import SaveIcon from '@mui/icons-material/Save';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import { useClient, useUpdateClient, useDeleteClient } from 'src/hooks/useClients';
 
-import { Region, ContactType, UpdateClientDto, UpdateClientContactDto } from 'src/generated/api-client';
-
 import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import { UpdateClientDto, UpdateClientContactDto } from 'src/generated/api-client';
 
 import ConfirmDialog from 'src/components/common/ConfirmDialog';
 import LoadingSpinner from 'src/components/common/LoadingSpinner';
@@ -25,7 +27,7 @@ import ClientInlineForm from './ClientInlineForm';
 import { buildAddressDto } from '../clientFormSchema';
 
 import type { ClientFormValues } from '../clientFormSchema';
-import type { ClientInlineFormHandle, FormHeaderState } from './ClientInlineForm';
+import type { FormHeaderState, ClientInlineFormHandle } from './ClientInlineForm';
 
 // ---------------------------------------------------------------------------
 

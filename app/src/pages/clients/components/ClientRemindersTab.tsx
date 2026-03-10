@@ -1,5 +1,9 @@
-import { useState, forwardRef, useImperativeHandle } from 'react';
+import type { DayOfWeek ,
+     ReminderListItemDto} from 'src/generated/api-client';
+
+import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useState, forwardRef, useImperativeHandle } from 'react';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -9,39 +13,18 @@ import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import MenuItem from '@mui/material/MenuItem';
-import Checkbox from '@mui/material/Checkbox';
 import TextField from '@mui/material/TextField';
+import EditIcon from '@mui/icons-material/Edit';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import LoadingButton from '@mui/lab/LoadingButton';
 import DialogTitle from '@mui/material/DialogTitle';
+import DeleteIcon from '@mui/icons-material/Delete';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import LoadingButton from '@mui/lab/LoadingButton';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-
-import dayjs from 'dayjs';
-
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-
-import {
-     DayOfWeek,
-     ReminderType,
-     CreateReminderDto,
-     UpdateReminderDto,
-     ReminderRecurrenceType,
-} from 'src/generated/api-client';
-
-import type { ReminderListItemDto } from 'src/generated/api-client';
-
-import EmptyState from 'src/components/common/EmptyState';
-import ConfirmDialog from 'src/components/common/ConfirmDialog';
-import LoadingSpinner from 'src/components/common/LoadingSpinner';
-
-import { useEnumLabel } from 'src/utils/enumTranslations';
 
 import {
      useClientReminders,
@@ -50,6 +33,19 @@ import {
      useDeleteClientReminder,
      useSetClientReminderResolved,
 } from 'src/hooks/useClients';
+
+import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import {
+     ReminderType,
+     CreateReminderDto,
+     UpdateReminderDto,
+     ReminderRecurrenceType,
+} from 'src/generated/api-client';
+
+import EmptyState from 'src/components/common/EmptyState';
+import ConfirmDialog from 'src/components/common/ConfirmDialog';
+import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 // ---------------------------------------------------------------------------
 // Types

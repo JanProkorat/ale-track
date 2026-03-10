@@ -1,14 +1,14 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRef, useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Tooltip from '@mui/material/Tooltip';
+import SaveIcon from '@mui/icons-material/Save';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreIcon from '@mui/icons-material/Restore';
-import SaveIcon from '@mui/icons-material/Save';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import { useBrewery, useUpdateBrewery, useDeleteBrewery } from 'src/hooks/useBreweries';
@@ -22,7 +22,7 @@ import BreweryInlineForm from './BreweryInlineForm';
 import { buildAddressDto } from '../breweryFormSchema';
 
 import type { BreweryFormValues } from '../breweryFormSchema';
-import type { BreweryInlineFormHandle, FormHeaderState } from './BreweryInlineForm';
+import type { FormHeaderState, BreweryInlineFormHandle } from './BreweryInlineForm';
 
 // ---------------------------------------------------------------------------
 

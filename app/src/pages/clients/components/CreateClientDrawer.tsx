@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import type {
+     Region,
+     ContactType} from 'src/generated/api-client';
+
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
@@ -23,8 +26,6 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import { useCreateClient } from 'src/hooks/useClients';
 
 import {
-     Region,
-     ContactType,
      CreateClientDto,
      CreateClientContactDto,
 } from 'src/generated/api-client';

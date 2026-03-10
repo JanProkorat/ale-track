@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -13,8 +13,9 @@ import Typography from '@mui/material/Typography';
 
 import { useBreweries } from 'src/hooks/useBreweries';
 
-import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
+
+import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 import BreweryInlineDetail from './components/BreweryInlineDetail';
 import CreateBreweryDrawer from './components/CreateBreweryDrawer';

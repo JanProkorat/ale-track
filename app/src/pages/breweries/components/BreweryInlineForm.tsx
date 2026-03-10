@@ -2,8 +2,8 @@ import type { BreweryDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
@@ -11,19 +11,16 @@ import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
+import AddIcon from '@mui/icons-material/Add';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import AddIcon from '@mui/icons-material/Add';
 
 import AddressForm from 'src/components/common/AddressForm';
 import SectionCard from 'src/components/common/SectionCard';
 
-import BreweryProductsTable from './BreweryProductsTable';
 import BreweryRemindersTab from './BreweryRemindersTab';
-
-import type { BreweryProductsTableHandle } from './BreweryProductsTable';
-
+import BreweryProductsTable from './BreweryProductsTable';
 import {
      brewerySchema,
      defaultValues,
@@ -32,6 +29,7 @@ import {
 
 import type { BreweryFormValues } from '../breweryFormSchema';
 import type { BreweryRemindersTabHandle } from './BreweryRemindersTab';
+import type { BreweryProductsTableHandle } from './BreweryProductsTable';
 
 // ---------------------------------------------------------------------------
 // Types

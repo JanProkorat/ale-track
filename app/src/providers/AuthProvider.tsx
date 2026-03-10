@@ -1,8 +1,8 @@
 import { jwtDecode } from 'jwt-decode';
 import { useMemo, useState, useEffect, useCallback, createContext } from 'react';
 
-import { apiClient, setApiToken, setRefreshToken, setAuthCallbacks } from 'src/api/apiClient';
 import { LoginUserDto, UserRoleType } from 'src/generated/api-client';
+import { apiClient, setApiToken, setRefreshToken, setAuthCallbacks } from 'src/api/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types

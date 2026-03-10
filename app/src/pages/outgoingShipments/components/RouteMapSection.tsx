@@ -1,11 +1,13 @@
+import type { DragEndEvent } from '@dnd-kit/core';
+import type { RoutePoint } from 'src/components/common/RouteMap';
 import type { OutgoingShipmentStopDto } from 'src/generated/api-client';
 
-import { useMemo, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useCallback } from 'react';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { arrayMove, useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSensor, DndContext, useSensors, closestCenter, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
@@ -15,15 +17,13 @@ import Collapse from '@mui/material/Collapse';
 import Typography from '@mui/material/Typography';
 import RadioGroup from '@mui/material/RadioGroup';
 import IconButton from '@mui/material/IconButton';
-import DragHandle from '@mui/icons-material/DragIndicator';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import DragHandle from '@mui/icons-material/DragIndicator';
 import FormControlLabel from '@mui/material/FormControlLabel';
 
-import RouteMap from 'src/components/common/RouteMap';
 import { getCompanyAddress } from 'src/utils/companyAddress';
 
-import type { RoutePoint } from 'src/components/common/RouteMap';
-import type { DragEndEvent } from '@dnd-kit/core';
+import RouteMap from 'src/components/common/RouteMap';
 
 // ---------------------------------------------------------------------------
 // Types

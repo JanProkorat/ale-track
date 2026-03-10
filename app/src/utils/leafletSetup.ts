@@ -1,4 +1,5 @@
 import 'leaflet/dist/leaflet.css';
+
 import L from 'leaflet';
 
 // Fix Leaflet's default marker icons which break under Vite bundling.

@@ -1,11 +1,12 @@
+import type { DragEndEvent } from '@dnd-kit/core';
 import type { BreweryProductListItemDto } from 'src/generated/api-client';
 
-import { useMemo, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useCallback } from 'react';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { arrayMove, useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSensor, DndContext, useSensors, closestCenter, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -24,23 +25,22 @@ import TableHead from '@mui/material/TableHead';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/Delete';
-import DragHandle from '@mui/icons-material/DragIndicator';
 import Autocomplete from '@mui/material/Autocomplete';
 import ListItemText from '@mui/material/ListItemText';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import TableContainer from '@mui/material/TableContainer';
 import ListItemButton from '@mui/material/ListItemButton';
-
-import type { DragEndEvent } from '@dnd-kit/core';
+import DragHandle from '@mui/icons-material/DragIndicator';
 
 import { useBreweries, useBreweryProducts } from 'src/hooks/useBreweries';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
+
 import { useCurrency } from 'src/providers/CurrencyProvider';
 
-import SectionCard from 'src/components/common/SectionCard';
 import EmptyState from 'src/components/common/EmptyState';
+import SectionCard from 'src/components/common/SectionCard';
 
 // ---------------------------------------------------------------------------
 // Types

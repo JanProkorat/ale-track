@@ -17,10 +17,9 @@ import Typography from '@mui/material/Typography';
 import Autocomplete from '@mui/material/Autocomplete';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
-import { ProductDeliveryState } from 'src/generated/api-client';
-
 import { useProductDeliveries } from 'src/hooks/useProductDeliveries';
 
+import { ProductDeliveryState } from 'src/generated/api-client';
 import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
 
 import DeliveryNameList from './components/DeliveryNameList';

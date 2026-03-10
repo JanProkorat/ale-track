@@ -11,14 +11,11 @@ import Tabs from '@mui/material/Tabs';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 import AddIcon from '@mui/icons-material/Add';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import Autocomplete from '@mui/material/Autocomplete';
-
-import { OutgoingShipmentState } from 'src/generated/api-client';
 
 import { useOutgoingShipments } from 'src/hooks/useOutgoingShipments';
 
+import { OutgoingShipmentState } from 'src/generated/api-client';
 import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
 
 import ShipmentInlineDetail from './components/ShipmentInlineDetail';

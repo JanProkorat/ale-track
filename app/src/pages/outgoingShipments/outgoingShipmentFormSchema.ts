@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { OutgoingShipmentState, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
-
 import i18n from 'src/i18n/i18n';
+import { OutgoingShipmentState, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
 // Helpers

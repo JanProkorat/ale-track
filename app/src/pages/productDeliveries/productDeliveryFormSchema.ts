@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { ProductDeliveryState } from 'src/generated/api-client';
-
 import i18n from 'src/i18n/i18n';
+import { ProductDeliveryState } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
 // Helpers

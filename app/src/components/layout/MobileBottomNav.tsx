@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
-
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import Badge from '@mui/material/Badge';
@@ -23,8 +21,10 @@ import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 
 import useAuth from 'src/hooks/useAuth';
 
-import { navItems, mobileNavItems } from './navConfig';
+import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
+
 import ThemeModeSwitcher from './ThemeModeSwitcher';
+import { navItems, mobileNavItems } from './navConfig';
 import InlineLanguageSwitcher from './InlineLanguageSwitcher';
 import InlineCurrencySwitcher from './InlineCurrencySwitcher';
 

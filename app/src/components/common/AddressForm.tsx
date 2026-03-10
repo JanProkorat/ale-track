@@ -1,18 +1,18 @@
-import type { Control, FieldErrors, UseFormSetValue, UseFormWatch } from 'react-hook-form';
+import type { Control, FieldErrors, UseFormWatch, UseFormSetValue } from 'react-hook-form';
 
-import { useEffect, useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { Controller } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
 import Grid from '@mui/material/Grid';
 import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
-import CircularProgress from '@mui/material/CircularProgress';
 import InputAdornment from '@mui/material/InputAdornment';
-
-import { Country } from 'src/generated/api-client';
+import CircularProgress from '@mui/material/CircularProgress';
 
 import { useGeocode } from 'src/hooks/useGeocode';
+
+import { Country } from 'src/generated/api-client';
 
 import MapPreview from './MapPreview';
 
@@ -72,8 +72,8 @@ export default function AddressForm({ prefix, control, errors, setValue, watch }
      const addressKey = `${streetName}|${streetNumber}|${city}|${zip}|${country}`;
 
      useEffect(() => {
-          if (!setValue || !watch || !allFilled) return;
-          if (addressKey === lastGeocodedKey.current) return;
+          if (!setValue || !watch || !allFilled) return undefined;
+          if (addressKey === lastGeocodedKey.current) return undefined;
 
           clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(async () => {

@@ -1,7 +1,7 @@
-import type { ProductListItemDto, ProductKind } from 'src/generated/api-client';
+import type { ProductKind, ProductListItemDto } from 'src/generated/api-client';
 
-import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -21,14 +21,15 @@ import TableHead from '@mui/material/TableHead';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import ListItemText from '@mui/material/ListItemText';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 import ListItemButton from '@mui/material/ListItemButton';
 import TableContainer from '@mui/material/TableContainer';
 import AddOutlined from '@mui/icons-material/AddOutlined';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 
 import { useProducts } from 'src/hooks/useProducts';
+
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
 // ---------------------------------------------------------------------------

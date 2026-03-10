@@ -1,7 +1,7 @@
 import type { BreweryProductListItemDto } from 'src/generated/api-client';
 
-import { useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -27,8 +27,8 @@ import { useBreweryProducts } from 'src/hooks/useBreweries';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
-import { ProductKind, ProductType } from 'src/generated/api-client';
 import { useCurrency } from 'src/providers/CurrencyProvider';
+import { ProductKind, ProductType } from 'src/generated/api-client';
 
 import EmptyState from 'src/components/common/EmptyState';
 import ConfirmDialog from 'src/components/common/ConfirmDialog';

@@ -12,11 +12,11 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import LoadingButton from '@mui/lab/LoadingButton';
 
-import { CreateUserDto, UserRoleType } from 'src/generated/api-client';
+import { useCreateUser } from 'src/hooks/useUsers';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
-import { useCreateUser } from 'src/hooks/useUsers';
+import { UserRoleType, CreateUserDto } from 'src/generated/api-client';
 
 import { createUserSchema, createDefaultValues } from '../userFormSchema';
 

@@ -5,13 +5,12 @@ import type {
      UpdateReminderDto,
 } from 'src/generated/api-client';
 
-import { SetBreweryReminderResolvedDateRequest } from 'src/generated/api-client';
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useNotification } from 'src/hooks/useNotification';
 
 import { apiClient } from 'src/api/apiClient';
+import { SetBreweryReminderResolvedDateRequest } from 'src/generated/api-client';
 
 // ---------------------------------------------------------------------------
 // Query keys

@@ -1,3 +1,7 @@
+import type {
+     Region,
+     ContactType} from 'src/generated/api-client';
+
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -23,8 +27,6 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import { useCreateClient } from 'src/hooks/useClients';
 
 import {
-     Region,
-     ContactType,
      CreateClientDto,
      CreateClientContactDto,
 } from 'src/generated/api-client';

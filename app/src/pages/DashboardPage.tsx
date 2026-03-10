@@ -2,14 +2,15 @@ import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 
-import PageHeader from 'src/components/common/PageHeader';
 import StatCards from 'src/pages/dashboard/components/StatCards';
+import ExchangeRates from 'src/pages/dashboard/components/ExchangeRates';
+import ActiveShipments from 'src/pages/dashboard/components/ActiveShipments';
+import ActiveDeliveries from 'src/pages/dashboard/components/ActiveDeliveries';
 import UpcomingReminders from 'src/pages/dashboard/components/UpcomingReminders';
 import OrderItemReminders from 'src/pages/dashboard/components/OrderItemReminders';
 import DriverAvailabilityCalendar from 'src/pages/dashboard/components/DriverAvailabilityCalendar';
-import ActiveShipments from 'src/pages/dashboard/components/ActiveShipments';
-import ActiveDeliveries from 'src/pages/dashboard/components/ActiveDeliveries';
-import ExchangeRates from 'src/pages/dashboard/components/ExchangeRates';
+
+import PageHeader from 'src/components/common/PageHeader';
 
 export default function DashboardPage() {
      const { t } = useTranslation();

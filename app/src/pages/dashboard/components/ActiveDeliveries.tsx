@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import ListItemButton from '@mui/material/ListItemButton';
+
+import { useProductDeliveries } from 'src/hooks/useProductDeliveries';
+
+import { useEnumLabel } from 'src/utils/enumTranslations';
 
 import { ProductDeliveryState } from 'src/generated/api-client';
-import { useProductDeliveries } from 'src/hooks/useProductDeliveries';
-import { useEnumLabel } from 'src/utils/enumTranslations';
-import SectionCard from 'src/components/common/SectionCard';
+
 import StatusChip from 'src/components/common/StatusChip';
-import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import EmptyState from 'src/components/common/EmptyState';
+import SectionCard from 'src/components/common/SectionCard';
+import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 function deliveryStateColor(state?: ProductDeliveryState): 'info' | 'warning' | 'success' | 'default' {
      switch (state) {

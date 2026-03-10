@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useMap, MapContainer, TileLayer, Marker } from 'react-leaflet';
+import { useMap, Marker, TileLayer, MapContainer } from 'react-leaflet';
 
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';

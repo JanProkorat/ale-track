@@ -1,5 +1,5 @@
-import { useState, forwardRef, useImperativeHandle } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useState, forwardRef, useImperativeHandle } from 'react';
 
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -7,19 +7,13 @@ import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
-import IconButton from '@mui/material/IconButton';
 import SaveIcon from '@mui/icons-material/Save';
+import IconButton from '@mui/material/IconButton';
+import LoadingButton from '@mui/lab/LoadingButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
-import LoadingButton from '@mui/lab/LoadingButton';
-
-import { CreateNoteDto, UpdateNoteDto } from 'src/generated/api-client';
-
-import EmptyState from 'src/components/common/EmptyState';
-import ConfirmDialog from 'src/components/common/ConfirmDialog';
-import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 import {
      useClientNotes,
@@ -27,6 +21,12 @@ import {
      useUpdateClientNote,
      useDeleteClientNote,
 } from 'src/hooks/useNotes';
+
+import { CreateNoteDto, UpdateNoteDto } from 'src/generated/api-client';
+
+import EmptyState from 'src/components/common/EmptyState';
+import ConfirmDialog from 'src/components/common/ConfirmDialog';
+import LoadingSpinner from 'src/components/common/LoadingSpinner';
 
 // ---------------------------------------------------------------------------
 

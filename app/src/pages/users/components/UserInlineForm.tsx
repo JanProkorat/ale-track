@@ -2,17 +2,17 @@ import type { UserListItemDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 
-import { UserRoleType } from 'src/generated/api-client';
-
 import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import { UserRoleType } from 'src/generated/api-client';
 
 import SectionCard from 'src/components/common/SectionCard';
 

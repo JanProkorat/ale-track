@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 
 export function useUnsavedChangesWarning(isDirty: boolean) {
      useEffect(() => {
-          if (!isDirty) return;
+          if (!isDirty) return undefined;
 
           const handler = (e: BeforeUnloadEvent) => {
                e.preventDefault();

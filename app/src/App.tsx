@@ -6,13 +6,13 @@ import LoginPage from 'src/pages/LoginPage';
 import AuthProvider from 'src/providers/AuthProvider';
 import QueryProvider from 'src/providers/QueryProvider';
 import ThemeProvider from 'src/providers/ThemeProvider';
+import CurrencyProvider from 'src/providers/CurrencyProvider';
+import UnsavedChangesProvider from 'src/providers/UnsavedChangesProvider';
 
 import AppLayout from 'src/components/layout/AppLayout';
 import RequireAuth from 'src/components/layout/RequireAuth';
 import RequireAdmin from 'src/components/layout/RequireAdmin';
 import LoadingSpinner from 'src/components/common/LoadingSpinner';
-import CurrencyProvider from 'src/providers/CurrencyProvider';
-import UnsavedChangesProvider from 'src/providers/UnsavedChangesProvider';
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded pages

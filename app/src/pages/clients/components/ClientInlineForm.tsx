@@ -2,8 +2,8 @@ import type { ClientDto } from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
@@ -28,9 +28,6 @@ import SectionCard from 'src/components/common/SectionCard';
 
 import ClientNotesTab from './ClientNotesTab';
 import ClientRemindersTab from './ClientRemindersTab';
-
-import type { ClientNotesTabHandle } from './ClientNotesTab';
-import type { ClientRemindersTabHandle } from './ClientRemindersTab';
 import {
      clientSchema,
      defaultValues,
@@ -40,6 +37,8 @@ import {
 } from '../clientFormSchema';
 
 import type { ClientFormValues } from '../clientFormSchema';
+import type { ClientNotesTabHandle } from './ClientNotesTab';
+import type { ClientRemindersTabHandle } from './ClientRemindersTab';
 
 // ---------------------------------------------------------------------------
 // Types

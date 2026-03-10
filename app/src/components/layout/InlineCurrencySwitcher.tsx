@@ -1,9 +1,9 @@
+import type { CurrencyCode } from 'src/providers/CurrencyProvider';
+
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 
 import { useCurrency } from 'src/providers/CurrencyProvider';
-
-import type { CurrencyCode } from 'src/providers/CurrencyProvider';
 
 // ---------------------------------------------------------------------------
 // Currency options

@@ -1,7 +1,8 @@
 import type {
      OutgoingShipmentState,
      OutgoingShipmentListItemDto,
-} from 'src/generated/api-client';
+
+     OutgoingShipmentStopAddressKind} from 'src/generated/api-client';
 
 import { useTranslation } from 'react-i18next';
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -20,20 +21,19 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import {
-     UpdateOutgoingShipmentDto,
-     ClientOrderShipmentDto,
-     OrderItemInfoDto,
-     ExtraShipmentDto,
-     OutgoingShipmentStopAddressKind,
-} from 'src/generated/api-client';
-
-import { useEnumLabel } from 'src/utils/enumTranslations';
-
-import {
      useOutgoingShipment,
      useUpdateOutgoingShipment,
      useDeleteOutgoingShipment,
 } from 'src/hooks/useOutgoingShipments';
+
+import { useEnumLabel } from 'src/utils/enumTranslations';
+
+import {
+     OrderItemInfoDto,
+     ExtraShipmentDto,
+     ClientOrderShipmentDto,
+     UpdateOutgoingShipmentDto
+} from 'src/generated/api-client';
 
 import ConfirmDialog from 'src/components/common/ConfirmDialog';
 import LoadingSpinner from 'src/components/common/LoadingSpinner';
@@ -41,7 +41,7 @@ import LoadingSpinner from 'src/components/common/LoadingSpinner';
 import ShipmentInlineForm from './ShipmentInlineForm';
 
 import type { OutgoingShipmentFormValues } from '../outgoingShipmentFormSchema';
-import type { ShipmentInlineFormHandle, FormHeaderState, ShipmentSubmitExtra } from './ShipmentInlineForm';
+import type { FormHeaderState, ShipmentSubmitExtra, ShipmentInlineFormHandle } from './ShipmentInlineForm';
 
 // ---------------------------------------------------------------------------
 
@@ -265,17 +265,17 @@ export default function ShipmentInlineDetail({
           dto.extraShipments = Object.entries(extraPiecesMap)
                .filter(([, val]) => val !== '' && Number(val) > 0)
                .map(([productId, val]) => {
-                    const extra = new ExtraShipmentDto();
-                    extra.quantity = Number(val);
+                    const extraDto = new ExtraShipmentDto();
+                    extraDto.quantity = Number(val);
                     const customName = customNameMap.get(productId);
                     if (customName) {
                          // Custom product — send name only, no productId
-                         extra.productName = customName;
+                         extraDto.productName = customName;
                     } else {
-                         extra.productId = productId;
+                         extraDto.productId = productId;
                     }
-                    extra.isLoadingConfirmed = confirmedProductIds.has(productId);
-                    return extra;
+                    extraDto.isLoadingConfirmed = confirmedProductIds.has(productId);
+                    return extraDto;
                });
 
           updateMutation.mutate({ id: shipmentId, data: dto });

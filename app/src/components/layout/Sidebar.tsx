@@ -18,6 +18,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
 
 import useAuth from 'src/hooks/useAuth';
+
 import { useUnsavedChanges } from 'src/providers/UnsavedChangesProvider';
 
 import { navItems } from './navConfig';

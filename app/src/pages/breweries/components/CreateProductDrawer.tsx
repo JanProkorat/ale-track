@@ -13,17 +13,16 @@ import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import InputLabel from '@mui/material/InputLabel';
 import Typography from '@mui/material/Typography';
-import FormControl from '@mui/material/FormControl';
 import LoadingButton from '@mui/lab/LoadingButton';
+import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
 import InputAdornment from '@mui/material/InputAdornment';
 
 import { useCreateProducts } from 'src/hooks/useProducts';
 
-import { useCurrency } from 'src/providers/CurrencyProvider';
-
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
+import { useCurrency } from 'src/providers/CurrencyProvider';
 import {
      ProductKind,
      ProductType,

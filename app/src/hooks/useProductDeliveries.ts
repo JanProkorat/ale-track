@@ -1,4 +1,4 @@
-import type { CreateProductsDeliveryDto, UpdateProductDeliveryDto } from 'src/generated/api-client';
+import type { UpdateProductDeliveryDto, CreateProductsDeliveryDto } from 'src/generated/api-client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 

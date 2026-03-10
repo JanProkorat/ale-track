@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
-import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
-import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
-import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined';
-import SportsBarOutlined from '@mui/icons-material/SportsBarOutlined';
+import Typography from '@mui/material/Typography';
 import BadgeOutlined from '@mui/icons-material/BadgeOutlined';
+import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
+import SportsBarOutlined from '@mui/icons-material/SportsBarOutlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
+import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined';
 import LocalShippingOutlined from '@mui/icons-material/LocalShippingOutlined';
 
 import { useModuleCounts } from 'src/hooks/useModuleCounts';
