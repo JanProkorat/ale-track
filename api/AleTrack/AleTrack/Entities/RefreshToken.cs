@@ -39,6 +39,12 @@ public sealed class RefreshToken : BaseEntity
     public DateTime CreatedAt { get; set; }
 
     /// <summary>
+    /// Whether this token has been revoked
+    /// </summary>
+    [Column("is_revoked")]
+    public bool IsRevoked { get; set; }
+
+    /// <summary>
     /// The user this token belongs to
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]

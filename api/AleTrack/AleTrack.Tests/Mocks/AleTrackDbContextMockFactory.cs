@@ -46,15 +46,16 @@ public static class AleTrackDbContextMockFactory
         ICollection<DeliveryItem>? deliveryItems = null,
         ICollection<InventoryItem>? inventoryItems = null,
         ICollection<ClientNote>? clientNotes = null,
-        ICollection<OutgoingShipment>? outgoingShipments = null)
+        ICollection<OutgoingShipment>? outgoingShipments = null,
+        ICollection<RefreshToken>? refreshTokens = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
         return dbContextMock.SetupDbContextMock(
-            clients ?? [], 
-            breweries ?? [], 
-            products ?? [], 
-            users ?? [], 
+            clients ?? [],
+            breweries ?? [],
+            products ?? [],
+            users ?? [],
             userRoles ?? [],
             orders ?? [],
             orderItems ?? [],
@@ -64,7 +65,8 @@ public static class AleTrackDbContextMockFactory
             deliveryItems ?? [],
             inventoryItems ?? [],
             clientNotes ?? [],
-            outgoingShipments ?? []);
+            outgoingShipments ?? [],
+            refreshTokens ?? []);
     }
 
     /// <summary>
@@ -99,7 +101,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<DeliveryItem> deliveryItems,
         ICollection<InventoryItem> inventoryItems,
         ICollection<ClientNote> clientNotes,
-        ICollection<OutgoingShipment> outgoingShipments)
+        ICollection<OutgoingShipment> outgoingShipments,
+        ICollection<RefreshToken> refreshTokens)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -115,6 +118,7 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<InventoryItem>>(x => x.InventoryItems).ReturnsDbSet(inventoryItems);
         dbContextMock.Setup<DbSet<ClientNote>>(x => x.ClientNotes).ReturnsDbSet(clientNotes);
         dbContextMock.Setup<DbSet<OutgoingShipment>>(x => x.OutgoingShipments).ReturnsDbSet(outgoingShipments);
+        dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
                 
         return dbContextMock;
     }

@@ -12,7 +12,7 @@ public static class PrimatorProductsBuilder
         [
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0001-4000-8000-000000000001"),
                 Name ="Prim. Antonín",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -27,7 +27,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0002-4000-8000-000000000002"),
                 Name ="Prim. Antonín",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -42,7 +42,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0003-4000-8000-000000000003"),
                 Name ="Prim. Antonín",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -57,7 +57,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0004-4000-8000-000000000004"),
                 Name ="Prim. Ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -72,7 +72,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0005-4000-8000-000000000005"),
                 Name ="Prim. Ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -87,7 +87,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0006-4000-8000-000000000006"),
                 Name ="Prim. Ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -102,7 +102,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0007-4000-8000-000000000007"),
                 Name ="Prim. Ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -117,7 +117,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0008-4000-8000-000000000008"),
                 Name ="Prim. Ležák nefiltrovaný",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -132,7 +132,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0009-4000-8000-000000000009"),
                 Name ="Prim. Ležák nefiltrovaný",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -147,7 +147,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0010-4000-8000-000000000010"),
                 Name ="Prim. Ležák nefiltrovaný",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -162,7 +162,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0011-4000-8000-000000000011"),
                 Name ="Prim. Premium",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -177,7 +177,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0012-4000-8000-000000000012"),
                 Name ="Prim. Premium",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -192,7 +192,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0013-4000-8000-000000000013"),
                 Name ="Prim. Premium",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -208,7 +208,7 @@ public static class PrimatorProductsBuilder
             // Dark
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0014-4000-8000-000000000014"),
                 Name ="Prim. Dark",
                 Kind = ProductKind.Keg,
                 Type = ProductType.DarkLager,
@@ -223,7 +223,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0015-4000-8000-000000000015"),
                 Name ="Prim. Dark",
                 Kind = ProductKind.Keg,
                 Type = ProductType.DarkLager,
@@ -239,7 +239,7 @@ public static class PrimatorProductsBuilder
             // 13 Polotmavé
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0016-4000-8000-000000000016"),
                 Name ="Prim. Polotmavé",
                 Kind = ProductKind.Keg,
                 Type = ProductType.AmberLager,
@@ -254,7 +254,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0017-4000-8000-000000000017"),
                 Name ="Prim. Polotmavé",
                 Kind = ProductKind.Keg,
                 Type = ProductType.AmberLager,
@@ -270,7 +270,7 @@ public static class PrimatorProductsBuilder
             // 16 Exkluziv
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0018-4000-8000-000000000018"),
                 Name ="Prim. Exkluziv",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -285,7 +285,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0019-4000-8000-000000000019"),
                 Name ="Prim. Exkluziv",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -301,7 +301,7 @@ public static class PrimatorProductsBuilder
             // 21 Imperial
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0020-4000-8000-000000000020"),
                 Name ="Prim. Imperial",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -316,7 +316,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0021-4000-8000-000000000021"),
                 Name ="Prim. Imperial",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -332,7 +332,7 @@ public static class PrimatorProductsBuilder
             // 24 Double
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0022-4000-8000-000000000022"),
                 Name ="Prim. Double",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -347,7 +347,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0023-4000-8000-000000000023"),
                 Name ="Prim. Double",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleStrong,
@@ -363,7 +363,7 @@ public static class PrimatorProductsBuilder
             // Weizen
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0024-4000-8000-000000000024"),
                 Name ="Prim. Weizen",
                 Kind = ProductKind.Keg,
                 Type = ProductType.WheatBeer,
@@ -378,7 +378,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0025-4000-8000-000000000025"),
                 Name ="Prim. Weizen",
                 Kind = ProductKind.Keg,
                 Type = ProductType.WheatBeer,
@@ -394,7 +394,7 @@ public static class PrimatorProductsBuilder
             // EPA
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0026-4000-8000-000000000026"),
                 Name ="Prim. EPA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -409,7 +409,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0027-4000-8000-000000000027"),
                 Name ="Prim. EPA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -425,7 +425,7 @@ public static class PrimatorProductsBuilder
             // IPA
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0028-4000-8000-000000000028"),
                 Name ="Prim. IPA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -440,7 +440,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0029-4000-8000-000000000029"),
                 Name ="Prim. IPA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -456,7 +456,7 @@ public static class PrimatorProductsBuilder
             // APA
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0030-4000-8000-000000000030"),
                 Name ="Prim. APA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -471,7 +471,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0031-4000-8000-000000000031"),
                 Name ="Prim. APA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -487,7 +487,7 @@ public static class PrimatorProductsBuilder
             // Stout
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0032-4000-8000-000000000032"),
                 Name ="Prim. Stout",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -502,7 +502,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a1b2c3d4-0033-4000-8000-000000000033"),
                 Name ="Prim. Stout",
                 Kind = ProductKind.Keg,
                 Type = ProductType.SpecialBeer,
@@ -518,7 +518,7 @@ public static class PrimatorProductsBuilder
             // Tchyně
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("5d8d48ac-ddb4-4430-ab40-b4dbde85eaed"),
                 Name ="Prim. Tchyně",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -533,7 +533,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("ccf9311c-2d6c-4c7f-9a7a-20126a3da02e"),
                 Name ="Prim. Tchyně",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -548,7 +548,7 @@ public static class PrimatorProductsBuilder
             // FREE Tchyně
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("b5bde6b8-847e-4876-b912-4f4d2439583a"),
                 Name ="Prim. FREE Tchyně",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -562,7 +562,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("4629131d-0268-43f4-a799-2d0c3b55705f"),
                 Name ="Prim. FREE Tchyně",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -577,7 +577,7 @@ public static class PrimatorProductsBuilder
             // N – Nealko
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("23c75327-03e5-4b67-bab5-b0c68ec5f6fd"),
                 Name ="Prim. Nealko",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -591,7 +591,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("8244b062-7d2a-4d3f-805b-714fc33a5cfa"),
                 Name ="Prim. Nealko",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -606,7 +606,7 @@ public static class PrimatorProductsBuilder
             // N – Nealko černý rybíz a limetka
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("7c2c1b20-913f-431f-931a-914b904acb63"),
                 Name ="Prim. Nealko rybíz a limetka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -620,7 +620,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("58f2b8f0-9916-4bdc-af46-b9ac698cb183"),
                 Name ="Prim. Nealko rybíz a limetka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -635,7 +635,7 @@ public static class PrimatorProductsBuilder
             // N – Nealko tropický citrus yuzu
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("5cfcfff5-14a5-4ea0-8663-3fe3c4edb7ec"),
                 Name ="Prim. Nealko citrus yuzu",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -649,7 +649,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("0007e744-02fa-4994-ba07-d9943903d4ca"),
                 Name ="Prim. Nealko citrus yuzu",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -664,7 +664,7 @@ public static class PrimatorProductsBuilder
             // HRON Světlý ležák
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("8cbefa29-d800-471d-9934-2a11876555d1"),
                 Name ="Hron Světlý ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -679,7 +679,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("24248d04-73b0-41ab-84e7-60f700ca3ffb"),
                 Name ="Hron Světlý ležák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -695,7 +695,7 @@ public static class PrimatorProductsBuilder
             // CHIPPER Grep
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("26574c46-192a-44f6-9c76-a2061b98d4b5"),
                 Name ="Prim. CHIPPER Grep",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Radler,
@@ -710,7 +710,7 @@ public static class PrimatorProductsBuilder
             // limo MALINA
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("bd6987f5-ed78-4d47-bca9-aabb4c292d67"),
                 Name ="Prim. limo Malina",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -723,7 +723,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("c13a1a66-b159-4ffa-84dd-497fcf744d68"),
                 Name ="Prim. limo Malina",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -737,7 +737,7 @@ public static class PrimatorProductsBuilder
             // limo COLA
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("e432dbbe-70d6-49e5-b6df-cbd6f351ad17"),
                 Name ="Prim. limo Cola",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -750,7 +750,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("1a9a5f19-09ac-42fc-bc4f-0c62c8dc5ac9"),
                 Name ="Prim. limo Cola",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -764,7 +764,7 @@ public static class PrimatorProductsBuilder
             // limo HROZNO
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("0ac1b1d9-4518-4ad6-bd22-b9a0620da741"),
                 Name ="Prim. limo Hrozno",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -777,7 +777,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("1543d4c6-1924-4a2a-8bbf-864ccd75b529"),
                 Name ="Prim. limo Hrozno",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -797,7 +797,7 @@ public static class PrimatorProductsBuilder
             // 0.5l Bottles
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("40c6281d-83ae-4643-9e04-e208ca2860c4"),
                 Name ="Prim. Antonín",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleDraftBeer,
@@ -812,7 +812,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("eb50a88d-1cbe-47e5-8b5a-c54e4430ddf6"),
                 Name ="Prim. Ležák",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -827,7 +827,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("28d05533-4f25-4ad8-98e7-80d256835e0b"),
                 Name ="Prim. Premium",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLagerPremium,
@@ -843,7 +843,7 @@ public static class PrimatorProductsBuilder
             // 0.33l Bottle
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("0780c7a9-3064-40e9-ad3b-0dadb83a2cdb"),
                 Name ="Prim. Premium",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLagerPremium,
@@ -858,7 +858,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("726742ac-b034-4774-b661-3547085d1d4e"),
                 Name ="Prim. Dark",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.DarkLager,
@@ -873,7 +873,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("59e329e3-bba3-46bd-9468-32f02fbc57c2"),
                 Name ="Prim. Polotmavé",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.AmberLager,
@@ -888,7 +888,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("8658b050-20d5-456e-869f-79081cf14a59"),
                 Name ="Prim. Exkluziv",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.SpecialBeer,
@@ -903,7 +903,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("55c6b9e7-0fbe-4540-84d1-ec7c2422298f"),
                 Name ="Prim. Imperial",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleStrong,
@@ -918,7 +918,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("d98d7fe5-2012-4b2f-8519-b09442d6787f"),
                 Name ="Prim. Double",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleStrong,
@@ -933,7 +933,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("9a3754f0-6ca3-4b72-8ca3-0f0be8a66a24"),
                 Name ="Prim. Weizen",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.WheatBeer,
@@ -948,7 +948,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("34a550cc-96f5-40df-947d-2415b7e195ee"),
                 Name ="Prim. EPA",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.SpecialBeer,
@@ -963,7 +963,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a2adc2ba-42c0-401a-994a-d13a4307de46"),
                 Name ="Prim. IPA",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.SpecialBeer,
@@ -978,7 +978,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("61fee2f5-48b3-4382-9dd6-c008c64e2fa9"),
                 Name ="Prim. APA",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.SpecialBeer,
@@ -993,7 +993,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("76298ed3-ee28-4225-8500-80a0ff1a238b"),
                 Name ="Prim. Stout",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.SpecialBeer,
@@ -1008,7 +1008,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("1f5620e9-00b4-41b0-9911-40afa9ec3367"),
                 Name ="Prim. Tchyně",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -1023,7 +1023,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("9a222d9c-abf3-4ed4-b243-14e1a1cf8f3b"),
                 Name ="Prim. FREE Tchyně",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.NonAlcoholicBeer,
@@ -1037,7 +1037,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("0a8670c0-c501-4f1d-bfb5-fa047dcfeb88"),
                 Name ="Prim. FREE Tchyně pomelo",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -1051,7 +1051,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("cd4bd1cc-8edb-476e-87f7-cb8f8f2b3474"),
                 Name ="Prim. Nealko",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.NonAlcoholicBeer,
@@ -1065,7 +1065,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("da8a9414-80af-4511-9370-4e0c8538f722"),
                 Name ="Prim. Chipper Grap",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Radler,
@@ -1080,7 +1080,7 @@ public static class PrimatorProductsBuilder
             // 0.33l Limo Bottles
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("01ae4723-cf24-4145-b5b7-8fd9cc90c2bb"),
                 Name ="Prim. limo Soda",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -1093,7 +1093,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("90bf724f-e407-4f91-bcb8-2b3079f0c9e2"),
                 Name ="Prim. limo Malina",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -1106,7 +1106,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a7d9688d-5f9e-4b34-8d39-2412b093b834"),
                 Name ="Prim. limo Cola",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -1119,7 +1119,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("759062d9-1810-45c2-8856-88f073776c04"),
                 Name ="Prim. limo Hrozno",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -1132,7 +1132,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("41aea878-898f-4280-90c5-54d7675ca530"),
                 Name ="Prim. limo Multivitamin",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -1151,7 +1151,7 @@ public static class PrimatorProductsBuilder
         [
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("dc5cc034-ad0b-4187-a965-a41b5d0da8d5"),
                 Name ="Prim. Premium 8x",
                 Kind = ProductKind.Multipack,
                 Type = ProductType.PaleLagerPremium,
@@ -1163,7 +1163,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("3851ba99-bdfb-4f03-8bb6-e052b2a46334"),
                 Name ="Prim. Osm zlatých 8x",
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
@@ -1173,7 +1173,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("b9fb168c-363a-448a-8168-857efa6503ea"),
                 Name ="Prim. Top line 8x",
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
@@ -1183,7 +1183,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("05408597-e3b0-4a5b-986a-3fbd8e42add1"),
                 Name ="Prim. Tchyně 8x",
                 Kind = ProductKind.Multipack,
                 Type = ProductType.PaleLager,
@@ -1202,7 +1202,7 @@ public static class PrimatorProductsBuilder
             // 0.5l Cans
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("d9eda329-814d-4182-9924-d019d822773b"),
                 Name = "Prim. Ležák",
                 Kind = ProductKind.Can,
                 Type = ProductType.PaleLager,
@@ -1217,7 +1217,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("964e6456-e819-42df-82ee-47ee99f94683"),
                 Name = "Prim. Premium",
                 Kind = ProductKind.Can,
                 Type = ProductType.PaleLagerPremium,
@@ -1232,7 +1232,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("134e72d9-6e64-46e7-96c2-b66438f92fff"),
                 Name = "Prim. Tchyně",
                 Kind = ProductKind.Can,
                 Type = ProductType.PaleLager,
@@ -1247,7 +1247,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("de9f5552-2353-4074-9a97-1a5275c66c9e"),
                 Name = "Prim. FREE Tchyně",
                 Kind = ProductKind.Can,
                 Type = ProductType.NonAlcoholicBeer,
@@ -1261,7 +1261,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("9e96586f-9237-4bf5-8081-5c1505cbf7a7"),
                 Name = "Prim. FREE Tchyně pomelo",
                 Kind = ProductKind.Can,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -1275,7 +1275,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("948e95f8-d5b3-4b1a-a869-7f04f09cce51"),
                 Name = "Prim. Nealko rybíz a limetka",
                 Kind = ProductKind.Can,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -1289,7 +1289,7 @@ public static class PrimatorProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("cae6b6e6-e808-4281-864c-fe4b2340d7fd"),
                 Name = "Prim. Nealko citrus yuzu",
                 Kind = ProductKind.Can,
                 Type = ProductType.NonAlcoholicFlavourBeer,

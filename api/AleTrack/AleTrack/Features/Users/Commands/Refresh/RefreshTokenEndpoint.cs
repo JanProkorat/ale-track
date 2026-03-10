@@ -34,7 +34,7 @@ public sealed record RefreshTokenDto
 /// <summary>
 /// Endpoint to refresh an access token using a refresh token
 /// </summary>
-public sealed class RefreshTokenEndpoint(AleTrackDbContext dbContext, IJwtService jwtService) :
+public sealed class RefreshTokenEndpoint(AleTrackDbContext dbContext, IJwtService jwtService, IConfiguration configuration) :
     Endpoint<RefreshTokenRequest, LoginResponse>
 {
     /// <inheritdoc />
@@ -59,43 +59,36 @@ public sealed class RefreshTokenEndpoint(AleTrackDbContext dbContext, IJwtServic
     /// <inheritdoc />
     public override async Task HandleAsync(RefreshTokenRequest req, CancellationToken ct)
     {
-        var existingToken = await dbContext.Set<RefreshToken>()
+        var hashedToken = jwtService.HashToken(req.Data.RefreshToken);
+
+        var existingToken = await dbContext.RefreshTokens
             .Include(rt => rt.User)
                 .ThenInclude(u => u.UserRoles)
-            .FirstOrDefaultAsync(rt => rt.Token == req.Data.RefreshToken, ct);
+            .FirstOrDefaultAsync(rt => rt.Token == hashedToken, ct);
 
-        if (existingToken is null || existingToken.ExpiresAt < DateTime.UtcNow)
+        if (existingToken is null || existingToken.IsRevoked || existingToken.ExpiresAt < DateTime.UtcNow)
             UserThrowHelper.InvalidRefreshToken();
 
         var user = existingToken.User;
 
         // Remove the used refresh token (rotation)
-        dbContext.Set<RefreshToken>().Remove(existingToken);
+        dbContext.RefreshTokens.Remove(existingToken);
 
         // Clean up expired tokens for this user
-        var expiredTokens = await dbContext.Set<RefreshToken>()
+        var expiredTokens = await dbContext.RefreshTokens
             .Where(rt => rt.UserId == user.Id && rt.ExpiresAt < DateTime.UtcNow)
             .ToListAsync(ct);
-        dbContext.Set<RefreshToken>().RemoveRange(expiredTokens);
+        dbContext.RefreshTokens.RemoveRange(expiredTokens);
 
         // Generate new tokens
-        var accessToken = jwtService.GenerateToken(user);
-        var refreshTokenString = jwtService.GenerateRefreshToken();
-        var refreshToken = new RefreshToken
-        {
-            User = user,
-            Token = refreshTokenString,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        dbContext.Set<RefreshToken>().Add(refreshToken);
+        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
+            jwtService, dbContext, user, configuration);
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse
         {
             AccessToken = accessToken,
-            RefreshToken = refreshTokenString
+            RefreshToken = rawRefreshToken
         }, cancellation: ct);
     }
 }

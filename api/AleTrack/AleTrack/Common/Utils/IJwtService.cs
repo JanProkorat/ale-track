@@ -19,4 +19,11 @@ public interface IJwtService
     /// </summary>
     /// <returns>A random token string.</returns>
     string GenerateRefreshToken();
+
+    /// <summary>
+    /// Hashes a refresh token using SHA-256 for secure storage.
+    /// </summary>
+    /// <param name="token">The raw refresh token to hash.</param>
+    /// <returns>A base64-encoded SHA-256 hash of the token.</returns>
+    string HashToken(string token);
 }

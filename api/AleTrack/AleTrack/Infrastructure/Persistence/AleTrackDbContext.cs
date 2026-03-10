@@ -100,6 +100,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<OutgoingShipment> OutgoingShipments => Set<OutgoingShipment>();
 
+    /// <summary>
+    /// DbSet of <see cref="RefreshToken"/>
+    /// </summary>
+    public virtual DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     /// <inheritdoc />
     public AleTrackDbContext(){}
     

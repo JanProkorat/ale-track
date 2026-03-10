@@ -13,7 +13,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Nealko - světlé nealkoholické pivo
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000001"),
                 Name = "Roh. Nealko",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicBeer,
@@ -27,7 +27,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Nealko Pomelo - míchaný nápoj z nealkoholického piva
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000002"),
                 Name = "Roh. Nealko Pomelo",
                 Kind = ProductKind.Keg,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -41,7 +41,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Podskalák - světlé výčepní pivo 4,2%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000003"),
                 Name = "Roh. Podskalák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -55,7 +55,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000004"),
                 Name = "Roh. Podskalák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -70,7 +70,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Y - Ypsilon - světlé výčepní pivo za studena chmelené 4,4%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000005"),
                 Name = "Roh. Y - Ypsilon",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -84,7 +84,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000006"),
                 Name = "Roh. Y - Ypsilon",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleDraftBeer,
@@ -99,7 +99,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Skalák - světlý ležák 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000007"),
                 Name = "Roh. Skalák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -113,7 +113,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000008"),
                 Name = "Roh. Skalák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -127,7 +127,7 @@ public static class RohozecProductsBuilder
             
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000009"),
                 Name = "Roh. Skalák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
@@ -142,7 +142,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Kvasničák - světlý ležák kvasnicový 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000010"),
                 Name = "Roh. Kvasničák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -156,7 +156,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000011"),
                 Name = "Roh. Kvasničák",
                 Kind = ProductKind.Keg,
                 Type = ProductType.YeastLager,
@@ -171,7 +171,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Dvanáctka - světlý ležák premium 5,3%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000012"),
                 Name = "Roh. Dvanáctka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -185,7 +185,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000013"),
                 Name = "Roh. Dvanáctka",
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLagerPremium,
@@ -200,7 +200,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Jedenáctka řezaná - řezaný ležák 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000014"),
                 Name = "Roh. Jedenáctka řezaná",
                 Kind = ProductKind.Keg,
                 Type = ProductType.MixedLager,
@@ -215,7 +215,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000015"),
                 Name = "Roh. Jedenáctka řezaná",
                 Kind = ProductKind.Keg,
                 Type = ProductType.MixedLager,
@@ -230,7 +230,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Třináctka tmavá - tmavé silné pivo 5,9%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000016"),
                 Name = "Roh. Třináctka tmavá",
                 Kind = ProductKind.Keg,
                 Type = ProductType.DarkStrong,
@@ -245,7 +245,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Cherry beer - míchaný nápoj z piva s višňovou příchutí 3,9%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000017"),
                 Name = "Roh. Cherry beer",
                 Kind = ProductKind.Keg,
                 Type = ProductType.FlavoredBeer,
@@ -260,7 +260,7 @@ public static class RohozecProductsBuilder
             // erko ORANŽ - limonáda
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000018"),
                 Name = "erko ORANŽ",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -273,7 +273,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000019"),
                 Name = "erko ORANŽ",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -287,7 +287,7 @@ public static class RohozecProductsBuilder
             // erko MALINA - limonáda
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000020"),
                 Name = "erko MALINA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -300,7 +300,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000021"),
                 Name = "erko MALINA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -314,7 +314,7 @@ public static class RohozecProductsBuilder
             // erko KOLA - limonáda
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000022"),
                 Name = "erko KOLA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -327,7 +327,7 @@ public static class RohozecProductsBuilder
 
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000023"),
                 Name = "erko KOLA",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Lemonade,
@@ -347,7 +347,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Nealko
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000024"),
                 Name = "Roh. Nealko",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.NonAlcoholicBeer,
@@ -361,7 +361,7 @@ public static class RohozecProductsBuilder
             // R - MIX Pomelo
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000025"),
                 Name = "Roh. R - MIX Pomelo",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.FlavoredBeer,
@@ -375,7 +375,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Skalákczech - světlé stolní pivo 3,2%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000026"),
                 Name = "Roh. Skalákczech",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleDraftBeer,
@@ -389,7 +389,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Podskalák
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000027"),
                 Name = "Roh. Podskalák",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleDraftBeer,
@@ -404,7 +404,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Y - Ypsilon
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000028"),
                 Name = "Roh. Y - Ypsilon",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleDraftBeer,
@@ -419,7 +419,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Skalák
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000029"),
                 Name = "Roh. Skalák",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -434,7 +434,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Dvanáctka
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000030"),
                 Name = "Roh. Dvanáctka",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLagerPremium,
@@ -449,7 +449,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Třináctka - světlé silné pivo 6,0%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000031"),
                 Name = "Roh. Třináctka",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleStrong,
@@ -464,7 +464,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Jedenáctka řezaná
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000032"),
                 Name = "Roh. Jedenáctka řezaná",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.MixedLager,
@@ -479,7 +479,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC X - Iks - tmavé výčepní pivo 4,4%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000033"),
                 Name = "Roh. X - Iks",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.DarkLager,
@@ -494,7 +494,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Třináctka tmavá - tmavé silné pivo 5,9%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000034"),
                 Name = "Roh. Třináctka tmavá",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.DarkStrong,
@@ -509,7 +509,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Cherry beer
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000035"),
                 Name = "Roh. Cherry beer",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.FlavoredBeer,
@@ -524,7 +524,7 @@ public static class RohozecProductsBuilder
             // Cecilia - světlý ležák bez lepku 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000036"),
                 Name = "Roh. Cecilia",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.PaleLager,
@@ -539,7 +539,7 @@ public static class RohozecProductsBuilder
             // GINGER DRINK - zázvorová limonáda (OW 0,5l nevratná)
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000037"),
                 Name = "Roh. GINGER DRINK",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
@@ -559,7 +559,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Skalák - světlý ležák 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("a0000000-0000-0000-0000-000000000038"),
                 Name = "Roh. Skalák",
                 Kind = ProductKind.Can,
                 Type = ProductType.PaleLager,
@@ -574,7 +574,7 @@ public static class RohozecProductsBuilder
             // ROHOZEC Nealko Pomelo
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("d2068a30-5280-4d99-a6d0-ebc348e7b5ea"),
                 Name = "Roh. Nealko Pomelo",
                 Kind = ProductKind.Can,
                 Type = ProductType.NonAlcoholicFlavourBeer,
@@ -588,7 +588,7 @@ public static class RohozecProductsBuilder
             // Cecilia - světlý ležák bez lepku 4,8%
             new()
             {
-                PublicId = Guid.NewGuid(),
+                PublicId = Guid.Parse("c4cec1e0-7128-431d-9e89-84671a1cd480"),
                 Name = "Roh. Cecilia",
                 Kind = ProductKind.Can,
                 Type = ProductType.PaleLager,

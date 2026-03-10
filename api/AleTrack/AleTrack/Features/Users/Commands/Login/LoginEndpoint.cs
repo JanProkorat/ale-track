@@ -1,5 +1,4 @@
 using AleTrack.Common.Utils;
-using AleTrack.Entities;
 using AleTrack.Features.Users.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -15,7 +14,7 @@ public sealed record LoginRequest
     /// <summary>
     /// Body of the request
     /// </summary>
-    [FromBody] 
+    [FromBody]
     public LoginUserDto Data { get; set; } = null!;
 }
 
@@ -38,7 +37,7 @@ public sealed record LoginResponse
 /// <summary>
 /// Endpoint to log user into the system
 /// </summary>
-public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher passwordHasher, IJwtService jwtService) : 
+public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher passwordHasher, IJwtService jwtService, IConfiguration configuration) :
     Endpoint<LoginRequest, LoginResponse>
 {
     /// <inheritdoc />
@@ -60,7 +59,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
             }
         );
     }
-    
+
     /// <inheritdoc />
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)
     {
@@ -71,28 +70,18 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
         if (user is null)
             UserThrowHelper.UserNotFound(req.Data.UserName);
         
-        var isPasswordValid = passwordHasher.VerifyPassword(req.Data.Password, user!.Password);
+        var isPasswordValid = passwordHasher.VerifyPassword(req.Data.Password, user.Password);
         if (!isPasswordValid)
             UserThrowHelper.InvalidPassword();
 
-        var accessToken = jwtService.GenerateToken(user);
-        var refreshTokenString = jwtService.GenerateRefreshToken();
-        var refreshToken = new RefreshToken
-        {
-            User = user,
-            Token = refreshTokenString,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            CreatedAt = DateTime.UtcNow
-        };
-
-        dbContext.Set<RefreshToken>().Add(refreshToken);
+        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
+            jwtService, dbContext, user, configuration);
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse
         {
             AccessToken = accessToken,
-            RefreshToken = refreshTokenString
+            RefreshToken = rawRefreshToken
         }, cancellation: ct);
-
     }
 }
