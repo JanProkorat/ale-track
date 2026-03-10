@@ -39,5 +39,8 @@ export const navItems: NavItem[] = [
      { labelKey: 'nav.users', path: '/users', icon: ManageAccountsOutlined, adminOnly: true, badgeKey: 'users' },
 ];
 
-// Bottom-nav items for mobile (first 4 + "More")
-export const mobileNavItems: NavItem[] = navItems.slice(0, 4);
+// Bottom-nav items for mobile (first 3 + outgoing shipments + "More")
+export const mobileNavItems: NavItem[] = [
+     ...navItems.slice(0, 3),
+     navItems.find((item) => item.path === '/outgoing-shipments')!,
+];
