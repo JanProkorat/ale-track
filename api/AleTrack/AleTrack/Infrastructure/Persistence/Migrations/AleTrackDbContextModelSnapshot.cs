@@ -17,7 +17,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.19")
+                .HasAnnotation("ProductVersion", "10.0.3")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -588,6 +588,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<bool>("IsShipmentLoadingConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_shipment_loading_confirmed");
+
                     b.Property<long>("OrderId")
                         .HasColumnType("bigint")
                         .HasColumnName("order_id");
@@ -685,6 +689,45 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasIndex("OutgoingShipmentId");
 
                     b.ToTable("outgoing_shipment_drivers");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentExtraItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("IsShipmentLoadingConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_shipment_loading_confirmed");
+
+                    b.Property<long>("OutgoingShipmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("outgoing_shipment_id");
+
+                    b.Property<long?>("ProductId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("product_name");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OutgoingShipmentId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("outgoing_shipment_extra_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStop", b =>
@@ -838,6 +881,47 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasIndex("VehicleId");
 
                     b.ToTable("product_deliveries");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.RefreshToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_revoked");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("token");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("refresh_tokens");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.User", b =>
@@ -1353,6 +1437,24 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("OutgoingShipment");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentExtraItem", b =>
+                {
+                    b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
+                        .WithMany("ExtraItems")
+                        .HasForeignKey("OutgoingShipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AleTrack.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("OutgoingShipment");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStop", b =>
                 {
                     b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
@@ -1383,6 +1485,17 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("AleTrack.Entities.User", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.UserRole", b =>
@@ -1452,6 +1565,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Drivers");
 
+                    b.Navigation("ExtraItems");
+
                     b.Navigation("Stops");
                 });
 
@@ -1468,6 +1583,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.User", b =>
                 {
+                    b.Navigation("RefreshTokens");
+
                     b.Navigation("UserRoles");
                 });
 

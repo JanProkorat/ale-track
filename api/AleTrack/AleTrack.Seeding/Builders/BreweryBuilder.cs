@@ -11,7 +11,7 @@ internal static class BreweryBuilder
             DisplayOrder = 1,
             Color = "#f52b07",
             Name = "Svijany",
-            PublicId = Guid.NewGuid(),
+            PublicId = Guid.Parse("e0681a30-b323-4df9-a670-a290e1ac990c"),
             OfficialAddress = new Address
             { 
                 StreetName = "Svijany",
@@ -36,7 +36,7 @@ internal static class BreweryBuilder
             DisplayOrder = 2,
             Color = "#f5e107",
             Name = "Rohozec",
-            PublicId = Guid.NewGuid(),
+            PublicId = Guid.Parse("77a0d351-e49d-4341-b443-18459c0122aa"),
             OfficialAddress = new Address
             {
                 StreetName = "Malý Rohozec",
@@ -53,7 +53,7 @@ internal static class BreweryBuilder
             DisplayOrder = 3,
             Color = "#0fa699",
             Name = "Primátor",
-            PublicId = Guid.NewGuid(),
+            PublicId = Guid.Parse("8ec5d390-b750-4231-9dc2-fcb2f651ed2b"),
             OfficialAddress = new Address
             {
                 StreetName = "Dobrošovská",

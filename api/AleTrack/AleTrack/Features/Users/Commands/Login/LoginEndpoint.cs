@@ -14,7 +14,7 @@ public sealed record LoginRequest
     /// <summary>
     /// Body of the request
     /// </summary>
-    [FromBody] 
+    [FromBody]
     public LoginUserDto Data { get; set; } = null!;
 }
 
@@ -27,12 +27,17 @@ public sealed record LoginResponse
     /// Valid access token
     /// </summary>
     public string AccessToken { get; set; } = null!;
+
+    /// <summary>
+    /// Refresh token for obtaining new access tokens
+    /// </summary>
+    public string RefreshToken { get; set; } = null!;
 }
 
 /// <summary>
 /// Endpoint to log user into the system
 /// </summary>
-public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher passwordHasher, IJwtService jwtService) : 
+public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher passwordHasher, IJwtService jwtService, IConfiguration configuration) :
     Endpoint<LoginRequest, LoginResponse>
 {
     /// <inheritdoc />
@@ -54,7 +59,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
             }
         );
     }
-    
+
     /// <inheritdoc />
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)
     {
@@ -65,16 +70,18 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
         if (user is null)
             UserThrowHelper.UserNotFound(req.Data.UserName);
         
-        var isPasswordValid = passwordHasher.VerifyPassword(req.Data.Password, user!.Password);
+        var isPasswordValid = passwordHasher.VerifyPassword(req.Data.Password, user.Password);
         if (!isPasswordValid)
             UserThrowHelper.InvalidPassword();
 
-        var accessToken = jwtService.GenerateToken(user);
-        
-        await SendAsync(new LoginResponse
-        {
-            AccessToken = accessToken
-        }, cancellation: ct);
+        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
+            jwtService, dbContext, user, configuration);
+        await dbContext.SaveChangesAsync(ct);
 
+        await Send.OkAsync(new LoginResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = rawRefreshToken
+        }, cancellation: ct);
     }
 }

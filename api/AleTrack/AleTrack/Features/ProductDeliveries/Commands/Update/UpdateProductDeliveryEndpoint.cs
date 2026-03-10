@@ -60,7 +60,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         if (delivery is null)
             ThrowHelper.PublicEntityNotFound(nameof(ProductDelivery), req.Id);
 
-        if (req.Data.State is not ProductDeliveryState.InPlanning && delivery!.Stops.Count is 0)
+        if (req.Data.State is not ProductDeliveryState.InPlanning && req.Data.State is not ProductDeliveryState.Cancelled && delivery.Stops.Count is 0)
             ProductDeliveryThrowHelper.NoItemsToDeliver(req.Data.State);
         
         delivery!.Date = req.Data.DeliveryDate;
@@ -106,7 +106,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
             await CreateInventoryItemsAsync(delivery.Stops, ct);
         
         await dbContext.SaveChangesAsync(ct);
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 
     private async Task CreateInventoryItemsAsync(ICollection<DeliveryStop> deliveryStops, CancellationToken cancellationToken)

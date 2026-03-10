@@ -26,9 +26,16 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         dbContext.Breweries.Add(svijany);
         
         var rohozec = BreweryBuilder.CreateRohozec();
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecKegProducts());
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecBottleProducts());
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecCanProducts());
         dbContext.Breweries.Add(rohozec);
         
         var primator = BreweryBuilder.CreatePrimator();
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorKegProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorBottleProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorMultipackProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorCanProducts());
         dbContext.Breweries.Add(primator);
         
         await dbContext.SaveChangesAsync();
@@ -48,6 +55,29 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleDuoPackProducts());
         svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleOtherProducts());
         
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task InsertProductsToRohozec()
+    {
+        var rohozec = await dbContext.Breweries.FirstAsync(b => b.Name == "Rohozec");
+
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecKegProducts());
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecBottleProducts());
+        rohozec.Products.AddRange(RohozecProductsBuilder.GetRohozecCanProducts());
+
+        await dbContext.SaveChangesAsync();
+    }
+
+    public async Task InsertProductsToPrimator()
+    {
+        var primator = await dbContext.Breweries.FirstAsync(b => b.Name == "Primátor");
+        
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorKegProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorBottleProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorMultipackProducts());
+        primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorCanProducts());
+
         await dbContext.SaveChangesAsync();
     }
 }

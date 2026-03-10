@@ -40,6 +40,7 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
         var data = await dbContext.Products
+            .OrderBy(c => c.Brewery.DisplayOrder)
             .Select(c => new ProductListItemDto
             {
                 Id = c.PublicId,
@@ -55,11 +56,13 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
                 PriceWithVat = c.PriceWithVat,
                 Weight = c.Weight,
                 BreweryId = c.Brewery.PublicId,
-                BreweryName = c.Brewery.Name
+                BreweryName = c.Brewery.Name,
+                BreweryDisplayOrder = c.Brewery.DisplayOrder,
+                DisplayOrder = c.DisplayOrder
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

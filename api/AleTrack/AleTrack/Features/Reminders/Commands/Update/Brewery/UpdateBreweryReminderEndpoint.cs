@@ -89,6 +89,6 @@ public sealed class UpdateBreweryReminderEndpoint(AleTrackDbContext dbContext) :
         dbContext.BreweryReminders.Update(existingReminder);
         await dbContext.SaveChangesAsync(ct);
 
-        await SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 }

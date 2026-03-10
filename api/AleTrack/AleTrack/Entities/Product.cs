@@ -111,12 +111,31 @@ public sealed class Product : PublicEntity
                 ProductKind.Bottle when PackageSize == BottleSize.TenLiters => PackageWeight.TwentyKilos,
                 ProductKind.Keg when PackageSize == KegSize.FiveLiters => PackageWeight.FiveKilos,
                 ProductKind.Keg when PackageSize == KegSize.FifteenLiters => PackageWeight.TwentyKilos,
+                ProductKind.Keg when PackageSize == KegSize.TwentyLiters => PackageWeight.TwentyKilos,
                 ProductKind.Keg when PackageSize == KegSize.ThirtyLiters => PackageWeight.FortyTwoKilos,
                 ProductKind.Keg when PackageSize == KegSize.FiftyLiters => PackageWeight.SixtyTwoKilos,
                 ProductKind.Can when PackageSize == CanSize.ZeroPointThreeThreeLiters => PackageWeight.ZeroPointThree,
                 ProductKind.Can when PackageSize == CanSize.ZeroPointFiveLiters => PackageWeight.ZeroPointFive,
                 ProductKind.Can when PackageSize == CanSize.TwoLiters => PackageWeight.TwoKilos,
                 _ => null
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Display order based on the Product kind
+    /// </summary>
+    public int DisplayOrder {
+        get
+        {
+            return Kind switch
+            {
+                ProductKind.Keg => 1,
+                ProductKind.Bottle => 2,
+                ProductKind.Can => 3,
+                ProductKind.Multipack => 4,
+                ProductKind.Other => 5,
+                _ => 6
             };
         }
     }

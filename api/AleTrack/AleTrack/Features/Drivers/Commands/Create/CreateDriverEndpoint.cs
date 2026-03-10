@@ -62,6 +62,6 @@ public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
         dbContext.Drivers.Add(driver);
         await dbContext.SaveChangesAsync(ct);
         
-        await SendAsync(driver.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+        await Send.ResponseAsync(driver.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
     }
 }

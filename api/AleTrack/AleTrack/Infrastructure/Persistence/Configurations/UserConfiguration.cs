@@ -1,4 +1,5 @@
 using AleTrack.Entities;
+using AleTrack.Features.Users.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,7 +19,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasData(new User
         {
             Id = 1,
-            UserName = "admin",
+            UserName = UserConstants.AdminUserName,
             Password = "$2a$13$vSTwVilIMPc4b6AQEx6BAe.jKbwcLbBcUuaPZ6P.s23N36bB4MbFu",
             PublicId = new Guid("5e58584b-76f1-4205-a5ab-9a37730db25b")
         });

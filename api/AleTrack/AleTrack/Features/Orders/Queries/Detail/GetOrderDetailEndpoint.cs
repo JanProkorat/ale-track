@@ -60,6 +60,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                     Name = o.Client.Name
                 },
                 OrderItems = o.OrderItems
+                    .OrderBy(i => i.Product.Brewery.DisplayOrder)
                     .Select(i => new OrderItemDto
                     {
                         Id = i.PublicId,
@@ -67,7 +68,9 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         Quantity = i.Quantity,
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,
-                        ReminderState = i.ReminderState
+                        ReminderState = i.ReminderState,
+                        BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
+                        DisplayOrder = i.Product.DisplayOrder
                     })
                     .ToList()
             })
@@ -76,6 +79,6 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
-        await SendAsync(order!, cancellation: ct);
+        await Send.OkAsync(order, cancellation: ct);
     }
 }

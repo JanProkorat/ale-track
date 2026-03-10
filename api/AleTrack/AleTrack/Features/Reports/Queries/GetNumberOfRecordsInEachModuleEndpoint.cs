@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Users.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -52,11 +53,11 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(AleTrackDbContext dbC
             DriversCount = await dbContext.Drivers.CountAsync(ct),
             VehiclesCount = await dbContext.Vehicles.CountAsync(ct),
             InventoryItemsCount = await dbContext.InventoryItems.CountAsync(ct),
-            UsersCount = await dbContext.Users.CountAsync(ct),
+            UsersCount = await dbContext.Users.CountAsync(u => u.UserName != UserConstants.AdminUserName, ct),
             OutgoingShipmentsCount = await dbContext.OutgoingShipments.CountAsync(o => !_finishedOutgoingShipments.Contains(o.State), ct),
             ProductDeliveriesCount = await dbContext.ProductDeliveries.CountAsync(o => !_finishedProductDeliveryStates.Contains(o.State), ct)
         };
 
-        await SendOkAsync(result, ct);
+        await Send.OkAsync(result, ct);
     }
 }

@@ -37,4 +37,35 @@ public sealed record UpdateOutgoingShipmentDto
     /// State of the outgoing shipment
     /// </summary>
     public OutgoingShipmentState State { get; set; }
+    
+    /// <summary>
+    /// Extra products to be delivered to the garage
+    /// </summary>
+    public List<ExtraShipmentDto> ExtraShipments { get; set; } = [];
+}
+
+/// <summary>
+/// Data transfer object for adding extra products to an outgoing shipment.
+/// </summary>
+public record ExtraShipmentDto
+{
+    /// <summary>
+    /// ID of related product
+    /// </summary>
+    public Guid? ProductId { get; set; }
+    
+    /// <summary>
+    /// Represents the quantity of the product in the shipment
+    /// </summary>
+    public int Quantity { get; set; }
+    
+    /// <summary>
+    /// Name of the product. Filled only if <see cref="ProductId"/> is null.
+    /// </summary>
+    public string? ProductName { get; set; }
+    
+    /// <summary>
+    /// FLag indicating if the loading of the order item is confirmed
+    /// </summary>
+    public bool IsLoadingConfirmed { get; set; }
 }

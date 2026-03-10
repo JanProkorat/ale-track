@@ -60,7 +60,7 @@ public sealed class GetReminderDetailEndpoint(AleTrackDbContext dbContext) : End
         if (reminder is null)
             ThrowHelper.PublicEntityNotFound(nameof(Reminder), req.Id);
         
-        await SendAsync(reminder!, cancellation: ct);
+        await Send.OkAsync(reminder!, cancellation: ct);
     }
 
     private static async Task<ReminderDetailDto?> GetBreweryReminderDetail(IQueryable<BreweryReminder> breweryRemindersQuery, CancellationToken cancellationToken)

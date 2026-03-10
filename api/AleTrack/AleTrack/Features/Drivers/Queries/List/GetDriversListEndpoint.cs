@@ -45,6 +45,6 @@ public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoi
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

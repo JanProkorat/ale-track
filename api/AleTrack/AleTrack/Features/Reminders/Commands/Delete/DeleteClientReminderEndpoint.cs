@@ -56,6 +56,6 @@ public sealed class DeleteClientReminderEndpoint(AleTrackDbContext dbContext) : 
         dbContext.ClientReminders.Remove(existingReminder!);
         await dbContext.SaveChangesAsync(ct);
 
-        await SendAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
+        await Send.ResponseAsync(null, statusCode: StatusCodes.Status202Accepted, cancellation: ct);
     }
 }

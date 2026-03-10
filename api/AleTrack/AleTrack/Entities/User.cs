@@ -47,4 +47,9 @@ public sealed class User : PublicEntity
     /// List of related roles
     /// </summary>
     public ICollection<UserRole> UserRoles { get; set; } = [];
+
+    /// <summary>
+    /// List of refresh tokens issued to this user
+    /// </summary>
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }

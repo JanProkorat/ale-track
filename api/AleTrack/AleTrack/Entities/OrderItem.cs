@@ -40,6 +40,12 @@ public sealed class OrderItem : PublicEntity
     public OrderItemReminderState? ReminderState { get; set; }
     
     /// <summary>
+    /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
+    /// </summary>
+    [Column("is_shipment_loading_confirmed")]
+    public bool IsShipmentLoadingConfirmed { get; set; }
+    
+    /// <summary>
     /// The parent <see cref="Order"/> related to this item.
     /// </summary>
     public Order Order { get; set; } = null!;

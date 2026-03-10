@@ -69,11 +69,12 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
                 PriceForUnitWithoutVat = c.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = c.PriceForUnitWithVat,
                 PriceWithVat = c.PriceWithVat,
-                Weight = c.Weight
+                Weight = c.Weight,
+                DisplayOrder = c.DisplayOrder
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
         
-        await SendAsync(data, cancellation: ct);
+        await Send.OkAsync(data, cancellation: ct);
     }
 }

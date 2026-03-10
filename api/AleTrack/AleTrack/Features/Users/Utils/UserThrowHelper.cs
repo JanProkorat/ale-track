@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AleTrack.Common.Models;
 
 namespace AleTrack.Features.Users.Utils;
@@ -12,6 +13,7 @@ public static class UserThrowHelper
     /// </summary>
     /// <param name="userName">The name of the user that was not found.</param>
     /// <exception cref="AleTrackException">Thrown when the user is not found, containing details such as status code, error code, and error properties.</exception>
+    [DoesNotReturn]
     public static void UserNotFound(string userName)
         => throw new AleTrackException(
             StatusCodes.Status401Unauthorized,
@@ -28,8 +30,18 @@ public static class UserThrowHelper
     /// Thrown when the password provided during authentication does not match the stored password.
     /// The exception includes details such as the status code and error code.
     /// </exception>
+    [DoesNotReturn]
     public static void InvalidPassword()
         => throw new AleTrackException(
             StatusCodes.Status401Unauthorized,
             UserErrorCodes.InvalidPasswordError);
+
+    /// <summary>
+    /// Throws an AleTrackException indicating that the provided refresh token is invalid or expired.
+    /// </summary>
+    [DoesNotReturn]
+    public static void InvalidRefreshToken()
+        => throw new AleTrackException(
+            StatusCodes.Status401Unauthorized,
+            UserErrorCodes.InvalidRefreshTokenError);
 }
