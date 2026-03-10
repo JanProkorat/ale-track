@@ -289,8 +289,21 @@ function BreweryProductsTable({ breweryId }, ref) {
                <Tabs
                     value={tabIndex}
                     onChange={handleTabChange}
-                    variant="fullWidth"
-                    sx={{ mb: 2 }}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    allowScrollButtonsMobile
+                    sx={{
+                         mb: 2,
+                         '& .MuiTabs-flexContainer': {
+                              justifyContent: 'space-between',
+                         },
+                         '& .MuiTab-root': {
+                              flex: 1,
+                         },
+                         '& .MuiTabScrollButton-root.Mui-disabled': {
+                              opacity: 0.3,
+                         },
+                    }}
                >
                     {kindTabs.map((kind) => (
                          <Tab key={kind} label={enumLabel.productKind(kind)} />
@@ -298,7 +311,7 @@ function BreweryProductsTable({ breweryId }, ref) {
                </Tabs>
 
                {/* Filters + Add button */}
-               <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+               <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center', '& > .MuiTextField-root': { width: { xs: '100%', sm: 250 } } }}>
                     <TextField
                          size="small"
                          placeholder={t('products.name')}
@@ -313,7 +326,7 @@ function BreweryProductsTable({ breweryId }, ref) {
                                    ),
                               },
                          }}
-                         sx={{ maxWidth: 250 }}
+                         sx={{ flexShrink: 0 }}
                     />
                     <TextField
                          select
@@ -321,7 +334,7 @@ function BreweryProductsTable({ breweryId }, ref) {
                          label={t('products.type')}
                          value={typeFilter}
                          onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-                         sx={{ minWidth: 180 }}
+                         sx={{ flexShrink: 0 }}
                     >
                          <MenuItem value="">{t('common.all')}</MenuItem>
                          {availableTypes.map((typeKey) => (
@@ -336,7 +349,7 @@ function BreweryProductsTable({ breweryId }, ref) {
                          label={t('products.packageSize')}
                          value={sizeFilter}
                          onChange={(e) => { setSizeFilter(e.target.value); setPage(0); }}
-                         sx={{ minWidth: 140 }}
+                         sx={{ flexShrink: 0 }}
                     >
                          <MenuItem value="">{t('common.all')}</MenuItem>
                          {availableSizes.map((size) => (

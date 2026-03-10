@@ -62,7 +62,7 @@ describe('MobileBottomNav', () => {
           expect(screen.getByText('nav.dashboard')).toBeInTheDocument();
           expect(screen.getByText('nav.clients')).toBeInTheDocument();
           expect(screen.getByText('nav.orders')).toBeInTheDocument();
-          expect(screen.getByText('nav.breweries')).toBeInTheDocument();
+          expect(screen.getByText('nav.outgoingShipments')).toBeInTheDocument();
      });
 
      it('renders "More" button', () => {

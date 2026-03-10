@@ -53,7 +53,9 @@ export default function MobileBottomNav({ badgeCounts = {} }: MobileBottomNavPro
           : '?';
 
      // Items not shown in bottom bar go into the "More" drawer
-     const overflowItems = navItems.slice(4).filter((item) => !item.adminOnly || isAdmin);
+     const overflowItems = navItems
+          .filter((item) => !mobileNavItems.includes(item))
+          .filter((item) => !item.adminOnly || isAdmin);
 
      // Determine which bottom tab is active
      const activeIndex = mobileNavItems.findIndex((item) =>

@@ -41,9 +41,10 @@ describe('mobileNavItems', () => {
           expect(mobileNavItems).toHaveLength(4);
      });
 
-     it('contains the same references as the first 4 navItems', () => {
-          for (let i = 0; i < 4; i++) {
-               expect(mobileNavItems[i]).toBe(navItems[i]);
-          }
+     it('contains dashboard, clients, orders, and outgoing shipments', () => {
+          expect(mobileNavItems[0]).toBe(navItems[0]); // dashboard
+          expect(mobileNavItems[1]).toBe(navItems[1]); // clients
+          expect(mobileNavItems[2]).toBe(navItems[2]); // orders
+          expect(mobileNavItems[3].path).toBe('/outgoing-shipments');
      });
 });

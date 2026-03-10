@@ -60,10 +60,14 @@ export default function LoginPage() {
                     position: 'relative',
                }}
           >
-               {/* Language + theme — top right */}
+               {/* Language — top right */}
                <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <ThemeModeSwitcher />
                     <LanguageSwitcher />
+               </Box>
+
+               {/* Theme mode — bottom right */}
+               <Box sx={{ position: 'absolute', bottom: 16, right: 16 }}>
+                    <ThemeModeSwitcher />
                </Box>
 
                {/* Login card */}

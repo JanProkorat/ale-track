@@ -238,16 +238,12 @@ export default function DriverAvailabilityCalendar() {
                ) : driversWithAvailability.length === 0 ? (
                     <EmptyState />
                ) : (
-                    <Box sx={{ overflowX: 'auto' }}>
+                    <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                          <Box
                               sx={{
                                    display: 'grid',
                                    gridTemplateColumns: `120px repeat(${days.length}, minmax(32px, 1fr))`,
                                    minWidth: days.length * 32 + 120,
-                                   border: '1px solid',
-                                   borderColor: 'divider',
-                                   borderRadius: 1,
-                                   overflow: 'hidden',
                               }}
                          >
                               {/* Header row */}

@@ -345,9 +345,9 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
                                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t('products.priceWithVat')}</TableCell>
                                         <TableCell
                                              sx={{
-                                                  position: 'sticky',
-                                                  right: 0,
-                                                  zIndex: 3,
+                                                  position: { xs: 'static', sm: 'sticky' },
+                                                  right: { sm: 0 },
+                                                  zIndex: { sm: 3 },
                                                   bgcolor: 'background.neutral',
                                                   width: 80,
                                              }}
@@ -401,9 +401,9 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
                                                   </TableCell>
                                                   <TableCell
                                                        sx={{
-                                                            position: 'sticky',
-                                                            right: 0,
-                                                            zIndex: 1,
+                                                            position: { xs: 'static', sm: 'sticky' },
+                                                            right: { sm: 0 },
+                                                            zIndex: { sm: 1 },
                                                             bgcolor: 'background.paper',
                                                             whiteSpace: 'nowrap',
                                                        }}
