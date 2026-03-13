@@ -50,11 +50,23 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentStop> Stops { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in this outgoing shipment
+    /// List of extra product items included in this outgoing shipment that will be stored in the inventory
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentExtraItem> ExtraItems { get; set; } = [];
+    public ICollection<OutgoingShipmentInventoryExtraItem> InventoryExtraItems { get; set; } = [];
 
+    /// <summary>
+    /// List of extra product items included in this outgoing shipment that will be taken from the inventory and shiped to the client
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentClientExtraItem> ClientExtraItems { get; set; } = [];
+    
+    /// <summary>
+    /// List of custom extra product items included in this outgoing shipment
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentCustomExtraItem> CustomExtraItems { get; set; } = [];
+    
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;
 

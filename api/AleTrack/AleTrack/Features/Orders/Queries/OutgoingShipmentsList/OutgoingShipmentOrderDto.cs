@@ -94,6 +94,16 @@ public record UnassignedOrderItemDto
     public bool IsShipmentLoadingConfirmed { get; set; }
     
     /// <summary>
+    /// Number of pieces to be put on the first invoice
+    /// </summary>
+    public int? FirstInvoiceQuantity { get; set; }
+    
+    /// <summary>
+    /// Number of pieces to be put on the second invoice
+    /// </summary>
+    public int? SecondInvoiceQuantity { get; set; }
+    
+    /// <summary>
     /// Display order based on brewery.
     /// </summary>
     public int BreweryDisplayOrder { get; set; }

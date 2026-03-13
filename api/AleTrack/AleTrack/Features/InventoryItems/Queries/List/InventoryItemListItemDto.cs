@@ -67,4 +67,9 @@ public sealed record InventoryItemListItemDto
     /// Price for unit without VAT
     /// </summary>
     public decimal? PriceForUnitWithoutVat { get; set; }
+    
+    /// <summary>
+    /// Note to the inventory item
+    /// </summary>
+    public string? Note { get; set; }
 }

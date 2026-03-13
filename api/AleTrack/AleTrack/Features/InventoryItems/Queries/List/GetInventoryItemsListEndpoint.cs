@@ -40,12 +40,16 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
         var data = await dbContext.InventoryItems
-            .Where(i => i.Product != null)
-            .GroupBy(i => new { i.Product!.Brewery.PublicId, i.Product!.Brewery.Name, i.Product!.Brewery.DisplayOrder})
+            .GroupBy(i => new
+            {
+                Id = i.Product != null ? i.Product.Brewery.PublicId : Guid.Empty,
+                Name = i.Product != null ? i.Product.Brewery.Name : "Ostatní",
+                DisplayOrder = i.Product != null ? i.Product.Brewery.DisplayOrder : int.MaxValue
+            })
             .OrderBy(g => g.Key.DisplayOrder)
             .Select(g => new InventorySectionDto
             {
-                Id = g.Key.PublicId,
+                Id = g.Key.Id,
                 Name = g.Key.Name,
                 Items = g.Select(i => new InventoryItemListItemDto
                 {
@@ -61,12 +65,13 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
                     PriceWithVat = i.Product != null ? i.Product.PriceWithVat : null,
                     PriceForUnitWithoutVat = i.Product != null ? i.Product.PriceForUnitWithoutVat : null,
                     PriceForUnitWithVat = i.Product != null ? i.Product.PriceForUnitWithVat : null,
+                    Note = i.Note
                 })
                 .ToList()
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
-        
+
         await Send.OkAsync(data, cancellation: ct);
     }
 }

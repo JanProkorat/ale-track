@@ -45,7 +45,7 @@ try
 {
     Log.Information("Seeding started");
     var seeder = services.GetRequiredService<SeedingService>();
-    await seeder.InsertProductsToRohozec();
+    await seeder.InsertDataAsync();
     Log.Information("Seeding finished");
 }
 catch (Exception ex)

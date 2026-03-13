@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Entities.BaseEntities;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
@@ -32,6 +33,7 @@ public sealed class InventoryItem : PublicEntity
     /// <summary>
     /// Related <see cref="Product"/>
     /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
     public Product? Product { get; set; }
     
     /// <summary>

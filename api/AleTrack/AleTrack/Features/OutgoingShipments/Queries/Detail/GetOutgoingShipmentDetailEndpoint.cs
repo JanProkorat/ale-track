@@ -75,35 +75,59 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         SelectedAddressKind = s.SelectedAddressKind,
                         Products = s.ClientOrder.OrderItems
                             .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
-                            .Select(oi => new OutgoingShipmentProductDto
+                            .Select(oi => new OutgoingShipmentOrderItemDto
                             {
                                 Id = oi.Product.PublicId,
                                 Name = oi.Product.Name,
                                 Quantity = oi.Quantity,
                                 Kind = oi.Product.Kind,
-                                Type = oi.Product.Type,
-                                AlcoholPercentage = oi.Product.AlcoholPercentage,
-                                PlatoDegree = oi.Product.PlatoDegree,
-                                PackageSize = oi.Product.PackageSize
+                                PackageSize = oi.Product.PackageSize,
+                                Weight = oi.Product.Weight,
+                                OrderItemId = oi.PublicId
                             })
                             .ToList()
                     })
                     .ToList(),
-                ExtraItems = os.ExtraItems
-                    .OrderBy(ei => ei.Product != null ? ei.Product.Brewery.DisplayOrder : int.MaxValue)
-                    .Select(ei => new OutgoingShipmentExtraItemDto
+                InventoryExtraItems = os.InventoryExtraItems
+                    .Select(ei => new OutgoingShipmentInventoryExtraItemDto
                     {
-                        ProductId = ei.Product != null ? ei.Product.PublicId : null,
-                        ProductName = ei.Product != null ? ei.Product.Name : ei.ProductName,
+                        Id = ei.PublicId,
                         Quantity = ei.Quantity,
-                        Kind = ei.Product != null ? ei.Product.Kind : null,
-                        Type = ei.Product != null ? ei.Product.Type : null,
-                        AlcoholPercentage = ei.Product != null ? ei.Product.AlcoholPercentage : null,
-                        PlatoDegree = ei.Product != null ? ei.Product.PlatoDegree : null,
-                        PackageSize = ei.Product != null ? ei.Product.PackageSize : null,
-                        IsLoadingConfirmed = ei.IsShipmentLoadingConfirmed
+                        Kind = ei.Product.Kind,
+                        PackageSize = ei.Product.PackageSize,
+                        IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
+                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
+                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
+                        ProductId = ei.Product.PublicId,
+                        Name = ei.Product.Name
                     })
-                    .ToList()
+                    .ToList(),
+                ClientExtraItems = os.ClientExtraItems
+                    .Select(ei => new OutgoingShipmentClientExtraItemDto
+                    {
+                        Id = ei.PublicId,
+                        Quantity = ei.Quantity,
+                        Kind = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.Kind : null,
+                        PackageSize = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.PackageSize : null,
+                        IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
+                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
+                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
+                        InventoryItemId = ei.InventoryItem.PublicId,
+                        ProductId = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.PublicId : null,
+                        Name = ei.InventoryItem.Name ?? (ei.InventoryItem.Product != null ? ei.InventoryItem.Product.Name : string.Empty)
+                    })
+                    .ToList(),
+                CustomExtraItems = os.CustomExtraItems
+                    .Select(ei => new OutgoingShipmentCustomExtraItemDto
+                    {
+                        Id = ei.PublicId,
+                        Quantity = ei.Quantity,
+                        IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
+                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
+                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
+                        Name = ei.Description
+                    })
+                    .ToList(),
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);

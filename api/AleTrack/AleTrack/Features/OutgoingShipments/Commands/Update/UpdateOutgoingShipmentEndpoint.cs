@@ -71,8 +71,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .ThenInclude(s => s.ClientOrder)
                 .ThenInclude(s => s.OrderItems)
                     .ThenInclude(oi => oi.Product)
-        .Include(os => os.ExtraItems)
+        .Include(os => os.InventoryExtraItems)
             .ThenInclude(ei => ei.Product)
+        .Include(os => os.ClientExtraItems)
+            .ThenInclude(ei => ei.InventoryItem)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -81,14 +83,18 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
-        var extraItems = await GetExtraItemsAsync(req.Data.ExtraShipments, outgoingShipment, ct);
-
+        var inventoryExtraItems = await GetInventoryExtraItemsAsync(req.Data.InventoryExtraShipments, outgoingShipment, ct);
+        var clientExtraItems = await GetClientExtraItemsAsync(req.Data.ClientExtraShipments, outgoingShipment, ct);
+        var customExtraItems = GetCustomExtraItems(req.Data.CustomExtraShipments, outgoingShipment);
+        
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
         outgoingShipment.Stops = stops;
-        outgoingShipment.ExtraItems = extraItems;
+        outgoingShipment.InventoryExtraItems = inventoryExtraItems;
+        outgoingShipment.ClientExtraItems = clientExtraItems;
+        outgoingShipment.CustomExtraItems = customExtraItems;
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -96,6 +102,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (_statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(req.Data.State);
         
+        var isTransitioningToDelivered = outgoingShipment.State != OutgoingShipmentState.Delivered
+                                        && req.Data.State == OutgoingShipmentState.Delivered;
+
         outgoingShipment.State = req.Data.State;
 
         foreach (var requestStop in req.Data.ClientOrderShipments)
@@ -108,12 +117,63 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             {
                 var relatedItem = relatedStop.ClientOrder.OrderItems.FirstOrDefault(i => i.PublicId == requestOrderItem.OrderItemId);
                 relatedItem?.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
+                relatedItem?.FirstInvoiceQuantity = requestOrderItem.FirstInvoiceQuantity;
+                relatedItem?.SecondInvoiceQuantity = requestOrderItem.SecondInvoiceQuantity;
             }
         }
         
+        var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
+                                     && req.Data.State == OutgoingShipmentState.Loaded;
+
+        if (req.Data.State == OutgoingShipmentState.Cancelled)
+            ResetOrderItemsForReuse(outgoingShipment);
+
+        if (isTransitioningToLoaded)
+            SubtractFromInventory(outgoingShipment.ClientExtraItems);
+
+        if (isTransitioningToDelivered && outgoingShipment.InventoryExtraItems.Count > 0)
+            await AddExtraItemsToInventoryAsync(outgoingShipment.InventoryExtraItems, ct);
+
         await dbContext.SaveChangesAsync(ct);
 
         await Send.NoContentAsync(ct);
+    }
+
+    private List<OutgoingShipmentCustomExtraItem> GetCustomExtraItems(List<CustomExtraShipmentDto> extraItems, OutgoingShipment outgoingShipment)
+    {
+        var newItems = extraItems
+            .Where(ei => ei.Id is null)
+            .ToList();
+        
+        var resultItems = newItems
+            .Select(i => new OutgoingShipmentCustomExtraItem
+            {
+                Description = i.Description,
+                FirstInvoiceQuantity = i.FirstInvoiceQuantity,
+                SecondInvoiceQuantity = i.SecondInvoiceQuantity,
+                IsShipmentLoadingConfirmed = i.IsLoadingConfirmed,
+                Quantity = i.Quantity
+            })
+            .ToList();
+        
+        var existingItems = extraItems
+            .Where(ei => ei.Id is not null 
+                         && outgoingShipment.CustomExtraItems.Any(ei2 => ei2.PublicId == ei.Id.Value))
+            .ToList();
+        
+        foreach (var item in existingItems)
+        {
+            var existing = outgoingShipment.CustomExtraItems.First(ei => ei.PublicId == item.Id!.Value);
+            existing.Description = item.Description;
+            existing.FirstInvoiceQuantity = item.FirstInvoiceQuantity;
+            existing.SecondInvoiceQuantity = item.SecondInvoiceQuantity;
+            existing.IsShipmentLoadingConfirmed = item.IsLoadingConfirmed;
+            existing.Quantity = item.Quantity;
+            
+            resultItems.Add(existing);
+        }
+        
+        return resultItems;
     }
 
     private async Task<ICollection<OutgoingShipmentStop>> GetOrderStopsAsync(List<ClientOrderShipmentDto> clientOrderShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
@@ -239,77 +299,178 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         return vehicle;
     }
 
-    private async Task<List<OutgoingShipmentExtraItem>> GetExtraItemsAsync(List<ExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
+    private static void SubtractFromInventory(ICollection<OutgoingShipmentClientExtraItem> extraItems)
+    {
+        foreach (var item in extraItems)
+            item.InventoryItem.Quantity -= item.Quantity;
+    }
+
+    private static void ResetOrderItemsForReuse(OutgoingShipment outgoingShipment)
+    {
+        foreach (var stop in outgoingShipment.Stops)
+        {
+            foreach (var orderItem in stop.ClientOrder.OrderItems)
+            {
+                orderItem.FirstInvoiceQuantity = null;
+                orderItem.SecondInvoiceQuantity = null;
+                orderItem.IsShipmentLoadingConfirmed = false;
+            }
+        }
+    }
+
+    private async Task AddExtraItemsToInventoryAsync(ICollection<OutgoingShipmentInventoryExtraItem> extraItems, CancellationToken ct)
+    {
+        var newInventoryItems = new List<InventoryItem>();
+        // Match product-linked extra items to existing inventory
+        
+        var productIds = extraItems
+            .Select(ei => ei.Product.Id)
+            .ToList();
+        
+        var existingInventory = await dbContext.InventoryItems
+            .Where(i => i.ProductId != null && productIds.Contains(i.ProductId.Value))
+            .ToListAsync(ct);
+
+        var inventoryByProductId = existingInventory.ToDictionary(i => i.ProductId!.Value);
+
+        foreach (var item in extraItems)
+        {
+            if (inventoryByProductId.TryGetValue(item.Product.Id, out var existing))
+                existing.Quantity += item.Quantity;
+            else
+            {
+                newInventoryItems.Add(new InventoryItem
+                {
+                    PublicId = Guid.NewGuid(),
+                    ProductId = item.Product.Id,
+                    Quantity = item.Quantity
+                });
+            }
+        }
+        
+        if (newInventoryItems.Count > 0)
+            dbContext.InventoryItems.AddRange(newInventoryItems);
+    }
+
+    private async Task<List<OutgoingShipmentClientExtraItem>> GetClientExtraItemsAsync(List<ClientExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
         if (extraShipments.Count == 0)
             return [];
 
-        // Split into product-linked and free-text items
-        var productShipments = extraShipments.Where(es => es.ProductId is not null).ToList();
-        var freeTextShipments = extraShipments.Where(es => es.ProductId is null).ToList();
+        var existingById = outgoingShipment.ClientExtraItems
+            .ToDictionary(ei => ei.PublicId);
 
-        var requestedProductIds = productShipments
-            .Select(es => es.ProductId!.Value)
-            .ToHashSet();
-
-        var existingProductIds = outgoingShipment.ExtraItems
-            .Where(ei => ei.Product is not null)
-            .Select(ei => ei.Product!.PublicId)
-            .ToHashSet();
-
-        var newProductIds = requestedProductIds
-            .Where(id => !existingProductIds.Contains(id))
+        // Fetch products for new items that reference a product
+        var newProductIds = extraShipments
+            .Select(es => es.InventoryItemId)
+            .Distinct()
             .ToList();
 
-        var extraItems = new List<OutgoingShipmentExtraItem>(
-            outgoingShipment.ExtraItems.Where(ei => ei.Product is not null));
+        var productsByPublicId = new Dictionary<Guid, InventoryItem>();
+        if (newProductIds.Count > 0)
+        {
+            var fetchedProducts = await dbContext.InventoryItems
+                .Where(p => newProductIds.Contains(p.PublicId))
+                .ToListAsync(ct);
 
+            if (fetchedProducts.Count != newProductIds.Count)
+            {
+                var notFound = newProductIds.Except(fetchedProducts.Select(p => p.PublicId)).ToList();
+                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFound);
+            }
+
+            productsByPublicId = fetchedProducts.ToDictionary(p => p.PublicId);
+        }
+
+        var result = new List<OutgoingShipmentClientExtraItem>();
+
+        foreach (var dto in extraShipments)
+        {
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                // Update existing item
+                existing.Quantity = dto.Quantity;
+                existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
+                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
+                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
+                result.Add(existing);
+            }
+            else
+            {
+                // Create new item
+                result.Add(new OutgoingShipmentClientExtraItem
+                {
+                    PublicId = Guid.NewGuid(),
+                    InventoryItem = productsByPublicId[dto.InventoryItemId],
+                    IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
+                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
+                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
+                    Quantity = dto.Quantity
+                });
+            }
+        }
+
+        return result;
+    }
+    
+    private async Task<List<OutgoingShipmentInventoryExtraItem>> GetInventoryExtraItemsAsync(List<InventoryExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
+    {
+        if (extraShipments.Count == 0)
+            return [];
+
+        var existingById = outgoingShipment.InventoryExtraItems
+            .ToDictionary(ei => ei.PublicId);
+
+        // Fetch products for new items that reference a product
+        var newProductIds = extraShipments
+            .Select(es => es.ProductId)
+            .Distinct()
+            .ToList();
+
+        var productsByPublicId = new Dictionary<Guid, Product>();
         if (newProductIds.Count > 0)
         {
             var fetchedProducts = await dbContext.Products
                 .Where(p => newProductIds.Contains(p.PublicId))
                 .ToListAsync(ct);
 
-            var fetchedProductIds = fetchedProducts
-                .Select(p => p.PublicId)
-                .ToHashSet();
+            if (fetchedProducts.Count != newProductIds.Count)
+            {
+                var notFound = newProductIds.Except(fetchedProducts.Select(p => p.PublicId)).ToList();
+                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFound);
+            }
 
-            var notFoundProductIds = newProductIds
-                .Where(id => !fetchedProductIds.Contains(id))
-                .ToList();
-
-            if (notFoundProductIds.Count > 0)
-                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFoundProductIds);
-
-            extraItems.AddRange(fetchedProducts
-                .Select(p => new
-                {
-                    Product = p,
-                    RequestProduct = productShipments.First(es => es.ProductId == p.PublicId)
-                })
-                .Select(p => new OutgoingShipmentExtraItem
-                {
-                    Product = p.Product,
-                    Quantity = p.RequestProduct.Quantity,
-                    IsShipmentLoadingConfirmed = p.RequestProduct.IsLoadingConfirmed
-                }));
+            productsByPublicId = fetchedProducts.ToDictionary(p => p.PublicId);
         }
 
-        // Remove product-linked items not in the request
-        extraItems = [.. extraItems.Where(ei => requestedProductIds.Contains(ei.Product!.PublicId))];
+        var result = new List<OutgoingShipmentInventoryExtraItem>();
 
-        // Update quantities for existing product-linked items
-        foreach (var item in extraItems.Where(ei => existingProductIds.Contains(ei.Product!.PublicId)))
-            item.Quantity = productShipments.First(es => es.ProductId == item.Product!.PublicId).Quantity;
-
-        // Add free-text items (always recreated)
-        extraItems.AddRange(freeTextShipments.Select(es => new OutgoingShipmentExtraItem
+        foreach (var dto in extraShipments)
         {
-            ProductName = es.ProductName,
-            Quantity = es.Quantity,
-            IsShipmentLoadingConfirmed = es.IsLoadingConfirmed
-        }));
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                // Update existing item
+                existing.Quantity = dto.Quantity;
+                existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
+                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
+                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
+                result.Add(existing);
+            }
+            else
+            {
+                // Create new item
+                result.Add(new OutgoingShipmentInventoryExtraItem
+                {
+                    PublicId = Guid.NewGuid(),
+                    Product = productsByPublicId[dto.ProductId],
+                    IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
+                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
+                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
+                    Quantity = dto.Quantity
+                });
+            }
+        }
 
-        return extraItems;
+        return result;
     }
 }

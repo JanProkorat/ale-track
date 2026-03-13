@@ -41,7 +41,7 @@ try
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
         options.SerializerOptions.Converters.Add(new UtcDateTimeConverter());
     });
-
+    
     services.AddEndpointsApiExplorer();
     
     services.AddMemoryCache();
