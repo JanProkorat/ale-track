@@ -63,7 +63,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         if (req.Data.State is not ProductDeliveryState.InPlanning && req.Data.State is not ProductDeliveryState.Cancelled && delivery.Stops.Count is 0)
             ProductDeliveryThrowHelper.NoItemsToDeliver(req.Data.State);
         
-        delivery!.Date = req.Data.DeliveryDate;
+        delivery.Date = req.Data.DeliveryDate;
         delivery.State = req.Data.State;
         delivery.Note = req.Data.Note;
         
@@ -128,7 +128,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         var newInventoryItems = new List<InventoryItem>();
         foreach (var item in allDeliveryItems)
         {
-            var relatedExistingItemForProduct = existingInventoryItemsForProducts.FirstOrDefault(i => i.Product.Id == item.Product.Id);
+            var relatedExistingItemForProduct = existingInventoryItemsForProducts.FirstOrDefault(i => i.Product?.Id == item.Product.Id);
             if (relatedExistingItemForProduct is not null)
             {
                 relatedExistingItemForProduct.Quantity += item.Quantity;
@@ -243,7 +243,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         if (vehicle is null)
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
         
-        return vehicle!;
+        return vehicle;
     }
 
     private async Task<List<Driver>> GetDriversAsync(List<Guid> driverIds, CancellationToken cancellationToken)

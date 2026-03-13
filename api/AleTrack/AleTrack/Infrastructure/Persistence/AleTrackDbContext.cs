@@ -105,6 +105,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    // /// <summary>
+    // /// DbSet of <see cref="Ean"/>
+    // /// </summary>
+    // public virtual DbSet<Ean> Eans => Set<Ean>();
+
     /// <inheritdoc />
     public AleTrackDbContext(){}
     

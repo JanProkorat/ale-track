@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260311063540_AddInvoiceSplittingToOrder")]
+    partial class AddInvoiceSplittingToOrder
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -674,104 +677,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("outgoing_shipments");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentClientExtraItem", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<int?>("FirstInvoiceQuantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("first_invoice_quantity");
-
-                    b.Property<long>("InventoryItemId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("inventory_item_id");
-
-                    b.Property<bool>("IsShipmentLoadingConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_shipment_loading_confirmed");
-
-                    b.Property<long>("OutgoingShipmentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("outgoing_shipment_id");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<int?>("SecondInvoiceQuantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("second_invoice_quantity");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InventoryItemId");
-
-                    b.HasIndex("OutgoingShipmentId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("outgoing_shipment_client_extra_items");
-                });
-
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentCustomExtraItem", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("description");
-
-                    b.Property<int?>("FirstInvoiceQuantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("first_invoice_quantity");
-
-                    b.Property<bool>("IsShipmentLoadingConfirmed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_shipment_loading_confirmed");
-
-                    b.Property<long>("OutgoingShipmentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("outgoing_shipment_id");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<int?>("SecondInvoiceQuantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("second_invoice_quantity");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OutgoingShipmentId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("outgoing_shipment_custom_extra_items");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentDriver", b =>
                 {
                     b.Property<long>("Id")
@@ -798,7 +703,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("outgoing_shipment_drivers");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentInventoryExtraItem", b =>
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentExtraItem", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -811,6 +716,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("first_invoice_quantity");
 
+                    b.Property<long?>("InventoryItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("inventory_item_id");
+
                     b.Property<bool>("IsShipmentLoadingConfirmed")
                         .HasColumnType("boolean")
                         .HasColumnName("is_shipment_loading_confirmed");
@@ -819,9 +728,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("outgoing_shipment_id");
 
-                    b.Property<long>("ProductId")
+                    b.Property<long?>("ProductId")
                         .HasColumnType("bigint")
                         .HasColumnName("product_id");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("product_name");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
@@ -837,6 +751,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("InventoryItemId");
+
                     b.HasIndex("OutgoingShipmentId");
 
                     b.HasIndex("ProductId");
@@ -844,7 +760,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.ToTable("outgoing_shipment_inventory_extra_items");
+                    b.ToTable("outgoing_shipment_extra_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStop", b =>
@@ -1536,36 +1452,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentClientExtraItem", b =>
-                {
-                    b.HasOne("AleTrack.Entities.InventoryItem", "InventoryItem")
-                        .WithMany()
-                        .HasForeignKey("InventoryItemId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
-                        .WithMany("ClientExtraItems")
-                        .HasForeignKey("OutgoingShipmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("InventoryItem");
-
-                    b.Navigation("OutgoingShipment");
-                });
-
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentCustomExtraItem", b =>
-                {
-                    b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
-                        .WithMany("CustomExtraItems")
-                        .HasForeignKey("OutgoingShipmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OutgoingShipment");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentDriver", b =>
                 {
                     b.HasOne("AleTrack.Entities.Driver", "Driver")
@@ -1585,10 +1471,15 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("OutgoingShipment");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentInventoryExtraItem", b =>
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentExtraItem", b =>
                 {
+                    b.HasOne("AleTrack.Entities.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
-                        .WithMany("InventoryExtraItems")
+                        .WithMany("ExtraItems")
                         .HasForeignKey("OutgoingShipmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1596,8 +1487,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasOne("AleTrack.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("InventoryItem");
 
                     b.Navigation("OutgoingShipment");
 
@@ -1712,13 +1604,9 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>
                 {
-                    b.Navigation("ClientExtraItems");
-
-                    b.Navigation("CustomExtraItems");
-
                     b.Navigation("Drivers");
 
-                    b.Navigation("InventoryExtraItems");
+                    b.Navigation("ExtraItems");
 
                     b.Navigation("Stops");
                 });

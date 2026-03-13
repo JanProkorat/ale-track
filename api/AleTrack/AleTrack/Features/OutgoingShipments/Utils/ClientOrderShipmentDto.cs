@@ -39,4 +39,14 @@ public record OrderItemInfoDto
     /// FLag indicating if the loading of the order item is confirmed
     /// </summary>
     public bool IsLoadingConfirmed { get; set; }
+    
+    /// <summary>
+    /// Number of pieces to be put on the first invoice
+    /// </summary>
+    public int? FirstInvoiceQuantity { get; set; }
+    
+    /// <summary>
+    /// Number of pieces to be put on the second invoice
+    /// </summary>
+    public int? SecondInvoiceQuantity { get; set; }
 }

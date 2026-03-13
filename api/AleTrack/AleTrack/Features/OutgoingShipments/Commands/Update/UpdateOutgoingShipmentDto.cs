@@ -39,33 +39,17 @@ public sealed record UpdateOutgoingShipmentDto
     public OutgoingShipmentState State { get; set; }
     
     /// <summary>
-    /// Extra products to be delivered to the garage
+    /// Extra products to be delivered to the inventory from the brewery
     /// </summary>
-    public List<ExtraShipmentDto> ExtraShipments { get; set; } = [];
-}
-
-/// <summary>
-/// Data transfer object for adding extra products to an outgoing shipment.
-/// </summary>
-public record ExtraShipmentDto
-{
-    /// <summary>
-    /// ID of related product
-    /// </summary>
-    public Guid? ProductId { get; set; }
+    public List<InventoryExtraShipmentDto> InventoryExtraShipments { get; set; } = [];
     
     /// <summary>
-    /// Represents the quantity of the product in the shipment
+    /// Extra products to be delivered from the inventory to the client
     /// </summary>
-    public int Quantity { get; set; }
+    public List<ClientExtraShipmentDto> ClientExtraShipments { get; set; } = [];
     
     /// <summary>
-    /// Name of the product. Filled only if <see cref="ProductId"/> is null.
+    /// Custom extra products to be delivered to the client
     /// </summary>
-    public string? ProductName { get; set; }
-    
-    /// <summary>
-    /// FLag indicating if the loading of the order item is confirmed
-    /// </summary>
-    public bool IsLoadingConfirmed { get; set; }
+    public List<CustomExtraShipmentDto> CustomExtraShipments { get; set; } = [];
 }

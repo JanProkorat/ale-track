@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
@@ -6,10 +5,10 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Entities;
 
 /// <summary>
-/// Represents an extra product item included in an outgoing shipment (not tied to a client order)
+/// Represents an extra product item included in an outgoing shipment that is taken from the inventory and is delivered to the client
 /// </summary>
-[Table("outgoing_shipment_extra_items")]
-public sealed class OutgoingShipmentExtraItem : BaseEntity
+[Table("outgoing_shipment_client_extra_items")]
+public sealed class OutgoingShipmentClientExtraItem : PublicEntity
 {
     /// <summary>
     /// ID of the outgoing shipment
@@ -18,23 +17,16 @@ public sealed class OutgoingShipmentExtraItem : BaseEntity
     public long OutgoingShipmentId { get; set; }
 
     /// <summary>
-    /// ID of the product
+    /// ID of the related inventory item this extra product was taken from
     /// </summary>
-    [Column("product_id")]
-    public long? ProductId { get; set; }
+    [Column("inventory_item_id")]
+    public long InventoryItemId { get; set; }
 
     /// <summary>
-    /// Quantity of the product
+    /// Quantity of the product to be delivered to the client
     /// </summary>
     [Column("quantity")]
     public int Quantity { get; set; }
-
-    /// <summary>
-    /// Name of the product. Filled only if <see cref="Product"/> is null.
-    /// </summary>
-    [Column("product_name")]
-    [MaxLength(200)]
-    public string? ProductName { get; set; }
     
     /// <summary>
     /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
@@ -43,13 +35,25 @@ public sealed class OutgoingShipmentExtraItem : BaseEntity
     public bool IsShipmentLoadingConfirmed { get; set; }
     
     /// <summary>
+    /// Number of pieces to be put on the first invoice
+    /// </summary>
+    [Column("first_invoice_quantity")]
+    public int? FirstInvoiceQuantity { get; set; }
+    
+    /// <summary>
+    /// Number of pieces to be put on the second invoice
+    /// </summary>
+    [Column("second_invoice_quantity")]
+    public int? SecondInvoiceQuantity { get; set; }
+    
+    /// <summary>
     /// Outgoing shipment associated with this extra item
     /// </summary>
     public OutgoingShipment OutgoingShipment { get; set; } = null!;
 
     /// <summary>
-    /// Product associated with this extra item
+    /// Inventory item this extra product was taken from
     /// </summary>
     [DeleteBehavior(DeleteBehavior.NoAction)]
-    public Product? Product { get; set; }
+    public InventoryItem InventoryItem { get; set; } = null!;
 }

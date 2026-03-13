@@ -51,6 +51,9 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     public override async Task HandleAsync(DeleteOutgoingShipmentRequest req, CancellationToken ct)
     {
         var outgoingShipment = await dbContext.OutgoingShipments
+            .Include(os => os.Stops)
+                .ThenInclude(s => s.ClientOrder)
+                    .ThenInclude(o => o.OrderItems)
             .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -64,6 +67,16 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             case OutgoingShipmentState.Cancelled:
                 ThrowHelper.ShipmentAlreadyCancelled(req.Id);
                 break;
+        }
+
+        foreach (var stop in outgoingShipment.Stops)
+        {
+            foreach (var orderItem in stop.ClientOrder.OrderItems)
+            {
+                orderItem.FirstInvoiceQuantity = null;
+                orderItem.SecondInvoiceQuantity = null;
+                orderItem.IsShipmentLoadingConfirmed = false;
+            }
         }
 
         dbContext.OutgoingShipments.Remove(outgoingShipment);

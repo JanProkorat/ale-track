@@ -1,43 +1,32 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
 /// <summary>
-/// Represents a specific item within an order.
+/// Represents an extra product item included in an outgoing shipment (not tied to a client order) - to be stored in the inventory
 /// </summary>
-/// <remarks>
-/// This entity is associated with a product and belongs to a specific order.
-/// Each item includes a quantity (Amount) as well as references to the related
-/// order and product.
-/// </remarks>
-[Table("order_items")]
-public sealed class OrderItem : PublicEntity
+[Table("outgoing_shipment_inventory_extra_items")]
+public sealed class OutgoingShipmentInventoryExtraItem : PublicEntity
 {
     /// <summary>
-    /// ID of related <see cref="Order"/>
+    /// ID of the outgoing shipment
     /// </summary>
-    [Column("order_id")]
-    public long OrderId { get; set; }
+    [Column("outgoing_shipment_id")]
+    public long OutgoingShipmentId { get; set; }
 
     /// <summary>
-    /// ID of related <see cref="Product"/>
+    /// ID of the product
     /// </summary>
     [Column("product_id")]
     public long ProductId { get; set; }
-    
+
     /// <summary>
-    /// Amount ordered from a client
+    /// Extra quantity of the product to be stored in the inventory
     /// </summary>
     [Column("quantity")]
     public int Quantity { get; set; }
-    
-    /// <summary>
-    /// State of the reminder for this item.
-    /// </summary>
-    [Column("reminder_state")]
-    public OrderItemReminderState? ReminderState { get; set; }
     
     /// <summary>
     /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
@@ -58,12 +47,13 @@ public sealed class OrderItem : PublicEntity
     public int? SecondInvoiceQuantity { get; set; }
     
     /// <summary>
-    /// The parent <see cref="Order"/> related to this item.
+    /// Outgoing shipment associated with this extra item
     /// </summary>
-    public Order Order { get; set; } = null!;
+    public OutgoingShipment OutgoingShipment { get; set; } = null!;
 
     /// <summary>
-    /// Instance of related <see cref="Product"/> entity
+    /// Product associated with this extra item
     /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
     public Product Product { get; set; } = null!;
 }

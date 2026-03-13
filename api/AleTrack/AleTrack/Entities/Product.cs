@@ -95,6 +95,11 @@ public sealed class Product : PublicEntity
     public Brewery Brewery { get; set; } = null!;
     
     /// <summary>
+    /// Related <see cref="InventoryItem"/>
+    /// </summary>
+    public InventoryItem? InventoryItem { get; set; }
+    
+    /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
     public double? Weight
