@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useRef, useEffect, useCallback } from 'react';
 
 import Grid from '@mui/material/Grid';
-import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
+import Autocomplete from '@mui/material/Autocomplete';
 import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
 
@@ -177,20 +177,22 @@ export default function AddressForm({ prefix, control, errors, setValue, watch }
                          name={fieldName('country')}
                          control={control}
                          render={({ field }) => (
-                              <TextField
-                                   {...field}
-                                   select
-                                   label={t('address.country')}
-                                   fullWidth
-                                   error={!!fieldError('country')}
-                                   helperText={fieldError('country')?.message as string}
-                              >
-                                   {countryOptions.map((opt) => (
-                                        <MenuItem key={opt.value} value={opt.value}>
-                                             {t(opt.labelKey)}
-                                        </MenuItem>
-                                   ))}
-                              </TextField>
+                              <Autocomplete
+                                   options={countryOptions}
+                                   getOptionLabel={(opt) => t(opt.labelKey)}
+                                   value={countryOptions.find((o) => o.value === field.value) ?? null}
+                                   onChange={(_e, newValue) => field.onChange(newValue?.value ?? '')}
+                                   isOptionEqualToValue={(opt, val) => opt.value === val.value}
+                                   renderInput={(params) => (
+                                        <TextField
+                                             {...params}
+                                             label={t('address.country')}
+                                             fullWidth
+                                             error={!!fieldError('country')}
+                                             helperText={fieldError('country')?.message as string}
+                                        />
+                                   )}
+                              />
                          )}
                     />
                </Grid>

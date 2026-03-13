@@ -1,17 +1,13 @@
-import type { ProductKind, ProductListItemDto } from 'src/generated/api-client';
+import type { ProductKind, ProductListItemDto, InventoryItemListItemDto } from 'src/generated/api-client';
 
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import List from '@mui/material/List';
 import Table from '@mui/material/Table';
 import Button from '@mui/material/Button';
 import Drawer from '@mui/material/Drawer';
 import Divider from '@mui/material/Divider';
-import Popover from '@mui/material/Popover';
-import Collapse from '@mui/material/Collapse';
 import Checkbox from '@mui/material/Checkbox';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
@@ -20,15 +16,13 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ListItemText from '@mui/material/ListItemText';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
-import ListItemButton from '@mui/material/ListItemButton';
+import Autocomplete from '@mui/material/Autocomplete';
 import TableContainer from '@mui/material/TableContainer';
 import AddOutlined from '@mui/icons-material/AddOutlined';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 
 import { useProducts } from 'src/hooks/useProducts';
+import { useInventoryItems } from 'src/hooks/useInventory';
 
 import { useEnumLabel } from 'src/utils/enumTranslations';
 
@@ -44,6 +38,8 @@ export interface ExtraProductEntry {
      quantity: number;
      /** True when the entry is a free-text custom product (no real productId). */
      isCustom?: boolean;
+     /** Set when the entry comes from an inventory item (for ClientExtraShipments). */
+     inventoryItemId?: string;
 }
 
 interface AddExtraProductsDrawerProps {
@@ -53,89 +49,47 @@ interface AddExtraProductsDrawerProps {
 }
 
 // ---------------------------------------------------------------------------
-// Grouped tree (same pattern as OrderItemsEditor)
+// Helpers for Autocomplete grouping & sorting
 // ---------------------------------------------------------------------------
 
-interface SizeGroup {
-     size: string;
-     products: ProductListItemDto[];
+/** Composite group: "Brewery — Kind — Size" to mimic the original 3-level tree. */
+function getProductGroup(p: ProductListItemDto, enumLabel: ReturnType<typeof useEnumLabel>): string {
+     const brew = p.breweryName ?? '—';
+     const kind = p.kind != null ? enumLabel.productKind(p.kind) : '—';
+     const size = p.packageSize != null ? `${p.packageSize} L` : '—';
+     return `${brew} — ${kind} — ${size}`;
 }
 
-interface KindGroup {
-     kind: string;
-     sizes: SizeGroup[];
+/** Sort products to match original tree: breweryDisplayOrder → displayOrder → packageSize → name. */
+function sortProducts(products: ProductListItemDto[]): ProductListItemDto[] {
+     return [...products].sort((a, b) => {
+          const brewA = a.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+          const brewB = b.breweryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+          if (brewA !== brewB) return brewA - brewB;
+          const ordA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+          const ordB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+          if (ordA !== ordB) return ordA - ordB;
+          const sizeA = a.packageSize ?? 0;
+          const sizeB = b.packageSize ?? 0;
+          if (sizeA !== sizeB) return sizeA - sizeB;
+          return (a.name ?? '').localeCompare(b.name ?? '');
+     });
 }
 
-interface BreweryGroup {
-     brewery: string;
-     kinds: KindGroup[];
+function getProductLabel(p: ProductListItemDto): string {
+     return p.name ?? '';
 }
 
-function buildTree(products: ProductListItemDto[], enumLabel: ReturnType<typeof useEnumLabel>): BreweryGroup[] {
-     const brewMap = new Map<string, Map<string, Map<string, ProductListItemDto[]>>>();
-     const breweryOrderMap = new Map<string, number>();
-     const kindOrderMap = new Map<string, number>();
+function getInventoryLabel(i: InventoryItemListItemDto): string {
+     return i.name ?? '';
+}
 
-     for (const p of products) {
-          const brew = p.breweryName ?? '—';
-          const kind = p.kind != null ? enumLabel.productKind(p.kind) : '—';
-          const size = p.packageSize != null ? `${p.packageSize} L` : '—';
-
-          if (!brewMap.has(brew)) brewMap.set(brew, new Map());
-          const kindMap = brewMap.get(brew)!;
-          if (!kindMap.has(kind)) kindMap.set(kind, new Map());
-          const sizeMap = kindMap.get(kind)!;
-          if (!sizeMap.has(size)) sizeMap.set(size, []);
-          sizeMap.get(size)!.push(p);
-
-          // Track the minimum breweryDisplayOrder per brewery
-          if (p.breweryDisplayOrder != null) {
-               const current = breweryOrderMap.get(brew);
-               if (current == null || p.breweryDisplayOrder < current) {
-                    breweryOrderMap.set(brew, p.breweryDisplayOrder);
-               }
-          }
-
-          // Track the minimum displayOrder per brewery+kind
-          const kindKey = `${brew}::${kind}`;
-          if (p.displayOrder != null) {
-               const current = kindOrderMap.get(kindKey);
-               if (current == null || p.displayOrder < current) {
-                    kindOrderMap.set(kindKey, p.displayOrder);
-               }
-          }
-     }
-
-     const result: BreweryGroup[] = [];
-     for (const [brewery, kindMap] of [...brewMap.entries()].sort((a, b) => {
-          const orderA = breweryOrderMap.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
-          const orderB = breweryOrderMap.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
-          if (orderA !== orderB) return orderA - orderB;
-          return a[0].localeCompare(b[0]);
-     })) {
-          const kinds: KindGroup[] = [];
-          for (const [kind, sizeMap] of [...kindMap.entries()].sort((a, b) => {
-               const orderA = kindOrderMap.get(`${brewery}::${a[0]}`) ?? Number.MAX_SAFE_INTEGER;
-               const orderB = kindOrderMap.get(`${brewery}::${b[0]}`) ?? Number.MAX_SAFE_INTEGER;
-               if (orderA !== orderB) return orderA - orderB;
-               return a[0].localeCompare(b[0]);
-          })) {
-               const sizes: SizeGroup[] = [];
-               for (const [size, prods] of [...sizeMap.entries()].sort(([a], [b]) => {
-                    const na = parseFloat(a) || 0;
-                    const nb = parseFloat(b) || 0;
-                    return na - nb;
-               })) {
-                    sizes.push({
-                         size,
-                         products: prods.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
-                    });
-               }
-               kinds.push({ kind, sizes });
-          }
-          result.push({ brewery, kinds });
-     }
-     return result;
+/** Composite group: "Section — Kind — Size" for inventory items. */
+function getInventoryGroup(i: InventoryItemListItemDto & { _sectionName: string }, enumLabel: ReturnType<typeof useEnumLabel>): string {
+     const section = i._sectionName;
+     const kind = i.kind != null ? enumLabel.productKind(i.kind) : '—';
+     const size = i.packageSize != null ? `${i.packageSize} L` : '—';
+     return `${section} — ${kind} — ${size}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,42 +100,59 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
      const { t } = useTranslation();
      const enumLabel = useEnumLabel();
      const { data: allProducts = [] } = useProducts();
+     const { data: inventorySections = [] } = useInventoryItems();
 
      const [selected, setSelected] = useState<ProductListItemDto[]>([]);
      const [quantities, setQuantities] = useState<Record<string, number>>({});
-     const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
-     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+     // Inventory items
+     const [selectedInventory, setSelectedInventory] = useState<InventoryItemListItemDto[]>([]);
+     const [inventoryQuantities, setInventoryQuantities] = useState<Record<string, number>>({});
 
      // Custom (free-text) products
      const [customProducts, setCustomProducts] = useState<ExtraProductEntry[]>([]);
      const [customName, setCustomName] = useState('');
      const [customQty, setCustomQty] = useState(1);
 
-     const tree = useMemo(() => buildTree(allProducts, enumLabel), [allProducts, enumLabel]);
      const selectedIds = useMemo(() => new Set(selected.map((p) => p.id)), [selected]);
+     const sortedProducts = useMemo(() => sortProducts(allProducts), [allProducts]);
 
-     const toggleCollapsed = useCallback((key: string) => {
-          setCollapsed((prev) => {
-               const next = new Set(prev);
-               if (next.has(key)) next.delete(key);
-               else next.add(key);
+     // Flat inventory items for Autocomplete, sorted by section → kind → packageSize → name
+     const allInventoryItems = useMemo(() => {
+          const items: (InventoryItemListItemDto & { _sectionName: string })[] = [];
+          for (const section of inventorySections) {
+               for (const item of section.items ?? []) {
+                    items.push(Object.assign(Object.create(Object.getPrototypeOf(item)), item, { _sectionName: section.name ?? '—' }));
+               }
+          }
+          return items.sort((a, b) => {
+               const secCmp = a._sectionName.localeCompare(b._sectionName);
+               if (secCmp !== 0) return secCmp;
+               const kindA = a.kind ?? Number.MAX_SAFE_INTEGER;
+               const kindB = b.kind ?? Number.MAX_SAFE_INTEGER;
+               if (kindA !== kindB) return (kindA as number) - (kindB as number);
+               const sizeA = a.packageSize ?? 0;
+               const sizeB = b.packageSize ?? 0;
+               if (sizeA !== sizeB) return sizeA - sizeB;
+               return (a.name ?? '').localeCompare(b.name ?? '');
+          });
+     }, [inventorySections]);
+
+     const handleProductsChange = (_e: unknown, newValue: ProductListItemDto[]) => {
+          // Add default quantity for newly added products
+          const newIds = new Set(newValue.map((p) => p.id));
+          setQuantities((prev) => {
+               const next = { ...prev };
+               for (const p of newValue) {
+                    if (p.id && !(p.id in next)) next[p.id] = 1;
+               }
+               // Remove quantities for deselected products
+               for (const key of Object.keys(next)) {
+                    if (!newIds.has(key)) delete next[key];
+               }
                return next;
           });
-     }, []);
-
-     const toggleProduct = (product: ProductListItemDto) => {
-          const id = product.id ?? '';
-          if (selectedIds.has(id)) {
-               setSelected((prev) => prev.filter((p) => p.id !== id));
-               setQuantities((prev) => {
-                    const next = { ...prev };
-                    delete next[id];
-                    return next;
-               });
-          } else {
-               setSelected((prev) => [...prev, product]);
-               setQuantities((prev) => ({ ...prev, [id]: 1 }));
-          }
+          setSelected(newValue);
      };
 
      const handleRemove = (productId: string) => {
@@ -195,6 +166,30 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
 
      const handleRemoveCustom = (id: string) => {
           setCustomProducts((prev) => prev.filter((p) => p.productId !== id));
+     };
+
+     const handleInventoryChange = (_e: unknown, newValue: InventoryItemListItemDto[]) => {
+          const newIds = new Set(newValue.map((i) => i.id));
+          setInventoryQuantities((prev) => {
+               const next = { ...prev };
+               for (const i of newValue) {
+                    if (i.id && !(i.id in next)) next[i.id] = 1;
+               }
+               for (const key of Object.keys(next)) {
+                    if (!newIds.has(key)) delete next[key];
+               }
+               return next;
+          });
+          setSelectedInventory(newValue);
+     };
+
+     const handleRemoveInventory = (itemId: string) => {
+          setSelectedInventory((prev) => prev.filter((i) => i.id !== itemId));
+          setInventoryQuantities((prev) => {
+               const next = { ...prev };
+               delete next[itemId];
+               return next;
+          });
      };
 
      const handleAddCustom = () => {
@@ -219,22 +214,37 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
                     packageSize: p.packageSize ?? undefined,
                     quantity: quantities[p.id!] ?? 1,
                }));
-          onAdd([...catalogEntries, ...customProducts]);
+          const inventoryEntries: ExtraProductEntry[] = selectedInventory
+               .filter((i) => i.id && (inventoryQuantities[i.id!] ?? 0) > 0)
+               .map((i) => ({
+                    productId: i.productId ?? i.id!,
+                    name: i.name ?? '',
+                    kind: i.kind,
+                    packageSize: i.packageSize ?? undefined,
+                    quantity: inventoryQuantities[i.id!] ?? 1,
+                    inventoryItemId: i.id!,
+               }));
+          onAdd([...catalogEntries, ...inventoryEntries, ...customProducts]);
           setSelected([]);
           setQuantities({});
+          setSelectedInventory([]);
+          setInventoryQuantities({});
           setCustomProducts([]);
      };
 
      const handleClose = () => {
           setSelected([]);
           setQuantities({});
+          setSelectedInventory([]);
+          setInventoryQuantities({});
           setCustomProducts([]);
-          setPickerAnchor(null);
           onClose();
      };
 
      const hasValidEntries =
-          selected.some((p) => p.id && (quantities[p.id!] ?? 0) > 0) || customProducts.length > 0;
+          selected.some((p) => p.id && (quantities[p.id!] ?? 0) > 0) ||
+          selectedInventory.some((i) => i.id && (inventoryQuantities[i.id!] ?? 0) > 0) ||
+          customProducts.length > 0;
 
      return (
           <Drawer
@@ -254,140 +264,88 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
                     {t('outgoingShipments.addExtraProducts')}
                </Typography>
 
-               {/* Product picker trigger — chip-based, same as OrderItemsEditor */}
-               <Box
-                    onClick={(e) => setPickerAnchor(e.currentTarget as HTMLElement)}
-                    sx={{
-                         border: '1px solid',
-                         borderColor: 'divider',
-                         borderRadius: 1,
-                         px: 1.5,
-                         py: 1,
-                         mb: 2,
-                         minHeight: 40,
-                         display: 'flex',
-                         alignItems: 'center',
-                         flexWrap: 'wrap',
-                         gap: 0.5,
-                         cursor: 'pointer',
-                         '&:hover': { borderColor: 'text.primary' },
+               {/* Product picker — searchable Autocomplete, grouped by Brewery — Kind — Size */}
+               <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    options={sortedProducts}
+                    getOptionLabel={(opt) => getProductLabel(opt)}
+                    filterOptions={(options, state) => {
+                         const input = state.inputValue.toLowerCase();
+                         if (!input) return options;
+                         return options.filter((p) =>
+                              (p.name ?? '').toLowerCase().includes(input) ||
+                              (p.breweryName ?? '').toLowerCase().includes(input),
+                         );
                     }}
-               >
-                    {selected.length === 0 ? (
-                         <Typography variant="body2" color="text.secondary">
-                              {t('outgoingShipments.selectProducts')}
-                         </Typography>
-                    ) : (
-                         selected.map((p) => (
-                              <Chip
-                                   key={p.id}
-                                   label={p.name}
-                                   size="small"
-                                   onDelete={() => handleRemove(p.id!)}
-                              />
-                         ))
+                    groupBy={(opt) => getProductGroup(opt, enumLabel)}
+                    value={selected}
+                    onChange={handleProductsChange}
+                    isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                    renderOption={(props, option) => {
+                         const { key, ...rest } = props as any;
+                         return (
+                              <li key={key} {...rest}>
+                                   <Checkbox
+                                        size="small"
+                                        checked={selectedIds.has(option.id ?? '')}
+                                        sx={{ mr: 1, p: 0 }}
+                                   />
+                                   {option.name}
+                              </li>
+                         );
+                    }}
+                    renderInput={(params) => (
+                         <TextField
+                              {...params}
+                              label={t('outgoingShipments.selectProducts')}
+                              size="small"
+                         />
                     )}
-               </Box>
+                    sx={{ mb: 2 }}
+               />
 
-               {/* Tree popover */}
-               <Popover
-                    open={Boolean(pickerAnchor)}
-                    anchorEl={pickerAnchor}
-                    onClose={() => setPickerAnchor(null)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    slotProps={{
-                         paper: {
-                              sx: {
-                                   width: pickerAnchor?.offsetWidth ?? 400,
-                                   maxHeight: 400,
-                                   overflow: 'auto',
-                              },
-                         },
+               {/* Inventory item picker — searchable Autocomplete, grouped by Section — Kind — Size */}
+               <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    options={allInventoryItems}
+                    getOptionLabel={(opt) => getInventoryLabel(opt)}
+                    filterOptions={(options, state) => {
+                         const input = state.inputValue.toLowerCase();
+                         if (!input) return options;
+                         return options.filter((i) =>
+                              (i.name ?? '').toLowerCase().includes(input) ||
+                              (i as any)._sectionName?.toLowerCase().includes(input),
+                         );
                     }}
-               >
-                    <List dense disablePadding>
-                         {tree.map((breweryGroup) => {
-                              const brewKey = `b:${breweryGroup.brewery}`;
-                              const brewOpen = !collapsed.has(brewKey);
-
-                              return (
-                                   <Box key={brewKey}>
-                                        <ListItemButton onClick={() => toggleCollapsed(brewKey)} sx={{ py: 0.5 }}>
-                                             <ListItemText
-                                                  primary={breweryGroup.brewery}
-                                                  primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem' }}
-                                             />
-                                             {brewOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                        </ListItemButton>
-
-                                        <Collapse in={brewOpen}>
-                                             {breweryGroup.kinds.map((kindGroup) => {
-                                                  const kindKey = `${brewKey}:k:${kindGroup.kind}`;
-                                                  const kindOpen = !collapsed.has(kindKey);
-
-                                                  return (
-                                                       <Box key={kindKey}>
-                                                            <ListItemButton onClick={() => toggleCollapsed(kindKey)} sx={{ pl: 4, py: 0.25 }}>
-                                                                 <ListItemText
-                                                                      primary={kindGroup.kind}
-                                                                      primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
-                                                                 />
-                                                                 {kindOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                                            </ListItemButton>
-
-                                                            <Collapse in={kindOpen}>
-                                                                 {kindGroup.sizes.map((sizeGroup) => {
-                                                                      const sizeKey = `${kindKey}:s:${sizeGroup.size}`;
-                                                                      const sizeOpen = !collapsed.has(sizeKey);
-
-                                                                      return (
-                                                                           <Box key={sizeKey}>
-                                                                                <ListItemButton onClick={() => toggleCollapsed(sizeKey)} sx={{ pl: 6, py: 0.25 }}>
-                                                                                     <ListItemText
-                                                                                          primary={sizeGroup.size}
-                                                                                          primaryTypographyProps={{ fontSize: '0.8125rem', color: 'text.secondary' }}
-                                                                                     />
-                                                                                     {sizeOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                                                                </ListItemButton>
-
-                                                                                <Collapse in={sizeOpen}>
-                                                                                     {sizeGroup.products.map((product) => {
-                                                                                          const checked = selectedIds.has(product.id ?? '');
-                                                                                          return (
-                                                                                               <ListItemButton
-                                                                                                    key={product.id}
-                                                                                                    onClick={() => toggleProduct(product)}
-                                                                                                    sx={{ pl: 8, py: 0.25 }}
-                                                                                               >
-                                                                                                    <Checkbox
-                                                                                                         size="small"
-                                                                                                         checked={checked}
-                                                                                                         tabIndex={-1}
-                                                                                                         disableRipple
-                                                                                                         sx={{ mr: 1, p: 0 }}
-                                                                                                    />
-                                                                                                    <ListItemText
-                                                                                                         primary={product.name}
-                                                                                                         primaryTypographyProps={{ fontSize: '0.8125rem' }}
-                                                                                                    />
-                                                                                               </ListItemButton>
-                                                                                          );
-                                                                                     })}
-                                                                                </Collapse>
-                                                                           </Box>
-                                                                      );
-                                                                 })}
-                                                            </Collapse>
-                                                       </Box>
-                                                  );
-                                             })}
-                                        </Collapse>
-                                   </Box>
-                              );
-                         })}
-                    </List>
-               </Popover>
+                    groupBy={(opt) => getInventoryGroup(opt as InventoryItemListItemDto & { _sectionName: string }, enumLabel)}
+                    value={selectedInventory}
+                    onChange={(_e, newValue) => handleInventoryChange(_e, newValue)}
+                    isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                    renderOption={(props, option) => {
+                         const { key, ...rest } = props as any;
+                         const checked = selectedInventory.some((i) => i.id === option.id);
+                         return (
+                              <li key={key} {...rest}>
+                                   <Checkbox
+                                        size="small"
+                                        checked={checked}
+                                        sx={{ mr: 1, p: 0 }}
+                                   />
+                                   {option.name}
+                              </li>
+                         );
+                    }}
+                    renderInput={(params) => (
+                         <TextField
+                              {...params}
+                              label={t('outgoingShipments.selectInventoryItems')}
+                              size="small"
+                         />
+                    )}
+                    sx={{ mb: 2 }}
+               />
 
                {/* Custom product input */}
                <Divider sx={{ my: 1 }} />
@@ -431,7 +389,7 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
                </Box>
 
                {/* Selected products table */}
-               {(selected.length > 0 || customProducts.length > 0) && (
+               {(selected.length > 0 || selectedInventory.length > 0 || customProducts.length > 0) && (
                     <TableContainer sx={{ mb: 2 }}>
                          <Table size="small">
                               <TableHead>
@@ -473,6 +431,40 @@ export default function AddExtraProductsDrawer({ open, onClose, onAdd }: AddExtr
                                              </TableCell>
                                              <TableCell>
                                                   <IconButton size="small" onClick={() => handleRemove(product.id!)}>
+                                                       <DeleteOutlined fontSize="small" />
+                                                  </IconButton>
+                                             </TableCell>
+                                        </TableRow>
+                                   ))}
+                                   {selectedInventory.map((item) => (
+                                        <TableRow key={`inv-${item.id}`}>
+                                             <TableCell>{item.name}</TableCell>
+                                             <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                                  {item.kind != null ? enumLabel.productKind(item.kind) : '—'}
+                                             </TableCell>
+                                             <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                                  {item.packageSize != null ? `${item.packageSize} L` : '—'}
+                                             </TableCell>
+                                             <TableCell align="right">
+                                                  <TextField
+                                                       type="number"
+                                                       size="small"
+                                                       value={inventoryQuantities[item.id!] ?? 1}
+                                                       onChange={(e) => {
+                                                            const val = parseInt(e.target.value, 10);
+                                                            setInventoryQuantities((prev) => ({
+                                                                 ...prev,
+                                                                 [item.id!]: isNaN(val) || val < 1 ? 1 : val,
+                                                            }));
+                                                       }}
+                                                       slotProps={{
+                                                            htmlInput: { min: 1, style: { textAlign: 'right' } },
+                                                       }}
+                                                       sx={{ width: 72 }}
+                                                  />
+                                             </TableCell>
+                                             <TableCell>
+                                                  <IconButton size="small" onClick={() => handleRemoveInventory(item.id!)}>
                                                        <DeleteOutlined fontSize="small" />
                                                   </IconButton>
                                              </TableCell>

@@ -152,7 +152,9 @@
           "customName": "Eigener Name",
           "quantity": "Menge",
           "note": "Notiz",
-          "otherSection": "Sonstiges"
+          "otherSection": "Sonstiges",
+          "selectProduct": "Produkt auswählen",
+          "items": "Artikel"
      },
      "productDeliveries": {
           "title": "Produktlieferungen",
@@ -161,6 +163,7 @@
           "deliveryDate": "Lieferdatum",
           "state": "Status",
           "stops": "Haltestellen",
+          "stop": "Haltestelle",
           "addStop": "Haltestelle hinzufügen",
           "note": "Notiz",
           "vehicle": "Fahrzeug",
@@ -199,15 +202,22 @@
           "tabCancelled": "Storniert",
           "loading": "Beladung",
           "totalQuantity": "Gesamt Stk.",
-          "extraPieces": "Zusätzlich Stk.",
-          "extraToGarage": "Zusätzliche Stücke zur Einlagerung in die Garage",
+          "extraPieces": "In die Garage",
+          "extraToGarage": "Stücke zur Einlagerung in die Garage",
+          "fromInventory": "Aus dem Lager",
           "routeMap": "Routenkarte",
           "companyHQ": "Firmensitz",
           "noRouteData": "Keine geokodierte Haltestellen für Routenanzeige verfügbar",
           "addExtraProducts": "Produkte hinzufügen",
           "selectProducts": "Produkte auswählen",
+          "selectInventoryItems": "Lagerartikel auswählen",
           "amount": "Menge",
-          "customProduct": "Eigenes Produkt"
+          "customProduct": "Eigenes Produkt",
+          "firstInvoicePcs": "1. Rechnung Stk.",
+          "secondInvoicePcs": "2. Rechnung Stk.",
+          "overviewTab": "Gesamtübersicht",
+          "firstInvoiceTab": "1. Rechnung",
+          "secondInvoiceTab": "2. Rechnung"
      },
      "drivers": {
           "title": "Fahrer",

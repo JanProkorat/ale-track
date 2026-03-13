@@ -9,7 +9,6 @@ import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 're
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
-import MenuItem from '@mui/material/MenuItem';
 import AddIcon from '@mui/icons-material/Add';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -190,29 +189,33 @@ const DeliveryInlineForm = forwardRef<DeliveryInlineFormHandle, DeliveryInlineFo
                                         name="state"
                                         control={control}
                                         render={({ field }) => (
-                                             <TextField
-                                                  {...field}
-                                                  onChange={(e) => {
-                                                       field.onChange(e);
+                                             <Autocomplete
+                                                  options={deliveryStateOptions}
+                                                  getOptionLabel={(opt) => t(opt.labelKey)}
+                                                  value={deliveryStateOptions.find((o) => o.value === field.value) ?? null}
+                                                  onChange={(_e, newValue) => {
+                                                       field.onChange(newValue?.value ?? '');
                                                        markDirty();
                                                   }}
-                                                  select
-                                                  label={t('productDeliveries.state')}
+                                                  isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                   size="small"
                                                   fullWidth
-                                             >
-                                                  {deliveryStateOptions.map((opt) => (
-                                                       <MenuItem key={opt.value} value={opt.value}>
-                                                            {t(opt.labelKey)}
-                                                       </MenuItem>
-                                                  ))}
-                                             </TextField>
+                                                  renderInput={(params) => (
+                                                       <TextField
+                                                            {...params}
+                                                            label={t('productDeliveries.state')}
+                                                            size="small"
+                                                            fullWidth
+                                                       />
+                                                  )}
+                                             />
                                         )}
                                    />
                               </Grid>
                               <Grid size={{ xs: 12, sm: 6 }}>
                                    <Autocomplete
                                         multiple
+                                        disableCloseOnSelect
                                         options={drivers}
                                         getOptionLabel={(opt) =>
                                              `${opt.firstName ?? ''} ${opt.lastName ?? ''}`.trim()

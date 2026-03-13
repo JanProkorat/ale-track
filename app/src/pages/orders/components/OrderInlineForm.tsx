@@ -8,7 +8,6 @@ import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 're
 
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
-import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -183,23 +182,26 @@ const OrderInlineForm = forwardRef<OrderInlineFormHandle, OrderInlineFormProps>(
                                         name="state"
                                         control={control}
                                         render={({ field }) => (
-                                             <TextField
-                                                  {...field}
-                                                  onChange={(e) => {
-                                                       field.onChange(e);
+                                             <Autocomplete
+                                                  options={orderStateOptions}
+                                                  getOptionLabel={(opt) => t(opt.labelKey)}
+                                                  value={orderStateOptions.find((o) => o.value === field.value) ?? null}
+                                                  onChange={(_e, newValue) => {
+                                                       field.onChange(newValue?.value ?? '');
                                                        markDirty();
                                                   }}
-                                                  select
-                                                  label={t('orders.state')}
+                                                  isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                   size="small"
                                                   fullWidth
-                                             >
-                                                  {orderStateOptions.map((opt) => (
-                                                       <MenuItem key={opt.value} value={opt.value}>
-                                                            {t(opt.labelKey)}
-                                                       </MenuItem>
-                                                  ))}
-                                             </TextField>
+                                                  renderInput={(params) => (
+                                                       <TextField
+                                                            {...params}
+                                                            label={t('orders.state')}
+                                                            size="small"
+                                                            fullWidth
+                                                       />
+                                                  )}
+                                             />
                                         )}
                                    />
                               </Grid>

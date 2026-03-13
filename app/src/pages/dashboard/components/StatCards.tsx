@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography';
 import BadgeOutlined from '@mui/icons-material/BadgeOutlined';
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
 import SportsBarOutlined from '@mui/icons-material/SportsBarOutlined';
+import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined';
 import LocalShippingOutlined from '@mui/icons-material/LocalShippingOutlined';
@@ -28,6 +29,7 @@ const STAT_ITEMS: StatCardItem[] = [
      { labelKey: 'dashboard.totalClients', countKey: 'clients', icon: <PeopleOutlined />, path: '/clients' },
      { labelKey: 'dashboard.totalBreweries', countKey: 'breweries', icon: <SportsBarOutlined />, path: '/breweries' },
      { labelKey: 'dashboard.totalDrivers', countKey: 'drivers', icon: <BadgeOutlined />, path: '/drivers' },
+     { labelKey: 'dashboard.inventoryItems', countKey: 'inventoryItems', icon: <Inventory2Outlined />, path: '/inventory' },
 ];
 
 export default function StatCards() {
@@ -41,8 +43,8 @@ export default function StatCards() {
                     display: 'grid',
                     gridTemplateColumns: {
                          xs: 'repeat(2, 1fr)',
-                         sm: 'repeat(3, 1fr)',
-                         md: 'repeat(6, 1fr)',
+                         sm: 'repeat(4, 1fr)',
+                         md: 'repeat(7, 1fr)',
                     },
                     gap: 2,
                }}

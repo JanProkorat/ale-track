@@ -30,9 +30,11 @@ import { useEnumLabel } from 'src/utils/enumTranslations';
 
 import {
      OrderItemInfoDto,
-     ExtraShipmentDto,
      ClientOrderShipmentDto,
-     UpdateOutgoingShipmentDto
+     ClientExtraShipmentDto,
+     CustomExtraShipmentDto,
+     UpdateOutgoingShipmentDto,
+     InventoryExtraShipmentDto,
 } from 'src/generated/api-client';
 
 import ConfirmDialog from 'src/components/common/ConfirmDialog';
@@ -225,7 +227,7 @@ export default function ShipmentInlineDetail({
      if (!shipment) return <Box>{header}</Box>;
 
      const handleSave = (data: OutgoingShipmentFormValues, extra: ShipmentSubmitExtra) => {
-          const { confirmedProductIds, extraPiecesMap, availableOrders, extraProducts } = extra;
+          const { confirmedProductIds, extraPiecesMap, inventoryPiecesMap, extraItemIdMap, clientExtraLinkMap, firstInvoiceMap, secondInvoiceMap, availableOrders, extraProducts } = extra;
           // Build a lookup for custom product names
           const customNameMap = new Map(
                extraProducts.filter((ep) => ep.isCustom).map((ep) => [ep.productId, ep.name]),
@@ -254,6 +256,11 @@ export default function ShipmentInlineDetail({
                                    const itemDto = new OrderItemInfoDto();
                                    itemDto.orderItemId = item.orderItemId;
                                    itemDto.isLoadingConfirmed = confirmedProductIds.has(item.productId ?? '');
+                                   const pid = item.productId ?? '';
+                                   const firstVal = firstInvoiceMap[pid];
+                                   const secondVal = secondInvoiceMap[pid];
+                                   if (firstVal != null && firstVal !== '') itemDto.firstInvoiceQuantity = Number(firstVal);
+                                   if (secondVal != null && secondVal !== '') itemDto.secondInvoiceQuantity = Number(secondVal);
                                    return itemDto;
                               });
                     }
@@ -261,22 +268,87 @@ export default function ShipmentInlineDetail({
                     return stopDto;
                });
 
-          // Map extra pieces to ExtraShipmentDto[]
-          dto.extraShipments = Object.entries(extraPiecesMap)
-               .filter(([, val]) => val !== '' && Number(val) > 0)
-               .map(([productId, val]) => {
-                    const extraDto = new ExtraShipmentDto();
-                    extraDto.quantity = Number(val);
-                    const customName = customNameMap.get(productId);
-                    if (customName) {
-                         // Custom product — send name only, no productId
-                         extraDto.productName = customName;
-                    } else {
-                         extraDto.productId = productId;
-                    }
-                    extraDto.isLoadingConfirmed = confirmedProductIds.has(productId);
-                    return extraDto;
-               });
+          // Map extra pieces to the three extra shipment arrays
+          const inventoryExtras: InventoryExtraShipmentDto[] = [];
+          const clientExtras: ClientExtraShipmentDto[] = [];
+          const customExtras: CustomExtraShipmentDto[] = [];
+
+          for (const [productId, val] of Object.entries(extraPiecesMap)) {
+               if (val === '' || Number(val) <= 0) continue;
+               const quantity = Number(val);
+               const isConfirmed = confirmedProductIds.has(productId);
+               const firstVal = firstInvoiceMap[productId];
+               const secondVal = secondInvoiceMap[productId];
+               const firstQty = (firstVal != null && firstVal !== '') ? Number(firstVal) : undefined;
+               const secondQty = (secondVal != null && secondVal !== '') ? Number(secondVal) : undefined;
+               const customName = customNameMap.get(productId);
+               const clientLinkId = clientExtraLinkMap[productId];
+
+               if (customName) {
+                    const extraDto = new CustomExtraShipmentDto();
+                    extraDto.id = extraItemIdMap[productId];
+                    extraDto.quantity = quantity;
+                    extraDto.description = customName;
+                    extraDto.isLoadingConfirmed = isConfirmed;
+                    extraDto.firstInvoiceQuantity = firstQty;
+                    extraDto.secondInvoiceQuantity = secondQty;
+                    customExtras.push(extraDto);
+               } else if (clientLinkId) {
+                    const extraDto = new ClientExtraShipmentDto();
+                    extraDto.id = extraItemIdMap[productId];
+                    extraDto.quantity = quantity;
+                    extraDto.inventoryItemId = clientLinkId;
+                    extraDto.isLoadingConfirmed = isConfirmed;
+                    extraDto.firstInvoiceQuantity = firstQty;
+                    extraDto.secondInvoiceQuantity = secondQty;
+                    clientExtras.push(extraDto);
+               } else {
+                    const extraDto = new InventoryExtraShipmentDto();
+                    extraDto.id = extraItemIdMap[productId];
+                    extraDto.quantity = quantity;
+                    extraDto.productId = productId;
+                    extraDto.isLoadingConfirmed = isConfirmed;
+                    extraDto.firstInvoiceQuantity = firstQty;
+                    extraDto.secondInvoiceQuantity = secondQty;
+                    inventoryExtras.push(extraDto);
+               }
+          }
+
+          // Process inventory pieces (items from inventory, keyed by productId)
+          for (const [productId, val] of Object.entries(inventoryPiecesMap)) {
+               if (val === '' || Number(val) <= 0) continue;
+               const quantity = Number(val);
+               const isConfirmed = confirmedProductIds.has(productId);
+               const firstVal = firstInvoiceMap[productId];
+               const secondVal = secondInvoiceMap[productId];
+               const firstQty = (firstVal != null && firstVal !== '') ? Number(firstVal) : undefined;
+               const secondQty = (secondVal != null && secondVal !== '') ? Number(secondVal) : undefined;
+               const clientLinkId = clientExtraLinkMap[productId];
+
+               if (clientLinkId) {
+                    const extraDto = new ClientExtraShipmentDto();
+                    extraDto.id = extraItemIdMap[productId];
+                    extraDto.quantity = quantity;
+                    extraDto.inventoryItemId = clientLinkId;
+                    extraDto.isLoadingConfirmed = isConfirmed;
+                    extraDto.firstInvoiceQuantity = firstQty;
+                    extraDto.secondInvoiceQuantity = secondQty;
+                    clientExtras.push(extraDto);
+               } else {
+                    const extraDto = new InventoryExtraShipmentDto();
+                    extraDto.id = extraItemIdMap[productId];
+                    extraDto.quantity = quantity;
+                    extraDto.productId = productId;
+                    extraDto.isLoadingConfirmed = isConfirmed;
+                    extraDto.firstInvoiceQuantity = firstQty;
+                    extraDto.secondInvoiceQuantity = secondQty;
+                    inventoryExtras.push(extraDto);
+               }
+          }
+
+          dto.inventoryExtraShipments = inventoryExtras;
+          dto.clientExtraShipments = clientExtras;
+          dto.customExtraShipments = customExtras;
 
           updateMutation.mutate({ id: shipmentId, data: dto });
      };

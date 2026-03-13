@@ -74,6 +74,10 @@ function buildFetchArgs(input: RequestInfo | URL, init?: RequestInit): [string, 
 }
 
 /** Try to refresh the access token. Returns true on success. */
+export async function tryRefreshToken(): Promise<boolean> {
+     return tryRefresh();
+}
+
 async function tryRefresh(): Promise<boolean> {
      if (!_refreshToken) return false;
 
