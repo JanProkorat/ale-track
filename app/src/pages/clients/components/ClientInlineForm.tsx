@@ -12,13 +12,13 @@ import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Checkbox from '@mui/material/Checkbox';
 import Collapse from '@mui/material/Collapse';
-import MenuItem from '@mui/material/MenuItem';
 import AddIcon from '@mui/icons-material/Add';
 import TextField from '@mui/material/TextField';
 import EmailIcon from '@mui/icons-material/Email';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Autocomplete from '@mui/material/Autocomplete';
 import PhoneInTalkIcon from '@mui/icons-material/PhoneInTalk';
 import FormControlLabel from '@mui/material/FormControlLabel';
 
@@ -218,21 +218,24 @@ const ClientInlineForm = forwardRef<ClientInlineFormHandle, ClientInlineFormProp
                                         name="region"
                                         control={control}
                                         render={({ field }) => (
-                                             <TextField
-                                                  {...field}
-                                                  select
-                                                  label={t('clients.region')}
+                                             <Autocomplete
+                                                  options={regionOptions}
+                                                  getOptionLabel={(opt) => t(opt.labelKey)}
+                                                  value={regionOptions.find((o) => o.value === field.value) ?? null}
+                                                  onChange={(_e, newValue) => { field.onChange(newValue?.value ?? ''); markDirty(); }}
+                                                  isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                   size="small"
-                                                  fullWidth
-                                                  error={!!errors.region}
-                                                  helperText={errors.region?.message as string}
-                                             >
-                                                  {regionOptions.map((opt) => (
-                                                       <MenuItem key={opt.value} value={opt.value}>
-                                                            {t(opt.labelKey)}
-                                                       </MenuItem>
-                                                  ))}
-                                             </TextField>
+                                                  renderInput={(params) => (
+                                                       <TextField
+                                                            {...params}
+                                                            label={t('clients.region')}
+                                                            size="small"
+                                                            fullWidth
+                                                            error={!!errors.region}
+                                                            helperText={errors.region?.message as string}
+                                                       />
+                                                  )}
+                                             />
                                         )}
                                    />
                               </Grid>
@@ -270,30 +273,39 @@ const ClientInlineForm = forwardRef<ClientInlineFormHandle, ClientInlineFormProp
                                                             name={`contacts.${index}.type`}
                                                             control={control}
                                                             render={({ field: f }) => (
-                                                                 <TextField
-                                                                      {...f}
-                                                                      select
-                                                                      label={t('clients.contactType')}
+                                                                 <Autocomplete
+                                                                      options={contactTypeOptions}
+                                                                      getOptionLabel={(opt) => t(opt.labelKey)}
+                                                                      value={contactTypeOptions.find((o) => o.value === f.value) ?? null}
+                                                                      onChange={(_e, newValue) => { f.onChange(newValue?.value ?? ''); markDirty(); }}
+                                                                      isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                                       size="small"
                                                                       fullWidth
-                                                                      error={!!errors.contacts?.[index]?.type}
-                                                                      slotProps={{
-                                                                           input: {
-                                                                                startAdornment:
-                                                                                     contacts?.[index]?.type === 'Phone' ? (
-                                                                                          <PhoneInTalkIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                                                                     ) : (
-                                                                                          <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                                                                     ),
-                                                                           },
-                                                                      }}
-                                                                 >
-                                                                      {contactTypeOptions.map((opt) => (
-                                                                           <MenuItem key={opt.value} value={opt.value}>
-                                                                                {t(opt.labelKey)}
-                                                                           </MenuItem>
-                                                                      ))}
-                                                                 </TextField>
+                                                                      renderInput={(params) => (
+                                                                           <TextField
+                                                                                {...params}
+                                                                                label={t('clients.contactType')}
+                                                                                size="small"
+                                                                                fullWidth
+                                                                                error={!!errors.contacts?.[index]?.type}
+                                                                                slotProps={{
+                                                                                     input: {
+                                                                                          ...params.InputProps,
+                                                                                          startAdornment: (
+                                                                                               <>
+                                                                                                    {contacts?.[index]?.type === 'Phone' ? (
+                                                                                                         <PhoneInTalkIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                                                                                                    ) : (
+                                                                                                         <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                                                                                                    )}
+                                                                                                    {params.InputProps.startAdornment}
+                                                                                               </>
+                                                                                          ),
+                                                                                     },
+                                                                                }}
+                                                                           />
+                                                                      )}
+                                                                 />
                                                             )}
                                                        />
                                                   </Grid>

@@ -152,7 +152,9 @@
           "customName": "Custom Name",
           "quantity": "Quantity",
           "note": "Note",
-          "otherSection": "Other"
+          "otherSection": "Other",
+          "selectProduct": "Select a product",
+          "items": "Items"
      },
      "productDeliveries": {
           "title": "Product Deliveries",
@@ -161,6 +163,7 @@
           "deliveryDate": "Delivery Date",
           "state": "State",
           "stops": "Stops",
+          "stop": "Stop",
           "addStop": "Add Stop",
           "note": "Note",
           "vehicle": "Vehicle",
@@ -199,15 +202,22 @@
           "tabCancelled": "Cancelled",
           "loading": "Loading",
           "totalQuantity": "Total Qty",
-          "extraPieces": "Extra pcs",
-          "extraToGarage": "Extra pieces to store in garage",
+          "extraPieces": "To garage",
+          "extraToGarage": "Pieces for garage storage",
+          "fromInventory": "From inventory",
           "routeMap": "Route Map",
           "companyHQ": "Company HQ",
           "noRouteData": "No geocoded stops available for route display",
           "addExtraProducts": "Add products",
           "selectProducts": "Select products",
+          "selectInventoryItems": "Select inventory items",
           "amount": "Amount",
-          "customProduct": "Custom product"
+          "customProduct": "Custom product",
+          "firstInvoicePcs": "1st Invoice pcs",
+          "secondInvoicePcs": "2nd Invoice pcs",
+          "overviewTab": "Overview",
+          "firstInvoiceTab": "1st Invoice",
+          "secondInvoiceTab": "2nd Invoice"
      },
      "drivers": {
           "title": "Drivers",

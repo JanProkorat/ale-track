@@ -41,6 +41,8 @@ const ProductDeliveryListPage = lazy(() => import('src/pages/productDeliveries/P
 
 const OutgoingShipmentListPage = lazy(() => import('src/pages/outgoingShipments/OutgoingShipmentListPage'));
 
+const InventoryPage = lazy(() => import('src/pages/inventory/InventoryPage'));
+
 const UserListPage = lazy(() => import('src/pages/users/UserListPage'));
 const UserFormPage = lazy(() => import('src/pages/users/UserFormPage'));
 
@@ -127,7 +129,7 @@ export default function App() {
 
                                                   {/* Orders */}
                                                   <Route path="/orders" element={<OrderListPage />} />
-                                                  <Route path="/inventory" element={<div>Inventory — coming soon</div>} />
+                                                  <Route path="/inventory" element={<InventoryPage />} />
                                                   <Route path="/product-deliveries" element={<ProductDeliveryListPage />} />
                                                   <Route path="/outgoing-shipments" element={<OutgoingShipmentListPage />} />
                                                   <Route path="/reminders" element={<div>Reminders — coming soon</div>} />

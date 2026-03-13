@@ -1,8 +1,8 @@
 import { jwtDecode } from 'jwt-decode';
-import { useMemo, useState, useEffect, useCallback, createContext } from 'react';
+import { useRef, useMemo, useState, useEffect, useCallback, createContext } from 'react';
 
 import { LoginUserDto, UserRoleType } from 'src/generated/api-client';
-import { apiClient, setApiToken, setRefreshToken, setAuthCallbacks } from 'src/api/apiClient';
+import { apiClient, setApiToken, setRefreshToken, tryRefreshToken, setAuthCallbacks } from 'src/api/apiClient';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +20,7 @@ export interface AuthContextValue {
      user: AuthUser | null;
      token: string | null;
      isAdmin: boolean;
+     isAuthLoading: boolean;
      login: (userName: string, password: string) => Promise<void>;
      logout: () => void;
 }
@@ -105,6 +106,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           const saved = localStorage.getItem(STORAGE_KEY);
           return saved ? parseUserFromToken(saved) : null;
      });
+     const isRefreshing = useRef(false);
+     const [isAuthLoading, setIsAuthLoading] = useState(() => {
+          // Start loading if we have an expired token but also a refresh token
+          const saved = localStorage.getItem(STORAGE_KEY);
+          const savedRefresh = localStorage.getItem(REFRESH_STORAGE_KEY);
+          return !!saved && !parseUserFromToken(saved) && !!savedRefresh;
+     });
 
      // Sync token to API client on mount & changes
      useEffect(() => {
@@ -114,19 +122,41 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                     setApiToken(token);
                     setRefreshToken(localStorage.getItem(REFRESH_STORAGE_KEY));
                     setUser(parsed);
+                    setIsAuthLoading(false);
                } else {
-                    // Token expired or invalid — clear
-                    localStorage.removeItem(STORAGE_KEY);
-                    localStorage.removeItem(REFRESH_STORAGE_KEY);
-                    setApiToken(null);
-                    setRefreshToken(null);
-                    setToken(null);
-                    setUser(null);
+                    // Token expired or invalid — try silent refresh before clearing
+                    const savedRefresh = localStorage.getItem(REFRESH_STORAGE_KEY);
+                    if (savedRefresh && !isRefreshing.current) {
+                         isRefreshing.current = true;
+                         setIsAuthLoading(true);
+                         setRefreshToken(savedRefresh);
+                         tryRefreshToken().then((success) => {
+                              isRefreshing.current = false;
+                              if (!success) {
+                                   localStorage.removeItem(STORAGE_KEY);
+                                   localStorage.removeItem(REFRESH_STORAGE_KEY);
+                                   setApiToken(null);
+                                   setRefreshToken(null);
+                                   setToken(null);
+                                   setUser(null);
+                              }
+                              setIsAuthLoading(false);
+                              // On success, _onTokenRefreshed callback (set below) updates state
+                         });
+                    } else if (!savedRefresh) {
+                         localStorage.removeItem(STORAGE_KEY);
+                         setApiToken(null);
+                         setRefreshToken(null);
+                         setToken(null);
+                         setUser(null);
+                         setIsAuthLoading(false);
+                    }
                }
           } else {
                setApiToken(null);
                setRefreshToken(null);
                setUser(null);
+               setIsAuthLoading(false);
           }
      }, [token]);
 
@@ -178,8 +208,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
      const isAdmin = useMemo(() => user?.roles.includes(UserRoleType.Admin) ?? false, [user]);
 
      const value = useMemo<AuthContextValue>(
-          () => ({ user, token, isAdmin, login, logout }),
-          [user, token, isAdmin, login, logout],
+          () => ({ user, token, isAdmin, isAuthLoading, login, logout }),
+          [user, token, isAdmin, isAuthLoading, login, logout],
      );
 
      return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

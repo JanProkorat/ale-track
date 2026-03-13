@@ -14,7 +14,6 @@ import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
-import MenuItem from '@mui/material/MenuItem';
 import AddIcon from '@mui/icons-material/Add';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -22,6 +21,7 @@ import IconButton from '@mui/material/IconButton';
 import LoadingButton from '@mui/lab/LoadingButton';
 import CardContent from '@mui/material/CardContent';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Autocomplete from '@mui/material/Autocomplete';
 import FormControlLabel from '@mui/material/FormControlLabel';
 
 import { useCreateClient } from 'src/hooks/useClients';
@@ -152,20 +152,22 @@ export default function ClientFormPage() {
                                              name="region"
                                              control={control}
                                              render={({ field }) => (
-                                                  <TextField
-                                                       {...field}
-                                                       select
-                                                       label={t('clients.region')}
-                                                       fullWidth
-                                                       error={!!errors.region}
-                                                       helperText={errors.region?.message as string}
-                                                  >
-                                                       {regionOptions.map((opt) => (
-                                                            <MenuItem key={opt.value} value={opt.value}>
-                                                                 {t(opt.labelKey)}
-                                                            </MenuItem>
-                                                       ))}
-                                                  </TextField>
+                                                  <Autocomplete
+                                                       options={regionOptions}
+                                                       getOptionLabel={(opt) => t(opt.labelKey)}
+                                                       value={regionOptions.find((o) => o.value === field.value) ?? null}
+                                                       onChange={(_e, newValue) => field.onChange(newValue?.value ?? '')}
+                                                       isOptionEqualToValue={(opt, val) => opt.value === val.value}
+                                                       renderInput={(params) => (
+                                                            <TextField
+                                                                 {...params}
+                                                                 label={t('clients.region')}
+                                                                 fullWidth
+                                                                 error={!!errors.region}
+                                                                 helperText={errors.region?.message as string}
+                                                            />
+                                                       )}
+                                                  />
                                              )}
                                         />
                                    </Grid>
@@ -229,32 +231,23 @@ export default function ClientFormPage() {
                                                             name={`contacts.${index}.type`}
                                                             control={control}
                                                             render={({ field: f }) => (
-                                                                 <TextField
-                                                                      {...f}
-                                                                      select
-                                                                      label={t('clients.contactType')}
+                                                                 <Autocomplete
+                                                                      options={contactTypeOptions}
+                                                                      getOptionLabel={(opt) => t(opt.labelKey)}
+                                                                      value={contactTypeOptions.find((o) => o.value === f.value) ?? null}
+                                                                      onChange={(_e, newValue) => f.onChange(newValue?.value ?? '')}
+                                                                      isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                                       sx={{ minWidth: 140 }}
                                                                       size="small"
-                                                                      error={
-                                                                           !!errors.contacts?.[index]
-                                                                                ?.type
-                                                                      }
-                                                                 >
-                                                                      {contactTypeOptions.map(
-                                                                           (opt) => (
-                                                                                <MenuItem
-                                                                                     key={opt.value}
-                                                                                     value={
-                                                                                          opt.value
-                                                                                     }
-                                                                                >
-                                                                                     {t(
-                                                                                          opt.labelKey,
-                                                                                     )}
-                                                                                </MenuItem>
-                                                                           ),
+                                                                      renderInput={(params) => (
+                                                                           <TextField
+                                                                                {...params}
+                                                                                label={t('clients.contactType')}
+                                                                                size="small"
+                                                                                error={!!errors.contacts?.[index]?.type}
+                                                                           />
                                                                       )}
-                                                                 </TextField>
+                                                                 />
                                                             )}
                                                        />
 

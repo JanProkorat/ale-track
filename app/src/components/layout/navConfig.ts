@@ -4,6 +4,7 @@ import BadgeOutlined from '@mui/icons-material/BadgeOutlined';
 import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
 import SportsBarOutlined from '@mui/icons-material/SportsBarOutlined';
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
+import InventoryOutlined from '@mui/icons-material/Inventory2Outlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
 import ShoppingCartOutlined from '@mui/icons-material/ShoppingCartOutlined';
 import LocalShippingOutlined from '@mui/icons-material/LocalShippingOutlined';
@@ -36,6 +37,7 @@ export const navItems: NavItem[] = [
      { labelKey: 'nav.vehicles', path: '/vehicles', icon: DirectionsCarOutlined, badgeKey: 'vehicles' },
      { labelKey: 'nav.outgoingShipments', path: '/outgoing-shipments', icon: MoveToInboxOutlined, badgeKey: 'outgoingShipments' },
      { labelKey: 'nav.productDeliveries', path: '/product-deliveries', icon: LocalShippingOutlined, badgeKey: 'productDeliveries' },
+     { labelKey: 'nav.inventory', path: '/inventory', icon: InventoryOutlined, badgeKey: 'inventoryItems' },
      { labelKey: 'nav.users', path: '/users', icon: ManageAccountsOutlined, adminOnly: true, badgeKey: 'users' },
 ];
 

@@ -10,15 +10,10 @@ import Card from '@mui/material/Card';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
-import InputLabel from '@mui/material/InputLabel';
 import LoadingButton from '@mui/lab/LoadingButton';
 import CardContent from '@mui/material/CardContent';
-import FormControl from '@mui/material/FormControl';
 import Autocomplete from '@mui/material/Autocomplete';
-import FormHelperText from '@mui/material/FormHelperText';
 
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useProduct, useUpdateProduct, useCreateProducts } from 'src/hooks/useProducts';
@@ -278,36 +273,23 @@ export default function ProductFormPage() {
                                              name="kind"
                                              control={control}
                                              render={({ field }) => (
-                                                  <FormControl
+                                                  <Autocomplete
+                                                       options={productKindEntries.map(([, value]) => value)}
+                                                       getOptionLabel={(opt) => enumLabel.productKind(opt)}
+                                                       value={field.value}
+                                                       onChange={(_e, newValue) => { if (newValue != null) field.onChange(newValue); }}
+                                                       disableClearable
                                                        fullWidth
-                                                       error={!!errors.kind}
-                                                  >
-                                                       <InputLabel required>
-                                                            {t('products.kind')}
-                                                       </InputLabel>
-                                                       <Select
-                                                            {...field}
-                                                            label={t('products.kind')}
-                                                       >
-                                                            {productKindEntries.map(
-                                                                 ([, value]) => (
-                                                                      <MenuItem
-                                                                           key={value}
-                                                                           value={value}
-                                                                      >
-                                                                           {enumLabel.productKind(
-                                                                                value,
-                                                                           )}
-                                                                      </MenuItem>
-                                                                 ),
-                                                            )}
-                                                       </Select>
-                                                       {errors.kind && (
-                                                            <FormHelperText>
-                                                                 {errors.kind.message as string}
-                                                            </FormHelperText>
+                                                       renderInput={(params) => (
+                                                            <TextField
+                                                                 {...params}
+                                                                 label={t('products.kind')}
+                                                                 required
+                                                                 error={!!errors.kind}
+                                                                 helperText={errors.kind?.message as string}
+                                                            />
                                                        )}
-                                                  </FormControl>
+                                                  />
                                              )}
                                         />
                                    </Grid>
@@ -318,36 +300,23 @@ export default function ProductFormPage() {
                                              name="type"
                                              control={control}
                                              render={({ field }) => (
-                                                  <FormControl
+                                                  <Autocomplete
+                                                       options={productTypeEntries.map(([, value]) => value)}
+                                                       getOptionLabel={(opt) => enumLabel.productType(opt)}
+                                                       value={field.value}
+                                                       onChange={(_e, newValue) => { if (newValue != null) field.onChange(newValue); }}
+                                                       disableClearable
                                                        fullWidth
-                                                       error={!!errors.type}
-                                                  >
-                                                       <InputLabel required>
-                                                            {t('products.type')}
-                                                       </InputLabel>
-                                                       <Select
-                                                            {...field}
-                                                            label={t('products.type')}
-                                                       >
-                                                            {productTypeEntries.map(
-                                                                 ([, value]) => (
-                                                                      <MenuItem
-                                                                           key={value}
-                                                                           value={value}
-                                                                      >
-                                                                           {enumLabel.productType(
-                                                                                value,
-                                                                           )}
-                                                                      </MenuItem>
-                                                                 ),
-                                                            )}
-                                                       </Select>
-                                                       {errors.type && (
-                                                            <FormHelperText>
-                                                                 {errors.type.message as string}
-                                                            </FormHelperText>
+                                                       renderInput={(params) => (
+                                                            <TextField
+                                                                 {...params}
+                                                                 label={t('products.type')}
+                                                                 required
+                                                                 error={!!errors.type}
+                                                                 helperText={errors.type?.message as string}
+                                                            />
                                                        )}
-                                                  </FormControl>
+                                                  />
                                              )}
                                         />
                                    </Grid>

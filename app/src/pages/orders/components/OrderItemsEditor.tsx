@@ -1,15 +1,11 @@
-import type { KindGroupDto, BreweryGroupDto, PackageGroupDto, ProductListItemDto } from 'src/generated/api-client';
+import type { ProductListItemDto } from 'src/generated/api-client';
 
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMemo, useState, useCallback } from 'react';
 
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import List from '@mui/material/List';
 import Table from '@mui/material/Table';
-import Divider from '@mui/material/Divider';
 import Popover from '@mui/material/Popover';
-import Collapse from '@mui/material/Collapse';
 import Checkbox from '@mui/material/Checkbox';
 import TableRow from '@mui/material/TableRow';
 import MenuItem from '@mui/material/MenuItem';
@@ -18,13 +14,10 @@ import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Autocomplete from '@mui/material/Autocomplete';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
-import ListItemButton from '@mui/material/ListItemButton';
 import TableContainer from '@mui/material/TableContainer';
 import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
 import NotificationsNoneOutlined from '@mui/icons-material/NotificationsNoneOutlined';
@@ -68,7 +61,7 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
      const recentProducts = useMemo(() => groupedData?.recent ?? [], [groupedData?.recent]);
      const breweryGroups = useMemo(() => groupedData?.breweries ?? [], [groupedData?.breweries]);
 
-     // Flat lookup for table rows and chip labels
+     // Flat lookup for table rows
      const allProducts = useMemo(() => {
           const map = new Map<string, ProductListItemDto>();
           for (const p of recentProducts) {
@@ -89,32 +82,55 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
      // Popover state for reminder "Added" → choose null or Resolved
      const [reminderPopover, setReminderPopover] = useState<{ anchor: HTMLElement; productId: string } | null>(null);
 
-     // Product picker popover
-     const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
-
-     // Collapsible sections: track collapsed keys (all expanded by default)
-     const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-
-     const toggleCollapsed = useCallback((key: string) => {
-          setCollapsed((prev) => {
-               const next = new Set(prev);
-               if (next.has(key)) next.delete(key);
-               else next.add(key);
-               return next;
-          });
-     }, []);
-
      // Products already selected (by id)
      const selectedIds = useMemo(() => new Set(items.map((i) => i.productId)), [items]);
 
-     // Toggle a product in the selection
-     const toggleProduct = (product: ProductListItemDto) => {
-          const id = product.id ?? '';
-          if (selectedIds.has(id)) {
-               onChange(items.filter((i) => i.productId !== id));
-          } else {
-               onChange([...items, { productId: id, quantity: 1 }]);
+     // Flat sorted product list for Autocomplete, with group info
+     const sortedProductList = useMemo(() => {
+          const list: (ProductListItemDto & { _group: string })[] = [];
+          const seen = new Set<string>();
+          // Recent products first
+          for (const p of recentProducts) {
+               if (p.id && !seen.has(p.id)) {
+                    seen.add(p.id);
+                    list.push(Object.assign(Object.create(Object.getPrototypeOf(p)), p, { _group: t('orders.recentProducts') }));
+               }
           }
+          // Brewery groups
+          for (const bg of breweryGroups) {
+               for (const kg of bg.kinds ?? []) {
+                    const kindLabel = kg.kind != null ? enumLabel.productKind(kg.kind) : '—';
+                    for (const pg of kg.packageSizes ?? []) {
+                         const sizeLabel = pg.size != null ? `${pg.size} L` : '—';
+                         const group = `${bg.breweryName ?? '—'} — ${kindLabel} — ${sizeLabel}`;
+                         for (const p of pg.items ?? []) {
+                              if (p.id && !seen.has(p.id)) {
+                                   seen.add(p.id);
+                                   list.push(Object.assign(Object.create(Object.getPrototypeOf(p)), p, { _group: group }));
+                              }
+                         }
+                    }
+               }
+          }
+          return list;
+     }, [recentProducts, breweryGroups, enumLabel, t]);
+
+     // Selected products as full objects for Autocomplete value
+     const selectedProducts = useMemo(
+          () => sortedProductList.filter((p) => selectedIds.has(p.id ?? '')),
+          [sortedProductList, selectedIds],
+     );
+
+     const handleProductsChange = (_e: unknown, newValue: (ProductListItemDto & { _group: string })[]) => {
+          const newIds = new Set(newValue.map((p) => p.id ?? ''));
+          // Keep existing items that are still selected (preserving quantities/reminderState)
+          const kept = items.filter((i) => newIds.has(i.productId));
+          const keptIds = new Set(kept.map((i) => i.productId));
+          // Add newly selected items with default quantity
+          const added = newValue
+               .filter((p) => p.id && !keptIds.has(p.id))
+               .map((p) => ({ productId: p.id!, quantity: 1 }));
+          onChange([...kept, ...added]);
      };
 
      // Update quantity for a specific item
@@ -149,176 +165,49 @@ export default function OrderItemsEditor({ clientId, items, onChange }: OrderIte
           );
      };
 
-     // --- Render helpers for the pre-grouped tree ---
-
-     const renderProductItem = (product: ProductListItemDto, indent: number) => {
-          const checked = selectedIds.has(product.id ?? '');
-          return (
-               <ListItemButton
-                    key={product.id}
-                    onClick={() => toggleProduct(product)}
-                    sx={{ pl: indent, py: 0.25 }}
-               >
-                    <Checkbox
-                         size="small"
-                         checked={checked}
-                         tabIndex={-1}
-                         disableRipple
-                         sx={{ mr: 1, p: 0 }}
-                    />
-                    <ListItemText
-                         primary={product.name}
-                         primaryTypographyProps={{ fontSize: '0.8125rem' }}
-                    />
-               </ListItemButton>
-          );
-     };
-
-     const renderPackageGroup = (pg: PackageGroupDto, parentKey: string) => {
-          const sizeLabel = pg.size != null ? `${pg.size} L` : '—';
-          const sizeKey = `${parentKey}:s:${sizeLabel}`;
-          const sizeOpen = !collapsed.has(sizeKey);
-
-          return (
-               <Box key={sizeKey}>
-                    <ListItemButton onClick={() => toggleCollapsed(sizeKey)} sx={{ pl: 6, py: 0.25 }}>
-                         <ListItemText
-                              primary={sizeLabel}
-                              primaryTypographyProps={{ fontSize: '0.8125rem', color: 'text.secondary' }}
-                         />
-                         {sizeOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                    </ListItemButton>
-                    <Collapse in={sizeOpen}>
-                         {(pg.items ?? []).map((product) => renderProductItem(product, 8))}
-                    </Collapse>
-               </Box>
-          );
-     };
-
-     const renderKindGroup = (kg: KindGroupDto, parentKey: string) => {
-          const kindLabel = kg.kind != null ? enumLabel.productKind(kg.kind) : '—';
-          const kindKey = `${parentKey}:k:${kindLabel}`;
-          const kindOpen = !collapsed.has(kindKey);
-
-          return (
-               <Box key={kindKey}>
-                    <ListItemButton onClick={() => toggleCollapsed(kindKey)} sx={{ pl: 4, py: 0.25 }}>
-                         <ListItemText
-                              primary={kindLabel}
-                              primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
-                         />
-                         {kindOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                    </ListItemButton>
-                    <Collapse in={kindOpen}>
-                         {(kg.packageSizes ?? []).map((pg) => renderPackageGroup(pg, kindKey))}
-                    </Collapse>
-               </Box>
-          );
-     };
-
-     const renderBreweryGroup = (bg: BreweryGroupDto) => {
-          const brewKey = `b:${bg.breweryName ?? '—'}`;
-          const brewOpen = !collapsed.has(brewKey);
-
-          return (
-               <Box key={brewKey}>
-                    <ListItemButton onClick={() => toggleCollapsed(brewKey)} sx={{ py: 0.5 }}>
-                         <ListItemText
-                              primary={bg.breweryName ?? '—'}
-                              primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem' }}
-                         />
-                         {brewOpen ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                    </ListItemButton>
-                    <Collapse in={brewOpen}>
-                         {(bg.kinds ?? []).map((kg) => renderKindGroup(kg, brewKey))}
-                    </Collapse>
-               </Box>
-          );
-     };
-
      return (
           <Box>
-               {/* Product picker trigger */}
-               <Box
-                    onClick={(e) => clientId && setPickerAnchor(e.currentTarget as HTMLElement)}
-                    sx={{
-                         border: '1px solid',
-                         borderColor: 'divider',
-                         borderRadius: 1,
-                         px: 1.5,
-                         py: 1,
-                         mb: 2,
-                         minHeight: 40,
-                         display: 'flex',
-                         alignItems: 'center',
-                         flexWrap: 'wrap',
-                         gap: 0.5,
-                         cursor: clientId ? 'pointer' : 'default',
-                         opacity: clientId ? 1 : 0.5,
-                         '&:hover': clientId ? { borderColor: 'text.primary' } : undefined,
+               {/* Product picker — searchable Autocomplete, grouped by Brewery — Kind — Size */}
+               <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    disabled={!clientId}
+                    options={sortedProductList}
+                    getOptionLabel={(opt) => opt.name ?? ''}
+                    filterOptions={(options, state) => {
+                         const input = state.inputValue.toLowerCase();
+                         if (!input) return options;
+                         return options.filter((p) =>
+                              (p.name ?? '').toLowerCase().includes(input) ||
+                              (p.breweryName ?? '').toLowerCase().includes(input),
+                         );
                     }}
-               >
-                    {items.length === 0 ? (
-                         <Typography variant="body2" color="text.secondary">
-                              {t('orders.addItem')}
-                         </Typography>
-                    ) : (
-                         items.map((item) => {
-                              const product = allProducts.get(item.productId);
-                              return (
-                                   <Chip
-                                        key={item.productId}
-                                        label={product?.name ?? item.productId}
+                    groupBy={(opt) => (opt as any)._group ?? '—'}
+                    value={selectedProducts}
+                    onChange={handleProductsChange}
+                    isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                    renderOption={(props, option) => {
+                         const { key, ...rest } = props as any;
+                         return (
+                              <li key={key} {...rest}>
+                                   <Checkbox
                                         size="small"
-                                        onDelete={() => handleRemove(item.productId)}
+                                        checked={selectedIds.has(option.id ?? '')}
+                                        sx={{ mr: 1, p: 0 }}
                                    />
-                              );
-                         })
-                    )}
-               </Box>
-
-               {/* Product picker popover with recent + brewery tree */}
-               <Popover
-                    open={Boolean(pickerAnchor)}
-                    anchorEl={pickerAnchor}
-                    onClose={() => setPickerAnchor(null)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    slotProps={{
-                         paper: {
-                              sx: {
-                                   width: pickerAnchor?.offsetWidth ?? 400,
-                                   maxHeight: 400,
-                                   overflow: 'auto',
-                              },
-                         },
+                                   {option.name}
+                              </li>
+                         );
                     }}
-               >
-                    <List dense disablePadding>
-                         {/* Recent (history) section */}
-                         {recentProducts.length > 0 && (
-                              <>
-                                   <ListItemButton
-                                        onClick={() => toggleCollapsed('recent')}
-                                        sx={{ py: 0.5, bgcolor: 'action.hover' }}
-                                   >
-                                        <ListItemText
-                                             primary={t('orders.recentProducts')}
-                                             primaryTypographyProps={{ fontWeight: 700, fontSize: '0.875rem', color: 'primary.main' }}
-                                        />
-                                        {!collapsed.has('recent') ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
-                                   </ListItemButton>
-                                   <Collapse in={!collapsed.has('recent')}>
-                                        {recentProducts.map((product) => renderProductItem(product, 2))}
-                                   </Collapse>
-                                   <Divider />
-                              </>
-                         )}
-
-                         {/* Brewery groups */}
-                         {breweryGroups.map((bg) => renderBreweryGroup(bg))}
-                    </List>
-               </Popover>
+                    renderInput={(params) => (
+                         <TextField
+                              {...params}
+                              label={t('orders.addItem')}
+                              size="small"
+                         />
+                    )}
+                    sx={{ mb: 2 }}
+               />
 
                {/* Items table */}
                {items.length === 0 ? (

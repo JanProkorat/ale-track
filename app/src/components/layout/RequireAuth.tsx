@@ -7,7 +7,11 @@ interface RequireAuthProps {
 }
 
 export default function RequireAuth({ children }: RequireAuthProps) {
-     const { user } = useAuth();
+     const { user, isAuthLoading } = useAuth();
+
+     if (isAuthLoading) {
+          return null;
+     }
 
      if (!user) {
           return <Navigate to="/login" replace />;

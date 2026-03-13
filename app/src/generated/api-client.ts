@@ -347,12 +347,6 @@ export interface IClient {
     createInventoryItemEndpoint(data: CreateInventoryItemDto, signal?: AbortSignal): Promise<string>;
 
     /**
-     * Gets inventory item detail
-     * @return Detail of inventory item
-     */
-    getInventoryItemDetailEndpoint(id: string, signal?: AbortSignal): Promise<InventoryItemDto>;
-
-    /**
      * Updates inventory item
      * @return Inventory item Updated
      */
@@ -379,6 +373,12 @@ export interface IClient {
      * @return List of exchange rates
      */
     getExchangeRatesEndpoint(signal?: AbortSignal): Promise<ExchangeRateDto[]>;
+
+    /**
+     * Gets or creates EAN codes for given package sizes
+     * @return List of EAN codes for the requested sizes
+     */
+    getOrCreateEansEndpoint(sizes: number[], signal?: AbortSignal): Promise<GetOrCreateEansResponse[]>;
 
     /**
      * Gets filtered driver list
@@ -4050,69 +4050,6 @@ export class Client implements IClient {
     }
 
     /**
-     * Gets inventory item detail
-     * @return Detail of inventory item
-     */
-    getInventoryItemDetailEndpoint(id: string, signal?: AbortSignal): Promise<InventoryItemDto> {
-        let url_ = this.baseUrl + "/ale-track/inventory-items/{id}";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "GET",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processGetInventoryItemDetailEndpoint(_response);
-        });
-    }
-
-    protected processGetInventoryItemDetailEndpoint(response: Response): Promise<InventoryItemDto> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            let result200: any = null;
-            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result200 = InventoryItemDto.fromJS(resultData200);
-            return result200;
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            let result404: any = null;
-            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result404 = FailureResponse.fromJS(resultData404);
-            return throwException("Inventory item not found", status, _responseText, _headers, result404);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<InventoryItemDto>(null as any);
-    }
-
-    /**
      * Updates inventory item
      * @return Inventory item Updated
      */
@@ -4360,6 +4297,74 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<ExchangeRateDto[]>(null as any);
+    }
+
+    /**
+     * Gets or creates EAN codes for given package sizes
+     * @return List of EAN codes for the requested sizes
+     */
+    getOrCreateEansEndpoint(sizes: number[], signal?: AbortSignal): Promise<GetOrCreateEansResponse[]> {
+        let url_ = this.baseUrl + "/ale-track/eans";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(sizes);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOrCreateEansEndpoint(_response);
+        });
+    }
+
+    protected processGetOrCreateEansEndpoint(response: Response): Promise<GetOrCreateEansResponse[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(GetOrCreateEansResponse.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<GetOrCreateEansResponse[]>(null as any);
     }
 
     /**
@@ -7189,7 +7194,6 @@ export interface IGroupedProductHistoryDto {
 export class BreweryGroupDto implements IBreweryGroupDto {
     breweryId?: string;
     breweryName?: string;
-    displayOrder?: number;
     kinds?: KindGroupDto[];
 
     constructor(data?: IBreweryGroupDto) {
@@ -7205,7 +7209,6 @@ export class BreweryGroupDto implements IBreweryGroupDto {
         if (_data) {
             this.breweryId = _data["breweryId"];
             this.breweryName = _data["breweryName"];
-            this.displayOrder = _data["displayOrder"];
             if (Array.isArray(_data["kinds"])) {
                 this.kinds = [] as any;
                 for (let item of _data["kinds"])
@@ -7225,7 +7228,6 @@ export class BreweryGroupDto implements IBreweryGroupDto {
         data = typeof data === 'object' ? data : {};
         data["breweryId"] = this.breweryId;
         data["breweryName"] = this.breweryName;
-        data["displayOrder"] = this.displayOrder;
         if (Array.isArray(this.kinds)) {
             data["kinds"] = [];
             for (let item of this.kinds)
@@ -7238,7 +7240,6 @@ export class BreweryGroupDto implements IBreweryGroupDto {
 export interface IBreweryGroupDto {
     breweryId?: string;
     breweryName?: string;
-    displayOrder?: number;
     kinds?: KindGroupDto[];
 }
 
@@ -8424,7 +8425,9 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     stops?: OutgoingShipmentStopDto[];
-    extraItems?: OutgoingShipmentExtraItemDto[];
+    inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
+    clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
+    customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -8452,10 +8455,20 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 for (let item of _data["stops"])
                     this.stops!.push(OutgoingShipmentStopDto.fromJS(item));
             }
-            if (Array.isArray(_data["extraItems"])) {
-                this.extraItems = [] as any;
-                for (let item of _data["extraItems"])
-                    this.extraItems!.push(OutgoingShipmentExtraItemDto.fromJS(item));
+            if (Array.isArray(_data["inventoryExtraItems"])) {
+                this.inventoryExtraItems = [] as any;
+                for (let item of _data["inventoryExtraItems"])
+                    this.inventoryExtraItems!.push(OutgoingShipmentInventoryExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["clientExtraItems"])) {
+                this.clientExtraItems = [] as any;
+                for (let item of _data["clientExtraItems"])
+                    this.clientExtraItems!.push(OutgoingShipmentClientExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(OutgoingShipmentCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -8484,10 +8497,20 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.stops)
                 data["stops"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.extraItems)) {
-            data["extraItems"] = [];
-            for (let item of this.extraItems)
-                data["extraItems"].push(item ? item.toJSON() : undefined as any);
+        if (Array.isArray(this.inventoryExtraItems)) {
+            data["inventoryExtraItems"] = [];
+            for (let item of this.inventoryExtraItems)
+                data["inventoryExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.clientExtraItems)) {
+            data["clientExtraItems"] = [];
+            for (let item of this.clientExtraItems)
+                data["clientExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
         return data;
     }
@@ -8501,7 +8524,9 @@ export interface IOutgoingShipmentDetailDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     stops?: OutgoingShipmentStopDto[];
-    extraItems?: OutgoingShipmentExtraItemDto[];
+    inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
+    clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
+    customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -8512,7 +8537,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     contactAddress?: AddressDto | undefined;
     orderId?: string;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
-    products?: OutgoingShipmentProductDto[];
+    products?: OutgoingShipmentOrderItemDto[];
 
     constructor(data?: IOutgoingShipmentStopDto) {
         if (data) {
@@ -8535,7 +8560,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             if (Array.isArray(_data["products"])) {
                 this.products = [] as any;
                 for (let item of _data["products"])
-                    this.products!.push(OutgoingShipmentProductDto.fromJS(item));
+                    this.products!.push(OutgoingShipmentOrderItemDto.fromJS(item));
             }
         }
     }
@@ -8573,7 +8598,7 @@ export interface IOutgoingShipmentStopDto {
     contactAddress?: AddressDto | undefined;
     orderId?: string;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
-    products?: OutgoingShipmentProductDto[];
+    products?: OutgoingShipmentOrderItemDto[];
 }
 
 export class AddressDto implements IAddressDto {
@@ -8650,11 +8675,12 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
     id?: string;
     name?: string;
     quantity?: number;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
+    kind?: ProductKind | undefined;
     packageSize?: number | undefined;
+    weight?: number | undefined;
+    isShipmentLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
 
     constructor(data?: IOutgoingShipmentProductDto) {
         if (data) {
@@ -8671,10 +8697,11 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
             this.name = _data["name"];
             this.quantity = _data["quantity"];
             this.kind = _data["kind"];
-            this.type = _data["type"];
-            this.alcoholPercentage = _data["alcoholPercentage"];
-            this.platoDegree = _data["platoDegree"];
             this.packageSize = _data["packageSize"];
+            this.weight = _data["weight"];
+            this.isShipmentLoadingConfirmed = _data["isShipmentLoadingConfirmed"];
+            this.firstInvoiceQuantity = _data["firstInvoiceQuantity"];
+            this.secondInvoiceQuantity = _data["secondInvoiceQuantity"];
         }
     }
 
@@ -8691,10 +8718,11 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
         data["name"] = this.name;
         data["quantity"] = this.quantity;
         data["kind"] = this.kind;
-        data["type"] = this.type;
-        data["alcoholPercentage"] = this.alcoholPercentage;
-        data["platoDegree"] = this.platoDegree;
         data["packageSize"] = this.packageSize;
+        data["weight"] = this.weight;
+        data["isShipmentLoadingConfirmed"] = this.isShipmentLoadingConfirmed;
+        data["firstInvoiceQuantity"] = this.firstInvoiceQuantity;
+        data["secondInvoiceQuantity"] = this.secondInvoiceQuantity;
         return data;
     }
 }
@@ -8703,79 +8731,142 @@ export interface IOutgoingShipmentProductDto {
     id?: string;
     name?: string;
     quantity?: number;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
+    kind?: ProductKind | undefined;
     packageSize?: number | undefined;
+    weight?: number | undefined;
+    isShipmentLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
 }
 
-export class OutgoingShipmentExtraItemDto implements IOutgoingShipmentExtraItemDto {
-    productId?: string | undefined;
-    productName?: string | undefined;
-    quantity?: number;
-    kind?: ProductKind | undefined;
-    type?: ProductType | undefined;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    isLoadingConfirmed?: boolean;
+export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentOrderItemDto {
+    orderItemId?: string;
 
-    constructor(data?: IOutgoingShipmentExtraItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
+    constructor(data?: IOutgoingShipmentOrderItemDto) {
+        super(data);
     }
 
-    init(_data?: any) {
+    override init(_data?: any) {
+        super.init(_data);
         if (_data) {
-            this.productId = _data["productId"];
-            this.productName = _data["productName"];
-            this.quantity = _data["quantity"];
-            this.kind = _data["kind"];
-            this.type = _data["type"];
-            this.alcoholPercentage = _data["alcoholPercentage"];
-            this.platoDegree = _data["platoDegree"];
-            this.packageSize = _data["packageSize"];
-            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+            this.orderItemId = _data["orderItemId"];
         }
     }
 
-    static fromJS(data: any): OutgoingShipmentExtraItemDto {
+    static override fromJS(data: any): OutgoingShipmentOrderItemDto {
         data = typeof data === 'object' ? data : {};
-        let result = new OutgoingShipmentExtraItemDto();
+        let result = new OutgoingShipmentOrderItemDto();
         result.init(data);
         return result;
     }
 
-    toJSON(data?: any) {
+    override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["productId"] = this.productId;
-        data["productName"] = this.productName;
-        data["quantity"] = this.quantity;
-        data["kind"] = this.kind;
-        data["type"] = this.type;
-        data["alcoholPercentage"] = this.alcoholPercentage;
-        data["platoDegree"] = this.platoDegree;
-        data["packageSize"] = this.packageSize;
-        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        data["orderItemId"] = this.orderItemId;
+        super.toJSON(data);
         return data;
     }
 }
 
-export interface IOutgoingShipmentExtraItemDto {
+export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductDto {
+    orderItemId?: string;
+}
+
+export class OutgoingShipmentInventoryExtraItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentInventoryExtraItemDto {
+    productId?: string;
+
+    constructor(data?: IOutgoingShipmentInventoryExtraItemDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.productId = _data["productId"];
+        }
+    }
+
+    static override fromJS(data: any): OutgoingShipmentInventoryExtraItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentInventoryExtraItemDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentInventoryExtraItemDto extends IOutgoingShipmentProductDto {
+    productId?: string;
+}
+
+export class OutgoingShipmentClientExtraItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentClientExtraItemDto {
+    inventoryItemId?: string;
     productId?: string | undefined;
-    productName?: string | undefined;
-    quantity?: number;
-    kind?: ProductKind | undefined;
-    type?: ProductType | undefined;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IOutgoingShipmentClientExtraItemDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.inventoryItemId = _data["inventoryItemId"];
+            this.productId = _data["productId"];
+        }
+    }
+
+    static override fromJS(data: any): OutgoingShipmentClientExtraItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentClientExtraItemDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["inventoryItemId"] = this.inventoryItemId;
+        data["productId"] = this.productId;
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentClientExtraItemDto extends IOutgoingShipmentProductDto {
+    inventoryItemId?: string;
+    productId?: string | undefined;
+}
+
+export class OutgoingShipmentCustomExtraItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentCustomExtraItemDto {
+
+    constructor(data?: IOutgoingShipmentCustomExtraItemDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): OutgoingShipmentCustomExtraItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentCustomExtraItemDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentCustomExtraItemDto extends IOutgoingShipmentProductDto {
 }
 
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
@@ -8845,7 +8936,9 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     driverIds?: string[];
     clientOrderShipments!: ClientOrderShipmentDto[];
     state!: OutgoingShipmentState;
-    extraShipments?: ExtraShipmentDto[];
+    inventoryExtraShipments?: InventoryExtraShipmentDto[];
+    clientExtraShipments?: ClientExtraShipmentDto[];
+    customExtraShipments?: CustomExtraShipmentDto[];
 
     constructor(data?: IUpdateOutgoingShipmentDto) {
         if (data) {
@@ -8875,10 +8968,20 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                     this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
             }
             this.state = _data["state"];
-            if (Array.isArray(_data["extraShipments"])) {
-                this.extraShipments = [] as any;
-                for (let item of _data["extraShipments"])
-                    this.extraShipments!.push(ExtraShipmentDto.fromJS(item));
+            if (Array.isArray(_data["inventoryExtraShipments"])) {
+                this.inventoryExtraShipments = [] as any;
+                for (let item of _data["inventoryExtraShipments"])
+                    this.inventoryExtraShipments!.push(InventoryExtraShipmentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["clientExtraShipments"])) {
+                this.clientExtraShipments = [] as any;
+                for (let item of _data["clientExtraShipments"])
+                    this.clientExtraShipments!.push(ClientExtraShipmentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraShipments"])) {
+                this.customExtraShipments = [] as any;
+                for (let item of _data["customExtraShipments"])
+                    this.customExtraShipments!.push(CustomExtraShipmentDto.fromJS(item));
             }
         }
     }
@@ -8906,10 +9009,20 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                 data["clientOrderShipments"].push(item ? item.toJSON() : undefined as any);
         }
         data["state"] = this.state;
-        if (Array.isArray(this.extraShipments)) {
-            data["extraShipments"] = [];
-            for (let item of this.extraShipments)
-                data["extraShipments"].push(item ? item.toJSON() : undefined as any);
+        if (Array.isArray(this.inventoryExtraShipments)) {
+            data["inventoryExtraShipments"] = [];
+            for (let item of this.inventoryExtraShipments)
+                data["inventoryExtraShipments"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.clientExtraShipments)) {
+            data["clientExtraShipments"] = [];
+            for (let item of this.clientExtraShipments)
+                data["clientExtraShipments"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.customExtraShipments)) {
+            data["customExtraShipments"] = [];
+            for (let item of this.customExtraShipments)
+                data["customExtraShipments"].push(item ? item.toJSON() : undefined as any);
         }
         return data;
     }
@@ -8922,7 +9035,9 @@ export interface IUpdateOutgoingShipmentDto {
     driverIds?: string[];
     clientOrderShipments: ClientOrderShipmentDto[];
     state: OutgoingShipmentState;
-    extraShipments?: ExtraShipmentDto[];
+    inventoryExtraShipments?: InventoryExtraShipmentDto[];
+    clientExtraShipments?: ClientExtraShipmentDto[];
+    customExtraShipments?: CustomExtraShipmentDto[];
 }
 
 export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
@@ -8984,6 +9099,8 @@ export interface IClientOrderShipmentDto {
 export class OrderItemInfoDto implements IOrderItemInfoDto {
     orderItemId?: string;
     isLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
 
     constructor(data?: IOrderItemInfoDto) {
         if (data) {
@@ -8998,6 +9115,8 @@ export class OrderItemInfoDto implements IOrderItemInfoDto {
         if (_data) {
             this.orderItemId = _data["orderItemId"];
             this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+            this.firstInvoiceQuantity = _data["firstInvoiceQuantity"];
+            this.secondInvoiceQuantity = _data["secondInvoiceQuantity"];
         }
     }
 
@@ -9012,6 +9131,8 @@ export class OrderItemInfoDto implements IOrderItemInfoDto {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
         data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        data["firstInvoiceQuantity"] = this.firstInvoiceQuantity;
+        data["secondInvoiceQuantity"] = this.secondInvoiceQuantity;
         return data;
     }
 }
@@ -9019,13 +9140,16 @@ export class OrderItemInfoDto implements IOrderItemInfoDto {
 export interface IOrderItemInfoDto {
     orderItemId?: string;
     isLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
 }
 
 export class ExtraShipmentDto implements IExtraShipmentDto {
-    productId?: string | undefined;
+    id?: string | undefined;
     quantity?: number;
-    productName?: string | undefined;
     isLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
 
     constructor(data?: IExtraShipmentDto) {
         if (data) {
@@ -9038,10 +9162,11 @@ export class ExtraShipmentDto implements IExtraShipmentDto {
 
     init(_data?: any) {
         if (_data) {
-            this.productId = _data["productId"];
+            this.id = _data["id"];
             this.quantity = _data["quantity"];
-            this.productName = _data["productName"];
             this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+            this.firstInvoiceQuantity = _data["firstInvoiceQuantity"];
+            this.secondInvoiceQuantity = _data["secondInvoiceQuantity"];
         }
     }
 
@@ -9054,19 +9179,120 @@ export class ExtraShipmentDto implements IExtraShipmentDto {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["productId"] = this.productId;
+        data["id"] = this.id;
         data["quantity"] = this.quantity;
-        data["productName"] = this.productName;
         data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        data["firstInvoiceQuantity"] = this.firstInvoiceQuantity;
+        data["secondInvoiceQuantity"] = this.secondInvoiceQuantity;
         return data;
     }
 }
 
 export interface IExtraShipmentDto {
-    productId?: string | undefined;
+    id?: string | undefined;
     quantity?: number;
-    productName?: string | undefined;
     isLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
+}
+
+export class InventoryExtraShipmentDto extends ExtraShipmentDto implements IInventoryExtraShipmentDto {
+    productId?: string;
+
+    constructor(data?: IInventoryExtraShipmentDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.productId = _data["productId"];
+        }
+    }
+
+    static override fromJS(data: any): InventoryExtraShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new InventoryExtraShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IInventoryExtraShipmentDto extends IExtraShipmentDto {
+    productId?: string;
+}
+
+export class ClientExtraShipmentDto extends ExtraShipmentDto implements IClientExtraShipmentDto {
+    inventoryItemId?: string;
+
+    constructor(data?: IClientExtraShipmentDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.inventoryItemId = _data["inventoryItemId"];
+        }
+    }
+
+    static override fromJS(data: any): ClientExtraShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientExtraShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["inventoryItemId"] = this.inventoryItemId;
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IClientExtraShipmentDto extends IExtraShipmentDto {
+    inventoryItemId?: string;
+}
+
+export class CustomExtraShipmentDto extends ExtraShipmentDto implements ICustomExtraShipmentDto {
+    description?: string;
+
+    constructor(data?: ICustomExtraShipmentDto) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.description = _data["description"];
+        }
+    }
+
+    static override fromJS(data: any): CustomExtraShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CustomExtraShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["description"] = this.description;
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface ICustomExtraShipmentDto extends IExtraShipmentDto {
+    description?: string;
 }
 
 export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
@@ -9216,6 +9442,8 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
     packageSize?: number | undefined;
     weight?: number | undefined;
     isShipmentLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
     breweryDisplayOrder?: number;
     displayOrder?: number;
 
@@ -9241,6 +9469,8 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
             this.packageSize = _data["packageSize"];
             this.weight = _data["weight"];
             this.isShipmentLoadingConfirmed = _data["isShipmentLoadingConfirmed"];
+            this.firstInvoiceQuantity = _data["firstInvoiceQuantity"];
+            this.secondInvoiceQuantity = _data["secondInvoiceQuantity"];
             this.breweryDisplayOrder = _data["breweryDisplayOrder"];
             this.displayOrder = _data["displayOrder"];
         }
@@ -9266,6 +9496,8 @@ export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
         data["packageSize"] = this.packageSize;
         data["weight"] = this.weight;
         data["isShipmentLoadingConfirmed"] = this.isShipmentLoadingConfirmed;
+        data["firstInvoiceQuantity"] = this.firstInvoiceQuantity;
+        data["secondInvoiceQuantity"] = this.secondInvoiceQuantity;
         data["breweryDisplayOrder"] = this.breweryDisplayOrder;
         data["displayOrder"] = this.displayOrder;
         return data;
@@ -9284,6 +9516,8 @@ export interface IUnassignedOrderItemDto {
     packageSize?: number | undefined;
     weight?: number | undefined;
     isShipmentLoadingConfirmed?: boolean;
+    firstInvoiceQuantity?: number | undefined;
+    secondInvoiceQuantity?: number | undefined;
     breweryDisplayOrder?: number;
     displayOrder?: number;
 }
@@ -10049,6 +10283,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
     priceWithVat?: number | undefined;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
+    note?: string | undefined;
 
     constructor(data?: IInventoryItemListItemDto) {
         if (data) {
@@ -10073,6 +10308,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.note = _data["note"];
         }
     }
 
@@ -10097,6 +10333,7 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["note"] = this.note;
         return data;
     }
 }
@@ -10114,88 +10351,7 @@ export interface IInventoryItemListItemDto {
     priceWithVat?: number | undefined;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
-}
-
-export class InventoryItemDto implements IInventoryItemDto {
-    id?: string;
-    name?: string | undefined;
-    productId?: string | undefined;
-    quantity?: number;
     note?: string | undefined;
-
-    constructor(data?: IInventoryItemDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.productId = _data["productId"];
-            this.quantity = _data["quantity"];
-            this.note = _data["note"];
-        }
-    }
-
-    static fromJS(data: any): InventoryItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new InventoryItemDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["productId"] = this.productId;
-        data["quantity"] = this.quantity;
-        data["note"] = this.note;
-        return data;
-    }
-}
-
-export interface IInventoryItemDto {
-    id?: string;
-    name?: string | undefined;
-    productId?: string | undefined;
-    quantity?: number;
-    note?: string | undefined;
-}
-
-export class GetInventoryItemDetailRequest implements IGetInventoryItemDetailRequest {
-
-    constructor(data?: IGetInventoryItemDetailRequest) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-    }
-
-    static fromJS(data: any): GetInventoryItemDetailRequest {
-        data = typeof data === 'object' ? data : {};
-        let result = new GetInventoryItemDetailRequest();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        return data;
-    }
-}
-
-export interface IGetInventoryItemDetailRequest {
 }
 
 export class DeleteInventoryItemRequest implements IDeleteInventoryItemRequest {
@@ -10362,6 +10518,46 @@ export interface ICreateInventoryItemDto {
     name?: string | undefined;
     quantity: number;
     note?: string | undefined;
+}
+
+export class GetOrCreateEansResponse implements IGetOrCreateEansResponse {
+    packageSize?: number;
+    code?: string;
+
+    constructor(data?: IGetOrCreateEansResponse) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.packageSize = _data["packageSize"];
+            this.code = _data["code"];
+        }
+    }
+
+    static fromJS(data: any): GetOrCreateEansResponse {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetOrCreateEansResponse();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["packageSize"] = this.packageSize;
+        data["code"] = this.code;
+        return data;
+    }
+}
+
+export interface IGetOrCreateEansResponse {
+    packageSize?: number;
+    code?: string;
 }
 
 export class DriverListItemDto implements IDriverListItemDto {

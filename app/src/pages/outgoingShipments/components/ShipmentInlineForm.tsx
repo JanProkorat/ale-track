@@ -1,4 +1,4 @@
-import type { OutgoingShipmentOrderDto, OutgoingShipmentDetailDto } from 'src/generated/api-client';
+import type { OutgoingShipmentOrderDto, OutgoingShipmentDetailDto, OutgoingShipmentProductDto } from 'src/generated/api-client';
 
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,6 @@ import { useRef, useMemo, useState, useEffect, forwardRef, useCallback, useImper
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
-import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
 import AddOutlined from '@mui/icons-material/AddOutlined';
@@ -50,6 +49,11 @@ export interface FormHeaderState {
 export interface ShipmentSubmitExtra {
      confirmedProductIds: Set<string>;
      extraPiecesMap: Record<string, string>;
+     inventoryPiecesMap: Record<string, string>;
+     extraItemIdMap: Record<string, string>;
+     clientExtraLinkMap: Record<string, string>;
+     firstInvoiceMap: Record<string, string>;
+     secondInvoiceMap: Record<string, string>;
      availableOrders: OutgoingShipmentOrderDto[];
      extraProducts: ExtraProductEntry[];
 }
@@ -99,6 +103,11 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
           const [dirty, setDirty] = useState(false);
           const [confirmedProductIds, setConfirmedProductIds] = useState<Set<string>>(() => new Set());
           const [extraPiecesMap, setExtraPiecesMap] = useState<Record<string, string>>({});
+          const [inventoryPiecesMap, setInventoryPiecesMap] = useState<Record<string, string>>({});
+          const [extraItemIdMap, setExtraItemIdMap] = useState<Record<string, string>>({});
+          const [clientExtraLinkMap, setClientExtraLinkMap] = useState<Record<string, string>>({});
+          const [firstInvoiceMap, setFirstInvoiceMap] = useState<Record<string, string>>({});
+          const [secondInvoiceMap, setSecondInvoiceMap] = useState<Record<string, string>>({});
           const [extraProducts, setExtraProducts] = useState<ExtraProductEntry[]>([]);
           const [extraDrawerOpen, setExtraDrawerOpen] = useState(false);
 
@@ -127,14 +136,57 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                          if (id.startsWith('custom:')) confirmed.add(id);
                     }
                     // Also include confirmed extra items with real productIds
-                    for (const item of shipment.extraItems ?? []) {
-                         if (item.isLoadingConfirmed && item.productId) {
+                    for (const item of shipment.inventoryExtraItems ?? []) {
+                         if (item.isShipmentLoadingConfirmed && item.productId) {
                               confirmed.add(item.productId);
+                         }
+                    }
+                    for (const item of shipment.clientExtraItems ?? []) {
+                         if (item.isShipmentLoadingConfirmed && item.inventoryItemId) {
+                              confirmed.add(item.inventoryItemId);
                          }
                     }
                     return confirmed;
                });
-          }, [availableOrders, shipment.extraItems]);
+          }, [availableOrders, shipment.inventoryExtraItems, shipment.clientExtraItems, shipment.customExtraItems]);
+
+          // Initialize invoice maps from available orders when data loads
+          const invoiceInitRef = useRef(false);
+          useEffect(() => {
+               if (availableOrders.length === 0) return;
+               if (invoiceInitRef.current) return;
+               invoiceInitRef.current = true;
+
+               // Sum invoice quantities across all order items for the same product
+               const firstSums = new Map<string, number>();
+               const secondSums = new Map<string, number>();
+               for (const order of availableOrders) {
+                    for (const item of order.items ?? []) {
+                         if (!item.productId) continue;
+                         if (item.firstInvoiceQuantity != null) {
+                              firstSums.set(item.productId, (firstSums.get(item.productId) ?? 0) + item.firstInvoiceQuantity);
+                         }
+                         if (item.secondInvoiceQuantity != null) {
+                              secondSums.set(item.productId, (secondSums.get(item.productId) ?? 0) + item.secondInvoiceQuantity);
+                         }
+                    }
+               }
+
+               setFirstInvoiceMap((prev) => {
+                    const next = { ...prev };
+                    for (const [pid, sum] of firstSums) {
+                         if (!(pid in next)) next[pid] = String(sum);
+                    }
+                    return next;
+               });
+               setSecondInvoiceMap((prev) => {
+                    const next = { ...prev };
+                    for (const [pid, sum] of secondSums) {
+                         if (!(pid in next)) next[pid] = String(sum);
+                    }
+                    return next;
+               });
+          }, [availableOrders]);
 
           const {
                control,
@@ -162,7 +214,7 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                     submit: async () => {
                          const isValid = await trigger();
                          if (isValid) {
-                              onSubmitRef.current(getValues(), { confirmedProductIds, extraPiecesMap, availableOrders, extraProducts });
+                              onSubmitRef.current(getValues(), { confirmedProductIds, extraPiecesMap, inventoryPiecesMap, extraItemIdMap, clientExtraLinkMap, firstInvoiceMap, secondInvoiceMap, availableOrders, extraProducts });
                               setDirty(false);
                          }
                     },
@@ -171,7 +223,7 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                          setDirty(false);
                     },
                }),
-               [trigger, getValues, reset, confirmedProductIds, extraPiecesMap, availableOrders, extraProducts],
+               [trigger, getValues, reset, confirmedProductIds, extraPiecesMap, inventoryPiecesMap, extraItemIdMap, clientExtraLinkMap, firstInvoiceMap, secondInvoiceMap, availableOrders, extraProducts],
           );
 
           // Notify parent of form state changes
@@ -190,29 +242,71 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                initialValuesRef.current = values;
                reset(values);
                setDirty(false);
+               invoiceInitRef.current = false;
 
                // Initialize extra pieces and extra products from shipment detail
                const pieces: Record<string, string> = {};
+               const idMap: Record<string, string> = {};
+               const clientLinks: Record<string, string> = {};
+               const firstInv: Record<string, string> = {};
+               const secondInv: Record<string, string> = {};
                const extras: ExtraProductEntry[] = [];
                const extraConfirmed: string[] = [];
-               for (const item of shipment.extraItems ?? []) {
-                    if (!item.quantity || item.quantity <= 0) continue;
-                    const id = item.productId ?? `custom:${crypto.randomUUID()}`;
-                    const isCustom = !item.productId;
-                    pieces[id] = String(item.quantity);
+
+               const processExtraItem = (key: string, item: OutgoingShipmentProductDto, isCustom: boolean, inventoryItemId?: string) => {
+                    if (!item.quantity || item.quantity <= 0) return;
+                    pieces[key] = String(item.quantity);
+                    if (item.id) idMap[key] = item.id;
+                    if (item.firstInvoiceQuantity != null) firstInv[key] = String(item.firstInvoiceQuantity);
+                    if (item.secondInvoiceQuantity != null) secondInv[key] = String(item.secondInvoiceQuantity);
                     extras.push({
-                         productId: id,
-                         name: item.productName ?? '',
+                         productId: key,
+                         name: item.name ?? '',
                          kind: item.kind,
                          packageSize: item.packageSize ?? undefined,
                          quantity: item.quantity,
                          isCustom,
+                         inventoryItemId,
                     });
-                    if (item.isLoadingConfirmed) {
-                         extraConfirmed.push(id);
+                    if (item.isShipmentLoadingConfirmed) {
+                         extraConfirmed.push(key);
                     }
+               };
+
+               for (const item of shipment.inventoryExtraItems ?? []) {
+                    if (item.productId) processExtraItem(item.productId, item, false);
                }
+               for (const item of shipment.clientExtraItems ?? []) {
+                    if (!item.inventoryItemId) continue;
+                    const key = item.productId ?? item.inventoryItemId;
+                    const qty = item.quantity ?? 0;
+                    if (qty > 0) pieces[key] = String(qty);
+                    if (item.id) idMap[key] = item.id;
+                    if (item.firstInvoiceQuantity != null) firstInv[key] = String(item.firstInvoiceQuantity);
+                    if (item.secondInvoiceQuantity != null) secondInv[key] = String(item.secondInvoiceQuantity);
+                    extras.push({
+                         productId: key,
+                         name: item.name ?? '',
+                         kind: item.kind,
+                         packageSize: item.packageSize ?? undefined,
+                         quantity: qty,
+                         isCustom: false,
+                         inventoryItemId: item.inventoryItemId,
+                    });
+                    if (item.isShipmentLoadingConfirmed) extraConfirmed.push(key);
+                    clientLinks[key] = item.inventoryItemId;
+               }
+               for (const item of shipment.customExtraItems ?? []) {
+                    const key = `custom:${crypto.randomUUID()}`;
+                    processExtraItem(key, item, true);
+               }
+
                setExtraPiecesMap(pieces);
+               setInventoryPiecesMap({});
+               setExtraItemIdMap(idMap);
+               setClientExtraLinkMap(clientLinks);
+               setFirstInvoiceMap(firstInv);
+               setSecondInvoiceMap(secondInv);
                setExtraProducts(extras);
                if (extraConfirmed.length > 0) {
                     setConfirmedProductIds((prev) => {
@@ -241,6 +335,16 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                markDirty();
           }, []);
 
+          const handleFirstInvoiceChange = useCallback((map: Record<string, string>) => {
+               setFirstInvoiceMap(map);
+               markDirty();
+          }, []);
+
+          const handleSecondInvoiceChange = useCallback((map: Record<string, string>) => {
+               setSecondInvoiceMap(map);
+               markDirty();
+          }, []);
+
           const handleAddExtraProducts = useCallback((entries: ExtraProductEntry[]) => {
                // Collect product IDs already present in the loading table (from stops)
                const stopProductIds = new Set<string>();
@@ -250,14 +354,41 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                     }
                }
 
-               setExtraPiecesMap((prev) => {
-                    const next = { ...prev };
-                    for (const entry of entries) {
-                         const existing = Number(next[entry.productId]) || 0;
-                         next[entry.productId] = String(existing + entry.quantity);
-                    }
-                    return next;
-               });
+               // Separate inventory entries from non-inventory entries
+               const inventoryEntries = entries.filter((e) => e.inventoryItemId);
+               const nonInventoryEntries = entries.filter((e) => !e.inventoryItemId);
+
+               // Non-inventory entries go to extraPiecesMap (garage)
+               if (nonInventoryEntries.length > 0) {
+                    setExtraPiecesMap((prev) => {
+                         const next = { ...prev };
+                         for (const entry of nonInventoryEntries) {
+                              const existing = Number(next[entry.productId]) || 0;
+                              next[entry.productId] = String(existing + entry.quantity);
+                         }
+                         return next;
+                    });
+               }
+
+               // Inventory entries go to inventoryPiecesMap (added to totalQuantity)
+               if (inventoryEntries.length > 0) {
+                    setInventoryPiecesMap((prev) => {
+                         const next = { ...prev };
+                         for (const entry of inventoryEntries) {
+                              const existing = Number(next[entry.productId]) || 0;
+                              next[entry.productId] = String(existing + entry.quantity);
+                         }
+                         return next;
+                    });
+
+                    setClientExtraLinkMap((prev) => {
+                         const next = { ...prev };
+                         for (const entry of inventoryEntries) {
+                              next[entry.productId] = entry.inventoryItemId!;
+                         }
+                         return next;
+                    });
+               }
 
                // Only add to extraProducts if the product isn't already in stops or extraProducts
                setExtraProducts((prev) => {
@@ -271,6 +402,43 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                setExtraDrawerOpen(false);
                markDirty();
           }, [shipment.stops]);
+
+          const handleRemoveInventoryItem = useCallback((productId: string) => {
+               setExtraPiecesMap((prev) => {
+                    const next = { ...prev };
+                    delete next[productId];
+                    return next;
+               });
+               setInventoryPiecesMap((prev) => {
+                    const next = { ...prev };
+                    delete next[productId];
+                    return next;
+               });
+               setClientExtraLinkMap((prev) => {
+                    const next = { ...prev };
+                    delete next[productId];
+                    return next;
+               });
+               setExtraItemIdMap((prev) => {
+                    const next = { ...prev };
+                    delete next[productId];
+                    return next;
+               });
+               setExtraProducts((prev) => prev.filter((ep) => ep.productId !== productId));
+               markDirty();
+          }, []);
+
+          const handleInventoryQuantityChange = useCallback((productId: string, value: string) => {
+               const qty = Math.max(0, Math.round(Number(value) || 0));
+               const strQty = String(qty);
+               // Update whichever map holds this item
+               if (clientExtraLinkMap[productId]) {
+                    setExtraPiecesMap((prev) => ({ ...prev, [productId]: strQty }));
+               } else {
+                    setInventoryPiecesMap((prev) => ({ ...prev, [productId]: strQty }));
+               }
+               markDirty();
+          }, [clientExtraLinkMap]);
 
           const selectedOrderIds = useMemo(
                () => new Set((watchedStops ?? []).map((s) => s.clientOrderId)),
@@ -362,6 +530,13 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                     const w = weightMap.get(productId) ?? 0;
                     totalWeight += w * q;
                }
+
+               for (const [productId, qty] of Object.entries(inventoryPiecesMap)) {
+                    const q = Number(qty) || 0;
+                    if (q <= 0) continue;
+                    const w = weightMap.get(productId) ?? 0;
+                    totalWeight += w * q;
+               }
           }
 
           const toggleOrder = useCallback(
@@ -409,23 +584,26 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                                         name="state"
                                         control={control}
                                         render={({ field }) => (
-                                             <TextField
-                                                  {...field}
-                                                  onChange={(e) => {
-                                                       field.onChange(e);
+                                             <Autocomplete
+                                                  options={shipmentStateOptions}
+                                                  getOptionLabel={(opt) => t(opt.labelKey)}
+                                                  value={shipmentStateOptions.find((o) => o.value === field.value) ?? null}
+                                                  onChange={(_e, newValue) => {
+                                                       field.onChange(newValue?.value ?? '');
                                                        markDirty();
                                                   }}
-                                                  select
-                                                  label={t('outgoingShipments.state')}
+                                                  isOptionEqualToValue={(opt, val) => opt.value === val.value}
                                                   size="small"
                                                   fullWidth
-                                             >
-                                                  {shipmentStateOptions.map((opt) => (
-                                                       <MenuItem key={opt.value} value={opt.value}>
-                                                            {t(opt.labelKey)}
-                                                       </MenuItem>
-                                                  ))}
-                                             </TextField>
+                                                  renderInput={(params) => (
+                                                       <TextField
+                                                            {...params}
+                                                            label={t('outgoingShipments.state')}
+                                                            size="small"
+                                                            fullWidth
+                                                       />
+                                                  )}
+                                             />
                                         )}
                                    />
                               </Grid>
@@ -475,6 +653,7 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                               <Grid size={{ xs: 12 }}>
                                    <Autocomplete
                                         multiple
+                                        disableCloseOnSelect
                                         options={drivers}
                                         getOptionLabel={(opt) =>
                                              `${opt.firstName ?? ''} ${opt.lastName ?? ''}`.trim()
@@ -545,7 +724,15 @@ const ShipmentInlineForm = forwardRef<ShipmentInlineFormHandle, ShipmentInlineFo
                               onConfirmedChange={handleConfirmedChange}
                               extraPiecesMap={extraPiecesMap}
                               onExtraPiecesMapChange={handleExtraPiecesChange}
+                              firstInvoiceMap={firstInvoiceMap}
+                              onFirstInvoiceMapChange={handleFirstInvoiceChange}
+                              secondInvoiceMap={secondInvoiceMap}
+                              onSecondInvoiceMapChange={handleSecondInvoiceChange}
                               extraProducts={extraProducts}
+                              inventoryPiecesMap={inventoryPiecesMap}
+                              clientExtraLinkMap={clientExtraLinkMap}
+                              onRemoveInventoryItem={handleRemoveInventoryItem}
+                              onInventoryQuantityChange={handleInventoryQuantityChange}
                               weightMap={weightMap}
                               displayOrderMap={displayOrderMap}
                               productDisplayOrderMap={productDisplayOrderMap}

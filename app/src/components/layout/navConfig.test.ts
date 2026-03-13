@@ -1,8 +1,8 @@
 import { navItems, mobileNavItems } from './navConfig';
 
 describe('navItems', () => {
-     it('has 9 items', () => {
-          expect(navItems).toHaveLength(9);
+     it('has 10 items', () => {
+          expect(navItems).toHaveLength(10);
      });
 
      it('all items have required fields (labelKey, path, icon)', () => {

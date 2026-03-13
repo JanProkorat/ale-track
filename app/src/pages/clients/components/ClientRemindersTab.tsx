@@ -12,7 +12,6 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
-import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import EditIcon from '@mui/icons-material/Edit';
 import Typography from '@mui/material/Typography';
@@ -20,6 +19,7 @@ import IconButton from '@mui/material/IconButton';
 import LoadingButton from '@mui/lab/LoadingButton';
 import DialogTitle from '@mui/material/DialogTitle';
 import DeleteIcon from '@mui/icons-material/Delete';
+import Autocomplete from '@mui/material/Autocomplete';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -355,26 +355,25 @@ function ClientRemindersTab({ clientId }, ref) {
                                    />
                               </Grid>
                               <Grid size={{ xs: 12, sm: 6 }}>
-                                   <TextField
-                                        select
-                                        label={t('reminders.type')}
+                                   <Autocomplete
+                                        options={[ReminderType.OneTimeEvent, ReminderType.Regular]}
+                                        getOptionLabel={(opt) => enumLabel.reminderType(opt)}
+                                        value={form.type}
+                                        onChange={(_e, newValue) => {
+                                             if (newValue != null) setForm((p) => ({ ...p, type: newValue }));
+                                        }}
+                                        disableClearable
                                         fullWidth
                                         size="small"
-                                        value={form.type}
-                                        onChange={(e) =>
-                                             setForm((p) => ({
-                                                  ...p,
-                                                  type: Number(e.target.value) as ReminderType,
-                                             }))
-                                        }
-                                   >
-                                        <MenuItem value={ReminderType.OneTimeEvent}>
-                                             {enumLabel.reminderType(ReminderType.OneTimeEvent)}
-                                        </MenuItem>
-                                        <MenuItem value={ReminderType.Regular}>
-                                             {enumLabel.reminderType(ReminderType.Regular)}
-                                        </MenuItem>
-                                   </TextField>
+                                        renderInput={(params) => (
+                                             <TextField
+                                                  {...params}
+                                                  label={t('reminders.type')}
+                                                  fullWidth
+                                                  size="small"
+                                             />
+                                        )}
+                                   />
                               </Grid>
                               <Grid size={{ xs: 12, sm: 6 }}>
                                    <TextField
@@ -411,32 +410,25 @@ function ClientRemindersTab({ clientId }, ref) {
                               {form.type === ReminderType.Regular && (
                                    <>
                                         <Grid size={{ xs: 12, sm: 6 }}>
-                                             <TextField
-                                                  select
-                                                  label={t('reminders.recurrenceType')}
+                                             <Autocomplete
+                                                  options={[ReminderRecurrenceType.Weekly, ReminderRecurrenceType.Monthly]}
+                                                  getOptionLabel={(opt) => enumLabel.recurrenceType(opt)}
+                                                  value={form.recurrenceType}
+                                                  onChange={(_e, newValue) => {
+                                                       if (newValue != null) setForm((p) => ({ ...p, recurrenceType: newValue }));
+                                                  }}
+                                                  disableClearable
                                                   fullWidth
                                                   size="small"
-                                                  value={form.recurrenceType}
-                                                  onChange={(e) =>
-                                                       setForm((p) => ({
-                                                            ...p,
-                                                            recurrenceType: Number(
-                                                                 e.target.value,
-                                                            ) as ReminderRecurrenceType,
-                                                       }))
-                                                  }
-                                             >
-                                                  <MenuItem value={ReminderRecurrenceType.Weekly}>
-                                                       {enumLabel.recurrenceType(
-                                                            ReminderRecurrenceType.Weekly,
-                                                       )}
-                                                  </MenuItem>
-                                                  <MenuItem value={ReminderRecurrenceType.Monthly}>
-                                                       {enumLabel.recurrenceType(
-                                                            ReminderRecurrenceType.Monthly,
-                                                       )}
-                                                  </MenuItem>
-                                             </TextField>
+                                                  renderInput={(params) => (
+                                                       <TextField
+                                                            {...params}
+                                                            label={t('reminders.recurrenceType')}
+                                                            fullWidth
+                                                            size="small"
+                                                       />
+                                                  )}
+                                             />
                                         </Grid>
 
                                         {form.recurrenceType === ReminderRecurrenceType.Weekly && (

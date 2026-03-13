@@ -31,7 +31,7 @@ export function useModuleCounts() {
                  vehicles: data.vehiclesCount ?? 0,
                  outgoingShipments: data.outgoingShipmentsCount ?? 0,
                  productDeliveries: data.productDeliveriesCount ?? 0,
-                 inventory: data.inventoryItemsCount ?? 0,
+                 inventoryItems: data.inventoryItemsCount ?? 0,
                  users: data.usersCount ?? 0,
             }
           : {};

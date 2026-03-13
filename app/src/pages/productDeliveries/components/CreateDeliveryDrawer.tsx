@@ -128,6 +128,7 @@ export default function CreateDeliveryDrawer({
                               <Grid size={{ xs: 12 }}>
                                    <Autocomplete
                                         multiple
+                                        disableCloseOnSelect
                                         options={drivers}
                                         getOptionLabel={(opt) =>
                                              `${opt.firstName ?? ''} ${opt.lastName ?? ''}`.trim()
