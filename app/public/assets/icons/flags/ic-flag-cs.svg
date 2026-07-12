@@ -1,0 +1,13 @@
+<svg width="28" height="20" viewBox="0 0 28 20" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <rect id="border" width="28" height="20" rx="3"/>
+        <mask id="mask">
+            <use href="#border" fill="#fff"/>
+        </mask>
+    </defs>
+    <g mask="url(#mask)">
+        <use href="#border" fill="#fff"/> <!-- bílý horní pruh -->
+        <rect x="0" y="10" width="28" height="10" fill="#d7141a"/> <!-- červený dolní pruh -->
+        <polygon points="0,0 0,20 12,10" fill="#11457e"/> <!-- modrý klín -->
+    </g>
+</svg>

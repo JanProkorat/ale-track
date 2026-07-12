@@ -1,0 +1,25 @@
+*,
+*::before,
+*::after {
+     box-sizing: border-box;
+     margin: 0;
+     padding: 0;
+}
+
+html {
+     -webkit-font-smoothing: antialiased;
+     -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+     margin: 0;
+}
+
+input:-webkit-autofill {
+     -webkit-box-shadow: 0 0 0 30px var(--palette-background-paper) inset !important;
+     -webkit-text-fill-color: var(--palette-text-primary) !important;
+}
+
+#root {
+     min-height: 100dvh;
+}
