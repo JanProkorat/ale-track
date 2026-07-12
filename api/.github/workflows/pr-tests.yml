@@ -1,0 +1,87 @@
+name: Pull Request Tests
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./AleTrack
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/AleTrack/**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+        
+    - name: Restore dependencies
+      run: dotnet restore AleTrack.sln
+      
+    - name: Build solution
+      run: dotnet build AleTrack.sln --no-restore --configuration Release --verbosity minimal
+      
+    - name: Run tests with coverage
+      run: |
+        dotnet test AleTrack.Tests/AleTrack.Tests.csproj --no-build --configuration Release --verbosity normal \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults \
+          --logger "trx;LogFileName=test-results.trx"
+      
+    - name: Generate coverage report
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.3.8
+      if: always()
+      with:
+        reports: 'AleTrack/TestResults/**/coverage.cobertura.xml'
+        targetdir: 'CoverageReport'
+        reporttypes: 'Html;MarkdownSummaryGithub'
+        verbosity: 'Info'
+        
+    - name: Add coverage comment to PR
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: github.event_name == 'pull_request' && always() && hashFiles('CoverageReport/SummaryGithub.md') != ''
+      with:
+        recreate: true
+        path: CoverageReport/SummaryGithub.md
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ github.run_number }}
+        path: |
+          AleTrack/TestResults/**/*.trx
+          AleTrack/TestResults/**/*.xml
+          
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report-${{ github.run_number }}
+        path: |
+          CoverageReport/
+          AleTrack/TestResults/**/coverage.cobertura.xml
