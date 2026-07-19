@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Stack, TextField, InputAdornment, Typography } from '@mui/material';
+import { Stack, TextField, InputAdornment, Typography, Button } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
@@ -67,11 +68,13 @@ export function ProductFormDrawer({
   breweryId,
   product,
   onClose,
+  onRequestDelete,
 }: {
   open: boolean;
   breweryId: string;
   product?: BreweryProductListItemDto;
   onClose: () => void;
+  onRequestDelete?: () => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const create = useCreateProducts(breweryId);
@@ -178,6 +181,11 @@ export function ProductFormDrawer({
       <Controller control={control} name="description" render={({ field }) => (
         <TextField {...field} label="Popis" multiline minRows={2} fullWidth />
       )} />
+      {editing && onRequestDelete && (
+        <Button color="error" startIcon={<DeleteIcon />} onClick={onRequestDelete} sx={{ alignSelf: 'flex-start' }}>
+          Smazat produkt
+        </Button>
+      )}
     </FormDrawer>
   );
 }

@@ -154,19 +154,17 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
       )}
 
       {tab === 'cenik' && (
-        <TitledCard title="Ceník" action={editable && <Button size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>}>
-          <QueryBoundary
-            query={products}
-            minHeight={160}
-            isEmpty={(rows) => rows.length === 0}
-            emptyState={
-              <EmptyState icon={<SportsBarIcon />} title="Prázdný ceník" dense description="Zatím žádné produkty."
-                action={editable && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>} />
-            }
-          >
-            {(rows) => <Cenik products={rows} editable={editable} onEdit={openEditProduct} onDelete={setConfirmProduct} />}
-          </QueryBoundary>
-        </TitledCard>
+        <QueryBoundary
+          query={products}
+          minHeight={160}
+          isEmpty={(rows) => rows.length === 0}
+          emptyState={
+            <EmptyState icon={<SportsBarIcon />} title="Prázdný ceník" description="Zatím žádné produkty."
+              action={editable && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>} />
+          }
+        >
+          {(rows) => <Cenik products={rows} editable={editable} breweryId={breweryId} onAdd={openAddProduct} onEdit={openEditProduct} />}
+        </QueryBoundary>
       )}
 
       {tab === 'reminders' && (
@@ -180,7 +178,15 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
         </CardContent></Card>
       )}
 
-      <ProductFormDrawer open={productForm} breweryId={breweryId} product={editingProduct} onClose={() => setProductForm(false)} />
+      <ProductFormDrawer
+        open={productForm}
+        breweryId={breweryId}
+        product={editingProduct}
+        onClose={() => setProductForm(false)}
+        onRequestDelete={
+          editingProduct ? () => { setProductForm(false); setConfirmProduct(editingProduct); } : undefined
+        }
+      />
       <ConfirmDialog
         open={confirmProduct !== null}
         title="Smazat produkt?"
