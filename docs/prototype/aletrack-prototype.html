@@ -1,0 +1,1978 @@
+<style>
+/* ============================================================
+   AleTrack — redesign prototype. Design tokens + components.
+   ============================================================ */
+:root{
+  --amber:#F08C00; --amber-600:#D97D00; --amber-700:#B4620A;
+  --amber-tint:#FDECD2; --amber-soft:#FBF4E8;
+  --navy:#1E2A3A; --navy-2:#17212E; --navy-3:#28394E;
+  --ground:#EEF1F6; --surface:#FFFFFF; --surface-2:#F6F8FB; --surface-3:#EEF2F7;
+  --border:#E1E6EE; --border-2:#D2D9E4;
+  --text:#1C2733; --text-2:#54606F; --text-3:#8791A0; --text-inv:#F3F6FA;
+  --ok:#15873F; --ok-tint:#DCF3E4; --info:#0E7C9B; --info-tint:#D3EFF6;
+  --warn:#B4620A; --warn-tint:#FBE7CC; --crit:#C22A2A; --crit-tint:#FBE0DE;
+  --grey-pill:#5A6675; --grey-tint:#E7EBF1;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.06),0 1px 3px rgba(20,30,45,.05);
+  --shadow-md:0 2px 8px rgba(20,30,45,.08),0 8px 24px rgba(20,30,45,.06);
+  --shadow-lg:0 12px 40px rgba(20,30,45,.16);
+  --r-sm:7px; --r:11px; --r-lg:16px; --r-pill:999px;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sidebar-w:250px; --topbar-h:62px;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --amber:#F5A62A; --amber-600:#E5941A; --amber-700:#C77B12;
+    --amber-tint:#3A2C15; --amber-soft:#241B0F;
+    --navy:#131C28; --navy-2:#0E1620; --navy-3:#20303F;
+    --ground:#0D141E; --surface:#18222F; --surface-2:#1E2A38; --surface-3:#243343;
+    --border:#2A3A4C; --border-2:#33475C;
+    --text:#E7EDF4; --text-2:#9DAABB; --text-3:#6C7A8C; --text-inv:#F3F6FA;
+    --ok:#3FBE6B; --ok-tint:#123021; --info:#33B7D6; --info-tint:#0E2C36;
+    --warn:#E5941A; --warn-tint:#33260F; --crit:#F0736B; --crit-tint:#361A1A;
+    --grey-pill:#8291A3; --grey-tint:#23303F;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 18px rgba(0,0,0,.45);
+    --shadow-lg:0 16px 48px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="light"]{
+  --amber:#F08C00; --amber-600:#D97D00; --amber-700:#B4620A; --amber-tint:#FDECD2; --amber-soft:#FBF4E8;
+  --navy:#1E2A3A; --navy-2:#17212E; --navy-3:#28394E;
+  --ground:#EEF1F6; --surface:#FFFFFF; --surface-2:#F6F8FB; --surface-3:#EEF2F7;
+  --border:#E1E6EE; --border-2:#D2D9E4; --text:#1C2733; --text-2:#54606F; --text-3:#8791A0;
+  --ok:#15873F; --ok-tint:#DCF3E4; --info:#0E7C9B; --info-tint:#D3EFF6;
+  --warn:#B4620A; --warn-tint:#FBE7CC; --crit:#C22A2A; --crit-tint:#FBE0DE;
+  --grey-pill:#5A6675; --grey-tint:#E7EBF1;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.06),0 1px 3px rgba(20,30,45,.05);
+  --shadow-md:0 2px 8px rgba(20,30,45,.08),0 8px 24px rgba(20,30,45,.06);
+  --shadow-lg:0 12px 40px rgba(20,30,45,.16);
+}
+:root[data-theme="dark"]{
+  --amber:#F5A62A; --amber-600:#E5941A; --amber-700:#C77B12; --amber-tint:#3A2C15; --amber-soft:#241B0F;
+  --navy:#131C28; --navy-2:#0E1620; --navy-3:#20303F;
+  --ground:#0D141E; --surface:#18222F; --surface-2:#1E2A38; --surface-3:#243343;
+  --border:#2A3A4C; --border-2:#33475C; --text:#E7EDF4; --text-2:#9DAABB; --text-3:#6C7A8C;
+  --ok:#3FBE6B; --ok-tint:#123021; --info:#33B7D6; --info-tint:#0E2C36;
+  --warn:#E5941A; --warn-tint:#33260F; --crit:#F0736B; --crit-tint:#361A1A;
+  --grey-pill:#8291A3; --grey-tint:#23303F;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 18px rgba(0,0,0,.45); --shadow-lg:0 16px 48px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--font); background:var(--ground); color:var(--text);
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  font-feature-settings:"cv02","cv03","cv04","cv11";
+}
+h1,h2,h3,h4{margin:0; font-weight:800; letter-spacing:-.02em; color:var(--text); text-wrap:balance;}
+button{font-family:inherit; cursor:pointer;}
+a{color:inherit; text-decoration:none;}
+::selection{background:var(--amber-tint); color:var(--text);}
+.tnum{font-variant-numeric:tabular-nums;}
+.mono{font-family:var(--mono); font-size:.86em;}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-thumb{background:var(--border-2); border-radius:99px; border:3px solid transparent; background-clip:content-box;}
+::-webkit-scrollbar-thumb:hover{background:var(--text-3);}
+
+/* ---------- App shell ---------- */
+#app{display:flex; min-height:100vh;}
+.sidebar{
+  width:var(--sidebar-w); flex:0 0 var(--sidebar-w); background:var(--navy);
+  color:#C6D0DC; display:flex; flex-direction:column; position:sticky; top:0; height:100vh;
+  transition:width .22s var(--ease), flex-basis .22s var(--ease);
+}
+.sidebar.collapsed{width:74px; flex-basis:74px;}
+.brand{display:flex; align-items:center; gap:11px; padding:16px 18px; height:var(--topbar-h); flex:0 0 auto;}
+.brand .logo{flex:0 0 auto;}
+.brand .name{font-size:19px; font-weight:800; color:#fff; letter-spacing:-.02em; white-space:nowrap;}
+.brand .name b{color:var(--amber);}
+.sidebar.collapsed .name,.sidebar.collapsed .navgroup-label,.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .side-foot .u-meta{display:none;}
+.nav{flex:1 1 auto; overflow-y:auto; padding:8px 12px 20px;}
+.nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);}
+.navgroup-label{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em;
+  color:#69788C; padding:16px 12px 6px;}
+.nav-item{display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:var(--r-sm);
+  color:#B4C0CE; font-weight:600; font-size:13.5px; margin:1px 0; white-space:nowrap; position:relative;}
+.nav-item:hover{background:rgba(255,255,255,.07); color:#fff;}
+.nav-item.active{background:linear-gradient(90deg,rgba(240,140,0,.20),rgba(240,140,0,.04)); color:#fff;}
+.nav-item.active::before{content:""; position:absolute; left:-12px; top:6px; bottom:6px; width:3px;
+  background:var(--amber); border-radius:0 3px 3px 0;}
+.nav-item .ico{flex:0 0 20px; display:grid; place-items:center; color:inherit; opacity:.92;}
+.nav-item .badge{margin-left:auto; background:var(--amber); color:#3a2402; font-size:11px; font-weight:800;
+  padding:1px 7px; border-radius:99px; line-height:1.5;}
+.sidebar.collapsed .nav-item .badge{position:absolute; top:3px; right:4px; margin:0; padding:0 5px; font-size:9px;}
+.side-foot{flex:0 0 auto; border-top:1px solid rgba(255,255,255,.08); padding:12px; display:flex; align-items:center; gap:10px;}
+.side-foot .u-av{width:34px;height:34px;border-radius:99px;background:var(--amber);color:#3a2402;
+  display:grid;place-items:center;font-weight:800;font-size:13px;flex:0 0 auto;}
+.side-foot .u-meta{min-width:0;} .side-foot .u-meta .n{color:#fff;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.side-foot .u-meta .r{color:#7c8b9e;font-size:11.5px;}
+
+.main{flex:1 1 auto; min-width:0; display:flex; flex-direction:column;}
+.topbar{height:var(--topbar-h); flex:0 0 auto; background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:14px; padding:0 22px; position:sticky; top:0; z-index:30;}
+.icon-btn{width:38px;height:38px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
+  color:var(--text-2);display:grid;place-items:center;position:relative;transition:.15s;}
+.icon-btn:hover{background:var(--surface-3); color:var(--text); border-color:var(--border-2);}
+.topbar .search{flex:1 1 auto; max-width:440px; display:flex; align-items:center; gap:9px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-pill); padding:0 15px; height:40px; color:var(--text-3);}
+.topbar .search input{border:0;background:none;outline:none;flex:1;font-family:inherit;font-size:13.5px;color:var(--text);}
+.topbar .spacer{flex:1 1 auto;}
+.dot-badge::after{content:""; position:absolute; top:8px; right:9px; width:8px; height:8px; border-radius:99px;
+  background:var(--crit); border:2px solid var(--surface);}
+
+/* ---------- Page ---------- */
+.page{padding:24px 28px 60px; max-width:1500px; width:100%; margin:0 auto; animation:fade .28s var(--ease);}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.page-head{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:22px;}
+.page-head .titles{min-width:0;}
+.eyebrow{font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--amber-700); margin-bottom:5px;}
+.page-head h1{font-size:26px;}
+.page-head .sub{color:var(--text-2); margin-top:5px; font-size:14px;}
+.page-head .actions{margin-left:auto; display:flex; gap:9px; align-items:center; flex-wrap:wrap;}
+.crumbs{display:flex; align-items:center; gap:7px; color:var(--text-3); font-size:12.5px; font-weight:600; margin-bottom:12px;}
+.crumbs a:hover{color:var(--amber-700);} .crumbs .sep{opacity:.5;}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-sm);
+  font-weight:700;font-size:13.5px;border:1px solid transparent;transition:.15s;white-space:nowrap;}
+.btn svg{flex:0 0 auto;}
+.btn-primary{background:var(--amber);color:#3a2402;box-shadow:var(--shadow-sm);}
+.btn-primary:hover{background:var(--amber-600);}
+.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border);}
+.btn-ghost:hover{background:var(--surface-3);border-color:var(--border-2);}
+.btn-soft{background:var(--amber-soft);color:var(--amber-700);}
+.btn-soft:hover{background:var(--amber-tint);}
+.btn-danger{background:var(--crit-tint);color:var(--crit);}
+.btn-danger:hover{filter:brightness(.97);}
+.btn-sm{height:32px;padding:0 11px;font-size:12.5px;border-radius:var(--r-sm);}
+.btn-icon{width:40px;padding:0;justify-content:center;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ---------- Cards / surfaces ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);}
+.card-pad{padding:20px;}
+.card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+.card-head h3{font-size:15px;} .card-head .sub{color:var(--text-3);font-size:12.5px;}
+.grid{display:grid;gap:16px;}
+.section-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin:0 0 10px;}
+
+/* ---------- Pills / chips ---------- */
+.pill{display:inline-flex;align-items:center;gap:6px;height:23px;padding:0 10px;border-radius:var(--r-pill);
+  font-size:11.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap;}
+.pill .d{width:6px;height:6px;border-radius:99px;background:currentColor;}
+.pill.s-grey{background:var(--grey-tint);color:var(--grey-pill);}
+.pill.s-amber{background:var(--amber-tint);color:var(--amber-700);}
+.pill.s-ok{background:var(--ok-tint);color:var(--ok);}
+.pill.s-info{background:var(--info-tint);color:var(--info);}
+.pill.s-warn{background:var(--warn-tint);color:var(--warn);}
+.pill.s-crit{background:var(--crit-tint);color:var(--crit);}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--r-sm);
+  background:var(--surface-3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-2);}
+.chip .dotc{width:9px;height:9px;border-radius:3px;flex:0 0 auto;}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);
+  background:var(--surface-3);color:var(--text-2);}
+
+/* ---------- Tables ---------- */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-sm);}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px;}
+table.tbl th{text-align:left;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);
+  padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-2);position:sticky;top:0;white-space:nowrap;}
+table.tbl td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle;}
+table.tbl tr:last-child td{border-bottom:0;}
+table.tbl tbody tr{transition:background .12s;}
+table.tbl tbody tr.clickable:hover{background:var(--surface-2);cursor:pointer;}
+table.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.t-strong{font-weight:700;color:var(--text);}
+.t-mut{color:var(--text-3);}
+.row-lead{display:flex;align-items:center;gap:11px;}
+.av{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:13px;flex:0 0 auto;color:#fff;}
+
+/* ---------- Toolbar/filters ---------- */
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:16px;}
+.seg{display:inline-flex;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px;gap:2px;}
+.seg button{border:0;background:none;padding:6px 13px;border-radius:6px;font-weight:700;font-size:12.5px;color:var(--text-2);}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+.fld{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:0 12px;height:38px;color:var(--text-3);}
+.fld input,.fld select{border:0;background:none;outline:none;font-family:inherit;font-size:13px;color:var(--text);min-width:120px;}
+.count-note{color:var(--text-3);font-size:12.5px;font-weight:600;margin-left:auto;}
+
+/* ---------- Stat tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 17px;box-shadow:var(--shadow-sm);
+  display:flex;flex-direction:column;gap:10px;transition:.15s;position:relative;overflow:hidden;}
+.tile:hover{border-color:var(--border-2);box-shadow:var(--shadow-md);transform:translateY(-2px);}
+.tile .ti-top{display:flex;align-items:center;justify-content:space-between;}
+.tile .ti-ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;}
+.tile .ti-val{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;}
+.tile .ti-lbl{color:var(--text-2);font-size:13px;font-weight:600;}
+.tile .ti-trend{font-size:11.5px;font-weight:700;}
+
+/* ---------- Forms ---------- */
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field.col-2{grid-column:1/-1;}
+.field label{font-size:12px;font-weight:700;color:var(--text-2);}
+.field label .req{color:var(--crit);}
+.input,.select,textarea.input{width:100%;height:40px;border:1px solid var(--border-2);border-radius:var(--r-sm);
+  padding:0 12px;font-family:inherit;font-size:13.5px;background:var(--surface);color:var(--text);outline:none;transition:.15s;}
+textarea.input{height:auto;padding:10px 12px;resize:vertical;min-height:78px;line-height:1.5;}
+.input:focus,.select:focus,textarea.input:focus{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-tint);}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238791A0' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;}
+.hint{font-size:11.5px;color:var(--text-3);}
+
+/* ---------- Tabs ---------- */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:20px;overflow-x:auto;}
+.tabs button{border:0;background:none;padding:11px 15px;font-weight:700;font-size:13.5px;color:var(--text-3);
+  border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:flex;align-items:center;gap:7px;}
+.tabs button:hover{color:var(--text);}
+.tabs button.on{color:var(--amber-700);border-bottom-color:var(--amber);}
+.tabs button .cnt{background:var(--surface-3);border-radius:99px;font-size:11px;padding:0 7px;color:var(--text-2);}
+
+/* ---------- Empty / misc ---------- */
+.empty{text-align:center;padding:52px 20px;color:var(--text-3);}
+.empty svg{opacity:.4;margin-bottom:12px;}
+.empty .t{font-weight:700;color:var(--text-2);font-size:15px;margin-bottom:4px;}
+.kv{display:flex;flex-direction:column;gap:2px;} .kv .k{font-size:11.5px;color:var(--text-3);font-weight:600;} .kv .v{font-weight:600;}
+.addr{color:var(--text-2);font-size:13px;line-height:1.55;}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+.stack{display:flex;flex-direction:column;} .row{display:flex;align-items:center;} .gap8{gap:8px;} .gap12{gap:12px;} .wrap{flex-wrap:wrap;}
+
+/* ---------- Modal / drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(15,22,32,.5);backdrop-filter:blur(2px);z-index:100;
+  display:flex;justify-content:flex-end;animation:fade .2s;}
+.scrim.center{align-items:center;justify-content:center;}
+.drawer{background:var(--ground);width:min(640px,94vw);height:100vh;overflow-y:auto;box-shadow:var(--shadow-lg);
+  animation:slidein .28s var(--ease);display:flex;flex-direction:column;}
+.drawer.wide{width:min(900px,96vw);}
+@keyframes slidein{from{transform:translateX(30px);opacity:.6;}to{transform:none;opacity:1;}}
+.modal{background:var(--surface);border-radius:var(--r-lg);width:min(520px,94vw);box-shadow:var(--shadow-lg);
+  animation:pop .2s var(--ease);max-height:90vh;overflow-y:auto;}
+@keyframes pop{from{transform:scale(.96);opacity:0;}to{transform:none;opacity:1;}}
+.drawer-head,.modal-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--surface);z-index:2;}
+.drawer .drawer-head{background:var(--surface);}
+.drawer-head h2,.modal-head h3{flex:1;font-size:17px;}
+.drawer-body{padding:22px;flex:1;} .drawer-foot,.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;
+  border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface);}
+.modal-body{padding:22px;}
+
+/* ---------- Toast ---------- */
+#toasts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:9px;align-items:center;}
+.toast{background:var(--navy);color:#fff;padding:11px 17px;border-radius:var(--r);box-shadow:var(--shadow-lg);
+  display:flex;align-items:center;gap:10px;font-weight:600;font-size:13.5px;animation:toastin .3s var(--ease);}
+.toast .ic{color:var(--amber);} @keyframes toastin{from{transform:translateY(14px);opacity:0;}to{transform:none;opacity:1;}}
+
+/* ---------- Utility responsive ---------- */
+@media (max-width:1080px){ .form-grid{grid-template-columns:1fr;} }
+@media (max-width:860px){
+  .sidebar{position:fixed;z-index:60;left:0;transform:translateX(-100%);transition:transform .25s var(--ease);box-shadow:var(--shadow-lg);}
+  .sidebar.mobile-open{transform:none;} .sidebar.collapsed{width:var(--sidebar-w);flex-basis:var(--sidebar-w);}
+  .page{padding:16px 14px 50px;}
+}
+.mob-only{display:none;} @media (max-width:860px){ .mob-only{display:grid;} }
+.hidebar{display:none;} @media (max-width:860px){ .hidebar.show{display:block;} }
+
+/* inputs inherit font + native control theming */
+.input,.select,textarea.input,select,input{font-family:var(--font);}
+input[type="date"],input[type="time"],input[type="datetime-local"],input[type="number"],input[type="password"]{color-scheme:light dark;}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:pointer;}
+.icon-btn:active{transform:scale(.94);}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+.nav-item:focus-visible,.tile:focus-visible{outline-offset:-2px;}
+
+/* animated route line */
+.route-anim{animation:dash 1.1s linear infinite;}
+@keyframes dash{to{stroke-dashoffset:-32;}}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+  .route-anim{animation:none;}
+}
+</style>
+
+<div id="app"></div>
+<div id="overlay"></div>
+<div id="toasts"></div>
+
+<script>
+/* ============================================================
+   AleTrack prototype — vanilla JS single-file app.
+   Sections: ICONS · HELPERS · SEED DATA · LABELS · SHELL ·
+             ROUTER · MODULE VIEWS · BOOT
+   ============================================================ */
+
+/* ============ ICONS (inline SVG, stroke=currentColor) ============ */
+const IC = {
+  dash:'<path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z"/>',
+  brewery:'<path d="M8 3h5l1 3M6 8h9v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2zM15 10h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/>',
+  client:'<path d="M3 21V9l7-5 7 5v12M9 21v-6h4v6M21 21H3M17 10h4v11"/>',
+  order:'<path d="M9 3h6l1 3H8zM6 6h12l-1 14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1zM9 10v7M15 10v7"/>',
+  ship:'<path d="M3 17h13V6H3zM16 9h4l3 4v4h-7M6.5 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>',
+  import:'<path d="M12 3v10m0 0 4-4m-4 4-4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+  stock:'<path d="M3 8 12 3l9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8"/>',
+  driver:'<path d="M4 17a8 8 0 0 1 16 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 21h8"/>',
+  vehicle:'<path d="M3 13V6h11v7M14 9h3l3 4v3h-6M3 16h17M7 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM16 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/>',
+  bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  chevR:'<path d="m9 6 6 6-6 6"/>', chevL:'<path d="m15 6-6 6 6 6"/>', chevD:'<path d="m6 9 6 6 6-6"/>',
+  menu:'<path d="M3 6h18M3 12h18M3 18h18"/>', close:'<path d="M18 6 6 18M6 6l12 12"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  edit:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  trash:'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>', pin:'<path d="M12 21s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+  mail:'<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 7-10 6L2 7"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  note:'<path d="M4 4h16v12l-4 4H4zM16 20v-4h4"/>', map:'<path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3zM9 3v15M15 6v15"/>',
+  route:'<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h6"/>',
+  drag:'<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>',
+  tag:'<path d="M20.6 13.4 12 22l-9-9V3h10zM7 7h.01"/>', box:'<path d="M21 8v8l-9 5-9-5V8l9-5zM3 8l9 5 9-5"/>',
+  filter:'<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>', wallet:'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5M16 12h4v4h-4a2 2 0 0 1 0-4z"/>',
+  arrowU:'<path d="M12 19V5M5 12l7-7 7 7"/>', arrowD:'<path d="M12 5v14M19 12l-7 7-7-7"/>',
+  shield:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>', eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>', warnTri:'<path d="M12 3 2 20h20zM12 9v5M12 18h.01"/>',
+  sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+  history:'<path d="M3 3v6h6M3 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/>',
+};
+function icon(name, size=18, sw=1.9){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${IC[name]||''}</svg>`;
+}
+function logoSVG(size=34){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+    <rect x="10" y="7" width="17" height="27" rx="3.5" fill="#F5F0E1" stroke="var(--navy,#1E2A3A)" stroke-width="2.4"/>
+    <path d="M12.4 15.5h12.2V30a2 2 0 0 1-2 2H14.4a2 2 0 0 1-2-2z" fill="#F08C00"/>
+    <path d="M12.4 15.5h12.2v2.6c-2 1-4 .3-6.1-.2s-4-.3-6.1.5z" fill="#FFB84D"/>
+    <path d="M11 12.5c.8-1.6 3-1.9 4.4-.9 1-1.7 3.6-1.7 4.7-.2 1.4-1 3.6-.4 4.2 1.3 1.7.2 2.5 2.2 1.4 3.4-.6.7-1.6.9-2.5.6H12.6c-1.3.3-2.6-.5-2.8-1.8-.2-1 .3-2 1.2-2.4z" fill="#F5F0E1" stroke="var(--navy,#1E2A3A)" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="27" y="14" width="4.6" height="9" rx="2.3" fill="none" stroke="var(--navy,#1E2A3A)" stroke-width="2.4"/>
+  </svg>`;
+}
+
+/* ============ HELPERS ============ */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const uid=(p='id')=>p+'-'+Math.abs(([...(''+Object.keys(DB||{}).length+performance.now())].reduce((a,c)=>a*31+c.charCodeAt(0),7))%99999);
+function esc(s){return (s==null?'':''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function money(n){ if(n==null||n==='')return '—'; return new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:2}).format(n)+' Kč'; }
+function num(n){ return new Intl.NumberFormat('cs-CZ').format(n); }
+function fdate(d){ if(!d)return '—'; const t=new Date(d); return t.toLocaleDateString('cs-CZ',{day:'numeric',month:'short',year:'numeric'}); }
+function fdateShort(d){ if(!d)return '—'; const t=new Date(d); return t.toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'}); }
+function initials(a,b){ return ((a||' ')[0]+(b? b[0]:'')).toUpperCase(); }
+function colorFor(str){ const cs=['#F08C00','#0E7C9B','#7C3AED','#15873F','#C22A2A','#B4620A','#0891B2','#DB2777']; let h=0; for(const c of (str||'x'))h=(h*31+c.charCodeAt(0))%997; return cs[h%cs.length]; }
+function toast(msg,ic='check'){ const t=document.createElement('div'); t.className='toast';
+  t.innerHTML=`<span class="ic">${icon(ic,17)}</span>${esc(msg)}`; $('#toasts').appendChild(t);
+  setTimeout(()=>{t.style.transition='.3s';t.style.opacity='0';t.style.transform='translateY(10px)';setTimeout(()=>t.remove(),300);},2600); }
+function daysFromNow(n){ const d=new Date(SEED_TODAY); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function plural(n,a,b,c){ n=Math.abs(n); if(n===1)return a; if(n>=2&&n<=4)return b; return c; }
+
+/* ============ LABELS (enum -> Czech + status meta) ============ */
+const SEED_TODAY = '2026-07-19';
+const L = {
+  orderState:{ New:'Nová', Planning:'Plánuje se', Delivering:'Rozváží se', Finished:'Dokončeno', Cancelled:'Zrušeno' },
+  shipState:{ Created:'Vytvořeno', Loaded:'Naloženo', InTransit:'Na cestě', Delivered:'Doručeno', Cancelled:'Zrušeno' },
+  deliveryState:{ InPlanning:'Plánuje se', OnTheWay:'Na cestě', Finished:'Dokončeno', Cancelled:'Zrušeno' },
+  kind:{ Keg:'Sud', Bottle:'Láhev', Can:'Plechovka', Multipack:'Multipack', Other:'Ostatní' },
+  ptype:{ PaleDraftBeer:'Světlé výčepní', PaleLager:'Světlý ležák', AmberLager:'Polotmavý ležák', DarkLager:'Tmavý ležák',
+    SpecialBeer:'Speciál', NonAlcoholicBeer:'Nealko', Radler:'Radler', WheatBeer:'Pšeničné', FlavoredBeer:'Ochucené',
+    Lemonade:'Limonáda', YeastLager:'Kroužkovaný ležák', Merchandise:'Merch', Other:'Ostatní' },
+  region:{ ZittauCity:'Žitava — město', ZittauRegion:'Žitavsko', Chemnitz:'Chemnitz', Leipzig:'Lipsko', Berlin:'Berlín',
+    Freiberg:'Freiberg', Goerlitz:'Zhořelec', Region:'Region', Other:'Ostatní' },
+  contact:{ Email:'E-mail', Phone:'Telefon' },
+  country:{ Czechia:'Česko', Germany:'Německo' },
+  addrKind:{ Official:'Fakturační', Contact:'Kontaktní' },
+};
+const STATUS = {
+  order:{ New:['s-grey','Nová'], Planning:['s-info','Plánuje se'], Delivering:['s-amber','Rozváží se'], Finished:['s-ok','Dokončeno'], Cancelled:['s-grey','Zrušeno'] },
+  ship:{ Created:['s-grey','Vytvořeno'], Loaded:['s-info','Naloženo'], InTransit:['s-amber','Na cestě'], Delivered:['s-ok','Doručeno'], Cancelled:['s-grey','Zrušeno'] },
+  delivery:{ InPlanning:['s-info','Plánuje se'], OnTheWay:['s-amber','Na cestě'], Finished:['s-ok','Dokončeno'], Cancelled:['s-grey','Zrušeno'] },
+};
+function pill(kind,state){ const m=(STATUS[kind]||{})[state]||['s-grey',state]; return `<span class="pill ${m[0]}"><span class="d"></span>${esc(m[1])}</span>`; }
+const KIND_ORDER={Keg:1,Bottle:2,Can:3,Multipack:4,Other:5};
+
+/* ============ SEED DATA ============ */
+function addr(street,no,city,zip,country,lat,lng){ return {streetName:street,streetNumber:no,city,zip,country,latitude:lat,longitude:lng}; }
+// Warehouse (company depot) — Žitava
+const DEPOT = { name:'Sklad AleTrack', lat:50.897, lng:14.807 };
+const MODULES=['dashboard','breweries','clients','orders','shipments','deliveries','inventory','drivers','vehicles','users'];
+function allPerms(v){ const o={}; MODULES.forEach(m=>o[m]=v?'edit':'none'); return o; }
+function makePerms(map){ const o={}; MODULES.forEach(m=>o[m]=map[m]||'none'); o.dashboard='view'; return o; }
+
+const DB = {
+  breweries:[
+    { id:'b-frydlant', name:'Pivovar Frýdlant', color:'#F08C00', displayOrder:1,
+      officialAddress:addr('Zámecká','12','Frýdlant','464 01','Czechia',50.921,15.079),
+      contactAddress:null },
+    { id:'b-svijany', name:'Pivovar Svijany', color:'#0E7C9B', displayOrder:2,
+      officialAddress:addr('Svijany','25','Svijany','463 46','Czechia',50.553,15.049),
+      contactAddress:addr('Odbyt — Svijany','25','Svijany','463 46','Czechia',50.553,15.049) },
+    { id:'b-landskron', name:'Landskron Brauerei', color:'#7C3AED', displayOrder:3,
+      officialAddress:addr('An der Landskronbrauerei','116','Görlitz','02826','Germany',51.140,14.995),
+      contactAddress:null },
+  ],
+  products:[
+    // Frýdlant
+    p('b-frydlant','Albrecht 12° Světlý ležák','Plný říz, 30 l KEG','Keg','PaleLager',5.0,12,30,1290,1066),
+    p('b-frydlant','Albrecht 11° Výčepní','Sud 50 l','Keg','PaleDraftBeer',4.6,11,50,1790,1479),
+    p('b-frydlant','Albrecht 12° — láhev','0,5 l vratná, basa 20 ks','Bottle','PaleLager',5.0,12,0.5,480,397),
+    p('b-frydlant','Albrecht Tmavý speciál 14°','Sud 30 l','Keg','SpecialBeer',5.8,14,30,1620,1339),
+    p('b-frydlant','Albrecht Nealko','Plechovka 0,5 l, multipack 6','Can','NonAlcoholicBeer',0.5,0,0.5,204,169),
+    p('b-frydlant','Albrecht IPA 15°','0,33 l láhev, karton 24','Bottle','SpecialBeer',6.5,15,0.33,720,595),
+    p('b-frydlant','Frýdlantská 10°','Sud 30 l','Keg','PaleDraftBeer',4.2,10,30,990,818),
+    // Svijany
+    p('b-svijany','Svijanský Máz 11°','Sud 50 l','Keg','PaleLager',4.8,11,50,1850,1529),
+    p('b-svijany','Svijanský Rytíř 12°','Sud 30 l','Keg','PaleLager',5.2,12,30,1350,1116),
+    p('b-svijany','Svijanská Kněžna 13°','Polotmavý, sud 30 l','Keg','AmberLager',5.6,13,30,1490,1231),
+    p('b-svijany','Svijany 450 — láhev','0,5 l, basa 20 ks','Bottle','PaleLager',4.8,11,0.5,520,430),
+    p('b-svijany','Svijanský Fanda Radler','Plechovka 0,5 l, multipack 4','Multipack','Radler',2.0,0,2.0,236,195),
+    p('b-svijany','Svijany Kvasničák','Kroužkovaný, sud 30 l','Keg','YeastLager',5.0,12,30,1560,1289),
+    // Landskron
+    p('b-landskron','Landskron Pilsner','Sud 30 l','Keg','PaleLager',4.9,11,30,1420,1174),
+    p('b-landskron','Landskron Hefeweizen','Pšeničné, láhev 0,5 l, karton 20','Bottle','WheatBeer',5.4,12,0.5,610,504),
+    p('b-landskron','Landskron Schwarzbier','Tmavý, sud 30 l','Keg','DarkLager',4.8,12,30,1490,1231),
+    p('b-landskron','Landskron Radler','Plechovka 0,5 l, multipack 6','Multipack','Radler',2.5,0,3.0,318,263),
+    p('b-landskron','Landskron Premium Pilsner','Sud 50 l','Keg','PaleLager',5.0,12,50,2190,1810),
+  ],
+  clients:[
+    c('cl-uzsklep','Hospoda U Zeleného stromu','Restaurace Zelený strom s.r.o.','ZittauCity',
+      addr('Náměstí','14','Žitava','02763','Germany',50.897,14.808), [ct('Phone','Provoz','+420 602 145 887'),ct('Email','Objednávky','sklep@zelenystrom.cz')]),
+    c('cl-pivnice','Pivnice Na Rohu','Na Rohu gastro s.r.o.','ZittauRegion',
+      addr('Liberecká','88','Hrádek nad Nisou','463 34','Czechia',50.853,14.844), [ct('Phone','Vedoucí','+420 777 200 341')]),
+    c('cl-hotel','Hotel Praha — restaurace','Hotel Praha Liberec a.s.','Region',
+      addr('Železná','2','Liberec','460 01','Czechia',50.770,15.058),
+      [ct('Phone','Recepce','+420 485 100 200'),ct('Email','F&B','fb@hotelpraha.cz')],
+      addr('Zásobování — dvůr','2a','Liberec','460 01','Czechia',50.771,15.060)),
+    c('cl-goerlitz','Gasthaus Altstadt','Altstadt Görlitz GmbH','Goerlitz',
+      addr('Peterstraße','5','Görlitz','02826','Germany',51.153,14.988), [ct('Email','Bestellung','info@altstadt-gr.de')]),
+    c('cl-club','Klub Zázemí','Zázemí z.s.','ZittauCity',
+      addr('Mostecká','3','Žitava','02763','Germany',50.900,14.803), [ct('Phone','Bar','+420 720 660 110')]),
+    c('cl-farma','Farma Vísky — výčep','Statek Vísky s.r.o.','ZittauRegion',
+      addr('Vísky','1','Chrastava','463 31','Czechia',50.822,14.968), [ct('Phone','Majitel','+420 603 998 771')]),
+  ],
+  orders:[], shipments:[], deliveries:[], inventory:[], reminders:[],
+  drivers:[
+    { id:'dr-novak', firstName:'Petr', lastName:'Novák', phoneNumber:'+420 602 100 200', color:'#F08C00',
+      availabilities:[ av(-1,7,0,17), av(2,7,0,14), av(4,6,0,20) ] },
+    { id:'dr-svoboda', firstName:'Jan', lastName:'Svoboda', phoneNumber:'+420 777 330 440', color:'#0E7C9B',
+      availabilities:[ av(0,8,0,16), av(1,8,0,16), av(3,8,0,16) ] },
+    { id:'dr-marek', firstName:'Tomáš', lastName:'Marek', phoneNumber:'+420 720 555 010', color:'#7C3AED',
+      availabilities:[ av(1,6,0,15), av(4,7,0,18), av(5,9,0,13) ] },
+    { id:'dr-horak', firstName:'Lukáš', lastName:'Horák', phoneNumber:'', color:'#15873F',
+      availabilities:[ av(2,7,0,17), av(3,7,0,17) ] },
+  ],
+  vehicles:[
+    { id:'v-iveco', name:'Iveco Daily 3.5t (2L1 4520)', maxWeight:1400 },
+    { id:'v-sprinter', name:'MB Sprinter (2L2 8890)', maxWeight:1100 },
+    { id:'v-fiat', name:'Fiat Ducato chladák (5U3 1122)', maxWeight:900 },
+  ],
+  users:[
+    { id:'u-admin', firstName:'Jan', lastName:'Prokorát', userName:'admin', roles:['Admin'],
+      perms:allPerms(true) },
+    { id:'u-dispecer', firstName:'Eva', lastName:'Dvořáková', userName:'dispecer', roles:['User'],
+      perms:makePerms({orders:'edit',shipments:'edit',deliveries:'edit',clients:'edit',inventory:'edit',breweries:'view',drivers:'view',vehicles:'view',users:'none'}) },
+    { id:'u-sklad', firstName:'Martin', lastName:'Kolář', userName:'sklad', roles:['User'],
+      perms:makePerms({inventory:'edit',deliveries:'edit',breweries:'view',orders:'view',shipments:'view',clients:'none',drivers:'none',vehicles:'view',users:'none'}) },
+  ],
+};
+
+function p(breweryId,name,description,kind,type,alc,plato,pkg,vat,novat){
+  return { id:'p-'+Math.random().toString(36).slice(2,8), breweryId, name, description, kind, type,
+    alcoholPercentage:alc, platoDegree:plato, packageSize:pkg, priceWithVat:vat, priceWithoutVat:novat }; }
+function c(id,name,businessName,region,official,contacts,contact){
+  return { id, name, businessName, region, officialAddress:official, contactAddress:contact||null, contacts, notes:[], reminders:[] }; }
+function ct(type,description,value){ return {type,description,value}; }
+function av(dayOffset,fromH,fromM,toH){ const base=new Date(SEED_TODAY); base.setDate(base.getDate()+dayOffset);
+  const d=base.toISOString().slice(0,10); return {from:`${d}T${String(fromH).padStart(2,'0')}:00`, until:`${d}T${String(toH).padStart(2,'0')}:00`}; }
+
+/* helpers after DB built */
+function prodById(id){ return DB.products.find(x=>x.id===id); }
+function breweryById(id){ return DB.breweries.find(x=>x.id===id); }
+function clientById(id){ return DB.clients.find(x=>x.id===id); }
+function driverById(id){ return DB.drivers.find(x=>x.id===id); }
+function vehicleById(id){ return DB.vehicles.find(x=>x.id===id); }
+function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((a,b)=>(KIND_ORDER[a.kind]-KIND_ORDER[b.kind])||a.name.localeCompare(b.name)); }
+
+/* ---- build orders / shipments / deliveries / inventory / reminders after products exist ---- */
+(function seedDynamic(){
+  const P = DB.products;
+  const byName = n => P.find(x=>x.name.startsWith(n));
+  const oi=(prod,qty,rem=null)=>({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:prod.id, quantity:qty, reminderState:rem });
+  let on=240;
+  function order(id,clientId,state,reqOffset,items,createdOffset){
+    return { id, number:'OBJ-2026-'+(on++), clientId, state, createdDate:daysFromNow(createdOffset??-6),
+      requiredDeliveryDate: state==='New'?null:daysFromNow(reqOffset), actualDeliveryDate: state==='Finished'?daysFromNow(reqOffset):null,
+      note:'', items }; }
+  DB.orders=[
+    order('o-1','cl-uzsklep','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht 11°'),2), oi(byName('Svijanský Máz'),3,'Added') ]),
+    order('o-2','cl-pivnice','Planning',2,[ oi(byName('Svijanský Rytíř'),3), oi(byName('Svijanská Kněžna'),1) ]),
+    order('o-3','cl-hotel','New',null,[ oi(byName('Landskron Pilsner'),4), oi(byName('Landskron Hefeweizen'),2) ]),
+    order('o-4','cl-goerlitz','Planning',3,[ oi(byName('Landskron Pilsner'),6), oi(byName('Landskron Radler'),4) ]),
+    order('o-5','cl-club','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),2), oi(byName('Frýdlantská 10°'),2) ]),
+    order('o-6','cl-farma','New',null,[ oi(byName('Svijany 450'),5), oi(byName('Svijanský Fanda'),3) ]),
+    order('o-7','cl-uzsklep','Finished',-3,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht Nealko'),2) ], -12),
+    order('o-8','cl-hotel','Finished',-5,[ oi(byName('Landskron Premium'),3) ], -14),
+    order('o-9','cl-pivnice','New',null,[ oi(byName('Svijanský Máz'),2) ]),
+  ];
+  // Shipments (Vývozy)
+  DB.shipments=[
+    { id:'s-1', number:'VYV-2026-051', name:'Rozvoz Žitava + Hrádek', state:'InTransit', deliveryDate:daysFromNow(1)+'T07:00',
+      vehicleId:'v-iveco', driverIds:['dr-novak','dr-svoboda'],
+      stops:[ stop('o-1','Official',1), stop('o-5','Official',2) ],
+      extraCustom:[{ id:'ex-1', description:'Vratné obaly — 6× basa', quantity:6 }] },
+    { id:'s-2', number:'VYV-2026-052', name:'Rozvoz Liberec / Görlitz', state:'Created', deliveryDate:daysFromNow(3)+'T08:00',
+      vehicleId:null, driverIds:[], stops:[ stop('o-2','Official',1), stop('o-4','Official',2) ], extraCustom:[] },
+    { id:'s-3', number:'VYV-2026-050', name:'Rozvoz čtvrtek', state:'Delivered', deliveryDate:daysFromNow(-2)+'T07:30',
+      vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
+  ];
+  function stop(orderId,kind,order){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, order,
+    items:o.items.map(it=>({ orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded: false })) }; }
+  // Deliveries (Dovozy)
+  DB.deliveries=[
+    { id:'d-1', number:'DOV-2026-030', date:daysFromNow(2), state:'InPlanning', vehicleId:'v-iveco', driverIds:['dr-novak'], note:'Zavézt i prázdné sudy zpět',
+      stops:[ { id:'ds-1', breweryId:'b-frydlant', note:'', items:[ di('Albrecht 12° Světlý',20), di('Albrecht 11°',10), di('Frýdlantská 10°',8) ] },
+              { id:'ds-2', breweryId:'b-svijany', note:'Nakládka rampa B', items:[ di('Svijanský Máz',15), di('Svijanský Rytíř',10) ] } ] },
+    { id:'d-2', number:'DOV-2026-029', date:daysFromNow(-1), state:'Finished', vehicleId:'v-sprinter', driverIds:['dr-svoboda','dr-horak'], note:'',
+      stops:[ { id:'ds-3', breweryId:'b-landskron', note:'', items:[ di('Landskron Pilsner',12), di('Landskron Premium',6), di('Landskron Radler',10) ] } ] },
+    { id:'d-3', number:'DOV-2026-031', date:daysFromNow(5), state:'InPlanning', vehicleId:null, driverIds:[], note:'',
+      stops:[ { id:'ds-4', breweryId:'b-frydlant', note:'', items:[ di('Albrecht Tmavý',6), di('Albrecht IPA',8) ] } ] },
+  ];
+  function di(name,qty){ const pr=byName(name); return { id:'di-'+Math.random().toString(36).slice(2,7), productId:pr.id, quantity:qty, note:'' }; }
+  // Inventory (Sklad) — some linked to products, some free items; from finished delivery d-2
+  const inv=(name,qty,note)=>{ const pr=byName(name); return { id:'inv-'+Math.random().toString(36).slice(2,7), productId:pr.id, name:null, quantity:qty, note:note||null }; };
+  DB.inventory=[
+    inv('Albrecht 12° Světlý',14), inv('Albrecht 11°',6), inv('Frýdlantská 10°',3,'Nízká zásoba'),
+    inv('Svijanský Máz',9), inv('Svijanský Rytíř',11), inv('Svijany 450',20),
+    inv('Landskron Pilsner',12), inv('Landskron Premium',6), inv('Landskron Radler',10),
+    inv('Landskron Hefeweizen',2,'Nízká zásoba'), inv('Albrecht Nealko',18),
+    { id:'inv-free1', productId:null, name:'Vratné basy (prázdné)', quantity:64, note:'Evidováno ručně' },
+    { id:'inv-free2', productId:null, name:'CO₂ bomba 10 kg', quantity:5, note:null },
+    { id:'inv-free3', productId:null, name:'Výčepní stojan (zápůjčka)', quantity:3, note:'Majetek firmy' },
+  ];
+  // Reminders (brewery + client) + order-item reminders derive from orders with reminderState
+  DB.reminders=[
+    { id:'r-1', kind:'Client', sectionId:'cl-uzsklep', sectionName:'Hospoda U Zeleného stromu', name:'Podepsat novou smlouvu',
+      description:'Roční rámcová smlouva končí, obnovit.', type:'OneTimeEvent', occurrenceDate:daysFromNow(3), remindBefore:2, resolved:false },
+    { id:'r-2', kind:'Brewery', sectionId:'b-svijany', sectionName:'Pivovar Svijany', name:'Aktualizovat ceník',
+      description:'Svijany hlásí zdražení od 1. srpna.', type:'OneTimeEvent', occurrenceDate:daysFromNow(6), remindBefore:5, resolved:false },
+    { id:'r-3', kind:'Client', sectionId:'cl-hotel', sectionName:'Hotel Praha — restaurace', name:'Zavolat ohledně letní akce',
+      description:'', type:'OneTimeEvent', occurrenceDate:daysFromNow(0), remindBefore:1, resolved:false },
+    { id:'r-4', kind:'Brewery', sectionId:'b-frydlant', sectionName:'Pivovar Frýdlant', name:'Objednat sezónní speciál',
+      description:'Tmavý 14° — omezená edice.', type:'Regular', occurrenceDate:daysFromNow(9), remindBefore:3, resolved:false },
+  ];
+})();
+
+/* current signed-in user (for permission demo & topbar) */
+let ME = DB.users[0];
+
+
+/* ============ NAV CONFIG ============ */
+const NAV=[
+  { group:null, items:[ ['dashboard','dash','Nástěnka'] ] },
+  { group:'Prodej', items:[ ['orders','order','Objednávky'], ['shipments','ship','Vývozy'] ] },
+  { group:'Sklad', items:[ ['deliveries','import','Dovozy zboží'], ['inventory','stock','Sklad'] ] },
+  { group:'Evidence', items:[ ['breweries','brewery','Pivovary'], ['clients','client','Klienti'], ['drivers','driver','Řidiči'], ['vehicles','vehicle','Vozy'] ] },
+  { group:'Správa', items:[ ['users','users','Uživatelé'] ] },
+];
+function moduleCount(m){ return ({ orders:DB.orders.length, shipments:DB.shipments.length, deliveries:DB.deliveries.length,
+  inventory:DB.inventory.length, breweries:DB.breweries.length, clients:DB.clients.length, drivers:DB.drivers.length,
+  vehicles:DB.vehicles.length, users:DB.users.length })[m]; }
+
+/* ============ SHELL ============ */
+const UIS={ collapsed:false, mobileOpen:false, theme:(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light') };
+function activeModule(){ const h=location.hash.replace(/^#\//,'').split('/')[0]; return h||'dashboard'; }
+function canSee(m){ return (ME.perms[m]||'none')!=='none'; }
+function canEdit(m){ return (ME.perms[m]||'none')==='edit'; }
+
+function buildShell(){
+  const app=$('#app');
+  app.innerHTML=`
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="logo">${logoSVG(34)}</span>
+        <span class="name">Ale<b>Track</b></span>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot">
+        <div class="u-av" id="foot-av"></div>
+        <div class="u-meta"><div class="n" id="foot-name"></div><div class="r" id="foot-role"></div></div>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn hidebar show" data-act="toggle-mobile" title="Menu">${icon('menu',18)}</button>
+        <button class="icon-btn" data-act="toggle-collapse" title="Sbalit menu">${icon('menu',18)}</button>
+        <div class="search"><span>${icon('search',17)}</span><input placeholder="Hledat objednávky, klienty, produkty…" id="globalSearch"></div>
+        <div class="spacer"></div>
+        <button class="icon-btn dot-badge" data-act="reminders" title="Připomínky">${icon('bell',18)}</button>
+        <button class="icon-btn" data-act="theme" id="themeBtn" title="Přepnout motiv">${icon(UIS.theme==='dark'?'sun':'moon',18)}</button>
+        <button class="icon-btn" data-act="me" title="Účet">${icon('users',18)}</button>
+      </header>
+      <div id="view"></div>
+    </div>`;
+  renderNav();
+  $('#foot-av').textContent=initials(ME.firstName,ME.lastName);
+  $('#foot-name').textContent=(ME.firstName||'')+' '+(ME.lastName||'');
+  $('#foot-role').textContent=ME.roles.includes('Admin')?'Administrátor':'Uživatel';
+  app.addEventListener('click',onShellClick);
+}
+function renderNav(){
+  const cur=activeModule();
+  $('#nav').innerHTML=NAV.map(sec=>{
+    const items=sec.items.filter(([m])=>canSee(m));
+    if(!items.length) return '';
+    const label=sec.group?`<div class="navgroup-label">${sec.group}</div>`:'';
+    return label+items.map(([m,ic,lbl])=>{
+      const cnt=moduleCount(m); const badge=(m===cur||!cnt)?'':`<span class="badge">${cnt}</span>`;
+      return `<a class="nav-item ${m===cur?'active':''}" href="#/${m}"><span class="ico">${icon(ic,19,1.8)}</span><span>${lbl}</span>${badge}</a>`;
+    }).join('');
+  }).join('');
+}
+function onShellClick(e){
+  const b=e.target.closest('[data-act]'); if(!b) return; const a=b.dataset.act;
+  if(a==='toggle-collapse'){ UIS.collapsed=!UIS.collapsed; $('#sidebar').classList.toggle('collapsed',UIS.collapsed); }
+  else if(a==='toggle-mobile'){ UIS.mobileOpen=!UIS.mobileOpen; $('#sidebar').classList.toggle('mobile-open',UIS.mobileOpen); }
+  else if(a==='theme'){ setTheme(UIS.theme==='dark'?'light':'dark'); }
+  else if(a==='reminders'){ openReminders(); }
+  else if(a==='me'){ openAccount(); }
+}
+function setTheme(t){ UIS.theme=t; document.documentElement.setAttribute('data-theme',t);
+  const btn=$('#themeBtn'); if(btn) btn.innerHTML=icon(t==='dark'?'sun':'moon',18); }
+
+/* ============ OVERLAY (drawer / modal) ============ */
+function openOverlay(html,{center=false,wide=false}={}){
+  const ov=$('#overlay');
+  ov.innerHTML=`<div class="scrim ${center?'center':''}" data-scrim>${center?`<div class="modal">${html}</div>`:`<div class="drawer ${wide?'wide':''}">${html}</div>`}</div>`;
+  ov.querySelector('[data-scrim]').addEventListener('mousedown',ev=>{ if(ev.target===ev.currentTarget) closeOverlay(); });
+  document.addEventListener('keydown',escClose);
+}
+function escClose(e){ if(e.key==='Escape') closeOverlay(); }
+function closeOverlay(){ $('#overlay').innerHTML=''; document.removeEventListener('keydown',escClose); }
+function confirmDialog(title,msg,onYes,{danger=true,yes='Smazat'}={}){
+  openOverlay(`<div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><p style="margin:0;color:var(--text-2)">${esc(msg)}</p></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+    <button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirmYes">${esc(yes)}</button></div>`,{center:true});
+  $('#confirmYes').onclick=()=>{ closeOverlay(); onYes&&onYes(); };
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+
+/* ============ ROUTER ============ */
+const ROUTES=[
+  [/^dashboard$/, ()=>viewDashboard()],
+  [/^breweries$/, ()=>viewBreweries()],
+  [/^breweries\/(.+)$/, m=>viewBreweryDetail(m[1])],
+  [/^clients$/, ()=>viewClients()],
+  [/^clients\/(.+)$/, m=>viewClientDetail(m[1])],
+  [/^orders$/, ()=>viewOrders()],
+  [/^orders\/new$/, ()=>viewOrderEditor(null)],
+  [/^orders\/(.+)\/edit$/, m=>viewOrderEditor(m[1])],
+  [/^orders\/(.+)$/, m=>viewOrderDetail(m[1])],
+  [/^shipments$/, ()=>viewShipments()],
+  [/^shipments\/new$/, ()=>viewShipmentEditor(null)],
+  [/^shipments\/(.+)\/edit$/, m=>viewShipmentEditor(m[1])],
+  [/^shipments\/(.+)$/, m=>viewShipmentDetail(m[1])],
+  [/^deliveries$/, ()=>viewDeliveries()],
+  [/^deliveries\/new$/, ()=>viewDeliveryEditor(null)],
+  [/^deliveries\/(.+)\/edit$/, m=>viewDeliveryEditor(m[1])],
+  [/^deliveries\/(.+)$/, m=>viewDeliveryDetail(m[1])],
+  [/^inventory$/, ()=>viewInventory()],
+  [/^drivers$/, ()=>viewDrivers()],
+  [/^vehicles$/, ()=>viewVehicles()],
+  [/^users$/, ()=>viewUsers()],
+];
+function go(path){ location.hash='#/'+path; }
+function renderRoute(){
+  const path=location.hash.replace(/^#\/?/,'')||'dashboard';
+  UIS.mobileOpen=false; $('#sidebar')&&$('#sidebar').classList.remove('mobile-open');
+  const mod=path.split('/')[0];
+  if(!canSee(mod)){ $('#view').innerHTML=noAccess(); renderNav(); window.scrollTo(0,0); return; }
+  for(const [re,fn] of ROUTES){ const m=path.match(re); if(m){ $('#view').innerHTML=fn(m); renderNav(); window.scrollTo(0,0); afterRender(path); return; } }
+  $('#view').innerHTML=viewDashboard();
+}
+let AFTER=null; // hook a view can set for post-render wiring
+function afterRender(path){ if(AFTER){ const f=AFTER; AFTER=null; try{f();}catch(e){console.error(e);} } }
+function rerender(){ renderRoute(); }
+function noAccess(){ return `<div class="page"><div class="empty"><div>${icon('shield',40)}</div><div class="t">Nemáte přístup</div>
+  <div>K tomuto modulu vám nebyla přidělena práva. Obraťte se na administrátora.</div></div></div>`; }
+
+/* ============ SHARED VIEW HELPERS ============ */
+function pageHead(eyebrow,title,sub,actions){
+  return `<div class="page-head"><div class="titles">
+    ${eyebrow?`<div class="eyebrow">${esc(eyebrow)}</div>`:''}<h1>${esc(title)}</h1>
+    ${sub?`<div class="sub">${sub}</div>`:''}</div>
+    ${actions?`<div class="actions">${actions}</div>`:''}</div>`;
+}
+function crumbs(list){ return `<div class="crumbs">${list.map((c,i)=>
+  (i?`<span class="sep">${icon('chevR',13)}</span>`:'')+(c.href?`<a href="${c.href}">${esc(c.t)}</a>`:`<span>${esc(c.t)}</span>`)).join('')}</div>`; }
+function addBtn(label,path){ return `<a class="btn btn-primary" href="#/${path}">${icon('plus',17)}${esc(label)}</a>`; }
+function fmtAddr(a){ if(!a)return '—'; return `${esc(a.streetName)} ${esc(a.streetNumber)}, ${esc(a.zip)} ${esc(a.city)}`; }
+function fmtAddrFull(a){ if(!a)return '—'; return `${esc(a.streetName)} ${esc(a.streetNumber)}<br>${esc(a.zip)} ${esc(a.city)}, ${L.country[a.country]||a.country}`; }
+function kindChip(kind){ return `<span class="tag">${icon('box',12)}${L.kind[kind]||kind}</span>`; }
+function avatar(str,txt){ const col=colorFor(str); return `<span class="av" style="background:${col}22;color:${col}">${esc(txt)}</span>`; }
+function guidNote(id){ return `<span class="mono t-mut" title="PublicId (GUID)">${esc(id)}</span>`; }
+function toolbarSearch(ph,id){ return `<div class="fld">${icon('search',16)}<input id="${id}" placeholder="${esc(ph)}"></div>`; }
+
+/* ============ DASHBOARD ============ */
+const TILE_META={
+  orders:['order','#F08C00','Objednávky'], shipments:['ship','#0E7C9B','Vývozy'], deliveries:['import','#7C3AED','Dovozy'],
+  inventory:['stock','#15873F','Skladem'], breweries:['brewery','#B4620A','Pivovary'], clients:['client','#0891B2','Klienti'],
+  drivers:['driver','#DB2777','Řidiči'], vehicles:['vehicle','#5A6675','Vozy'], users:['users','#7C3AED','Uživatelé'],
+};
+function viewDashboard(){
+  const openOrders=DB.orders.filter(o=>o.state!=='Finished'&&o.state!=='Cancelled').length;
+  const activeShip=DB.shipments.filter(s=>s.state!=='Delivered'&&s.state!=='Cancelled').length;
+  const lowStock=DB.inventory.filter(i=>i.productId&&i.quantity<=3);
+  const upcoming=[...DB.reminders].filter(r=>!r.resolved).sort((a,b)=>a.occurrenceDate.localeCompare(b.occurrenceDate));
+  const weekShip=DB.shipments.filter(s=>s.deliveryDate&&s.deliveryDate.slice(0,10)>=SEED_TODAY).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
+  const weekDeliv=DB.deliveries.filter(d=>d.date>=SEED_TODAY&&d.state!=='Cancelled').sort((a,b)=>a.date.localeCompare(b.date));
+
+  const tiles=['orders','shipments','deliveries','inventory','clients','breweries','drivers','vehicles'].filter(canSee).map(m=>{
+    const [ic,col,lbl]=TILE_META[m];
+    return `<a class="tile" href="#/${m}">
+      <div class="ti-top"><div class="ti-ico" style="background:${col}1a;color:${col}">${icon(ic,20)}</div>
+      ${m==='orders'&&openOrders?`<span class="pill s-amber"><span class="d"></span>${openOrders} otevřených</span>`:''}
+      ${m==='inventory'&&lowStock.length?`<span class="pill s-crit"><span class="d"></span>${lowStock.length} nízká</span>`:''}
+      </div>
+      <div><div class="ti-val tnum">${moduleCount(m)}</div><div class="ti-lbl">${lbl}</div></div></a>`;
+  }).join('');
+
+  return `<div class="page">
+    ${pageHead('Přehled','Nástěnka','Vítejte zpět, '+esc(ME.firstName||'')+'. Tady je dnešní situace.',
+      canEdit('orders')?addBtn('Nová objednávka','orders/new'):'')}
+    <div class="tiles" style="margin-bottom:22px">${tiles}</div>
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
+      <div class="stack" style="gap:16px">
+        <div class="card">
+          <div class="card-head"><span style="color:var(--amber)">${icon('route',18)}</span><h3>Tento týden — rozvozy a dovozy</h3>
+            <a class="btn btn-sm btn-ghost" href="#/shipments" style="margin-left:auto">Vše</a></div>
+          <div class="card-pad" style="display:flex;flex-direction:column;gap:9px">
+            ${weekShip.length||weekDeliv.length? [
+              ...weekShip.map(s=>schedRow('ship',s.deliveryDate,s.name,pill('ship',s.state),`#/shipments/${s.id}`,s.stops.length+' '+plural(s.stops.length,'zastávka','zastávky','zastávek'))),
+              ...weekDeliv.map(d=>schedRow('import',d.date,'Dovoz z pivovarů',pill('delivery',d.state),`#/deliveries/${d.id}`,d.stops.length+' '+plural(d.stops.length,'pivovar','pivovary','pivovarů')))
+            ].join('') : `<div class="empty" style="padding:24px"><div class="t">Nic naplánováno</div></div>` }
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span style="color:var(--crit)">${icon('warnTri',18)}</span><h3>Nízká zásoba</h3>
+            <a class="btn btn-sm btn-ghost" href="#/inventory" style="margin-left:auto">Sklad</a></div>
+          <div class="card-pad">
+            ${lowStock.length? `<div style="display:flex;flex-direction:column;gap:8px">${lowStock.map(i=>{const pr=prodById(i.productId);const b=breweryById(pr.breweryId);
+              return `<div class="row gap12" style="justify-content:space-between"><div class="row gap8"><span class="chip"><span class="dotc" style="background:${b.color}"></span>${esc(pr.name)}</span></div>
+              <span class="pill s-crit"><span class="d"></span>${i.quantity} ks skladem</span></div>`;}).join('')}</div>`
+              : `<div class="t-mut">Vše dostatečně naskladněno.</div>` }
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span style="color:var(--info)">${icon('bell',18)}</span><h3>Připomínky</h3>
+          <span class="tag" style="margin-left:auto">${upcoming.length}</span></div>
+        <div class="card-pad" style="display:flex;flex-direction:column;gap:2px">
+          ${upcoming.map(r=>reminderRow(r)).join('')||`<div class="t-mut">Žádné aktivní připomínky.</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function schedRow(ic,date,title,pillHtml,href,meta){
+  const d=new Date(date); const isToday=(''+date).slice(0,10)===SEED_TODAY;
+  return `<a href="${href}" class="row gap12" style="padding:11px 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2)">
+    <div style="text-align:center;min-width:44px"><div style="font-weight:800;font-size:17px;line-height:1" class="tnum">${d.getDate()}.</div>
+    <div class="t-mut" style="font-size:11px;text-transform:uppercase">${d.toLocaleDateString('cs-CZ',{month:'short'})}</div></div>
+    <div style="width:34px;height:34px;border-radius:9px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2)">${icon(ic,17)}</div>
+    <div style="flex:1;min-width:0"><div class="t-strong">${esc(title)} ${isToday?'<span class="tag" style="color:var(--amber-700)">dnes</span>':''}</div><div class="t-mut" style="font-size:12.5px">${meta}</div></div>
+    ${pillHtml}</a>`;
+}
+function reminderRow(r){
+  const overdue=r.occurrenceDate<SEED_TODAY, today=r.occurrenceDate===SEED_TODAY;
+  const href=r.kind==='Client'?`#/clients/${r.sectionId}`:`#/breweries/${r.sectionId}`;
+  return `<a href="${href}" class="row gap12" style="padding:10px 8px;border-radius:var(--r-sm)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='none'">
+    <div style="width:8px;height:8px;border-radius:99px;margin-top:6px;flex:0 0 auto;background:${overdue?'var(--crit)':today?'var(--amber)':'var(--info)'}"></div>
+    <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(r.name)}</div>
+    <div class="t-mut" style="font-size:12px">${esc(r.sectionName)}</div></div>
+    <div class="tag ${overdue?'':''}" style="${overdue?'color:var(--crit)':today?'color:var(--amber-700)':''}">${today?'dnes':fdateShort(r.occurrenceDate)}</div></a>`;
+}
+function openReminders(){
+  const ups=[...DB.reminders].filter(r=>!r.resolved).sort((a,b)=>a.occurrenceDate.localeCompare(b.occurrenceDate));
+  const orderRems=DB.orders.flatMap(o=>o.items.filter(i=>i.reminderState==='Added').map(i=>({o,i})));
+  openOverlay(`<div class="drawer-head">${icon('bell',20)}<h2>Připomínky</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body" style="display:flex;flex-direction:column;gap:20px">
+      <div><div class="section-label">Pivovary &amp; klienti</div><div class="card"><div class="card-pad" style="display:flex;flex-direction:column;gap:2px">
+        ${ups.map(r=>reminderRow(r)).join('')||'<div class="t-mut">Žádné.</div>'}</div></div></div>
+      <div><div class="section-label">Položky objednávek (hlídané)</div><div class="card"><div class="card-pad" style="display:flex;flex-direction:column;gap:8px">
+        ${orderRems.length?orderRems.map(({o,i})=>{const pr=prodById(i.productId);const cl=clientById(o.clientId);
+          return `<div class="row gap12" style="justify-content:space-between"><div><div class="t-strong" style="font-size:13px">${esc(pr.name)} × ${i.quantity}</div>
+          <div class="t-mut" style="font-size:12px">${esc(cl.name)} · ${o.number}</div></div><span class="pill s-info"><span class="d"></span>hlídáno</span></div>`;}).join(''):'<div class="t-mut">Žádné.</div>'}
+      </div></div></div>
+    </div>`);
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+function openAccount(){
+  openOverlay(`<div class="modal-head"><h3>Přihlášený uživatel</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <div class="row gap12" style="margin-bottom:16px">${avatar(ME.id,initials(ME.firstName,ME.lastName))}
+        <div><div class="t-strong">${esc(ME.firstName)} ${esc(ME.lastName)}</div><div class="t-mut">@${esc(ME.userName)} · ${ME.roles.includes('Admin')?'Administrátor':'Uživatel'}</div></div></div>
+      <div class="section-label">Vyzkoušet jako jiná role (demo)</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${DB.users.map(u=>`<button class="btn btn-ghost" data-switch="${u.id}" style="justify-content:flex-start;height:auto;padding:10px 12px">
+          ${avatar(u.id,initials(u.firstName,u.lastName))}<div style="text-align:left"><div class="t-strong">${esc(u.firstName)} ${esc(u.lastName)}</div>
+          <div class="t-mut" style="font-weight:500">${u.roles.includes('Admin')?'Administrátor — vše':'Uživatel — omezená práva'}</div></div>
+          ${u.id===ME.id?`<span style="margin-left:auto;color:var(--amber)">${icon('check',16)}</span>`:''}</button>`).join('')}
+      </div>
+    </div>`,{center:true});
+  $$('[data-switch]').forEach(b=>b.onclick=()=>{ ME=DB.users.find(u=>u.id===b.dataset.switch); closeOverlay(); buildShell(); if(!canSee(activeModule())) go('dashboard'); else renderRoute(); toast('Přepnuto na: '+ME.firstName+' '+ME.lastName,'users'); });
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+
+/* ============ FORM HELPERS ============ */
+function field(label,inner,{req=false,col2=false,hint=''}={}){
+  return `<div class="field ${col2?'col-2':''}"><label>${esc(label)}${req?' <span class="req">*</span>':''}</label>${inner}
+    ${hint?`<div class="hint">${esc(hint)}</div>`:''}</div>`; }
+function inp(id,val='',ph='',type='text'){ return `<input class="input" id="${id}" type="${type}" value="${esc(val)}" placeholder="${esc(ph)}">`; }
+function sel(id,opts,val){ return `<select class="select" id="${id}">${opts.map(([v,l])=>`<option value="${esc(v)}" ${v===val?'selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+function txta(id,val='',ph=''){ return `<textarea class="input" id="${id}" placeholder="${esc(ph)}">${esc(val)}</textarea>`; }
+function addressFields(pfx,a){ a=a||{country:'Czechia'};
+  return `<div class="form-grid">
+    ${field('Ulice',inp(pfx+'-street',a.streetName||'','Zámecká'),{req:true})}
+    ${field('Číslo',inp(pfx+'-no',a.streetNumber||'','12'),{req:true})}
+    ${field('Město',inp(pfx+'-city',a.city||'','Frýdlant'),{req:true})}
+    ${field('PSČ',inp(pfx+'-zip',a.zip||'','464 01'),{req:true})}
+    ${field('Země',sel(pfx+'-country',[['Czechia','Česko'],['Germany','Německo']],a.country||'Czechia'),{col2:true})}
+  </div>`; }
+function readAddress(pfx){ const g=id=>($('#'+id)?$('#'+id).value.trim():''); return {
+  streetName:g(pfx+'-street'), streetNumber:g(pfx+'-no'), city:g(pfx+'-city'), zip:g(pfx+'-zip'),
+  country:g(pfx+'-country')||'Czechia', latitude:null, longitude:null }; }
+function val(id){ const e=$('#'+id); return e?e.value.trim():''; }
+
+/* ============ MODULE: PIVOVARY (BREWERIES) ============ */
+function viewBreweries(){
+  const rows=DB.breweries.slice().sort((a,b)=>a.displayOrder-b.displayOrder).map(b=>{
+    const prods=productsOf(b.id);
+    return `<tr class="clickable" onclick="go('breweries/${b.id}')">
+      <td><div class="row-lead"><span class="av" style="background:${b.color}22;color:${b.color}">${icon('brewery',18)}</span>
+        <div><div class="t-strong">${esc(b.name)}</div><div class="t-mut" style="font-size:12px">${L.country[b.officialAddress.country]}</div></div></div></td>
+      <td>${fmtAddr(b.officialAddress)}</td>
+      <td class="num tnum">${prods.length}</td>
+      <td><span class="chip"><span class="dotc" style="background:${b.color}"></span>${b.color}</span></td>
+      <td style="text-align:right">${icon('chevR',16)}</td></tr>`;
+  }).join('');
+  return `<div class="page">
+    ${pageHead('Evidence','Pivovary','Dodavatelé a jejich produkty s ceníkem.', canEdit('breweries')?`<button class="btn btn-primary" onclick="breweryForm(null)">${icon('plus',17)}Nový pivovar</button>`:'')}
+    <div class="toolbar">${toolbarSearch('Hledat pivovar…','br-search')}<span class="count-note">${DB.breweries.length} pivovarů · ${DB.products.length} produktů</span></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Pivovar</th><th>Sídlo</th><th style="text-align:right">Produkty</th><th>Barva</th><th></th></tr></thead>
+    <tbody id="br-body">${rows}</tbody></table></div></div>`;
+}
+function viewBreweryDetail(id){
+  id=id.split('?')[0];
+  const b=breweryById(id); if(!b) return notFound('Pivovar');
+  const tab=(location.hash.split('?tab=')[1])||'info';
+  const prods=productsOf(id);
+  const rems=DB.reminders.filter(r=>r.kind==='Brewery'&&r.sectionId===id);
+  const ed=canEdit('breweries');
+  const tabs=`<div class="tabs">
+    ${brTab('info','Info','info',tab)}
+    ${brTab('cenik','Ceník','wallet',tab,prods.length)}
+    ${brTab('reminders','Připomínky','bell',tab,rems.length)}
+    ${brTab('notes','Poznámky','note',tab)}
+  </div>`;
+  let body='';
+  if(tab==='info'){
+    body=`<div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card"><div class="card-head"><h3>Fakturační adresa</h3></div><div class="card-pad addr">${fmtAddrFull(b.officialAddress)}</div></div>
+      <div class="card"><div class="card-head"><h3>Kontaktní adresa</h3></div><div class="card-pad addr">${b.contactAddress?fmtAddrFull(b.contactAddress):'<span class="t-mut">Shodná s fakturační</span>'}</div></div>
+      <div class="card" style="grid-column:1/-1"><div class="card-head"><h3>Přehled</h3></div><div class="card-pad">
+        <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+          ${miniStat('Produktů',prods.length,'box')}
+          ${miniStat('Sudů',prods.filter(p=>p.kind==='Keg').length,'stock')}
+          ${miniStat('Aktivní připomínky',rems.filter(r=>!r.resolved).length,'bell')}
+        </div></div></div></div>`;
+  } else if(tab==='cenik'){
+    body=cenikView(b,prods,ed);
+  } else if(tab==='reminders'){
+    body=remindersView(rems,ed,'Brewery',id);
+  } else {
+    body=notesView(b,'brewery');
+  }
+  return `<div class="page">
+    ${crumbs([{t:'Pivovary',href:'#/breweries'},{t:b.name}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow" style="color:${b.color}">Pivovar</div><h1>${esc(b.name)}</h1>
+      <div class="sub">${guidNote(b.id)}</div></div>
+      <div class="actions">${ed?`<button class="btn btn-ghost" onclick="breweryForm('${id}')">${icon('edit',16)}Upravit</button>
+        <button class="btn btn-danger btn-icon" onclick="delBrewery('${id}')" title="Smazat">${icon('trash',16)}</button>`:''}</div></div>
+    ${tabs}${body}</div>`;
+}
+function brTab(key,label,ic,cur,cnt){ return `<button class="${cur===key?'on':''}" onclick="location.hash='#/breweries/'+curId()+'?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`; }
+function curId(){ return location.hash.replace(/^#\//,'').split('/')[1].split('?')[0]; }
+
+function cenikView(b,prods,ed){
+  const groups={}; prods.forEach(p=>{ (groups[p.kind]=groups[p.kind]||[]).push(p); });
+  const order=['Keg','Bottle','Can','Multipack','Other'];
+  const sections=order.filter(k=>groups[k]).map(k=>{
+    const rows=groups[k].map(p=>`<tr class="clickable" onclick="${ed?`productForm('${b.id}','${p.id}')`:''}">
+      <td><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${esc(p.description||'')}</div></td>
+      <td><span class="tag">${L.ptype[p.type]||p.type}</span></td>
+      <td class="tnum">${p.platoDegree?p.platoDegree+'°':'—'}${p.alcoholPercentage?` · ${p.alcoholPercentage}%`:''}</td>
+      <td class="tnum">${p.packageSize? (p.packageSize>=1?p.packageSize+' l':(p.packageSize*1000)+' ml'):'—'}</td>
+      <td class="num tnum t-strong">${money(p.priceWithVat)}</td>
+      <td class="num tnum t-mut">${money(p.priceWithoutVat)}</td></tr>`).join('');
+    return `<div style="margin-bottom:8px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:18px 0 8px">
+      ${kindChip(k)} <span>${groups[k].length} ${plural(groups[k].length,'položka','položky','položek')}</span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th>Druh piva</th><th>Stupně / Alk.</th><th>Balení</th><th style="text-align:right">Cena s DPH</th><th style="text-align:right">Bez DPH</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  }).join('');
+  return `<div class="card-pad" style="padding:0">
+    ${ed?`<div class="toolbar"><button class="btn btn-soft btn-sm" onclick="bulkPriceForm('${b.id}')">${icon('wallet',15)}Hromadná úprava cen</button>
+      <button class="btn btn-ghost btn-sm" onclick="productForm('${b.id}',null)">${icon('plus',15)}Přidat produkt</button>
+      <span class="count-note">Ceny se mění — použijte hromadnou úpravu s datem účinnosti</span></div>`:''}
+    ${sections||`<div class="empty"><div class="t">Žádné produkty</div></div>`}</div>`;
+}
+function miniStat(label,val,ic){ return `<div class="tile" style="padding:14px"><div class="ti-top"><div class="ti-lbl">${esc(label)}</div>${icon(ic,16)}</div>
+  <div class="ti-val tnum" style="font-size:24px">${val}</div></div>`; }
+
+/* ---- Brewery forms ---- */
+function breweryForm(id){
+  const b=id?breweryById(id):{ name:'', color:'#F08C00', officialAddress:{country:'Czechia'}, contactAddress:null };
+  const hasContact=!!(b.contactAddress);
+  openOverlay(`<div class="drawer-head">${icon('brewery',20)}<h2>${id?'Upravit pivovar':'Nový pivovar'}</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        ${field('Název',inp('b-name',b.name,'Pivovar Frýdlant'),{req:true,col2:true})}
+        ${field('Barva (pro rozlišení)',`<div class="row gap8"><input type="color" id="b-color" value="${b.color}" style="width:46px;height:40px;border:1px solid var(--border-2);border-radius:8px;background:none;padding:2px">${inp('b-colorhex',b.color)}</div>`)}
+      </div>
+      <div class="divider"></div><div class="section-label">Fakturační adresa</div>${addressFields('bof',b.officialAddress)}
+      <div class="divider"></div><label class="row gap8" style="font-weight:700;font-size:13px;cursor:pointer"><input type="checkbox" id="b-hascontact" ${hasContact?'checked':''} onchange="$('#bc-wrap').style.display=this.checked?'block':'none'"> Odlišná kontaktní adresa</label>
+      <div id="bc-wrap" style="display:${hasContact?'block':'none'};margin-top:12px">${addressFields('bcon',b.contactAddress)}</div>
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="b-save">${icon('check',16)}Uložit</button></div>`);
+  $('#b-color').oninput=e=>{ $('#b-colorhex').value=e.target.value; };
+  $('#b-save').onclick=()=>{
+    const name=val('b-name'); if(!name) return toast('Vyplňte název','warnTri');
+    const data={ name, color:val('b-colorhex')||'#F08C00', officialAddress:readAddress('bof'),
+      contactAddress: $('#b-hascontact').checked? readAddress('bcon'):null };
+    if(id){ Object.assign(breweryById(id),data); toast('Pivovar upraven'); }
+    else { data.id='b-'+Math.random().toString(36).slice(2,7); data.displayOrder=DB.breweries.length+1; DB.breweries.push(data); toast('Pivovar vytvořen'); }
+    closeOverlay(); renderRoute();
+  };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function delBrewery(id){ confirmDialog('Smazat pivovar?','Smažou se i jeho produkty a připomínky. Tuto akci nelze vrátit.',()=>{
+  DB.products=DB.products.filter(p=>p.breweryId!==id); DB.breweries=DB.breweries.filter(b=>b.id!==id);
+  DB.reminders=DB.reminders.filter(r=>!(r.kind==='Brewery'&&r.sectionId===id)); toast('Pivovar smazán','trash'); go('breweries'); }); }
+
+function productForm(bId,pId){
+  const p=pId?prodById(pId):{ name:'',description:'',kind:'Keg',type:'PaleLager',alcoholPercentage:'',platoDegree:'',packageSize:'',priceWithVat:'',priceWithoutVat:'' };
+  openOverlay(`<div class="drawer-head">${icon('box',20)}<h2>${pId?'Upravit produkt':'Nový produkt'}</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body"><div class="form-grid">
+      ${field('Název',inp('p-name',p.name,'Albrecht 12°'),{req:true,col2:true})}
+      ${field('Popis',inp('p-desc',p.description||'','Sud 30 l'),{col2:true})}
+      ${field('Druh balení',sel('p-kind',Object.entries(L.kind),p.kind))}
+      ${field('Druh piva',sel('p-type',Object.entries(L.ptype),p.type))}
+      ${field('Alkohol %',inp('p-alc',p.alcoholPercentage,'5.0','number'))}
+      ${field('Stupně (°)',inp('p-plato',p.platoDegree,'12','number'))}
+      ${field('Velikost balení (l)',inp('p-pkg',p.packageSize,'30','number'))}
+      ${field('Cena s DPH',inp('p-vat',p.priceWithVat,'1290','number'),{req:true})}
+      ${field('Cena bez DPH',inp('p-novat',p.priceWithoutVat,'1066','number'))}
+    </div></div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="p-save">${icon('check',16)}Uložit</button></div>`);
+  $('#p-save').onclick=()=>{
+    const name=val('p-name'); if(!name) return toast('Vyplňte název','warnTri');
+    const num2=id=>{const v=val(id);return v===''?null:parseFloat(v);};
+    const data={ name, description:val('p-desc'), kind:val('p-kind'), type:val('p-type'),
+      alcoholPercentage:num2('p-alc'), platoDegree:num2('p-plato'), packageSize:num2('p-pkg'),
+      priceWithVat:num2('p-vat')||0, priceWithoutVat:num2('p-novat') };
+    if(pId){ Object.assign(prodById(pId),data); toast('Produkt upraven'); }
+    else { data.id='p-'+Math.random().toString(36).slice(2,7); data.breweryId=bId; DB.products.push(data); toast('Produkt přidán'); }
+    closeOverlay(); renderRoute();
+  };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function bulkPriceForm(bId){
+  const prods=productsOf(bId);
+  openOverlay(`<div class="drawer-head">${icon('wallet',20)}<h2>Hromadná úprava cen</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="card" style="background:var(--amber-soft);border-color:var(--amber-tint);margin-bottom:16px"><div class="card-pad" style="display:flex;gap:12px">
+        <span style="color:var(--amber-700)">${icon('info',18)}</span><div style="font-size:13px;color:var(--text-2)">Úprava se projeví u všech vybraných produktů. Zadejte změnu v procentech nebo upravte ceny ručně a nastavte <b>datum účinnosti</b>.</div></div></div>
+      <div class="form-grid" style="margin-bottom:16px">
+        ${field('Změna ceny (%)',inp('bp-pct','','např. 5 nebo -3','number'),{hint:'Aplikuje se na cenu s i bez DPH'})}
+        ${field('Datum účinnosti',inp('bp-date',daysFromNow(0),'','date'))}
+      </div>
+      <button class="btn btn-soft btn-sm" id="bp-apply" style="margin-bottom:14px">${icon('sparkle',15)}Přepočítat náhled</button>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th style="text-align:right">Nyní</th><th style="text-align:right">Nově</th></tr></thead>
+      <tbody id="bp-body">${prods.map(p=>`<tr><td class="t-strong">${esc(p.name)}</td><td class="num tnum">${money(p.priceWithVat)}</td>
+        <td class="num tnum" data-pid="${p.id}"><input class="input" style="width:110px;height:32px;text-align:right;display:inline-block" value="${p.priceWithVat}" data-price></td></tr>`).join('')}</tbody></table></div>
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="bp-save">${icon('check',16)}Uložit ceny</button></div>`);
+  $('#bp-apply').onclick=()=>{ const pct=parseFloat(val('bp-pct'))||0; $$('#bp-body [data-price]').forEach((inpEl,i)=>{
+    const base=prods[i].priceWithVat; inpEl.value=Math.round(base*(1+pct/100)); }); toast('Náhled přepočítán','sparkle'); };
+  $('#bp-save').onclick=()=>{ $$('#bp-body [data-pid]').forEach(td=>{ const p=prodById(td.dataset.pid); const nv=parseFloat(td.querySelector('[data-price]').value);
+    if(!isNaN(nv)){ const ratio=p.priceWithoutVat?p.priceWithoutVat/p.priceWithVat:0.826; p.priceWithVat=nv; p.priceWithoutVat=Math.round(nv*ratio); } });
+    toast('Ceny aktualizovány k '+fdate(val('bp-date'))); closeOverlay(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+
+/* ---- shared reminders + notes tab renderers ---- */
+function remindersView(rems,ed,kind,sectionId){
+  return `<div class="card-pad" style="padding:0">
+    ${ed?`<div class="toolbar"><button class="btn btn-ghost btn-sm" onclick="reminderForm('${kind}','${sectionId}',null)">${icon('plus',15)}Nová připomínka</button></div>`:''}
+    ${rems.length?`<div class="stack" style="gap:10px">${rems.map(r=>{
+      const overdue=!r.resolved&&r.occurrenceDate<SEED_TODAY;
+      return `<div class="card"><div class="card-pad row gap12" style="align-items:flex-start">
+        <div style="width:40px;height:40px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:${r.resolved?'var(--ok-tint)':overdue?'var(--crit-tint)':'var(--amber-soft)'};color:${r.resolved?'var(--ok)':overdue?'var(--crit)':'var(--amber-700)'}">${icon(r.resolved?'check':'bell',18)}</div>
+        <div style="flex:1;min-width:0"><div class="row gap8"><span class="t-strong">${esc(r.name)}</span>
+          <span class="tag">${r.type==='Regular'?'Opakovaná':'Jednorázová'}</span>
+          ${r.resolved?'<span class="pill s-ok"><span class="d"></span>Vyřešeno</span>':overdue?'<span class="pill s-crit"><span class="d"></span>Po termínu</span>':`<span class="pill s-amber"><span class="d"></span>${fdate(r.occurrenceDate)}</span>`}</div>
+          ${r.description?`<div class="t-mut" style="margin-top:4px;font-size:13px">${esc(r.description)}</div>`:''}
+          <div class="t-mut" style="font-size:12px;margin-top:6px">Upozornit ${r.remindBefore} ${plural(r.remindBefore,'den','dny','dní')} předem</div></div>
+        ${ed?`<div class="row gap8">${r.resolved?'':`<button class="btn btn-sm btn-soft" onclick="resolveReminder('${r.id}')">${icon('check',14)}Vyřešit</button>`}
+          <button class="icon-btn" style="width:32px;height:32px" onclick="delReminder('${r.id}')">${icon('trash',14)}</button></div>`:''}
+      </div></div>`; }).join('')}</div>`
+    :`<div class="empty"><div>${icon('bell',36)}</div><div class="t">Žádné připomínky</div><div>Přidejte upomínku na smlouvu, ceník nebo sezónní objednávku.</div></div>`}
+  </div>`;
+}
+function reminderForm(kind,sectionId,rId){
+  const r=rId?DB.reminders.find(x=>x.id===rId):{ name:'',description:'',type:'OneTimeEvent',occurrenceDate:daysFromNow(7),remindBefore:2 };
+  openOverlay(`<div class="modal-head"><h3>${rId?'Upravit':'Nová'} připomínka</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><div class="form-grid">
+      ${field('Název',inp('rm-name',r.name,'Aktualizovat ceník'),{req:true,col2:true})}
+      ${field('Popis',txta('rm-desc',r.description||''),{col2:true})}
+      ${field('Typ',sel('rm-type',[['OneTimeEvent','Jednorázová'],['Regular','Opakovaná']],r.type))}
+      ${field('Datum',inp('rm-date',r.occurrenceDate,'','date'))}
+      ${field('Upozornit dní předem',inp('rm-before',r.remindBefore,'2','number'))}
+    </div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="rm-save">Uložit</button></div>`,{center:true});
+  $('#rm-save').onclick=()=>{ const name=val('rm-name'); if(!name)return toast('Vyplňte název','warnTri');
+    const data={ name, description:val('rm-desc'), type:val('rm-type'), occurrenceDate:val('rm-date'), remindBefore:parseInt(val('rm-before'))||0 };
+    if(rId){ Object.assign(DB.reminders.find(x=>x.id===rId),data); toast('Připomínka upravena'); }
+    else { DB.reminders.push({ id:'r-'+Math.random().toString(36).slice(2,7), kind, sectionId,
+      sectionName: kind==='Brewery'?breweryById(sectionId).name:clientById(sectionId).name, resolved:false, ...data }); toast('Připomínka přidána'); }
+    closeOverlay(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function resolveReminder(id){ DB.reminders.find(x=>x.id===id).resolved=true; toast('Označeno jako vyřešené'); renderRoute(); }
+function delReminder(id){ DB.reminders=DB.reminders.filter(x=>x.id!==id); toast('Připomínka smazána','trash'); renderRoute(); }
+
+function notesView(entity,type){
+  const ed=canEdit(type==='brewery'?'breweries':'clients');
+  entity.notes=entity.notes||[];
+  return `<div class="card-pad" style="padding:0">
+    ${ed?`<div class="toolbar"><div class="fld" style="flex:1;max-width:none"><input id="note-input" placeholder="Napište poznámku a stiskněte Přidat…"></div>
+      <button class="btn btn-primary btn-sm" onclick="addNote('${type}')">${icon('plus',15)}Přidat</button></div>`:''}
+    ${entity.notes.length?`<div class="stack" style="gap:10px">${entity.notes.slice().reverse().map(n=>`<div class="card"><div class="card-pad row gap12" style="align-items:flex-start">
+      <span style="color:var(--text-3);margin-top:2px">${icon('note',17)}</span><div style="flex:1">${esc(n.text)}
+      <div class="t-mut" style="font-size:11.5px;margin-top:6px">${n.dateCreated?fdate(n.dateCreated):'právě teď'}</div></div>
+      ${ed?`<button class="icon-btn" style="width:30px;height:30px" onclick="delNote('${type}','${n.id}')">${icon('trash',13)}</button>`:''}</div></div>`).join('')}</div>`
+      :`<div class="empty"><div>${icon('note',36)}</div><div class="t">Zatím žádné poznámky</div></div>`}</div>`;
+}
+function addNote(type){ const t=val('note-input'); if(!t)return; const e=type==='brewery'?breweryById(curId()):clientById(curId());
+  e.notes.push({ id:'n-'+Math.random().toString(36).slice(2,7), text:t, dateCreated:daysFromNow(0) }); toast('Poznámka přidána'); renderRoute(); }
+function delNote(type,id){ const e=type==='brewery'?breweryById(curId()):clientById(curId()); e.notes=e.notes.filter(n=>n.id!==id); renderRoute(); }
+function notFound(what){ return `<div class="page"><div class="empty"><div>${icon('warnTri',40)}</div><div class="t">${what} nenalezen</div>
+  <a class="btn btn-ghost btn-sm" href="#/dashboard" style="margin-top:12px">Zpět</a></div></div>`; }
+
+/* ============ MODULE: KLIENTI (CLIENTS) ============ */
+function viewClients(){
+  const rows=DB.clients.map(c=>{
+    const orders=DB.orders.filter(o=>o.clientId===c.id&&o.state!=='Cancelled');
+    return `<tr class="clickable" onclick="go('clients/${c.id}')">
+      <td><div class="row-lead">${avatar(c.id,initials(c.name))}
+        <div><div class="t-strong">${esc(c.name)}</div><div class="t-mut" style="font-size:12px">${esc(c.businessName||'')}</div></div></div></td>
+      <td><span class="tag">${icon('pin',12)}${L.region[c.region]||c.region}</span></td>
+      <td>${fmtAddr(c.officialAddress)}</td>
+      <td class="num tnum">${orders.length}</td>
+      <td>${c.contacts.length?c.contacts.map(ct=>`<span class="tag" title="${esc(ct.value)}">${icon(ct.type==='Email'?'mail':'phone',11)}</span>`).join(' '):'<span class="t-mut">—</span>'}</td>
+      <td style="text-align:right">${icon('chevR',16)}</td></tr>`;
+  }).join('');
+  return `<div class="page">
+    ${pageHead('Evidence','Klienti','Odběratelé, jejich adresy a kontakty.', canEdit('clients')?`<button class="btn btn-primary" onclick="clientForm(null)">${icon('plus',17)}Nový klient</button>`:'')}
+    <div class="toolbar">${toolbarSearch('Hledat klienta…','cl-search')}<span class="count-note">${DB.clients.length} klientů</span></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Klient</th><th>Region</th><th>Sídlo</th><th style="text-align:right">Objednávky</th><th>Kontakty</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+function viewClientDetail(id){
+  id=id.split('?')[0]; const c=clientById(id); if(!c) return notFound('Klient');
+  const tab=(location.hash.split('?tab=')[1])||'info';
+  const orders=DB.orders.filter(o=>o.clientId===id).sort((a,b)=>(b.createdDate||'').localeCompare(a.createdDate||''));
+  const rems=DB.reminders.filter(r=>r.kind==='Client'&&r.sectionId===id);
+  const ed=canEdit('clients');
+  const tabs=`<div class="tabs">
+    ${clTab('info','Info','info',tab)}
+    ${clTab('contacts','Kontakty','phone',tab,c.contacts.length)}
+    ${clTab('orders','Objednávky','order',tab,orders.length)}
+    ${clTab('reminders','Připomínky','bell',tab,rems.length)}
+    ${clTab('notes','Poznámky','note',tab)}</div>`;
+  let body='';
+  if(tab==='info'){
+    body=`<div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card"><div class="card-head"><h3>Fakturační adresa</h3></div><div class="card-pad addr">${fmtAddrFull(c.officialAddress)}</div></div>
+      <div class="card"><div class="card-head"><h3>Kontaktní adresa</h3></div><div class="card-pad addr">${c.contactAddress?fmtAddrFull(c.contactAddress):'<span class="t-mut">Shodná s fakturační</span>'}</div></div>
+      <div class="card"><div class="card-head"><h3>Obchodní údaje</h3></div><div class="card-pad stack" style="gap:12px">
+        <div class="kv"><span class="k">Obchodní název</span><span class="v">${esc(c.businessName||'—')}</span></div>
+        <div class="kv"><span class="k">Region</span><span class="v">${L.region[c.region]||c.region}</span></div></div></div>
+      <div class="card"><div class="card-head"><h3>Aktivita</h3></div><div class="card-pad">
+        <div class="tiles" style="grid-template-columns:1fr 1fr">
+          ${miniStat('Objednávek',orders.length,'order')}
+          ${miniStat('Otevřených',orders.filter(o=>o.state!=='Finished'&&o.state!=='Cancelled').length,'clock')}
+        </div></div></div></div>`;
+  } else if(tab==='contacts'){
+    body=`<div class="card-pad" style="padding:0">${ed?`<div class="toolbar"><button class="btn btn-ghost btn-sm" onclick="clientForm('${id}')">${icon('edit',15)}Upravit kontakty</button></div>`:''}
+      ${c.contacts.length?`<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${c.contacts.map(ct=>`<div class="tile" style="flex-direction:row;align-items:center;gap:12px">
+        <div class="ti-ico" style="background:var(--info-tint);color:var(--info)">${icon(ct.type==='Email'?'mail':'phone',18)}</div>
+        <div><div class="t-mut" style="font-size:12px">${esc(ct.description||L.contact[ct.type])}</div><div class="t-strong">${esc(ct.value)}</div></div></div>`).join('')}</div>`
+        :`<div class="empty"><div>${icon('phone',34)}</div><div class="t">Žádné kontakty</div></div>`}</div>`;
+  } else if(tab==='orders'){
+    body=`<div class="card-pad" style="padding:0">${ed?`<div class="toolbar"><a class="btn btn-primary btn-sm" href="#/orders/new?client=${id}">${icon('plus',15)}Nová objednávka</a></div>`:''}
+      ${orders.length?ordersTable(orders,true):`<div class="empty"><div>${icon('order',34)}</div><div class="t">Žádné objednávky</div></div>`}</div>`;
+  } else if(tab==='reminders'){ body=remindersView(rems,ed,'Client',id); }
+  else { body=notesView(c,'client'); }
+  return `<div class="page">
+    ${crumbs([{t:'Klienti',href:'#/clients'},{t:c.name}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow">Klient · ${L.region[c.region]}</div><h1>${esc(c.name)}</h1>
+      <div class="sub">${esc(c.businessName||'')} · ${guidNote(c.id)}</div></div>
+      <div class="actions">${ed?`<button class="btn btn-ghost" onclick="clientForm('${id}')">${icon('edit',16)}Upravit</button>
+        <button class="btn btn-danger btn-icon" onclick="delClient('${id}')">${icon('trash',16)}</button>`:''}</div></div>
+    ${tabs}${body}</div>`;
+}
+function clTab(key,label,ic,cur,cnt){ return `<button class="${cur===key?'on':''}" onclick="location.hash='#/clients/'+curId()+'?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`; }
+
+let CONTACT_DRAFT=[];
+function clientForm(id){
+  const c=id?clientById(id):{ name:'',businessName:'',region:'ZittauCity',officialAddress:{country:'Czechia'},contactAddress:null,contacts:[] };
+  CONTACT_DRAFT=c.contacts.map(x=>({...x}));
+  const hasContact=!!c.contactAddress;
+  openOverlay(`<div class="drawer-head">${icon('client',20)}<h2>${id?'Upravit klienta':'Nový klient'}</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        ${field('Název',inp('cl-name',c.name,'Hospoda U ...'),{req:true})}
+        ${field('Obchodní název',inp('cl-biz',c.businessName||'','s.r.o.'))}
+        ${field('Region',sel('cl-region',Object.entries(L.region),c.region),{col2:true})}
+      </div>
+      <div class="divider"></div><div class="section-label">Fakturační adresa</div>${addressFields('clof',c.officialAddress)}
+      <div class="divider"></div><label class="row gap8" style="font-weight:700;font-size:13px;cursor:pointer"><input type="checkbox" id="cl-hascontact" ${hasContact?'checked':''} onchange="$('#clc-wrap').style.display=this.checked?'block':'none'"> Odlišná kontaktní adresa</label>
+      <div id="clc-wrap" style="display:${hasContact?'block':'none'};margin-top:12px">${addressFields('clcon',c.contactAddress)}</div>
+      <div class="divider"></div><div class="section-label">Kontakty</div><div id="contacts-list"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addContactRow()" style="margin-top:10px">${icon('plus',15)}Přidat kontakt</button>
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="cl-save">${icon('check',16)}Uložit</button></div>`);
+  renderContacts();
+  $('#cl-save').onclick=()=>{ const name=val('cl-name'); if(!name)return toast('Vyplňte název','warnTri');
+    syncContactDraft();
+    const data={ name, businessName:val('cl-biz'), region:val('cl-region'), officialAddress:readAddress('clof'),
+      contactAddress:$('#cl-hascontact').checked?readAddress('clcon'):null, contacts:CONTACT_DRAFT.filter(x=>x.value) };
+    if(id){ Object.assign(clientById(id),data); toast('Klient upraven'); }
+    else { data.id='cl-'+Math.random().toString(36).slice(2,7); data.notes=[]; data.reminders=[]; DB.clients.push(data); toast('Klient vytvořen'); }
+    closeOverlay(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function renderContacts(){ $('#contacts-list').innerHTML=CONTACT_DRAFT.map((ct,i)=>`<div class="row gap8" style="margin-bottom:8px">
+  <select class="select" style="width:120px;flex:0 0 auto" data-ci="${i}" data-f="type">${Object.entries(L.contact).map(([v,l])=>`<option value="${v}" ${ct.type===v?'selected':''}>${l}</option>`).join('')}</select>
+  <input class="input" placeholder="Popis" value="${esc(ct.description||'')}" data-ci="${i}" data-f="description" style="width:120px;flex:0 0 auto">
+  <input class="input" placeholder="Hodnota" value="${esc(ct.value||'')}" data-ci="${i}" data-f="value" style="flex:1">
+  <button class="icon-btn" style="width:38px;flex:0 0 auto" onclick="rmContactRow(${i})">${icon('trash',14)}</button></div>`).join('')
+  ||`<div class="t-mut" style="font-size:13px">Zatím žádné kontakty.</div>`; }
+function syncContactDraft(){ $$('#contacts-list [data-ci]').forEach(el=>{ CONTACT_DRAFT[+el.dataset.ci][el.dataset.f]=el.value; }); }
+function addContactRow(){ syncContactDraft(); CONTACT_DRAFT.push({type:'Phone',description:'',value:''}); renderContacts(); }
+function rmContactRow(i){ syncContactDraft(); CONTACT_DRAFT.splice(i,1); renderContacts(); }
+function delClient(id){ confirmDialog('Smazat klienta?','Klient bude odstraněn (soft-delete). Jeho objednávky zůstanou v historii.',()=>{
+  DB.clients=DB.clients.filter(c=>c.id!==id); toast('Klient smazán','trash'); go('clients'); }); }
+
+/* ============ MODULE: OBJEDNÁVKY (ORDERS) ============ */
+function orderTotals(o){ let items=0,price=0; o.items.forEach(it=>{ const p=prodById(it.productId); items+=it.quantity; price+=(p?p.priceWithVat:0)*it.quantity; }); return {items,price}; }
+function ordersTable(orders,hideClient){
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th>${hideClient?'':'<th>Klient</th>'}<th>Stav</th><th>Termín</th><th style="text-align:right">Položky</th><th style="text-align:right">Hodnota</th><th></th></tr></thead>
+    <tbody>${orders.map(o=>{ const cl=clientById(o.clientId); const t=orderTotals(o);
+      return `<tr class="clickable" onclick="go('orders/${o.id}')"><td><span class="mono t-strong">${o.number}</span></td>
+      ${hideClient?'':`<td><div class="row-lead">${avatar(o.clientId,initials(cl.name))}<span class="t-strong">${esc(cl.name)}</span></div></td>`}
+      <td>${pill('order',o.state)}</td>
+      <td>${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'<span class="t-mut">neurčeno</span>'}</td>
+      <td class="num tnum">${t.items}</td><td class="num tnum t-strong">${money(t.price)}</td>
+      <td style="text-align:right">${icon('chevR',16)}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+let ORD_FILTER='all';
+function viewOrders(){
+  const counts={ all:DB.orders.length }; ['New','Planning','Delivering','Finished'].forEach(s=>counts[s]=DB.orders.filter(o=>o.state===s).length);
+  let list=DB.orders.slice().sort((a,b)=>(b.number||'').localeCompare(a.number||''));
+  if(ORD_FILTER!=='all') list=list.filter(o=>o.state===ORD_FILTER);
+  const seg=[['all','Vše'],['New','Nové'],['Planning','Plánované'],['Delivering','Rozváží se'],['Finished','Dokončené']]
+    .map(([v,l])=>`<button class="${ORD_FILTER===v?'on':''}" onclick="ORD_FILTER='${v}';renderRoute()">${l}${counts[v]?` <span style="opacity:.6">${counts[v]}</span>`:''}</button>`).join('');
+  return `<div class="page">
+    ${pageHead('Prodej','Objednávky','Požadavky klientů — co, kolik a do kdy.', canEdit('orders')?addBtn('Nová objednávka','orders/new'):'')}
+    <div class="toolbar"><div class="seg">${seg}</div><span class="count-note">${list.length} z ${DB.orders.length}</span></div>
+    ${list.length?ordersTable(list,false):`<div class="empty"><div>${icon('order',36)}</div><div class="t">Žádné objednávky</div></div>`}</div>`;
+}
+function viewOrderDetail(id){
+  id=id.split('?')[0]; const o=DB.orders.find(x=>x.id===id); if(!o) return notFound('Objednávka');
+  const cl=clientById(o.clientId); const t=orderTotals(o); const ed=canEdit('orders');
+  const items=o.items.map(it=>{ const p=prodById(it.productId); const b=breweryById(p.breweryId);
+    return `<tr><td><div class="row-lead"><span class="chip" style="width:auto"><span class="dotc" style="background:${b.color}"></span></span>
+      <div><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${esc(b.name)} · ${kindChipText(p.kind)}</div></div></div></td>
+      <td class="num tnum">${it.quantity} ks</td><td class="num tnum">${money(p.priceWithVat)}</td>
+      <td class="num tnum t-strong">${money(p.priceWithVat*it.quantity)}</td>
+      <td>${it.reminderState==='Added'?'<span class="pill s-info"><span class="d"></span>hlídáno</span>':''}</td></tr>`; }).join('');
+  const shipStop=DB.shipments.find(s=>s.stops.some(st=>st.orderId===id));
+  const flow=['New','Planning','Delivering','Finished'];
+  return `<div class="page">
+    ${crumbs([{t:'Objednávky',href:'#/orders'},{t:o.number}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow">Objednávka</div><h1>${o.number}</h1>
+      <div class="sub"><a href="#/clients/${cl.id}" style="color:var(--amber-700);font-weight:600">${esc(cl.name)}</a> · vytvořeno ${fdate(o.createdDate)}</div></div>
+      <div class="actions">${pill('order',o.state)}${ed&&o.state!=='Finished'&&o.state!=='Cancelled'?`<a class="btn btn-ghost" href="#/orders/${id}/edit">${icon('edit',16)}Upravit</a>`:''}
+        ${ed?`<button class="btn btn-danger btn-icon" onclick="delOrder('${id}')">${icon('trash',16)}</button>`:''}</div></div>
+    ${o.state!=='Cancelled'?`<div class="card" style="margin-bottom:16px"><div class="card-pad"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
+      ${flow.map((s,i)=>{ const cur=flow.indexOf(o.state); const done=i<cur, active=i===cur;
+        return `<div style="flex:1;min-width:120px;text-align:center"><div style="height:5px;border-radius:99px;background:${i<=cur?'var(--amber)':'var(--border)'};margin-bottom:8px"></div>
+        <div class="row gap8" style="justify-content:center;color:${active?'var(--amber-700)':done?'var(--text)':'var(--text-3)'};font-weight:${active?800:600};font-size:12.5px">${done?icon('check',14):''}${L.orderState[s]}</div></div>`; }).join('')}
+    </div></div></div>`:''}
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
+      <div class="card"><div class="card-head"><h3>Položky</h3><span class="tag" style="margin-left:auto">${o.items.length}</span></div>
+        <div class="tbl-wrap" style="border:0"><table class="tbl"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:right">Cena/ks</th><th style="text-align:right">Celkem</th><th></th></tr></thead>
+        <tbody>${items}</tbody><tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:14px 16px">Celkem s DPH</td>
+        <td class="num tnum" style="font-weight:800;font-size:15px;color:var(--amber-700)">${money(t.price)}</td><td></td></tr></tfoot></table></div></div>
+      <div class="stack" style="gap:16px">
+        <div class="card"><div class="card-head"><h3>Doručení</h3></div><div class="card-pad stack" style="gap:14px">
+          <div class="kv"><span class="k">Požadovaný termín</span><span class="v">${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'—'}</span></div>
+          <div class="kv"><span class="k">Skutečné doručení</span><span class="v">${o.actualDeliveryDate?fdate(o.actualDeliveryDate):'—'}</span></div>
+          <div class="kv"><span class="k">Zařazeno do vývozu</span><span class="v">${shipStop?`<a href="#/shipments/${shipStop.id}" style="color:var(--amber-700)">${esc(shipStop.name)}</a>`:'<span class="t-mut">dosud ne</span>'}</span></div>
+        </div></div>
+        <div class="card"><div class="card-head"><h3>Klient</h3></div><div class="card-pad">
+          <div class="row-lead" style="margin-bottom:12px">${avatar(cl.id,initials(cl.name))}<div><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12px">${L.region[cl.region]}</div></div></div>
+          <div class="addr">${fmtAddrFull(cl.officialAddress)}</div></div></div>
+      </div></div></div>`;
+}
+function kindChipText(k){ return L.kind[k]||k; }
+function delOrder(id){ confirmDialog('Zrušit objednávku?','Objednávka bude nastavena jako Zrušená.',()=>{
+  DB.orders.find(o=>o.id===id).state='Cancelled'; toast('Objednávka zrušena','trash'); go('orders'); },{yes:'Zrušit objednávku'}); }
+
+/* ---- Order editor: history-first product picker ---- */
+let OE={ draft:null, tab:'history', search:'', brewOpen:{} };
+function viewOrderEditor(id){
+  let clientId=null; const q=location.hash.split('?')[1]||''; const qp=new URLSearchParams(q); if(qp.get('client')) clientId=qp.get('client');
+  if(id){ const o=DB.orders.find(x=>x.id===id); OE.draft={ id:o.id, number:o.number, clientId:o.clientId, requiredDeliveryDate:o.requiredDeliveryDate,
+    state:o.state, note:o.note||'', items:o.items.map(it=>({...it})) }; }
+  else { OE.draft={ id:null, clientId:clientId, requiredDeliveryDate:daysFromNow(3), state:'New', note:'', items:[] }; }
+  OE.tab= (OE.draft.clientId && orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; OE.search='';
+  AFTER=()=>{
+    const s=$('#oe-search'); if(s) s.oninput=e=>{ OE.search=e.target.value; oeRerenderCatalog(); };
+    const cs=$('#oe-client'); if(cs) cs.onchange=e=>{ OE.draft.clientId=e.target.value||null;
+      OE.tab=(OE.draft.clientId&&orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; oeRerenderCatalog(); };
+  };
+  return oeHTML();
+}
+function orderHistoryProducts(clientId){
+  const seen=new Set(); const list=[];
+  DB.orders.filter(o=>o.clientId===clientId).sort((a,b)=>(b.createdDate||'').localeCompare(a.createdDate||''))
+    .forEach(o=>o.items.forEach(it=>{ if(!seen.has(it.productId)){ seen.add(it.productId); const p=prodById(it.productId); if(p) list.push(p); } }));
+  return list;
+}
+function oeHTML(){
+  const d=OE.draft; const t=oeTotals();
+  const clientPick = d.id ? '' : `<div style="margin-bottom:16px">${field('Klient', sel('oe-client',[['','— vyberte klienta —'],...DB.clients.map(c=>[c.id,c.name])], d.clientId||''),{req:true})}</div>`;
+  return `<div class="page">
+    ${crumbs([{t:'Objednávky',href:'#/orders'},{t:d.id?('Úprava '+d.number):'Nová objednávka'}])}
+    ${pageHead('Prodej', d.id?('Úprava '+d.number):'Nová objednávka','Vyberte produkty — nejdřív se nabízí dříve objednané.',
+      `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button><button class="btn btn-primary" onclick="oeSave()">${icon('check',16)}${d.id?'Uložit změny':'Vytvořit objednávku'}</button>`)}
+    <div class="grid" style="grid-template-columns:1fr 380px;align-items:start" id="oe-grid">
+      <div class="card"><div class="card-head">${icon('history',16)}<h3>Katalog produktů</h3></div>
+        <div class="card-pad" id="oe-catalog-wrap">${oeCatalog()}</div></div>
+      <div class="stack" style="gap:16px;position:sticky;top:78px">
+        <div class="card"><div class="card-pad">${clientPick}
+          <div class="form-grid" style="grid-template-columns:1fr">
+            ${field('Požadovaný termín dodání',inp('oe-date',d.requiredDeliveryDate||'','','date'))}
+            ${field('Poznámka k objednávce',txta('oe-note',d.note||'','Např. dovézt dopoledne…'))}
+          </div></div></div>
+        <div class="card"><div class="card-head"><h3>Košík</h3><span class="tag" style="margin-left:auto" id="oe-count">${t.items} ks</span></div>
+          <div id="oe-cart">${oeCart()}</div></div>
+      </div></div></div>`;
+}
+function oeTotals(){ let items=0,price=0; OE.draft.items.forEach(it=>{ const p=prodById(it.productId); items+=it.quantity; price+=(p?p.priceWithVat:0)*it.quantity; }); return {items,price}; }
+function oeCatalog(){
+  const d=OE.draft;
+  const hist = d.clientId?orderHistoryProducts(d.clientId):[];
+  const tabs=`<div class="seg" style="margin-bottom:14px">
+    <button class="${OE.tab==='history'?'on':''}" onclick="OE.tab='history';oeRerenderCatalog()">${icon('history',14)} Dříve objednané ${hist.length?`<span style="opacity:.6">${hist.length}</span>`:''}</button>
+    <button class="${OE.tab==='browse'?'on':''}" onclick="OE.tab='browse';oeRerenderCatalog()">${icon('brewery',14)} Procházet dle pivovaru</button></div>`;
+  const search=`<div class="fld" style="margin-bottom:14px">${icon('search',16)}<input id="oe-search" placeholder="Hledat produkt…" value="${esc(OE.search)}"></div>`;
+  let content='';
+  const flt=p=>!OE.search||p.name.toLowerCase().includes(OE.search.toLowerCase());
+  if(OE.tab==='history'){
+    if(!d.clientId) content=`<div class="empty"><div class="t">Vyberte klienta</div><div>Zobrazí se produkty z jeho předchozích objednávek.</div></div>`;
+    else if(!hist.length) content=`<div class="empty"><div>${icon('history',34)}</div><div class="t">Zatím žádná historie</div><div>Tento klient ještě nic neobjednal — přepněte na „Procházet".</div></div>`;
+    else content=`<div class="stack" style="gap:9px">${hist.filter(flt).map(p=>oeProductRow(p,true)).join('')}</div>`;
+  } else {
+    content=DB.breweries.map(b=>{ const prods=productsOf(b.id).filter(flt); if(!prods.length) return '';
+      const open=OE.brewOpen[b.id]!==false;
+      return `<div style="margin-bottom:10px"><button class="row gap8" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;font-weight:700" onclick="OE.brewOpen['${b.id}']=${!open};oeRerenderCatalog()">
+        <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut" style="font-weight:600;margin-left:6px">${prods.length}</span>
+        <span style="margin-left:auto;transform:rotate(${open?90:0}deg);transition:.2s;color:var(--text-3)">${icon('chevR',16)}</span></button>
+        ${open?`<div class="stack" style="gap:9px;margin-top:9px">${prods.map(p=>oeProductRow(p,false)).join('')}</div>`:''}</div>`;
+    }).join('');
+  }
+  return tabs+search+content;
+}
+function oeProductRow(p,histBadge){
+  const b=breweryById(p.breweryId); const inCart=OE.draft.items.find(it=>it.productId===p.id);
+  return `<div class="row gap12" style="padding:10px;border:1px solid var(--border);border-radius:var(--r);${inCart?'background:var(--amber-soft);border-color:var(--amber-tint)':''}">
+    <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color};flex:0 0 auto"></span>
+    <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(p.name)}</div>
+      <div class="t-mut" style="font-size:12px">${kindChipText(p.kind)} · ${money(p.priceWithVat)}${histBadge?' · <span style="color:var(--info)">dříve objednáno</span>':''}</div></div>
+    ${inCart?`<div class="row gap8"><button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',-1)">−</button>
+      <span class="t-strong tnum" style="min-width:20px;text-align:center">${inCart.quantity}</span>
+      <button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',1)">+</button></div>`
+      :`<button class="btn btn-soft btn-sm" onclick="oeAdd('${p.id}')">${icon('plus',14)}Přidat</button>`}</div>`;
+}
+function oeCart(){
+  if(!OE.draft.items.length) return `<div class="empty" style="padding:30px"><div>${icon('order',30)}</div><div class="t">Košík je prázdný</div><div style="font-size:12.5px">Přidejte produkty z katalogu.</div></div>`;
+  const t=oeTotals();
+  return `<div class="stack">${OE.draft.items.map(it=>{ const p=prodById(it.productId); const b=breweryById(p.breweryId);
+    return `<div class="row gap8" style="padding:11px 16px;border-bottom:1px solid var(--border)">
+      <span class="dotc" style="width:8px;height:8px;border-radius:2px;background:${b.color};flex:0 0 auto"></span>
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+        <div class="t-mut" style="font-size:11.5px">${money(p.priceWithVat*it.quantity)}</div></div>
+      <button class="icon-btn" style="width:26px;height:26px" onclick="oeQty('${p.id}',-1)">−</button>
+      <span class="tnum t-strong" style="min-width:18px;text-align:center">${it.quantity}</span>
+      <button class="icon-btn" style="width:26px;height:26px" onclick="oeQty('${p.id}',1)">+</button>
+      <button class="icon-btn" style="width:26px;height:26px;color:var(--crit)" onclick="oeRemove('${p.id}')">${icon('trash',13)}</button></div>`; }).join('')}
+    <div class="row" style="justify-content:space-between;padding:14px 16px"><span class="t-strong">Celkem s DPH</span>
+      <span class="tnum" style="font-weight:800;font-size:16px;color:var(--amber-700)">${money(t.price)}</span></div></div>`;
+}
+function oeRerenderCatalog(){ $('#oe-catalog-wrap').innerHTML=oeCatalog(); const s=$('#oe-search'); if(s){ s.focus(); s.setSelectionRange(s.value.length,s.value.length); s.oninput=e=>{OE.search=e.target.value;oeRerenderCatalog();}; } }
+function oeRefreshCart(){ $('#oe-cart').innerHTML=oeCart(); $('#oe-count').textContent=oeTotals().items+' ks'; }
+function oeAdd(pid){ syncOEmeta(); if(OE.draft.clientId||OE.draft.id){} OE.draft.items.push({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:pid, quantity:1, reminderState:null }); oeRerenderCatalog(); oeRefreshCart(); }
+function oeQty(pid,delta){ const it=OE.draft.items.find(x=>x.productId===pid); if(!it)return; it.quantity+=delta; if(it.quantity<=0) OE.draft.items=OE.draft.items.filter(x=>x.productId!==pid); oeRerenderCatalog(); oeRefreshCart(); }
+function oeRemove(pid){ OE.draft.items=OE.draft.items.filter(x=>x.productId!==pid); oeRerenderCatalog(); oeRefreshCart(); }
+function syncOEmeta(){ if($('#oe-client')) OE.draft.clientId=$('#oe-client').value||null; if($('#oe-date')) OE.draft.requiredDeliveryDate=$('#oe-date').value||null; if($('#oe-note')) OE.draft.note=$('#oe-note').value; }
+function oeSave(){ syncOEmeta(); const d=OE.draft;
+  if(!d.clientId) return toast('Vyberte klienta','warnTri');
+  if(!d.items.length) return toast('Přidejte alespoň jeden produkt','warnTri');
+  if(d.id){ const o=DB.orders.find(x=>x.id===d.id); o.clientId=d.clientId; o.requiredDeliveryDate=d.requiredDeliveryDate; o.note=d.note; o.items=d.items;
+    if(o.state==='New'&&d.requiredDeliveryDate) o.state='Planning'; toast('Objednávka uložena'); go('orders/'+d.id); }
+  else { const num='OBJ-2026-'+(249+DB.orders.length); const o={ id:'o-'+Math.random().toString(36).slice(2,7), number:num, clientId:d.clientId,
+    state:d.requiredDeliveryDate?'Planning':'New', createdDate:daysFromNow(0), requiredDeliveryDate:d.requiredDeliveryDate, actualDeliveryDate:null, note:d.note, items:d.items };
+    DB.orders.push(o); toast('Objednávka vytvořena'); go('orders/'+o.id); }
+}
+
+/* ============ ROUTE MAP (stylized SVG, geographic projection) ============ */
+const MAP_BOUNDS={ latMin:50.50, latMax:51.20, lngMin:14.72, lngMax:15.14 };
+function projP(lat,lng,W,H,pad){ const b=MAP_BOUNDS;
+  return { x: pad+(lng-b.lngMin)/(b.lngMax-b.lngMin)*(W-2*pad), y: pad+(b.latMax-lat)/(b.latMax-b.latMin)*(H-2*pad) }; }
+function haversine(a,b){ const R=6371,d2r=Math.PI/180; const dLat=(b.lat-a.lat)*d2r,dLng=(b.lng-a.lng)*d2r;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*d2r)*Math.cos(b.lat*d2r)*Math.sin(dLng/2)**2; return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); }
+function routeStats(pts){ let km=0; for(let i=1;i<pts.length;i++) km+=haversine(pts[i-1],pts[i]);
+  const min=Math.round(km/45*60)+ (pts.length-1)*12; return { km:Math.round(km*10)/10, min }; }
+function fmtDur(min){ const h=Math.floor(min/60),m=min%60; return h?`${h} h ${m} min`:`${m} min`; }
+// stopPts: [{lat,lng,label,seq,color}], depot auto-added first & last
+function routeMap(stopPts,{h=380,loop=true,animate=true}={}){
+  const W=820, H=560, pad=46;
+  const depot={ lat:DEPOT.lat, lng:DEPOT.lng, label:DEPOT.name, depot:true };
+  const seq=[depot, ...stopPts]; if(loop&&stopPts.length) seq.push(depot);
+  const proj=seq.map(p=>({ ...p, ...projP(p.lat,p.lng,W,H,pad) }));
+  const line=proj.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+  const cities=[['Žitava',50.897,14.807],['Zhořelec',51.152,14.988],['Liberec',50.770,15.058],['Hrádek n.N.',50.853,14.844],['Frýdlant',50.921,15.079]];
+  const stats=stopPts.length?routeStats(seq):{km:0,min:0};
+  const markers=proj.map((p,i)=>{ if(p.depot&&i>0) return '';
+    if(p.depot) return `<g><circle cx="${p.x}" cy="${p.y}" r="15" fill="var(--navy)" stroke="#fff" stroke-width="3"/>
+      <g transform="translate(${p.x-7},${p.y-7})" stroke="#fff" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round">${IC.stock}</g>
+      <text x="${p.x}" y="${p.y+30}" text-anchor="middle" font-size="12" font-weight="800" fill="var(--text)">Sklad</text></g>`;
+    return `<g><circle cx="${p.x}" cy="${p.y}" r="16" fill="${p.color||'#F08C00'}" stroke="#fff" stroke-width="3"/>
+      <text x="${p.x}" y="${p.y+4.5}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff">${p.seq}</text>
+      <text x="${p.x}" y="${p.y+32}" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--text)">${esc((p.label||'').slice(0,22))}</text></g>`; }).join('');
+  const cityDots=cities.map(([n,la,lo])=>{ const q=projP(la,lo,W,H,pad); return `<g opacity=".5"><circle cx="${q.x}" cy="${q.y}" r="2.5" fill="var(--text-3)"/>
+    <text x="${q.x+6}" y="${q.y+3}" font-size="10.5" fill="var(--text-3)" font-weight="600">${n}</text></g>`; }).join('');
+  return `<div style="position:relative;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border);background:linear-gradient(160deg,var(--surface-2),var(--surface-3))">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="height:${h}px;display:block" preserveAspectRatio="xMidYMid slice">
+      <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="var(--border)" stroke-width="1" opacity=".5"/></pattern></defs>
+      <rect width="${W}" height="${H}" fill="url(#grid)"/>
+      <path d="M120 ${H} Q 300 ${H*0.55} 520 ${H*0.62} T ${W} ${H*0.35}" fill="none" stroke="var(--info)" stroke-width="6" opacity=".18" stroke-linecap="round"/>
+      <path d="M${pad} ${H*0.3} Q ${W*0.4} ${H*0.15} ${W-pad} ${H*0.42}" fill="none" stroke="var(--ok)" stroke-width="42" opacity=".07" stroke-linecap="round"/>
+      ${cityDots}
+      ${stopPts.length?`<path d="${line}" fill="none" stroke="var(--amber)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" ${animate?'stroke-dasharray="9 7" class="route-anim"':''}/>`:''}
+      ${markers}
+    </svg>
+    ${stopPts.length?`<div style="position:absolute;top:12px;left:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:9px 13px;box-shadow:var(--shadow-md);display:flex;gap:16px">
+      <div><div class="t-mut" style="font-size:11px;font-weight:700">VZDÁLENOST</div><div class="tnum" style="font-weight:800;font-size:16px">${stats.km} km</div></div>
+      <div><div class="t-mut" style="font-size:11px;font-weight:700">ČAS (odhad)</div><div class="tnum" style="font-weight:800;font-size:16px">${fmtDur(stats.min)}</div></div>
+      <div><div class="t-mut" style="font-size:11px;font-weight:700">ZASTÁVEK</div><div class="tnum" style="font-weight:800;font-size:16px">${stopPts.length}</div></div>
+    </div>`:`<div style="position:absolute;inset:0;display:grid;place-items:center;pointer-events:none"><div class="t-mut" style="text-align:center"><div>${icon('map',30)}</div>Vyberte objednávky — trasa se vykreslí</div></div>`}
+  </div>`;
+}
+function stopAddress(st){ const cl=clientById(st.clientId); return st.addressKind==='Contact'&&cl.contactAddress?cl.contactAddress:cl.officialAddress; }
+function shipStopPoints(stops){ return stops.slice().sort((a,b)=>a.order-b.order).map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
+  return { lat:a.latitude, lng:a.longitude, label:cl.name, seq:i+1, color:colorFor(cl.id) }; }); }
+
+/* ============ MODULE: VÝVOZY (OUTGOING SHIPMENTS) ============ */
+function viewShipments(){
+  const list=DB.shipments.slice().sort((a,b)=>(b.deliveryDate||'').localeCompare(a.deliveryDate||''));
+  const rows=list.map(s=>{ const stops=s.stops.length; const veh=vehicleById(s.vehicleId);
+    return `<tr class="clickable" onclick="go('shipments/${s.id}')"><td><span class="mono t-strong">${s.number}</span></td>
+      <td class="t-strong">${esc(s.name)}</td><td>${pill('ship',s.state)}</td>
+      <td>${s.deliveryDate?fdate(s.deliveryDate):'—'}</td>
+      <td class="num tnum">${stops}</td>
+      <td>${veh?`<span class="tag">${icon('vehicle',12)}${esc(veh.name.split('(')[0])}</span>`:'<span class="t-mut">nepřiřazen</span>'}</td>
+      <td>${s.driverIds.map(id=>{const d=driverById(id);return `<span class="tag" style="border-color:${d.color}55" title="${esc(d.firstName+' '+d.lastName)}"><span class="dotc" style="width:8px;height:8px;border-radius:99px;background:${d.color}"></span>${esc(d.lastName)}</span>`;}).join(' ')||'<span class="t-mut">—</span>'}</td>
+      <td style="text-align:right">${icon('chevR',16)}</td></tr>`; }).join('');
+  return `<div class="page">
+    ${pageHead('Prodej','Vývozy','Plánování rozvozů ke klientům s optimalizací trasy.', canEdit('shipments')?addBtn('Naplánovat vývoz','shipments/new'):'')}
+    <div class="toolbar"><span class="count-note">${list.length} vývozů</span></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Název</th><th>Stav</th><th>Datum</th><th style="text-align:right">Zast.</th><th>Vůz</th><th>Řidiči</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+function viewShipmentDetail(id){
+  id=id.split('?')[0]; const s=DB.shipments.find(x=>x.id===id); if(!s) return notFound('Vývoz');
+  const ed=canEdit('shipments'); const veh=vehicleById(s.vehicleId);
+  const pts=shipStopPoints(s.stops);
+  const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
+  const totalWeight=stopsSorted.reduce((w,st)=>w+st.items.reduce((x,it)=>{const p=prodById(it.productId);return x+(estWeight(p)*it.quantity);},0),0);
+  const stopCards=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
+    return `<div class="card"><div class="card-pad">
+      <div class="row gap12" style="margin-bottom:10px"><span class="av" style="background:${colorFor(cl.id)};color:#fff">${i+1}</span>
+        <div style="flex:1"><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12.5px">${fmtAddr(a)} · <span class="tag">${L.addrKind[st.addressKind]}</span></div></div>
+        <a class="btn btn-sm btn-ghost" href="#/clients/${cl.id}">Detail</a></div>
+      <div class="tbl-wrap" style="border:0"><table class="tbl" style="min-width:0"><tbody>
+        ${st.items.map(it=>{ const p=prodById(it.productId);
+          return `<tr><td style="padding:8px 12px"><span class="t-strong">${esc(p.name)}</span></td>
+          <td class="num tnum" style="padding:8px 12px">${it.quantity} ks</td>
+          <td style="padding:8px 12px;width:40px">${s.state==='Loaded'||s.state==='InTransit'||s.state==='Delivered'?`<span class="pill s-ok" title="Naloženo"><span class="d"></span>naloženo</span>`:''}</td></tr>`; }).join('')}
+      </tbody></table></div></div></div>`; }).join('');
+  const flow=['Created','Loaded','InTransit','Delivered'];
+  return `<div class="page">
+    ${crumbs([{t:'Vývozy',href:'#/shipments'},{t:s.number}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow">Vývoz</div><h1>${esc(s.name)}</h1>
+      <div class="sub"><span class="mono">${s.number}</span> · ${s.deliveryDate?fdate(s.deliveryDate):'termín neurčen'}</div></div>
+      <div class="actions">${pill('ship',s.state)}
+        ${ed&&s.state==='Created'?`<button class="btn btn-soft" onclick="advanceShip('${id}','Loaded')">${icon('check',16)}Naloženo</button>`:''}
+        ${ed&&s.state==='Loaded'?`<button class="btn btn-soft" onclick="advanceShip('${id}','InTransit')">${icon('ship',16)}Vyrazit</button>`:''}
+        ${ed&&s.state==='InTransit'?`<button class="btn btn-primary" onclick="advanceShip('${id}','Delivered')">${icon('check',16)}Doručeno</button>`:''}
+        ${ed?`<a class="btn btn-ghost" href="#/shipments/${id}/edit">${icon('edit',16)}Upravit</a>`:''}</div></div>
+    ${routeMap(pts,{h:360,animate:s.state==='InTransit'})}
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start;margin-top:16px">
+      <div class="stack" style="gap:14px"><div class="section-label">Zastávky &amp; nakládka (${stopsSorted.length})</div>${stopCards}
+        ${s.extraCustom&&s.extraCustom.length?`<div class="section-label" style="margin-top:8px">Extra položky</div>
+          <div class="card"><div class="card-pad stack" style="gap:8px">${s.extraCustom.map(e=>`<div class="row" style="justify-content:space-between"><span>${esc(e.description)}</span><span class="tnum t-strong">${e.quantity} ks</span></div>`).join('')}</div></div>`:''}</div>
+      <div class="stack" style="gap:14px">
+        <div class="card"><div class="card-head"><h3>Vůz</h3></div><div class="card-pad">
+          ${veh?`<div class="row gap12"><div class="ti-ico" style="background:var(--surface-3)">${icon('vehicle',18)}</div>
+            <div><div class="t-strong">${esc(veh.name)}</div><div class="t-mut" style="font-size:12px">Nosnost ${num(veh.maxWeight)} kg</div></div></div>
+            <div class="divider"></div><div class="row" style="justify-content:space-between"><span class="t-mut">Odhad. hmotnost nákladu</span>
+            <span class="tnum t-strong" style="color:${totalWeight>veh.maxWeight?'var(--crit)':'var(--ok)'}">${num(Math.round(totalWeight))} kg</span></div>
+            ${totalWeight>veh.maxWeight?`<div class="pill s-crit" style="margin-top:8px"><span class="d"></span>Překročena nosnost!</div>`:''}`
+            :'<span class="t-mut">Vůz nepřiřazen</span>'}</div></div>
+        <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad stack" style="gap:10px">
+          ${s.driverIds.length?s.driverIds.map(did=>{const d=driverById(did);return `<div class="row gap12"><span class="dotc" style="width:12px;height:12px;border-radius:99px;background:${d.color}"></span>
+            <div><div class="t-strong">${esc(d.firstName)} ${esc(d.lastName)}</div><div class="t-mut" style="font-size:12px">${esc(d.phoneNumber||'')}</div></div></div>`;}).join(''):'<span class="t-mut">Bez řidiče</span>'}</div></div>
+      </div></div></div>`;
+}
+function estWeight(p){ if(!p) return 0; if(p.kind==='Keg') return (p.packageSize||30)*1.05+8; if(p.kind==='Bottle') return (p.packageSize||0.5)*20*1.1; if(p.kind==='Can'||p.kind==='Multipack') return (p.packageSize||6)*1.05; return 5; }
+function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to;
+  if(to==='Delivered'){ s.stops.forEach(st=>{ const o=DB.orders.find(x=>x.id===st.orderId); if(o){o.state='Finished';o.actualDeliveryDate=daysFromNow(0);} });
+    toast('Vývoz doručen — objednávky dokončeny','check'); } else if(to==='InTransit'){ s.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o)o.state='Delivering';}); toast('Vývoz vyrazil'); } else toast('Stav aktualizován');
+  renderRoute(); }
+
+/* ---- Shipment planner ---- */
+let SH={ draft:null, drag:null };
+function shipmentUsedOrderIds(exceptId){ const set=new Set(); DB.shipments.forEach(s=>{ if(s.id===exceptId)return; s.stops.forEach(st=>set.add(st.orderId)); }); return set; }
+function viewShipmentEditor(id){
+  if(id){ const s=DB.shipments.find(x=>x.id===id); SH.draft={ id:s.id, number:s.number, name:s.name, deliveryDate:s.deliveryDate, vehicleId:s.vehicleId,
+    driverIds:[...s.driverIds], stops:s.stops.map(st=>({...st})), extraCustom:(s.extraCustom||[]).map(e=>({...e})) }; }
+  else SH.draft={ id:null, name:'', deliveryDate:daysFromNow(2)+'T07:00', vehicleId:null, driverIds:[], stops:[], extraCustom:[] };
+  return seHTML();
+}
+function seRerender(){ $('#view').innerHTML=seHTML(); }
+function seHTML(){
+  const d=SH.draft;
+  const used=shipmentUsedOrderIds(d.id);
+  const avail=DB.orders.filter(o=>['New','Planning','Delivering'].includes(o.state)&&(!used.has(o.id)||d.stops.some(st=>st.orderId===o.id)));
+  const stopsSorted=d.stops.slice().sort((a,b)=>a.order-b.order);
+  const pts=shipStopPoints(d.stops);
+  const veh=vehicleById(d.vehicleId);
+  const totalWeight=stopsSorted.reduce((w,st)=>{const o=DB.orders.find(x=>x.id===st.orderId);return w+ (o?o.items.reduce((x,it)=>x+estWeight(prodById(it.productId))*it.quantity,0):0);},0);
+  // available orders list
+  const availList=avail.map(o=>{ const cl=clientById(o.clientId); const inRoute=d.stops.some(st=>st.orderId===o.id); const t=orderTotals(o);
+    return `<label class="row gap12" style="padding:11px;border:1px solid ${inRoute?'var(--amber)':'var(--border)'};border-radius:var(--r);cursor:pointer;${inRoute?'background:var(--amber-soft)':''}">
+      <input type="checkbox" ${inRoute?'checked':''} onchange="seToggleOrder('${o.id}')" style="width:17px;height:17px;accent-color:var(--amber)">
+      <span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${colorFor(cl.id)}"></span>
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(cl.name)}</div>
+        <div class="t-mut" style="font-size:12px">${o.number} · ${t.items} ks · ${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'bez termínu'}</div></div>
+      ${pill('order',o.state)}</label>`; }).join('')||`<div class="empty" style="padding:24px"><div class="t">Žádné objednávky k naplánování</div></div>`;
+  // ordered stops (draggable)
+  const stopRows=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const o=DB.orders.find(x=>x.id===st.orderId);
+    return `<div class="row gap8" draggable="true" ondragstart="SH.drag='${st.orderId}'" ondragover="event.preventDefault()" ondrop="seDropOn('${st.orderId}')"
+      style="padding:10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:grab">
+      <span style="color:var(--text-3)">${icon('drag',16)}</span>
+      <span class="av" style="width:28px;height:28px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(cl.name)}</div>
+        <div class="t-mut" style="font-size:11.5px">${o?o.number:''}</div></div>
+      <select class="select" style="width:130px;height:32px;flex:0 0 auto" onchange="seAddrKind('${st.orderId}',this.value)">
+        <option value="Official" ${st.addressKind==='Official'?'selected':''}>Fakturační</option>
+        ${cl.contactAddress?`<option value="Contact" ${st.addressKind==='Contact'?'selected':''}>Kontaktní</option>`:''}</select>
+      <button class="icon-btn" style="width:30px;height:30px" onclick="seMove('${st.orderId}',-1)" ${i===0?'disabled':''}>${icon('arrowU',13)}</button>
+      <button class="icon-btn" style="width:30px;height:30px" onclick="seMove('${st.orderId}',1)" ${i===stopsSorted.length-1?'disabled':''}>${icon('arrowD',13)}</button>
+      <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="seRemoveStop('${st.orderId}')">${icon('trash',13)}</button></div>`; }).join('');
+  const driverChips=DB.drivers.map(dr=>{ const on=d.driverIds.includes(dr.id); const free=driverAvailableOn(dr,d.deliveryDate);
+    return `<button class="chip" style="height:34px;border-color:${on?dr.color:'var(--border)'};${on?`background:${dr.color}18`:''}" onclick="seToggleDriver('${dr.id}')">
+      <span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${dr.color}"></span>${esc(dr.firstName)} ${esc(dr.lastName)}
+      ${on?`<span style="color:${dr.color}">${icon('check',13)}</span>`:free?'':`<span title="Nedostupný v tento den" style="color:var(--warn)">${icon('warnTri',13)}</span>`}</button>`; }).join('');
+  return `<div class="page">
+    ${crumbs([{t:'Vývozy',href:'#/shipments'},{t:d.id?('Úprava '+d.number):'Nový vývoz'}])}
+    ${pageHead('Prodej', d.id?('Úprava vývozu'):'Naplánovat vývoz','Vyberte objednávky, seřaďte zastávky a přiřaďte vůz a řidiče.',
+      `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button><button class="btn btn-primary" onclick="seSave()">${icon('check',16)}${d.id?'Uložit':'Vytvořit vývoz'}</button>`)}
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
+      <div class="stack" style="gap:16px">
+        ${routeMap(pts,{h:340,animate:false})}
+        <div class="card"><div class="card-head">${icon('route',16)}<h3>Pořadí zastávek</h3>
+          ${d.stops.length>1?`<button class="btn btn-sm btn-soft" style="margin-left:auto" onclick="seOptimize()">${icon('sparkle',14)}Optimalizovat trasu</button>`:''}</div>
+          <div class="card-pad stack" style="gap:9px">${stopRows||'<div class="t-mut" style="text-align:center;padding:16px">Zatím žádné zastávky — vyberte objednávky vpravo.</div>'}</div></div>
+      </div>
+      <div class="stack" style="gap:16px">
+        <div class="card"><div class="card-pad"><div class="form-grid" style="grid-template-columns:1fr">
+          ${field('Název vývozu',inp('se-name',d.name,'Rozvoz Žitava + Hrádek'),{req:true})}
+          ${field('Datum a čas',`<input class="input" type="datetime-local" id="se-date" value="${(d.deliveryDate||'').slice(0,16)}" onchange="SH.draft.deliveryDate=this.value;seRerender()">`)}
+          ${field('Vůz',sel('se-veh',[['','— vyberte vůz —'],...DB.vehicles.map(v=>[v.id,v.name])],d.vehicleId||''))}
+        </div>
+        ${veh?`<div class="row" style="justify-content:space-between;margin-top:6px"><span class="t-mut" style="font-size:12.5px">Náklad / nosnost</span>
+          <span class="tnum t-strong" style="color:${totalWeight>veh.maxWeight?'var(--crit)':'var(--ok)'}">${Math.round(totalWeight)} / ${num(veh.maxWeight)} kg</span></div>`:''}
+        </div></div>
+        <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad" style="display:flex;flex-wrap:wrap;gap:8px">${driverChips}</div></div>
+        <div class="card"><div class="card-head">${icon('order',16)}<h3>Objednávky k rozvozu</h3><span class="tag" style="margin-left:auto">${d.stops.length}/${avail.length}</span></div>
+          <div class="card-pad stack" style="gap:9px;max-height:420px;overflow-y:auto">${availList}</div></div>
+      </div></div></div>`;
+}
+function driverAvailableOn(dr,dt){ if(!dt)return true; const day=dt.slice(0,10); return dr.availabilities.some(a=>a.from.slice(0,10)===day); }
+function seSyncMeta(){ if($('#se-name'))SH.draft.name=$('#se-name').value; if($('#se-veh'))SH.draft.vehicleId=$('#se-veh').value||null; }
+function seToggleOrder(orderId){ seSyncMeta(); const d=SH.draft; const ex=d.stops.find(s=>s.orderId===orderId);
+  if(ex) d.stops=d.stops.filter(s=>s.orderId!==orderId);
+  else { const o=DB.orders.find(x=>x.id===orderId); d.stops.push({ orderId, clientId:o.clientId, addressKind:'Official', order:d.stops.length+1 }); }
+  reseq(); seRerender(); }
+function reseq(){ SH.draft.stops.slice().sort((a,b)=>a.order-b.order).forEach((s,i)=>s.order=i+1); }
+function seMove(orderId,dir){ seSyncMeta(); const arr=SH.draft.stops.slice().sort((a,b)=>a.order-b.order); const i=arr.findIndex(s=>s.orderId===orderId);
+  const j=i+dir; if(j<0||j>=arr.length)return; [arr[i].order,arr[j].order]=[arr[j].order,arr[i].order]; seRerender(); }
+function seDropOn(targetId){ const arr=SH.draft.stops.slice().sort((a,b)=>a.order-b.order); const from=arr.findIndex(s=>s.orderId===SH.drag); const to=arr.findIndex(s=>s.orderId===targetId);
+  if(from<0||to<0||from===to)return; const [m]=arr.splice(from,1); arr.splice(to,0,m); arr.forEach((s,i)=>s.order=i+1); SH.drag=null; seRerender(); }
+function seRemoveStop(orderId){ seSyncMeta(); SH.draft.stops=SH.draft.stops.filter(s=>s.orderId!==orderId); reseq(); seRerender(); }
+function seAddrKind(orderId,kind){ SH.draft.stops.find(s=>s.orderId===orderId).addressKind=kind; seRerender(); }
+function seToggleDriver(id){ seSyncMeta(); const a=SH.draft.driverIds; const i=a.indexOf(id); if(i>=0)a.splice(i,1); else a.push(id); seRerender(); }
+function seOptimize(){ seSyncMeta(); const arr=SH.draft.stops.slice(); if(arr.length<2){toast('Málo zastávek');return;}
+  const pt=st=>{const a=stopAddress(st);return {lat:a.latitude,lng:a.longitude};};
+  let cur={lat:DEPOT.lat,lng:DEPOT.lng}; const rem=[...arr]; const out=[];
+  while(rem.length){ let bi=0,bd=1e9; rem.forEach((s,i)=>{const dd=haversine(cur,pt(s));if(dd<bd){bd=dd;bi=i;}}); const n=rem.splice(bi,1)[0]; out.push(n); cur=pt(n); }
+  out.forEach((s,i)=>s.order=i+1); SH.draft.stops=out; seRerender(); toast('Trasa optimalizována (nejbližší soused)','sparkle'); }
+function seSave(){ seSyncMeta(); const d=SH.draft; if(!d.name)return toast('Zadejte název','warnTri'); if(!d.stops.length)return toast('Přidejte alespoň jednu zastávku','warnTri');
+  const build=st=>{ const o=DB.orders.find(x=>x.id===st.orderId); return { ...st, items:o.items.map(it=>({orderItemId:it.id,productId:it.productId,quantity:it.quantity,loaded:false})) }; };
+  if(d.id){ const s=DB.shipments.find(x=>x.id===d.id); Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom }); toast('Vývoz uložen'); go('shipments/'+d.id); }
+  else { const s={ id:'s-'+Math.random().toString(36).slice(2,7), number:'VYV-2026-'+(53+DB.shipments.length), name:d.name, state:'Created',
+    deliveryDate:d.deliveryDate, vehicleId:d.vehicleId, driverIds:d.driverIds, stops:d.stops.map(build), extraCustom:d.extraCustom };
+    d.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o&&o.state==='New')o.state='Planning';});
+    DB.shipments.push(s); toast('Vývoz naplánován'); go('shipments/'+s.id); }
+}
+
+/* ============ MODULE: DOVOZY ZBOŽÍ (PRODUCT DELIVERIES) ============ */
+function deliveryTotals(d){ let items=0; d.stops.forEach(s=>s.items.forEach(i=>items+=i.quantity)); return items; }
+function viewDeliveries(){
+  const list=DB.deliveries.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const rows=list.map(d=>{ const veh=vehicleById(d.vehicleId);
+    return `<tr class="clickable" onclick="go('deliveries/${d.id}')"><td><span class="mono t-strong">${d.number}</span></td>
+      <td>${fdate(d.date)}</td><td>${pill('delivery',d.state)}</td>
+      <td>${d.stops.map(s=>{const b=breweryById(s.breweryId);return `<span class="tag"><span class="dotc" style="background:${b.color}"></span>${esc(b.name.replace('Pivovar ','').replace('Brauerei','').trim())}</span>`;}).join(' ')}</td>
+      <td class="num tnum">${deliveryTotals(d)} ks</td>
+      <td>${veh?`<span class="tag">${icon('vehicle',12)}${esc(veh.name.split('(')[0])}</span>`:'<span class="t-mut">—</span>'}</td>
+      <td style="text-align:right">${icon('chevR',16)}</td></tr>`; }).join('');
+  return `<div class="page">
+    ${pageHead('Sklad','Dovozy zboží','Navážení zboží z pivovarů na firemní sklad.', canEdit('deliveries')?addBtn('Nový dovoz','deliveries/new'):'')}
+    <div class="toolbar"><span class="count-note">${list.length} dovozů</span></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Datum</th><th>Stav</th><th>Pivovary</th><th style="text-align:right">Kusů</th><th>Vůz</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+function viewDeliveryDetail(id){
+  id=id.split('?')[0]; const d=DB.deliveries.find(x=>x.id===id); if(!d) return notFound('Dovoz');
+  const ed=canEdit('deliveries'); const veh=vehicleById(d.vehicleId); const done=d.state==='Finished';
+  const stopCards=d.stops.map((s,i)=>{ const b=breweryById(s.breweryId);
+    return `<div class="card"><div class="card-pad">
+      <div class="row gap12" style="margin-bottom:10px"><span class="av" style="background:${b.color}22;color:${b.color}">${icon('brewery',18)}</span>
+        <div style="flex:1"><div class="t-strong">${esc(b.name)}</div><div class="t-mut" style="font-size:12.5px">${fmtAddr(b.officialAddress)}</div></div>
+        ${s.note?`<span class="tag">${icon('note',12)}${esc(s.note)}</span>`:''}</div>
+      <div class="tbl-wrap" style="border:0"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th>Pozn.</th></tr></thead>
+        <tbody>${s.items.map(it=>{const p=prodById(it.productId);return `<tr><td class="t-strong" style="padding:8px 12px">${esc(p.name)}</td>
+          <td class="num tnum" style="padding:8px 12px">${it.quantity} ks</td><td style="padding:8px 12px" class="t-mut">${esc(it.note||'')}</td></tr>`;}).join('')}</tbody></table></div></div></div>`; }).join('');
+  return `<div class="page">
+    ${crumbs([{t:'Dovozy zboží',href:'#/deliveries'},{t:d.number}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow">Dovoz z pivovarů</div><h1>${d.number}</h1>
+      <div class="sub">${fdate(d.date)} · ${d.stops.length} ${plural(d.stops.length,'pivovar','pivovary','pivovarů')}</div></div>
+      <div class="actions">${pill('delivery',d.state)}
+        ${ed&&d.state==='InPlanning'?`<button class="btn btn-soft" onclick="advanceDelivery('${id}','OnTheWay')">${icon('vehicle',16)}Vyrazit</button>`:''}
+        ${ed&&d.state==='OnTheWay'?`<button class="btn btn-primary" onclick="finishDelivery('${id}')">${icon('stock',16)}Dokončit → naskladnit</button>`:''}
+        ${ed&&!done?`<a class="btn btn-ghost" href="#/deliveries/${id}/edit">${icon('edit',16)}Upravit</a>`:''}</div></div>
+    ${done?`<div class="card" style="margin-bottom:16px;background:var(--ok-tint);border-color:transparent"><div class="card-pad row gap12">
+      <span style="color:var(--ok)">${icon('check',20)}</span><div><div class="t-strong">Naskladněno</div>
+      <div class="t-mut" style="font-size:13px">${deliveryTotals(d)} kusů bylo propsáno na sklad.</div></div>
+      <a class="btn btn-sm btn-ghost" href="#/inventory" style="margin-left:auto">Zobrazit sklad</a></div></div>`:''}
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
+      <div class="stack" style="gap:14px"><div class="section-label">Zastávky (${d.stops.length})</div>${stopCards}</div>
+      <div class="stack" style="gap:14px">
+        <div class="card"><div class="card-head"><h3>Vůz a řidiči</h3></div><div class="card-pad stack" style="gap:12px">
+          <div class="kv"><span class="k">Vůz</span><span class="v">${veh?esc(veh.name):'—'}</span></div>
+          <div><span class="k" style="font-size:11.5px;color:var(--text-3);font-weight:600">Řidiči</span><div class="row wrap gap8" style="margin-top:6px">
+            ${d.driverIds.map(did=>{const dr=driverById(did);return `<span class="chip"><span class="dotc" style="width:9px;height:9px;border-radius:99px;background:${dr.color}"></span>${esc(dr.firstName)} ${esc(dr.lastName)}</span>`;}).join('')||'<span class="t-mut">—</span>'}</div></div>
+        </div></div>
+        ${d.note?`<div class="card"><div class="card-head"><h3>Poznámka</h3></div><div class="card-pad addr">${esc(d.note)}</div></div>`:''}
+        <div class="card"><div class="card-head"><h3>Souhrn</h3></div><div class="card-pad"><div class="tiles" style="grid-template-columns:1fr 1fr">
+          ${miniStat('Kusů celkem',deliveryTotals(d),'box')}${miniStat('Pivovarů',d.stops.length,'brewery')}</div></div></div>
+      </div></div></div>`;
+}
+function advanceDelivery(id,to){ DB.deliveries.find(x=>x.id===id).state=to; toast(to==='OnTheWay'?'Dovoz vyrazil':'Stav aktualizován'); renderRoute(); }
+function finishDelivery(id){ const d=DB.deliveries.find(x=>x.id===id);
+  const preview=[]; d.stops.forEach(s=>s.items.forEach(it=>{ const p=prodById(it.productId); const inv=DB.inventory.find(i=>i.productId===it.productId);
+    preview.push({ name:p.name, qty:it.quantity, before:inv?inv.quantity:0, after:(inv?inv.quantity:0)+it.quantity }); }));
+  openOverlay(`<div class="modal-head">${icon('stock',20)}<h3>Naskladnit dovoz ${d.number}</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><p style="margin:0 0 14px;color:var(--text-2)">Po dokončení se tyto položky připíšou na sklad:</p>
+      <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Skladem</th><th style="text-align:right">Dovoz</th><th style="text-align:right">Nově</th></tr></thead>
+      <tbody>${preview.map(r=>`<tr><td class="t-strong">${esc(r.name)}</td><td class="num tnum t-mut">${r.before}</td>
+        <td class="num tnum" style="color:var(--ok)">+${r.qty}</td><td class="num tnum t-strong">${r.after}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="fin-yes">${icon('check',16)}Dokončit a naskladnit</button></div>`,{center:true});
+  $('#fin-yes').onclick=()=>{ d.stops.forEach(s=>s.items.forEach(it=>{ const inv=DB.inventory.find(i=>i.productId===it.productId);
+    if(inv) inv.quantity+=it.quantity; else DB.inventory.push({ id:'inv-'+Math.random().toString(36).slice(2,7), productId:it.productId, name:null, quantity:it.quantity, note:null }); }));
+    d.state='Finished'; closeOverlay(); toast('Dovoz naskladněn na sklad','stock'); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+/* ---- Delivery editor ---- */
+let DE={ draft:null };
+function viewDeliveryEditor(id){
+  if(id){ const d=DB.deliveries.find(x=>x.id===id); DE.draft={ id:d.id,number:d.number,date:d.date,vehicleId:d.vehicleId,driverIds:[...d.driverIds],note:d.note,
+    stops:d.stops.map(s=>({ id:s.id, breweryId:s.breweryId, note:s.note, items:s.items.map(i=>({...i})) })) }; }
+  else DE.draft={ id:null,date:daysFromNow(2),vehicleId:null,driverIds:[],note:'',stops:[] };
+  return deHTML();
+}
+function deRerender(){ $('#view').innerHTML=deHTML(); }
+function deSyncMeta(){ if($('#de-date'))DE.draft.date=$('#de-date').value; if($('#de-veh'))DE.draft.vehicleId=$('#de-veh').value||null; if($('#de-note'))DE.draft.note=$('#de-note').value; }
+function deHTML(){
+  const d=DE.draft;
+  const usedBrew=new Set(d.stops.map(s=>s.breweryId));
+  const stopCards=d.stops.map(s=>{ const b=breweryById(s.breweryId); const prods=productsOf(b.id);
+    return `<div class="card"><div class="card-head"><span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>
+      <h3>${esc(b.name)}</h3><button class="icon-btn" style="width:32px;height:32px;margin-left:auto;color:var(--crit)" onclick="deRemoveStop('${s.id}')">${icon('trash',14)}</button></div>
+      <div class="card-pad">
+        <div class="stack" style="gap:8px;margin-bottom:12px">${s.items.length?s.items.map(it=>{const p=prodById(it.productId);
+          return `<div class="row gap8" style="padding:8px;border:1px solid var(--border);border-radius:var(--r-sm)">
+            <div style="flex:1"><span class="t-strong" style="font-size:13px">${esc(p.name)}</span></div>
+            <button class="icon-btn" style="width:28px;height:28px" onclick="deItemQty('${s.id}','${it.productId}',-1)">−</button>
+            <span class="tnum t-strong" style="min-width:22px;text-align:center">${it.quantity}</span>
+            <button class="icon-btn" style="width:28px;height:28px" onclick="deItemQty('${s.id}','${it.productId}',1)">+</button>
+            <button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" onclick="deRemoveItem('${s.id}','${it.productId}')">${icon('trash',12)}</button></div>`;}).join(''):'<div class="t-mut" style="font-size:12.5px">Přidejte produkty z pivovaru.</div>'}</div>
+        <select class="select" onchange="if(this.value){deAddItem('${s.id}',this.value);this.value='';}">
+          <option value="">+ Přidat produkt…</option>
+          ${prods.filter(p=>!s.items.some(i=>i.productId===p.id)).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+      </div></div>`; }).join('');
+  const addBrewery=DB.breweries.filter(b=>!usedBrew.has(b.id));
+  const driverChips=DB.drivers.map(dr=>{ const on=d.driverIds.includes(dr.id);
+    return `<button class="chip" style="height:34px;border-color:${on?dr.color:'var(--border)'};${on?`background:${dr.color}18`:''}" onclick="deToggleDriver('${dr.id}')">
+      <span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${dr.color}"></span>${esc(dr.firstName)} ${esc(dr.lastName)}${on?`<span style="color:${dr.color}">${icon('check',13)}</span>`:''}</button>`; }).join('');
+  return `<div class="page">
+    ${crumbs([{t:'Dovozy zboží',href:'#/deliveries'},{t:d.id?('Úprava '+d.number):'Nový dovoz'}])}
+    ${pageHead('Sklad', d.id?'Úprava dovozu':'Nový dovoz','Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů.',
+      `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button><button class="btn btn-primary" onclick="deSave()">${icon('check',16)}${d.id?'Uložit':'Vytvořit dovoz'}</button>`)}
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
+      <div class="stack" style="gap:14px">
+        <div class="section-label">Zastávky u pivovarů (${d.stops.length})</div>
+        ${stopCards||`<div class="empty" style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-lg)"><div>${icon('brewery',34)}</div><div class="t">Zatím žádný pivovar</div></div>`}
+        ${addBrewery.length?`<select class="select" onchange="if(this.value){deAddStop(this.value);this.value='';}"><option value="">+ Přidat pivovar…</option>
+          ${addBrewery.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>`:''}
+      </div>
+      <div class="stack" style="gap:16px">
+        <div class="card"><div class="card-pad"><div class="form-grid" style="grid-template-columns:1fr">
+          ${field('Datum dovozu',`<input class="input" type="date" id="de-date" value="${d.date}" onchange="DE.draft.date=this.value">`)}
+          ${field('Vůz',sel('de-veh',[['','— vyberte vůz —'],...DB.vehicles.map(v=>[v.id,v.name])],d.vehicleId||''))}
+          ${field('Poznámka',txta('de-note',d.note||'','Např. vrátit prázdné sudy…'))}
+        </div></div></div>
+        <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad" style="display:flex;flex-wrap:wrap;gap:8px">${driverChips}</div></div>
+      </div></div></div>`;
+}
+function deAddStop(bId){ deSyncMeta(); DE.draft.stops.push({ id:'ds-'+Math.random().toString(36).slice(2,7), breweryId:bId, note:'', items:[] }); deRerender(); }
+function deRemoveStop(sid){ deSyncMeta(); DE.draft.stops=DE.draft.stops.filter(s=>s.id!==sid); deRerender(); }
+function deAddItem(sid,pid){ deSyncMeta(); DE.draft.stops.find(s=>s.id===sid).items.push({ productId:pid, quantity:1, note:'' }); deRerender(); }
+function deItemQty(sid,pid,delta){ deSyncMeta(); const it=DE.draft.stops.find(s=>s.id===sid).items.find(i=>i.productId===pid); it.quantity+=delta; if(it.quantity<=0)deRemoveItem(sid,pid); else deRerender(); }
+function deRemoveItem(sid,pid){ deSyncMeta(); const s=DE.draft.stops.find(s=>s.id===sid); s.items=s.items.filter(i=>i.productId!==pid); deRerender(); }
+function deToggleDriver(id){ deSyncMeta(); const a=DE.draft.driverIds; const i=a.indexOf(id); if(i>=0)a.splice(i,1); else a.push(id); deRerender(); }
+function deSave(){ deSyncMeta(); const d=DE.draft; if(!d.stops.length)return toast('Přidejte alespoň jeden pivovar','warnTri');
+  if(d.stops.some(s=>!s.items.length))return toast('Každý pivovar musí mít alespoň jeden produkt','warnTri');
+  if(d.id){ const dv=DB.deliveries.find(x=>x.id===d.id); Object.assign(dv,{date:d.date,vehicleId:d.vehicleId,driverIds:d.driverIds,note:d.note,stops:d.stops}); toast('Dovoz uložen'); go('deliveries/'+d.id); }
+  else { const dv={ id:'d-'+Math.random().toString(36).slice(2,7), number:'DOV-2026-'+(32+DB.deliveries.length), date:d.date, state:'InPlanning',
+    vehicleId:d.vehicleId, driverIds:d.driverIds, note:d.note, stops:d.stops }; DB.deliveries.push(dv); toast('Dovoz vytvořen'); go('deliveries/'+dv.id); }
+}
+
+/* ============ MODULE: SKLAD (INVENTORY) ============ */
+let INV_VIEW='product';
+function viewInventory(){
+  const ed=canEdit('inventory');
+  const linked=DB.inventory.filter(i=>i.productId), free=DB.inventory.filter(i=>!i.productId);
+  const totalKs=DB.inventory.reduce((s,i)=>s+i.quantity,0);
+  const low=linked.filter(i=>i.quantity<=3);
+  // group linked by brewery
+  const byBrew={}; linked.forEach(i=>{ const p=prodById(i.productId); const b=p.breweryId; (byBrew[b]=byBrew[b]||[]).push(i); });
+  const brewSections=Object.keys(byBrew).map(bid=>{ const b=breweryById(bid);
+    const rows=byBrew[bid].sort((a,b)=>KIND_ORDER[prodById(a.productId).kind]-KIND_ORDER[prodById(b.productId).kind]).map(i=>{ const p=prodById(i.productId); const lowq=i.quantity<=3;
+      return `<tr><td><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${kindChipText(p.kind)} · ${p.packageSize?(p.packageSize>=1?p.packageSize+' l':p.packageSize*1000+' ml'):''}</div></td>
+        <td>${p.priceWithVat?money(p.priceWithVat):'—'}</td>
+        <td class="num"><div class="row gap8" style="justify-content:flex-end">
+          ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',-1)">−</button>`:''}
+          <span class="tnum t-strong" style="min-width:34px;text-align:center;font-size:15px;${lowq?'color:var(--crit)':''}">${i.quantity}</span>
+          ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',1)">+</button>`:''}</div></td>
+        <td>${lowq?'<span class="pill s-crit"><span class="d"></span>nízká zásoba</span>':'<span class="pill s-ok"><span class="d"></span>skladem</span>'}</td>
+        <td class="t-mut">${esc(i.note||'')}</td>${ed?`<td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="invDel('${i.id}')">${icon('trash',13)}</button></td>`:''}</tr>`; }).join('');
+    return `<div style="margin-bottom:8px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:20px 0 8px">
+      <span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut">${byBrew[bid].length} položek</span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th>Cena/ks</th><th style="text-align:right">Skladem</th><th>Stav</th><th>Pozn.</th>${ed?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table></div></div>`; }).join('');
+  const freeSection=free.length?`<div style="margin-bottom:8px"><div class="section-label" style="margin:20px 0 8px">${icon('box',14)} Ostatní (ručně evidované)</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Položka</th><th style="text-align:right">Množství</th><th>Pozn.</th>${ed?'<th></th>':''}</tr></thead>
+    <tbody>${free.map(i=>`<tr><td class="t-strong">${esc(i.name)}</td><td class="num"><div class="row gap8" style="justify-content:flex-end">
+      ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',-1)">−</button>`:''}<span class="tnum t-strong" style="min-width:34px;text-align:center;font-size:15px">${i.quantity}</span>
+      ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',1)">+</button>`:''}</div></td>
+      <td class="t-mut">${esc(i.note||'')}</td>${ed?`<td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="invDel('${i.id}')">${icon('trash',13)}</button></td>`:''}</tr>`).join('')}</tbody></table></div></div>`:'';
+  return `<div class="page">
+    ${pageHead('Sklad','Sklad','Evidence zboží na skladě. Naskladňuje dovoz, vyskladňuje vývoz — lze i ručně.',
+      ed?`<button class="btn btn-primary" onclick="invForm(null)">${icon('plus',17)}Ruční položka</button>`:'')}
+    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:6px">
+      ${miniStat('Položek',DB.inventory.length,'stock')}${miniStat('Kusů celkem',totalKs,'box')}
+      <div class="tile" style="padding:14px;${low.length?'border-color:var(--crit)':''}"><div class="ti-top"><div class="ti-lbl">Nízká zásoba</div><span style="color:${low.length?'var(--crit)':'var(--text-3)'}">${icon('warnTri',16)}</span></div>
+        <div class="ti-val tnum" style="font-size:24px;${low.length?'color:var(--crit)':''}">${low.length}</div></div></div>
+    ${brewSections}${freeSection}</div>`;
+}
+function invAdj(id,delta){ const i=DB.inventory.find(x=>x.id===id); i.quantity=Math.max(0,i.quantity+delta); renderRoute(); }
+function invDel(id){ const i=DB.inventory.find(x=>x.id===id); const nm=i.name||(prodById(i.productId||'')||{}).name||'položku';
+  confirmDialog('Odebrat ze skladu?','Opravdu odebrat „'+nm+'" ze skladové evidence?',()=>{ DB.inventory=DB.inventory.filter(x=>x.id!==id); toast('Odebráno ze skladu','trash'); renderRoute(); }); }
+function invForm(id){
+  const linkedIds=new Set(DB.inventory.filter(i=>i.productId).map(i=>i.productId));
+  openOverlay(`<div class="modal-head">${icon('stock',20)}<h3>Ruční skladová položka</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <div class="seg" style="margin-bottom:16px"><button class="on" id="iv-tab-p" onclick="invFormTab('p')">Produkt z ceníku</button><button id="iv-tab-f" onclick="invFormTab('f')">Volná položka</button></div>
+      <div id="iv-p"><div class="form-grid" style="grid-template-columns:1fr">
+        ${field('Produkt',sel('iv-prod',DB.products.filter(p=>!linkedIds.has(p.id)).map(p=>[p.id,breweryById(p.breweryId).name+' — '+p.name])))}
+        ${field('Množství',inp('iv-qty1','1','','number'))}${field('Poznámka',inp('iv-note1',''))}</div></div>
+      <div id="iv-f" style="display:none"><div class="form-grid" style="grid-template-columns:1fr">
+        ${field('Název položky',inp('iv-name','','Vratné basy, CO₂ bomba…'),{req:true})}
+        ${field('Množství',inp('iv-qty2','1','','number'))}${field('Poznámka',inp('iv-note2',''))}</div></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="iv-save">Přidat na sklad</button></div>`,{center:true});
+  window._ivTab='p';
+  $('#iv-save').onclick=()=>{ if(window._ivTab==='p'){ const pid=val('iv-prod'); if(!pid)return toast('Vyberte produkt','warnTri');
+      const ex=DB.inventory.find(i=>i.productId===pid); const q=parseInt(val('iv-qty1'))||0;
+      if(ex){ ex.quantity+=q; } else DB.inventory.push({ id:'inv-'+Math.random().toString(36).slice(2,7), productId:pid, name:null, quantity:q, note:val('iv-note1')||null }); }
+    else { const nm=val('iv-name'); if(!nm)return toast('Zadejte název','warnTri');
+      DB.inventory.push({ id:'inv-'+Math.random().toString(36).slice(2,7), productId:null, name:nm, quantity:parseInt(val('iv-qty2'))||0, note:val('iv-note2')||null }); }
+    closeOverlay(); toast('Přidáno na sklad','stock'); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function invFormTab(t){ window._ivTab=t; $('#iv-p').style.display=t==='p'?'block':'none'; $('#iv-f').style.display=t==='f'?'block':'none';
+  $('#iv-tab-p').classList.toggle('on',t==='p'); $('#iv-tab-f').classList.toggle('on',t==='f'); }
+
+/* ============ MODULE: ŘIDIČI (DRIVERS) ============ */
+let DRV_VIEW='list';
+function viewDrivers(){
+  const ed=canEdit('drivers');
+  const seg=[['list','Seznam','users'],['calendar','Kalendář dostupnosti','cal']].map(([v,l,ic])=>
+    `<button class="${DRV_VIEW===v?'on':''}" onclick="DRV_VIEW='${v}';renderRoute()">${icon(ic,14)} ${l}</button>`).join('');
+  const body = DRV_VIEW==='list'? driversListView(ed) : driverCalendarView();
+  return `<div class="page">
+    ${pageHead('Evidence','Řidiči','Evidence řidičů a jejich dostupnosti pro rozvozy a dovozy.', ed?`<button class="btn btn-primary" onclick="driverForm(null)">${icon('plus',17)}Nový řidič</button>`:'')}
+    <div class="toolbar"><div class="seg">${seg}</div><span class="count-note">${DB.drivers.length} řidičů</span></div>
+    ${body}</div>`;
+}
+function driversListView(ed){
+  return `<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${DB.drivers.map(d=>{
+    const nextAv=d.availabilities.filter(a=>a.from.slice(0,10)>=SEED_TODAY).sort((a,b)=>a.from.localeCompare(b.from))[0];
+    return `<div class="tile" style="gap:14px">
+      <div class="row gap12"><span class="av" style="background:${d.color}22;color:${d.color};width:44px;height:44px;border-radius:12px">${initials(d.firstName,d.lastName)}</span>
+        <div style="flex:1"><div class="t-strong" style="font-size:15px">${esc(d.firstName)} ${esc(d.lastName)}</div>
+          <div class="t-mut" style="font-size:12.5px">${d.phoneNumber?esc(d.phoneNumber):'bez telefonu'}</div></div>
+        <span class="dotc" style="width:14px;height:14px;border-radius:99px;background:${d.color}" title="Barva v kalendáři"></span></div>
+      <div class="divider" style="margin:0"></div>
+      <div class="row" style="justify-content:space-between"><span class="t-mut" style="font-size:12.5px">Nejbližší dostupnost</span>
+        <span class="t-strong" style="font-size:12.5px">${nextAv?fdateShort(nextAv.from)+' '+nextAv.from.slice(11,16)+'–'+nextAv.until.slice(11,16):'—'}</span></div>
+      ${ed?`<div class="row gap8"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="driverForm('${d.id}')">${icon('edit',14)}Upravit</button>
+        <button class="icon-btn" style="width:34px" onclick="delDriver('${d.id}')">${icon('trash',14)}</button></div>`:''}</div>`; }).join('')}</div>`;
+}
+function driverCalendarView(){
+  const days=[...Array(7)].map((_,i)=>{ const d=new Date(SEED_TODAY); d.setDate(d.getDate()+i); return d; });
+  const H0=6, H1=20, hrs=H1-H0, colH=460;
+  const hourLabels=[...Array(hrs+1)].map((_,i)=>`<div style="height:${colH/hrs}px;font-size:10.5px;color:var(--text-3);text-align:right;padding-right:6px;transform:translateY(-6px)">${H0+i}:00</div>`).join('');
+  const dayCols=days.map(day=>{ const ds=day.toISOString().slice(0,10); const isToday=ds===SEED_TODAY;
+    const blocks=DB.drivers.flatMap(dr=>dr.availabilities.filter(a=>a.from.slice(0,10)===ds).map(a=>{
+      const fh=parseInt(a.from.slice(11,13))+parseInt(a.from.slice(14,16))/60, uh=parseInt(a.until.slice(11,13))+parseInt(a.until.slice(14,16))/60;
+      const top=Math.max(0,(fh-H0)/hrs*colH), height=Math.max(18,(uh-fh)/hrs*colH);
+      return `<div title="${esc(dr.firstName+' '+dr.lastName)} ${a.from.slice(11,16)}–${a.until.slice(11,16)}" style="position:absolute;left:3px;right:3px;top:${top}px;height:${height}px;background:${dr.color}22;border-left:3px solid ${dr.color};border-radius:5px;padding:3px 5px;overflow:hidden;font-size:10.5px;color:var(--text)">
+        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(dr.lastName)}</div><div style="color:var(--text-2)">${a.from.slice(11,16)}–${a.until.slice(11,16)}</div></div>`; }));
+    return `<div style="flex:1;min-width:100px;border-left:1px solid var(--border)">
+      <div style="text-align:center;padding:8px 4px;border-bottom:1px solid var(--border);${isToday?'background:var(--amber-soft)':''}">
+        <div style="font-size:11px;text-transform:uppercase;color:var(--text-3);font-weight:700">${day.toLocaleDateString('cs-CZ',{weekday:'short'})}</div>
+        <div class="tnum" style="font-weight:800;font-size:16px;${isToday?'color:var(--amber-700)':''}">${day.getDate()}.</div></div>
+      <div style="position:relative;height:${colH}px">${[...Array(hrs)].map((_,i)=>`<div style="height:${colH/hrs}px;border-bottom:1px solid var(--border);opacity:.5"></div>`).join('')}${blocks.join('')}</div></div>`; }).join('');
+  return `<div class="card"><div class="card-pad" style="overflow-x:auto"><div style="display:flex;min-width:760px">
+    <div style="width:46px;flex:0 0 auto"><div style="height:53px"></div>${hourLabels}</div>${dayCols}</div>
+    <div class="row wrap gap12" style="margin-top:16px">${DB.drivers.map(d=>`<span class="chip"><span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${d.color}"></span>${esc(d.firstName)} ${esc(d.lastName)}</span>`).join('')}</div>
+  </div></div>`;
+}
+let AV_DRAFT=[];
+function driverForm(id){
+  const d=id?driverById(id):{ firstName:'',lastName:'',phoneNumber:'',color:'#F08C00',availabilities:[] };
+  AV_DRAFT=d.availabilities.map(a=>({...a}));
+  openOverlay(`<div class="drawer-head">${icon('driver',20)}<h2>${id?'Upravit řidiče':'Nový řidič'}</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        ${field('Jméno',inp('dr-fn',d.firstName,'Petr'),{req:true})}${field('Příjmení',inp('dr-ln',d.lastName,'Novák'),{req:true})}
+        ${field('Telefon',inp('dr-ph',d.phoneNumber||'','+420 …'))}
+        ${field('Barva v kalendáři',`<div class="row gap8"><input type="color" id="dr-color" value="${d.color}" style="width:46px;height:40px;border:1px solid var(--border-2);border-radius:8px;background:none;padding:2px">${inp('dr-colorhex',d.color)}</div>`)}
+      </div>
+      <div class="divider"></div><div class="section-label">Dostupnost (kalendář)</div><div id="av-list"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addAvRow()" style="margin-top:10px">${icon('plus',15)}Přidat termín</button>
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="dr-save">${icon('check',16)}Uložit</button></div>`);
+  $('#dr-color').oninput=e=>$('#dr-colorhex').value=e.target.value;
+  renderAv();
+  $('#dr-save').onclick=()=>{ const fn=val('dr-fn'),ln=val('dr-ln'); if(!fn||!ln)return toast('Vyplňte jméno a příjmení','warnTri');
+    syncAv(); const data={ firstName:fn, lastName:ln, phoneNumber:val('dr-ph'), color:val('dr-colorhex')||'#F08C00', availabilities:AV_DRAFT.filter(a=>a.from&&a.until) };
+    if(id){ Object.assign(driverById(id),data); toast('Řidič upraven'); } else { data.id='dr-'+Math.random().toString(36).slice(2,7); DB.drivers.push(data); toast('Řidič vytvořen'); }
+    closeOverlay(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function renderAv(){ $('#av-list').innerHTML=AV_DRAFT.map((a,i)=>`<div class="row gap8" style="margin-bottom:8px">
+  <input class="input" type="date" value="${a.from?a.from.slice(0,10):''}" data-ai="${i}" data-f="date" style="flex:1">
+  <input class="input" type="time" value="${a.from?a.from.slice(11,16):'08:00'}" data-ai="${i}" data-f="from" style="width:110px;flex:0 0 auto">
+  <span class="t-mut">–</span><input class="input" type="time" value="${a.until?a.until.slice(11,16):'16:00'}" data-ai="${i}" data-f="until" style="width:110px;flex:0 0 auto">
+  <button class="icon-btn" style="width:38px;flex:0 0 auto" onclick="rmAvRow(${i})">${icon('trash',14)}</button></div>`).join('')||'<div class="t-mut" style="font-size:13px">Zatím žádné termíny.</div>'; }
+function syncAv(){ AV_DRAFT.forEach((a,i)=>{ const date=$(`[data-ai="${i}"][data-f="date"]`), from=$(`[data-ai="${i}"][data-f="from"]`), until=$(`[data-ai="${i}"][data-f="until"]`);
+  if(date&&from&&until){ a.from=date.value+'T'+from.value; a.until=date.value+'T'+until.value; } }); }
+function addAvRow(){ syncAv(); AV_DRAFT.push({from:daysFromNow(1)+'T08:00',until:daysFromNow(1)+'T16:00'}); renderAv(); }
+function rmAvRow(i){ syncAv(); AV_DRAFT.splice(i,1); renderAv(); }
+function delDriver(id){ confirmDialog('Smazat řidiče?','Řidič bude odstraněn z evidence.',()=>{ DB.drivers=DB.drivers.filter(d=>d.id!==id); toast('Řidič smazán','trash'); renderRoute(); }); }
+
+/* ============ MODULE: VOZY (VEHICLES) ============ */
+function viewVehicles(){
+  const ed=canEdit('vehicles');
+  return `<div class="page">
+    ${pageHead('Evidence','Vozy','Vozový park pro vývozy a dovozy do skladu.', ed?`<button class="btn btn-primary" onclick="vehicleForm(null)">${icon('plus',17)}Nový vůz</button>`:'')}
+    <div class="toolbar"><span class="count-note">${DB.vehicles.length} vozů</span></div>
+    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${DB.vehicles.map(v=>{
+      const usage=DB.shipments.filter(s=>s.vehicleId===v.id).length+DB.deliveries.filter(d=>d.vehicleId===v.id).length;
+      return `<div class="tile" style="gap:14px"><div class="row gap12">
+        <div class="ti-ico" style="background:var(--info-tint);color:var(--info);width:46px;height:46px">${icon('vehicle',22)}</div>
+        <div style="flex:1"><div class="t-strong" style="font-size:15px">${esc(v.name)}</div>
+          <div class="t-mut" style="font-size:12.5px">Nosnost ${num(v.maxWeight)} kg</div></div></div>
+        <div class="divider" style="margin:0"></div>
+        <div class="row" style="justify-content:space-between"><span class="t-mut" style="font-size:12.5px">Použit v jízdách</span><span class="t-strong tnum">${usage}×</span></div>
+        ${ed?`<div class="row gap8"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="vehicleForm('${v.id}')">${icon('edit',14)}Upravit</button>
+          <button class="icon-btn" style="width:34px" onclick="delVehicle('${v.id}')">${icon('trash',14)}</button></div>`:''}</div>`; }).join('')}</div></div>`;
+}
+function vehicleForm(id){
+  const v=id?vehicleById(id):{ name:'',maxWeight:'' };
+  openOverlay(`<div class="modal-head">${icon('vehicle',20)}<h3>${id?'Upravit vůz':'Nový vůz'}</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr">
+      ${field('Název / SPZ',inp('ve-name',v.name,'Iveco Daily (2L1 4520)'),{req:true})}
+      ${field('Maximální nosnost (kg)',inp('ve-weight',v.maxWeight,'1400','number'),{req:true})}</div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="ve-save">Uložit</button></div>`,{center:true});
+  $('#ve-save').onclick=()=>{ const name=val('ve-name'); if(!name)return toast('Zadejte název','warnTri');
+    const data={ name, maxWeight:parseFloat(val('ve-weight'))||0 };
+    if(id){ Object.assign(vehicleById(id),data); toast('Vůz upraven'); } else { data.id='v-'+Math.random().toString(36).slice(2,7); DB.vehicles.push(data); toast('Vůz vytvořen'); }
+    closeOverlay(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function delVehicle(id){ confirmDialog('Smazat vůz?','Vůz bude odstraněn z vozového parku.',()=>{ DB.vehicles=DB.vehicles.filter(v=>v.id!==id); toast('Vůz smazán','trash'); renderRoute(); }); }
+
+/* ============ MODULE: UŽIVATELÉ (USERS) — permission matrix ============ */
+const PERM_MODULES=[['orders','Objednávky','order'],['shipments','Vývozy','ship'],['deliveries','Dovozy zboží','import'],
+  ['inventory','Sklad','stock'],['breweries','Pivovary','brewery'],['clients','Klienti','client'],
+  ['drivers','Řidiči','driver'],['vehicles','Vozy','vehicle'],['users','Uživatelé','users']];
+function permSummary(u){ if(u.roles.includes('Admin')) return '<span class="pill s-amber"><span class="d"></span>Plný přístup</span>';
+  const edit=PERM_MODULES.filter(([m])=>u.perms[m]==='edit').length, view=PERM_MODULES.filter(([m])=>u.perms[m]==='view').length;
+  return `<span class="tag" style="color:var(--ok)">${edit} úprav</span> <span class="tag" style="color:var(--info)">${view} čtení</span>`; }
+function viewUsers(){
+  const ed=canEdit('users');
+  const rows=DB.users.map(u=>`<tr class="clickable" onclick="${ed?`userForm('${u.id}')`:''}">
+    <td><div class="row-lead">${avatar(u.id,initials(u.firstName,u.lastName))}
+      <div><div class="t-strong">${esc(u.firstName||'')} ${esc(u.lastName||'')}</div><div class="t-mut mono" style="font-size:12px">@${esc(u.userName)}</div></div></div></td>
+    <td>${u.roles.map(r=>`<span class="pill ${r==='Admin'?'s-amber':'s-grey'}"><span class="d"></span>${r==='Admin'?'Administrátor':'Uživatel'}</span>`).join(' ')}</td>
+    <td>${permSummary(u)}</td>
+    ${ed?`<td style="text-align:right"><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();userForm('${u.id}')">${icon('edit',14)}Práva</button></td>`:''}</tr>`).join('');
+  return `<div class="page">
+    ${pageHead('Správa','Uživatelé','Správa uživatelů a jejich práv k jednotlivým modulům.', ed?`<button class="btn btn-primary" onclick="userForm(null)">${icon('plus',17)}Nový uživatel</button>`:'')}
+    <div class="card" style="margin-bottom:16px;background:var(--amber-soft);border-color:var(--amber-tint)"><div class="card-pad row gap12">
+      <span style="color:var(--amber-700)">${icon('shield',18)}</span><div style="font-size:13px;color:var(--text-2)"><b>Granulární oprávnění.</b> U každého uživatele lze nastavit přístup <b>ke každému modulu zvlášť</b> — bez přístupu / jen čtení / úpravy. (Rozšíření oproti současnému API, které zná jen role Admin/Uživatel.)</div></div></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Uživatel</th><th>Role</th><th>Práva k modulům</th>${ed?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+let USER_DRAFT=null;
+function userForm(id){
+  const u=id?DB.users.find(x=>x.id===id):{ firstName:'',lastName:'',userName:'',roles:['User'],perms:makePerms({}) };
+  USER_DRAFT={ ...u, roles:[...u.roles], perms:{...u.perms} };
+  openOverlay(`<div class="drawer-head wide">${icon('users',20)}<h2>${id?'Upravit uživatele':'Nový uživatel'}</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        ${field('Jméno',inp('us-fn',u.firstName||'','Eva'))}${field('Příjmení',inp('us-ln',u.lastName||'','Dvořáková'))}
+        ${field('Uživatelské jméno',inp('us-un',u.userName||'','dispecer'),{req:true})}
+        ${field('Heslo',inp('us-pw','',id?'(beze změny)':'••••••••','password'),{req:!id})}
+      </div>
+      <div class="divider"></div><div class="section-label">Role</div>
+      <div class="row gap8" style="margin-bottom:6px">
+        <button class="chip" id="role-admin" style="height:36px" onclick="userToggleAdmin()"><span id="role-admin-ic">${USER_DRAFT.roles.includes('Admin')?icon('check',14):''}</span> Administrátor (plný přístup)</button></div>
+      <div class="hint">Administrátor má vždy přístup ke všem modulům. Pro jemné řízení práv ponechte roli Uživatel.</div>
+      <div class="divider"></div><div class="section-label">Práva k modulům</div>
+      <div id="perm-matrix"></div>
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="us-save">${icon('check',16)}Uložit</button></div>`,{wide:true});
+  renderPermMatrix();
+  $('#us-save').onclick=()=>{ const un=val('us-un'); if(!un)return toast('Zadejte uživatelské jméno','warnTri');
+    const data={ firstName:val('us-fn'), lastName:val('us-ln'), userName:un, roles:USER_DRAFT.roles, perms:USER_DRAFT.perms };
+    if(id){ Object.assign(DB.users.find(x=>x.id===id),data); if(ME.id===id)ME=DB.users.find(x=>x.id===id); toast('Uživatel upraven'); }
+    else { data.id='u-'+Math.random().toString(36).slice(2,7); DB.users.push(data); toast('Uživatel vytvořen'); }
+    closeOverlay(); buildShell(); renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function userToggleAdmin(){ const isA=USER_DRAFT.roles.includes('Admin');
+  USER_DRAFT.roles= isA? ['User'] : ['Admin'];
+  $('#role-admin-ic').innerHTML=USER_DRAFT.roles.includes('Admin')?icon('check',14):'';
+  $('#role-admin').style.background=USER_DRAFT.roles.includes('Admin')?'var(--amber-soft)':''; $('#role-admin').style.borderColor=USER_DRAFT.roles.includes('Admin')?'var(--amber)':'var(--border)';
+  renderPermMatrix(); }
+function renderPermMatrix(){
+  const admin=USER_DRAFT.roles.includes('Admin');
+  const levels=[['none','Bez přístupu','var(--text-3)'],['view','Jen čtení','var(--info)'],['edit','Úpravy','var(--ok)']];
+  $('#perm-matrix').innerHTML=`<div class="tbl-wrap" style="${admin?'opacity:.5;pointer-events:none':''}"><table class="tbl" style="min-width:0"><thead><tr><th>Modul</th>
+    ${levels.map(([,l])=>`<th style="text-align:center">${l}</th>`).join('')}</tr></thead><tbody>
+    ${PERM_MODULES.map(([m,label,ic])=>{ const cur=admin?'edit':(USER_DRAFT.perms[m]||'none');
+      return `<tr><td><div class="row gap8">${icon(ic,15)}<span class="t-strong">${label}</span></div></td>
+      ${levels.map(([lv,,col])=>`<td style="text-align:center"><label style="cursor:pointer;display:inline-flex"><input type="radio" name="perm-${m}" ${cur===lv?'checked':''} onchange="USER_DRAFT.perms['${m}']='${lv}'" style="width:17px;height:17px;accent-color:${col}"></label></td>`).join('')}</tr>`; }).join('')}
+  </tbody></table></div>${admin?'<div class="hint" style="margin-top:8px">Administrátor má automaticky úpravy ve všech modulech.</div>':''}`;
+}
+
+/* ============ GLOBAL SEARCH ============ */
+function wireGlobalSearch(){
+  const inp=$('#globalSearch'); if(!inp) return;
+  inp.oninput=()=>{ const q=inp.value.trim().toLowerCase(); const box=$('#gsearch-box'); if(box)box.remove();
+    if(q.length<2) return;
+    const res=[];
+    DB.clients.forEach(c=>{ if(canSee('clients')&&c.name.toLowerCase().includes(q)) res.push(['client',c.name,L.region[c.region],'clients/'+c.id]); });
+    DB.breweries.forEach(b=>{ if(canSee('breweries')&&b.name.toLowerCase().includes(q)) res.push(['brewery',b.name,'Pivovar','breweries/'+b.id]); });
+    DB.products.forEach(p=>{ if(canSee('breweries')&&p.name.toLowerCase().includes(q)){ const b=breweryById(p.breweryId); res.push(['box',p.name,b.name+' · '+money(p.priceWithVat),'breweries/'+b.id+'?tab=cenik']); } });
+    DB.orders.forEach(o=>{ if(canSee('orders')&&(o.number||'').toLowerCase().includes(q)){ const c=clientById(o.clientId); res.push(['order',o.number,c.name,'orders/'+o.id]); } });
+    const box2=document.createElement('div'); box2.id='gsearch-box';
+    box2.style.cssText='position:absolute;top:56px;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);max-height:340px;overflow-y:auto;z-index:40;padding:6px';
+    box2.innerHTML=res.length?res.slice(0,8).map(([ic,t,sub,path])=>`<a href="#/${path}" class="row gap12" style="padding:9px 11px;border-radius:var(--r-sm)" onclick="setTimeout(()=>{$('#gsearch-box')&&$('#gsearch-box').remove();$('#globalSearch').value='';},0)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='none'">
+        <span style="color:var(--text-3)">${icon(ic,16)}</span><div style="flex:1"><div class="t-strong" style="font-size:13px">${esc(t)}</div><div class="t-mut" style="font-size:11.5px">${esc(sub)}</div></div>${icon('chevR',14)}</a>`).join('')
+      :`<div class="t-mut" style="padding:14px;text-align:center;font-size:13px">Nic nenalezeno pro „${esc(inp.value)}"</div>`;
+    inp.parentElement.style.position='relative'; inp.parentElement.appendChild(box2);
+  };
+  document.addEventListener('click',e=>{ if(!e.target.closest('.search')){ const b=$('#gsearch-box'); if(b)b.remove(); } });
+}
+
+/* ============ BOOT ============ */
+function boot(){
+  document.documentElement.setAttribute('data-theme',UIS.theme);
+  buildShell(); wireGlobalSearch();
+  window.addEventListener('hashchange',renderRoute);
+  if(!location.hash) location.hash='#/dashboard';
+  renderRoute();
+}
+// re-wire global search whenever shell rebuilds
+const _buildShell=buildShell;
+buildShell=function(){ _buildShell(); wireGlobalSearch(); };
+boot();
+
+</script>
