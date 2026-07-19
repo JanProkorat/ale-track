@@ -34,13 +34,14 @@ function clientInitials(name: string): string {
   return `${(a || '?')[0]}${b ? b[0] : ''}`.toUpperCase();
 }
 
-type StatusFilter = 'all' | 'New' | 'Planning' | 'Delivering' | 'Finished';
+type StatusFilter = 'all' | 'New' | 'Planning' | 'Delivering' | 'Finished' | 'Cancelled';
 const SEGMENTS: [StatusFilter, string][] = [
   ['all', 'Vše'],
   ['New', 'Nové'],
   ['Planning', 'Plánované'],
   ['Delivering', 'Rozváží se'],
   ['Finished', 'Dokončené'],
+  ['Cancelled', 'Zrušené'],
 ];
 
 type EditorState = { mode: 'create' } | { mode: 'edit'; id: string } | null;
@@ -63,7 +64,7 @@ export function OrdersPage() {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: orders.length };
-    for (const s of ['New', 'Planning', 'Delivering', 'Finished']) {
+    for (const s of ['New', 'Planning', 'Delivering', 'Finished', 'Cancelled']) {
       c[s] = orders.filter((o) => orderStateName(o.state) === s).length;
     }
     return c;
