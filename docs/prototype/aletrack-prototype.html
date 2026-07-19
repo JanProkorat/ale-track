@@ -104,7 +104,11 @@ a{color:inherit; text-decoration:none;}
 .nav-item .badge{margin-left:auto; background:var(--amber); color:#3a2402; font-size:11px; font-weight:800;
   padding:1px 7px; border-radius:99px; line-height:1.5;}
 .sidebar.collapsed .nav-item .badge{position:absolute; top:3px; right:4px; margin:0; padding:0 5px; font-size:9px;}
-.side-foot{flex:0 0 auto; border-top:1px solid rgba(255,255,255,.08); padding:12px; display:flex; align-items:center; gap:10px;}
+.side-foot{flex:0 0 auto; width:100%; border:0; border-top:1px solid rgba(255,255,255,.08); padding:12px; display:flex; align-items:center; gap:10px;
+  background:none; color:inherit; font-family:inherit; text-align:left; cursor:pointer; transition:background .15s;}
+.side-foot:hover{background:rgba(255,255,255,.06);}
+.side-foot .u-caret{margin-left:auto; color:#69788c; flex:0 0 auto; display:inline-flex;}
+.sidebar.collapsed .side-foot{justify-content:center;} .sidebar.collapsed .side-foot .u-caret{display:none;}
 .side-foot .u-av{width:34px;height:34px;border-radius:99px;background:var(--amber);color:#3a2402;
   display:grid;place-items:center;font-weight:800;font-size:13px;flex:0 0 auto;}
 .side-foot .u-meta{min-width:0;} .side-foot .u-meta .n{color:#fff;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -699,10 +703,11 @@ function buildShell(){
         <span class="name">Ale<b>Track</b></span>
       </div>
       <nav class="nav" id="nav"></nav>
-      <div class="side-foot">
+      <button class="side-foot" data-act="me" title="Účet a odhlášení">
         <div class="u-av" id="foot-av"></div>
         <div class="u-meta"><div class="n" id="foot-name"></div><div class="r" id="foot-role"></div></div>
-      </div>
+        <span class="u-caret">${icon('chevD',15)}</span>
+      </button>
     </aside>
     <div class="main">
       <header class="topbar">
@@ -713,7 +718,6 @@ function buildShell(){
         <button class="icon-btn" id="currencyBtn" data-act="currency" title="Měna a kurz" style="width:auto;padding:0 11px;gap:5px;font-weight:800;font-size:13.5px">${CUR==='EUR'?'€':'Kč'}${icon('chevD',14)}</button>
         <button class="icon-btn dot-badge" data-act="reminders" title="Připomínky">${icon('bell',18)}</button>
         <button class="icon-btn" data-act="theme" id="themeBtn" title="Přepnout motiv">${icon(UIS.theme==='dark'?'sun':'moon',18)}</button>
-        <button class="icon-btn" data-act="me" title="Účet">${icon('users',18)}</button>
       </header>
       <div id="view"></div>
     </div>`;
