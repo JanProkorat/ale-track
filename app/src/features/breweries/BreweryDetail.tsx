@@ -167,9 +167,7 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
         </QueryBoundary>
       )}
 
-      {tab === 'reminders' && (
-        <Card><CardContent><RemindersPanel breweryId={breweryId} editable={editable} /></CardContent></Card>
-      )}
+      {tab === 'reminders' && <RemindersPanel breweryId={breweryId} editable={editable} />}
 
       {tab === 'notes' && (
         <Card><CardContent>

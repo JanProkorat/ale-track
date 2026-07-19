@@ -1,24 +1,98 @@
 import { useState } from 'react';
-import {
-  Box, Stack, Typography, Button, IconButton, Checkbox, Tooltip, Card,
-} from '@mui/material';
+import { Box, Stack, Typography, Button, IconButton, Chip, Tooltip, Card } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
-import EditIcon from '@mui/icons-material/EditOutlined';
+import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
+import dayjs from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
+import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate } from 'src/lib/format';
-import { type ReminderListItemDto } from 'src/generated/api-client';
+import { ReminderType, type ReminderListItemDto } from 'src/generated/api-client';
 import {
   useBreweryReminders,
   useResolveBreweryReminder,
   useDeleteBreweryReminder,
 } from 'src/hooks/useBreweryReminders';
 import { ReminderFormDrawer } from './ReminderFormDrawer';
+
+function ReminderCard({
+  r,
+  editable,
+  onResolve,
+  onDelete,
+  resolving,
+}: {
+  r: ReminderListItemDto;
+  editable: boolean;
+  onResolve: (r: ReminderListItemDto) => void;
+  onDelete: (r: ReminderListItemDto) => void;
+  resolving: boolean;
+}) {
+  const resolved = Boolean(r.isResolved);
+  const overdue = !resolved && r.occurrenceDate != null && dayjs(r.occurrenceDate).isBefore(dayjs(), 'day');
+
+  const iconSx = resolved
+    ? { bg: (t: { palette: { brand: { okTint: string } } }) => t.palette.brand.okTint, fg: 'success.main' as const }
+    : overdue
+    ? { bg: (t: { palette: { brand: { critTint: string } } }) => t.palette.brand.critTint, fg: 'error.main' as const }
+    : { bg: (t: { palette: { brand: { amberSoft: string } } }) => t.palette.brand.amberSoft, fg: 'primary.dark' as const };
+
+  return (
+    <Card sx={{ p: 2, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+      <Box
+        sx={{
+          width: 40, height: 40, borderRadius: 2.5, display: 'grid', placeItems: 'center', flexShrink: 0,
+          bgcolor: iconSx.bg, color: iconSx.fg, '& svg': { fontSize: 20 },
+        }}
+      >
+        {resolved ? <CheckIcon /> : <NotificationsIcon />}
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
+          <Chip size="small" label={r.type === ReminderType.Regular ? 'Opakovaná' : 'Jednorázová'} sx={{ height: 22 }} />
+          {resolved ? (
+            <StatusPill tone="ok" label="Vyřešeno" />
+          ) : overdue ? (
+            <StatusPill tone="crit" label="Po termínu" />
+          ) : (
+            <StatusPill tone="amber" label={fmtDate(r.occurrenceDate)} />
+          )}
+        </Stack>
+        {r.description && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {r.description}
+          </Typography>
+        )}
+      </Box>
+      {editable && (
+        <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
+          {!resolved && (
+            <Button
+              size="small"
+              startIcon={<CheckIcon />}
+              disabled={resolving}
+              onClick={() => onResolve(r)}
+              sx={{ bgcolor: (t) => t.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.palette.brand.amberTint } }}
+            >
+              Vyřešit
+            </Button>
+          )}
+          <Tooltip title="Smazat">
+            <IconButton size="small" onClick={() => onDelete(r)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      )}
+    </Card>
+  );
+}
 
 export function RemindersPanel({ breweryId, editable }: { breweryId: string; editable: boolean }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -27,12 +101,13 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
   const del = useDeleteBreweryReminder(breweryId);
 
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<ReminderListItemDto | undefined>(undefined);
   const [confirm, setConfirm] = useState<ReminderListItemDto | null>(null);
 
-  const toggleResolved = async (r: ReminderListItemDto) => {
+  const doResolve = async (r: ReminderListItemDto) => {
+    if (!r.id) return;
     try {
-      await resolve.mutateAsync({ id: r.id!, resolvedDate: r.isResolved ? undefined : new Date() });
+      await resolve.mutateAsync({ id: r.id, resolvedDate: new Date() });
+      enqueueSnackbar('Označeno jako vyřešené.', { variant: 'success' });
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
     }
@@ -49,61 +124,37 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
   };
 
   return (
-    <>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}>
-        <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Připomínky</Typography>
-        {editable && (
-          <Button size="small" startIcon={<AddIcon />} onClick={() => { setEditing(undefined); setFormOpen(true); }}>
-            Přidat
+    <Box>
+      {editable && (
+        <Box sx={{ mb: 2 }}>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setFormOpen(true)} sx={{ color: 'text.primary', borderColor: 'divider' }}>
+            Nová připomínka
           </Button>
-        )}
-      </Stack>
+        </Box>
+      )}
 
       <QueryBoundary
         query={query}
-        minHeight={120}
+        minHeight={140}
         isEmpty={(rows) => rows.length === 0}
-        emptyState={<EmptyState icon={<NotificationsIcon />} title="Žádné připomínky" dense />}
+        emptyState={
+          <EmptyState
+            icon={<NotificationsIcon />}
+            title="Žádné připomínky"
+            description="Přidejte upomínku na smlouvu, ceník nebo sezónní objednávku."
+          />
+        }
       >
         {(rows) => (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
             {rows.map((r) => (
-              <Card key={r.id} variant="outlined" sx={{ p: 1.25, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Checkbox
-                  checked={Boolean(r.isResolved)}
-                  onChange={() => toggleResolved(r)}
-                  disabled={!editable || resolve.isPending}
-                  size="small"
-                />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 600, textDecoration: r.isResolved ? 'line-through' : 'none', color: r.isResolved ? 'text.disabled' : 'text.primary' }}>
-                    {r.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {fmtDate(r.occurrenceDate)}{r.description ? ` · ${r.description}` : ''}
-                  </Typography>
-                </Box>
-                {editable && (
-                  <>
-                    <Tooltip title="Upravit">
-                      <IconButton size="small" onClick={() => { setEditing(r); setFormOpen(true); }}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Smazat">
-                      <IconButton size="small" color="error" onClick={() => setConfirm(r)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </>
-                )}
-              </Card>
+              <ReminderCard key={r.id} r={r} editable={editable} onResolve={doResolve} onDelete={setConfirm} resolving={resolve.isPending} />
             ))}
           </Stack>
         )}
       </QueryBoundary>
 
-      <ReminderFormDrawer open={formOpen} breweryId={breweryId} reminder={editing} onClose={() => setFormOpen(false)} />
+      <ReminderFormDrawer open={formOpen} breweryId={breweryId} onClose={() => setFormOpen(false)} />
       <ConfirmDialog
         open={confirm !== null}
         title="Smazat připomínku?"
@@ -112,6 +163,6 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
         onConfirm={doDelete}
         onClose={() => setConfirm(null)}
       />
-    </>
+    </Box>
   );
 }
