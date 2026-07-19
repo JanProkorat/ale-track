@@ -411,7 +411,11 @@ const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const uid=(p='id')=>p+'-'+Math.abs(([...(''+Object.keys(DB||{}).length+performance.now())].reduce((a,c)=>a*31+c.charCodeAt(0),7))%99999);
 function esc(s){return (s==null?'':''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function money(n){ if(n==null||n==='')return '—'; return new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:2}).format(n)+' Kč'; }
+/* prices are stored in CZK (base); money() converts to the active display currency */
+function eurRate(){ const e=(DB.exchangeRates||[]).find(x=>x.currencyCode==='EUR'); return e?e.rate:25.30; }
+function money(n){ if(n==null||n==='')return '—';
+  if(typeof CUR!=='undefined'&&CUR==='EUR'){ return new Intl.NumberFormat('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/eurRate())+' €'; }
+  return new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:2}).format(n)+' Kč'; }
 function num(n){ return new Intl.NumberFormat('cs-CZ').format(n); }
 function fdate(d){ if(!d)return '—'; const t=new Date(d); return t.toLocaleDateString('cs-CZ',{day:'numeric',month:'short',year:'numeric'}); }
 function fdateShort(d){ if(!d)return '—'; const t=new Date(d); return t.toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric'}); }
@@ -511,6 +515,7 @@ const DB = {
       addr('Vísky','1','Chrastava','463 31','Czechia',50.822,14.968), [ct('Phone','Majitel','+420 603 998 771')]),
   ],
   orders:[], shipments:[], deliveries:[], inventory:[], reminders:[],
+  exchangeRates:[{ currencyCode:'EUR', rate:25.30, updatedDate:SEED_TODAY }],
   drivers:[
     { id:'dr-novak', firstName:'Petr', lastName:'Novák', phoneNumber:'+420 602 100 200', color:'#F08C00',
       availabilities:[ av(-1,7,0,17), av(2,7,0,14), av(4,6,0,20) ] },
@@ -624,6 +629,7 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
 
 /* current signed-in user (for permission demo & topbar) */
 let ME = DB.users[0];
+let CUR = 'CZK'; // active display currency (CZK base | EUR converted via daily rate)
 
 
 /* ============ NAV CONFIG ============ */
@@ -664,6 +670,7 @@ function buildShell(){
         <button class="icon-btn" data-act="toggle-collapse" title="Sbalit menu">${icon('menu',18)}</button>
         <button class="cmdk-btn" data-act="cmdk" title="Hledat všude (⌘K)">${icon('search',16)}<span class="lbl">Hledat…</span><kbd class="cmdk-kbd">⌘K</kbd></button>
         <div class="spacer"></div>
+        <button class="icon-btn" id="currencyBtn" data-act="currency" title="Měna a kurz" style="width:auto;padding:0 11px;gap:5px;font-weight:800;font-size:13.5px">${CUR==='EUR'?'€':'Kč'}${icon('chevD',14)}</button>
         <button class="icon-btn dot-badge" data-act="reminders" title="Připomínky">${icon('bell',18)}</button>
         <button class="icon-btn" data-act="theme" id="themeBtn" title="Přepnout motiv">${icon(UIS.theme==='dark'?'sun':'moon',18)}</button>
         <button class="icon-btn" data-act="me" title="Účet">${icon('users',18)}</button>
@@ -694,6 +701,7 @@ function onShellClick(e){
   else if(a==='toggle-mobile'){ UIS.mobileOpen=!UIS.mobileOpen; $('#sidebar').classList.toggle('mobile-open',UIS.mobileOpen); }
   else if(a==='theme'){ setTheme(UIS.theme==='dark'?'light':'dark'); }
   else if(a==='cmdk'){ openCommandPalette(); }
+  else if(a==='currency'){ openCurrency(); }
   else if(a==='reminders'){ openReminders(); }
   else if(a==='me'){ openAccount(); }
 }
@@ -903,6 +911,24 @@ function openAccount(){
   $$('[data-switch]').forEach(b=>b.onclick=()=>{ ME=DB.users.find(u=>u.id===b.dataset.switch); closeOverlay(); buildShell(); if(!canSee(activeModule())) go('dashboard'); else renderRoute(); toast('Přepnuto na: '+ME.firstName+' '+ME.lastName,'users'); });
   $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
 }
+function openCurrency(){
+  const rate=eurRate(); const e=(DB.exchangeRates||[]).find(x=>x.currencyCode==='EUR');
+  openOverlay(`<div class="modal-head">${icon('wallet',18)}<h3>Měna a kurz</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <div class="section-label">Zobrazovat ceny v</div>
+      <div class="seg" style="width:100%;display:flex">
+        <button class="${CUR==='CZK'?'on':''}" style="flex:1" onclick="setCurrency('CZK')">Kč — koruna</button>
+        <button class="${CUR==='EUR'?'on':''}" style="flex:1" onclick="setCurrency('EUR')">€ — euro</button></div>
+      <div class="card" style="margin-top:16px;background:var(--surface-2)"><div class="card-pad stack" style="gap:9px">
+        <div class="row" style="justify-content:space-between"><span class="t-mut">Aktuální kurz</span><span class="t-strong tnum">1 € = ${new Intl.NumberFormat('cs-CZ',{minimumFractionDigits:2}).format(rate)} Kč</span></div>
+        <div class="row" style="justify-content:space-between"><span class="t-mut">Aktualizováno</span><span class="t-strong">${fdate(e?e.updatedDate:SEED_TODAY)}</span></div>
+        <div class="hint">Kurz se načítá automaticky každý den (ČNB) a propisuje se do všech cen. Ceny se ukládají v Kč a přepočítávají se pro zobrazení.</div>
+      </div></div>
+    </div>`,{center:true});
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+function setCurrency(c){ CUR=c; const btn=$('#currencyBtn'); if(btn) btn.innerHTML=(c==='EUR'?'€':'Kč')+icon('chevD',14);
+  closeOverlay(); renderRoute(); toast('Měna: '+(c==='EUR'?'euro (€)':'koruna (Kč)'),'wallet'); }
 
 /* ============ FORM HELPERS ============ */
 function field(label,inner,{req=false,col2=false,hint=''}={}){
@@ -1092,8 +1118,8 @@ function productForm(bId,pId){
       ${field('Alkohol %',inp('p-alc',p.alcoholPercentage,'5.0','number'))}
       ${field('Stupně (°)',inp('p-plato',p.platoDegree,'12','number'))}
       ${field('Velikost balení (l)',inp('p-pkg',p.packageSize,'30','number'))}
-      ${field('Cena s DPH',inp('p-vat',p.priceWithVat,'1290','number'),{req:true})}
-      ${field('Cena bez DPH',inp('p-novat',p.priceWithoutVat,'1066','number'))}
+      ${field('Cena s DPH (Kč)',inp('p-vat',p.priceWithVat,'1290','number'),{req:true})}
+      ${field('Cena bez DPH (Kč)',inp('p-novat',p.priceWithoutVat,'1066','number'))}
     </div></div>
     <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="p-save">${icon('check',16)}Uložit</button></div>`);
   $('#p-save').onclick=()=>{
@@ -1119,8 +1145,8 @@ function bulkPriceForm(bId){
         ${field('Datum účinnosti',inp('bp-date',daysFromNow(0),'','date'))}
       </div>
       <button class="btn btn-soft btn-sm" id="bp-apply" style="margin-bottom:14px">${icon('sparkle',15)}Přepočítat náhled</button>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th style="text-align:right">Nyní</th><th style="text-align:right">Nově</th></tr></thead>
-      <tbody id="bp-body">${prods.map(p=>`<tr><td class="t-strong">${esc(p.name)}</td><td class="num tnum">${money(p.priceWithVat)}</td>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th style="text-align:right">Nyní (Kč)</th><th style="text-align:right">Nově (Kč)</th></tr></thead>
+      <tbody id="bp-body">${prods.map(p=>`<tr><td class="t-strong">${esc(p.name)}</td><td class="num tnum">${num(p.priceWithVat)}</td>
         <td class="num tnum" data-pid="${p.id}"><input class="input" style="width:110px;height:32px;text-align:right;display:inline-block" value="${p.priceWithVat}" data-price></td></tr>`).join('')}</tbody></table></div>
     </div>
     <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="bp-save">${icon('check',16)}Uložit ceny</button></div>`);
