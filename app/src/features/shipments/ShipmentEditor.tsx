@@ -463,7 +463,7 @@ export function ShipmentEditor({
                     sx={{
                       display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, borderRadius: 2, cursor: 'pointer',
                       border: 1, borderColor: inRoute ? 'warning.main' : 'divider',
-                      bgcolor: (t) => (inRoute ? t.palette.brand.amberTint : 'transparent'),
+                      bgcolor: inRoute ? 'brand.amberTint' : 'transparent',
                     }}
                   >
                     <Checkbox checked={inRoute} size="small" sx={{ p: 0 }} />
