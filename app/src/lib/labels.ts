@@ -1,7 +1,10 @@
 // Enum → Czech display strings, matching the backend's string enums and the
 // prototype's vocabulary. "Basa" is used for the Bottle kind per the domain.
 
-import { ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState } from 'src/generated/api-client';
+import {
+  ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
+  OutgoingShipmentState, OutgoingShipmentStopAddressKind,
+} from 'src/generated/api-client';
 
 export const L = {
   orderState: {
@@ -121,6 +124,24 @@ export function orderStateName(s?: OrderState | string | number): string | undef
  * resolved from either wire representation. */
 export function isReminderAdded(s?: OrderItemReminderState | string | number): boolean {
   return enumName(OrderItemReminderState as unknown as Record<string, string | number>, s) === 'Added';
+}
+
+/** The OutgoingShipmentState enum's member name (e.g. "InTransit"), resolved
+ * from either wire representation — indexes both `L.shipState` and
+ * `SHIP_STATUS`. */
+export function shipStateName(s?: OutgoingShipmentState | string | number): string | undefined {
+  return enumName(OutgoingShipmentState as unknown as Record<string, string | number>, s);
+}
+
+/** The stop's chosen address kind ("Official"/"Contact"), resolved from
+ * either wire representation, and its Czech label via `L.addrKind`. */
+export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
+  return enumName(OutgoingShipmentStopAddressKind as unknown as Record<string, string | number>, k);
+}
+
+export function addrKindLabel(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
+  const name = addrKindName(k);
+  return name ? (L.addrKind[name] ?? name) : undefined;
 }
 
 export const KIND_ORDER: Record<string, number> = {

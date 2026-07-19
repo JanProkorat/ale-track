@@ -20,6 +20,8 @@ import {
   PermissionLevel,
   OrderState,
   OrderItemReminderState,
+  OutgoingShipmentState,
+  OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
 // Plain user shape for the demo store — permissions kept as the interface type
@@ -42,6 +44,7 @@ export interface MockDb {
   clientReminders: MockReminder[];
   clientNotes: MockNote[];
   orders: MockOrder[];
+  shipments: MockOutgoingShipment[];
 }
 
 // Free-text note scoped to its parent (brewery/client) via `ownerId`.
@@ -108,6 +111,62 @@ export interface MockOrder {
   requiredDeliveryDate?: Date;
   actualDeliveryDate?: Date;
   items: MockOrderItem[];
+}
+
+// ---- Outgoing shipments (Vývozy) --------------------------------------------
+// Per-order-item shipment state (nakládka): the real `OrderItemInfoDto` only
+// carries invoice split + a single loading-confirmed flag — quantity itself is
+// always derived from the underlying order item, never duplicated here except
+// for demo-side convenience (kept in sync on create/update).
+export interface MockShipmentItem {
+  orderItemId: string;
+  productId: string;
+  quantity: number;
+  firstInvoiceQuantity: number;
+  secondInvoiceQuantity: number;
+  isShipmentLoadingConfirmed: boolean;
+}
+
+export interface MockShipmentStop {
+  order: number;
+  clientId: string;
+  orderId: string;
+  selectedAddressKind: OutgoingShipmentStopAddressKind;
+  items: MockShipmentItem[];
+}
+
+// Shared shape for the three shipment-level "extra" lists (dokládka ze skladu,
+// client extra, custom/vratné obaly) — mirrors `ExtraShipmentDto`. None of the
+// three carry a client/stop reference in the real DTOs, so — unlike the
+// prototype's per-stop dokládka — these live at the shipment level here.
+export interface MockExtraShipmentItem {
+  id: string;
+  quantity: number;
+  isLoadingConfirmed: boolean;
+  firstInvoiceQuantity: number;
+  secondInvoiceQuantity: number;
+}
+export interface MockInventoryExtraShipment extends MockExtraShipmentItem {
+  productId: string;
+}
+export interface MockClientExtraShipment extends MockExtraShipmentItem {
+  inventoryItemId: string;
+}
+export interface MockCustomExtraShipment extends MockExtraShipmentItem {
+  description: string;
+}
+
+export interface MockOutgoingShipment {
+  id: string;
+  name: string;
+  state: OutgoingShipmentState;
+  deliveryDate?: Date;
+  vehicleId?: string;
+  driverIds: string[];
+  stops: MockShipmentStop[];
+  inventoryExtra: MockInventoryExtraShipment[];
+  clientExtra: MockClientExtraShipment[];
+  customExtra: MockCustomExtraShipment[];
 }
 
 // Reminder store shared by breweries/clients; `ownerId` scopes it to its parent.
@@ -526,6 +585,102 @@ const ORDERS_SEED: MockOrder[] = [
   },
 ];
 
+// Three shipments spanning the full state flow (Created → InTransit →
+// Delivered), each carrying real order stops with per-item nakládka state, so
+// the detail screen's invoice tabs / loading progress / dokládka all have
+// something to show without any manual setup:
+//  - "Rozvoz Žitava + Hrádek" (Created): ord-0003 + ord-0004, not loaded yet.
+//  - "Vývoz Zhořelec" (InTransit): ord-0002, fully loaded + one dokládka item.
+//  - "Vývoz Chemnitz (hotovo)" (Delivered): ord-0005, fully loaded + one
+//    custom extra (vratné obaly), already invoiced.
+const SHIPMENTS_SEED: MockOutgoingShipment[] = [
+  {
+    id: 'ship-0001',
+    name: 'Rozvoz Žitava + Hrádek',
+    state: OutgoingShipmentState.Created,
+    deliveryDate: new Date(2026, 6, 23, 7, 0),
+    vehicleId: 'veh-0001',
+    driverIds: ['drv-0001'],
+    stops: [
+      {
+        order: 1,
+        clientId: 'cl-0002',
+        orderId: 'ord-0003',
+        selectedAddressKind: OutgoingShipmentStopAddressKind.Contact,
+        items: [
+          { orderItemId: 'oi-0005', productId: 'prod-0004', quantity: 5, firstInvoiceQuantity: 5, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: false },
+        ],
+      },
+      {
+        order: 2,
+        clientId: 'cl-0003',
+        orderId: 'ord-0004',
+        selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+        items: [
+          { orderItemId: 'oi-0006', productId: 'prod-0008', quantity: 3, firstInvoiceQuantity: 3, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: false },
+          { orderItemId: 'oi-0007', productId: 'prod-0009', quantity: 2, firstInvoiceQuantity: 2, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: false },
+        ],
+      },
+    ],
+    inventoryExtra: [],
+    clientExtra: [],
+    customExtra: [],
+  },
+  {
+    id: 'ship-0002',
+    name: 'Vývoz Zhořelec',
+    state: OutgoingShipmentState.InTransit,
+    deliveryDate: new Date(2026, 6, 19, 8, 0),
+    vehicleId: 'veh-0002',
+    driverIds: ['drv-0002', 'drv-0003'],
+    stops: [
+      {
+        order: 1,
+        clientId: 'cl-0001',
+        orderId: 'ord-0002',
+        selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+        items: [
+          { orderItemId: 'oi-0003', productId: 'prod-0001', quantity: 6, firstInvoiceQuantity: 6, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: true },
+          { orderItemId: 'oi-0004', productId: 'prod-0002', quantity: 2, firstInvoiceQuantity: 0, secondInvoiceQuantity: 2, isShipmentLoadingConfirmed: true },
+        ],
+      },
+    ],
+    // Dokládka ze skladu: 4 extra 0.5l Únětický Ležák bottles pulled from stock
+    // (invi-0003) on top of the order, to be deducted from inventory on delivery.
+    inventoryExtra: [
+      { id: 'extra-0001', productId: 'prod-0003', quantity: 4, isLoadingConfirmed: true, firstInvoiceQuantity: 4, secondInvoiceQuantity: 0 },
+    ],
+    clientExtra: [],
+    customExtra: [],
+  },
+  {
+    id: 'ship-0003',
+    name: 'Vývoz Chemnitz (hotovo)',
+    state: OutgoingShipmentState.Delivered,
+    deliveryDate: new Date(2026, 4, 9, 9, 0),
+    vehicleId: 'veh-0003',
+    driverIds: ['drv-0004'],
+    stops: [
+      {
+        order: 1,
+        clientId: 'cl-0004',
+        orderId: 'ord-0005',
+        selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+        items: [
+          { orderItemId: 'oi-0008', productId: 'prod-0006', quantity: 10, firstInvoiceQuantity: 10, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: true },
+          { orderItemId: 'oi-0009', productId: 'prod-0007', quantity: 5, firstInvoiceQuantity: 5, secondInvoiceQuantity: 0, isShipmentLoadingConfirmed: true },
+        ],
+      },
+    ],
+    inventoryExtra: [],
+    clientExtra: [],
+    // Extra custom (vratné obaly) — a shipment-level line with no product link.
+    customExtra: [
+      { id: 'extra-0002', description: 'Vratné přepravky', quantity: 8, isLoadingConfirmed: true, firstInvoiceQuantity: 8, secondInvoiceQuantity: 0 },
+    ],
+  },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
@@ -539,7 +694,13 @@ export const db: MockDb = {
   clientReminders: structuredClone(CLIENT_REMINDERS_SEED),
   clientNotes: structuredClone(CLIENT_NOTES_SEED),
   orders: structuredClone(ORDERS_SEED),
+  shipments: structuredClone(SHIPMENTS_SEED),
 };
+
+// ord-0004 is already assigned to ship-0001 above — reflect the create-shipment
+// state transition ("New" -> "Planning") on the seeded order itself so the
+// Orders module and the shipment editor agree on its state from first load.
+db.orders.find((o) => o.id === 'ord-0004')!.state = OrderState.Planning;
 
 /** New id for demo-created records. */
 export function mockId(prefix = 'demo'): string {

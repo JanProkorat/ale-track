@@ -66,6 +66,20 @@ import {
   type ICreateOrderItemDto,
   type IUpdateOrderItemDto,
   type IProductListItemDto,
+  OutgoingShipmentListItemDto,
+  OutgoingShipmentDetailDto,
+  OutgoingShipmentStopDto,
+  OutgoingShipmentOrderItemDto,
+  OutgoingShipmentInventoryExtraItemDto,
+  OutgoingShipmentClientExtraItemDto,
+  OutgoingShipmentCustomExtraItemDto,
+  OutgoingShipmentOrderDto,
+  UnassignedOrderItemDto,
+  OutgoingShipmentState,
+  PlanningState,
+  type CreateOutgoingShipmentDto,
+  type UpdateOutgoingShipmentDto,
+  type ClientOrderShipmentDto,
 } from 'src/generated/api-client';
 import {
   db,
@@ -79,6 +93,12 @@ import {
   type MockClientContact,
   type MockOrder,
   type MockOrderItem,
+  type MockOutgoingShipment,
+  type MockShipmentStop,
+  type MockShipmentItem,
+  type MockInventoryExtraShipment,
+  type MockClientExtraShipment,
+  type MockCustomExtraShipment,
 } from './db';
 
 /** Case-insensitive substring match for demo-side list search. */
@@ -201,6 +221,159 @@ function buildBreweryGroups(products: IProductListItemDto[]): BreweryGroupDto[] 
       });
       return new BreweryGroupDto({ breweryId: b.breweryId, breweryName: b.breweryName, kinds });
     });
+}
+
+// ---- Outgoing shipments (Vývozy) helpers ------------------------------------
+// Per-unit weight estimate — the real backend stores a `weight` field on the
+// product; the demo catalog doesn't carry one, so this mirrors the
+// prototype's `estWeight()` formula (kegs/bottles/cans by package size).
+function estimateWeight(kind?: ProductKind, packageSize?: number): number {
+  if (kind === ProductKind.Keg) return (packageSize ?? 30) * 1.05 + 8;
+  if (kind === ProductKind.Bottle) return (packageSize ?? 0.5) * 20 * 1.1;
+  if (kind === ProductKind.Can || kind === ProductKind.Multipack) return (packageSize ?? 6) * 1.05;
+  return 5;
+}
+function shipmentPlanningState(state: OutgoingShipmentState): PlanningState {
+  if (state === OutgoingShipmentState.Delivered) return PlanningState.Finished;
+  if (state === OutgoingShipmentState.Cancelled) return PlanningState.Cancelled;
+  return PlanningState.Active;
+}
+function shipmentItemToDto(it: MockShipmentItem): OutgoingShipmentOrderItemDto {
+  const p = db.products.find((x) => x.id === it.productId);
+  return new OutgoingShipmentOrderItemDto({
+    id: it.orderItemId,
+    orderItemId: it.orderItemId,
+    name: p?.name ?? '(smazaný produkt)',
+    quantity: it.quantity,
+    kind: p?.kind,
+    packageSize: p?.packageSize,
+    weight: estimateWeight(p?.kind, p?.packageSize),
+    isShipmentLoadingConfirmed: it.isShipmentLoadingConfirmed,
+    firstInvoiceQuantity: it.firstInvoiceQuantity,
+    secondInvoiceQuantity: it.secondInvoiceQuantity,
+  });
+}
+function shipmentStopToDto(st: MockShipmentStop): OutgoingShipmentStopDto {
+  const c = db.clients.find((x) => x.id === st.clientId);
+  return new OutgoingShipmentStopDto({
+    order: st.order,
+    clientId: st.clientId,
+    clientName: c?.name ?? '—',
+    officialAddress: c ? toAddressDto(c.officialAddress) : undefined,
+    contactAddress: c?.contactAddress ? toAddressDto(c.contactAddress) : undefined,
+    orderId: st.orderId,
+    selectedAddressKind: st.selectedAddressKind,
+    products: st.items.map(shipmentItemToDto),
+  });
+}
+function inventoryExtraToDto(e: MockInventoryExtraShipment): OutgoingShipmentInventoryExtraItemDto {
+  const p = db.products.find((x) => x.id === e.productId);
+  return new OutgoingShipmentInventoryExtraItemDto({
+    id: e.id,
+    productId: e.productId,
+    name: p?.name ?? '(smazaný produkt)',
+    quantity: e.quantity,
+    kind: p?.kind,
+    packageSize: p?.packageSize,
+    weight: estimateWeight(p?.kind, p?.packageSize),
+    isShipmentLoadingConfirmed: e.isLoadingConfirmed,
+    firstInvoiceQuantity: e.firstInvoiceQuantity,
+    secondInvoiceQuantity: e.secondInvoiceQuantity,
+  });
+}
+function clientExtraToDto(e: MockClientExtraShipment): OutgoingShipmentClientExtraItemDto {
+  const item = db.inventory.flatMap((sec) => sec.items).find((i) => i.id === e.inventoryItemId);
+  return new OutgoingShipmentClientExtraItemDto({
+    id: e.id,
+    inventoryItemId: e.inventoryItemId,
+    productId: item?.productId,
+    name: item?.name ?? '(smazaná položka)',
+    quantity: e.quantity,
+    kind: item?.kind,
+    packageSize: item?.packageSize,
+    weight: estimateWeight(item?.kind, item?.packageSize),
+    isShipmentLoadingConfirmed: e.isLoadingConfirmed,
+    firstInvoiceQuantity: e.firstInvoiceQuantity,
+    secondInvoiceQuantity: e.secondInvoiceQuantity,
+  });
+}
+function customExtraToDto(e: MockCustomExtraShipment): OutgoingShipmentCustomExtraItemDto {
+  return new OutgoingShipmentCustomExtraItemDto({
+    id: e.id,
+    name: e.description,
+    quantity: e.quantity,
+    isShipmentLoadingConfirmed: e.isLoadingConfirmed,
+    firstInvoiceQuantity: e.firstInvoiceQuantity,
+    secondInvoiceQuantity: e.secondInvoiceQuantity,
+  });
+}
+function shipmentToDetailDto(s: MockOutgoingShipment): OutgoingShipmentDetailDto {
+  return new OutgoingShipmentDetailDto({
+    id: s.id,
+    state: s.state,
+    name: s.name,
+    deliveryDate: s.deliveryDate,
+    vehicleId: s.vehicleId,
+    driverIds: s.driverIds,
+    stops: s.stops.map(shipmentStopToDto),
+    inventoryExtraItems: s.inventoryExtra.map(inventoryExtraToDto),
+    clientExtraItems: s.clientExtra.map(clientExtraToDto),
+    customExtraItems: s.customExtra.map(customExtraToDto),
+  });
+}
+/** Rebuilds a shipment stop from a saved `ClientOrderShipmentDto`, deriving
+ * quantity from the underlying order item (the write DTO never carries it)
+ * and falling back to the previous stop's nakládka state for any per-item
+ * field the caller didn't send (e.g. the shipment editor only touches
+ * ordering/address kind, not invoice/loading flags). */
+function buildMockStop(co: ClientOrderShipmentDto, existing?: MockShipmentStop): MockShipmentStop {
+  const order = db.orders.find((x) => x.id === co.clientOrderId);
+  const items: MockShipmentItem[] = (order?.items ?? []).map((oi) => {
+    const prevItem = existing?.items.find((x) => x.orderItemId === oi.id);
+    const info = co.orderItems?.find((x) => x.orderItemId === oi.id);
+    return {
+      orderItemId: oi.id,
+      productId: oi.productId,
+      quantity: oi.quantity,
+      firstInvoiceQuantity: info?.firstInvoiceQuantity ?? prevItem?.firstInvoiceQuantity ?? oi.quantity,
+      secondInvoiceQuantity: info?.secondInvoiceQuantity ?? prevItem?.secondInvoiceQuantity ?? 0,
+      isShipmentLoadingConfirmed: info?.isLoadingConfirmed ?? prevItem?.isShipmentLoadingConfirmed ?? false,
+    };
+  });
+  return {
+    order: co.order,
+    clientId: order?.clientId ?? '',
+    orderId: co.clientOrderId,
+    selectedAddressKind: co.selectedAddressKind,
+    items,
+  };
+}
+function orderToShipmentOrderDto(o: MockOrder): OutgoingShipmentOrderDto {
+  const c = db.clients.find((x) => x.id === o.clientId);
+  return new OutgoingShipmentOrderDto({
+    id: o.id,
+    requiredDeliveryDate: o.requiredDeliveryDate,
+    clientName: c?.name ?? '—',
+    clientOfficialAddress: c ? toAddressDto(c.officialAddress) : undefined,
+    clientContactAddress: c?.contactAddress ? toAddressDto(c.contactAddress) : undefined,
+    items: o.items.map((it) => {
+      const p = db.products.find((x) => x.id === it.productId);
+      return new UnassignedOrderItemDto({
+        orderItemId: it.id,
+        productId: it.productId,
+        productName: p?.name ?? '(smazaný produkt)',
+        quantity: it.quantity,
+        kind: p?.kind,
+        type: p?.type,
+        alcoholPercentage: p?.alcoholPercentage,
+        platoDegree: p?.platoDegree,
+        packageSize: p?.packageSize,
+        weight: estimateWeight(p?.kind, p?.packageSize),
+        breweryDisplayOrder: p?.breweryDisplayOrder,
+        displayOrder: p?.displayOrder,
+      });
+    }),
+  });
 }
 
 const impl: Partial<IClient> = {
@@ -747,6 +920,131 @@ const impl: Partial<IClient> = {
       }));
     const breweries = buildBreweryGroups(db.products);
     return mockDelay(new GroupedProductHistoryDto({ recent, breweries }));
+  },
+
+  // ---- Outgoing shipments (Vývozy) -------------------------------------------
+  getOutgoingShipmentsListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.shipments
+      .filter((s) => matches(s.name, search))
+      .slice()
+      .sort((a, b) => (b.deliveryDate?.getTime() ?? 0) - (a.deliveryDate?.getTime() ?? 0))
+      .map((s) => new OutgoingShipmentListItemDto({
+        id: s.id, state: s.state, deliveryDate: s.deliveryDate, name: s.name,
+        planningState: shipmentPlanningState(s.state),
+      }));
+    return mockDelay(rows);
+  },
+  getOutgoingShipmentDetailEndpoint(id: string) {
+    const s = db.shipments.find((x) => x.id === id);
+    if (!s) return Promise.reject(new MockNotFoundError('Vývoz'));
+    return mockDelay(shipmentToDetailDto(s));
+  },
+  createOutgoingShipmentEndpoint(data: CreateOutgoingShipmentDto) {
+    const id = mockId('ship');
+    const stops = data.clientOrderShipments.map((co) => buildMockStop(co));
+    db.shipments.push({
+      id,
+      name: data.name,
+      state: OutgoingShipmentState.Created,
+      deliveryDate: data.deliveryDate,
+      vehicleId: data.vehicleId,
+      driverIds: data.driverIds ?? [],
+      stops,
+      inventoryExtra: [],
+      clientExtra: [],
+      customExtra: [],
+    });
+    // Mirrors the prototype's seSave: putting a brand-new order on a shipment
+    // moves it out of "New" and into "Planning".
+    stops.forEach((st) => {
+      const o = db.orders.find((x) => x.id === st.orderId);
+      if (o && o.state === OrderState.New) o.state = OrderState.Planning;
+    });
+    return mockDelay(id);
+  },
+  updateOutgoingShipmentEndpoint(id: string, data: UpdateOutgoingShipmentDto) {
+    const s = db.shipments.find((x) => x.id === id);
+    if (!s) return Promise.reject(new MockNotFoundError('Vývoz'));
+    const prevState = s.state;
+    s.name = data.name;
+    s.deliveryDate = data.deliveryDate;
+    s.vehicleId = data.vehicleId;
+    s.driverIds = data.driverIds ?? [];
+    s.stops = data.clientOrderShipments.map((co) => {
+      const existing = s.stops.find((st) => st.orderId === co.clientOrderId);
+      return buildMockStop(co, existing);
+    });
+    s.inventoryExtra = (data.inventoryExtraShipments ?? []).map((e) => ({
+      id: e.id || mockId('extra'),
+      productId: e.productId!,
+      quantity: e.quantity ?? 0,
+      isLoadingConfirmed: e.isLoadingConfirmed ?? false,
+      firstInvoiceQuantity: e.firstInvoiceQuantity ?? (e.quantity ?? 0),
+      secondInvoiceQuantity: e.secondInvoiceQuantity ?? 0,
+    }));
+    s.clientExtra = (data.clientExtraShipments ?? []).map((e) => ({
+      id: e.id || mockId('extra'),
+      inventoryItemId: e.inventoryItemId!,
+      quantity: e.quantity ?? 0,
+      isLoadingConfirmed: e.isLoadingConfirmed ?? false,
+      firstInvoiceQuantity: e.firstInvoiceQuantity ?? (e.quantity ?? 0),
+      secondInvoiceQuantity: e.secondInvoiceQuantity ?? 0,
+    }));
+    s.customExtra = (data.customExtraShipments ?? []).map((e) => ({
+      id: e.id || mockId('extra'),
+      description: e.description ?? '',
+      quantity: e.quantity ?? 0,
+      isLoadingConfirmed: e.isLoadingConfirmed ?? false,
+      firstInvoiceQuantity: e.firstInvoiceQuantity ?? (e.quantity ?? 0),
+      secondInvoiceQuantity: e.secondInvoiceQuantity ?? 0,
+    }));
+    s.state = data.state;
+
+    // Mirror the prototype's advanceShip(): state transitions cascade onto the
+    // orders riding this shipment, and delivery deducts dokládka from stock.
+    if (prevState !== data.state) {
+      if (data.state === OutgoingShipmentState.InTransit) {
+        s.stops.forEach((st) => {
+          const o = db.orders.find((x) => x.id === st.orderId);
+          if (o) o.state = OrderState.Delivering;
+        });
+      } else if (data.state === OutgoingShipmentState.Delivered) {
+        const now = new Date();
+        s.stops.forEach((st) => {
+          const o = db.orders.find((x) => x.id === st.orderId);
+          if (o) { o.state = OrderState.Finished; o.actualDeliveryDate = now; }
+        });
+        s.inventoryExtra.forEach((e) => {
+          const invItem = db.inventory.flatMap((sec) => sec.items).find((i) => i.productId === e.productId);
+          if (invItem) invItem.quantity = Math.max(0, (invItem.quantity ?? 0) - e.quantity);
+        });
+      }
+    }
+    return mockDelay(id);
+  },
+  deleteOutgoingShipmentEndpoint(id: string) {
+    const i = db.shipments.findIndex((x) => x.id === id);
+    if (i >= 0) db.shipments.splice(i, 1);
+    return mockDelay(id);
+  },
+  getOrdersListForOutgoingShipmentsEndpoint(outgoingShipmentId: string | null | undefined, parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const usedOrderIds = new Set<string>();
+    // Orders already on *this* shipment stay visible even if their state has
+    // since moved past the normal "eligible" window (e.g. re-opening the
+    // editor for an already-Delivered shipment, whose orders are Finished).
+    const ownOrderIds = new Set<string>();
+    db.shipments.forEach((s) => {
+      if (s.id === outgoingShipmentId) { s.stops.forEach((st) => ownOrderIds.add(st.orderId)); return; }
+      s.stops.forEach((st) => usedOrderIds.add(st.orderId));
+    });
+    const eligibleStates = [OrderState.New, OrderState.Planning, OrderState.Delivering];
+    const rows = db.orders
+      .filter((o) => (eligibleStates.includes(o.state) || ownOrderIds.has(o.id)) && !usedOrderIds.has(o.id))
+      .filter((o) => matches(db.clients.find((c) => c.id === o.clientId)?.name, search))
+      .map((o) => orderToShipmentOrderDto(o));
+    return mockDelay(rows);
   },
 };
 

@@ -11,6 +11,7 @@ import { DriversPage } from 'src/features/drivers/DriversPage';
 import { BreweriesPage } from 'src/features/breweries/BreweriesPage';
 import { ClientsPage } from 'src/features/clients/ClientsPage';
 import { OrdersPage } from 'src/features/orders/OrdersPage';
+import { ShipmentsPage } from 'src/features/shipments/ShipmentsPage';
 import { LOGIN_PATH, PATHS } from './paths';
 
 const placeholder = (eyebrow: string, title: string, phase: string) => (
@@ -27,7 +28,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: PATHS.orders, element: <OrdersPage /> },
-          { path: PATHS.shipments, element: placeholder('Prodej', 'Vývozy', 'P7') },
+          { path: PATHS.shipments, element: <ShipmentsPage /> },
           { path: PATHS.deliveries, element: placeholder('Sklad', 'Dovozy zboží', 'P8') },
           { path: PATHS.inventory, element: <InventoryPage /> },
           { path: PATHS.breweries, element: <BreweriesPage /> },
