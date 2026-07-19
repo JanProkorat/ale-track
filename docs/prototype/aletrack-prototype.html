@@ -1746,6 +1746,7 @@ function viewDeliveryDetail(id){
       <span style="color:var(--ok)">${icon('check',20)}</span><div><div class="t-strong">Naskladněno</div>
       <div class="t-mut" style="font-size:13px">${deliveryTotals(d)} kusů bylo propsáno na sklad.</div></div>
       <a class="btn btn-sm btn-ghost" href="#/inventory" style="margin-left:auto">Zobrazit sklad</a></div></div>`:''}
+    <div style="margin-bottom:16px">${routeMap(deliveryStopPoints(d.stops),{h:320,animate:d.state==='OnTheWay'})}</div>
     <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
       <div class="stack" style="gap:14px"><div class="section-label">Zastávky (${d.stops.length})</div>${stopCards}</div>
       <div class="stack" style="gap:14px">
@@ -1862,10 +1863,7 @@ function deStopCard(s){
       <button class="icon-btn" style="width:30px;height:30px" onclick="event.stopPropagation();deMoveStop('${s.id}',-1)" ${idx===0?'disabled':''} title="Nahoru">${icon('arrowU',13)}</button>
       <button class="icon-btn" style="width:30px;height:30px" onclick="event.stopPropagation();deMoveStop('${s.id}',1)" ${idx===n-1?'disabled':''} title="Dolů">${icon('arrowD',13)}</button>
       <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="event.stopPropagation();deRemoveStop('${s.id}')" title="Odebrat pivovar">${icon('trash',14)}</button></div>`;
-  const body=ui.collapsed
-    ? (cnt?`<div class="card-pad" style="padding-top:0"><div class="row wrap gap8">${s.items.map(it=>{const p=prodById(it.productId);
-        return `<span class="chip">${esc(p.name)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}<b style="margin-left:5px;color:var(--text)">×${it.quantity}</b></span>`;}).join('')}</div></div>`:'')
-    : `<div class="card-pad" id="de-cat-${s.id}">${deStopCatalog(s)}</div>`;
+  const body=ui.collapsed ? '' : `<div class="card-pad" id="de-cat-${s.id}">${deStopCatalog(s)}</div>`;
   return `<div class="card" id="de-stop-${s.id}">${head}${body}</div>`;
 }
 function deToggleCollapse(sid){ deStopUI(sid).collapsed=!deStopUI(sid).collapsed; deRerenderStop(sid); }
@@ -1940,17 +1938,25 @@ function viewInventory(){
   return `<div class="page">
     ${pageHead('Sklad','Sklad','Evidence zboží na skladě. Naskladňuje dovoz, vyskladňuje vývoz — lze i ručně.',
       ed?`<button class="btn btn-primary" onclick="invForm(null)">${icon('plus',17)}Ruční položka</button>`:'')}
-    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:16px">
-      ${miniStat('Položek',DB.inventory.length,'stock')}${miniStat('Kusů celkem',totalKs,'box')}
-      <div class="tile" style="padding:14px;${low.length?'border-color:var(--crit)':''}"><div class="ti-top"><div class="ti-lbl">Nízká zásoba</div><span style="color:${low.length?'var(--crit)':'var(--text-3)'}">${icon('warnTri',16)}</span></div>
-        <div class="ti-val tnum" style="font-size:24px;${low.length?'color:var(--crit)':''}">${low.length}</div></div></div>
-    <div class="toolbar">
-      <div class="fld" style="min-width:230px">${icon('search',16)}<input id="inv-search" placeholder="Hledat položku…" value="${esc(INV_SEARCH)}"></div>
-      <div style="width:220px">${sel('inv-brew',brewOpts,INV_BREW)}</div>
-      <div class="seg"><button id="inv-lay-list" class="${INV_LAYOUT==='list'?'on':''}" onclick="invSetLayout('list')">${icon('menu',14)} Seznam</button>
-        <button id="inv-lay-grid" class="${INV_LAYOUT==='grid'?'on':''}" onclick="invSetLayout('grid')">${icon('dash',14)} Mřížka</button></div>
-      <span class="count-note" id="inv-count">${invCount()} položek</span></div>
+    <div class="card" style="margin-bottom:16px"><div style="display:flex;flex-wrap:wrap;align-items:stretch">
+      ${invStat('Položek na skladě',DB.inventory.length,'stock',false,true)}
+      ${invStat('Kusů celkem',num(totalKs),'box',false,false)}
+      ${invStat('Nízká zásoba',low.length,'warnTri',low.length>0,false)}
+      <div style="flex:2;min-width:240px;border-left:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:12px 16px;flex-wrap:wrap">
+        <div class="fld" style="flex:1;min-width:170px;height:38px">${icon('search',16)}<input id="inv-search" placeholder="Hledat položku…" value="${esc(INV_SEARCH)}"></div>
+        <div style="width:190px">${sel('inv-brew',brewOpts,INV_BREW)}</div>
+        <div class="seg"><button id="inv-lay-list" class="${INV_LAYOUT==='list'?'on':''}" onclick="invSetLayout('list')" title="Seznam">${icon('menu',15)}</button>
+          <button id="inv-lay-grid" class="${INV_LAYOUT==='grid'?'on':''}" onclick="invSetLayout('grid')" title="Mřížka">${icon('dash',15)}</button></div>
+      </div>
+    </div></div>
+    <div class="row" style="justify-content:flex-end;margin:-8px 2px 10px"><span class="count-note" id="inv-count">${invCount()} položek</span></div>
     <div id="inv-results">${invResults()}</div></div>`;
+}
+function invStat(label,val,ic,crit,first){
+  return `<div style="flex:1;min-width:150px;padding:14px 18px;${first?'':'border-left:1px solid var(--border)'};display:flex;align-items:center;gap:12px">
+    <div style="width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:${crit?'var(--crit-tint)':'var(--surface-3)'};color:${crit?'var(--crit)':'var(--text-2)'}">${icon(ic,18)}</div>
+    <div style="min-width:0"><div class="t-mut" style="font-size:12px;font-weight:600;white-space:nowrap">${esc(label)}</div>
+      <div class="tnum" style="font-size:22px;font-weight:800;line-height:1.15;${crit?'color:var(--crit)':''}">${val}</div></div></div>`;
 }
 function invWire(){ const s=$('#inv-search'); if(s) s.oninput=()=>{ INV_SEARCH=s.value; invRerender(); };
   const b=$('#inv-brew'); if(b) b.onchange=()=>{ INV_BREW=b.value; invRerender(); }; }
