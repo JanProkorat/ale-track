@@ -1538,12 +1538,13 @@ function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to
   renderRoute(); }
 
 /* ---- Shipment planner ---- */
-let SH={ draft:null, drag:null };
+let SH={ draft:null, drag:null, regionFilter:'all' };
 function shipmentUsedOrderIds(exceptId){ const set=new Set(); DB.shipments.forEach(s=>{ if(s.id===exceptId)return; s.stops.forEach(st=>set.add(st.orderId)); }); return set; }
 function viewShipmentEditor(id){
   if(id){ const s=DB.shipments.find(x=>x.id===id); SH.draft={ id:s.id, number:s.number, name:s.name, deliveryDate:s.deliveryDate, vehicleId:s.vehicleId,
     driverIds:[...s.driverIds], stops:s.stops.map(st=>({...st})), extraCustom:(s.extraCustom||[]).map(e=>({...e})) }; }
   else SH.draft={ id:null, name:'', deliveryDate:daysFromNow(2)+'T07:00', vehicleId:null, driverIds:[], stops:[], extraCustom:[] };
+  SH.regionFilter='all';
   return seHTML();
 }
 function seRerender(){ $('#view').innerHTML=seHTML(); }
@@ -1555,14 +1556,23 @@ function seHTML(){
   const pts=shipStopPoints(d.stops);
   const veh=vehicleById(d.vehicleId);
   const totalWeight=stopsSorted.reduce((w,st)=>{const o=DB.orders.find(x=>x.id===st.orderId);return w+ (o?o.items.reduce((x,it)=>x+estWeight(prodById(it.productId))*it.quantity,0):0);},0);
-  // available orders list
-  const availList=avail.map(o=>{ const cl=clientById(o.clientId); const inRoute=d.stops.some(st=>st.orderId===o.id); const t=orderTotals(o);
+  // available orders list — region filter
+  const regionsPresent=[...new Set(avail.map(o=>clientById(o.clientId).region))].sort((a,b)=>(L.region[a]||a).localeCompare(L.region[b]||b));
+  if(SH.regionFilter!=='all'&&!regionsPresent.includes(SH.regionFilter)) SH.regionFilter='all';
+  const regionSelect=`<select class="select" style="width:auto;height:32px;flex:0 0 auto;font-size:12.5px" onchange="seSetRegion(this.value)">
+    <option value="all" ${SH.regionFilter==='all'?'selected':''}>Vše (${avail.length})</option>
+    ${regionsPresent.map(r=>{const n=avail.filter(o=>clientById(o.clientId).region===r).length;
+      return `<option value="${r}" ${SH.regionFilter===r?'selected':''}>${L.region[r]||r} (${n})</option>`;}).join('')}</select>`;
+  const availShown=avail.filter(o=>SH.regionFilter==='all'||clientById(o.clientId).region===SH.regionFilter||d.stops.some(st=>st.orderId===o.id));
+  const availList=availShown.map(o=>{ const cl=clientById(o.clientId); const inRoute=d.stops.some(st=>st.orderId===o.id); const t=orderTotals(o);
     return `<label class="row gap12" style="padding:11px;border:1px solid ${inRoute?'var(--amber)':'var(--border)'};border-radius:var(--r);cursor:pointer;${inRoute?'background:var(--amber-soft)':''}">
       <input type="checkbox" ${inRoute?'checked':''} onchange="seToggleOrder('${o.id}')" style="width:17px;height:17px;accent-color:var(--amber)">
       <span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${colorFor(cl.id)}"></span>
       <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(cl.name)}</div>
-        <div class="t-mut" style="font-size:12px">${o.number} · ${t.items} ks · ${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'bez termínu'}</div></div>
-      ${pill('order',o.state)}</label>`; }).join('')||`<div class="empty" style="padding:24px"><div class="t">Žádné objednávky k naplánování</div></div>`;
+        <div class="t-mut" style="font-size:12px">${o.number} · ${t.items} ks · ${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'bez termínu'}</div>
+        <span class="tag" style="margin-top:4px">${icon('pin',11)}${L.region[cl.region]||cl.region}</span></div>
+      ${pill('order',o.state)}</label>`; }).join('')||`<div class="empty" style="padding:24px"><div class="t">V tomto regionu nejsou objednávky</div>
+        ${SH.regionFilter!=='all'?`<button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="seSetRegion('all')">Zobrazit vše</button>`:''}</div>`;
   // ordered stops (draggable)
   const stopRows=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const o=DB.orders.find(x=>x.id===st.orderId);
     return `<div class="row gap8" draggable="true" ondragstart="SH.drag='${st.orderId}'" ondragover="event.preventDefault()" ondrop="seDropOn('${st.orderId}')"
@@ -1602,10 +1612,12 @@ function seHTML(){
           <span class="tnum t-strong" style="color:${totalWeight>veh.maxWeight?'var(--crit)':'var(--ok)'}">${Math.round(totalWeight)} / ${num(veh.maxWeight)} kg</span></div>`:''}
         </div></div>
         <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad" style="display:flex;flex-wrap:wrap;gap:8px">${driverChips}</div></div>
-        <div class="card"><div class="card-head">${icon('order',16)}<h3>Objednávky k rozvozu</h3><span class="tag" style="margin-left:auto">${d.stops.length}/${avail.length}</span></div>
-          <div class="card-pad stack" style="gap:9px;max-height:420px;overflow-y:auto">${availList}</div></div>
+        <div class="card"><div class="card-head">${icon('order',16)}<h3>Objednávky k rozvozu</h3>
+            <span class="tag">${d.stops.length}/${avail.length}</span><span style="margin-left:auto">${regionSelect}</span></div>
+          <div class="card-pad stack" style="gap:9px;max-height:440px;overflow-y:auto">${availList}</div></div>
       </div></div></div>`;
 }
+function seSetRegion(r){ seSyncMeta(); SH.regionFilter=r; seRerender(); }
 function driverAvailableOn(dr,dt){ if(!dt)return true; const day=dt.slice(0,10); return dr.availabilities.some(a=>a.from.slice(0,10)===day); }
 function seSyncMeta(){ if($('#se-name'))SH.draft.name=$('#se-name').value; if($('#se-veh'))SH.draft.vehicleId=$('#se-veh').value||null; }
 function seToggleOrder(orderId){ seSyncMeta(); const d=SH.draft; const ex=d.stops.find(s=>s.orderId===orderId);
