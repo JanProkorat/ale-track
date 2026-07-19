@@ -38,3 +38,11 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (abs >= 2 && abs <= 4) return few;
   return many;
 }
+
+/** Short, stable "order number" surrogate — OrderDto carries no `number` field
+ * (unlike the design prototype's `OBJ-2026-###`), so the tail of the id stands
+ * in for one, shown in mono like the prototype's order number chip. */
+export function orderNumber(id?: string): string {
+  if (!id) return '—';
+  return `#${id.slice(-6).toUpperCase()}`;
+}

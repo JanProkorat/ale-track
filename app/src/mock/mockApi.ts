@@ -51,6 +51,21 @@ import {
   type IClientContactDto,
   type CreateNoteDto,
   type SetClientReminderResolvedDateRequest,
+  OrderListItemDto,
+  OrderDto,
+  OrderItemDto,
+  ClientInfoDto,
+  OrderState,
+  GroupedProductHistoryDto,
+  BreweryGroupDto,
+  KindGroupDto,
+  PackageGroupDto,
+  ProductKind,
+  type CreateOrderDto,
+  type UpdateOrderDto,
+  type ICreateOrderItemDto,
+  type IUpdateOrderItemDto,
+  type IProductListItemDto,
 } from 'src/generated/api-client';
 import {
   db,
@@ -62,6 +77,8 @@ import {
   type MockReminder,
   type MockClient,
   type MockClientContact,
+  type MockOrder,
+  type MockOrderItem,
 } from './db';
 
 /** Case-insensitive substring match for demo-side list search. */
@@ -99,6 +116,91 @@ function clientToDetailDto(c: MockClient): ClientDto {
     contactAddress: c.contactAddress ? toAddressDto(c.contactAddress) : undefined,
     contacts: c.contacts.map(contactToDto),
   });
+}
+
+// ---- Orders helpers ---------------------------------------------------------
+// The order item store only holds ids/quantity; product name and the
+// brewery/display ordering hints on OrderItemDto are resolved by joining
+// against db.products on the way out (same denormalization pattern used by
+// inventory items elsewhere in this file).
+function orderItemToDto(oi: MockOrderItem): OrderItemDto {
+  const p = db.products.find((x) => x.id === oi.productId);
+  return new OrderItemDto({
+    id: oi.id,
+    productId: oi.productId,
+    productName: p?.name ?? '(smazaný produkt)',
+    quantity: oi.quantity,
+    reminderState: oi.reminderState,
+    breweryDisplayOrder: p?.breweryDisplayOrder,
+    displayOrder: p?.displayOrder,
+  });
+}
+function orderToListDto(o: MockOrder): OrderListItemDto {
+  const c = db.clients.find((x) => x.id === o.clientId);
+  return new OrderListItemDto({
+    id: o.id, state: o.state, requiredDeliveryDate: o.requiredDeliveryDate,
+    clientName: c?.name ?? '—',
+  });
+}
+function orderToDetailDto(o: MockOrder): OrderDto {
+  const c = db.clients.find((x) => x.id === o.clientId);
+  return new OrderDto({
+    id: o.id,
+    client: new ClientInfoDto({ id: c?.id, name: c?.name }),
+    state: o.state,
+    requiredDeliveryDate: o.requiredDeliveryDate,
+    actualDeliveryDate: o.actualDeliveryDate,
+    createdDate: o.createdDate,
+    orderItems: o.items.map(orderItemToDto),
+  });
+}
+function toMockOrderItems(items: (ICreateOrderItemDto | IUpdateOrderItemDto)[] | undefined): MockOrderItem[] {
+  return (items ?? []).map((it) => ({
+    id: mockId('oi'),
+    productId: it.productId!,
+    quantity: it.quantity ?? 1,
+    reminderState: it.reminderState,
+  }));
+}
+/** Groups the full product catalog into brewery -> kind -> package size, the
+ * shape `GroupedProductHistoryDto.breweries` needs for the "browse" tab of the
+ * order editor's catalog. */
+function buildBreweryGroups(products: IProductListItemDto[]): BreweryGroupDto[] {
+  const byBrewery = new Map<string, { breweryId: string; breweryName: string; order: number; products: IProductListItemDto[] }>();
+  for (const p of products) {
+    const key = p.breweryId ?? '';
+    if (!byBrewery.has(key)) {
+      byBrewery.set(key, { breweryId: key, breweryName: p.breweryName ?? '', order: p.breweryDisplayOrder ?? 0, products: [] });
+    }
+    byBrewery.get(key)!.products.push(p);
+  }
+  const KIND_ORDER = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
+  return Array.from(byBrewery.values())
+    .sort((a, b) => a.order - b.order)
+    .map((b) => {
+      const byKind = new Map<ProductKind, IProductListItemDto[]>();
+      for (const p of b.products) {
+        const k = p.kind ?? ProductKind.Other;
+        if (!byKind.has(k)) byKind.set(k, []);
+        byKind.get(k)!.push(p);
+      }
+      const kinds = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
+        const bySize = new Map<number, IProductListItemDto[]>();
+        for (const p of byKind.get(k)!) {
+          const size = p.packageSize ?? -1;
+          if (!bySize.has(size)) bySize.set(size, []);
+          bySize.get(size)!.push(p);
+        }
+        const packageSizes = Array.from(bySize.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([size, prods]) => new PackageGroupDto({
+            size: size === -1 ? undefined : size,
+            items: prods.map((p) => new ProductListItemDto(p)),
+          }));
+        return new KindGroupDto({ kind: k, packageSizes });
+      });
+      return new BreweryGroupDto({ breweryId: b.breweryId, breweryName: b.breweryName, kinds });
+    });
 }
 
 const impl: Partial<IClient> = {
@@ -583,6 +685,68 @@ const impl: Partial<IClient> = {
     const i = db.clientNotes.findIndex((x) => x.id === id);
     if (i >= 0) db.clientNotes.splice(i, 1);
     return mockDelay(id);
+  },
+
+  // ---- Orders (Objednávky) ---------------------------------------------------
+  getOrdersListEndpoint() {
+    const rows = db.orders
+      .slice()
+      .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime())
+      .map(orderToListDto);
+    return mockDelay(rows);
+  },
+  getOrderDetailEndpoint(id: string) {
+    const o = db.orders.find((x) => x.id === id);
+    if (!o) return Promise.reject(new MockNotFoundError('Objednávka'));
+    return mockDelay(orderToDetailDto(o));
+  },
+  createOrderEndpoint(data: CreateOrderDto) {
+    const id = mockId('ord');
+    db.orders.unshift({
+      id,
+      clientId: data.clientId,
+      // Mirrors the prototype's oeSave: a required delivery date already
+      // moves a brand-new order out of "New" and into "Planning".
+      state: data.requiredDeliveryDate ? OrderState.Planning : OrderState.New,
+      createdDate: new Date(),
+      requiredDeliveryDate: data.requiredDeliveryDate,
+      items: toMockOrderItems(data.orderItems),
+    });
+    return mockDelay(id);
+  },
+  updateOrderEndpoint(id: string, data: UpdateOrderDto) {
+    const o = db.orders.find((x) => x.id === id);
+    if (!o) return Promise.reject(new MockNotFoundError('Objednávka'));
+    o.clientId = data.clientId;
+    o.requiredDeliveryDate = data.requiredDeliveryDate;
+    o.actualDeliveryDate = data.actualDeliveryDate;
+    o.items = toMockOrderItems(data.orderItems);
+    if (data.state != null) o.state = data.state;
+    else if (o.state === OrderState.New && data.requiredDeliveryDate) o.state = OrderState.Planning;
+    return mockDelay(id);
+  },
+  deleteOrderEndpoint(id: string) {
+    // Per the prototype's delOrder(): "delete" cancels the order rather than
+    // erasing it, so it stays visible in the client's history.
+    const o = db.orders.find((x) => x.id === id);
+    if (o) o.state = OrderState.Cancelled;
+    return mockDelay(id);
+  },
+
+  // ---- Order editor catalog (history-first product picker) ------------------
+  getProductsByClientHistoryEndpoint(clientId: string) {
+    const seen = new Set<string>();
+    const recent: ProductListItemDto[] = [];
+    db.orders
+      .filter((o) => o.clientId === clientId)
+      .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime())
+      .forEach((o) => o.items.forEach((it) => {
+        if (seen.has(it.productId)) return;
+        const p = db.products.find((x) => x.id === it.productId);
+        if (p) { seen.add(it.productId); recent.push(new ProductListItemDto(p)); }
+      }));
+    const breweries = buildBreweryGroups(db.products);
+    return mockDelay(new GroupedProductHistoryDto({ recent, breweries }));
   },
 };
 

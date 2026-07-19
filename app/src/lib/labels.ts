@@ -1,7 +1,7 @@
 // Enum → Czech display strings, matching the backend's string enums and the
 // prototype's vocabulary. "Basa" is used for the Bottle kind per the domain.
 
-import { ProductKind, ProductType, Country, Region, ContactType } from 'src/generated/api-client';
+import { ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState } from 'src/generated/api-client';
 
 export const L = {
   orderState: {
@@ -108,6 +108,19 @@ export function contactTypeLabel(t?: ContactType | string | number): string | un
 
 export function isEmailContact(t?: ContactType | string | number): boolean {
   return enumName(ContactType as unknown as Record<string, string | number>, t) === 'Email';
+}
+
+/** The OrderState enum's member name (e.g. "Planning"), resolved from either
+ * the numeric (demo) or string (real) wire representation — used to index
+ * both `L.orderState` and `ORDER_STATUS` below. */
+export function orderStateName(s?: OrderState | string | number): string | undefined {
+  return enumName(OrderState as unknown as Record<string, string | number>, s);
+}
+
+/** Whether an order item's reminder ("hlídáno" badge) is in the Added state,
+ * resolved from either wire representation. */
+export function isReminderAdded(s?: OrderItemReminderState | string | number): boolean {
+  return enumName(OrderItemReminderState as unknown as Record<string, string | number>, s) === 'Added';
 }
 
 export const KIND_ORDER: Record<string, number> = {

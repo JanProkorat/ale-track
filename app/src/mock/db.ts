@@ -18,6 +18,8 @@ import {
   ReminderType,
   ModuleType,
   PermissionLevel,
+  OrderState,
+  OrderItemReminderState,
 } from 'src/generated/api-client';
 
 // Plain user shape for the demo store — permissions kept as the interface type
@@ -39,6 +41,7 @@ export interface MockDb {
   clients: MockClient[];
   clientReminders: MockReminder[];
   clientNotes: MockNote[];
+  orders: MockOrder[];
 }
 
 // Free-text note scoped to its parent (brewery/client) via `ownerId`.
@@ -85,6 +88,26 @@ export interface MockClient {
   officialAddress: MockAddress;
   contactAddress?: MockAddress;
   contacts: MockClientContact[];
+}
+
+// A line item on an order — carries only the ids the real OrderItemDto needs
+// to be resolved (product name/brewery ordering come from the joined product
+// on the way out, same denormalization pattern as inventory items).
+export interface MockOrderItem {
+  id: string;
+  productId: string;
+  quantity: number;
+  reminderState?: OrderItemReminderState;
+}
+
+export interface MockOrder {
+  id: string;
+  clientId: string;
+  state: OrderState;
+  createdDate: Date;
+  requiredDeliveryDate?: Date;
+  actualDeliveryDate?: Date;
+  items: MockOrderItem[];
 }
 
 // Reminder store shared by breweries/clients; `ownerId` scopes it to its parent.
@@ -444,6 +467,65 @@ const CLIENT_NOTES_SEED: MockNote[] = [
   { id: 'cnote-0002', ownerId: 'cl-0004', text: 'Hotel pořádá svatby — špičková spotřeba o víkendech.', createdDate: new Date(2026, 4, 20) },
 ];
 
+// Eight orders across six of the seven clients (cl-0007 is left with no
+// history so the editor's "Dříve objednané" empty state is exercised),
+// mixing every OrderState so the list's status filter and detail's status-flow
+// bar both show something in every step.
+const ORDERS_SEED: MockOrder[] = [
+  {
+    id: 'ord-0001', clientId: 'cl-0001', state: OrderState.Finished,
+    createdDate: new Date(2026, 5, 10), requiredDeliveryDate: new Date(2026, 5, 15), actualDeliveryDate: new Date(2026, 5, 15),
+    items: [
+      { id: 'oi-0001', productId: 'prod-0001', quantity: 4 },
+      { id: 'oi-0002', productId: 'prod-0003', quantity: 20 },
+    ],
+  },
+  {
+    id: 'ord-0002', clientId: 'cl-0001', state: OrderState.Delivering,
+    createdDate: new Date(2026, 6, 12), requiredDeliveryDate: new Date(2026, 6, 20),
+    items: [
+      { id: 'oi-0003', productId: 'prod-0001', quantity: 6, reminderState: OrderItemReminderState.Added },
+      { id: 'oi-0004', productId: 'prod-0002', quantity: 2 },
+    ],
+  },
+  {
+    id: 'ord-0003', clientId: 'cl-0002', state: OrderState.Planning,
+    createdDate: new Date(2026, 6, 15), requiredDeliveryDate: new Date(2026, 6, 25),
+    items: [{ id: 'oi-0005', productId: 'prod-0004', quantity: 5 }],
+  },
+  {
+    id: 'ord-0004', clientId: 'cl-0003', state: OrderState.New,
+    createdDate: new Date(2026, 6, 18),
+    items: [
+      { id: 'oi-0006', productId: 'prod-0008', quantity: 3 },
+      { id: 'oi-0007', productId: 'prod-0009', quantity: 2 },
+    ],
+  },
+  {
+    id: 'ord-0005', clientId: 'cl-0004', state: OrderState.Finished,
+    createdDate: new Date(2026, 4, 2), requiredDeliveryDate: new Date(2026, 4, 10), actualDeliveryDate: new Date(2026, 4, 9),
+    items: [
+      { id: 'oi-0008', productId: 'prod-0006', quantity: 10 },
+      { id: 'oi-0009', productId: 'prod-0007', quantity: 5 },
+    ],
+  },
+  {
+    id: 'ord-0006', clientId: 'cl-0005', state: OrderState.Cancelled,
+    createdDate: new Date(2026, 5, 20), requiredDeliveryDate: new Date(2026, 5, 28),
+    items: [{ id: 'oi-0010', productId: 'prod-0010', quantity: 8 }],
+  },
+  {
+    id: 'ord-0007', clientId: 'cl-0006', state: OrderState.New,
+    createdDate: new Date(2026, 6, 17),
+    items: [{ id: 'oi-0011', productId: 'prod-0005', quantity: 4 }],
+  },
+  {
+    id: 'ord-0008', clientId: 'cl-0001', state: OrderState.New,
+    createdDate: new Date(2026, 6, 19),
+    items: [{ id: 'oi-0012', productId: 'prod-0002', quantity: 3 }],
+  },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
@@ -456,6 +538,7 @@ export const db: MockDb = {
   clients: structuredClone(CLIENTS_SEED),
   clientReminders: structuredClone(CLIENT_REMINDERS_SEED),
   clientNotes: structuredClone(CLIENT_NOTES_SEED),
+  orders: structuredClone(ORDERS_SEED),
 };
 
 /** New id for demo-created records. */
