@@ -121,10 +121,10 @@ export function BreweriesPage() {
                         borderBottom: '3px solid',
                         borderColor: active ? color : 'transparent',
                         mb: '-2px',
-                        bgcolor: active ? 'background.paper' : 'transparent',
+                        bgcolor: active ? (t) => t.palette.brand.surface2 : 'transparent',
                         color: active ? 'text.primary' : 'text.secondary',
                         transition: 'background .15s, color .15s',
-                        '&:hover': { color: 'text.primary', bgcolor: active ? 'background.paper' : 'action.hover' },
+                        '&:hover': { color: 'text.primary', bgcolor: (t) => (active ? t.palette.brand.surface2 : t.palette.action.hover) },
                       }}
                     >
                       <Box sx={{ width: 11, height: 11, borderRadius: '4px', bgcolor: color, flexShrink: 0, boxShadow: `0 0 0 3px ${alpha(color, 0.18)}` }} />

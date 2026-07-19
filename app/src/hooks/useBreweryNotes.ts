@@ -1,17 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from 'src/auth/AuthProvider';
 import { listBreweryNotes, createBreweryNote, deleteBreweryNote } from 'src/mock/demoNotes';
 
-// Brewery notes are demo-only (no backend endpoint). The queries run only in
-// demo sessions; in real sessions the Poznámky tab shows an "unavailable" state.
+// Brewery notes are client-side only (no backend endpoint yet), so these run in
+// both real and demo sessions against the in-memory store.
 const key = (breweryId: string) => ['breweryNotes', breweryId] as const;
 
 export function useBreweryNotes(breweryId: string | undefined) {
-  const { isDemo } = useAuth();
   return useQuery({
     queryKey: key(breweryId ?? ''),
     queryFn: () => listBreweryNotes(breweryId!),
-    enabled: isDemo && Boolean(breweryId),
+    enabled: Boolean(breweryId),
   });
 }
 

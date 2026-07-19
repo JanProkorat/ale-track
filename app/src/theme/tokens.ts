@@ -25,6 +25,7 @@ export type BrandTokens = {
   navy: string;
   navyDeep: string;
   navyRaised: string;
+  surface2: string;
   surface3: string;
   ground: string;
   okTint: string;
@@ -44,6 +45,7 @@ export const lightBrand: BrandTokens = {
   navy: '#1E2A3A',
   navyDeep: '#17212E',
   navyRaised: '#28394E',
+  surface2: '#F6F8FB',
   surface3: '#EEF2F7',
   ground: '#EEF1F6',
   okTint: '#DCF3E4',
@@ -63,6 +65,7 @@ export const darkBrand: BrandTokens = {
   navy: '#131C28',
   navyDeep: '#0E1620',
   navyRaised: '#20303F',
+  surface2: '#1E2A38',
   surface3: '#243343',
   ground: '#0D141E',
   okTint: '#123021',

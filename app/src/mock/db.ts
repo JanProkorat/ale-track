@@ -31,6 +31,7 @@ export interface MockNote {
   id: string;
   ownerId: string;
   text: string;
+  createdDate: Date;
 }
 
 // Plain address shape mirroring IAddressDto (kept local so the demo store holds
@@ -322,8 +323,8 @@ const BREWERY_REMINDERS_SEED: MockReminder[] = [
 ];
 
 const BREWERY_NOTES_SEED: MockNote[] = [
-  { id: 'bnote-0001', ownerId: 'brw-0001', text: 'Preferují dodávky v úterý dopoledne.' },
-  { id: 'bnote-0002', ownerId: 'brw-0003', text: 'Nová řada nealko piv od jara 2026.' },
+  { id: 'bnote-0001', ownerId: 'brw-0001', text: 'Preferují dodávky v úterý dopoledne.', createdDate: new Date(2026, 5, 12) },
+  { id: 'bnote-0002', ownerId: 'brw-0003', text: 'Nová řada nealko piv od jara 2026.', createdDate: new Date(2026, 4, 28) },
 ];
 
 export const db: MockDb = {

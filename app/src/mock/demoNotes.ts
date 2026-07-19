@@ -1,19 +1,27 @@
-// Brewery notes exist only in demo mode — the backend has no brewery-note
-// endpoint (only client notes), so these can't go through the IClient-typed
-// mockApi. The Poznámky tab uses these directly when the session is demo.
-import { NoteDto } from 'src/generated/api-client';
+// Brewery notes have no backend endpoint (only client notes exist), so they
+// can't go through the IClient-typed mockApi. They're served from this
+// in-memory store in BOTH real and demo sessions — client-side only, so they
+// live for the session and reset on reload. Persisting them needs a backend
+// brewery-note endpoint.
 import { db, mockId, mockDelay } from './db';
 
-export function listBreweryNotes(breweryId: string): Promise<NoteDto[]> {
+export interface DemoNote {
+  id: string;
+  text: string;
+  createdDate: Date;
+}
+
+export function listBreweryNotes(breweryId: string): Promise<DemoNote[]> {
   const rows = db.breweryNotes
     .filter((n) => n.ownerId === breweryId)
-    .map((n) => new NoteDto({ id: n.id, text: n.text }));
+    .map((n) => ({ id: n.id, text: n.text, createdDate: n.createdDate }))
+    .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
   return mockDelay(rows);
 }
 
 export function createBreweryNote(breweryId: string, text: string): Promise<string> {
   const id = mockId('bnote');
-  db.breweryNotes.unshift({ id, ownerId: breweryId, text });
+  db.breweryNotes.unshift({ id, ownerId: breweryId, text, createdDate: new Date() });
   return mockDelay(id);
 }
 

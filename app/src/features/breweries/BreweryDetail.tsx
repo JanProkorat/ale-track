@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Box, Card, CardContent, Stack, Typography, Button, Tabs, Tab,
+  Box, Card, Stack, Typography, Button, Tabs, Tab,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
@@ -169,12 +169,7 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
 
       {tab === 'reminders' && <RemindersPanel breweryId={breweryId} editable={editable} />}
 
-      {tab === 'notes' && (
-        <Card><CardContent>
-          <Typography variant="h6" sx={{ fontSize: 16, mb: 1.5 }}>Poznámky</Typography>
-          <NotesPanel breweryId={breweryId} editable={editable} />
-        </CardContent></Card>
-      )}
+      {tab === 'notes' && <NotesPanel breweryId={breweryId} editable={editable} />}
 
       <ProductFormDrawer
         open={productForm}
