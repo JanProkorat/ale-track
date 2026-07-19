@@ -23,6 +23,14 @@ export interface MockDb {
   drivers: MockDriver[];
   breweries: MockBrewery[];
   breweryReminders: MockReminder[];
+  breweryNotes: MockNote[];
+}
+
+// Free-text note scoped to its parent (brewery/client) via `ownerId`.
+export interface MockNote {
+  id: string;
+  ownerId: string;
+  text: string;
 }
 
 // Plain address shape mirroring IAddressDto (kept local so the demo store holds
@@ -313,6 +321,11 @@ const BREWERY_REMINDERS_SEED: MockReminder[] = [
   { id: 'rem-0002', ownerId: 'brw-0002', name: 'Roční revize sudů', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 8, 15), numberOfDaysToRemindBefore: 7, isResolved: false },
 ];
 
+const BREWERY_NOTES_SEED: MockNote[] = [
+  { id: 'bnote-0001', ownerId: 'brw-0001', text: 'Preferují dodávky v úterý dopoledne.' },
+  { id: 'bnote-0002', ownerId: 'brw-0003', text: 'Nová řada nealko piv od jara 2026.' },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
@@ -321,6 +334,7 @@ export const db: MockDb = {
   drivers: structuredClone(DRIVERS_SEED),
   breweries: structuredClone(BREWERIES_SEED),
   breweryReminders: structuredClone(BREWERY_REMINDERS_SEED),
+  breweryNotes: structuredClone(BREWERY_NOTES_SEED),
 };
 
 /** New id for demo-created records. */

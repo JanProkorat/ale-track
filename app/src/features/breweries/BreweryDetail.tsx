@@ -1,62 +1,107 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
-  Box, Card, CardContent, Stack, Typography, Button, IconButton, Tooltip, Chip,
+  Box, Card, CardContent, Stack, Typography, Button, Tabs, Tab,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
-import EditIcon from '@mui/icons-material/EditOutlined';
-import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import PlaceIcon from '@mui/icons-material/PlaceOutlined';
-import LocalBarIcon from '@mui/icons-material/SportsBarOutlined';
+import InfoIcon from '@mui/icons-material/InfoOutlined';
+import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
+import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
+import StickyNote2Icon from '@mui/icons-material/StickyNote2Outlined';
+import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
+import SportsBarIcon from '@mui/icons-material/SportsBarOutlined';
 import { useSnackbar } from 'notistack';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
 import { countryLabel } from 'src/lib/labels';
-import { type AddressDto, type BreweryDto, type BreweryProductListItemDto } from 'src/generated/api-client';
+import { ProductKind, type AddressDto, type BreweryDto, type BreweryProductListItemDto } from 'src/generated/api-client';
 import { useBreweryProducts, useDeleteProduct } from 'src/hooks/useBreweryProducts';
+import { useBreweryReminders } from 'src/hooks/useBreweryReminders';
 import { CenikTable } from './CenikTable';
 import { ProductFormDrawer } from './ProductFormDrawer';
 import { RemindersPanel } from './RemindersPanel';
+import { NotesPanel } from './NotesPanel';
 
-function AddressCard({ title, a }: { title: string; a: AddressDto }) {
+type SubTab = 'info' | 'cenik' | 'reminders' | 'notes';
+
+function formatZip(zip?: string): string {
+  const z = (zip ?? '').replace(/\s/g, '');
+  return /^\d{5}$/.test(z) ? `${z.slice(0, 3)} ${z.slice(3)}` : (zip ?? '');
+}
+function addressesEqual(a?: AddressDto, b?: AddressDto): boolean {
+  if (!a || !b) return false;
+  return a.streetName === b.streetName && a.streetNumber === b.streetNumber && a.city === b.city && a.zip === b.zip && a.country === b.country;
+}
+
+/** Titled card matching the prototype: header band + body. */
+function TitledCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{title}</Typography>
+        {action}
+      </Stack>
+      <Box sx={{ p: 2.5 }}>{children}</Box>
+    </Card>
+  );
+}
+
+function AddressBody({ a }: { a: AddressDto }) {
   return (
     <Box>
-      <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {title}
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-        <PlaceIcon fontSize="small" color="disabled" sx={{ mt: '2px' }} />
-        <Box>
-          <Typography>{a.streetName} {a.streetNumber}</Typography>
-          <Typography>{a.zip} {a.city}</Typography>
-          <Typography variant="body2" color="text.secondary">{countryLabel(a.country)}</Typography>
-        </Box>
-      </Stack>
+      <Typography>{a.streetName} {a.streetNumber}</Typography>
+      <Typography>{formatZip(a.zip)} {a.city}, {countryLabel(a.country)}</Typography>
     </Box>
   );
 }
 
-/** Full detail for one brewery: header actions, addresses, ceník, reminders. */
-export function BreweryDetail({
-  brewery,
-  editable,
-  onEdit,
-  onDelete,
-}: {
-  brewery: BreweryDto;
-  editable: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
+function PrehledTile({ label, value, icon }: { label: string; value: ReactNode; icon: ReactNode }) {
+  return (
+    <Card variant="outlined" sx={{ p: 2, minWidth: 150 }}>
+      <Stack direction="row" alignItems="flex-start">
+        <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'text.secondary' }}>{label}</Typography>
+        <Box sx={{ color: 'text.disabled', '& svg': { fontSize: 20 } }}>{icon}</Box>
+      </Stack>
+      <Typography sx={{ fontSize: 30, fontWeight: 800, mt: 1, lineHeight: 1 }}>{value}</Typography>
+    </Card>
+  );
+}
+
+function tabLabel(text: string, count?: number) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <span>{text}</span>
+      {count != null && count > 0 && (
+        <Box component="span" sx={{ px: 0.9, py: 0.1, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+          {count}
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+const isKeg = (k: BreweryProductListItemDto['kind']) =>
+  (typeof k === 'number' ? ProductKind[k] : String(k ?? '')) === 'Keg';
+
+/** Detail body for one brewery: Info / Ceník / Připomínky / Poznámky sub-tabs. */
+export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; editable: boolean }) {
   const breweryId = brewery.id!;
   const { enqueueSnackbar } = useSnackbar();
   const products = useBreweryProducts(breweryId);
+  const reminders = useBreweryReminders(breweryId);
   const delProduct = useDeleteProduct(breweryId);
 
+  const [tab, setTab] = useState<SubTab>('info');
   const [productForm, setProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<BreweryProductListItemDto | undefined>(undefined);
   const [confirmProduct, setConfirmProduct] = useState<BreweryProductListItemDto | null>(null);
+
+  const productRows = products.data ?? [];
+  const reminderRows = reminders.data ?? [];
+  const productCount = productRows.length;
+  const kegCount = productRows.filter((p) => isKeg(p.kind)).length;
+  const activeReminderCount = reminderRows.filter((r) => !r.isResolved).length;
 
   const openAddProduct = () => { setEditingProduct(undefined); setProductForm(true); };
   const openEditProduct = (p: BreweryProductListItemDto) => { setEditingProduct(p); setProductForm(true); };
@@ -71,69 +116,69 @@ export function BreweryDetail({
     }
   };
 
+  const contactSame = !brewery.contactAddress || addressesEqual(brewery.officialAddress, brewery.contactAddress);
+
   return (
     <Box>
-      {/* Header inside the tab */}
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
-        <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: brewery.color ?? 'grey.400', flexShrink: 0 }} />
-        <Typography variant="h1" sx={{ fontSize: 24 }}>{brewery.name}</Typography>
-        <Box sx={{ flex: 1 }} />
-        {editable && (
-          <>
-            <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={onEdit}>Upravit</Button>
-            <Tooltip title="Smazat pivovar">
-              <IconButton size="small" color="error" onClick={onDelete}><DeleteIcon fontSize="small" /></IconButton>
-            </Tooltip>
-          </>
-        )}
-      </Stack>
-
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.6fr 1fr' }, alignItems: 'start' }}>
-        {/* Ceník */}
-        <Card>
-          <CardContent>
-            <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}>
-              <Typography variant="h6" sx={{ fontSize: 16, flex: 1 }}>Ceník</Typography>
-              {editable && (
-                <Button size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>
-              )}
-            </Stack>
-            <QueryBoundary
-              query={products}
-              minHeight={140}
-              isEmpty={(rows) => rows.length === 0}
-              emptyState={
-                <EmptyState icon={<LocalBarIcon />} title="Prázdný ceník" dense
-                  description="Zatím žádné produkty."
-                  action={editable && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>} />
-              }
-            >
-              {(rows) => (
-                <CenikTable products={rows} editable={editable} onEdit={openEditProduct} onDelete={setConfirmProduct} />
-              )}
-            </QueryBoundary>
-          </CardContent>
-        </Card>
-
-        {/* Addresses + reminders */}
-        <Stack spacing={2.5}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontSize: 16, mb: 1.5 }}>Adresa</Typography>
-              <Stack spacing={2}>
-                {brewery.officialAddress && <AddressCard title="Fakturační" a={brewery.officialAddress} />}
-                {brewery.contactAddress && <AddressCard title="Kontaktní" a={brewery.contactAddress} />}
-                {!brewery.officialAddress && <Chip label="Bez adresy" size="small" />}
-              </Stack>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent>
-              <RemindersPanel breweryId={breweryId} editable={editable} />
-            </CardContent>
-          </Card>
-        </Stack>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={tab} onChange={(_e, v: SubTab) => setTab(v)} variant="scrollable" scrollButtons="auto">
+          <Tab value="info" iconPosition="start" icon={<InfoIcon fontSize="small" />} label="Info" sx={{ minHeight: 48 }} />
+          <Tab value="cenik" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Ceník', productCount)} sx={{ minHeight: 48 }} />
+          <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
+          <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
+        </Tabs>
       </Box>
+
+      {tab === 'info' && (
+        <Stack spacing={2.5}>
+          <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
+            <TitledCard title="Fakturační adresa">
+              {brewery.officialAddress ? <AddressBody a={brewery.officialAddress} /> : <Typography color="text.secondary">Bez adresy</Typography>}
+            </TitledCard>
+            <TitledCard title="Kontaktní adresa">
+              {contactSame ? (
+                <Typography color="text.secondary">Shodná s fakturační</Typography>
+              ) : (
+                <AddressBody a={brewery.contactAddress!} />
+              )}
+            </TitledCard>
+          </Box>
+          <TitledCard title="Přehled">
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              <PrehledTile label="Produktů" value={productCount} icon={<Inventory2Icon />} />
+              <PrehledTile label="Sudů" value={kegCount} icon={<SportsBarIcon />} />
+              <PrehledTile label="Aktivní připomínky" value={activeReminderCount} icon={<NotificationsIcon />} />
+            </Stack>
+          </TitledCard>
+        </Stack>
+      )}
+
+      {tab === 'cenik' && (
+        <TitledCard title="Ceník" action={editable && <Button size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>}>
+          <QueryBoundary
+            query={products}
+            minHeight={160}
+            isEmpty={(rows) => rows.length === 0}
+            emptyState={
+              <EmptyState icon={<SportsBarIcon />} title="Prázdný ceník" dense description="Zatím žádné produkty."
+                action={editable && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>} />
+            }
+          >
+            {(rows) => <CenikTable products={rows} editable={editable} onEdit={openEditProduct} onDelete={setConfirmProduct} />}
+          </QueryBoundary>
+        </TitledCard>
+      )}
+
+      {tab === 'reminders' && (
+        <Card><CardContent><RemindersPanel breweryId={breweryId} editable={editable} /></CardContent></Card>
+      )}
+
+      {tab === 'notes' && (
+        <Card><CardContent>
+          <Typography variant="h6" sx={{ fontSize: 16, mb: 1.5 }}>Poznámky</Typography>
+          <NotesPanel breweryId={breweryId} editable={editable} />
+        </CardContent></Card>
+      )}
 
       <ProductFormDrawer open={productForm} breweryId={breweryId} product={editingProduct} onClose={() => setProductForm(false)} />
       <ConfirmDialog
