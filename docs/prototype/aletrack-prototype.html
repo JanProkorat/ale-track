@@ -185,6 +185,8 @@ table.tbl tr:last-child td{border-bottom:0;}
 table.tbl tbody tr{transition:background .12s;}
 table.tbl tbody tr.clickable:hover{background:var(--surface-2);cursor:pointer;}
 table.tbl td.num{text-align:right;font-variant-numeric:tabular-nums;}
+table.tbl td.price-cell.edit{cursor:pointer;transition:background .12s;}
+table.tbl td.price-cell.edit:hover{background:var(--amber-soft);box-shadow:inset 0 0 0 1px var(--amber-tint);}
 .t-strong{font-weight:700;color:var(--text);}
 .t-mut{color:var(--text-3);}
 .row-lead{display:flex;align-items:center;gap:11px;}
@@ -1002,22 +1004,29 @@ function cenikView(b,prods,ed){
   const groups={}; prods.forEach(p=>{ (groups[p.kind]=groups[p.kind]||[]).push(p); });
   const order=['Keg','Bottle','Can','Multipack','Other'];
   const sections=order.filter(k=>groups[k]).map(k=>{
-    const rows=groups[k].map(p=>`<tr class="clickable" onclick="${ed?`productForm('${b.id}','${p.id}')`:''}">
-      <td><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${esc(p.description||'')}</div></td>
-      <td><span class="tag">${L.ptype[p.type]||p.type}</span></td>
-      <td class="tnum">${p.platoDegree?p.platoDegree+'°':'—'}${p.alcoholPercentage?` · ${p.alcoholPercentage}%`:''}</td>
-      <td class="tnum">${p.packageSize? (p.packageSize>=1?p.packageSize+' l':(p.packageSize*1000)+' ml'):'—'}</td>
-      <td class="num tnum t-strong">${money(p.priceWithVat)}</td>
-      <td class="num tnum t-mut">${money(p.priceWithoutVat)}</td></tr>`).join('');
+    const items=groups[k];
+    // pivot: rows = product name (family), columns = package sizes present in this kind
+    const sizes=[...new Set(items.map(p=>p.packageSize))].sort((a,c)=>{ if(a==null)return 1; if(c==null)return -1; return a-c; });
+    const fam={}, famOrder=[]; items.forEach(p=>{ if(!fam[p.name]){ fam[p.name]=[]; famOrder.push(p.name); } fam[p.name].push(p); });
+    const headSizes=sizes.map(s=>`<th style="text-align:right">${s==null?'Cena':fmtLiters(s)}</th>`).join('');
+    const rows=famOrder.map(name=>{ const variants=fam[name]; const f=variants[0];
+      const cells=sizes.map(s=>{ const pv=variants.find(x=>x.packageSize===s);
+        if(!pv) return `<td class="num t-mut" style="text-align:right">—</td>`;
+        return `<td class="num price-cell ${ed?'edit':''}" style="text-align:right" ${ed?`onclick="productForm('${b.id}','${pv.id}')" title="Upravit / cena"`:''}>
+          <div class="tnum t-strong">${money(pv.priceWithVat)}</div>${pv.priceWithoutVat?`<div class="tnum t-mut" style="font-size:11px">${money(pv.priceWithoutVat)} bez DPH</div>`:''}</td>`; }).join('');
+      return `<tr><td><div class="t-strong">${esc(name)}</div>
+        <div class="t-mut" style="font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px">
+          <span class="tag">${L.ptype[f.type]||f.type}</span>${f.platoDegree?`<span>${f.platoDegree}°</span>`:''}${f.alcoholPercentage?`<span>· ${f.alcoholPercentage}%</span>`:''}
+          ${variants.length>1?`<span class="tag" style="color:var(--amber-700)">${variants.length} ${plural(variants.length,'velikost','velikosti','velikostí')}</span>`:''}</div></td>
+        ${cells}</tr>`; }).join('');
     return `<div style="margin-bottom:8px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:18px 0 8px">
-      ${kindChip(k)} <span>${groups[k].length} ${plural(groups[k].length,'položka','položky','položek')}</span></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th>Druh piva</th><th>Stupně / Alk.</th><th>Balení</th><th style="text-align:right">Cena s DPH</th><th style="text-align:right">Bez DPH</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+      ${kindChip(k)} <span>${famOrder.length} ${plural(famOrder.length,'produkt','produkty','produktů')}${items.length>famOrder.length?` · ${items.length} variant`:''}</span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th>${headSizes}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }).join('');
   return `<div class="card-pad" style="padding:0">
     ${ed?`<div class="toolbar"><button class="btn btn-soft btn-sm" onclick="bulkPriceForm('${b.id}')">${icon('wallet',15)}Hromadná úprava cen</button>
       <button class="btn btn-ghost btn-sm" onclick="productForm('${b.id}',null)">${icon('plus',15)}Přidat produkt</button>
-      <span class="count-note">Ceny se mění — použijte hromadnou úpravu s datem účinnosti</span></div>`:''}
+      <span class="count-note">Sloupce = velikosti balení · klikni na cenu pro úpravu</span></div>`:''}
     ${sections||`<div class="empty"><div class="t">Žádné produkty</div></div>`}</div>`;
 }
 function miniStat(label,val,ic){ return `<div class="tile" style="padding:14px"><div class="ti-top"><div class="ti-lbl">${esc(label)}</div>${icon(ic,16)}</div>
