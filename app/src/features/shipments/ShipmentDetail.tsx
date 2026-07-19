@@ -12,7 +12,6 @@ import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import { useSnackbar } from 'notistack';
 import { SegControl } from 'src/components/common/SegControl';
@@ -126,92 +125,71 @@ interface AggRow {
   kind?: ProductKind;
   packageSize?: number;
   quantity: number;
+  orderQuantity: number;
+  dokladkaQuantity: number;
+  dokladka: boolean;           // every source is a dokládka (pure stock extra)
+  sources: NakladkaRow[];      // underlying per-order / per-dokládka rows
 }
 
 /** Collapse the per-order/per-dokládka rows into one line per distinct product
- * (name + kind + package size), summing quantities — the brewery's prep list. */
+ * (name + kind + package size), summing quantities. This is the loading list —
+ * two orders with the same product become a single line with the total. */
 function aggregateRows(rows: NakladkaRow[]): AggRow[] {
   const map = new Map<string, AggRow>();
   const order: string[] = [];
   for (const r of rows) {
     const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
-    const existing = map.get(key);
-    if (existing) existing.quantity += r.quantity;
-    else { map.set(key, { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: r.quantity }); order.push(key); }
+    let agg = map.get(key);
+    if (!agg) {
+      agg = { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, dokladkaQuantity: 0, dokladka: true, sources: [] };
+      map.set(key, agg);
+      order.push(key);
+    }
+    agg.quantity += r.quantity;
+    if (r.dokladka) agg.dokladkaQuantity += r.quantity;
+    else { agg.orderQuantity += r.quantity; agg.dokladka = false; }
+    agg.sources.push(r);
   }
   return order.map((k) => map.get(k)!);
 }
 
-/** "Celková nakládka" — aggregated products to prepare, no orders/checks/invoice. */
-function SummaryTable({ rows }: { rows: AggRow[] }) {
-  if (rows.length === 0) {
-    return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>Zatím žádné produkty k naložení.</Typography>;
-  }
-  const total = rows.reduce((s, r) => s + r.quantity, 0);
-  return (
-    <Card variant="outlined">
-      <TableContainer sx={{ overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <TableCell sx={HEAD_SX}>Produkt</TableCell>
-              <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((r) => {
-              const chipText = kindSizeChipText(r.kind, r.packageSize);
-              return (
-                <TableRow key={r.key} hover>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{r.name}</Typography>
-                    {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600, mt: 0.25 }} />}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Typography sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 13.5 }}>{r.quantity} ks</Typography>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Celkem k naložení</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', borderBottom: 'none' }}>{total} ks</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Card>
-  );
+interface AggRowState {
+  loaded: boolean;
+  loadedIndeterminate: boolean;
+  checked: boolean;
+  checkedIndeterminate: boolean;
+  f2: number;
 }
 
-function LoadingRow({
-  row, editable, loaded, checked, f2, onLoaded, onMoveInvoice, onToggleChecked, onRemove,
+/** One aggregated product line on "Celková nakládka" — the operational loading
+ * row with invoice split, Naloženo/Kontrola (aggregated across its source order
+ * items, hence the indeterminate state) and a removable dokládka badge. */
+function AggLoadingRow({
+  agg, state, editable, onLoaded, onMoveInvoice, onToggleChecked, onRemoveDokladka,
 }: {
-  row: NakladkaRow;
+  agg: AggRow;
+  state: AggRowState;
   editable: boolean;
-  loaded: boolean;
-  checked: boolean;
-  f2: number;
   onLoaded: (loaded: boolean) => void;
   onMoveInvoice: (delta: number) => void;
   onToggleChecked: () => void;
-  onRemove?: () => void;
+  onRemoveDokladka?: () => void;
 }) {
-  const chipText = kindSizeChipText(row.kind, row.packageSize);
+  const chipText = kindSizeChipText(agg.kind, agg.packageSize);
   return (
     <TableRow hover>
       <TableCell>
-        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{agg.name}</Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
-          {row.dokladka && (
+          {agg.dokladkaQuantity > 0 && (
             <Chip
               size="small"
               label={
                 <Stack direction="row" spacing={0.25} alignItems="center">
-                  <span>dokládka +{row.quantity}</span>
-                  {onRemove && editable && (
-                    <Box component="span" onClick={onRemove} sx={{ display: 'inline-flex', cursor: 'pointer', ml: 0.25 }} title="Odebrat dokládku">
+                  <span>dokládka +{agg.dokladkaQuantity}</span>
+                  {onRemoveDokladka && editable && (
+                    <Box component="span" onClick={onRemoveDokladka} sx={{ display: 'inline-flex', cursor: 'pointer', ml: 0.25 }} title="Odebrat dokládku">
                       <CloseIcon sx={{ fontSize: 12 }} />
                     </Box>
                   )}
@@ -223,62 +201,82 @@ function LoadingRow({
         </Stack>
       </TableCell>
       <TableCell align="right">
-        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{row.quantity} ks</Typography>
-        {row.dokladka && <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ze skladu</Typography>}
+        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{agg.quantity} ks</Typography>
+        {agg.dokladkaQuantity > 0 && (
+          <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+            {agg.orderQuantity > 0 ? `${agg.orderQuantity} obj. + ${agg.dokladkaQuantity} dokl.` : `${agg.dokladkaQuantity} ze skladu`}
+          </Typography>
+        )}
       </TableCell>
       <TableCell align="center">
-        <InvoiceSplit f2={f2} quantity={row.quantity} onMove={onMoveInvoice} disabled={!editable} />
+        <InvoiceSplit f2={state.f2} quantity={agg.quantity} onMove={onMoveInvoice} disabled={!editable} />
       </TableCell>
       <TableCell align="center" padding="checkbox">
-        <Checkbox size="small" checked={loaded} disabled={!editable} onChange={(e) => onLoaded(e.target.checked)} title="Naloženo (1. diktovaná nakládka)" />
+        <Checkbox size="small" checked={state.loaded} indeterminate={state.loadedIndeterminate} disabled={!editable} onChange={() => onLoaded(!state.loaded)} title="Naloženo (1. diktovaná nakládka)" />
       </TableCell>
       <TableCell align="center" padding="checkbox">
-        <Checkbox size="small" checked={checked} disabled={!editable || !loaded} onChange={onToggleChecked} title={loaded ? 'Kontrola (2. kontrolní kolo)' : 'Nejdřív naložit'} />
-      </TableCell>
-      <TableCell align="right" sx={{ width: 40, pl: 0 }}>
-        {onRemove && editable && (
-          <IconButton size="small" onClick={onRemove} sx={{ color: 'error.main' }} aria-label="Odebrat">
-            <DeleteOutlineOutlinedIcon fontSize="small" />
-          </IconButton>
-        )}
+        <Checkbox size="small" checked={state.checked} indeterminate={state.checkedIndeterminate} disabled={!editable || !state.loaded} onChange={onToggleChecked} title={state.loaded ? 'Kontrola (2. kontrolní kolo)' : 'Nejdřív naložit'} />
       </TableCell>
     </TableRow>
   );
 }
 
-/** One bordered card = the header (numbered client + address + Dokládka button)
- * followed by its own product table, matching the prototype's per-stop block. */
-function LoadingBlock({
-  index, color, title, subtitle, editable, rows, onDokladka, renderRow, emptyText,
+/** "Celková nakládka" — the loading list: one row per distinct product with the
+ * invoice/loaded/kontrola controls and the summed quantity. */
+function AggLoadingTable({ rows, renderRow, emptyText }: { rows: AggRow[]; renderRow: (a: AggRow) => ReactNode; emptyText: string }) {
+  if (rows.length === 0) {
+    return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
+  }
+  const total = rows.reduce((s, r) => s + r.quantity, 0);
+  return (
+    <Card variant="outlined">
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+              <TableCell sx={HEAD_SX}>Produkt</TableCell>
+              <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
+              <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>
+              <TableCell align="center" sx={HEAD_SX}>Naloženo</TableCell>
+              <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map(renderRow)}
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Celkem k naložení</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', borderBottom: 'none' }}>{total} ks</TableCell>
+              <TableCell colSpan={3} sx={{ borderBottom: 'none' }} />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Card>
+  );
+}
+
+/** "Přehled objednávek" — a read-only per-client card: what each client
+ * ordered (product + quantity). No loading/invoice controls — pure overview. */
+function OrderClientBlock({
+  index, color, title, subtitle, rows, emptyText,
 }: {
   index: number;
   color: string;
   title: string;
   subtitle: string;
-  editable: boolean;
   rows: NakladkaRow[];
-  onDokladka?: () => void;
-  renderRow: (row: NakladkaRow) => ReactNode;
   emptyText: string;
 }) {
   return (
     <Box sx={{ mb: 1.75 }}>
-      <Stack direction="row" spacing={1.25} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
-          <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>
-            {index + 1}
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
-            <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>{subtitle}</Typography>
-          </Box>
-        </Stack>
-        {editable && onDokladka && (
-          <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={onDokladka}
-            sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
-            Dokládka ze skladu
-          </Button>
-        )}
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, mb: 0.75 }}>
+        <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>
+          {index + 1}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+          <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>{subtitle}</Typography>
+        </Box>
       </Stack>
       {rows.length > 0 ? (
         <Card variant="outlined">
@@ -288,13 +286,24 @@ function LoadingBlock({
                 <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
                   <TableCell sx={HEAD_SX}>Produkt</TableCell>
                   <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
-                  <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>
-                  <TableCell align="center" sx={HEAD_SX}>Naloženo</TableCell>
-                  <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
-                  <TableCell sx={{ ...HEAD_SX, width: 40 }} />
                 </TableRow>
               </TableHead>
-              <TableBody>{rows.map(renderRow)}</TableBody>
+              <TableBody>
+                {rows.map((row) => {
+                  const chipText = kindSizeChipText(row.kind, row.packageSize);
+                  return (
+                    <TableRow key={row.key} hover>
+                      <TableCell>
+                        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
+                        {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600, mt: 0.25 }} />}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{row.quantity} ks</Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
             </Table>
           </TableContainer>
         </Card>
@@ -368,10 +377,19 @@ export function ShipmentDetail({
     () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
     [stopsSorted, extraRows],
   );
-  const summaryRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
-  const totalN = combinedRows.length;
-  const loadedN = combinedRows.filter((r) => isLoaded(r)).length;
-  const checkedN = combinedRows.filter((r) => checkedIds.has(r.key)).length;
+  const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
+  // Aggregated-row state derives from the per-source overrides: a product line is
+  // "loaded" only when all its source order items are, and indeterminate between.
+  const aggLoaded = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => isLoaded(r));
+  const aggLoadedIndeterminate = (a: AggRow) => a.sources.some((r) => isLoaded(r)) && !aggLoaded(a);
+  const aggChecked = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => checkedIds.has(r.key));
+  const aggCheckedIndeterminate = (a: AggRow) => a.sources.some((r) => checkedIds.has(r.key)) && !aggChecked(a);
+  const aggF2 = (a: AggRow) => a.sources.reduce((s, r) => s + rowF2(r), 0);
+
+  const productN = aggRows.length;
+  const loadedN = aggRows.filter(aggLoaded).length;
+  const checkedN = aggRows.filter(aggChecked).length;
+  const orderLineN = stopsSorted.reduce((s, st) => s + (st.products?.length ?? 0), 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -404,58 +422,80 @@ export function ShipmentDetail({
     void save(draftFromShipment(shipment), next);
   }
 
-  function setRowLoaded(row: NakladkaRow, loaded: boolean) {
-    setLoadedOverride((prev) => { const n = new Map(prev); n.set(row.key, loaded); return n; });
+  // Mark a whole aggregated product (all its source order items) loaded/unloaded
+  // in one mutation. Optimistic overrides keep the checkbox instant.
+  function applyLoaded(rows: NakladkaRow[], loaded: boolean) {
+    setLoadedOverride((prev) => { const n = new Map(prev); for (const r of rows) n.set(r.key, loaded); return n; });
     const draft = draftFromShipment(shipment);
-    if (row.orderItemId) {
-      for (const co of draft.clientOrderShipments) {
-        const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
-        if (oi) oi.isLoadingConfirmed = loaded;
+    for (const row of rows) {
+      if (row.orderItemId) {
+        for (const co of draft.clientOrderShipments) {
+          const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
+          if (oi) oi.isLoadingConfirmed = loaded;
+        }
+      } else if (row.extraId) {
+        const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
+        if (e) e.isLoadingConfirmed = loaded;
       }
-    } else if (row.extraId) {
-      const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
-      if (e) e.isLoadingConfirmed = loaded;
     }
-    if (!loaded) setCheckedIds((prev) => { const n = new Set(prev); n.delete(row.key); return n; });
+    if (!loaded) setCheckedIds((prev) => { const n = new Set(prev); for (const r of rows) n.delete(r.key); return n; });
     void save(draft);
   }
 
-  // Move `delta` pieces between invoices (+1 -> invoice 2, -1 -> invoice 1).
-  // F1 is always the remainder, so we only track the invoice-2 quantity.
-  function moveInvoice(row: NakladkaRow, delta: number) {
-    const nextF2 = Math.max(0, Math.min(rowF2(row) + delta, row.quantity));
-    if (nextF2 === rowF2(row)) return;
-    setInvoiceOverride((prev) => { const n = new Map(prev); n.set(row.key, nextF2); return n; });
+  // Distribute `targetF2` invoice-2 pieces across a product's source rows (fill
+  // each up to its own quantity, in order); F1 is the remainder per row.
+  function applyInvoiceDistribution(rows: NakladkaRow[], targetF2: number) {
+    let remaining = targetF2;
+    const nextOverride = new Map(invoiceOverride);
     const draft = draftFromShipment(shipment);
-    const apply = (target: { firstInvoiceQuantity?: number; secondInvoiceQuantity?: number }) => {
-      target.firstInvoiceQuantity = row.quantity - nextF2;
-      target.secondInvoiceQuantity = nextF2;
-    };
-    if (row.orderItemId) {
-      for (const co of draft.clientOrderShipments) {
-        const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
-        if (oi) apply(oi);
+    for (const row of rows) {
+      const give = Math.max(0, Math.min(remaining, row.quantity));
+      remaining -= give;
+      nextOverride.set(row.key, give);
+      const apply = (target: { firstInvoiceQuantity?: number; secondInvoiceQuantity?: number }) => {
+        target.firstInvoiceQuantity = row.quantity - give;
+        target.secondInvoiceQuantity = give;
+      };
+      if (row.orderItemId) {
+        for (const co of draft.clientOrderShipments) {
+          const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
+          if (oi) apply(oi);
+        }
+      } else if (row.extraId) {
+        const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
+        if (e) apply(e);
       }
-    } else if (row.extraId) {
-      const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
-      if (e) apply(e);
     }
+    setInvoiceOverride(nextOverride);
     void save(draft);
   }
 
-  function removeExtra(extraId?: string) {
-    const draft = draftFromShipment(shipment);
-    draft.inventoryExtraShipments = draft.inventoryExtraShipments.filter((e) => e.id !== extraId);
-    void save(draft);
-    enqueueSnackbar('Dokládka odebrána.', { variant: 'success' });
+  // Move `delta` pieces of an aggregated product between invoices (+1 -> F2).
+  function moveAggInvoice(agg: AggRow, delta: number) {
+    const current = aggF2(agg);
+    const next = Math.max(0, Math.min(current + delta, agg.quantity));
+    if (next === current) return;
+    applyInvoiceDistribution(agg.sources, next);
   }
 
-  function toggleChecked(key: string) {
+  // Toggle "Kontrola" for a whole product: check all sources, or clear all.
+  function toggleCheckedRows(rows: NakladkaRow[]) {
     setCheckedIds((prev) => {
       const n = new Set(prev);
-      if (n.has(key)) n.delete(key); else n.add(key);
+      const all = rows.length > 0 && rows.every((r) => n.has(r.key));
+      for (const r of rows) { if (all) n.delete(r.key); else n.add(r.key); }
       return n;
     });
+  }
+
+  // Remove the dokládka (stock-extra) portion of an aggregated product line.
+  function removeDokladkaRows(rows: NakladkaRow[]) {
+    const extraIds = rows.filter((r) => r.extraId).map((r) => r.extraId);
+    if (extraIds.length === 0) return;
+    const draft = draftFromShipment(shipment);
+    draft.inventoryExtraShipments = draft.inventoryExtraShipments.filter((e) => !extraIds.includes(e.id));
+    void save(draft);
+    enqueueSnackbar('Dokládka odebrána.', { variant: 'success' });
   }
 
   const stockOptions: ComboOption[] = useMemo(() => (inventoryQuery.data ?? [])
@@ -544,78 +584,64 @@ export function ShipmentDetail({
                 value={tab}
                 onChange={setTab}
                 options={[
-                  { value: 'summary', label: <>Celková nakládka <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{summaryRows.length}</Box></> },
-                  { value: 'orders', label: <>Přehled objednávek <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{totalN}</Box></> },
+                  { value: 'summary', label: <>Celková nakládka <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{productN}</Box></> },
+                  { value: 'orders', label: <>Přehled objednávek <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{orderLineN}</Box></> },
                 ]}
               />
             </Stack>
             <Box sx={{ px: 2.5, py: 2 }}>
               {tab === 'summary' ? (
                 <>
-                  <Typography color="text.secondary" sx={{ fontSize: 12.5, mb: 1.5 }}>
-                    Souhrn všech produktů k naložení do vozu — sečteno napříč objednávkami.
-                  </Typography>
-                  <SummaryTable rows={summaryRows} />
+                  <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                    <StatusPill tone={productN > 0 && loadedN === productN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${productN}`} />
+                    <StatusPill tone={productN > 0 && checkedN === productN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${productN}`} />
+                    <Box sx={{ flex: 1 }} />
+                    {nakladkaEditable && (
+                      <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openDokladka}
+                        sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
+                        Dokládka ze skladu
+                      </Button>
+                    )}
+                  </Stack>
+                  <AggLoadingTable
+                    rows={aggRows}
+                    emptyText="Zatím žádné produkty k naložení."
+                    renderRow={(agg) => (
+                      <AggLoadingRow
+                        key={agg.key}
+                        agg={agg}
+                        editable={nakladkaEditable}
+                        state={{
+                          loaded: aggLoaded(agg),
+                          loadedIndeterminate: aggLoadedIndeterminate(agg),
+                          checked: aggChecked(agg),
+                          checkedIndeterminate: aggCheckedIndeterminate(agg),
+                          f2: aggF2(agg),
+                        }}
+                        onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
+                        onMoveInvoice={(delta) => moveAggInvoice(agg, delta)}
+                        onToggleChecked={() => toggleCheckedRows(agg.sources)}
+                        onRemoveDokladka={agg.dokladkaQuantity > 0 ? () => removeDokladkaRows(agg.sources) : undefined}
+                      />
+                    )}
+                  />
                 </>
               ) : (
                 <>
-                  <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
-                    <StatusPill tone={totalN > 0 && loadedN === totalN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${totalN}`} />
-                    <StatusPill tone={totalN > 0 && checkedN === totalN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${totalN}`} />
-                  </Stack>
-
+                  <Typography color="text.secondary" sx={{ fontSize: 12.5, mb: 1.5 }}>
+                    Co jednotliví klienti objednali. Nakládka, faktury a dokládka se řeší v záložce „Celková nakládka“.
+                  </Typography>
                   {stopsSorted.map((stop, i) => (
-                    <LoadingBlock
+                    <OrderClientBlock
                       key={stop.orderId ?? i}
                       index={i}
                       color={colorForClient(stop.clientId ?? '')}
                       title={stop.clientName ?? '—'}
                       subtitle={stopSubtitle(stop)}
-                      editable={nakladkaEditable}
                       rows={(stop.products ?? []).map(productRowFrom)}
-                      onDokladka={openDokladka}
                       emptyText="Klient nemá žádné položky."
-                      renderRow={(row) => (
-                        <LoadingRow
-                          key={row.key}
-                          row={row}
-                          editable={nakladkaEditable}
-                          loaded={isLoaded(row)}
-                          checked={checkedIds.has(row.key)}
-                          f2={rowF2(row)}
-                          onLoaded={(loaded) => setRowLoaded(row, loaded)}
-                          onMoveInvoice={(delta) => moveInvoice(row, delta)}
-                          onToggleChecked={() => toggleChecked(row.key)}
-                        />
-                      )}
                     />
                   ))}
-
-                  {extraRows.length > 0 && (
-                    <LoadingBlock
-                      index={stopsSorted.length}
-                      color="#1A2B4C"
-                      title="Dokládka ze skladu"
-                      subtitle="Kusy navíc mimo objednávky — při doručení se odečtou ze skladu"
-                      editable={nakladkaEditable}
-                      rows={extraRows}
-                      emptyText="Žádná dokládka."
-                      renderRow={(row) => (
-                        <LoadingRow
-                          key={row.key}
-                          row={row}
-                          editable={nakladkaEditable}
-                          loaded={isLoaded(row)}
-                          checked={checkedIds.has(row.key)}
-                          f2={rowF2(row)}
-                          onLoaded={(loaded) => setRowLoaded(row, loaded)}
-                          onMoveInvoice={(delta) => moveInvoice(row, delta)}
-                          onToggleChecked={() => toggleChecked(row.key)}
-                          onRemove={() => removeExtra(row.extraId)}
-                        />
-                      )}
-                    />
-                  )}
                 </>
               )}
             </Box>
