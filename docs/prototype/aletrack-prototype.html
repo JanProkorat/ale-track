@@ -88,8 +88,9 @@ a{color:inherit; text-decoration:none;}
 .brand .logo{flex:0 0 auto;}
 .brand .name{font-size:19px; font-weight:800; color:#fff; letter-spacing:-.02em; white-space:nowrap;}
 .brand .name b{color:var(--amber);}
-.sidebar.collapsed .name,.sidebar.collapsed .navgroup-label,.sidebar.collapsed .nav-item span,
+.sidebar.collapsed .name,.sidebar.collapsed .navgroup-label,.sidebar.collapsed .nav-item span:not(.ico):not(.badge),
 .sidebar.collapsed .side-foot .u-meta{display:none;}
+.sidebar.collapsed .nav-item{justify-content:center;}
 .nav{flex:1 1 auto; overflow-y:auto; padding:8px 12px 20px;}
 .nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);}
 .navgroup-label{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em;
