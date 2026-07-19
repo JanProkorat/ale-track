@@ -121,9 +121,6 @@ a{color:inherit; text-decoration:none;}
 .icon-btn{width:38px;height:38px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--surface);
   color:var(--text-2);display:grid;place-items:center;position:relative;transition:.15s;}
 .icon-btn:hover{background:var(--surface-3); color:var(--text); border-color:var(--border-2);}
-.topbar .search{flex:1 1 auto; max-width:440px; display:flex; align-items:center; gap:9px;
-  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-pill); padding:0 15px; height:40px; color:var(--text-3);}
-.topbar .search input{border:0;background:none;outline:none;flex:1;font-family:inherit;font-size:13.5px;color:var(--text);}
 .topbar .spacer{flex:1 1 auto;}
 .dot-badge::after{content:""; position:absolute; top:8px; right:9px; width:8px; height:8px; border-radius:99px;
   background:var(--crit); border:2px solid var(--surface);}
@@ -172,7 +169,6 @@ a{color:inherit; text-decoration:none;}
 .pill.s-amber{background:var(--amber-tint);color:var(--amber-700);}
 .pill.s-ok{background:var(--ok-tint);color:var(--ok);}
 .pill.s-info{background:var(--info-tint);color:var(--info);}
-.pill.s-warn{background:var(--warn-tint);color:var(--warn);}
 .pill.s-crit{background:var(--crit-tint);color:var(--crit);}
 .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--r-sm);
   background:var(--surface-3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-2);}
@@ -216,7 +212,6 @@ table.tbl td.price-cell.edit:hover{background:var(--amber-soft);box-shadow:inset
 .tile .ti-ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;}
 .tile .ti-val{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;}
 .tile .ti-lbl{color:var(--text-2);font-size:13px;font-weight:600;}
-.tile .ti-trend{font-size:11.5px;font-weight:700;}
 
 /* ---------- Forms ---------- */
 .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
@@ -296,7 +291,6 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;min-height:78px;lin
   .sidebar.mobile-open{transform:none;} .sidebar.collapsed{width:var(--sidebar-w);flex-basis:var(--sidebar-w);}
   .page{padding:16px 14px 50px;}
 }
-.mob-only{display:none;} @media (max-width:860px){ .mob-only{display:grid;} }
 .hidebar{display:none;} @media (max-width:860px){ .hidebar.show{display:block;} }
 
 /* inputs inherit font + native control theming */
@@ -450,7 +444,6 @@ function logoSVG(size=34){
 /* ============ HELPERS ============ */
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>[...r.querySelectorAll(s)];
-const uid=(p='id')=>p+'-'+Math.abs(([...(''+Object.keys(DB||{}).length+performance.now())].reduce((a,c)=>a*31+c.charCodeAt(0),7))%99999);
 function esc(s){return (s==null?'':''+s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 /* prices are stored in CZK (base); money() converts to the active display currency */
 function eurRate(){ const e=(DB.exchangeRates||[]).find(x=>x.currencyCode==='EUR'); return e?e.rate:25.30; }
@@ -620,7 +613,7 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
     order('o-8','cl-hotel','Finished',-5,[ oi(byName('Landskron Premium'),3) ], -14),
     order('o-9','cl-pivnice','New',null,[ oi(byName('Svijanský Máz'),2) ]),
   ];
-  // Shipments (Vývozy)
+  // Shipments (outgoing / Vývozy)
   DB.shipments=[
     { id:'s-1', number:'VYV-2026-051', name:'Rozvoz Žitava + Hrádek', state:'InTransit', deliveryDate:daysFromNow(1)+'T07:00',
       vehicleId:'v-iveco', driverIds:['dr-novak','dr-svoboda'],
@@ -806,7 +799,6 @@ function renderRoute(){
 }
 let AFTER=null; // hook a view can set for post-render wiring
 function afterRender(path){ if(AFTER){ const f=AFTER; AFTER=null; try{f();}catch(e){console.error(e);} } }
-function rerender(){ renderRoute(); }
 function noAccess(){ return `<div class="page"><div class="empty"><div>${icon('shield',40)}</div><div class="t">Nemáte přístup</div>
   <div>K tomuto modulu vám nebyla přidělena práva. Obraťte se na administrátora.</div></div></div>`; }
 
@@ -825,7 +817,6 @@ function fmtAddrFull(a){ if(!a)return '—'; return `${esc(a.streetName)} ${esc(
 function kindChip(kind){ return `<span class="tag">${icon('box',12)}${L.kind[kind]||kind}</span>`; }
 function avatar(str,txt){ const col=colorFor(str); return `<span class="av" style="background:${col}22;color:${col}">${esc(txt)}</span>`; }
 function guidNote(id){ return `<span class="mono t-mut" title="PublicId (GUID)">${esc(id)}</span>`; }
-function toolbarSearch(ph,id){ return `<div class="fld">${icon('search',16)}<input id="${id}" placeholder="${esc(ph)}"></div>`; }
 
 /* ============ DASHBOARD ============ */
 const TILE_META={
@@ -1067,7 +1058,7 @@ function breweriesModule(id){
         ${on&&ed?`<span class="brew-tab-act"><button class="icon-btn" title="Upravit" onclick="event.stopPropagation();breweryForm('${x.id}')">${icon('edit',13)}</button>
           <button class="icon-btn" title="Smazat pivovar" onclick="event.stopPropagation();delBrewery('${x.id}')">${icon('trash',13)}</button></span>`:''}</div>`; }).join('')}</div>
     ${ed?`<button class="btn btn-primary btn-sm brew-add" onclick="breweryForm(null)">${icon('plus',15)}Nový pivovar</button>`:''}</div>`;
-  // sub tabs (info / ceník / připomínky / poznámky)
+  // sub-tabs: info / price list / reminders / notes
   const subTab=(key,label,ic,cnt)=>`<button class="${tab===key?'on':''}" onclick="location.hash='#/breweries/${id}?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`;
   const subtabs=`<div class="tabs">${subTab('info','Info','info')}${subTab('cenik','Ceník','wallet',prods.length)}${subTab('reminders','Připomínky','bell',rems.length)}${subTab('notes','Poznámky','note')}</div>`;
   let body='';

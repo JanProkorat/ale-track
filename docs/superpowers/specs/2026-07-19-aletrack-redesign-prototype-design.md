@@ -77,3 +77,34 @@ inline SVG logo + map + icons, light/dark via `data-theme`. Published as an Arti
 
 Real API calls, auth, persistence, real map tiles, production React. This is a
 click-through design prototype for evaluating the redesign.
+
+## Implemented in the prototype (final state)
+
+Single self-contained file: `docs/prototype/aletrack-prototype.html`
+(~2.6k lines, vanilla JS + inline CSS/SVG). Verified by a headless jsdom
+smoke test (`scratchpad/smoke.js`) covering every route + flagship flow.
+
+**Shell & cross-cutting**
+- Branded **login** screen (split navy brand panel + form, demo-account chips) as the entry gate; **logout** from the account menu.
+- Collapsible navy **sidebar**; single account control in the sidebar footer (no duplicate top-right user icon).
+- **Command palette (⌘K)** for global search across orders/clients/products/breweries/shipments/deliveries; per-module fields are pure list filters.
+- Global **CZK/EUR currency switch** (topbar) with the daily rate + date; prices stored in CZK, converted on display via `money()`.
+- Light/dark themes; **searchable comboboxes** replace every native `<select>`.
+- Granular **per-module permissions** (view/edit/none) with live nav/rights via user switching.
+
+**Modules**
+- **Pivovary:** brewery tab bar (each brewery a tab, edit/delete in the active tab); detail = Info / **Ceník (pivot: product × package-size)** / Připomínky / Poznámky; bulk price update with effective date.
+- **Klienti:** grouped by region (+ region filter, search); Info-and-contacts tab with **mini maps** (GPS pin) for official + contact address.
+- **Objednávky:** builder with **client typeahead** + history-first product picker, kind tabs, same-name/size variant grouping.
+- **Vývozy:** planner (order selection w/ region filter, live route map + optimizer, drivers/vehicle); detail **Nakládka** table — two-stage load check (Naloženo → Zkontrolováno, gated), invoice split (Celková / Faktura 1 / Faktura 2), **dokládka** from stock merged into product rows and deducted from inventory on delivery.
+- **Dovozy zboží:** collapsible/reorderable brewery stops each with an embedded catalog + brewery typeahead; pickup route map; stock write-through preview on finish.
+- **Sklad:** search + brewery filter + list/grid toggle; grouped by brewery; inline qty; manual/free items.
+- **Řidiči:** list + availability time-grid calendar; **dashboard** carries a compact week availability matrix.
+- **Vozy / Uživatelé:** CRUD; Users has the permission matrix.
+
+## Notes for the React port
+
+- IDs on the wire are GUIDs; enums are strings — the mock store mirrors this.
+- Maps are stylized SVG (offline); swap for Leaflet/Mapbox with the same pin/route markers.
+- Fonts use a system stack (artifact CSP blocks font CDNs); the real app can load Barlow/DM Sans.
+- Invoice split is per-whole-product; the BE's `First/SecondInvoiceQuantity` also allows partial splits if needed.
