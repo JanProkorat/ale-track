@@ -247,8 +247,10 @@ const INVENTORY_SEED: MockInventorySection[] = [
   },
 ];
 
-// Five drivers with a distinct color each and 1-3 availability ranges spanning
-// the current period (hardcoded 2026 dates — fine for demo seed data).
+// Five drivers with a distinct color each and 1-3 intra-day availability
+// slots spread across the week of 2026-07-20 to 2026-07-25 (hardcoded 2026
+// dates around "today" — fine for demo seed data) so both the "nearest
+// availability" tile and the weekly time-grid calendar show real data.
 const DRIVERS_SEED: MockDriver[] = [
   {
     id: 'drv-0001',
@@ -257,8 +259,8 @@ const DRIVERS_SEED: MockDriver[] = [
     phoneNumber: '+420 601 234 567',
     color: '#E8590C',
     availableDates: [
-      { from: new Date(2026, 6, 20), until: new Date(2026, 6, 24) },
-      { from: new Date(2026, 7, 3), until: new Date(2026, 7, 7) },
+      { from: new Date(2026, 6, 20, 8, 0), until: new Date(2026, 6, 20, 16, 0) },
+      { from: new Date(2026, 6, 23, 7, 30), until: new Date(2026, 6, 23, 15, 0) },
     ],
   },
   {
@@ -267,7 +269,7 @@ const DRIVERS_SEED: MockDriver[] = [
     lastName: 'Dvořák',
     phoneNumber: '+420 602 345 678',
     color: '#2F9E44',
-    availableDates: [{ from: new Date(2026, 6, 21), until: new Date(2026, 6, 31) }],
+    availableDates: [{ from: new Date(2026, 6, 21, 9, 0), until: new Date(2026, 6, 21, 18, 0) }],
   },
   {
     id: 'drv-0003',
@@ -276,9 +278,9 @@ const DRIVERS_SEED: MockDriver[] = [
     phoneNumber: '+420 603 456 789',
     color: '#1971C2',
     availableDates: [
-      { from: new Date(2026, 6, 18), until: new Date(2026, 6, 22) },
-      { from: new Date(2026, 6, 27), until: new Date(2026, 6, 29) },
-      { from: new Date(2026, 7, 10), until: new Date(2026, 7, 14) },
+      { from: new Date(2026, 6, 20, 12, 0), until: new Date(2026, 6, 20, 19, 0) },
+      { from: new Date(2026, 6, 22, 6, 30), until: new Date(2026, 6, 22, 14, 0) },
+      { from: new Date(2026, 6, 25, 8, 0), until: new Date(2026, 6, 25, 17, 0) },
     ],
   },
   {
@@ -295,7 +297,7 @@ const DRIVERS_SEED: MockDriver[] = [
     lastName: 'Novotný',
     phoneNumber: '+420 605 678 901',
     color: '#E03131',
-    availableDates: [{ from: new Date(2026, 7, 1), until: new Date(2026, 7, 5) }],
+    availableDates: [{ from: new Date(2026, 6, 24, 8, 0), until: new Date(2026, 6, 24, 12, 30) }],
   },
 ];
 

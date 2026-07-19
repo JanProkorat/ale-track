@@ -5,6 +5,7 @@ import { z } from 'zod';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Box, Button, FormHelperText, IconButton, Stack, TextField, Typography } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
@@ -33,9 +34,13 @@ const COLOR_PRESETS = [
 
 const dayjsField = () =>
   z.custom<Dayjs | null>((v) => v != null && dayjs.isDayjs(v) && v.isValid(), {
-    message: 'Zadejte datum',
+    message: 'Povinné pole',
   });
 
+// One availability row = a calendar date + a start/end time-of-day (the
+// prototype's `renderAv`: date input, "from" time, "-", "until" time). The
+// full from/until instants are assembled on submit from the date's day plus
+// each time field's hour/minute.
 const schema = z
   .object({
     firstName: z.string().trim().min(1, 'Zadejte jméno'),
@@ -44,17 +49,21 @@ const schema = z
     color: z.string().trim().min(1, 'Vyberte barvu'),
     availableDates: z.array(
       z.object({
+        date: dayjsField(),
         from: dayjsField(),
         until: dayjsField(),
       })
     ),
   })
   .superRefine((values, ctx) => {
-    values.availableDates.forEach((range, i) => {
-      if (range.from && range.until && range.until.isBefore(range.from, 'day')) {
+    values.availableDates.forEach((row, i) => {
+      if (!row.from || !row.until) return;
+      const fromMinutes = row.from.hour() * 60 + row.from.minute();
+      const untilMinutes = row.until.hour() * 60 + row.until.minute();
+      if (untilMinutes <= fromMinutes) {
         ctx.addIssue({
           code: 'custom',
-          message: 'Datum do musí být stejné nebo pozdější než od',
+          message: 'Čas do musí být pozdější než od',
           path: ['availableDates', i, 'until'],
         });
       }
@@ -76,11 +85,19 @@ function toForm(d: DriverDto): FormValues {
     lastName: d.lastName ?? '',
     phoneNumber: d.phoneNumber ?? '',
     color: d.color ?? '',
-    availableDates: (d.availableDates ?? []).map((a) => ({
-      from: a.from ? dayjs(a.from) : null,
-      until: a.until ? dayjs(a.until) : null,
-    })),
+    availableDates: (d.availableDates ?? [])
+      .filter((a) => a.from && a.until)
+      .map((a) => ({
+        date: dayjs(a.from).startOf('day'),
+        from: dayjs(a.from),
+        until: dayjs(a.until),
+      })),
   };
+}
+
+/** Combines `date`'s calendar day with `time`'s hour/minute into one Date. */
+function combine(date: Dayjs, time: Dayjs): Date {
+  return date.hour(time.hour()).minute(time.minute()).second(0).millisecond(0).toDate();
 }
 
 /** Create/edit a driver. `driver` undefined → create mode. */
@@ -123,7 +140,11 @@ export function DriverFormDrawer({
             phoneNumber,
             color: values.color,
             availableDates: values.availableDates.map(
-              (r) => new UpdateDriverAvailabilityDto({ from: r.from!.toDate(), until: r.until!.toDate() })
+              (r) =>
+                new UpdateDriverAvailabilityDto({
+                  from: combine(r.date!, r.from!),
+                  until: combine(r.date!, r.until!),
+                })
             ),
           }),
         });
@@ -136,7 +157,11 @@ export function DriverFormDrawer({
             phoneNumber,
             color: values.color,
             availableDates: values.availableDates.map(
-              (r) => new CreateDriverAvailabilityDto({ from: r.from!.toDate(), until: r.until!.toDate() })
+              (r) =>
+                new CreateDriverAvailabilityDto({
+                  from: combine(r.date!, r.from!),
+                  until: combine(r.date!, r.until!),
+                })
             ),
           })
         );
@@ -208,7 +233,7 @@ export function DriverFormDrawer({
         render={({ field }) => (
           <Box>
             <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-              Barva
+              Barva v kalendáři
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
               {COLOR_PRESETS.map((c) => (
@@ -241,7 +266,7 @@ export function DriverFormDrawer({
 
       <Box>
         <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
-          Dostupnost
+          Dostupnost (kalendář)
         </Typography>
         {fields.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -253,18 +278,19 @@ export function DriverFormDrawer({
             <Stack key={f.id} direction="row" spacing={1} alignItems="flex-start">
               <Controller
                 control={control}
-                name={`availableDates.${i}.from`}
+                name={`availableDates.${i}.date`}
                 render={({ field }) => (
                   <DatePicker
-                    label="Od"
+                    label="Datum"
                     value={field.value}
                     onChange={field.onChange}
+                    sx={{ flex: 1.3 }}
                     slotProps={{
                       textField: {
                         size: 'small',
                         fullWidth: true,
-                        error: Boolean(errors.availableDates?.[i]?.from),
-                        helperText: errors.availableDates?.[i]?.from?.message,
+                        error: Boolean(errors.availableDates?.[i]?.date),
+                        helperText: errors.availableDates?.[i]?.date?.message,
                       },
                     }}
                   />
@@ -272,16 +298,40 @@ export function DriverFormDrawer({
               />
               <Controller
                 control={control}
-                name={`availableDates.${i}.until`}
+                name={`availableDates.${i}.from`}
                 render={({ field }) => (
-                  <DatePicker
-                    label="Do"
+                  <TimePicker
+                    label="Od"
+                    ampm={false}
                     value={field.value}
                     onChange={field.onChange}
+                    sx={{ width: 118, flex: '0 0 auto' }}
                     slotProps={{
                       textField: {
                         size: 'small',
-                        fullWidth: true,
+                        error: Boolean(errors.availableDates?.[i]?.from),
+                        helperText: errors.availableDates?.[i]?.from?.message,
+                      },
+                    }}
+                  />
+                )}
+              />
+              <Typography color="text.secondary" sx={{ pt: 1.25 }}>
+                –
+              </Typography>
+              <Controller
+                control={control}
+                name={`availableDates.${i}.until`}
+                render={({ field }) => (
+                  <TimePicker
+                    label="Do"
+                    ampm={false}
+                    value={field.value}
+                    onChange={field.onChange}
+                    sx={{ width: 118, flex: '0 0 auto' }}
+                    slotProps={{
+                      textField: {
+                        size: 'small',
                         error: Boolean(errors.availableDates?.[i]?.until),
                         helperText: errors.availableDates?.[i]?.until?.message,
                       },
@@ -303,7 +353,13 @@ export function DriverFormDrawer({
         <Button
           size="small"
           startIcon={<AddIcon />}
-          onClick={() => append({ from: null, until: null })}
+          onClick={() =>
+            append({
+              date: dayjs().add(1, 'day').startOf('day'),
+              from: dayjs().hour(8).minute(0).second(0),
+              until: dayjs().hour(16).minute(0).second(0),
+            })
+          }
           sx={{ mt: 1.5 }}
         >
           Přidat termín

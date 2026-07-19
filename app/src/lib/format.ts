@@ -26,6 +26,12 @@ export function initials(a?: string, b?: string): string {
   return `${(a || ' ')[0]}${b ? b[0] : ''}`.toUpperCase().trim() || '?';
 }
 
+/** "HH:mm" from a Date's local hour/minute (24h, zero-padded). */
+export function fmtTime(d: Date | null | undefined): string {
+  if (!d) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function plural(n: number, one: string, few: string, many: string): string {
   const abs = Math.abs(n);
   if (abs === 1) return one;
