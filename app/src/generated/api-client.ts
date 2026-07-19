@@ -5583,6 +5583,7 @@ export class UserListItemDto implements IUserListItemDto {
     lastName?: string | undefined;
     userName?: string;
     userRoles?: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 
     constructor(data?: IUserListItemDto) {
         if (data) {
@@ -5603,6 +5604,11 @@ export class UserListItemDto implements IUserListItemDto {
                 this.userRoles = [] as any;
                 for (let item of _data["userRoles"])
                     this.userRoles!.push(item);
+            }
+            if (Array.isArray(_data["permissions"])) {
+                this.permissions = [] as any;
+                for (let item of _data["permissions"])
+                    this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
         }
     }
@@ -5625,6 +5631,11 @@ export class UserListItemDto implements IUserListItemDto {
             for (let item of this.userRoles)
                 data["userRoles"].push(item);
         }
+        if (Array.isArray(this.permissions)) {
+            data["permissions"] = [];
+            for (let item of this.permissions)
+                data["permissions"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -5635,6 +5646,7 @@ export interface IUserListItemDto {
     lastName?: string | undefined;
     userName?: string;
     userRoles?: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 }
 
 export class CreateVehicleDto implements ICreateVehicleDto {
@@ -5682,6 +5694,64 @@ export enum UserRoleType {
     User = 1,
 }
 
+export class ModulePermissionDto implements IModulePermissionDto {
+    module?: ModuleType;
+    level?: PermissionLevel;
+
+    constructor(data?: IModulePermissionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.module = _data["module"];
+            this.level = _data["level"];
+        }
+    }
+
+    static fromJS(data: any): ModulePermissionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ModulePermissionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["module"] = this.module;
+        data["level"] = this.level;
+        return data;
+    }
+}
+
+export interface IModulePermissionDto {
+    module?: ModuleType;
+    level?: PermissionLevel;
+}
+
+export enum ModuleType {
+    Orders = 0,
+    Shipments = 1,
+    Deliveries = 2,
+    Inventory = 3,
+    Breweries = 4,
+    Clients = 5,
+    Drivers = 6,
+    Vehicles = 7,
+    Users = 8,
+}
+
+export enum PermissionLevel {
+    None = 0,
+    View = 1,
+    Edit = 2,
+}
+
 export class LoginResponse implements ILoginResponse {
     accessToken?: string;
     refreshToken?: string;
@@ -5726,6 +5796,7 @@ export class UpdateUserDto implements IUpdateUserDto {
     firstName?: string | undefined;
     lastName?: string | undefined;
     userRoles!: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 
     constructor(data?: IUpdateUserDto) {
         if (data) {
@@ -5748,6 +5819,11 @@ export class UpdateUserDto implements IUpdateUserDto {
                 for (let item of _data["userRoles"])
                     this.userRoles!.push(item);
             }
+            if (Array.isArray(_data["permissions"])) {
+                this.permissions = [] as any;
+                for (let item of _data["permissions"])
+                    this.permissions!.push(ModulePermissionDto.fromJS(item));
+            }
         }
     }
 
@@ -5767,6 +5843,11 @@ export class UpdateUserDto implements IUpdateUserDto {
             for (let item of this.userRoles)
                 data["userRoles"].push(item);
         }
+        if (Array.isArray(this.permissions)) {
+            data["permissions"] = [];
+            for (let item of this.permissions)
+                data["permissions"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -5775,6 +5856,7 @@ export interface IUpdateUserDto {
     firstName?: string | undefined;
     lastName?: string | undefined;
     userRoles: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 }
 
 export class DeleteUserRequest implements IDeleteUserRequest {
@@ -5957,6 +6039,7 @@ export class CreateUserDto implements ICreateUserDto {
     userName!: string;
     password!: string;
     userRoles!: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 
     constructor(data?: ICreateUserDto) {
         if (data) {
@@ -5981,6 +6064,11 @@ export class CreateUserDto implements ICreateUserDto {
                 for (let item of _data["userRoles"])
                     this.userRoles!.push(item);
             }
+            if (Array.isArray(_data["permissions"])) {
+                this.permissions = [] as any;
+                for (let item of _data["permissions"])
+                    this.permissions!.push(ModulePermissionDto.fromJS(item));
+            }
         }
     }
 
@@ -6002,6 +6090,11 @@ export class CreateUserDto implements ICreateUserDto {
             for (let item of this.userRoles)
                 data["userRoles"].push(item);
         }
+        if (Array.isArray(this.permissions)) {
+            data["permissions"] = [];
+            for (let item of this.permissions)
+                data["permissions"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -6012,6 +6105,7 @@ export interface ICreateUserDto {
     userName: string;
     password: string;
     userRoles: UserRoleType[];
+    permissions?: ModulePermissionDto[];
 }
 
 export class ReminderSectionDto implements IReminderSectionDto {
