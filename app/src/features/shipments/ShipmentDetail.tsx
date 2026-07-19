@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Box, Breadcrumbs, Button, Card, Checkbox, Chip, CircularProgress, Dialog,
+  Box, Breadcrumbs, Button, ButtonBase, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
@@ -9,18 +9,20 @@ import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import { useSnackbar } from 'notistack';
-import { SegControl } from 'src/components/common/SegControl';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtDate, num, fmtLiters } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, addrKindLabel, kindLabel } from 'src/lib/labels';
+import { fmtDate, num, fmtLiters, plural } from 'src/lib/format';
+import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
@@ -38,8 +40,6 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
-
-type Tab = 'summary' | 'orders';
 
 interface NakladkaRow {
   key: string;
@@ -255,69 +255,113 @@ function AggLoadingTable({ rows, renderRow, emptyText }: { rows: AggRow[]; rende
   );
 }
 
-/** "Přehled objednávek" — a read-only per-client card: what each client
- * ordered (product + quantity). No loading/invoice controls — pure overview. */
-function OrderClientBlock({
-  index, color, title, subtitle, rows, emptyText,
-}: {
-  index: number;
-  color: string;
+function ProductLine({ row }: { row: NakladkaRow }) {
+  const chipText = kindSizeChipText(row.kind, row.packageSize);
+  return (
+    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{row.name}</Typography>
+        {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600, mt: 0.25 }} />}
+      </Box>
+      <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
+    </Stack>
+  );
+}
+
+/** One expandable line in the orders overview: a collapsed header (avatar +
+ * title + item count) that reveals its product list on click. */
+function OverviewRow({ avatar, title, rows, open, onToggle }: {
+  avatar: ReactNode;
   title: string;
-  subtitle: string;
   rows: NakladkaRow[];
-  emptyText: string;
+  open: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <Box sx={{ mb: 1.75 }}>
-      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, mb: 0.75 }}>
-        <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>
-          {index + 1}
-        </Box>
-        <Box sx={{ minWidth: 0 }}>
+    <Box sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
+      <ButtonBase
+        onClick={onToggle}
+        sx={{ width: '100%', px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
+      >
+        {avatar}
+        <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
-          <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>{subtitle}</Typography>
+          <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+            {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
+          </Typography>
         </Box>
-      </Stack>
-      {rows.length > 0 ? (
-        <Card variant="outlined">
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-                  <TableCell sx={HEAD_SX}>Produkt</TableCell>
-                  <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((row) => {
-                  const chipText = kindSizeChipText(row.kind, row.packageSize);
-                  return (
-                    <TableRow key={row.key} hover>
-                      <TableCell>
-                        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
-                        {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600, mt: 0.25 }} />}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{row.quantity} ks</Typography>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
-      ) : (
-        <Typography color="text.secondary" sx={{ fontSize: 12.5, py: 1 }}>{emptyText}</Typography>
-      )}
+        <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
+      </ButtonBase>
+      <Collapse in={open} unmountOnExit>
+        <Box sx={{ pb: 0.75 }}>
+          {rows.length > 0
+            ? rows.map((r) => <ProductLine key={r.key} row={r} />)
+            : <Typography color="text.secondary" sx={{ fontSize: 12, px: 2.5, py: 1 }}>Žádné položky.</Typography>}
+        </Box>
+      </Collapse>
     </Box>
   );
 }
 
-function stopSubtitle(stop: OutgoingShipmentStopDto): string {
-  const address = stop.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && stop.contactAddress ? stop.contactAddress : stop.officialAddress;
-  const addr = address ? `${address.streetName} ${address.streetNumber}, ${address.city}` : '—';
-  return `${addr} · ${addrKindLabel(stop.selectedAddressKind)}`;
+/** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
+ * row per client, expandable to its products), plus a dokládka row listing all
+ * stock extras when present. Read-only; the loading workflow lives elsewhere. */
+function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopDto[]; extraRows: NakladkaRow[] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (key: string) => setExpanded((prev) => {
+    const n = new Set(prev);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  });
+
+  const numberAvatar = (color: string, n: number): ReactNode => (
+    <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
+  );
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        <ReceiptLongOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled objednávek</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled' }}>
+          {stops.length} {plural(stops.length, 'objednávka', 'objednávky', 'objednávek')}
+        </Typography>
+      </Stack>
+      {stops.length > 0 || extraRows.length > 0 ? (
+        <Box>
+          {stops.map((stop, i) => {
+            const key = stop.orderId ?? `stop-${i}`;
+            return (
+              <OverviewRow
+                key={key}
+                avatar={numberAvatar(colorForClient(stop.clientId ?? ''), i + 1)}
+                title={stop.clientName ?? '—'}
+                rows={(stop.products ?? []).map(productRowFrom)}
+                open={expanded.has(key)}
+                onToggle={() => toggle(key)}
+              />
+            );
+          })}
+          {extraRows.length > 0 && (
+            <OverviewRow
+              avatar={
+                <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: '#1A2B4C', color: '#fff', '& svg': { fontSize: 15 } }}>
+                  <WarehouseOutlinedIcon />
+                </Box>
+              }
+              title="Dokládka ze skladu"
+              rows={extraRows}
+              open={expanded.has('dokladka')}
+              onToggle={() => toggle('dokladka')}
+            />
+          )}
+        </Box>
+      ) : (
+        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné objednávky.</Typography>
+      )}
+    </Card>
+  );
 }
 
 /** Vývoz detail: route map, advance-state header, and the nakládka card
@@ -340,7 +384,6 @@ export function ShipmentDetail({
   const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
 
-  const [tab, setTab] = useState<Tab>('summary');
   // "Kontrola" (2nd check round) has no field on the real DTO (only a single
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
   // state, reset whenever a different shipment is opened.
@@ -389,7 +432,6 @@ export function ShipmentDetail({
   const productN = aggRows.length;
   const loadedN = aggRows.filter(aggLoaded).length;
   const checkedN = aggRows.filter(aggChecked).length;
-  const orderLineN = stopsSorted.reduce((s, st) => s + (st.products?.length ?? 0), 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -578,72 +620,42 @@ export function ShipmentDetail({
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Nakládka</Typography>
+              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Celková nakládka</Typography>
               <Box sx={{ flex: 1 }} />
-              <SegControl<Tab>
-                value={tab}
-                onChange={setTab}
-                options={[
-                  { value: 'summary', label: <>Celková nakládka <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{productN}</Box></> },
-                  { value: 'orders', label: <>Přehled objednávek <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{orderLineN}</Box></> },
-                ]}
-              />
+              {nakladkaEditable && (
+                <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openDokladka}
+                  sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
+                  Dokládka ze skladu
+                </Button>
+              )}
             </Stack>
             <Box sx={{ px: 2.5, py: 2 }}>
-              {tab === 'summary' ? (
-                <>
-                  <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
-                    <StatusPill tone={productN > 0 && loadedN === productN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${productN}`} />
-                    <StatusPill tone={productN > 0 && checkedN === productN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${productN}`} />
-                    <Box sx={{ flex: 1 }} />
-                    {nakladkaEditable && (
-                      <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openDokladka}
-                        sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
-                        Dokládka ze skladu
-                      </Button>
-                    )}
-                  </Stack>
-                  <AggLoadingTable
-                    rows={aggRows}
-                    emptyText="Zatím žádné produkty k naložení."
-                    renderRow={(agg) => (
-                      <AggLoadingRow
-                        key={agg.key}
-                        agg={agg}
-                        editable={nakladkaEditable}
-                        state={{
-                          loaded: aggLoaded(agg),
-                          loadedIndeterminate: aggLoadedIndeterminate(agg),
-                          checked: aggChecked(agg),
-                          checkedIndeterminate: aggCheckedIndeterminate(agg),
-                          f2: aggF2(agg),
-                        }}
-                        onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
-                        onMoveInvoice={(delta) => moveAggInvoice(agg, delta)}
-                        onToggleChecked={() => toggleCheckedRows(agg.sources)}
-                        onRemoveDokladka={agg.dokladkaQuantity > 0 ? () => removeDokladkaRows(agg.sources) : undefined}
-                      />
-                    )}
+              <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                <StatusPill tone={productN > 0 && loadedN === productN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${productN}`} />
+                <StatusPill tone={productN > 0 && checkedN === productN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${productN}`} />
+              </Stack>
+              <AggLoadingTable
+                rows={aggRows}
+                emptyText="Zatím žádné produkty k naložení."
+                renderRow={(agg) => (
+                  <AggLoadingRow
+                    key={agg.key}
+                    agg={agg}
+                    editable={nakladkaEditable}
+                    state={{
+                      loaded: aggLoaded(agg),
+                      loadedIndeterminate: aggLoadedIndeterminate(agg),
+                      checked: aggChecked(agg),
+                      checkedIndeterminate: aggCheckedIndeterminate(agg),
+                      f2: aggF2(agg),
+                    }}
+                    onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
+                    onMoveInvoice={(delta) => moveAggInvoice(agg, delta)}
+                    onToggleChecked={() => toggleCheckedRows(agg.sources)}
+                    onRemoveDokladka={agg.dokladkaQuantity > 0 ? () => removeDokladkaRows(agg.sources) : undefined}
                   />
-                </>
-              ) : (
-                <>
-                  <Typography color="text.secondary" sx={{ fontSize: 12.5, mb: 1.5 }}>
-                    Co jednotliví klienti objednali. Nakládka, faktury a dokládka se řeší v záložce „Celková nakládka“.
-                  </Typography>
-                  {stopsSorted.map((stop, i) => (
-                    <OrderClientBlock
-                      key={stop.orderId ?? i}
-                      index={i}
-                      color={colorForClient(stop.clientId ?? '')}
-                      title={stop.clientName ?? '—'}
-                      subtitle={stopSubtitle(stop)}
-                      rows={(stop.products ?? []).map(productRowFrom)}
-                      emptyText="Klient nemá žádné položky."
-                    />
-                  ))}
-                </>
-              )}
+                )}
+              />
             </Box>
           </Card>
 
@@ -712,6 +724,8 @@ export function ShipmentDetail({
               )) : <Typography color="text.secondary">Bez řidiče</Typography>}
             </Stack>
           </Card>
+
+          <OrdersOverviewCard stops={stopsSorted} extraRows={extraRows} />
         </Stack>
       </Box>
 
