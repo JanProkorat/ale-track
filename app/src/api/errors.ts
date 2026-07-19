@@ -11,6 +11,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 
 /** Extract a user-facing Czech message from any thrown API error. */
 export function apiErrorMessage(err: unknown, fallback = 'Něco se pokazilo.'): string {
+  if (err == null) return fallback;
   if (ApiException.isApiException(err)) {
     // Try to read a message off the JSON error body, else map the status.
     try {

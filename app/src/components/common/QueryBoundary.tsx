@@ -26,17 +26,11 @@ export function QueryBoundary<T>({
   emptyState?: ReactNode;
   minHeight?: number;
 }) {
-  const { data, isLoading, isError, error, refetch } = query;
+  const { data, isError, error, refetch } = query;
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (isError || data === undefined) {
+  // A real error takes priority. (Only here do we read `error`, so a disabled or
+  // still-pending query with a null error never reaches apiErrorMessage.)
+  if (isError) {
     return (
       <Alert
         severity="error"
@@ -51,6 +45,15 @@ export function QueryBoundary<T>({
       >
         {apiErrorMessage(error, 'Data se nepodařilo načíst.')}
       </Alert>
+    );
+  }
+
+  // No data yet — loading, or a query still disabled/idle. Show the spinner.
+  if (data === undefined) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
