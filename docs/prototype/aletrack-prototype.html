@@ -591,9 +591,10 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
       vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
   ];
   function stop(orderId,kind,order){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, order,
-    items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded:false, checked:false, inv:1, source:'order' })) }; }
-  // demo dokládka (extra units taken from stock on top of the order) on shipment s-1
-  DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:4, loaded:false, checked:false, inv:1, source:'dokladka' });
+    items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:0, loaded:false, checked:false, inv:1, source:'order' })) }; }
+  // demo: a pure dokládka (product not in the order) + a merged dokládka on an existing order line
+  DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:0, dokladkaQty:4, loaded:false, checked:false, inv:1, source:'dokladka' });
+  (function(){ const alb=DB.shipments[0].stops[0].items.find(i=>i.productId===byName('Albrecht 12° Světlý').id); if(alb) alb.dokladkaQty=2; })();
   // Deliveries (Dovozy)
   DB.deliveries=[
     { id:'d-1', number:'DOV-2026-030', date:daysFromNow(2), state:'InPlanning', vehicleId:'v-iveco', driverIds:['dr-novak'], note:'Zavézt i prázdné sudy zpět',
@@ -1675,7 +1676,7 @@ function viewShipmentDetail(id){
   const ed=canEdit('shipments'); const veh=vehicleById(s.vehicleId);
   const pts=shipStopPoints(s.stops);
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
-  const totalWeight=stopsSorted.reduce((w,st)=>w+st.items.reduce((x,it)=>{const p=prodById(it.productId);return x+(estWeight(p)*it.quantity);},0),0);
+  const totalWeight=stopsSorted.reduce((w,st)=>w+st.items.reduce((x,it)=>{const p=prodById(it.productId);return x+(estWeight(p)*slQty(it));},0),0);
   const flow=['Created','Loaded','InTransit','Delivered'];
   return `<div class="page">
     ${crumbs([{t:'Vývozy',href:'#/shipments'},{t:s.number}])}
@@ -1707,8 +1708,8 @@ function viewShipmentDetail(id){
 function estWeight(p){ if(!p) return 0; if(p.kind==='Keg') return (p.packageSize||30)*1.05+8; if(p.kind==='Bottle') return (p.packageSize||0.5)*20*1.1; if(p.kind==='Can'||p.kind==='Multipack') return (p.packageSize||6)*1.05; return 5; }
 function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to;
   if(to==='Delivered'){ s.stops.forEach(st=>{ const o=DB.orders.find(x=>x.id===st.orderId); if(o){o.state='Finished';o.actualDeliveryDate=daysFromNow(0);} });
-    let deducted=0; s.stops.forEach(st=>st.items.forEach(it=>{ if(it.source==='dokladka'){ const inv=DB.inventory.find(i=>i.id===it.fromInventoryId)||DB.inventory.find(i=>i.productId===it.productId);
-      if(inv){ inv.quantity=Math.max(0,inv.quantity-it.quantity); deducted+=it.quantity; } } }));
+    let deducted=0; s.stops.forEach(st=>st.items.forEach(it=>{ const dq=it.dokladkaQty||0; if(dq>0){ const inv=DB.inventory.find(i=>i.id===it.fromInventoryId)||DB.inventory.find(i=>i.productId===it.productId);
+      if(inv){ inv.quantity=Math.max(0,inv.quantity-dq); deducted+=dq; } } }));
     toast(deducted?`Doručeno · ${deducted} ks dokládky odečteno ze skladu`:'Vývoz doručen — objednávky dokončeny','check'); }
   else if(to==='InTransit'){ s.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o)o.state='Delivering';}); toast('Vývoz vyrazil'); } else toast('Stav aktualizován');
   renderRoute(); }
@@ -1721,7 +1722,11 @@ function slToggle(itemId,field){ const s=DB.shipments.find(x=>x.id===SL.shipId);
   it[field]=!it[field]; if(field==='loaded'&&!it.loaded) it.checked=false; slRerender(); }
 function slSetInvoice(itemId,inv){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(it){ it.inv=inv; slRerender(); } }
 function slRemoveItem(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId)); toast('Dokládka odebrána','trash'); slRerender(); }
-function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*it.quantity; }
+function slQty(it){ return (it.quantity||0)+(it.dokladkaQty||0); }
+function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*slQty(it); }
+function slRemoveDokladka(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(!it)return;
+  it.dokladkaQty=0; it.fromInventoryId=null; if(it.quantity===0) s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId));
+  toast('Dokládka odebrána','trash'); slRerender(); }
 function shipLoadingCard(s){
   const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
@@ -1736,18 +1741,21 @@ function shipLoadingCard(s){
     <button class="${SL.tab==='f2'?'on':''}" onclick="slSetTab('f2')">Faktura 2 <span style="opacity:.6">${f2.length}</span></button></div>`;
   const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
     const items=st.items.filter(inTab);
-    const rows=items.map(it=>{ const p=prodById(it.productId); const dok=it.source==='dokladka';
+    const rows=items.map(it=>{ const p=prodById(it.productId); const dq=it.dokladkaQty||0; const pure=it.quantity===0; const qty=slQty(it);
+      const qtyCell = dq>0
+        ? `<div class="tnum t-strong">${qty} ks</div><div class="t-mut tnum" style="font-size:11px">${pure?`${dq} ze skladu`:`${it.quantity} obj. + ${dq} dokl.`}</div>`
+        : `<span class="tnum t-strong">${qty} ks</span>`;
+      const dokBadge = dq>0 ? `<span class="pill s-info"><span class="d"></span>dokládka +${dq}${editable?`<button title="Odebrat dokládku" onclick="slRemoveDokladka('${it.id}')" style="border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px;display:inline-flex;align-items:center">${icon('close',11)}</button>`:''}</span>` : '';
       return `<tr>
         <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
-          <div class="row gap8" style="margin-top:2px"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>
-          ${dok?'<span class="pill s-info"><span class="d"></span>dokládka</span>':''}</div></td>
-        <td class="num tnum">${it.quantity} ks</td>
+          <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${dokBadge}</div></td>
+        <td class="num">${qtyCell}</td>
         ${SL.tab==='all'?`<td style="text-align:center"><div class="seg" style="display:inline-flex">
           <button class="${it.inv===1?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',1)"`:'disabled'}>F1</button>
           <button class="${it.inv===2?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',2)"`:'disabled'}>F2</button></div></td>`:''}
         <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
         <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
-        <td style="width:34px;text-align:right">${dok&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
+        <td style="width:34px;text-align:right">${pure&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" title="Odebrat" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
     return `<div style="margin-bottom:6px">
       <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
         <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
@@ -1785,8 +1793,10 @@ function slSaveDokladka(){ const invId=val('dok-prod'); const qty=parseInt(val('
   if(qty<=0) return toast('Zadejte počet kusů','warnTri');
   if(qty>inv.quantity) return toast('Na skladě je jen '+inv.quantity+' ks','warnTri');
   const s=DB.shipments.find(x=>x.id===SL.shipId); const st=s.stops.find(x=>x.orderId===SL.dokStop); if(!st) return;
-  st.items.push({ id:'dok-'+Math.random().toString(36).slice(2,7), productId:inv.productId, quantity:qty, loaded:false, checked:false, inv:1, source:'dokladka', fromInventoryId:inv.id });
-  closeOverlay(); toast('Dokládka přidána do nakládky'); slRerender(); }
+  const existing=st.items.find(i=>i.productId===inv.productId);
+  if(existing){ existing.dokladkaQty=(existing.dokladkaQty||0)+qty; existing.fromInventoryId=inv.id; toast('Dokládka sloučena k položce'); }
+  else { st.items.push({ id:'dok-'+Math.random().toString(36).slice(2,7), productId:inv.productId, quantity:0, dokladkaQty:qty, loaded:false, checked:false, inv:1, source:'dokladka', fromInventoryId:inv.id }); toast('Dokládka přidána do nakládky'); }
+  closeOverlay(); slRerender(); }
 
 /* ---- Shipment planner ---- */
 let SH={ draft:null, drag:null, regionFilter:'all' };
@@ -1893,7 +1903,7 @@ function seSave(){ seSyncMeta(); const d=SH.draft; if(!d.name)return toast('Zade
     const existing=(DB.shipments.find(x=>x.id===d.id)||{stops:[]}).stops.find(x=>x.orderId===st.orderId);
     const keep=existing?existing.items.filter(i=>i.source==='dokladka'):[];
     return { ...st, items:[...o.items.map(it=>{ const prev=existing&&existing.items.find(x=>x.orderItemId===it.id);
-      return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, inv:prev?prev.inv:1, source:'order' }; }), ...keep] }; };
+      return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:prev?(prev.dokladkaQty||0):0, fromInventoryId:prev?prev.fromInventoryId:null, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, inv:prev?prev.inv:1, source:'order' }; }), ...keep] }; };
   if(d.id){ const s=DB.shipments.find(x=>x.id===d.id); Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom }); toast('Vývoz uložen'); go('shipments/'+d.id); }
   else { const s={ id:'s-'+Math.random().toString(36).slice(2,7), number:'VYV-2026-'+(53+DB.shipments.length), name:d.name, state:'Created',
     deliveryDate:d.deliveryDate, vehicleId:d.vehicleId, driverIds:d.driverIds, stops:d.stops.map(build), extraCustom:d.extraCustom };
