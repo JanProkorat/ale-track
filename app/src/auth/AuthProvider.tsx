@@ -10,6 +10,7 @@ import {
 import { type CurrentUser } from './types';
 import { canEdit as canEditPerms, canSee as canSeePerms, type ModuleKey } from './permissions';
 import { userFromToken, isTokenExpired } from './jwt';
+import { useQueryClient } from '@tanstack/react-query';
 import { LoginUserDto } from 'src/generated/api-client';
 import { api } from 'src/api/apiClient';
 import { setApiTokens, setAuthFailedHandler, setTokensRefreshedHandler } from 'src/api/apiClient';
@@ -75,12 +76,14 @@ function restore(): { user: CurrentUser | null; demo: boolean } {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [{ user, demo }, setState] = useState(restore);
+  const qc = useQueryClient();
 
   const signOut = useCallback(() => {
     clearStorage();
     setApiTokens(null, null);
+    qc.clear();
     setState({ user: null, demo: false });
-  }, []);
+  }, [qc]);
 
   // Keep the api layer's refresh/failure handlers pointed at this provider.
   useEffect(() => {
@@ -109,14 +112,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!u) throw new Error('Neplatný přihlašovací token.');
     setApiTokens(access, refresh);
     persistReal(u, access, refresh);
+    qc.clear();
     setState({ user: u, demo: false });
-  }, []);
+  }, [qc]);
 
-  const signInDemo = useCallback((u: CurrentUser) => {
-    setApiTokens(null, null);
-    persistDemo(u);
-    setState({ user: u, demo: true });
-  }, []);
+  const signInDemo = useCallback(
+    (u: CurrentUser) => {
+      setApiTokens(null, null);
+      persistDemo(u);
+      qc.clear();
+      setState({ user: u, demo: true });
+    },
+    [qc]
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({

@@ -1,41 +1,45 @@
 // TEMPLATE module hooks — the CRUD pattern every module copies (P4–P12).
 // list → useQuery, detail → useQuery(enabled), create/update/delete → useMutation
-// invalidating the resource root. Filter params flow through as the dict the
-// backend expects (apiClient patches the NSwag serialization).
+// invalidating the resource root. Calls go through useDataSource() so the same
+// hooks serve both live (API) and demo (in-memory) sessions.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from 'src/api/apiClient';
+import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import { type CreateVehicleDto, type UpdateVehicleDto } from 'src/generated/api-client';
 
 export function useVehicles(params: Record<string, string> = {}) {
+  const ds = useDataSource();
   return useQuery({
     queryKey: qk.vehicles.list(params),
-    queryFn: ({ signal }) => api.getVehiclesListEndpoint(params, signal),
+    queryFn: ({ signal }) => ds.getVehiclesListEndpoint(params, signal),
   });
 }
 
 export function useVehicle(id: string | undefined) {
+  const ds = useDataSource();
   return useQuery({
     queryKey: qk.vehicles.detail(id ?? ''),
-    queryFn: ({ signal }) => api.getVehicleDetailEndpoint(id!, signal),
+    queryFn: ({ signal }) => ds.getVehicleDetailEndpoint(id!, signal),
     enabled: Boolean(id),
   });
 }
 
 export function useCreateVehicle() {
+  const ds = useDataSource();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateVehicleDto) => api.createVehicleEndpoint(data),
+    mutationFn: (data: CreateVehicleDto) => ds.createVehicleEndpoint(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.vehicles.all }),
   });
 }
 
 export function useUpdateVehicle() {
+  const ds = useDataSource();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateVehicleDto }) =>
-      api.updateVehicleEndpoint(id, data),
+      ds.updateVehicleEndpoint(id, data),
     onSuccess: (_res, { id }) => {
       qc.invalidateQueries({ queryKey: qk.vehicles.all });
       qc.invalidateQueries({ queryKey: qk.vehicles.detail(id) });
@@ -44,9 +48,10 @@ export function useUpdateVehicle() {
 }
 
 export function useDeleteVehicle() {
+  const ds = useDataSource();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.deleteVehicleEndpoint(id),
+    mutationFn: (id: string) => ds.deleteVehicleEndpoint(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.vehicles.all }),
   });
 }

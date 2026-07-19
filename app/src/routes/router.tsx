@@ -4,6 +4,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { LoginPage } from 'src/pages/LoginPage';
 import { DashboardPage } from 'src/pages/DashboardPage';
 import { ModulePlaceholder } from 'src/pages/ModulePlaceholder';
+import { VehiclesPage } from 'src/features/vehicles/VehiclesPage';
 import { LOGIN_PATH, PATHS } from './paths';
 
 const placeholder = (eyebrow: string, title: string, phase: string) => (
@@ -26,7 +27,7 @@ export const router = createBrowserRouter([
           { path: PATHS.breweries, element: placeholder('Evidence', 'Pivovary', 'P5') },
           { path: PATHS.clients, element: placeholder('Evidence', 'Klienti', 'P6') },
           { path: PATHS.drivers, element: placeholder('Evidence', 'Řidiči', 'P10') },
-          { path: PATHS.vehicles, element: placeholder('Evidence', 'Vozy', 'P11') },
+          { path: PATHS.vehicles, element: <VehiclesPage /> },
           { path: PATHS.users, element: placeholder('Správa', 'Uživatelé', 'P12') },
         ],
       },
