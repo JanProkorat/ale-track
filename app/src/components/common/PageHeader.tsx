@@ -18,6 +18,7 @@ export function PageHeader({
       alignItems="flex-end"
       spacing={2}
       flexWrap="wrap"
+      useFlexGap
       sx={{ mb: 2.75 }}
     >
       <Box sx={{ minWidth: 0 }}>

@@ -250,11 +250,17 @@ function DriverTile({
 
       {editable && (
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" size="small" startIcon={<EditIcon fontSize="small" />} sx={{ flex: 1 }} onClick={onEdit}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<EditIcon fontSize="small" />}
+            onClick={onEdit}
+            sx={{ flex: 1, color: 'text.primary', borderColor: 'divider', fontWeight: 700, bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+          >
             Upravit
           </Button>
           <Tooltip title="Smazat">
-            <IconButton size="small" color="error" onClick={onDelete}>
+            <IconButton size="small" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'text.secondary' }}>
               <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
