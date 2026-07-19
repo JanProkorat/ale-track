@@ -232,6 +232,19 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;min-height:78px;lin
 .tabs button.on{color:var(--amber-700);border-bottom-color:var(--amber);}
 .tabs button .cnt{background:var(--surface-3);border-radius:99px;font-size:11px;padding:0 7px;color:var(--text-2);}
 
+/* brewery tab bar (each brewery = a big top-level tab) */
+.brew-tabbar{display:flex;align-items:stretch;gap:12px;border-bottom:2px solid var(--border);}
+.brew-tabs{display:flex;gap:4px;overflow-x:auto;flex:1;}
+.brew-tabs::-webkit-scrollbar{height:0;}
+.brew-tab{display:flex;align-items:center;gap:9px;padding:13px 17px;font-weight:700;font-size:14.5px;color:var(--text-2);
+  border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;border-radius:var(--r-sm) var(--r-sm) 0 0;transition:.15s;}
+.brew-tab .dot{width:11px;height:11px;border-radius:4px;background:var(--bc,#ccc);flex:0 0 auto;box-shadow:0 0 0 3px color-mix(in srgb,var(--bc) 18%,transparent);}
+.brew-tab .cnt{background:var(--surface-3);color:var(--text-3);font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;}
+.brew-tab:hover{color:var(--text);background:var(--surface-2);}
+.brew-tab.on{color:var(--text);border-bottom-color:var(--bc);background:var(--surface-2);}
+.brew-tab.on .cnt{background:color-mix(in srgb,var(--bc) 18%,transparent);color:var(--text);}
+.brew-add{flex:0 0 auto;align-self:center;margin-bottom:6px;}
+
 /* ---------- Empty / misc ---------- */
 .empty{text-align:center;padding:52px 20px;color:var(--text-3);}
 .empty svg{opacity:.4;margin-bottom:12px;}
@@ -936,35 +949,27 @@ function val(id){ const e=$('#'+id); return e?e.value.trim():''; }
 
 /* ============ MODULE: PIVOVARY (BREWERIES) ============ */
 function viewBreweries(){
-  const rows=DB.breweries.slice().sort((a,b)=>a.displayOrder-b.displayOrder).map(b=>{
-    const prods=productsOf(b.id);
-    return `<tr class="clickable" onclick="go('breweries/${b.id}')">
-      <td><div class="row-lead"><span class="av" style="background:${b.color}22;color:${b.color}">${icon('brewery',18)}</span>
-        <div><div class="t-strong">${esc(b.name)}</div><div class="t-mut" style="font-size:12px">${L.country[b.officialAddress.country]}</div></div></div></td>
-      <td>${fmtAddr(b.officialAddress)}</td>
-      <td class="num tnum">${prods.length}</td>
-      <td><span class="chip"><span class="dotc" style="background:${b.color}"></span>${b.color}</span></td>
-      <td style="text-align:right">${icon('chevR',16)}</td></tr>`;
-  }).join('');
-  return `<div class="page">
-    ${pageHead('Evidence','Pivovary','Dodavatelé a jejich produkty s ceníkem.', canEdit('breweries')?`<button class="btn btn-primary" onclick="breweryForm(null)">${icon('plus',17)}Nový pivovar</button>`:'')}
-    <div class="toolbar">${toolbarSearch('Hledat pivovar…','br-search')}<span class="count-note">${DB.breweries.length} pivovarů · ${DB.products.length} produktů</span></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Pivovar</th><th>Sídlo</th><th style="text-align:right">Produkty</th><th>Barva</th><th></th></tr></thead>
-    <tbody id="br-body">${rows}</tbody></table></div></div>`;
+  const first=DB.breweries.slice().sort((a,b)=>a.displayOrder-b.displayOrder)[0];
+  if(!first) return `<div class="page">${pageHead('Evidence','Pivovary','Dodavatelé a jejich produkty s ceníkem.',canEdit('breweries')?`<button class="btn btn-primary" onclick="breweryForm(null)">${icon('plus',17)}Nový pivovar</button>`:'')}
+    <div class="empty"><div>${icon('brewery',40)}</div><div class="t">Zatím žádný pivovar</div><div>Přidejte prvního dodavatele.</div></div></div>`;
+  return breweriesModule(first.id);
 }
-function viewBreweryDetail(id){
-  id=id.split('?')[0];
-  const b=breweryById(id); if(!b) return notFound('Pivovar');
+function viewBreweryDetail(id){ return breweriesModule(id.split('?')[0]); }
+function breweriesModule(id){
+  const breweries=DB.breweries.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
+  const b=breweryById(id)||breweries[0]; if(!b) return notFound('Pivovar'); id=b.id;
   const tab=(location.hash.split('?tab=')[1])||'info';
+  const ed=canEdit('breweries');
   const prods=productsOf(id);
   const rems=DB.reminders.filter(r=>r.kind==='Brewery'&&r.sectionId===id);
-  const ed=canEdit('breweries');
-  const tabs=`<div class="tabs">
-    ${brTab('info','Info','info',tab)}
-    ${brTab('cenik','Ceník','wallet',tab,prods.length)}
-    ${brTab('reminders','Připomínky','bell',tab,rems.length)}
-    ${brTab('notes','Poznámky','note',tab)}
-  </div>`;
+  // top brewery tab bar
+  const tabbar=`<div class="brew-tabbar">
+    <div class="brew-tabs">${breweries.map(x=>`<a class="brew-tab ${x.id===id?'on':''}" href="#/breweries/${x.id}" style="--bc:${x.color}">
+      <span class="dot"></span>${esc(x.name)}<span class="cnt">${productsOf(x.id).length}</span></a>`).join('')}</div>
+    ${ed?`<button class="btn btn-primary btn-sm brew-add" onclick="breweryForm(null)">${icon('plus',15)}Nový pivovar</button>`:''}</div>`;
+  // sub tabs (info / ceník / připomínky / poznámky)
+  const subTab=(key,label,ic,cnt)=>`<button class="${tab===key?'on':''}" onclick="location.hash='#/breweries/${id}?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`;
+  const subtabs=`<div class="tabs">${subTab('info','Info','info')}${subTab('cenik','Ceník','wallet',prods.length)}${subTab('reminders','Připomínky','bell',rems.length)}${subTab('notes','Poznámky','note')}</div>`;
   let body='';
   if(tab==='info'){
     body=`<div class="grid" style="grid-template-columns:1fr 1fr">
@@ -976,22 +981,19 @@ function viewBreweryDetail(id){
           ${miniStat('Sudů',prods.filter(p=>p.kind==='Keg').length,'stock')}
           ${miniStat('Aktivní připomínky',rems.filter(r=>!r.resolved).length,'bell')}
         </div></div></div></div>`;
-  } else if(tab==='cenik'){
-    body=cenikView(b,prods,ed);
-  } else if(tab==='reminders'){
-    body=remindersView(rems,ed,'Brewery',id);
-  } else {
-    body=notesView(b,'brewery');
-  }
+  } else if(tab==='cenik'){ body=cenikView(b,prods,ed); }
+  else if(tab==='reminders'){ body=remindersView(rems,ed,'Brewery',id); }
+  else { body=notesView(b,'brewery'); }
   return `<div class="page">
-    ${crumbs([{t:'Pivovary',href:'#/breweries'},{t:b.name}])}
-    <div class="page-head"><div class="titles"><div class="eyebrow" style="color:${b.color}">Pivovar</div><h1>${esc(b.name)}</h1>
+    <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px">
+      <div><div class="eyebrow">Evidence</div><h1 style="font-size:22px">Pivovary</h1></div></div>
+    ${tabbar}
+    <div class="page-head" style="margin-top:22px"><div class="titles"><div class="eyebrow" style="color:${b.color}">Pivovar · ${esc(b.officialAddress.city)}</div><h1>${esc(b.name)}</h1>
       <div class="sub">${guidNote(b.id)}</div></div>
       <div class="actions">${ed?`<button class="btn btn-ghost" onclick="breweryForm('${id}')">${icon('edit',16)}Upravit</button>
         <button class="btn btn-danger btn-icon" onclick="delBrewery('${id}')" title="Smazat">${icon('trash',16)}</button>`:''}</div></div>
-    ${tabs}${body}</div>`;
+    ${subtabs}${body}</div>`;
 }
-function brTab(key,label,ic,cur,cnt){ return `<button class="${cur===key?'on':''}" onclick="location.hash='#/breweries/'+curId()+'?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`; }
 function curId(){ return location.hash.replace(/^#\//,'').split('/')[1].split('?')[0]; }
 
 function cenikView(b,prods,ed){
