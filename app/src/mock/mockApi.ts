@@ -20,8 +20,14 @@ import {
   type IInventoryItemListItemDto,
   type CreateInventoryItemDto,
   type UpdateInventoryItemDto,
+  DriverListItemDto,
+  DriverDto,
+  DriverAvailabilityListItemDto,
+  DriverAvailabilityDto,
+  type CreateDriverDto,
+  type UpdateDriverDto,
 } from 'src/generated/api-client';
-import { db, mockId, mockDelay, MockNotFoundError } from './db';
+import { db, mockId, mockDelay, MockNotFoundError, type MockDriverAvailability } from './db';
 
 /** Case-insensitive substring match for demo-side list search. */
 function matches(haystack: string | undefined, needle: string | undefined): boolean {
@@ -176,6 +182,71 @@ const impl: Partial<IClient> = {
         return mockDelay(id);
       }
     }
+    return mockDelay(id);
+  },
+
+  // ---- Drivers (Řidiči) ------------------------------------------------------
+  getDriversListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.drivers
+      .filter((d) => matches(d.firstName, search) || matches(d.lastName, search))
+      .map(
+        (d) =>
+          new DriverListItemDto({
+            id: d.id,
+            firstName: d.firstName,
+            lastName: d.lastName,
+            phoneNumber: d.phoneNumber,
+            color: d.color,
+            availableDates: d.availableDates.map((a) => new DriverAvailabilityListItemDto(a)),
+          })
+      );
+    return mockDelay(rows);
+  },
+  getDriverDetailEndpoint(id: string) {
+    const d = db.drivers.find((x) => x.id === id);
+    if (!d) return Promise.reject(new MockNotFoundError('Řidič'));
+    return mockDelay(
+      new DriverDto({
+        id: d.id,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        phoneNumber: d.phoneNumber,
+        color: d.color,
+        availableDates: d.availableDates.map((a) => new DriverAvailabilityDto(a)),
+      })
+    );
+  },
+  createDriverEndpoint(data: CreateDriverDto) {
+    const id = mockId('drv');
+    const availableDates: MockDriverAvailability[] = (data.availableDates ?? [])
+      .filter((a) => a.from && a.until)
+      .map((a) => ({ from: a.from!, until: a.until! }));
+    db.drivers.unshift({
+      id,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phoneNumber: data.phoneNumber,
+      color: data.color,
+      availableDates,
+    });
+    return mockDelay(id);
+  },
+  updateDriverEndpoint(id: string, data: UpdateDriverDto) {
+    const d = db.drivers.find((x) => x.id === id);
+    if (!d) return Promise.reject(new MockNotFoundError('Řidič'));
+    d.firstName = data.firstName;
+    d.lastName = data.lastName;
+    d.phoneNumber = data.phoneNumber;
+    d.color = data.color;
+    d.availableDates = (data.availableDates ?? [])
+      .filter((a) => a.from && a.until)
+      .map((a) => ({ from: a.from!, until: a.until! }));
+    return mockDelay(id);
+  },
+  deleteDriverEndpoint(id: string) {
+    const i = db.drivers.findIndex((x) => x.id === id);
+    if (i >= 0) db.drivers.splice(i, 1);
     return mockDelay(id);
   },
 };

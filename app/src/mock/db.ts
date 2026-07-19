@@ -18,6 +18,7 @@ export interface MockDb {
   users: IUserListItemDto[];
   products: IProductListItemDto[];
   inventory: MockInventorySection[];
+  drivers: MockDriver[];
 }
 
 // Note: the generated `IInventorySectionDto.items` is typed as the concrete
@@ -27,6 +28,23 @@ export interface MockInventorySection {
   id?: string;
   name?: string;
   items: IInventoryItemListItemDto[];
+}
+
+// Availability is a plain `{from, until}` range mirroring
+// `IDriverAvailabilityListItemDto` — kept local (not the generated class) so
+// the demo store can hold plain objects like the other collections.
+export interface MockDriverAvailability {
+  from: Date;
+  until: Date;
+}
+
+export interface MockDriver {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  color?: string;
+  availableDates: MockDriverAvailability[];
 }
 
 const VEHICLES_SEED: IVehicleDto[] = [
@@ -182,11 +200,64 @@ const INVENTORY_SEED: MockInventorySection[] = [
   },
 ];
 
+// Five drivers with a distinct color each and 1-3 availability ranges spanning
+// the current period (hardcoded 2026 dates — fine for demo seed data).
+const DRIVERS_SEED: MockDriver[] = [
+  {
+    id: 'drv-0001',
+    firstName: 'Petr',
+    lastName: 'Král',
+    phoneNumber: '+420 601 234 567',
+    color: '#E8590C',
+    availableDates: [
+      { from: new Date(2026, 6, 20), until: new Date(2026, 6, 24) },
+      { from: new Date(2026, 7, 3), until: new Date(2026, 7, 7) },
+    ],
+  },
+  {
+    id: 'drv-0002',
+    firstName: 'Martin',
+    lastName: 'Dvořák',
+    phoneNumber: '+420 602 345 678',
+    color: '#2F9E44',
+    availableDates: [{ from: new Date(2026, 6, 21), until: new Date(2026, 6, 31) }],
+  },
+  {
+    id: 'drv-0003',
+    firstName: 'Jakub',
+    lastName: 'Horák',
+    phoneNumber: '+420 603 456 789',
+    color: '#1971C2',
+    availableDates: [
+      { from: new Date(2026, 6, 18), until: new Date(2026, 6, 22) },
+      { from: new Date(2026, 6, 27), until: new Date(2026, 6, 29) },
+      { from: new Date(2026, 7, 10), until: new Date(2026, 7, 14) },
+    ],
+  },
+  {
+    id: 'drv-0004',
+    firstName: 'Tomáš',
+    lastName: 'Beneš',
+    phoneNumber: '+420 604 567 890',
+    color: '#9C36B5',
+    availableDates: [],
+  },
+  {
+    id: 'drv-0005',
+    firstName: 'Marek',
+    lastName: 'Novotný',
+    phoneNumber: '+420 605 678 901',
+    color: '#E03131',
+    availableDates: [{ from: new Date(2026, 7, 1), until: new Date(2026, 7, 5) }],
+  },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
   products: structuredClone(PRODUCTS_SEED),
   inventory: structuredClone(INVENTORY_SEED),
+  drivers: structuredClone(DRIVERS_SEED),
 };
 
 /** New id for demo-created records. */
