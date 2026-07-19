@@ -1,47 +1,25 @@
-import { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { TextField, FormControlLabel, Checkbox, FormControl, FormHelperText, FormGroup } from '@mui/material';
+import { useEffect, useState } from 'react';
+import {
+  Box, Stack, TextField, Typography, Switch, FormControlLabel, Alert,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Radio, Card,
+} from '@mui/material';
+import ShieldIcon from '@mui/icons-material/ShieldOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { apiErrorMessage } from 'src/api/errors';
+import { allPerms, type PermissionLevel, type Permissions } from 'src/auth/permissions';
 import {
-  CreateUserDto,
-  UpdateUserDto,
-  UserRoleType,
-  type UserListItemDto,
+  CreateUserDto, UpdateUserDto, UserRoleType, type UserListItemDto,
 } from 'src/generated/api-client';
 import { useCreateUser, useUpdateUser } from 'src/hooks/useUsers';
+import { PERM_MODULES, permsToDtos, dtosToPerms, isAdminUser } from './permissionModel';
 
-/** Schema depends on mode: create requires userName + password, edit has neither
- * (UpdateUserDto carries only names + roles). */
-function makeSchema(editing: boolean) {
-  return z.object({
-    firstName: z.string().trim().optional(),
-    lastName: z.string().trim().optional(),
-    userName: editing
-      ? z.string().optional()
-      : z.string().trim().min(1, 'Zadejte přihlašovací jméno'),
-    password: editing ? z.string().optional() : z.string().min(6, 'Heslo musí mít alespoň 6 znaků'),
-    roles: z.array(z.nativeEnum(UserRoleType)).min(1, 'Vyberte alespoň jednu roli'),
-  });
-}
-type FormValues = z.infer<ReturnType<typeof makeSchema>>;
+const LEVELS: { value: PermissionLevel; label: string }[] = [
+  { value: 'none', label: 'Bez přístupu' },
+  { value: 'view', label: 'Jen čtení' },
+  { value: 'edit', label: 'Úpravy' },
+];
 
-const empty: FormValues = { firstName: '', lastName: '', userName: '', password: '', roles: [] };
-
-function toForm(u: UserListItemDto): FormValues {
-  return {
-    firstName: u.firstName ?? '',
-    lastName: u.lastName ?? '',
-    userName: u.userName ?? '',
-    password: '',
-    roles: u.userRoles ?? [],
-  };
-}
-
-/** Create/edit a user. `user` undefined → create mode. */
 export function UserFormDrawer({
   open,
   user,
@@ -56,38 +34,53 @@ export function UserFormDrawer({
   const update = useUpdateUser();
   const editing = Boolean(user);
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>({ resolver: zodResolver(makeSchema(editing)), defaultValues: empty });
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [userName, setUserName] = useState('');
+  const [password, setPassword] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [perms, setPerms] = useState<Permissions>(allPerms('none'));
+  const [errors, setErrors] = useState<{ userName?: string; password?: string }>({});
 
   useEffect(() => {
-    if (open) reset(user ? toForm(user) : empty);
-  }, [open, user, reset]);
+    if (!open) return;
+    setErrors({});
+    setPassword('');
+    if (user) {
+      setFirstName(user.firstName ?? '');
+      setLastName(user.lastName ?? '');
+      setUserName(user.userName ?? '');
+      setIsAdmin(isAdminUser(user));
+      setPerms(dtosToPerms(user.permissions));
+    } else {
+      setFirstName('');
+      setLastName('');
+      setUserName('');
+      setIsAdmin(false);
+      setPerms(allPerms('none'));
+    }
+  }, [open, user]);
 
-  const submit = handleSubmit(async (values) => {
+  const submit = async () => {
+    const errs: typeof errors = {};
+    if (!userName.trim()) errs.userName = 'Zadejte přihlašovací jméno';
+    if (!editing && password.length < 6) errs.password = 'Heslo musí mít alespoň 6 znaků';
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    const userRoles = [isAdmin ? UserRoleType.Admin : UserRoleType.User];
+    const permissions = isAdmin ? [] : permsToDtos(perms);
+
     try {
       if (user?.id) {
         await update.mutateAsync({
           id: user.id,
-          data: new UpdateUserDto({
-            firstName: values.firstName || undefined,
-            lastName: values.lastName || undefined,
-            userRoles: values.roles,
-          }),
+          data: new UpdateUserDto({ firstName: firstName || undefined, lastName: lastName || undefined, userRoles, permissions }),
         });
         enqueueSnackbar('Uživatel upraven.', { variant: 'success' });
       } else {
         await create.mutateAsync(
-          new CreateUserDto({
-            firstName: values.firstName || undefined,
-            lastName: values.lastName || undefined,
-            userName: values.userName ?? '',
-            password: values.password ?? '',
-            userRoles: values.roles,
-          })
+          new CreateUserDto({ firstName: firstName || undefined, lastName: lastName || undefined, userName, password, userRoles, permissions })
         );
         enqueueSnackbar('Uživatel přidán.', { variant: 'success' });
       }
@@ -95,7 +88,7 @@ export function UserFormDrawer({
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
     }
-  });
+  };
 
   const busy = create.isPending || update.isPending;
 
@@ -103,109 +96,81 @@ export function UserFormDrawer({
     <FormDrawer
       open={open}
       title={editing ? 'Upravit uživatele' : 'Nový uživatel'}
-      subtitle={editing ? `@${user?.userName}` : 'Vytvořte nový uživatelský účet.'}
+      subtitle={editing ? `@${user?.userName}` : 'Vytvořte účet a nastavte práva k modulům.'}
       onClose={onClose}
       onSubmit={submit}
       busy={busy}
       submitLabel={editing ? 'Uložit změny' : 'Přidat uživatele'}
+      width={640}
     >
-      <Controller
-        control={control}
-        name="firstName"
-        render={({ field }) => (
-          <TextField
-            {...field}
-            label="Jméno"
-            error={Boolean(errors.firstName)}
-            helperText={errors.firstName?.message}
-            fullWidth
-            autoFocus
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="lastName"
-        render={({ field }) => (
-          <TextField
-            {...field}
-            label="Příjmení"
-            error={Boolean(errors.lastName)}
-            helperText={errors.lastName?.message}
-            fullWidth
-          />
-        )}
-      />
+      <Stack direction="row" spacing={2}>
+        <TextField label="Jméno" value={firstName} onChange={(e) => setFirstName(e.target.value)} fullWidth autoFocus />
+        <TextField label="Příjmení" value={lastName} onChange={(e) => setLastName(e.target.value)} fullWidth />
+      </Stack>
       {!editing && (
-        <Controller
-          control={control}
-          name="userName"
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Přihlašovací jméno"
-              error={Boolean(errors.userName)}
-              helperText={errors.userName?.message}
-              fullWidth
-            />
-          )}
-        />
+        <Stack direction="row" spacing={2}>
+          <TextField label="Přihlašovací jméno" value={userName} onChange={(e) => setUserName(e.target.value)} error={Boolean(errors.userName)} helperText={errors.userName} fullWidth />
+          <TextField label="Heslo" type="password" value={password} onChange={(e) => setPassword(e.target.value)} error={Boolean(errors.password)} helperText={errors.password} fullWidth />
+        </Stack>
       )}
-      {!editing && (
-        <Controller
-          control={control}
-          name="password"
-          render={({ field }) => (
-            <TextField
-              {...field}
-              type="password"
-              label="Heslo"
-              error={Boolean(errors.password)}
-              helperText={errors.password?.message}
-              fullWidth
-            />
-          )}
+
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Role</Typography>
+        <FormControlLabel
+          control={<Switch checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />}
+          label="Administrátor (plný přístup)"
         />
-      )}
-      <Controller
-        control={control}
-        name="roles"
-        render={({ field }) => (
-          <FormControl error={Boolean(errors.roles)} component="fieldset" variant="standard">
-            <FormGroup>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={field.value.includes(UserRoleType.Admin)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...field.value, UserRoleType.Admin]
-                        : field.value.filter((r) => r !== UserRoleType.Admin);
-                      field.onChange(next);
-                    }}
-                  />
-                }
-                label="Administrátor"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={field.value.includes(UserRoleType.User)}
-                    onChange={(e) => {
-                      const next = e.target.checked
-                        ? [...field.value, UserRoleType.User]
-                        : field.value.filter((r) => r !== UserRoleType.User);
-                      field.onChange(next);
-                    }}
-                  />
-                }
-                label="Uživatel"
-              />
-            </FormGroup>
-            {errors.roles?.message && <FormHelperText>{errors.roles.message}</FormHelperText>}
-          </FormControl>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          Administrátor má vždy přístup ke všem modulům. Pro jemné řízení práv ponechte roli Uživatel.
+        </Typography>
+      </Box>
+
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Práva k modulům</Typography>
+        {isAdmin && (
+          <Alert severity="info" icon={<ShieldIcon />} sx={{ mb: 1.5 }}>
+            Administrátor má automaticky úpravy ve všech modulech.
+          </Alert>
         )}
-      />
+        <Card variant="outlined" sx={{ opacity: isAdmin ? 0.5 : 1, pointerEvents: isAdmin ? 'none' : 'auto' }}>
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Modul</TableCell>
+                  {LEVELS.map((l) => (
+                    <TableCell key={l.value} align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{l.label}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {PERM_MODULES.map((m) => {
+                  const current = isAdmin ? 'edit' : perms[m.key];
+                  return (
+                    <TableRow key={m.key}>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Box sx={{ color: 'text.secondary', display: 'flex' }}>{m.icon}</Box>
+                          <Typography sx={{ fontWeight: 600 }}>{m.label}</Typography>
+                        </Stack>
+                      </TableCell>
+                      {LEVELS.map((l) => (
+                        <TableCell key={l.value} align="center" sx={{ py: 0.25 }}>
+                          <Radio
+                            size="small"
+                            checked={current === l.value}
+                            onChange={() => setPerms((p) => ({ ...p, [m.key]: l.value }))}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Card>
+      </Box>
     </FormDrawer>
   );
 }

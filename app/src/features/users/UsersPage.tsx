@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlineOutlined';
+import ShieldIcon from '@mui/icons-material/ShieldOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
+import { StatusPill } from 'src/components/common/StatusPill';
 import { DataTable, type Column } from 'src/components/common/DataTable';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
@@ -16,6 +18,19 @@ import { apiErrorMessage } from 'src/api/errors';
 import { UserRoleType, type UserListItemDto } from 'src/generated/api-client';
 import { useUsers, useDeleteUser } from 'src/hooks/useUsers';
 import { UserFormDrawer } from './UserFormDrawer';
+import { isAdminUser, permCounts } from './permissionModel';
+
+function PermSummary({ user }: { user: UserListItemDto }) {
+  if (isAdminUser(user)) return <StatusPill tone="amber" label="Plný přístup" />;
+  const { edit, view } = permCounts(user);
+  if (edit === 0 && view === 0) return <Typography variant="body2" color="text.disabled">Bez práv</Typography>;
+  return (
+    <Stack direction="row" spacing={0.75}>
+      {edit > 0 && <Chip size="small" label={`${edit} úprav`} sx={{ color: 'success.main', fontWeight: 700 }} />}
+      {view > 0 && <Chip size="small" label={`${view} čtení`} sx={{ color: 'info.main', fontWeight: 700 }} />}
+    </Stack>
+  );
+}
 
 const fullName = (u: UserListItemDto) => [u.firstName, u.lastName].filter(Boolean).join(' ');
 
@@ -84,6 +99,12 @@ export function UsersPage() {
         </Stack>
       ),
     },
+    {
+      key: 'perms',
+      header: 'Práva k modulům',
+      hideOnMobile: true,
+      render: (u) => <PermSummary user={u} />,
+    },
     ...(editable
       ? [
           {
@@ -115,7 +136,7 @@ export function UsersPage() {
       <PageHeader
         eyebrow="Správa"
         title="Uživatelé"
-        subtitle="Uživatelské účty a jejich role."
+        subtitle="Správa uživatelů a jejich práv k jednotlivým modulům."
         actions={
           <>
             <SearchField value={search} onChange={setSearch} placeholder="Hledat uživatele…" />
@@ -127,6 +148,15 @@ export function UsersPage() {
           </>
         }
       />
+
+      <Alert
+        severity="warning"
+        icon={<ShieldIcon />}
+        sx={{ mb: 2, bgcolor: (t) => t.palette.brand.amberSoft, color: 'text.secondary', border: 1, borderColor: (t) => t.palette.brand.amberTint }}
+      >
+        <strong>Granulární oprávnění.</strong> U každého uživatele lze nastavit přístup ke každému
+        modulu zvlášť — bez přístupu / jen čtení / úpravy.
+      </Alert>
 
       <Card sx={{ p: { xs: 1, sm: 1.5 } }}>
         <QueryBoundary

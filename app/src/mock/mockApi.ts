@@ -12,6 +12,7 @@ import {
   type CreateVehicleDto,
   type UpdateVehicleDto,
   UserListItemDto,
+  ModulePermissionDto,
   type CreateUserDto,
   type UpdateUserDto,
   InventorySectionDto,
@@ -123,6 +124,7 @@ const impl: Partial<IClient> = {
             lastName: u.lastName,
             userName: u.userName,
             userRoles: u.userRoles,
+            permissions: (u.permissions ?? []).map((p) => new ModulePermissionDto(p)),
           })
       );
     return mockDelay(rows);
@@ -135,6 +137,7 @@ const impl: Partial<IClient> = {
       lastName: data.lastName,
       userName: data.userName,
       userRoles: data.userRoles,
+      permissions: data.permissions,
     });
     return mockDelay(id);
   },
@@ -144,6 +147,7 @@ const impl: Partial<IClient> = {
     u.firstName = data.firstName;
     u.lastName = data.lastName;
     u.userRoles = data.userRoles;
+    u.permissions = data.permissions;
     return mockDelay(id);
   },
   deleteUserEndpoint(id: string) {

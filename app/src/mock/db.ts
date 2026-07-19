@@ -6,6 +6,7 @@
 import {
   type IVehicleDto,
   type IUserListItemDto,
+  type IModulePermissionDto,
   type IProductListItemDto,
   type IInventoryItemListItemDto,
   UserRoleType,
@@ -13,11 +14,20 @@ import {
   ProductType,
   Country,
   ReminderType,
+  ModuleType,
+  PermissionLevel,
 } from 'src/generated/api-client';
+
+// Plain user shape for the demo store — permissions kept as the interface type
+// (the generated IUserListItemDto references the concrete class); the mock API
+// wraps them in the generated classes on the way out.
+export interface MockUser extends Omit<IUserListItemDto, 'permissions'> {
+  permissions?: IModulePermissionDto[];
+}
 
 export interface MockDb {
   vehicles: IVehicleDto[];
-  users: IUserListItemDto[];
+  users: MockUser[];
   products: IProductListItemDto[];
   inventory: MockInventorySection[];
   drivers: MockDriver[];
@@ -101,12 +111,34 @@ const VEHICLES_SEED: IVehicleDto[] = [
   { id: 'veh-0004', name: 'Ford Transit (5U9 6631)', maxWeight: 1100 },
 ];
 
-const USERS_SEED: IUserListItemDto[] = [
-  { id: 'usr-0001', firstName: undefined, lastName: undefined, userName: 'admin', userRoles: [UserRoleType.Admin] },
-  { id: 'usr-0002', firstName: 'Jana', lastName: 'Nováková', userName: 'jana.novakova', userRoles: [UserRoleType.User] },
-  { id: 'usr-0003', firstName: 'Petr', lastName: 'Svoboda', userName: 'petr.svoboda', userRoles: [UserRoleType.User] },
-  { id: 'usr-0004', firstName: 'Lucie', lastName: 'Dvořáková', userName: 'lucie.dvorakova', userRoles: [UserRoleType.User] },
-  { id: 'usr-0005', firstName: 'Tomáš', lastName: 'Procházka', userName: 'tomas.prochazka', userRoles: [UserRoleType.User] },
+const USERS_SEED: MockUser[] = [
+  { id: 'usr-0001', firstName: undefined, lastName: undefined, userName: 'admin', userRoles: [UserRoleType.Admin], permissions: [] },
+  {
+    id: 'usr-0002', firstName: 'Jana', lastName: 'Nováková', userName: 'jana.novakova', userRoles: [UserRoleType.User],
+    permissions: [
+      { module: ModuleType.Orders, level: PermissionLevel.Edit },
+      { module: ModuleType.Shipments, level: PermissionLevel.Edit },
+      { module: ModuleType.Clients, level: PermissionLevel.Edit },
+      { module: ModuleType.Breweries, level: PermissionLevel.View },
+      { module: ModuleType.Drivers, level: PermissionLevel.View },
+    ],
+  },
+  {
+    id: 'usr-0003', firstName: 'Petr', lastName: 'Svoboda', userName: 'petr.svoboda', userRoles: [UserRoleType.User],
+    permissions: [
+      { module: ModuleType.Inventory, level: PermissionLevel.Edit },
+      { module: ModuleType.Deliveries, level: PermissionLevel.Edit },
+      { module: ModuleType.Breweries, level: PermissionLevel.View },
+    ],
+  },
+  {
+    id: 'usr-0004', firstName: 'Lucie', lastName: 'Dvořáková', userName: 'lucie.dvorakova', userRoles: [UserRoleType.User],
+    permissions: [
+      { module: ModuleType.Orders, level: PermissionLevel.View },
+      { module: ModuleType.Clients, level: PermissionLevel.View },
+    ],
+  },
+  { id: 'usr-0005', firstName: 'Tomáš', lastName: 'Procházka', userName: 'tomas.prochazka', userRoles: [UserRoleType.User], permissions: [] },
 ];
 
 // Three breweries; ~3-4 products each, priced per package (keg/crate/bottle)
