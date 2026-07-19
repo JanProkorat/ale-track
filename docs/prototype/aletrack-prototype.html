@@ -297,6 +297,25 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:poin
 .combo-opt.sel{color:var(--amber-700);font-weight:700;}
 .combo-opt .ck{margin-left:auto;color:var(--amber);display:inline-flex;}
 
+/* command palette (⌘K) */
+.cmdk-btn{display:flex;align-items:center;gap:9px;height:40px;padding:0 11px 0 15px;flex:0 1 340px;min-width:190px;max-width:360px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-pill);color:var(--text-3);font-family:var(--font);font-size:13.5px;transition:.15s;}
+.cmdk-btn:hover{background:var(--surface-3);border-color:var(--border-2);color:var(--text-2);}
+.cmdk-btn .lbl{flex:1;text-align:left;}
+.cmdk-kbd{font-family:var(--font);font-size:11px;font-weight:700;color:var(--text-3);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1px 6px;line-height:1.5;}
+.cmdk-scrim{align-items:flex-start;justify-content:center;}
+.cmdk-panel{margin-top:11vh;width:min(640px,94vw);background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);overflow:hidden;animation:pop .16s var(--ease);}
+.cmdk-input-wrap{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--border);color:var(--text-3);}
+.cmdk-input-wrap input{flex:1;border:0;outline:none;background:none;font-family:var(--font);font-size:16px;color:var(--text);}
+.cmdk-results{max-height:min(60vh,440px);overflow-y:auto;padding:8px;}
+.cmdk-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-radius:var(--r-sm);cursor:pointer;color:var(--text);}
+.cmdk-item.on{background:var(--amber-soft);}
+.cmdk-ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--surface-3);color:var(--text-2);flex:0 0 auto;}
+.cmdk-item.on .cmdk-ic{background:var(--amber-tint);color:var(--amber-700);}
+.cmdk-t{display:block;font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cmdk-s{display:block;color:var(--text-3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:720px){ .cmdk-btn .lbl,.cmdk-btn .cmdk-kbd{display:none;} .cmdk-btn{min-width:0;flex:0 0 auto;width:40px;justify-content:center;padding:0;} }
+
 /* animated route line */
 .route-anim{animation:dash 1.1s linear infinite;}
 @keyframes dash{to{stroke-dashoffset:-32;}}
@@ -625,7 +644,7 @@ function buildShell(){
       <header class="topbar">
         <button class="icon-btn hidebar show" data-act="toggle-mobile" title="Menu">${icon('menu',18)}</button>
         <button class="icon-btn" data-act="toggle-collapse" title="Sbalit menu">${icon('menu',18)}</button>
-        <div class="search"><span>${icon('search',17)}</span><input placeholder="Hledat objednávky, klienty, produkty…" id="globalSearch"></div>
+        <button class="cmdk-btn" data-act="cmdk" title="Hledat všude (⌘K)">${icon('search',16)}<span class="lbl">Hledat…</span><kbd class="cmdk-kbd">⌘K</kbd></button>
         <div class="spacer"></div>
         <button class="icon-btn dot-badge" data-act="reminders" title="Připomínky">${icon('bell',18)}</button>
         <button class="icon-btn" data-act="theme" id="themeBtn" title="Přepnout motiv">${icon(UIS.theme==='dark'?'sun':'moon',18)}</button>
@@ -656,6 +675,7 @@ function onShellClick(e){
   if(a==='toggle-collapse'){ UIS.collapsed=!UIS.collapsed; $('#sidebar').classList.toggle('collapsed',UIS.collapsed); }
   else if(a==='toggle-mobile'){ UIS.mobileOpen=!UIS.mobileOpen; $('#sidebar').classList.toggle('mobile-open',UIS.mobileOpen); }
   else if(a==='theme'){ setTheme(UIS.theme==='dark'?'light':'dark'); }
+  else if(a==='cmdk'){ openCommandPalette(); }
   else if(a==='reminders'){ openReminders(); }
   else if(a==='me'){ openAccount(); }
 }
@@ -2220,36 +2240,64 @@ function renderPermMatrix(){
 }
 
 /* ============ GLOBAL SEARCH ============ */
-function wireGlobalSearch(){
-  const inp=$('#globalSearch'); if(!inp) return;
-  inp.oninput=()=>{ const q=inp.value.trim().toLowerCase(); const box=$('#gsearch-box'); if(box)box.remove();
-    if(q.length<2) return;
-    const res=[];
-    DB.clients.forEach(c=>{ if(canSee('clients')&&c.name.toLowerCase().includes(q)) res.push(['client',c.name,L.region[c.region],'clients/'+c.id]); });
-    DB.breweries.forEach(b=>{ if(canSee('breweries')&&b.name.toLowerCase().includes(q)) res.push(['brewery',b.name,'Pivovar','breweries/'+b.id]); });
-    DB.products.forEach(p=>{ if(canSee('breweries')&&p.name.toLowerCase().includes(q)){ const b=breweryById(p.breweryId); res.push(['box',p.name,b.name+' · '+money(p.priceWithVat),'breweries/'+b.id+'?tab=cenik']); } });
-    DB.orders.forEach(o=>{ if(canSee('orders')&&(o.number||'').toLowerCase().includes(q)){ const c=clientById(o.clientId); res.push(['order',o.number,c.name,'orders/'+o.id]); } });
-    const box2=document.createElement('div'); box2.id='gsearch-box';
-    box2.style.cssText='position:absolute;top:56px;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);max-height:340px;overflow-y:auto;z-index:40;padding:6px';
-    box2.innerHTML=res.length?res.slice(0,8).map(([ic,t,sub,path])=>`<a href="#/${path}" class="row gap12" style="padding:9px 11px;border-radius:var(--r-sm)" onclick="setTimeout(()=>{$('#gsearch-box')&&$('#gsearch-box').remove();$('#globalSearch').value='';},0)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='none'">
-        <span style="color:var(--text-3)">${icon(ic,16)}</span><div style="flex:1"><div class="t-strong" style="font-size:13px">${esc(t)}</div><div class="t-mut" style="font-size:11.5px">${esc(sub)}</div></div>${icon('chevR',14)}</a>`).join('')
-      :`<div class="t-mut" style="padding:14px;text-align:center;font-size:13px">Nic nenalezeno pro „${esc(inp.value)}"</div>`;
-    inp.parentElement.style.position='relative'; inp.parentElement.appendChild(box2);
-  };
-  document.addEventListener('click',e=>{ if(!e.target.closest('.search')){ const b=$('#gsearch-box'); if(b)b.remove(); } });
+/* ============ COMMAND PALETTE (⌘K) ============ */
+const CMDK={ items:[], sel:0 };
+function cmdkSearch(q){
+  q=q.trim().toLowerCase(); const res=[];
+  if(!q){ // quick nav to modules when empty
+    NAV.forEach(sec=>sec.items.forEach(([m,ic,lbl])=>{ if(canSee(m)) res.push({ic,title:lbl,sub:'Přejít do modulu',path:m,kind:'Modul'}); }));
+    return res;
+  }
+  if(canSee('orders')) DB.orders.forEach(o=>{ const c=clientById(o.clientId); if((o.number||'').toLowerCase().includes(q)||c.name.toLowerCase().includes(q))
+    res.push({ic:'order',title:o.number,sub:c.name+' · '+(L.orderState[o.state]||''),path:'orders/'+o.id,kind:'Objednávka'}); });
+  if(canSee('clients')) DB.clients.forEach(c=>{ if(c.name.toLowerCase().includes(q)||(c.businessName||'').toLowerCase().includes(q))
+    res.push({ic:'client',title:c.name,sub:(c.businessName?c.businessName+' · ':'')+(L.region[c.region]||''),path:'clients/'+c.id,kind:'Klient'}); });
+  if(canSee('breweries')) DB.breweries.forEach(b=>{ if(b.name.toLowerCase().includes(q)) res.push({ic:'brewery',title:b.name,sub:'Pivovar',path:'breweries/'+b.id,kind:'Pivovar'}); });
+  if(canSee('breweries')) DB.products.forEach(p=>{ if(p.name.toLowerCase().includes(q)){ const b=breweryById(p.breweryId);
+    res.push({ic:'box',title:p.name+(p.packageSize!=null?' ('+fmtLiters(p.packageSize)+')':''),sub:b.name+' · '+money(p.priceWithVat),path:'breweries/'+b.id+'?tab=cenik',kind:'Produkt'}); } });
+  if(canSee('shipments')) DB.shipments.forEach(s=>{ if((s.number||'').toLowerCase().includes(q)||s.name.toLowerCase().includes(q))
+    res.push({ic:'ship',title:s.name,sub:s.number+' · '+(L.shipState[s.state]||''),path:'shipments/'+s.id,kind:'Vývoz'}); });
+  if(canSee('deliveries')) DB.deliveries.forEach(d=>{ if((d.number||'').toLowerCase().includes(q))
+    res.push({ic:'import',title:d.number,sub:'Dovoz · '+(L.deliveryState[d.state]||''),path:'deliveries/'+d.id,kind:'Dovoz'}); });
+  return res.slice(0,10);
 }
+function openCommandPalette(){
+  $('#overlay').innerHTML=`<div class="scrim cmdk-scrim" data-scrim><div class="cmdk-panel" role="dialog" aria-label="Hledat">
+    <div class="cmdk-input-wrap">${icon('search',18)}<input id="cmdk-input" autocomplete="off" placeholder="Hledat objednávky, klienty, produkty, pivovary…"><kbd class="cmdk-kbd">ESC</kbd></div>
+    <div id="cmdk-results" class="cmdk-results"></div></div></div>`;
+  $('.cmdk-scrim').addEventListener('mousedown',e=>{ if(e.target===e.currentTarget) closeOverlay(); });
+  const inp=$('#cmdk-input');
+  inp.oninput=()=>{ CMDK.sel=0; renderCmdk(inp.value); };
+  inp.onkeydown=e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); CMDK.sel=Math.min(CMDK.sel+1,CMDK.items.length-1); paintCmdkSel(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); CMDK.sel=Math.max(CMDK.sel-1,0); paintCmdkSel(); }
+    else if(e.key==='Enter'){ e.preventDefault(); const it=CMDK.items[CMDK.sel]; if(it) cmdkGo(it.path); }
+    else if(e.key==='Escape'){ closeOverlay(); }
+  };
+  renderCmdk(''); inp.focus();
+  document.addEventListener('keydown',escClose);
+}
+function renderCmdk(q){
+  CMDK.items=cmdkSearch(q); const box=$('#cmdk-results'); if(!box) return;
+  if(!CMDK.items.length){ box.innerHTML=`<div class="t-mut" style="padding:26px;text-align:center;font-size:13.5px">Nic nenalezeno pro „${esc(q)}"</div>`; return; }
+  box.innerHTML=CMDK.items.map((it,i)=>`<button class="cmdk-item ${i===CMDK.sel?'on':''}" data-i="${i}" onmousedown="event.preventDefault();cmdkGo('${it.path}')" onmouseenter="CMDK.sel=${i};paintCmdkSel()">
+    <span class="cmdk-ic">${icon(it.ic,17)}</span>
+    <span style="flex:1;min-width:0"><span class="cmdk-t">${esc(it.title)}</span><span class="cmdk-s">${esc(it.sub)}</span></span>
+    <span class="tag">${esc(it.kind)}</span></button>`).join('');
+  paintCmdkSel();
+}
+function paintCmdkSel(){ $$('.cmdk-item').forEach((el,i)=>{ el.classList.toggle('on',i===CMDK.sel); if(i===CMDK.sel&&el.scrollIntoView) el.scrollIntoView({block:'nearest'}); }); }
+function cmdkGo(path){ closeOverlay(); go(path); }
 
 /* ============ BOOT ============ */
 function boot(){
   document.documentElement.setAttribute('data-theme',UIS.theme);
-  buildShell(); wireGlobalSearch(); initCombos();
+  buildShell(); initCombos();
   window.addEventListener('hashchange',renderRoute);
+  window.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); if($('#cmdk-input')) closeOverlay(); else openCommandPalette(); } });
   if(!location.hash) location.hash='#/dashboard';
   renderRoute();
 }
-// re-wire global search whenever shell rebuilds
-const _buildShell=buildShell;
-buildShell=function(){ _buildShell(); wireGlobalSearch(); };
 boot();
 
 </script>
