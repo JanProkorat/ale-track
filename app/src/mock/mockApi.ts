@@ -26,6 +26,7 @@ import {
   DriverAvailabilityDto,
   type CreateDriverDto,
   type UpdateDriverDto,
+  NumberOfRecordsInEachModuleDto,
 } from 'src/generated/api-client';
 import { db, mockId, mockDelay, MockNotFoundError, type MockDriverAvailability } from './db';
 
@@ -248,6 +249,27 @@ const impl: Partial<IClient> = {
     const i = db.drivers.findIndex((x) => x.id === id);
     if (i >= 0) db.drivers.splice(i, 1);
     return mockDelay(id);
+  },
+
+  // ---- Reports (dashboard KPI tiles) ----------------------------------------
+  getNumberOfRecordsInEachModuleEndpoint() {
+    const inventoryItemsCount = db.inventory.reduce((sum, section) => sum + section.items.length, 0);
+    const breweriesCount = new Set(db.products.map((p) => p.breweryName)).size;
+    return mockDelay(
+      new NumberOfRecordsInEachModuleDto({
+        // Not yet backed by a demo collection — plausible fixed numbers per spec.
+        clientsCount: 24,
+        ordersCount: 37,
+        outgoingShipmentsCount: 9,
+        productDeliveriesCount: 6,
+        // Derived from the in-memory demo store.
+        breweriesCount,
+        inventoryItemsCount,
+        driversCount: db.drivers.length,
+        vehiclesCount: db.vehicles.length,
+        usersCount: db.users.length,
+      })
+    );
   },
 };
 
