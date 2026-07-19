@@ -236,13 +236,16 @@ textarea.input{height:auto;padding:10px 12px;resize:vertical;min-height:78px;lin
 .brew-tabbar{display:flex;align-items:stretch;gap:12px;border-bottom:2px solid var(--border);}
 .brew-tabs{display:flex;gap:4px;overflow-x:auto;flex:1;}
 .brew-tabs::-webkit-scrollbar{height:0;}
-.brew-tab{display:flex;align-items:center;gap:9px;padding:13px 17px;font-weight:700;font-size:14.5px;color:var(--text-2);
+.brew-tab{display:flex;align-items:center;gap:9px;padding:13px 17px;font-weight:700;font-size:14.5px;color:var(--text-2);cursor:pointer;
   border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;border-radius:var(--r-sm) var(--r-sm) 0 0;transition:.15s;}
 .brew-tab .dot{width:11px;height:11px;border-radius:4px;background:var(--bc,#ccc);flex:0 0 auto;box-shadow:0 0 0 3px color-mix(in srgb,var(--bc) 18%,transparent);}
 .brew-tab .cnt{background:var(--surface-3);color:var(--text-3);font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;}
 .brew-tab:hover{color:var(--text);background:var(--surface-2);}
 .brew-tab.on{color:var(--text);border-bottom-color:var(--bc);background:var(--surface-2);}
 .brew-tab.on .cnt{background:color-mix(in srgb,var(--bc) 18%,transparent);color:var(--text);}
+.brew-tab-act{display:flex;gap:3px;margin-left:6px;padding-left:8px;border-left:1px solid var(--border-2);}
+.brew-tab-act .icon-btn{width:28px;height:28px;border-color:transparent;background:transparent;}
+.brew-tab-act .icon-btn:hover{background:var(--surface-3);border-color:var(--border);}
 .brew-add{flex:0 0 auto;align-self:center;margin-bottom:6px;}
 
 /* ---------- Empty / misc ---------- */
@@ -964,8 +967,11 @@ function breweriesModule(id){
   const rems=DB.reminders.filter(r=>r.kind==='Brewery'&&r.sectionId===id);
   // top brewery tab bar
   const tabbar=`<div class="brew-tabbar">
-    <div class="brew-tabs">${breweries.map(x=>`<a class="brew-tab ${x.id===id?'on':''}" href="#/breweries/${x.id}" style="--bc:${x.color}">
-      <span class="dot"></span>${esc(x.name)}<span class="cnt">${productsOf(x.id).length}</span></a>`).join('')}</div>
+    <div class="brew-tabs">${breweries.map(x=>{ const on=x.id===id;
+      return `<div class="brew-tab ${on?'on':''}" style="--bc:${x.color}" onclick="go('breweries/${x.id}')">
+        <span class="dot"></span><span class="nm">${esc(x.name)}</span><span class="cnt">${productsOf(x.id).length}</span>
+        ${on&&ed?`<span class="brew-tab-act"><button class="icon-btn" title="Upravit" onclick="event.stopPropagation();breweryForm('${x.id}')">${icon('edit',13)}</button>
+          <button class="icon-btn" title="Smazat pivovar" onclick="event.stopPropagation();delBrewery('${x.id}')">${icon('trash',13)}</button></span>`:''}</div>`; }).join('')}</div>
     ${ed?`<button class="btn btn-primary btn-sm brew-add" onclick="breweryForm(null)">${icon('plus',15)}Nový pivovar</button>`:''}</div>`;
   // sub tabs (info / ceník / připomínky / poznámky)
   const subTab=(key,label,ic,cnt)=>`<button class="${tab===key?'on':''}" onclick="location.hash='#/breweries/${id}?tab=${key}';renderRoute()">${icon(ic,15)}${label}${cnt!=null?`<span class="cnt">${cnt}</span>`:''}</button>`;
@@ -985,14 +991,10 @@ function breweriesModule(id){
   else if(tab==='reminders'){ body=remindersView(rems,ed,'Brewery',id); }
   else { body=notesView(b,'brewery'); }
   return `<div class="page">
-    <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:16px">
       <div><div class="eyebrow">Evidence</div><h1 style="font-size:22px">Pivovary</h1></div></div>
     ${tabbar}
-    <div class="page-head" style="margin-top:22px"><div class="titles"><div class="eyebrow" style="color:${b.color}">Pivovar · ${esc(b.officialAddress.city)}</div><h1>${esc(b.name)}</h1>
-      <div class="sub">${guidNote(b.id)}</div></div>
-      <div class="actions">${ed?`<button class="btn btn-ghost" onclick="breweryForm('${id}')">${icon('edit',16)}Upravit</button>
-        <button class="btn btn-danger btn-icon" onclick="delBrewery('${id}')" title="Smazat">${icon('trash',16)}</button>`:''}</div></div>
-    ${subtabs}${body}</div>`;
+    <div style="margin-top:20px">${subtabs}${body}</div></div>`;
 }
 function curId(){ return location.hash.replace(/^#\//,'').split('/')[1].split('?')[0]; }
 
@@ -1161,24 +1163,44 @@ function delNote(type,id){ const e=type==='brewery'?breweryById(curId()):clientB
 function notFound(what){ return `<div class="page"><div class="empty"><div>${icon('warnTri',40)}</div><div class="t">${what} nenalezen</div>
   <a class="btn btn-ghost btn-sm" href="#/dashboard" style="margin-top:12px">Zpět</a></div></div>`; }
 
-/* ============ MODULE: KLIENTI (CLIENTS) ============ */
+/* ============ MODULE: KLIENTI (CLIENTS) — grouped by region ============ */
+let CL_SEARCH='', CL_REGION='all';
 function viewClients(){
-  const rows=DB.clients.map(c=>{
-    const orders=DB.orders.filter(o=>o.clientId===c.id&&o.state!=='Cancelled');
-    return `<tr class="clickable" onclick="go('clients/${c.id}')">
-      <td><div class="row-lead">${avatar(c.id,initials(c.name))}
-        <div><div class="t-strong">${esc(c.name)}</div><div class="t-mut" style="font-size:12px">${esc(c.businessName||'')}</div></div></div></td>
-      <td><span class="tag">${icon('pin',12)}${L.region[c.region]||c.region}</span></td>
-      <td>${fmtAddr(c.officialAddress)}</td>
-      <td class="num tnum">${orders.length}</td>
-      <td>${c.contacts.length?c.contacts.map(ct=>`<span class="tag" title="${esc(ct.value)}">${icon(ct.type==='Email'?'mail':'phone',11)}</span>`).join(' '):'<span class="t-mut">—</span>'}</td>
-      <td style="text-align:right">${icon('chevR',16)}</td></tr>`;
-  }).join('');
+  const counts={}; DB.clients.forEach(c=>counts[c.region]=(counts[c.region]||0)+1);
+  const regionOpts=[['all','Všechny regiony'],...Object.keys(L.region).filter(r=>counts[r]).map(r=>[r,`${L.region[r]} (${counts[r]})`])];
+  AFTER=clWire;
   return `<div class="page">
-    ${pageHead('Evidence','Klienti','Odběratelé, jejich adresy a kontakty.', canEdit('clients')?`<button class="btn btn-primary" onclick="clientForm(null)">${icon('plus',17)}Nový klient</button>`:'')}
-    <div class="toolbar">${toolbarSearch('Hledat klienta…','cl-search')}<span class="count-note">${DB.clients.length} klientů</span></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Klient</th><th>Region</th><th>Sídlo</th><th style="text-align:right">Objednávky</th><th>Kontakty</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table></div></div>`;
+    ${pageHead('Evidence','Klienti','Odběratelé sdružení do regionů — adresy, kontakty a objednávky.', canEdit('clients')?`<button class="btn btn-primary" onclick="clientForm(null)">${icon('plus',17)}Nový klient</button>`:'')}
+    <div class="toolbar">
+      <div class="fld" style="min-width:220px">${icon('search',16)}<input id="cl-search" placeholder="Hledat klienta…" value="${esc(CL_SEARCH)}"></div>
+      <div style="width:210px">${sel('cl-region-filter',regionOpts,CL_REGION)}</div>
+      <span class="count-note" id="cl-count">${clFiltered().length} klientů</span></div>
+    <div id="cl-results">${clResults()}</div></div>`;
+}
+function clWire(){ const s=$('#cl-search'); if(s) s.oninput=()=>{ CL_SEARCH=s.value; clRerender(); };
+  const r=$('#cl-region-filter'); if(r) r.onchange=()=>{ CL_REGION=r.value; clRerender(); }; }
+function clRerender(){ const el=$('#cl-results'); if(el) el.innerHTML=clResults(); const c=$('#cl-count'); if(c) c.textContent=clFiltered().length+' klientů'; }
+function clFiltered(){ const q=CL_SEARCH.toLowerCase().trim();
+  return DB.clients.filter(c=>(CL_REGION==='all'||c.region===CL_REGION)&&(!q||c.name.toLowerCase().includes(q)||(c.businessName||'').toLowerCase().includes(q))); }
+function clResults(){
+  const list=clFiltered();
+  if(!list.length) return `<div class="empty"><div>${icon('client',34)}</div><div class="t">Žádní klienti</div>
+    ${(CL_SEARCH||CL_REGION!=='all')?`<button class="btn btn-sm btn-ghost" style="margin-top:12px" onclick="CL_SEARCH='';CL_REGION='all';renderRoute()">Zrušit filtry</button>`:''}</div>`;
+  const byRegion={}; list.forEach(c=>{ (byRegion[c.region]=byRegion[c.region]||[]).push(c); });
+  return Object.keys(L.region).filter(r=>byRegion[r]).map(r=>{
+    const rows=byRegion[r].map(c=>{ const orders=DB.orders.filter(o=>o.clientId===c.id&&o.state!=='Cancelled');
+      return `<tr class="clickable" onclick="go('clients/${c.id}')">
+        <td><div class="row-lead">${avatar(c.id,initials(c.name))}
+          <div><div class="t-strong">${esc(c.name)}</div><div class="t-mut" style="font-size:12px">${esc(c.businessName||'')}</div></div></div></td>
+        <td>${fmtAddr(c.officialAddress)}</td>
+        <td class="num tnum">${orders.length}</td>
+        <td>${c.contacts.length?c.contacts.map(ct=>`<span class="tag" title="${esc(ct.value)}">${icon(ct.type==='Email'?'mail':'phone',11)}${esc(ct.value)}</span>`).join(' '):'<span class="t-mut">—</span>'}</td>
+        <td style="text-align:right">${icon('chevR',16)}</td></tr>`; }).join('');
+    return `<div style="margin-bottom:10px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:18px 0 8px">
+      <span style="color:var(--amber-700)">${icon('pin',14)}</span>${L.region[r]||r}<span class="t-mut">${byRegion[r].length} ${plural(byRegion[r].length,'klient','klienti','klientů')}</span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Klient</th><th>Sídlo</th><th style="text-align:right">Objednávky</th><th>Kontakty</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  }).join('');
 }
 function viewClientDetail(id){
   id=id.split('?')[0]; const c=clientById(id); if(!c) return notFound('Klient');
@@ -1194,12 +1216,17 @@ function viewClientDetail(id){
     ${clTab('notes','Poznámky','note',tab)}</div>`;
   let body='';
   if(tab==='info'){
+    const addrCard=(title,ic,a,fallback)=>`<div class="card"><div class="card-head">${icon(ic,16)}<h3>${title}</h3>
+        ${a&&a.latitude!=null?`<span class="tag" style="margin-left:auto">${icon('pin',11)}GPS</span>`:''}</div>
+      <div class="card-pad" style="display:flex;flex-direction:column;gap:12px">
+        ${a?`<div class="addr">${fmtAddrFull(a)}</div>${pointMap(a.latitude,a.longitude,{color:'#0E7C9B'})}`:`<div class="t-mut">${fallback}</div>`}</div></div>`;
     body=`<div class="grid" style="grid-template-columns:1fr 1fr">
-      <div class="card"><div class="card-head"><h3>Fakturační adresa</h3></div><div class="card-pad addr">${fmtAddrFull(c.officialAddress)}</div></div>
-      <div class="card"><div class="card-head"><h3>Kontaktní adresa</h3></div><div class="card-pad addr">${c.contactAddress?fmtAddrFull(c.contactAddress):'<span class="t-mut">Shodná s fakturační</span>'}</div></div>
+      ${addrCard('Fakturační adresa','wallet',c.officialAddress,'')}
+      ${addrCard('Kontaktní adresa','pin',c.contactAddress,'Shodná s fakturační adresou.')}
       <div class="card"><div class="card-head"><h3>Obchodní údaje</h3></div><div class="card-pad stack" style="gap:12px">
         <div class="kv"><span class="k">Obchodní název</span><span class="v">${esc(c.businessName||'—')}</span></div>
-        <div class="kv"><span class="k">Region</span><span class="v">${L.region[c.region]||c.region}</span></div></div></div>
+        <div class="kv"><span class="k">Region</span><span class="v"><span class="tag">${icon('pin',11)}${L.region[c.region]||c.region}</span></span></div>
+        <div class="kv"><span class="k">Identifikátor</span><span class="v">${guidNote(c.id)}</span></div></div></div>
       <div class="card"><div class="card-head"><h3>Aktivita</h3></div><div class="card-pad">
         <div class="tiles" style="grid-template-columns:1fr 1fr">
           ${miniStat('Objednávek',orders.length,'order')}
@@ -1548,6 +1575,23 @@ function routeMap(stopPts,{h=380,loop=true,animate=true}={}){
   </div>`;
 }
 function stopAddress(st){ const cl=clientById(st.clientId); return st.addressKind==='Contact'&&cl.contactAddress?cl.contactAddress:cl.officialAddress; }
+/* single-point mini map (for client addresses) */
+function pointMap(lat,lng,{color='#F08C00',h=190}={}){
+  if(lat==null||lng==null) return `<div style="height:${h}px;display:grid;place-items:center;border-radius:var(--r);background:var(--surface-2);border:1px dashed var(--border-2);color:var(--text-3);font-size:12.5px;gap:6px"><span>${icon('pin',20)}</span>Bez GPS souřadnic</div>`;
+  const W=820,H=560,pad=64; const p=projP(lat,lng,W,H,pad);
+  const cities=[['Žitava',50.897,14.807],['Zhořelec',51.152,14.988],['Liberec',50.770,15.058],['Hrádek n.N.',50.853,14.844],['Frýdlant',50.921,15.079]];
+  const cityDots=cities.map(([n,la,lo])=>{const q=projP(la,lo,W,H,pad);return `<g opacity=".5"><circle cx="${q.x}" cy="${q.y}" r="2.5" fill="var(--text-3)"/><text x="${q.x+6}" y="${q.y+3}" font-size="11.5" fill="var(--text-3)" font-weight="600">${n}</text></g>`;}).join('');
+  return `<div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:linear-gradient(160deg,var(--surface-2),var(--surface-3))">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="height:${h}px;display:block" preserveAspectRatio="xMidYMid slice">
+      <defs><pattern id="pgrid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="var(--border)" stroke-width="1" opacity=".5"/></pattern></defs>
+      <rect width="${W}" height="${H}" fill="url(#pgrid)"/>
+      <path d="M120 ${H} Q 300 ${H*0.55} 520 ${H*0.62} T ${W} ${H*0.35}" fill="none" stroke="var(--info)" stroke-width="6" opacity=".18" stroke-linecap="round"/>
+      ${cityDots}
+      <g><circle cx="${p.x}" cy="${p.y}" r="30" fill="${color}" opacity=".16"/>
+        <path d="M${p.x} ${p.y-22} c-8 0 -15 7 -15 15 c0 11 15 25 15 25 s15 -14 15 -25 c0 -8 -7 -15 -15 -15 z" fill="${color}" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="${p.x}" cy="${p.y-7}" r="5" fill="#fff"/></g>
+    </svg></div>`;
+}
 function shipStopPoints(stops){ return stops.slice().sort((a,b)=>a.order-b.order).map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
   return { lat:a.latitude, lng:a.longitude, label:cl.name, seq:i+1, color:colorFor(cl.id) }; }); }
 
