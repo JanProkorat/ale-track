@@ -152,7 +152,7 @@ export function UsersPage() {
       <Alert
         severity="warning"
         icon={<ShieldIcon />}
-        sx={{ mb: 2, bgcolor: (t) => t.palette.brand.amberSoft, color: 'text.secondary', border: 1, borderColor: (t) => t.palette.brand.amberTint }}
+        sx={{ mb: 2, bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'text.secondary', border: 1, borderColor: (t) => t.vars!.palette.brand.amberTint }}
       >
         <strong>Granulární oprávnění.</strong> U každého uživatele lze nastavit přístup ke každému
         modulu zvlášť — bez přístupu / jen čtení / úpravy.

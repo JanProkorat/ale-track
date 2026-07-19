@@ -81,7 +81,9 @@ export const theme = createTheme({
       styleOverrides: {
         root: ({ theme: t }) => ({
           borderRadius: 16,
-          border: `1px solid ${t.palette.divider}`,
+          // theme.vars.* is scheme-reactive under cssVariables; theme.palette.*
+          // would freeze to the light value and give white borders in dark mode.
+          border: `1px solid ${t.vars.palette.divider}`,
           backgroundImage: 'none',
         }),
       },
@@ -90,7 +92,7 @@ export const theme = createTheme({
     MuiTooltip: {
       styleOverrides: {
         tooltip: ({ theme: t }) => ({
-          backgroundColor: t.palette.brand.navy,
+          backgroundColor: t.vars.palette.brand.navy,
           fontSize: 12,
         }),
       },

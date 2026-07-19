@@ -119,7 +119,7 @@ export function DriversPage() {
                 size="small"
                 onChange={(_e, next: DriverView | null) => next && setView(next)}
                 sx={{
-                  bgcolor: (t) => t.palette.brand.surface3,
+                  bgcolor: (t) => t.vars!.palette.brand.surface3,
                   p: 0.375,
                   borderRadius: 2,
                   '& .MuiToggleButtonGroup-grouped': {

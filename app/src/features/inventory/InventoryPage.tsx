@@ -133,7 +133,7 @@ function StatCell({
           display: 'grid',
           placeItems: 'center',
           flexShrink: 0,
-          bgcolor: (t) => (critical ? t.palette.brand.critTint : t.palette.brand.greyTint),
+          bgcolor: (t) => (critical ? t.vars!.palette.brand.critTint : t.vars!.palette.brand.greyTint),
           color: critical ? 'error.main' : 'text.secondary',
           '& svg': { fontSize: 18 },
         }}

@@ -114,7 +114,7 @@ function ProductRow({
     <Box sx={{
       display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderRadius: 2,
       borderColor: qty > 0 ? 'warning.main' : 'divider',
-      bgcolor: (t) => (qty > 0 ? t.palette.brand.amberTint : 'transparent'),
+      bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent'),
     }}
     >
       <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
@@ -161,7 +161,7 @@ function VariantCard({
               direction="row"
               spacing={1}
               alignItems="center"
-              sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.palette.brand.amberTint : 'transparent') }}
+              sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}
             >
               <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
               <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
@@ -561,7 +561,7 @@ export function OrderEditor({
                     direction="row"
                     spacing={1.25}
                     alignItems="center"
-                    sx={{ p: 1.25, border: 1, borderColor: 'warning.main', borderRadius: 1.5, bgcolor: (t) => t.palette.brand.amberTint }}
+                    sx={{ p: 1.25, border: 1, borderColor: 'warning.main', borderRadius: 1.5, bgcolor: (t) => t.vars!.palette.brand.amberTint }}
                   >
                     <Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12, bgcolor: 'background.paper' }}>
                       {clientInitials(selectedClient.name)}

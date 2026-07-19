@@ -36,7 +36,7 @@ function PriceCell({ p, editable, onEdit }: { p: P | undefined; editable: boolea
       onClick={editable ? () => onEdit(p) : undefined}
       sx={{
         cursor: editable ? 'pointer' : 'default',
-        '&:hover': editable ? { bgcolor: (t) => t.palette.brand.amberSoft, boxShadow: (t) => `inset 0 0 0 1px ${t.palette.brand.amberTint}` } : undefined,
+        '&:hover': editable ? { bgcolor: (t) => t.vars!.palette.brand.amberSoft, boxShadow: (t) => `inset 0 0 0 1px ${t.vars!.palette.brand.amberTint}` } : undefined,
       }}
     >
       <Typography sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
@@ -114,7 +114,7 @@ function KindSection({ kind, items, editable, onEdit }: { kind: string; items: P
                           <Chip
                             size="small"
                             label={`${variants.length} ${plural(variants.length, 'velikost', 'velikosti', 'velikostí')}`}
-                            sx={{ height: 20, fontSize: 11, fontWeight: 700, color: 'primary.dark', bgcolor: (t) => t.palette.brand.amberTint }}
+                            sx={{ height: 20, fontSize: 11, fontWeight: 700, color: 'primary.dark', bgcolor: (t) => t.vars!.palette.brand.amberTint }}
                           />
                         )}
                       </Stack>
@@ -168,7 +168,7 @@ export function Cenik({
           <Button
             startIcon={<WalletIcon />}
             onClick={() => setBulkOpen(true)}
-            sx={{ bgcolor: (t) => t.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.palette.brand.amberTint } }}
+            sx={{ bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint } }}
           >
             Hromadná úprava cen
           </Button>

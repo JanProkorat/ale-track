@@ -59,7 +59,7 @@ export function DataTable<T>({
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   whiteSpace: 'nowrap',
-                  bgcolor: (t) => t.palette.brand.surface2,
+                  bgcolor: (t) => t.vars!.palette.brand.surface2,
                   borderBottom: '1px solid',
                   borderColor: 'divider',
                   ...(c.hideOnMobile && { display: { xs: 'none', sm: 'table-cell' } }),

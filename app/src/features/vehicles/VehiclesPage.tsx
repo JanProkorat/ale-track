@@ -142,7 +142,7 @@ function VehicleTile({
             display: 'grid',
             placeItems: 'center',
             flexShrink: 0,
-            bgcolor: (t) => t.palette.brand.infoTint,
+            bgcolor: (t) => t.vars!.palette.brand.infoTint,
             color: 'info.main',
             '& svg': { fontSize: 22 },
           }}

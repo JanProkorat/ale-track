@@ -37,10 +37,10 @@ function ReminderCard({
   const overdue = !resolved && r.occurrenceDate != null && dayjs(r.occurrenceDate).isBefore(dayjs(), 'day');
 
   const iconSx = resolved
-    ? { bg: (t: { palette: { brand: { okTint: string } } }) => t.palette.brand.okTint, fg: 'success.main' as const }
+    ? { bg: 'brand.okTint', fg: 'success.main' as const }
     : overdue
-    ? { bg: (t: { palette: { brand: { critTint: string } } }) => t.palette.brand.critTint, fg: 'error.main' as const }
-    : { bg: (t: { palette: { brand: { amberSoft: string } } }) => t.palette.brand.amberSoft, fg: 'primary.dark' as const };
+    ? { bg: 'brand.critTint', fg: 'error.main' as const }
+    : { bg: 'brand.amberSoft', fg: 'primary.dark' as const };
 
   return (
     <Card sx={{ p: 2, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
@@ -78,7 +78,7 @@ function ReminderCard({
               startIcon={<CheckIcon />}
               disabled={resolving}
               onClick={() => onResolve(r)}
-              sx={{ bgcolor: (t) => t.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.palette.brand.amberTint } }}
+              sx={{ bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint } }}
             >
               Vyřešit
             </Button>

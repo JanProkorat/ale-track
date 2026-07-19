@@ -55,7 +55,7 @@ export function StatCard({
             display: 'grid',
             placeItems: 'center',
             flexShrink: 0,
-            bgcolor: (t) => t.palette.brand[TONE_KEY[tone]],
+            bgcolor: (t) => t.vars!.palette.brand[TONE_KEY[tone]],
             color: TONE_FG[tone],
             '& svg': { fontSize: 22 },
           }}

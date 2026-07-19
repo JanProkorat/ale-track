@@ -148,7 +148,7 @@ export function OrderDetail({
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Klient</Typography>
             </Stack>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 2.5 }}>
-              <Box sx={{ width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: (t) => t.palette.brand.infoTint, color: 'info.main' }}>
+              <Box sx={{ width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: (t) => t.vars!.palette.brand.infoTint, color: 'info.main' }}>
                 <LocalMallOutlinedIcon fontSize="small" />
               </Box>
               <Typography sx={{ fontWeight: 700 }}>{order.client?.name ?? '—'}</Typography>

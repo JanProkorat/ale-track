@@ -25,7 +25,7 @@ export function SegControl<T extends string>({
         gap: '2px',
         p: '3px',
         borderRadius: '8px',
-        bgcolor: (t) => t.palette.brand.surface3,
+        bgcolor: (t) => t.vars!.palette.brand.surface3,
         border: 1,
         borderColor: 'divider',
       }}

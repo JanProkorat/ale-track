@@ -26,7 +26,7 @@ function CountBadge({ n, active, color }: { n: number; active: boolean; color: s
       component="span"
       sx={{
         px: 0.9, py: 0.1, borderRadius: 999, fontSize: 11.5, fontWeight: 700,
-        bgcolor: (t) => (active ? alpha(color, 0.18) : t.palette.brand.greyTint),
+        bgcolor: (t) => (active ? alpha(color, 0.18) : t.vars!.palette.brand.greyTint),
         color: active ? 'text.primary' : 'text.secondary',
       }}
     >
@@ -121,10 +121,10 @@ export function BreweriesPage() {
                         borderBottom: '3px solid',
                         borderColor: active ? color : 'transparent',
                         mb: '-2px',
-                        bgcolor: active ? (t) => t.palette.brand.surface2 : 'transparent',
+                        bgcolor: active ? (t) => t.vars!.palette.brand.surface2 : 'transparent',
                         color: active ? 'text.primary' : 'text.secondary',
                         transition: 'background .15s, color .15s',
-                        '&:hover': { color: 'text.primary', bgcolor: (t) => (active ? t.palette.brand.surface2 : t.palette.action.hover) },
+                        '&:hover': { color: 'text.primary', bgcolor: (t) => (active ? t.vars!.palette.brand.surface2 : t.vars!.palette.action.hover) },
                       }}
                     >
                       <Box sx={{ width: 11, height: 11, borderRadius: '4px', bgcolor: color, flexShrink: 0, boxShadow: `0 0 0 3px ${alpha(color, 0.18)}` }} />

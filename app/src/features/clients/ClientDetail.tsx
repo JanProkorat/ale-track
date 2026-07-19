@@ -86,7 +86,7 @@ function ContactTile({ c }: { c: ClientContactDto }) {
       <Box
         sx={{
           width: 38, height: 38, borderRadius: 2, display: 'grid', placeItems: 'center', flexShrink: 0,
-          bgcolor: (t) => t.palette.brand.infoTint, color: 'info.main', '& svg': { fontSize: 18 },
+          bgcolor: (t) => t.vars!.palette.brand.infoTint, color: 'info.main', '& svg': { fontSize: 18 },
         }}
       >
         {isEmail ? <MailIcon /> : <PhoneIcon />}

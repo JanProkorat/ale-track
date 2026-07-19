@@ -3,7 +3,7 @@ import { type Theme } from '@mui/material/styles';
 import { type StatusTone } from 'src/lib/labels';
 
 function toneColors(theme: Theme, tone: StatusTone): { bg: string; fg: string } {
-  const b = theme.palette.brand;
+  const b = theme.vars!.palette.brand;
   switch (tone) {
     case 'amber':
       return { bg: b.amberTint, fg: b.amberStrong };

@@ -109,7 +109,7 @@ export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListIte
                   py: 1,
                   borderBottom: '1px solid',
                   borderColor: 'divider',
-                  bgcolor: isToday ? (t) => t.palette.brand.amberSoft : 'transparent',
+                  bgcolor: isToday ? (t) => t.vars!.palette.brand.amberSoft : 'transparent',
                 }}
               >
                 <Typography sx={{ fontSize: 11, textTransform: 'uppercase', color: 'text.disabled', fontWeight: 700 }}>
@@ -120,7 +120,7 @@ export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListIte
                     fontWeight: 800,
                     fontSize: 16,
                     fontVariantNumeric: 'tabular-nums',
-                    color: isToday ? (t) => t.palette.brand.amberStrong : 'text.primary',
+                    color: isToday ? (t) => t.vars!.palette.brand.amberStrong : 'text.primary',
                   }}
                 >
                   {day.date()}.
@@ -152,7 +152,7 @@ export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListIte
               height: 26,
               px: 1.25,
               borderRadius: 1,
-              bgcolor: (t) => t.palette.brand.greyTint,
+              bgcolor: (t) => t.vars!.palette.brand.greyTint,
               fontSize: 12.5,
               fontWeight: 600,
             }}
