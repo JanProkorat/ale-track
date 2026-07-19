@@ -14,6 +14,12 @@ import {
   UserListItemDto,
   type CreateUserDto,
   type UpdateUserDto,
+  InventorySectionDto,
+  InventoryItemListItemDto,
+  ProductListItemDto,
+  type IInventoryItemListItemDto,
+  type CreateInventoryItemDto,
+  type UpdateInventoryItemDto,
 } from 'src/generated/api-client';
 import { db, mockId, mockDelay, MockNotFoundError } from './db';
 
@@ -97,6 +103,79 @@ const impl: Partial<IClient> = {
   deleteUserEndpoint(id: string) {
     const i = db.users.findIndex((x) => x.id === id);
     if (i >= 0) db.users.splice(i, 1);
+    return mockDelay(id);
+  },
+
+  // ---- Products (read-only picker source) -----------------------------------
+  getProductsListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.products
+      .filter((p) => matches(p.name, search) || matches(p.breweryName, search))
+      .map((p) => new ProductListItemDto(p));
+    return mockDelay(rows);
+  },
+
+  // ---- Inventory (Sklad) -----------------------------------------------------
+  getInventoryItemsListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const sections = db.inventory.map((s) => {
+      const items = search ? s.items.filter((i) => matches(i.name, search)) : s.items;
+      return new InventorySectionDto({
+        id: s.id,
+        name: s.name,
+        items: items.map((i) => new InventoryItemListItemDto(i)),
+      });
+    });
+    const rows = search ? sections.filter((s) => (s.items ?? []).length > 0) : sections;
+    return mockDelay(rows);
+  },
+  createInventoryItemEndpoint(data: CreateInventoryItemDto) {
+    const product = db.products.find((p) => p.id === data.productId);
+    if (!product) return Promise.reject(new MockNotFoundError('Produkt'));
+    const id = mockId('inv');
+    const item: IInventoryItemListItemDto = {
+      id,
+      name: data.name || product.name,
+      productId: product.id,
+      quantity: data.quantity,
+      kind: product.kind,
+      type: product.type,
+      alcoholPercentage: product.alcoholPercentage,
+      platoDegree: product.platoDegree,
+      packageSize: product.packageSize,
+      priceWithVat: product.priceWithVat,
+      priceForUnitWithVat: product.priceForUnitWithVat,
+      priceForUnitWithoutVat: product.priceForUnitWithoutVat,
+      note: data.note,
+    };
+    let section = db.inventory.find((s) => s.name === product.breweryName);
+    if (!section) {
+      section = { id: mockId('sec'), name: product.breweryName, items: [] };
+      db.inventory.push(section);
+    }
+    section.items.push(item);
+    return mockDelay(id);
+  },
+  updateInventoryItemEndpoint(id: string, data: UpdateInventoryItemDto) {
+    for (const section of db.inventory) {
+      const item = section.items.find((i) => i.id === id);
+      if (item) {
+        item.quantity = data.quantity;
+        item.note = data.note;
+        if (data.name) item.name = data.name;
+        return mockDelay(id);
+      }
+    }
+    return Promise.reject(new MockNotFoundError('Skladová položka'));
+  },
+  deleteInventoryItemEndpoint(id: string) {
+    for (const section of db.inventory) {
+      const i = section.items.findIndex((x) => x.id === id);
+      if (i >= 0) {
+        section.items.splice(i, 1);
+        return mockDelay(id);
+      }
+    }
     return mockDelay(id);
   },
 };
