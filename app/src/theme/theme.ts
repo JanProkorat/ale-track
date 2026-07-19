@@ -58,6 +58,11 @@ export const theme = createTheme({
   shape: { borderRadius: radius },
   typography: {
     fontFamily: fonts.body,
+    // The prototype's base body size is 14px (MUI defaults body1 to 16px) —
+    // match it so text isn't ~14% larger than the design everywhere.
+    fontSize: 14,
+    body1: { fontSize: '0.875rem', lineHeight: 1.5 },
+    body2: { fontSize: '0.8125rem', lineHeight: 1.5 },
     h1: { fontWeight: 800, letterSpacing: '-0.02em' },
     h2: { fontWeight: 800, letterSpacing: '-0.02em' },
     h3: { fontWeight: 800, letterSpacing: '-0.02em' },
@@ -91,6 +96,12 @@ export const theme = createTheme({
       },
     },
     MuiChip: { styleOverrides: { root: { fontWeight: 600 } } },
+    // Sub-tabs (Info/Ceník/…) — match the prototype's .tabs button (13.5px/700).
+    MuiTab: {
+      styleOverrides: {
+        root: { fontWeight: 700, fontSize: '0.84rem', textTransform: 'none', minHeight: 48 },
+      },
+    },
     MuiCssBaseline: {
       styleOverrides: (t) => ({
         '::selection': { background: alpha(t.palette.primary.main, 0.28) },

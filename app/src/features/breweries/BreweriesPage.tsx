@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Divider, IconButton, Tooltip, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useQueries } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -19,14 +20,14 @@ import { useBreweries, useBrewery, useDeleteBrewery } from 'src/hooks/useBreweri
 import { BreweryDetail } from './BreweryDetail';
 import { BreweryFormDrawer } from './BreweryFormDrawer';
 
-function CountBadge({ n, active }: { n: number; active: boolean }) {
+function CountBadge({ n, active, color }: { n: number; active: boolean; color: string }) {
   return (
     <Box
       component="span"
       sx={{
-        px: 0.9, py: 0.1, borderRadius: 999, fontSize: 12, fontWeight: 700,
-        bgcolor: (t) => (active ? t.palette.brand.amberTint : t.palette.action.selected),
-        color: active ? 'primary.dark' : 'text.secondary',
+        px: 0.9, py: 0.1, borderRadius: 999, fontSize: 11.5, fontWeight: 700,
+        bgcolor: (t) => (active ? alpha(color, 0.18) : t.palette.brand.greyTint),
+        color: active ? 'text.primary' : 'text.secondary',
       }}
     >
       {n}
@@ -102,10 +103,11 @@ export function BreweriesPage() {
         {(rows: BreweryListItemDto[]) => (
           <>
             {/* Brewery tab strip */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, borderBottom: 1, borderColor: 'divider', mb: 3, pb: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 1.5, borderBottom: '2px solid', borderColor: 'divider', mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, flex: 1, overflowX: 'auto' }}>
                 {rows.map((b) => {
                   const active = b.id === selectedId;
+                  const color = b.color ?? '#8791A0';
                   return (
                     <Box
                       key={b.id}
@@ -113,22 +115,23 @@ export function BreweriesPage() {
                       aria-selected={active}
                       onClick={() => setSelectedId(b.id ?? null)}
                       sx={{
-                        display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer',
-                        px: 2, py: 1.25, borderRadius: '10px 10px 0 0', whiteSpace: 'nowrap',
-                        borderBottom: '2px solid',
-                        borderColor: active ? 'primary.main' : 'transparent',
+                        display: 'flex', alignItems: 'center', gap: 1.1, cursor: 'pointer',
+                        px: 2.1, py: 1.6, whiteSpace: 'nowrap',
+                        borderRadius: '7px 7px 0 0',
+                        borderBottom: '3px solid',
+                        borderColor: active ? color : 'transparent',
+                        mb: '-2px',
                         bgcolor: active ? 'background.paper' : 'transparent',
                         color: active ? 'text.primary' : 'text.secondary',
-                        boxShadow: active ? '0 -1px 3px rgba(0,0,0,0.05)' : 'none',
+                        transition: 'background .15s, color .15s',
                         '&:hover': { color: 'text.primary', bgcolor: active ? 'background.paper' : 'action.hover' },
                       }}
                     >
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: b.color ?? 'grey.400', flexShrink: 0 }} />
-                      <Typography sx={{ fontWeight: active ? 700 : 600, fontSize: 15 }}>{b.name}</Typography>
-                      <CountBadge n={countFor(b.id)} active={active} />
+                      <Box sx={{ width: 11, height: 11, borderRadius: '4px', bgcolor: color, flexShrink: 0, boxShadow: `0 0 0 3px ${alpha(color, 0.18)}` }} />
+                      <Typography sx={{ fontWeight: 700, fontSize: 14.5 }}>{b.name}</Typography>
+                      <CountBadge n={countFor(b.id)} active={active} color={color} />
                       {active && editable && (
-                        <>
-                          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.75 }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, ml: 0.75, pl: 1, borderLeft: '1px solid', borderColor: 'divider' }}>
                           <Tooltip title="Upravit pivovar">
                             <IconButton size="small" onClick={(e) => { e.stopPropagation(); setEditingOpen(true); }}>
                               <EditIcon fontSize="small" />
@@ -139,7 +142,7 @@ export function BreweriesPage() {
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                        </>
+                        </Box>
                       )}
                     </Box>
                   );
@@ -147,8 +150,8 @@ export function BreweriesPage() {
               </Box>
               {editable && (
                 <>
-                  <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1 }} />
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)} sx={{ flexShrink: 0, mb: 0.5 }}>
+                  <Divider orientation="vertical" flexItem sx={{ my: 1 }} />
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)} sx={{ flexShrink: 0, alignSelf: 'center' }}>
                     Nový pivovar
                   </Button>
                 </>
