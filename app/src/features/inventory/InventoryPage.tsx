@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Box, Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Card, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
-import EditIcon from '@mui/icons-material/EditOutlined';
+import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -20,12 +20,11 @@ import { useAuth } from 'src/auth/AuthProvider';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { apiErrorMessage } from 'src/api/errors';
 import { num, fmtLiters } from 'src/lib/format';
-import { kindLabel, ptypeLabel } from 'src/lib/labels';
-import { type InventoryItemListItemDto } from 'src/generated/api-client';
-import { useInventory, useDeleteInventoryItem } from 'src/hooks/useInventory';
+import { kindLabel } from 'src/lib/labels';
+import { UpdateInventoryItemDto, type InventoryItemListItemDto } from 'src/generated/api-client';
+import { useInventory, useDeleteInventoryItem, useUpdateInventoryItem } from 'src/hooks/useInventory';
+import { useBreweries } from 'src/hooks/useBreweries';
 import { InventoryItemFormDrawer } from './InventoryItemFormDrawer';
-
-const typeLabel = ptypeLabel;
 
 /** An item is "low stock" only when it's linked to a catalog product — free/manual
  * entries never carry the warning (matches the prototype's `i.productId && qty<=3`). */
@@ -33,11 +32,41 @@ function isLow(item: InventoryItemListItemDto): boolean {
   return Boolean(item.productId) && (item.quantity ?? 0) <= 3;
 }
 
-/** Kind/type + package size as a secondary line under the item name. */
+/** Kind + package size as a secondary line under the item name (no beer type,
+ * matching the prototype). */
 function itemSubtitle(item: InventoryItemListItemDto): string {
-  return [kindLabel(item.kind), typeLabel(item.type), fmtLiters(item.packageSize)]
-    .filter(Boolean)
-    .join(' · ');
+  return [kindLabel(item.kind), fmtLiters(item.packageSize)].filter(Boolean).join(' · ');
+}
+
+/** − / + quantity stepper (matches the prototype's inline stock adjust). */
+function QtyStepper({
+  item,
+  editable,
+  onAdjust,
+}: {
+  item: InventoryItemListItemDto;
+  editable: boolean;
+  onAdjust: (item: InventoryItemListItemDto, delta: number) => void;
+}) {
+  const low = isLow(item);
+  const btnSx = { border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 } as const;
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center" justifyContent="flex-end">
+      {editable && (
+        <IconButton size="small" onClick={() => onAdjust(item, -1)} sx={btnSx} aria-label="Ubrat">
+          <RemoveIcon fontSize="small" />
+        </IconButton>
+      )}
+      <Typography sx={{ minWidth: 34, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums', ...(low && { color: 'error.main' }) }}>
+        {num(item.quantity ?? 0)}
+      </Typography>
+      {editable && (
+        <IconButton size="small" onClick={() => onAdjust(item, 1)} sx={btnSx} aria-label="Přidat">
+          <AddIcon fontSize="small" />
+        </IconButton>
+      )}
+    </Stack>
+  );
 }
 
 /** Section shape after client-side filtering — a plain object (spread off the
@@ -48,18 +77,20 @@ interface FilteredSection {
   items: InventoryItemListItemDto[];
 }
 
-function SectionHeading({ section }: { section: FilteredSection }) {
+function SectionHeading({ section, color }: { section: FilteredSection; color?: string }) {
   const count = section.items?.length ?? 0;
-  if (!section.name) {
-    // Manually-entered items with no brewery — the prototype's "Ostatní (ručně evidované)" group.
-    return (
-      <Typography sx={{ fontWeight: 700, fontSize: 15, mb: 1 }}>Ostatní (ručně evidované)</Typography>
-    );
-  }
+  const label = section.name || 'Ostatní (ručně evidované)';
   return (
-    <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1 }}>
-      <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{section.name}</Typography>
-      <Typography variant="body2" color="text.secondary">
+    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+      {section.name ? (
+        <Box sx={{ width: 12, height: 12, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
+      ) : (
+        <Inventory2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+      )}
+      <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontSize: 12, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {count} položek
       </Typography>
     </Stack>
@@ -124,56 +155,37 @@ function StatCell({
 function ItemCard({
   item,
   editable,
-  formatMoney,
-  onEdit,
+  color,
+  onAdjust,
   onDelete,
 }: {
   item: InventoryItemListItemDto;
   editable: boolean;
-  formatMoney: (v: number | null | undefined) => string;
-  onEdit: () => void;
+  color?: string;
+  onAdjust: (item: InventoryItemListItemDto, delta: number) => void;
   onDelete: () => void;
 }) {
   const low = isLow(item);
   return (
     <Card variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-        <Typography sx={{ fontWeight: 700, minWidth: 0 }}>{item.name}</Typography>
-        {editable && (
-          <Stack direction="row" spacing={0.25} flexShrink={0}>
-            <Tooltip title="Upravit">
-              <IconButton size="small" onClick={onEdit}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Smazat">
-              <IconButton size="small" color="error" onClick={onDelete}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        )}
-      </Stack>
-      <Stack direction="row" spacing={0.5} flexWrap="wrap" alignItems="center">
-        {kindLabel(item.kind) && <Chip size="small" label={kindLabel(item.kind)} />}
-        {typeLabel(item.type) && <Chip size="small" variant="outlined" label={typeLabel(item.type)} />}
-        {item.packageSize != null && (
-          <Chip size="small" variant="outlined" label={fmtLiters(item.packageSize)} />
-        )}
+      <Stack direction="row" spacing={1} alignItems="flex-start">
+        <Box sx={{ width: 12, height: 12, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0, mt: 0.5 }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{itemSubtitle(item)}</Typography>
+        </Box>
         {item.productId && <StatusPill tone={low ? 'crit' : 'ok'} label={low ? 'nízká' : 'skladem'} />}
       </Stack>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-end" sx={{ mt: 'auto', pt: 1 }}>
-        <Box>
-          <Typography
-            sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }}
-          >
-            Množství
-          </Typography>
-          <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1, ...(low && { color: 'error.main' }) }}>
-            {num(item.quantity ?? 0)}
-          </Typography>
-        </Box>
-        <Typography sx={{ fontWeight: 600 }}>{formatMoney(item.priceForUnitWithVat)}</Typography>
+      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5 }} />
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <QtyStepper item={item} editable={editable} onAdjust={onAdjust} />
+        {editable && (
+          <Tooltip title="Vyskladnit">
+            <IconButton size="small" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Stack>
       {item.note && (
         <Typography variant="caption" color="text.secondary">
@@ -192,6 +204,29 @@ export function InventoryPage() {
 
   const query = useInventory();
   const del = useDeleteInventoryItem();
+  const update = useUpdateInventoryItem();
+
+  // Brewery colors for the section swatches (best-effort; the color is cosmetic
+  // so a missing/forbidden breweries list just falls back to a neutral square).
+  const breweries = useBreweries();
+  const colorByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of breweries.data ?? []) if (b.name && b.color) m.set(b.name, b.color);
+    return m;
+  }, [breweries.data]);
+
+  const adjustQty = async (item: InventoryItemListItemDto, delta: number) => {
+    const next = Math.max(0, (item.quantity ?? 0) + delta);
+    if (!item.id || next === item.quantity) return;
+    try {
+      await update.mutateAsync({
+        id: item.id,
+        data: new UpdateInventoryItemDto({ productId: item.productId, name: item.name, quantity: next, note: item.note }),
+      });
+    } catch (e) {
+      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+    }
+  };
 
   const [search, setSearch] = useState('');
   const [section, setSection] = useState<string | null>(null);
@@ -241,10 +276,6 @@ export function InventoryPage() {
     setEditing(undefined);
     setFormOpen(true);
   };
-  const openEdit = (item: InventoryItemListItemDto) => {
-    setEditing(item);
-    setFormOpen(true);
-  };
 
   const doDelete = async () => {
     if (!confirm?.id) return;
@@ -281,12 +312,8 @@ export function InventoryPage() {
       key: 'quantity',
       header: 'Skladem',
       align: 'right',
-      width: 100,
-      render: (i) => (
-        <Typography component="span" sx={{ fontWeight: 700, ...(isLow(i) && { color: 'error.main' }) }}>
-          {num(i.quantity ?? 0)}
-        </Typography>
-      ),
+      width: 150,
+      render: (i) => <QtyStepper item={i} editable={editable} onAdjust={adjustQty} />,
     },
     {
       key: 'status',
@@ -307,14 +334,9 @@ export function InventoryPage() {
             align: 'right' as const,
             width: 96,
             render: (i: InventoryItemListItemDto) => (
-              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                <Tooltip title="Upravit">
-                  <IconButton size="small" onClick={() => openEdit(i)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Smazat">
-                  <IconButton size="small" color="error" onClick={() => setConfirm(i)}>
+              <Stack direction="row" justifyContent="flex-end">
+                <Tooltip title="Vyskladnit">
+                  <IconButton size="small" onClick={() => setConfirm(i)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -417,7 +439,9 @@ export function InventoryPage() {
           // Grid view is a single flat tile grid across all matching sections;
           // list view stays grouped per brewery — matching the prototype exactly.
           if (viewMode === 'grid') {
-            const allItems = filteredSections.flatMap((s) => s.items);
+            const allItems = filteredSections.flatMap((s) =>
+              s.items.map((i) => ({ item: i, color: s.name ? colorByName.get(s.name) : undefined }))
+            );
             return (
               <Box
                 sx={{
@@ -426,14 +450,14 @@ export function InventoryPage() {
                   gap: 2,
                 }}
               >
-                {allItems.map((i) => (
+                {allItems.map(({ item, color }) => (
                   <ItemCard
-                    key={i.id}
-                    item={i}
+                    key={item.id}
+                    item={item}
+                    color={color}
                     editable={editable}
-                    formatMoney={formatMoney}
-                    onEdit={() => openEdit(i)}
-                    onDelete={() => setConfirm(i)}
+                    onAdjust={adjustQty}
+                    onDelete={() => setConfirm(item)}
                   />
                 ))}
               </Box>
@@ -444,7 +468,7 @@ export function InventoryPage() {
             <Stack spacing={3}>
               {filteredSections.map((s) => (
                 <Box key={s.id ?? s.name ?? 'free'}>
-                  <SectionHeading section={s} />
+                  <SectionHeading section={s} color={s.name ? colorByName.get(s.name) : undefined} />
                   <Card variant="outlined">
                     <DataTable columns={columns} rows={s.items} getRowKey={(i) => i.id ?? ''} />
                   </Card>

@@ -59,6 +59,9 @@ export function DataTable<T>({
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',
                   whiteSpace: 'nowrap',
+                  bgcolor: (t) => t.palette.brand.surface2,
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
                   ...(c.hideOnMobile && { display: { xs: 'none', sm: 'table-cell' } }),
                 }}
               >
@@ -73,13 +76,18 @@ export function DataTable<T>({
               key={getRowKey(row)}
               hover={Boolean(onRowClick)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              sx={onRowClick ? { cursor: 'pointer' } : undefined}
+              sx={{
+                ...(onRowClick && { cursor: 'pointer' }),
+                '&:last-child td': { borderBottom: 0 },
+              }}
             >
               {columns.map((c) => (
                 <TableCell
                   key={c.key}
                   align={c.align}
                   sx={{
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
                     ...(c.hideOnMobile && { display: { xs: 'none', sm: 'table-cell' } }),
                   }}
                 >
