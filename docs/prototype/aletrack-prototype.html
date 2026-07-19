@@ -1715,34 +1715,31 @@ function finishDelivery(id){ const d=DB.deliveries.find(x=>x.id===id);
   $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
 }
 /* ---- Delivery editor ---- */
-let DE={ draft:null };
+let DE={ draft:null, brewQuery:'', ui:{} };
+function deStopUI(sid){ if(!DE.ui[sid]) DE.ui[sid]={q:'',kind:'all'}; return DE.ui[sid]; }
 function viewDeliveryEditor(id){
   if(id){ const d=DB.deliveries.find(x=>x.id===id); DE.draft={ id:d.id,number:d.number,date:d.date,vehicleId:d.vehicleId,driverIds:[...d.driverIds],note:d.note,
     stops:d.stops.map(s=>({ id:s.id, breweryId:s.breweryId, note:s.note, items:s.items.map(i=>({...i})) })) }; }
   else DE.draft={ id:null,date:daysFromNow(2),vehicleId:null,driverIds:[],note:'',stops:[] };
+  DE.brewQuery=''; DE.ui={}; AFTER=deWire;
   return deHTML();
 }
-function deRerender(){ $('#view').innerHTML=deHTML(); }
+function deRerender(){ $('#view').innerHTML=deHTML(); deWire(); }
+function deWire(){
+  const bi=$('#de-brew-input'); if(bi){ bi.oninput=deBreweryInput; bi.onfocus=deBreweryInput;
+    bi.onblur=()=>setTimeout(()=>{ const l=$('#de-brew-list'); if(l) l.innerHTML=''; },160); }
+  DE.draft.stops.forEach(s=>deWireStop(s.id));
+}
+function deWireStop(sid){ const si=$('#de-q-'+sid); if(si) si.oninput=()=>{ deStopUI(sid).q=si.value; deRerenderStopCat(sid); }; }
+function deRerenderStop(sid){ const s=DE.draft.stops.find(x=>x.id===sid); const el=$('#de-stop-'+sid); if(el){ el.outerHTML=deStopCard(s); deWireStop(sid); } }
+function deRerenderStopCat(sid){ const s=DE.draft.stops.find(x=>x.id===sid); const el=$('#de-cat-'+sid);
+  if(el){ el.innerHTML=deStopCatalog(s); const si=$('#de-q-'+sid); if(si){ si.focus(); si.setSelectionRange(si.value.length,si.value.length); } deWireStop(sid); } }
 function deSyncMeta(){ if($('#de-date'))DE.draft.date=$('#de-date').value; if($('#de-veh'))DE.draft.vehicleId=$('#de-veh').value||null; if($('#de-note'))DE.draft.note=$('#de-note').value; }
+
 function deHTML(){
   const d=DE.draft;
   const usedBrew=new Set(d.stops.map(s=>s.breweryId));
-  const stopCards=d.stops.map(s=>{ const b=breweryById(s.breweryId); const prods=productsOf(b.id);
-    return `<div class="card"><div class="card-head"><span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>
-      <h3>${esc(b.name)}</h3><button class="icon-btn" style="width:32px;height:32px;margin-left:auto;color:var(--crit)" onclick="deRemoveStop('${s.id}')">${icon('trash',14)}</button></div>
-      <div class="card-pad">
-        <div class="stack" style="gap:8px;margin-bottom:12px">${s.items.length?s.items.map(it=>{const p=prodById(it.productId);
-          return `<div class="row gap8" style="padding:8px;border:1px solid var(--border);border-radius:var(--r-sm)">
-            <div style="flex:1"><span class="t-strong" style="font-size:13px">${esc(p.name)}</span></div>
-            <button class="icon-btn" style="width:28px;height:28px" onclick="deItemQty('${s.id}','${it.productId}',-1)">−</button>
-            <span class="tnum t-strong" style="min-width:22px;text-align:center">${it.quantity}</span>
-            <button class="icon-btn" style="width:28px;height:28px" onclick="deItemQty('${s.id}','${it.productId}',1)">+</button>
-            <button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" onclick="deRemoveItem('${s.id}','${it.productId}')">${icon('trash',12)}</button></div>`;}).join(''):'<div class="t-mut" style="font-size:12.5px">Přidejte produkty z pivovaru.</div>'}</div>
-        <select class="select" onchange="if(this.value){deAddItem('${s.id}',this.value);this.value='';}">
-          <option value="">+ Přidat produkt…</option>
-          ${prods.filter(p=>!s.items.some(i=>i.productId===p.id)).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
-      </div></div>`; }).join('');
-  const addBrewery=DB.breweries.filter(b=>!usedBrew.has(b.id));
+  const stopCards=d.stops.map(s=>deStopCard(s)).join('');
   const driverChips=DB.drivers.map(dr=>{ const on=d.driverIds.includes(dr.id);
     return `<button class="chip" style="height:34px;border-color:${on?dr.color:'var(--border)'};${on?`background:${dr.color}18`:''}" onclick="deToggleDriver('${dr.id}')">
       <span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${dr.color}"></span>${esc(dr.firstName)} ${esc(dr.lastName)}${on?`<span style="color:${dr.color}">${icon('check',13)}</span>`:''}</button>`; }).join('');
@@ -1752,10 +1749,9 @@ function deHTML(){
       `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button><button class="btn btn-primary" onclick="deSave()">${icon('check',16)}${d.id?'Uložit':'Vytvořit dovoz'}</button>`)}
     <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
       <div class="stack" style="gap:14px">
-        <div class="section-label">Zastávky u pivovarů (${d.stops.length})</div>
-        ${stopCards||`<div class="empty" style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-lg)"><div>${icon('brewery',34)}</div><div class="t">Zatím žádný pivovar</div></div>`}
-        ${addBrewery.length?`<select class="select" onchange="if(this.value){deAddStop(this.value);this.value='';}"><option value="">+ Přidat pivovar…</option>
-          ${addBrewery.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>`:''}
+        <div class="row gap8" style="justify-content:space-between"><div class="section-label" style="margin:0">Pivovary v dovozu (${d.stops.length})</div></div>
+        ${deBreweryPicker(usedBrew)}
+        ${stopCards||`<div class="empty" style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-lg)"><div>${icon('brewery',34)}</div><div class="t">Zatím žádný pivovar</div><div>Přidejte pivovar pomocí pole nahoře.</div></div>`}
       </div>
       <div class="stack" style="gap:16px">
         <div class="card"><div class="card-pad"><div class="form-grid" style="grid-template-columns:1fr">
@@ -1766,11 +1762,89 @@ function deHTML(){
         <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad" style="display:flex;flex-wrap:wrap;gap:8px">${driverChips}</div></div>
       </div></div></div>`;
 }
+/* ---- brewery typeahead (above stops) ---- */
+function deBreweryPicker(usedBrew){
+  const avail=DB.breweries.filter(b=>!usedBrew.has(b.id));
+  if(!avail.length) return `<div class="hint" style="padding:2px 2px 4px">Všechny pivovary už jsou v dovozu.</div>`;
+  return `<div style="position:relative;margin-bottom:4px">
+    <div class="fld">${icon('search',16)}<input id="de-brew-input" autocomplete="off" placeholder="Přidat pivovar — začněte psát název…" value="${esc(DE.brewQuery)}"></div>
+    <div id="de-brew-list"></div></div>`;
+}
+function deBreweryInput(){
+  const el=$('#de-brew-input'); if(!el) return; DE.brewQuery=el.value; const q=el.value.toLowerCase().trim();
+  const used=new Set(DE.draft.stops.map(s=>s.breweryId));
+  const m=DB.breweries.filter(b=>!used.has(b.id)&&(!q||b.name.toLowerCase().includes(q)));
+  const list=$('#de-brew-list'); if(!list) return;
+  list.innerHTML=`<div style="position:absolute;left:0;right:0;top:100%;margin-top:5px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:30;max-height:260px;overflow:auto;padding:5px">
+    ${m.length?m.map(b=>`<button type="button" class="row gap8" style="width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:var(--r-sm)" onmousedown="dePickBrewery('${b.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='none'">
+      <span class="dotc" style="width:11px;height:11px;border-radius:3px;background:${b.color};flex:0 0 auto"></span>
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(b.name)}</div>
+      <div class="t-mut" style="font-size:11.5px">${productsOf(b.id).length} produktů · ${L.country[b.officialAddress.country]||''}</div></div></button>`).join('')
+      :`<div class="t-mut" style="padding:11px;font-size:12.5px">Žádný pivovar neodpovídá „${esc(el.value)}"</div>`}</div>`;
+}
+function dePickBrewery(bId){ DE.brewQuery=''; deAddStop(bId); }
+
+/* ---- stop card with embedded catalog ---- */
+function deStopCard(s){
+  const b=breweryById(s.breweryId); const cnt=s.items.length; const ks=s.items.reduce((x,i)=>x+i.quantity,0);
+  return `<div class="card" id="de-stop-${s.id}">
+    <div class="card-head"><span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>
+      <h3 style="flex:1">${esc(b.name)}</h3>
+      <span class="tag">${cnt} ${plural(cnt,'položka','položky','položek')} · ${ks} ks</span>
+      <button class="icon-btn" style="width:32px;height:32px;color:var(--crit)" onclick="deRemoveStop('${s.id}')" title="Odebrat pivovar">${icon('trash',14)}</button></div>
+    <div class="card-pad" id="de-cat-${s.id}">${deStopCatalog(s)}</div></div>`;
+}
+function deStopCatalog(s){
+  const b=breweryById(s.breweryId); const ui=deStopUI(s.id); const prods=productsOf(b.id);
+  const flt=p=>!ui.q||p.name.toLowerCase().includes(ui.q.toLowerCase());
+  const kinds=['Keg','Bottle','Can','Multipack','Other']; const kc={}; prods.forEach(p=>{ if(flt(p)) kc[p.kind]=(kc[p.kind]||0)+1; });
+  const kindTabs=`<div class="seg wrap" style="margin-bottom:12px;flex-wrap:wrap">
+    <button class="${ui.kind==='all'?'on':''}" onclick="deSetKind('${s.id}','all')">Vše</button>
+    ${kinds.filter(k=>kc[k]).map(k=>`<button class="${ui.kind===k?'on':''}" onclick="deSetKind('${s.id}','${k}')">${L.kind[k]} <span style="opacity:.6">${kc[k]}</span></button>`).join('')}</div>`;
+  const kindOk=p=>ui.kind==='all'||p.kind===ui.kind;
+  const shown=prods.filter(p=>flt(p)&&kindOk(p));
+  const search=`<div class="fld" style="margin-bottom:12px">${icon('search',16)}<input id="de-q-${s.id}" placeholder="Hledat produkt v pivovaru…" value="${esc(ui.q)}"></div>`;
+  const list=shown.length?`<div style="max-height:340px;overflow-y:auto;padding-right:2px">${deGroupList(s,shown)}</div>`
+    :`<div class="empty" style="padding:22px"><div class="t">Nic nenalezeno</div></div>`;
+  return search+kindTabs+list;
+}
+function deSetKind(sid,k){ deStopUI(sid).kind=k; deRerenderStopCat(sid); }
+function deGroupList(s,prods){
+  const groups=[]; const idx={};
+  prods.forEach(p=>{ if(idx[p.name]==null){ idx[p.name]=groups.length; groups.push({name:p.name,items:[p]}); } else groups[idx[p.name]].items.push(p); });
+  return `<div class="stack" style="gap:9px">${groups.map(g=>g.items.length>1?deVariantCard(s,g):deProductRow(s,g.items[0])).join('')}</div>`;
+}
+function deQtyCtrl(s,p,item){ return item?`<div class="row gap8" style="flex:0 0 auto"><button class="icon-btn" style="width:30px;height:30px" onclick="deItemQty('${s.id}','${p.id}',-1)">−</button>
+    <span class="t-strong tnum" style="min-width:20px;text-align:center">${item.quantity}</span>
+    <button class="icon-btn" style="width:30px;height:30px" onclick="deItemQty('${s.id}','${p.id}',1)">+</button></div>`
+    :`<button class="btn btn-soft btn-sm" style="flex:0 0 auto" onclick="deAddItem('${s.id}','${p.id}')">${icon('plus',14)}Přidat</button>`; }
+function deProductRow(s,p){
+  const item=s.items.find(i=>i.productId===p.id);
+  return `<div class="row gap12" style="padding:9px 10px;border:1px solid var(--border);border-radius:var(--r);${item?'background:var(--amber-soft);border-color:var(--amber-tint)':''}">
+    <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+      <div class="row gap8 wrap" style="margin-top:4px"><span class="tag">${kindChipText(p.kind)}</span>
+        ${p.packageSize!=null?`<span class="tag" style="font-weight:800">${fmtLiters(p.packageSize)}</span>`:''}</div></div>
+    ${deQtyCtrl(s,p,item)}</div>`;
+}
+function deVariantCard(s,g){
+  const b=breweryById(g.items[0].breweryId);
+  return `<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+    <div class="row gap8" style="padding:10px 11px;background:var(--surface-2)">
+      <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color};flex:0 0 auto"></span>
+      <span class="t-strong" style="font-size:13.5px">${esc(g.name)}</span>
+      <span class="tag" style="margin-left:auto">${g.items.length} ${plural(g.items.length,'velikost','velikosti','velikostí')}</span></div>
+    ${g.items.map(v=>{ const item=s.items.find(i=>i.productId===v.id);
+      return `<div class="row gap8" style="padding:9px 11px;border-top:1px solid var(--border);${item?'background:var(--amber-soft)':''}">
+        <span class="tag">${kindChipText(v.kind)}</span>
+        <span class="tag" style="font-weight:800">${fmtLiters(v.packageSize)}</span>
+        <span class="t-mut" style="font-size:11.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(v.description||'')}</span>
+        ${deQtyCtrl(s,v,item)}</div>`; }).join('')}</div>`;
+}
 function deAddStop(bId){ deSyncMeta(); DE.draft.stops.push({ id:'ds-'+Math.random().toString(36).slice(2,7), breweryId:bId, note:'', items:[] }); deRerender(); }
-function deRemoveStop(sid){ deSyncMeta(); DE.draft.stops=DE.draft.stops.filter(s=>s.id!==sid); deRerender(); }
-function deAddItem(sid,pid){ deSyncMeta(); DE.draft.stops.find(s=>s.id===sid).items.push({ productId:pid, quantity:1, note:'' }); deRerender(); }
-function deItemQty(sid,pid,delta){ deSyncMeta(); const it=DE.draft.stops.find(s=>s.id===sid).items.find(i=>i.productId===pid); it.quantity+=delta; if(it.quantity<=0)deRemoveItem(sid,pid); else deRerender(); }
-function deRemoveItem(sid,pid){ deSyncMeta(); const s=DE.draft.stops.find(s=>s.id===sid); s.items=s.items.filter(i=>i.productId!==pid); deRerender(); }
+function deRemoveStop(sid){ deSyncMeta(); delete DE.ui[sid]; DE.draft.stops=DE.draft.stops.filter(s=>s.id!==sid); deRerender(); }
+function deAddItem(sid,pid){ DE.draft.stops.find(s=>s.id===sid).items.push({ productId:pid, quantity:1, note:'' }); deRerenderStop(sid); }
+function deItemQty(sid,pid,delta){ const it=DE.draft.stops.find(s=>s.id===sid).items.find(i=>i.productId===pid); if(!it)return; it.quantity+=delta; if(it.quantity<=0)return deRemoveItem(sid,pid); deRerenderStop(sid); }
+function deRemoveItem(sid,pid){ const s=DE.draft.stops.find(s=>s.id===sid); s.items=s.items.filter(i=>i.productId!==pid); deRerenderStop(sid); }
 function deToggleDriver(id){ deSyncMeta(); const a=DE.draft.driverIds; const i=a.indexOf(id); if(i>=0)a.splice(i,1); else a.push(id); deRerender(); }
 function deSave(){ deSyncMeta(); const d=DE.draft; if(!d.stops.length)return toast('Přidejte alespoň jeden pivovar','warnTri');
   if(d.stops.some(s=>!s.items.length))return toast('Každý pivovar musí mít alespoň jeden produkt','warnTri');
