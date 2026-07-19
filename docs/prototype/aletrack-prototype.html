@@ -591,7 +591,9 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
       vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
   ];
   function stop(orderId,kind,order){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, order,
-    items:o.items.map(it=>({ orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded: false })) }; }
+    items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded:false, checked:false, inv:1, source:'order' })) }; }
+  // demo dokládka (extra units taken from stock on top of the order) on shipment s-1
+  DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:4, loaded:false, checked:false, inv:1, source:'dokladka' });
   // Deliveries (Dovozy)
   DB.deliveries=[
     { id:'d-1', number:'DOV-2026-030', date:daysFromNow(2), state:'InPlanning', vehicleId:'v-iveco', driverIds:['dr-novak'], note:'Zavézt i prázdné sudy zpět',
@@ -1666,23 +1668,14 @@ function viewShipments(){
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Název</th><th>Stav</th><th>Datum</th><th style="text-align:right">Zast.</th><th>Vůz</th><th>Řidiči</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
+let SL={ shipId:null, tab:'all', dokStop:null };
 function viewShipmentDetail(id){
   id=id.split('?')[0]; const s=DB.shipments.find(x=>x.id===id); if(!s) return notFound('Vývoz');
+  SL.shipId=id;
   const ed=canEdit('shipments'); const veh=vehicleById(s.vehicleId);
   const pts=shipStopPoints(s.stops);
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
   const totalWeight=stopsSorted.reduce((w,st)=>w+st.items.reduce((x,it)=>{const p=prodById(it.productId);return x+(estWeight(p)*it.quantity);},0),0);
-  const stopCards=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
-    return `<div class="card"><div class="card-pad">
-      <div class="row gap12" style="margin-bottom:10px"><span class="av" style="background:${colorFor(cl.id)};color:#fff">${i+1}</span>
-        <div style="flex:1"><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12.5px">${fmtAddr(a)} · <span class="tag">${L.addrKind[st.addressKind]}</span></div></div>
-        <a class="btn btn-sm btn-ghost" href="#/clients/${cl.id}">Detail</a></div>
-      <div class="tbl-wrap" style="border:0"><table class="tbl" style="min-width:0"><tbody>
-        ${st.items.map(it=>{ const p=prodById(it.productId);
-          return `<tr><td style="padding:8px 12px"><span class="t-strong">${esc(p.name)}</span></td>
-          <td class="num tnum" style="padding:8px 12px">${it.quantity} ks</td>
-          <td style="padding:8px 12px;width:40px">${s.state==='Loaded'||s.state==='InTransit'||s.state==='Delivered'?`<span class="pill s-ok" title="Naloženo"><span class="d"></span>naloženo</span>`:''}</td></tr>`; }).join('')}
-      </tbody></table></div></div></div>`; }).join('');
   const flow=['Created','Loaded','InTransit','Delivered'];
   return `<div class="page">
     ${crumbs([{t:'Vývozy',href:'#/shipments'},{t:s.number}])}
@@ -1695,8 +1688,8 @@ function viewShipmentDetail(id){
         ${ed?`<a class="btn btn-ghost" href="#/shipments/${id}/edit">${icon('edit',16)}Upravit</a>`:''}</div></div>
     ${routeMap(pts,{h:360,animate:s.state==='InTransit'})}
     <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start;margin-top:16px">
-      <div class="stack" style="gap:14px"><div class="section-label">Zastávky &amp; nakládka (${stopsSorted.length})</div>${stopCards}
-        ${s.extraCustom&&s.extraCustom.length?`<div class="section-label" style="margin-top:8px">Extra položky</div>
+      <div class="stack" style="gap:14px"><div id="ship-load">${shipLoadingCard(s)}</div>
+        ${s.extraCustom&&s.extraCustom.length?`<div class="section-label" style="margin-top:8px">Extra položky (vratné obaly ap.)</div>
           <div class="card"><div class="card-pad stack" style="gap:8px">${s.extraCustom.map(e=>`<div class="row" style="justify-content:space-between"><span>${esc(e.description)}</span><span class="tnum t-strong">${e.quantity} ks</span></div>`).join('')}</div></div>`:''}</div>
       <div class="stack" style="gap:14px">
         <div class="card"><div class="card-head"><h3>Vůz</h3></div><div class="card-pad">
@@ -1714,8 +1707,86 @@ function viewShipmentDetail(id){
 function estWeight(p){ if(!p) return 0; if(p.kind==='Keg') return (p.packageSize||30)*1.05+8; if(p.kind==='Bottle') return (p.packageSize||0.5)*20*1.1; if(p.kind==='Can'||p.kind==='Multipack') return (p.packageSize||6)*1.05; return 5; }
 function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to;
   if(to==='Delivered'){ s.stops.forEach(st=>{ const o=DB.orders.find(x=>x.id===st.orderId); if(o){o.state='Finished';o.actualDeliveryDate=daysFromNow(0);} });
-    toast('Vývoz doručen — objednávky dokončeny','check'); } else if(to==='InTransit'){ s.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o)o.state='Delivering';}); toast('Vývoz vyrazil'); } else toast('Stav aktualizován');
+    let deducted=0; s.stops.forEach(st=>st.items.forEach(it=>{ if(it.source==='dokladka'){ const inv=DB.inventory.find(i=>i.id===it.fromInventoryId)||DB.inventory.find(i=>i.productId===it.productId);
+      if(inv){ inv.quantity=Math.max(0,inv.quantity-it.quantity); deducted+=it.quantity; } } }));
+    toast(deducted?`Doručeno · ${deducted} ks dokládky odečteno ze skladu`:'Vývoz doručen — objednávky dokončeny','check'); }
+  else if(to==='InTransit'){ s.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o)o.state='Delivering';}); toast('Vývoz vyrazil'); } else toast('Stav aktualizován');
   renderRoute(); }
+
+/* ============ VÝVOZ — NAKLÁDKA (loading, invoices, dokládka) ============ */
+function slFind(s,itemId){ for(const st of s.stops){ const it=st.items.find(i=>i.id===itemId); if(it) return it; } return null; }
+function slRerender(){ const s=DB.shipments.find(x=>x.id===SL.shipId); const el=$('#ship-load'); if(el&&s) el.innerHTML=shipLoadingCard(s); }
+function slSetTab(t){ SL.tab=t; slRerender(); }
+function slToggle(itemId,field){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(!it)return;
+  it[field]=!it[field]; if(field==='loaded'&&!it.loaded) it.checked=false; slRerender(); }
+function slSetInvoice(itemId,inv){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(it){ it.inv=inv; slRerender(); } }
+function slRemoveItem(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId)); toast('Dokládka odebrána','trash'); slRerender(); }
+function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*it.quantity; }
+function shipLoadingCard(s){
+  const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
+  const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
+  const all=stopsSorted.flatMap(st=>st.items);
+  const totalN=all.length, loadedN=all.filter(i=>i.loaded).length, checkedN=all.filter(i=>i.checked).length;
+  const f1=all.filter(i=>i.inv===1), f2=all.filter(i=>i.inv===2);
+  const tabTotal=(SL.tab==='f1'?f1:SL.tab==='f2'?f2:all).reduce((x,i)=>x+slPrice(i),0);
+  const inTab=i=>SL.tab==='all'||(SL.tab==='f1'&&i.inv===1)||(SL.tab==='f2'&&i.inv===2);
+  const seg=`<div class="seg" style="flex-wrap:wrap">
+    <button class="${SL.tab==='all'?'on':''}" onclick="slSetTab('all')">Celková nakládka <span style="opacity:.6">${totalN}</span></button>
+    <button class="${SL.tab==='f1'?'on':''}" onclick="slSetTab('f1')">Faktura 1 <span style="opacity:.6">${f1.length}</span></button>
+    <button class="${SL.tab==='f2'?'on':''}" onclick="slSetTab('f2')">Faktura 2 <span style="opacity:.6">${f2.length}</span></button></div>`;
+  const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
+    const items=st.items.filter(inTab);
+    const rows=items.map(it=>{ const p=prodById(it.productId); const dok=it.source==='dokladka';
+      return `<tr>
+        <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+          <div class="row gap8" style="margin-top:2px"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>
+          ${dok?'<span class="pill s-info"><span class="d"></span>dokládka</span>':''}</div></td>
+        <td class="num tnum">${it.quantity} ks</td>
+        ${SL.tab==='all'?`<td style="text-align:center"><div class="seg" style="display:inline-flex">
+          <button class="${it.inv===1?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',1)"`:'disabled'}>F1</button>
+          <button class="${it.inv===2?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',2)"`:'disabled'}>F2</button></div></td>`:''}
+        <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
+        <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
+        <td style="width:34px;text-align:right">${dok&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
+    return `<div style="margin-bottom:6px">
+      <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
+        <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
+          <div><div class="t-strong" style="font-size:13.5px">${esc(cl.name)}</div><div class="t-mut" style="font-size:11.5px">${fmtAddr(a)} · ${L.addrKind[st.addressKind]}</div></div></div>
+        ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
+      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th>${SL.tab==='all'?'<th style="text-align:center">Faktura</th>':''}<th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+        :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">V této faktuře nemá klient žádné položky.</div>`}</div>`; }).join('');
+  return `<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
+      <div style="margin-left:auto">${seg}</div></div>
+    <div class="card-pad">
+      <div class="row gap8" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:6px">
+        <div class="row gap8">
+          <span class="pill ${loadedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Naloženo ${loadedN}/${totalN}</span>
+          <span class="pill ${checkedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Zkontrolováno ${checkedN}/${totalN}</span></div>
+        <div class="t-mut" style="font-size:13px">${SL.tab==='all'?'Hodnota nakládky':SL.tab==='f1'?'Faktura 1':'Faktura 2'}: <span class="t-strong" style="color:var(--amber-700)">${money(tabTotal)}</span></div>
+      </div>
+      ${stopBlocks}
+    </div></div>`;
+}
+function slAddDokladka(orderId){ SL.dokStop=orderId;
+  const stock=DB.inventory.filter(i=>i.productId&&i.quantity>0);
+  if(!stock.length) return toast('Sklad je prázdný — není co doložit','warnTri');
+  openOverlay(`<div class="modal-head">${icon('stock',18)}<h3>Dokládka ze skladu</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <p style="margin:0 0 14px;color:var(--text-2);font-size:13px">Přidá kusy produktu ze skladu navíc k objednávce. Při doručení vývozu se automaticky odečtou ze skladu.</p>
+      <div class="form-grid" style="grid-template-columns:1fr">
+        ${field('Produkt (skladem)',sel('dok-prod',stock.map(i=>{const p=prodById(i.productId);return [i.id,`${p.name}${p.packageSize!=null?' ('+fmtLiters(p.packageSize)+')':''} — skladem ${i.quantity} ks`];})))}
+        ${field('Počet kusů',inp('dok-qty','1','','number'))}
+      </div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button><button class="btn btn-primary" id="dok-save">${icon('plus',15)}Přidat dokládku</button></div>`,{center:true});
+  $('#dok-save').onclick=slSaveDokladka; $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+function slSaveDokladka(){ const invId=val('dok-prod'); const qty=parseInt(val('dok-qty'))||0;
+  const inv=DB.inventory.find(i=>i.id===invId); if(!inv) return toast('Vyberte produkt','warnTri');
+  if(qty<=0) return toast('Zadejte počet kusů','warnTri');
+  if(qty>inv.quantity) return toast('Na skladě je jen '+inv.quantity+' ks','warnTri');
+  const s=DB.shipments.find(x=>x.id===SL.shipId); const st=s.stops.find(x=>x.orderId===SL.dokStop); if(!st) return;
+  st.items.push({ id:'dok-'+Math.random().toString(36).slice(2,7), productId:inv.productId, quantity:qty, loaded:false, checked:false, inv:1, source:'dokladka', fromInventoryId:inv.id });
+  closeOverlay(); toast('Dokládka přidána do nakládky'); slRerender(); }
 
 /* ---- Shipment planner ---- */
 let SH={ draft:null, drag:null, regionFilter:'all' };
@@ -1818,7 +1889,11 @@ function seOptimize(){ seSyncMeta(); const arr=SH.draft.stops.slice(); if(arr.le
   while(rem.length){ let bi=0,bd=1e9; rem.forEach((s,i)=>{const dd=haversine(cur,pt(s));if(dd<bd){bd=dd;bi=i;}}); const n=rem.splice(bi,1)[0]; out.push(n); cur=pt(n); }
   out.forEach((s,i)=>s.order=i+1); SH.draft.stops=out; seRerender(); toast('Trasa optimalizována (nejbližší soused)','sparkle'); }
 function seSave(){ seSyncMeta(); const d=SH.draft; if(!d.name)return toast('Zadejte název','warnTri'); if(!d.stops.length)return toast('Přidejte alespoň jednu zastávku','warnTri');
-  const build=st=>{ const o=DB.orders.find(x=>x.id===st.orderId); return { ...st, items:o.items.map(it=>({orderItemId:it.id,productId:it.productId,quantity:it.quantity,loaded:false})) }; };
+  const build=st=>{ const o=DB.orders.find(x=>x.id===st.orderId);
+    const existing=(DB.shipments.find(x=>x.id===d.id)||{stops:[]}).stops.find(x=>x.orderId===st.orderId);
+    const keep=existing?existing.items.filter(i=>i.source==='dokladka'):[];
+    return { ...st, items:[...o.items.map(it=>{ const prev=existing&&existing.items.find(x=>x.orderItemId===it.id);
+      return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, inv:prev?prev.inv:1, source:'order' }; }), ...keep] }; };
   if(d.id){ const s=DB.shipments.find(x=>x.id===d.id); Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom }); toast('Vývoz uložen'); go('shipments/'+d.id); }
   else { const s={ id:'s-'+Math.random().toString(36).slice(2,7), number:'VYV-2026-'+(53+DB.shipments.length), name:d.name, state:'Created',
     deliveryDate:d.deliveryDate, vehicleId:d.vehicleId, driverIds:d.driverIds, stops:d.stops.map(build), extraCustom:d.extraCustom };
