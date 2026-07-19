@@ -216,12 +216,14 @@ export function InventoryPage() {
   }, [breweries.data]);
 
   const adjustQty = async (item: InventoryItemListItemDto, delta: number) => {
-    const next = Math.max(0, (item.quantity ?? 0) + delta);
+    // The backend forbids changing productId/name on update (they're immutable)
+    // and requires quantity > 0, so send only quantity + the existing note.
+    const next = Math.max(1, (item.quantity ?? 1) + delta);
     if (!item.id || next === item.quantity) return;
     try {
       await update.mutateAsync({
         id: item.id,
-        data: new UpdateInventoryItemDto({ productId: item.productId, name: item.name, quantity: next, note: item.note }),
+        data: new UpdateInventoryItemDto({ quantity: next, note: item.note ?? undefined }),
       });
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
