@@ -13,6 +13,8 @@ import {
   ProductKind,
   ProductType,
   Country,
+  Region,
+  ContactType,
   ReminderType,
   ModuleType,
   PermissionLevel,
@@ -34,6 +36,9 @@ export interface MockDb {
   breweries: MockBrewery[];
   breweryReminders: MockReminder[];
   breweryNotes: MockNote[];
+  clients: MockClient[];
+  clientReminders: MockReminder[];
+  clientNotes: MockNote[];
 }
 
 // Free-text note scoped to its parent (brewery/client) via `ownerId`.
@@ -63,6 +68,23 @@ export interface MockBrewery {
   displayOrder: number;
   officialAddress: MockAddress;
   contactAddress?: MockAddress;
+}
+
+// Plain contact shape mirroring IClientContactDto.
+export interface MockClientContact {
+  type: ContactType;
+  description?: string;
+  value: string;
+}
+
+export interface MockClient {
+  id: string;
+  name: string;
+  businessName?: string;
+  region: Region;
+  officialAddress: MockAddress;
+  contactAddress?: MockAddress;
+  contacts: MockClientContact[];
 }
 
 // Reminder store shared by breweries/clients; `ownerId` scopes it to its parent.
@@ -361,6 +383,67 @@ const BREWERY_NOTES_SEED: MockNote[] = [
   { id: 'bnote-0002', ownerId: 'brw-0003', text: 'Nová řada nealko piv od jara 2026.', createdDate: new Date(2026, 4, 28) },
 ];
 
+// Seven clients across four regions around the Žitava/Görlitz/Chemnitz area
+// (coordinates are real-ish so PointMap renders sensible pins). Mixes German
+// venue names (billed in Germany, per Country.Germany) with a Czech contact
+// person style; two carry a separate contact address, one has no contacts.
+const CLIENTS_SEED: MockClient[] = [
+  {
+    id: 'cl-0001', name: 'Hospoda U Kohouta', businessName: 'Kohout Gastro s.r.o.', region: Region.ZittauCity,
+    officialAddress: { streetName: 'Bahnhofstraße', streetNumber: '12', city: 'Žitava', zip: '02763', country: Country.Germany, latitude: 50.8971, longitude: 14.8058 },
+    contacts: [
+      { type: ContactType.Phone, description: 'Vedoucí provozu', value: '+49 3583 123456' },
+      { type: ContactType.Email, value: 'kohout@gastro.de' },
+    ],
+  },
+  {
+    id: 'cl-0002', name: 'Gasthaus Zur Linde', businessName: 'Zur Linde GmbH', region: Region.ZittauCity,
+    officialAddress: { streetName: 'Neustadtplatz', streetNumber: '5', city: 'Žitava', zip: '02763', country: Country.Germany, latitude: 50.8945, longitude: 14.8102 },
+    contactAddress: { streetName: 'Postfach', streetNumber: '20', city: 'Žitava', zip: '02764', country: Country.Germany },
+    contacts: [{ type: ContactType.Email, description: 'Objednávky', value: 'info@zurlinde.de' }],
+  },
+  {
+    id: 'cl-0003', name: 'Bierstube Am Markt', region: Region.ZittauRegion,
+    officialAddress: { streetName: 'Marktplatz', streetNumber: '3', city: 'Hirschfelde', zip: '02788', country: Country.Germany, latitude: 50.9515, longitude: 14.8735 },
+    contacts: [{ type: ContactType.Phone, value: '+49 35843 22110' }],
+  },
+  {
+    id: 'cl-0004', name: 'Hotel Görlitzer Hof', businessName: 'Görlitzer Hof Hotel GmbH', region: Region.Goerlitz,
+    officialAddress: { streetName: 'Berliner Straße', streetNumber: '44', city: 'Zhořelec', zip: '02826', country: Country.Germany, latitude: 51.1520, longitude: 14.9877 },
+    contacts: [
+      { type: ContactType.Email, description: 'Recepce', value: 'rezervace@goerlitzerhof.de' },
+      { type: ContactType.Phone, value: '+49 3581 405060' },
+    ],
+  },
+  {
+    id: 'cl-0005', name: 'Wirtshaus Altstadt', businessName: 'Altstadt Gastro e.K.', region: Region.Goerlitz,
+    officialAddress: { streetName: 'Untermarkt', streetNumber: '18', city: 'Zhořelec', zip: '02826', country: Country.Germany, latitude: 51.1497, longitude: 14.9857 },
+    contactAddress: { streetName: 'Untermarkt', streetNumber: '18', city: 'Zhořelec', zip: '02826', country: Country.Germany, latitude: 51.1497, longitude: 14.9857 },
+    contacts: [],
+  },
+  {
+    id: 'cl-0006', name: 'Sport Bar Chemnitz', businessName: 'Sport Bar s.r.o.', region: Region.Chemnitz,
+    officialAddress: { streetName: 'Brückenstraße', streetNumber: '7', city: 'Chemnitz', zip: '09111', country: Country.Germany, latitude: 50.8322, longitude: 12.9214 },
+    contacts: [{ type: ContactType.Phone, description: 'Objednávky', value: '+49 371 998877' }],
+  },
+  {
+    id: 'cl-0007', name: 'Restaurace U Radnice', businessName: 'U Radnice Chemnitz GmbH', region: Region.Chemnitz,
+    officialAddress: { streetName: 'Markt', streetNumber: '1', city: 'Chemnitz', zip: '09111', country: Country.Germany, latitude: 50.8300, longitude: 12.9180 },
+    contacts: [{ type: ContactType.Email, value: 'info@uradnice-chemnitz.de' }],
+  },
+];
+
+const CLIENT_REMINDERS_SEED: MockReminder[] = [
+  { id: 'crem-0001', ownerId: 'cl-0001', name: 'Prodloužit smlouvu', description: 'Roční smlouva o dodávkách končí koncem srpna.', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 7, 25), numberOfDaysToRemindBefore: 10, isResolved: false },
+  { id: 'crem-0002', ownerId: 'cl-0004', name: 'Sezónní objednávka na podzim', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 9, 1), numberOfDaysToRemindBefore: 14, isResolved: false },
+  { id: 'crem-0003', ownerId: 'cl-0006', name: 'Ověřit fakturační údaje', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 5, 30), numberOfDaysToRemindBefore: 3, isResolved: true, resolvedDate: new Date(2026, 5, 28) },
+];
+
+const CLIENT_NOTES_SEED: MockNote[] = [
+  { id: 'cnote-0001', ownerId: 'cl-0001', text: 'Preferuje dodávky v pátek odpoledne.', createdDate: new Date(2026, 5, 3) },
+  { id: 'cnote-0002', ownerId: 'cl-0004', text: 'Hotel pořádá svatby — špičková spotřeba o víkendech.', createdDate: new Date(2026, 4, 20) },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
@@ -370,6 +453,9 @@ export const db: MockDb = {
   breweries: structuredClone(BREWERIES_SEED),
   breweryReminders: structuredClone(BREWERY_REMINDERS_SEED),
   breweryNotes: structuredClone(BREWERY_NOTES_SEED),
+  clients: structuredClone(CLIENTS_SEED),
+  clientReminders: structuredClone(CLIENT_REMINDERS_SEED),
+  clientNotes: structuredClone(CLIENT_NOTES_SEED),
 };
 
 /** New id for demo-created records. */

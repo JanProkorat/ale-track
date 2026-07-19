@@ -1,0 +1,289 @@
+import { useEffect } from 'react';
+import { useForm, useFieldArray, Controller, type Control, type FieldErrors } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Box, Stack, TextField, Typography, FormControlLabel, Switch, IconButton, Button } from '@mui/material';
+import AddIcon from '@mui/icons-material/AddOutlined';
+import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import { useSnackbar } from 'notistack';
+import { FormDrawer } from 'src/components/common/FormDrawer';
+import { Combobox } from 'src/components/common/Combobox';
+import { apiErrorMessage } from 'src/api/errors';
+import { L, regionName } from 'src/lib/labels';
+import {
+  CreateClientDto,
+  UpdateClientDto,
+  CreateClientContactDto,
+  UpdateClientContactDto,
+  AddressDto,
+  Country,
+  Region,
+  ContactType,
+  type ClientDto,
+} from 'src/generated/api-client';
+import { useCreateClient, useUpdateClient } from 'src/hooks/useClients';
+
+const addressSchema = z.object({
+  streetName: z.string().trim().min(1, 'Ulice'),
+  streetNumber: z.string().trim().min(1, 'Č.p.'),
+  city: z.string().trim().min(1, 'Město'),
+  zip: z.string().trim().min(1, 'PSČ'),
+  country: z.string().min(1, 'Země'),
+  latitude: z.string().refine((v) => v === '' || Number.isFinite(Number(v)), 'Číslo'),
+  longitude: z.string().refine((v) => v === '' || Number.isFinite(Number(v)), 'Číslo'),
+});
+type AddressValues = z.infer<typeof addressSchema>;
+
+const contactSchema = z.object({
+  type: z.string().min(1),
+  description: z.string().optional(),
+  value: z.string().optional(),
+});
+
+const schema = z
+  .object({
+    name: z.string().trim().min(1, 'Zadejte název'),
+    businessName: z.string().optional(),
+    region: z.string().min(1, 'Vyberte region'),
+    official: addressSchema,
+    hasContact: z.boolean(),
+    contact: addressSchema,
+    contacts: z.array(contactSchema),
+  })
+  .superRefine((val, ctx) => {
+    if (val.hasContact) {
+      const r = addressSchema.safeParse(val.contact);
+      if (!r.success) {
+        for (const issue of r.error.issues) {
+          ctx.addIssue({ ...issue, path: ['contact', ...issue.path] });
+        }
+      }
+    }
+  });
+type FormValues = z.infer<typeof schema>;
+
+const COUNTRY_OPTIONS = [
+  { value: String(Country.Czechia), label: 'Česko' },
+  { value: String(Country.Germany), label: 'Německo' },
+];
+const REGION_OPTIONS = Object.entries(L.region).map(([value, label]) => ({ value, label }));
+const CONTACT_TYPE_OPTIONS = Object.entries(L.contact).map(([value, label]) => ({ value, label }));
+
+const emptyAddr: AddressValues = {
+  streetName: '', streetNumber: '', city: '', zip: '', country: String(Country.Czechia), latitude: '', longitude: '',
+};
+const empty: FormValues = {
+  name: '', businessName: '', region: 'ZittauCity', official: emptyAddr, hasContact: false, contact: emptyAddr, contacts: [],
+};
+
+function addrToForm(a: { streetName?: string; streetNumber?: string; city?: string; zip?: string; country?: Country; latitude?: number; longitude?: number } | undefined): AddressValues {
+  if (!a) return emptyAddr;
+  return {
+    streetName: a.streetName ?? '', streetNumber: a.streetNumber ?? '', city: a.city ?? '', zip: a.zip ?? '',
+    country: a.country != null ? String(a.country) : String(Country.Czechia),
+    latitude: a.latitude != null ? String(a.latitude) : '', longitude: a.longitude != null ? String(a.longitude) : '',
+  };
+}
+function toAddressDto(a: AddressValues): AddressDto {
+  return new AddressDto({
+    streetName: a.streetName, streetNumber: a.streetNumber, city: a.city, zip: a.zip,
+    country: Number(a.country) as Country,
+    latitude: a.latitude === '' ? undefined : Number(a.latitude),
+    longitude: a.longitude === '' ? undefined : Number(a.longitude),
+  });
+}
+
+/** Reusable address field block bound to a react-hook-form path prefix —
+ * same shape as BreweryFormDrawer's AddressFields, duplicated here since it's
+ * typed against that component's own FormValues. */
+function AddressFields({ control, prefix, errors }: {
+  control: Control<FormValues>;
+  prefix: 'official' | 'contact';
+  errors: FieldErrors<FormValues>;
+}) {
+  const e = errors[prefix];
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={2}>
+        <Controller control={control} name={`${prefix}.streetName`} render={({ field }) => (
+          <TextField {...field} label="Ulice" fullWidth error={Boolean(e?.streetName)} helperText={e?.streetName?.message} />
+        )} />
+        <Controller control={control} name={`${prefix}.streetNumber`} render={({ field }) => (
+          <TextField {...field} label="Č.p." sx={{ maxWidth: 120 }} error={Boolean(e?.streetNumber)} helperText={e?.streetNumber?.message} />
+        )} />
+      </Stack>
+      <Stack direction="row" spacing={2}>
+        <Controller control={control} name={`${prefix}.city`} render={({ field }) => (
+          <TextField {...field} label="Město" fullWidth error={Boolean(e?.city)} helperText={e?.city?.message} />
+        )} />
+        <Controller control={control} name={`${prefix}.zip`} render={({ field }) => (
+          <TextField {...field} label="PSČ" sx={{ maxWidth: 140 }} error={Boolean(e?.zip)} helperText={e?.zip?.message} />
+        )} />
+      </Stack>
+      <Controller control={control} name={`${prefix}.country`} render={({ field }) => (
+        <Combobox label="Země" value={field.value || null} onChange={(v) => field.onChange(v ?? '')}
+          options={COUNTRY_OPTIONS} clearable={false} error={Boolean(e?.country)} helperText={e?.country?.message} />
+      )} />
+      <Stack direction="row" spacing={2}>
+        <Controller control={control} name={`${prefix}.latitude`} render={({ field }) => (
+          <TextField {...field} label="Zeměpisná šířka" type="number" fullWidth error={Boolean(e?.latitude)}
+            helperText={e?.latitude?.message ?? 'Volitelné — pro mapu'} />
+        )} />
+        <Controller control={control} name={`${prefix}.longitude`} render={({ field }) => (
+          <TextField {...field} label="Zeměpisná délka" type="number" fullWidth error={Boolean(e?.longitude)}
+            helperText={e?.longitude?.message ?? 'Volitelné'} />
+        )} />
+      </Stack>
+    </Stack>
+  );
+}
+
+export function ClientFormDrawer({ open, client, onClose }: {
+  open: boolean;
+  client?: ClientDto;
+  onClose: () => void;
+}) {
+  const { enqueueSnackbar } = useSnackbar();
+  const create = useCreateClient();
+  const update = useUpdateClient();
+  const editing = Boolean(client);
+
+  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: empty,
+  });
+  const hasContact = watch('hasContact');
+  const { fields, append, remove } = useFieldArray({ control, name: 'contacts' });
+
+  useEffect(() => {
+    if (!open) return;
+    reset(
+      client
+        ? {
+            name: client.name ?? '',
+            businessName: client.businessName ?? '',
+            region: regionName(client.region) ?? 'ZittauCity',
+            official: addrToForm(client.officialAddress),
+            hasContact: Boolean(client.contactAddress),
+            contact: addrToForm(client.contactAddress),
+            contacts: (client.contacts ?? []).map((c) => ({
+              type: c.type != null ? ContactType[c.type] : 'Phone',
+              description: c.description ?? '',
+              value: c.value ?? '',
+            })),
+          }
+        : empty
+    );
+  }, [open, client, reset]);
+
+  const submit = handleSubmit(async (v) => {
+    const contactsPayload = v.contacts
+      .filter((c) => c.value?.trim())
+      .map((c) => ({
+        type: ContactType[c.type as keyof typeof ContactType] as ContactType,
+        description: c.description?.trim() || undefined,
+        value: c.value!.trim(),
+      }));
+    const common = {
+      name: v.name,
+      businessName: v.businessName?.trim() || undefined,
+      region: Region[v.region as keyof typeof Region] as Region,
+      officialAddress: toAddressDto(v.official),
+      contactAddress: v.hasContact ? toAddressDto(v.contact) : undefined,
+    };
+    try {
+      if (client?.id) {
+        await update.mutateAsync({
+          id: client.id,
+          data: new UpdateClientDto({ ...common, contacts: contactsPayload.map((c) => new UpdateClientContactDto(c)) }),
+        });
+        enqueueSnackbar('Klient upraven.', { variant: 'success' });
+      } else {
+        await create.mutateAsync(
+          new CreateClientDto({ ...common, contacts: contactsPayload.map((c) => new CreateClientContactDto(c)) })
+        );
+        enqueueSnackbar('Klient přidán.', { variant: 'success' });
+      }
+      onClose();
+    } catch (e) {
+      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+    }
+  });
+
+  const busy = create.isPending || update.isPending;
+
+  return (
+    <FormDrawer
+      open={open}
+      title={editing ? 'Upravit klienta' : 'Nový klient'}
+      subtitle={editing ? client?.name : 'Přidejte klienta, jeho adresu a kontakty.'}
+      onClose={onClose}
+      onSubmit={submit}
+      busy={busy}
+      submitLabel={editing ? 'Uložit změny' : 'Přidat klienta'}
+      width={560}
+    >
+      <Controller control={control} name="name" render={({ field }) => (
+        <TextField {...field} label="Název" fullWidth autoFocus placeholder="Hospoda U…" error={Boolean(errors.name)} helperText={errors.name?.message} />
+      )} />
+      <Controller control={control} name="businessName" render={({ field }) => (
+        <TextField {...field} label="Obchodní název" fullWidth placeholder="s.r.o." />
+      )} />
+      <Controller control={control} name="region" render={({ field }) => (
+        <Combobox label="Region" value={field.value || null} onChange={(v) => field.onChange(v ?? '')}
+          options={REGION_OPTIONS} clearable={false} error={Boolean(errors.region)} helperText={errors.region?.message} />
+      )} />
+
+      <Typography variant="subtitle2" sx={{ mt: 1 }}>Fakturační adresa</Typography>
+      <AddressFields control={control} prefix="official" errors={errors} />
+
+      <FormControlLabel
+        control={<Controller control={control} name="hasContact" render={({ field }) => (
+          <Switch checked={field.value} onChange={(e) => field.onChange(e.target.checked)} />
+        )} />}
+        label="Odlišná kontaktní adresa"
+      />
+      {hasContact && (
+        <>
+          <Typography variant="subtitle2">Kontaktní adresa</Typography>
+          <AddressFields control={control} prefix="contact" errors={errors} />
+        </>
+      )}
+
+      <Typography variant="subtitle2" sx={{ mt: 1 }}>Kontakty</Typography>
+      <Stack spacing={1.25}>
+        {fields.length === 0 && (
+          <Typography variant="body2" color="text.secondary">Zatím žádné kontakty.</Typography>
+        )}
+        {fields.map((f, i) => (
+          <Stack key={f.id} direction="row" spacing={1} alignItems="flex-start">
+            <Box sx={{ width: 130, flexShrink: 0 }}>
+              <Controller control={control} name={`contacts.${i}.type`} render={({ field }) => (
+                <Combobox value={field.value || null} onChange={(v) => field.onChange(v ?? 'Phone')}
+                  options={CONTACT_TYPE_OPTIONS} clearable={false} />
+              )} />
+            </Box>
+            <Controller control={control} name={`contacts.${i}.description`} render={({ field }) => (
+              <TextField {...field} label="Popis" size="small" sx={{ width: 140, flexShrink: 0 }} />
+            )} />
+            <Controller control={control} name={`contacts.${i}.value`} render={({ field }) => (
+              <TextField {...field} label="Hodnota" size="small" fullWidth />
+            )} />
+            <IconButton onClick={() => remove(i)} sx={{ mt: 0.5, flexShrink: 0 }} aria-label="Odebrat kontakt">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        ))}
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={() => append({ type: 'Phone', description: '', value: '' })}
+          sx={{ alignSelf: 'flex-start', color: 'text.primary', borderColor: 'divider', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+        >
+          Přidat kontakt
+        </Button>
+      </Stack>
+    </FormDrawer>
+  );
+}

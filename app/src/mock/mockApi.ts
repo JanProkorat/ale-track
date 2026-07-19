@@ -42,6 +42,15 @@ import {
   type UpdateReminderDto,
   type SetBreweryReminderResolvedDateRequest,
   type IAddressDto,
+  ClientListItemDto,
+  ClientDto,
+  ClientContactDto,
+  NoteDto,
+  type CreateClientDto,
+  type UpdateClientDto,
+  type IClientContactDto,
+  type CreateNoteDto,
+  type SetClientReminderResolvedDateRequest,
 } from 'src/generated/api-client';
 import {
   db,
@@ -51,6 +60,8 @@ import {
   type MockDriverAvailability,
   type MockAddress,
   type MockReminder,
+  type MockClient,
+  type MockClientContact,
 } from './db';
 
 /** Case-insensitive substring match for demo-side list search. */
@@ -73,6 +84,20 @@ function reminderToDto(r: MockReminder): ReminderListItemDto {
   return new ReminderListItemDto({
     id: r.id, name: r.name, description: r.description, occurrenceDate: r.occurrenceDate,
     isResolved: r.isResolved, type: r.type,
+  });
+}
+function contactToDto(c: MockClientContact): ClientContactDto {
+  return new ClientContactDto(c as IClientContactDto);
+}
+function fromContactDto(c: IClientContactDto): MockClientContact {
+  return { type: c.type ?? 0, description: c.description, value: c.value ?? '' };
+}
+function clientToDetailDto(c: MockClient): ClientDto {
+  return new ClientDto({
+    id: c.id, name: c.name, businessName: c.businessName, region: c.region,
+    officialAddress: toAddressDto(c.officialAddress),
+    contactAddress: c.contactAddress ? toAddressDto(c.contactAddress) : undefined,
+    contacts: c.contacts.map(contactToDto),
   });
 }
 
@@ -459,6 +484,104 @@ const impl: Partial<IClient> = {
   deleteBreweryReminderEndpoint(id: string) {
     const i = db.breweryReminders.findIndex((x) => x.id === id);
     if (i >= 0) db.breweryReminders.splice(i, 1);
+    return mockDelay(id);
+  },
+
+  // ---- Clients ----------------------------------------------------------
+  getClientListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.clients
+      .filter((c) => matches(c.name, search) || matches(c.businessName, search))
+      .map((c) => new ClientListItemDto({ id: c.id, name: c.name, region: c.region }));
+    return mockDelay(rows);
+  },
+  getClientDetailEndpoint(id: string) {
+    const c = db.clients.find((x) => x.id === id);
+    if (!c) return Promise.reject(new MockNotFoundError('Klient'));
+    return mockDelay(clientToDetailDto(c));
+  },
+  createClientEndpoint(data: CreateClientDto) {
+    const id = mockId('cl');
+    db.clients.push({
+      id, name: data.name, businessName: data.businessName, region: data.region,
+      officialAddress: fromAddressDto(data.officialAddress)!,
+      contactAddress: fromAddressDto(data.contactAddress),
+      contacts: (data.contacts ?? []).map(fromContactDto),
+    });
+    return mockDelay(id);
+  },
+  updateClientEndpoint(id: string, data: UpdateClientDto) {
+    const c = db.clients.find((x) => x.id === id);
+    if (!c) return Promise.reject(new MockNotFoundError('Klient'));
+    c.name = data.name;
+    c.businessName = data.businessName;
+    c.region = data.region;
+    if (data.officialAddress) c.officialAddress = fromAddressDto(data.officialAddress)!;
+    c.contactAddress = fromAddressDto(data.contactAddress);
+    c.contacts = (data.contacts ?? []).map(fromContactDto);
+    return mockDelay(id);
+  },
+  deleteClientEndpoint(id: string) {
+    const i = db.clients.findIndex((x) => x.id === id);
+    if (i >= 0) db.clients.splice(i, 1);
+    db.clientReminders = db.clientReminders.filter((r) => r.ownerId !== id);
+    db.clientNotes = db.clientNotes.filter((n) => n.ownerId !== id);
+    return mockDelay(id);
+  },
+
+  // ---- Client reminders ---------------------------------------------------
+  getClientRemindersListEndpoint(id: string) {
+    const rows = db.clientReminders.filter((r) => r.ownerId === id).map(reminderToDto);
+    return mockDelay(rows);
+  },
+  createClientReminderEndpoint(id: string, data: CreateReminderDto) {
+    const rid = mockId('crem');
+    db.clientReminders.push({
+      id: rid, ownerId: id, name: data.name, description: data.description, type: data.type,
+      occurrenceDate: data.occurrenceDate, numberOfDaysToRemindBefore: data.numberOfDaysToRemindBefore,
+      isResolved: false,
+    });
+    return mockDelay(rid);
+  },
+  updateClientReminderEndpoint(id: string, data: UpdateReminderDto) {
+    const r = db.clientReminders.find((x) => x.id === id);
+    if (!r) return Promise.reject(new MockNotFoundError('Připomínka'));
+    Object.assign(r, {
+      name: data.name, description: data.description, type: data.type, occurrenceDate: data.occurrenceDate,
+      numberOfDaysToRemindBefore: data.numberOfDaysToRemindBefore,
+      resolvedDate: data.resolvedDate, isResolved: data.resolvedDate != null,
+    });
+    return mockDelay(id);
+  },
+  setClientReminderResolvedDateEndpoint(id: string, req: SetClientReminderResolvedDateRequest) {
+    const r = db.clientReminders.find((x) => x.id === id);
+    if (!r) return Promise.reject(new MockNotFoundError('Připomínka'));
+    r.resolvedDate = req.resolvedDate;
+    r.isResolved = req.resolvedDate != null;
+    return mockDelay(id);
+  },
+  deleteClientReminderEndpoint(id: string) {
+    const i = db.clientReminders.findIndex((x) => x.id === id);
+    if (i >= 0) db.clientReminders.splice(i, 1);
+    return mockDelay(id);
+  },
+
+  // ---- Client notes (real endpoints — no demoNotes fallback needed) -------
+  getClientNotesEndpoint(id: string) {
+    const rows = db.clientNotes
+      .filter((n) => n.ownerId === id)
+      .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime())
+      .map((n) => new NoteDto({ id: n.id, text: n.text }));
+    return mockDelay(rows);
+  },
+  createClientNoteEndpoint(id: string, data: CreateNoteDto) {
+    const nid = mockId('cnote');
+    db.clientNotes.unshift({ id: nid, ownerId: id, text: data.text, createdDate: new Date() });
+    return mockDelay(nid);
+  },
+  deleteClientNoteEndpoint(id: string) {
+    const i = db.clientNotes.findIndex((x) => x.id === id);
+    if (i >= 0) db.clientNotes.splice(i, 1);
     return mockDelay(id);
   },
 };

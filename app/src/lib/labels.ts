@@ -1,7 +1,7 @@
 // Enum → Czech display strings, matching the backend's string enums and the
 // prototype's vocabulary. "Basa" is used for the Bottle kind per the domain.
 
-import { ProductKind, ProductType, Country } from 'src/generated/api-client';
+import { ProductKind, ProductType, Country, Region, ContactType } from 'src/generated/api-client';
 
 export const L = {
   orderState: {
@@ -85,6 +85,29 @@ export function ptypeLabel(t?: ProductType | string | number): string | undefine
 export function countryLabel(c?: Country | string | number): string | undefined {
   const name = enumName(Country as unknown as Record<string, string | number>, c);
   return name ? (L.country[name] ?? name) : undefined;
+}
+
+/** The Region enum's member name (e.g. "ZittauCity"), resolved from either the
+ * numeric (demo) or string (real) wire representation — used as the grouping
+ * key so it can also index `L.region` for display. */
+export function regionName(r?: Region | string | number): string | undefined {
+  return enumName(Region as unknown as Record<string, string | number>, r);
+}
+
+export function regionLabel(r?: Region | string | number): string | undefined {
+  const name = regionName(r);
+  return name ? (L.region[name] ?? name) : undefined;
+}
+
+/** Resolves either wire representation of ContactType to its Czech label
+ * ("E-mail"/"Telefon"), and a matching `isEmailContact` check for icon choice. */
+export function contactTypeLabel(t?: ContactType | string | number): string | undefined {
+  const name = enumName(ContactType as unknown as Record<string, string | number>, t);
+  return name ? (L.contact[name] ?? name) : undefined;
+}
+
+export function isEmailContact(t?: ContactType | string | number): boolean {
+  return enumName(ContactType as unknown as Record<string, string | number>, t) === 'Email';
 }
 
 export const KIND_ORDER: Record<string, number> = {
