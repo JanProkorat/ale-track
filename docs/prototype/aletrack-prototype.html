@@ -284,6 +284,19 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:poin
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 .nav-item:focus-visible,.tile:focus-visible{outline-offset:-2px;}
 
+/* searchable combobox */
+.combo{position:relative;}
+.combo-btn{width:100%;display:flex;align-items:center;text-align:left;cursor:pointer;background:var(--surface);}
+.combo-btn .combo-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.combo-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-sm);box-shadow:var(--shadow-lg);z-index:70;overflow:hidden;}
+.combo-search-wrap{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--border);color:var(--text-3);}
+.combo-search{border:0;outline:none;background:none;font-family:var(--font);font-size:13px;flex:1;color:var(--text);}
+.combo-list{max-height:230px;overflow-y:auto;padding:5px;}
+.combo-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:none;padding:8px 11px;border-radius:var(--r-sm);font-family:var(--font);font-size:13.5px;color:var(--text);cursor:pointer;}
+.combo-opt:hover{background:var(--surface-2);}
+.combo-opt.sel{color:var(--amber-700);font-weight:700;}
+.combo-opt .ck{margin-left:auto;color:var(--amber);display:inline-flex;}
+
 /* animated route line */
 .route-anim{animation:dash 1.1s linear infinite;}
 @keyframes dash{to{stroke-dashoffset:-32;}}
@@ -839,7 +852,54 @@ function field(label,inner,{req=false,col2=false,hint=''}={}){
   return `<div class="field ${col2?'col-2':''}"><label>${esc(label)}${req?' <span class="req">*</span>':''}</label>${inner}
     ${hint?`<div class="hint">${esc(hint)}</div>`:''}</div>`; }
 function inp(id,val='',ph='',type='text'){ return `<input class="input" id="${id}" type="${type}" value="${esc(val)}" placeholder="${esc(ph)}">`; }
-function sel(id,opts,val){ return `<select class="select" id="${id}">${opts.map(([v,l])=>`<option value="${esc(v)}" ${v===val?'selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+/* Searchable combobox — drop-in replacement for a native <select>.
+   Keeps the same external contract: an element with `id` exposing `.value`
+   (a hidden input), so all existing val(id)/$('#id').value reads still work. */
+function sel(id,opts,val){
+  const cur = (val!=null&&val!=='') ? val : (opts[0]?opts[0][0]:'');
+  const curOpt = opts.find(o=>o[0]===cur) || opts[0] || ['',''];
+  const data = encodeURIComponent(JSON.stringify(opts));
+  return `<div class="combo" data-opts="${data}">
+    <input type="hidden" id="${id}" value="${esc(cur)}">
+    <button type="button" class="select combo-btn" data-combo-btn>
+      <span class="combo-label ${cur===''?'t-mut':''}">${esc(curOpt[1]||'— vyberte —')}</span></button>
+    <div class="combo-pop" data-combo-pop hidden></div></div>`;
+}
+function initCombos(){
+  document.addEventListener('click',e=>{
+    const btn=e.target.closest('[data-combo-btn]');
+    if(btn){ e.preventDefault(); toggleCombo(btn.closest('.combo')); return; }
+    const opt=e.target.closest('.combo-opt');
+    if(opt){ pickCombo(opt.closest('.combo'),opt.dataset.val); return; }
+    if(!e.target.closest('.combo-pop')) closeAllCombos();
+  });
+  document.addEventListener('input',e=>{ if(e.target.classList.contains('combo-search')) renderComboOptions(e.target.closest('.combo'),e.target.value); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeAllCombos(); });
+}
+function closeAllCombos(){ $$('[data-combo-pop]').forEach(p=>p.hidden=true); }
+function comboOpts(c){ try{ return JSON.parse(decodeURIComponent(c.dataset.opts)); }catch(e){ return []; } }
+function toggleCombo(c){
+  const pop=c.querySelector('[data-combo-pop]'); if(!pop.hidden){ pop.hidden=true; return; }
+  closeAllCombos();
+  const many=comboOpts(c).length>7;
+  pop.innerHTML=`${many?`<div class="combo-search-wrap">${icon('search',15)}<input class="combo-search" placeholder="Hledat…"></div>`:''}<div class="combo-list"></div>`;
+  renderComboOptions(c,''); pop.hidden=false;
+  const s=pop.querySelector('.combo-search'); if(s) s.focus();
+}
+function renderComboOptions(c,filter){
+  const opts=comboOpts(c); const cur=c.querySelector('input').value; const q=(filter||'').toLowerCase().trim();
+  const list=c.querySelector('.combo-list'); if(!list) return;
+  const f=opts.filter(o=>!q||(''+o[1]).toLowerCase().includes(q));
+  list.innerHTML=f.length?f.map(o=>`<button type="button" class="combo-opt ${o[0]===cur?'sel':''}" data-val="${esc(o[0])}">${esc(o[1])}${o[0]===cur?`<span class="ck">${icon('check',15)}</span>`:''}</button>`).join('')
+    :`<div class="t-mut" style="padding:10px 11px;font-size:12.5px">Nic nenalezeno</div>`;
+}
+function pickCombo(c,v){
+  const input=c.querySelector('input'); input.value=v;
+  const opt=comboOpts(c).find(o=>''+o[0]===''+v)||['',''];
+  const lbl=c.querySelector('.combo-label'); lbl.textContent=opt[1]||'— vyberte —'; lbl.classList.toggle('t-mut',v==='');
+  c.querySelector('[data-combo-pop]').hidden=true;
+  input.dispatchEvent(new Event('change',{bubbles:true}));
+}
 function txta(id,val='',ph=''){ return `<textarea class="input" id="${id}" placeholder="${esc(ph)}">${esc(val)}</textarea>`; }
 function addressFields(pfx,a){ a=a||{country:'Czechia'};
   return `<div class="form-grid">
@@ -1749,6 +1809,9 @@ function deHTML(){
       `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button><button class="btn btn-primary" onclick="deSave()">${icon('check',16)}${d.id?'Uložit':'Vytvořit dovoz'}</button>`)}
     <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
       <div class="stack" style="gap:14px">
+        ${d.stops.length?`<div class="card"><div class="card-head">${icon('route',16)}<h3>Plánovaná trasa svozu</h3>
+          <span class="tag" style="margin-left:auto">sklad → pivovary → sklad</span></div>
+          <div class="card-pad" style="padding:14px">${routeMap(deliveryStopPoints(d.stops),{h:300,animate:false})}</div></div>`:''}
         <div class="row gap8" style="justify-content:space-between"><div class="section-label" style="margin:0">Pivovary v dovozu (${d.stops.length})</div></div>
         ${deBreweryPicker(usedBrew)}
         ${stopCards||`<div class="empty" style="background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-lg)"><div>${icon('brewery',34)}</div><div class="t">Zatím žádný pivovar</div><div>Přidejte pivovar pomocí pole nahoře.</div></div>`}
@@ -1784,16 +1847,29 @@ function deBreweryInput(){
 }
 function dePickBrewery(bId){ DE.brewQuery=''; deAddStop(bId); }
 
-/* ---- stop card with embedded catalog ---- */
+/* brewery coordinates for the pickup route (warehouse -> breweries -> warehouse) */
+function deliveryStopPoints(stops){ return stops.map((s,i)=>{ const b=breweryById(s.breweryId); const a=b.officialAddress;
+  return { lat:a.latitude, lng:a.longitude, label:b.name.replace('Pivovar ','').replace('Brauerei','').trim(), seq:i+1, color:b.color }; }); }
+/* ---- stop card with embedded catalog (collapsible + reorderable) ---- */
 function deStopCard(s){
-  const b=breweryById(s.breweryId); const cnt=s.items.length; const ks=s.items.reduce((x,i)=>x+i.quantity,0);
-  return `<div class="card" id="de-stop-${s.id}">
-    <div class="card-head"><span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>
-      <h3 style="flex:1">${esc(b.name)}</h3>
+  const b=breweryById(s.breweryId); const ui=deStopUI(s.id); const cnt=s.items.length; const ks=s.items.reduce((x,i)=>x+i.quantity,0);
+  const idx=DE.draft.stops.findIndex(x=>x.id===s.id); const n=DE.draft.stops.length;
+  const head=`<div class="card-head" style="cursor:pointer;gap:9px" onclick="deToggleCollapse('${s.id}')">
+      <span style="color:var(--text-3);transform:rotate(${ui.collapsed?0:90}deg);transition:.2s;display:inline-flex">${icon('chevR',16)}</span>
+      <span class="av" style="width:26px;height:26px;border-radius:8px;background:${b.color}22;color:${b.color};font-size:12px;flex:0 0 auto">${idx+1}</span>
+      <h3 style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</h3>
       <span class="tag">${cnt} ${plural(cnt,'položka','položky','položek')} · ${ks} ks</span>
-      <button class="icon-btn" style="width:32px;height:32px;color:var(--crit)" onclick="deRemoveStop('${s.id}')" title="Odebrat pivovar">${icon('trash',14)}</button></div>
-    <div class="card-pad" id="de-cat-${s.id}">${deStopCatalog(s)}</div></div>`;
+      <button class="icon-btn" style="width:30px;height:30px" onclick="event.stopPropagation();deMoveStop('${s.id}',-1)" ${idx===0?'disabled':''} title="Nahoru">${icon('arrowU',13)}</button>
+      <button class="icon-btn" style="width:30px;height:30px" onclick="event.stopPropagation();deMoveStop('${s.id}',1)" ${idx===n-1?'disabled':''} title="Dolů">${icon('arrowD',13)}</button>
+      <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="event.stopPropagation();deRemoveStop('${s.id}')" title="Odebrat pivovar">${icon('trash',14)}</button></div>`;
+  const body=ui.collapsed
+    ? (cnt?`<div class="card-pad" style="padding-top:0"><div class="row wrap gap8">${s.items.map(it=>{const p=prodById(it.productId);
+        return `<span class="chip">${esc(p.name)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}<b style="margin-left:5px;color:var(--text)">×${it.quantity}</b></span>`;}).join('')}</div></div>`:'')
+    : `<div class="card-pad" id="de-cat-${s.id}">${deStopCatalog(s)}</div>`;
+  return `<div class="card" id="de-stop-${s.id}">${head}${body}</div>`;
 }
+function deToggleCollapse(sid){ deStopUI(sid).collapsed=!deStopUI(sid).collapsed; deRerenderStop(sid); }
+function deMoveStop(sid,dir){ deSyncMeta(); const a=DE.draft.stops; const i=a.findIndex(s=>s.id===sid); const j=i+dir; if(j<0||j>=a.length)return; [a[i],a[j]]=[a[j],a[i]]; deRerender(); }
 function deStopCatalog(s){
   const b=breweryById(s.breweryId); const ui=deStopUI(s.id); const prods=productsOf(b.id);
   const flt=p=>!ui.q||p.name.toLowerCase().includes(ui.q.toLowerCase());
@@ -1854,41 +1930,84 @@ function deSave(){ deSyncMeta(); const d=DE.draft; if(!d.stops.length)return toa
 }
 
 /* ============ MODULE: SKLAD (INVENTORY) ============ */
-let INV_VIEW='product';
+let INV_SEARCH='', INV_BREW='all', INV_LAYOUT='list';
 function viewInventory(){
   const ed=canEdit('inventory');
-  const linked=DB.inventory.filter(i=>i.productId), free=DB.inventory.filter(i=>!i.productId);
   const totalKs=DB.inventory.reduce((s,i)=>s+i.quantity,0);
-  const low=linked.filter(i=>i.quantity<=3);
-  // group linked by brewery
-  const byBrew={}; linked.forEach(i=>{ const p=prodById(i.productId); const b=p.breweryId; (byBrew[b]=byBrew[b]||[]).push(i); });
-  const brewSections=Object.keys(byBrew).map(bid=>{ const b=breweryById(bid);
-    const rows=byBrew[bid].sort((a,b)=>KIND_ORDER[prodById(a.productId).kind]-KIND_ORDER[prodById(b.productId).kind]).map(i=>{ const p=prodById(i.productId); const lowq=i.quantity<=3;
-      return `<tr><td><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${kindChipText(p.kind)} · ${p.packageSize?(p.packageSize>=1?p.packageSize+' l':p.packageSize*1000+' ml'):''}</div></td>
+  const low=DB.inventory.filter(i=>i.productId&&i.quantity<=3);
+  const brewOpts=[['all','Všechny pivovary'],...DB.breweries.map(b=>[b.id,b.name]),['__free','Ostatní (ruční)']];
+  AFTER=invWire;
+  return `<div class="page">
+    ${pageHead('Sklad','Sklad','Evidence zboží na skladě. Naskladňuje dovoz, vyskladňuje vývoz — lze i ručně.',
+      ed?`<button class="btn btn-primary" onclick="invForm(null)">${icon('plus',17)}Ruční položka</button>`:'')}
+    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:16px">
+      ${miniStat('Položek',DB.inventory.length,'stock')}${miniStat('Kusů celkem',totalKs,'box')}
+      <div class="tile" style="padding:14px;${low.length?'border-color:var(--crit)':''}"><div class="ti-top"><div class="ti-lbl">Nízká zásoba</div><span style="color:${low.length?'var(--crit)':'var(--text-3)'}">${icon('warnTri',16)}</span></div>
+        <div class="ti-val tnum" style="font-size:24px;${low.length?'color:var(--crit)':''}">${low.length}</div></div></div>
+    <div class="toolbar">
+      <div class="fld" style="min-width:230px">${icon('search',16)}<input id="inv-search" placeholder="Hledat položku…" value="${esc(INV_SEARCH)}"></div>
+      <div style="width:220px">${sel('inv-brew',brewOpts,INV_BREW)}</div>
+      <div class="seg"><button id="inv-lay-list" class="${INV_LAYOUT==='list'?'on':''}" onclick="invSetLayout('list')">${icon('menu',14)} Seznam</button>
+        <button id="inv-lay-grid" class="${INV_LAYOUT==='grid'?'on':''}" onclick="invSetLayout('grid')">${icon('dash',14)} Mřížka</button></div>
+      <span class="count-note" id="inv-count">${invCount()} položek</span></div>
+    <div id="inv-results">${invResults()}</div></div>`;
+}
+function invWire(){ const s=$('#inv-search'); if(s) s.oninput=()=>{ INV_SEARCH=s.value; invRerender(); };
+  const b=$('#inv-brew'); if(b) b.onchange=()=>{ INV_BREW=b.value; invRerender(); }; }
+function invSetLayout(l){ INV_LAYOUT=l; const a=$('#inv-lay-list'),g=$('#inv-lay-grid'); if(a)a.classList.toggle('on',l==='list'); if(g)g.classList.toggle('on',l==='grid'); invRerender(); }
+function invRerender(){ const r=$('#inv-results'); if(r) r.innerHTML=invResults(); const c=$('#inv-count'); if(c) c.textContent=invCount()+' položek'; }
+function invFiltered(){
+  const q=INV_SEARCH.toLowerCase().trim();
+  const spec=(INV_BREW!=='all'&&INV_BREW!=='__free');
+  const linked=(INV_BREW==='__free')?[]:DB.inventory.filter(i=>i.productId).filter(i=>{ const p=prodById(i.productId); return (!spec||p.breweryId===INV_BREW)&&(!q||p.name.toLowerCase().includes(q)); });
+  const free=spec?[]:DB.inventory.filter(i=>!i.productId).filter(i=>!q||(i.name||'').toLowerCase().includes(q));
+  return {linked,free};
+}
+function invCount(){ const {linked,free}=invFiltered(); return linked.length+free.length; }
+function invResults(){
+  const ed=canEdit('inventory'); const {linked,free}=invFiltered();
+  if(!linked.length&&!free.length) return `<div class="empty"><div>${icon('search',34)}</div><div class="t">Nic nenalezeno</div>
+    <div>Zkuste jiný filtr nebo hledaný výraz.</div>${(INV_SEARCH||INV_BREW!=='all')?`<button class="btn btn-sm btn-ghost" style="margin-top:12px" onclick="INV_SEARCH='';INV_BREW='all';renderRoute()">Zrušit filtry</button>`:''}</div>`;
+  if(INV_LAYOUT==='grid'){
+    const all=[...linked,...free];
+    return `<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">${all.map(i=>invTile(i,ed)).join('')}</div>`;
+  }
+  // list layout — grouped by brewery
+  const byBrew={}; linked.forEach(i=>{ const p=prodById(i.productId); (byBrew[p.breweryId]=byBrew[p.breweryId]||[]).push(i); });
+  const brewSections=DB.breweries.filter(b=>byBrew[b.id]).map(b=>{ const items=byBrew[b.id].sort((x,y)=>KIND_ORDER[prodById(x.productId).kind]-KIND_ORDER[prodById(y.productId).kind]);
+    const rows=items.map(i=>{ const p=prodById(i.productId); const lowq=i.quantity<=3;
+      return `<tr><td><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</div></td>
         <td>${p.priceWithVat?money(p.priceWithVat):'—'}</td>
-        <td class="num"><div class="row gap8" style="justify-content:flex-end">
-          ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',-1)">−</button>`:''}
+        <td class="num"><div class="row gap8" style="justify-content:flex-end">${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',-1)">−</button>`:''}
           <span class="tnum t-strong" style="min-width:34px;text-align:center;font-size:15px;${lowq?'color:var(--crit)':''}">${i.quantity}</span>
           ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',1)">+</button>`:''}</div></td>
         <td>${lowq?'<span class="pill s-crit"><span class="d"></span>nízká zásoba</span>':'<span class="pill s-ok"><span class="d"></span>skladem</span>'}</td>
         <td class="t-mut">${esc(i.note||'')}</td>${ed?`<td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="invDel('${i.id}')">${icon('trash',13)}</button></td>`:''}</tr>`; }).join('');
-    return `<div style="margin-bottom:8px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:20px 0 8px">
-      <span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut">${byBrew[bid].length} položek</span></div>
+    return `<div style="margin-bottom:8px"><div class="section-label" style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">
+      <span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut">${items.length} položek</span></div>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produkt</th><th>Cena/ks</th><th style="text-align:right">Skladem</th><th>Stav</th><th>Pozn.</th>${ed?'<th></th>':''}</tr></thead><tbody>${rows}</tbody></table></div></div>`; }).join('');
-  const freeSection=free.length?`<div style="margin-bottom:8px"><div class="section-label" style="margin:20px 0 8px">${icon('box',14)} Ostatní (ručně evidované)</div>
+  const freeSection=free.length?`<div style="margin-bottom:8px"><div class="section-label" style="margin:16px 0 8px">${icon('box',14)} Ostatní (ručně evidované)</div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Položka</th><th style="text-align:right">Množství</th><th>Pozn.</th>${ed?'<th></th>':''}</tr></thead>
     <tbody>${free.map(i=>`<tr><td class="t-strong">${esc(i.name)}</td><td class="num"><div class="row gap8" style="justify-content:flex-end">
       ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',-1)">−</button>`:''}<span class="tnum t-strong" style="min-width:34px;text-align:center;font-size:15px">${i.quantity}</span>
       ${ed?`<button class="icon-btn" style="width:28px;height:28px" onclick="invAdj('${i.id}',1)">+</button>`:''}</div></td>
       <td class="t-mut">${esc(i.note||'')}</td>${ed?`<td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="invDel('${i.id}')">${icon('trash',13)}</button></td>`:''}</tr>`).join('')}</tbody></table></div></div>`:'';
-  return `<div class="page">
-    ${pageHead('Sklad','Sklad','Evidence zboží na skladě. Naskladňuje dovoz, vyskladňuje vývoz — lze i ručně.',
-      ed?`<button class="btn btn-primary" onclick="invForm(null)">${icon('plus',17)}Ruční položka</button>`:'')}
-    <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-bottom:6px">
-      ${miniStat('Položek',DB.inventory.length,'stock')}${miniStat('Kusů celkem',totalKs,'box')}
-      <div class="tile" style="padding:14px;${low.length?'border-color:var(--crit)':''}"><div class="ti-top"><div class="ti-lbl">Nízká zásoba</div><span style="color:${low.length?'var(--crit)':'var(--text-3)'}">${icon('warnTri',16)}</span></div>
-        <div class="ti-val tnum" style="font-size:24px;${low.length?'color:var(--crit)':''}">${low.length}</div></div></div>
-    ${brewSections}${freeSection}</div>`;
+  return brewSections+freeSection;
+}
+function invTile(i,ed){
+  const p=i.productId?prodById(i.productId):null; const b=p?breweryById(p.breweryId):null; const lowq=p&&i.quantity<=3;
+  return `<div class="tile" style="gap:12px">
+    <div class="row gap8"><span class="dotc" style="width:12px;height:12px;border-radius:3px;background:${b?b.color:'var(--text-3)'};flex:0 0 auto"></span>
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p?p.name:i.name)}</div>
+      <div class="t-mut" style="font-size:11.5px">${p?kindChipText(p.kind)+(p.packageSize!=null?' · '+fmtLiters(p.packageSize):''):'ruční položka'}</div></div>
+      ${lowq?'<span class="pill s-crit"><span class="d"></span>nízká</span>':(p?'<span class="pill s-ok"><span class="d"></span>skladem</span>':'')}</div>
+    <div class="divider" style="margin:0"></div>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row gap8">${ed?`<button class="icon-btn" style="width:30px;height:30px" onclick="invAdj('${i.id}',-1)">−</button>`:''}
+        <span class="tnum t-strong" style="min-width:30px;text-align:center;font-size:17px;${lowq?'color:var(--crit)':''}">${i.quantity}</span>
+        ${ed?`<button class="icon-btn" style="width:30px;height:30px" onclick="invAdj('${i.id}',1)">+</button>`:''}</div>
+      ${ed?`<button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="invDel('${i.id}')">${icon('trash',13)}</button>`:''}</div>
+    ${i.note?`<div class="t-mut" style="font-size:11.5px">${esc(i.note)}</div>`:''}</div>`;
 }
 function invAdj(id,delta){ const i=DB.inventory.find(x=>x.id===id); i.quantity=Math.max(0,i.quantity+delta); renderRoute(); }
 function invDel(id){ const i=DB.inventory.find(x=>x.id===id); const nm=i.name||(prodById(i.productId||'')||{}).name||'položku';
@@ -1899,7 +2018,7 @@ function invForm(id){
     <div class="modal-body">
       <div class="seg" style="margin-bottom:16px"><button class="on" id="iv-tab-p" onclick="invFormTab('p')">Produkt z ceníku</button><button id="iv-tab-f" onclick="invFormTab('f')">Volná položka</button></div>
       <div id="iv-p"><div class="form-grid" style="grid-template-columns:1fr">
-        ${field('Produkt',sel('iv-prod',DB.products.filter(p=>!linkedIds.has(p.id)).map(p=>[p.id,breweryById(p.breweryId).name+' — '+p.name])))}
+        ${field('Produkt',sel('iv-prod',DB.products.filter(p=>!linkedIds.has(p.id)).map(p=>[p.id,`${breweryById(p.breweryId).name} — ${p.name}${p.packageSize!=null?' ('+fmtLiters(p.packageSize)+')':''}`])))}
         ${field('Množství',inp('iv-qty1','1','','number'))}${field('Poznámka',inp('iv-note1',''))}</div></div>
       <div id="iv-f" style="display:none"><div class="form-grid" style="grid-template-columns:1fr">
         ${field('Název položky',inp('iv-name','','Vratné basy, CO₂ bomba…'),{req:true})}
@@ -2117,7 +2236,7 @@ function wireGlobalSearch(){
 /* ============ BOOT ============ */
 function boot(){
   document.documentElement.setAttribute('data-theme',UIS.theme);
-  buildShell(); wireGlobalSearch();
+  buildShell(); wireGlobalSearch(); initCombos();
   window.addEventListener('hashchange',renderRoute);
   if(!location.hash) location.hash='#/dashboard';
   renderRoute();
