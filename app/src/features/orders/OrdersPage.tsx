@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Box, Button, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Button, Card, Stack, Typography } from '@mui/material';
+import { SegControl } from 'src/components/common/SegControl';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
@@ -192,14 +193,19 @@ export function OrdersPage() {
             {() => (
               <>
                 <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
-                  <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_e, v: StatusFilter | null) => v && setFilter(v)} sx={{ flexWrap: 'wrap' }}>
-                    {SEGMENTS.map(([value, label]) => (
-                      <ToggleButton key={value} value={value} sx={{ textTransform: 'none', fontWeight: 700 }}>
-                        {label}
-                        {counts[value] ? <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{counts[value]}</Box> : null}
-                      </ToggleButton>
-                    ))}
-                  </ToggleButtonGroup>
+                  <SegControl
+                    value={filter}
+                    onChange={setFilter}
+                    options={SEGMENTS.map(([value, label]) => ({
+                      value,
+                      label: (
+                        <Box component="span">
+                          {label}
+                          {counts[value] ? <Box component="span" sx={{ ml: 0.5, opacity: 0.55 }}>{counts[value]}</Box> : null}
+                        </Box>
+                      ),
+                    }))}
+                  />
                   <Box sx={{ flex: 1 }} />
                   <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
                     {filtered.length} z {orders.length}
@@ -209,7 +215,9 @@ export function OrdersPage() {
                 {filtered.length === 0 ? (
                   <EmptyState icon={<ReceiptLongOutlinedIcon />} title="Žádné objednávky v tomto filtru" dense />
                 ) : (
-                  <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => setSelectedId(o.id ?? null)} />
+                  <Card variant="outlined">
+                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => setSelectedId(o.id ?? null)} />
+                  </Card>
                 )}
               </>
             )}
