@@ -80,6 +80,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
+        // Snapshot the orders currently on the shipment so we can free any that get removed.
+        var previousStopOrders = outgoingShipment!.Stops.Select(s => s.ClientOrder).ToList();
+
         var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
@@ -124,6 +127,36 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         
         var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
                                      && req.Data.State == OutgoingShipmentState.Loaded;
+
+        // Order lifecycle follows the shipment: added → Planning, InTransit →
+        // Delivering, Delivered → Finished (+ actual delivery date), Cancelled or
+        // removed → back to New (freed for reuse).
+        var currentStopOrders = outgoingShipment.Stops.Select(s => s.ClientOrder).ToList();
+        var currentOrderIds = currentStopOrders.Select(o => o.PublicId).ToHashSet();
+
+        foreach (var removed in previousStopOrders.Where(o => !currentOrderIds.Contains(o.PublicId)))
+            removed.State = OrderState.New;
+
+        foreach (var order in currentStopOrders)
+        {
+            switch (req.Data.State)
+            {
+                case OutgoingShipmentState.Cancelled:
+                    order.State = OrderState.New;
+                    break;
+                case OutgoingShipmentState.Delivered:
+                    order.State = OrderState.Finished;
+                    order.ActualDeliveryDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
+                    break;
+                case OutgoingShipmentState.InTransit:
+                    order.State = OrderState.Delivering;
+                    break;
+                default: // Created / Loaded
+                    if (order.State == OrderState.New)
+                        order.State = OrderState.Planning;
+                    break;
+            }
+        }
 
         if (req.Data.State == OutgoingShipmentState.Cancelled)
             ResetOrderItemsForReuse(outgoingShipment);

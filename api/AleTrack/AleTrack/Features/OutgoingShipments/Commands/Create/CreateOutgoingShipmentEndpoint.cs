@@ -75,6 +75,10 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 })]
         };
 
+        // Orders added to a shipment move into planning.
+        foreach (var order in orders.Where(o => o.State == OrderState.New))
+            order.State = OrderState.Planning;
+
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
