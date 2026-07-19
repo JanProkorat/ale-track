@@ -97,6 +97,69 @@ public sealed class UpdateOutgoingShipmentTests
     }
 
     [Fact]
+    public async Task ProcessAsync_UpdateOutgoingShipment_ExistingInventoryExtraItemWithoutProductId_Success()
+    {
+        // Regression: re-sending an existing dokládka whose ProductId is not
+        // round-tripped (empty) must update it in place, not trigger a Product
+        // lookup on Guid.Empty (which threw ENTITY_NOT_FOUND).
+        var shipmentId = Guid.NewGuid();
+        var extraId = Guid.NewGuid();
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
+
+        var existingExtra = new OutgoingShipmentInventoryExtraItem
+        {
+            PublicId = extraId,
+            Product = product,
+            Quantity = 2,
+            IsShipmentLoadingConfirmed = false
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created
+        );
+        outgoingShipment.InventoryExtraItems = [existingExtra];
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            products: [product]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                ClientOrderShipments = [],
+                State = OutgoingShipmentState.Created,
+                InventoryExtraShipments =
+                [
+                    new InventoryExtraShipmentDto
+                    {
+                        Id = extraId,
+                        ProductId = Guid.Empty,
+                        Quantity = 7,
+                        IsLoadingConfirmed = true
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        outgoingShipment.InventoryExtraItems.Should().ContainSingle();
+        existingExtra.Quantity.Should().Be(7);
+        existingExtra.IsShipmentLoadingConfirmed.Should().BeTrue();
+        existingExtra.Product.Should().Be(product);
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdateOutgoingShipment_NotFound()
     {
         var dbContext = AleTrackDbContextMockFactory.CreateMock();

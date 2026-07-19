@@ -393,8 +393,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var existingById = outgoingShipment.ClientExtraItems
             .ToDictionary(ei => ei.PublicId);
 
-        // Fetch products for new items that reference a product
+        // Only new items need their inventory item resolved — existing items are
+        // matched by Id and keep their already-linked inventory item.
         var newProductIds = extraShipments
+            .Where(es => es.Id is null || !existingById.ContainsKey(es.Id.Value))
             .Select(es => es.InventoryItemId)
             .Distinct()
             .ToList();
@@ -454,8 +456,11 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var existingById = outgoingShipment.InventoryExtraItems
             .ToDictionary(ei => ei.PublicId);
 
-        // Fetch products for new items that reference a product
+        // Only new items need their product resolved — existing items are matched
+        // by Id and keep their already-linked product, so their (possibly not
+        // round-tripped) ProductId must not trigger a lookup.
         var newProductIds = extraShipments
+            .Where(es => es.Id is null || !existingById.ContainsKey(es.Id.Value))
             .Select(es => es.ProductId)
             .Distinct()
             .ToList();
