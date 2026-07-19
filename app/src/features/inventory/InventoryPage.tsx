@@ -17,13 +17,12 @@ import { useAuth } from 'src/auth/AuthProvider';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { apiErrorMessage } from 'src/api/errors';
 import { num, fmtLiters, plural } from 'src/lib/format';
-import { L } from 'src/lib/labels';
-import { ProductKind, ProductType, type InventoryItemListItemDto } from 'src/generated/api-client';
+import { kindLabel, ptypeLabel } from 'src/lib/labels';
+import { type InventoryItemListItemDto } from 'src/generated/api-client';
 import { useInventory, useDeleteInventoryItem } from 'src/hooks/useInventory';
 import { InventoryItemFormDrawer } from './InventoryItemFormDrawer';
 
-const kindLabel = (k?: ProductKind) => (k != null ? (L.kind[ProductKind[k]] ?? '—') : undefined);
-const typeLabel = (t?: ProductType) => (t != null ? (L.ptype[ProductType[t]] ?? '—') : undefined);
+const typeLabel = ptypeLabel;
 
 /** Kind/type + package size as a secondary line under the item name. */
 function itemSubtitle(item: InventoryItemListItemDto): string {

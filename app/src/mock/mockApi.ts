@@ -27,13 +27,52 @@ import {
   type CreateDriverDto,
   type UpdateDriverDto,
   NumberOfRecordsInEachModuleDto,
+  BreweryListItemDto,
+  BreweryDto,
+  AddressDto,
+  BreweryProductListItemDto,
+  ProductDto,
+  ReminderListItemDto,
+  type CreateBreweryDto,
+  type UpdateBreweryDto,
+  type CreateProductsDto,
+  type UpdateProductDto,
+  type CreateReminderDto,
+  type UpdateReminderDto,
+  type SetBreweryReminderResolvedDateRequest,
+  type IAddressDto,
 } from 'src/generated/api-client';
-import { db, mockId, mockDelay, MockNotFoundError, type MockDriverAvailability } from './db';
+import {
+  db,
+  mockId,
+  mockDelay,
+  MockNotFoundError,
+  type MockDriverAvailability,
+  type MockAddress,
+  type MockReminder,
+} from './db';
 
 /** Case-insensitive substring match for demo-side list search. */
 function matches(haystack: string | undefined, needle: string | undefined): boolean {
   if (!needle) return true;
   return (haystack ?? '').toLowerCase().includes(needle.toLowerCase());
+}
+
+function toAddressDto(a: MockAddress): AddressDto {
+  return new AddressDto(a as IAddressDto);
+}
+function fromAddressDto(a: IAddressDto | undefined): MockAddress | undefined {
+  if (!a) return undefined;
+  return {
+    streetName: a.streetName, streetNumber: a.streetNumber, city: a.city, zip: a.zip,
+    country: a.country, latitude: a.latitude, longitude: a.longitude,
+  };
+}
+function reminderToDto(r: MockReminder): ReminderListItemDto {
+  return new ReminderListItemDto({
+    id: r.id, name: r.name, description: r.description, occurrenceDate: r.occurrenceDate,
+    isResolved: r.isResolved, type: r.type,
+  });
 }
 
 const impl: Partial<IClient> = {
@@ -270,6 +309,153 @@ const impl: Partial<IClient> = {
         usersCount: db.users.length,
       })
     );
+  },
+
+  // ---- Breweries ------------------------------------------------------------
+  getBreweriesListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.breweries
+      .filter((b) => matches(b.name, search))
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((b) => new BreweryListItemDto({ id: b.id, name: b.name, displayOrder: b.displayOrder, color: b.color }));
+    return mockDelay(rows);
+  },
+  getBreweryDetailEndpoint(id: string) {
+    const b = db.breweries.find((x) => x.id === id);
+    if (!b) return Promise.reject(new MockNotFoundError('Pivovar'));
+    return mockDelay(
+      new BreweryDto({
+        id: b.id, name: b.name, color: b.color,
+        officialAddress: toAddressDto(b.officialAddress),
+        contactAddress: b.contactAddress ? toAddressDto(b.contactAddress) : undefined,
+      })
+    );
+  },
+  createBreweryEndpoint(data: CreateBreweryDto) {
+    const id = mockId('brw');
+    const displayOrder = db.breweries.reduce((m, b) => Math.max(m, b.displayOrder), 0) + 1;
+    db.breweries.push({
+      id, name: data.name, color: data.color, displayOrder,
+      officialAddress: fromAddressDto(data.officialAddress)!,
+      contactAddress: fromAddressDto(data.contactAddress),
+    });
+    return mockDelay(id);
+  },
+  updateBreweryEndpoint(id: string, data: UpdateBreweryDto) {
+    const b = db.breweries.find((x) => x.id === id);
+    if (!b) return Promise.reject(new MockNotFoundError('Pivovar'));
+    b.name = data.name;
+    b.color = data.color;
+    if (data.officialAddress) b.officialAddress = fromAddressDto(data.officialAddress)!;
+    b.contactAddress = fromAddressDto(data.contactAddress);
+    // Keep denormalized product.breweryName in sync.
+    db.products.forEach((p) => { if (p.breweryId === id) p.breweryName = data.name; });
+    return mockDelay(id);
+  },
+  deleteBreweryEndpoint(id: string) {
+    const i = db.breweries.findIndex((x) => x.id === id);
+    if (i >= 0) db.breweries.splice(i, 1);
+    db.products = db.products.filter((p) => p.breweryId !== id);
+    db.breweryReminders = db.breweryReminders.filter((r) => r.ownerId !== id);
+    return mockDelay(id);
+  },
+
+  // ---- Ceník (per-brewery products) -----------------------------------------
+  getBreweryProductsListEndpoint(id: string, parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.products
+      .filter((p) => p.breweryId === id && matches(p.name, search))
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+      .map(
+        (p) =>
+          new BreweryProductListItemDto({
+            id: p.id, name: p.name, description: p.description, kind: p.kind, type: p.type,
+            alcoholPercentage: p.alcoholPercentage, platoDegree: p.platoDegree, packageSize: p.packageSize,
+            priceWithVat: p.priceWithVat, priceForUnitWithVat: p.priceForUnitWithVat,
+            priceForUnitWithoutVat: p.priceForUnitWithoutVat, weight: p.weight, displayOrder: p.displayOrder,
+          })
+      );
+    return mockDelay(rows);
+  },
+  getProductDetailEndpoint(id: string) {
+    const p = db.products.find((x) => x.id === id);
+    if (!p) return Promise.reject(new MockNotFoundError('Produkt'));
+    return mockDelay(
+      new ProductDto({
+        id: p.id, name: p.name, description: p.description, kind: p.kind, type: p.type,
+        alcoholPercentage: p.alcoholPercentage, platoDegree: p.platoDegree, packageSize: p.packageSize,
+        priceWithVat: p.priceWithVat, priceForUnitWithVat: p.priceForUnitWithVat,
+        priceForUnitWithoutVat: p.priceForUnitWithoutVat, weight: p.weight,
+      })
+    );
+  },
+  createProductsEndpoint(id: string, data: CreateProductsDto) {
+    const brewery = db.breweries.find((x) => x.id === id);
+    const nextOrder = db.products.filter((p) => p.breweryId === id).reduce((m, p) => Math.max(m, p.displayOrder ?? 0), 0);
+    (data.products ?? []).forEach((prod, i) => {
+      db.products.push({
+        id: mockId('prod'), name: prod.name, description: prod.description, kind: prod.kind, type: prod.type,
+        alcoholPercentage: prod.alcoholPercentage, platoDegree: prod.platoDegree, packageSize: prod.packageSize,
+        priceWithVat: prod.priceWithVat, priceForUnitWithVat: prod.priceForUnitWithVat,
+        priceForUnitWithoutVat: prod.priceForUnitWithoutVat,
+        breweryName: brewery?.name, breweryId: id, breweryDisplayOrder: brewery?.displayOrder,
+        displayOrder: nextOrder + i + 1,
+      });
+    });
+    return mockDelay(id);
+  },
+  updateProductEndpoint(id: string, data: UpdateProductDto) {
+    const p = db.products.find((x) => x.id === id);
+    if (!p) return Promise.reject(new MockNotFoundError('Produkt'));
+    Object.assign(p, {
+      name: data.name, description: data.description, kind: data.kind, type: data.type,
+      alcoholPercentage: data.alcoholPercentage, platoDegree: data.platoDegree, packageSize: data.packageSize,
+      priceWithVat: data.priceWithVat, priceForUnitWithVat: data.priceForUnitWithVat,
+      priceForUnitWithoutVat: data.priceForUnitWithoutVat,
+    });
+    return mockDelay(id);
+  },
+  deleteProductEndpoint(id: string) {
+    const i = db.products.findIndex((x) => x.id === id);
+    if (i >= 0) db.products.splice(i, 1);
+    return mockDelay(id);
+  },
+
+  // ---- Brewery reminders ----------------------------------------------------
+  getBreweryRemindersListEndpoint(id: string) {
+    const rows = db.breweryReminders.filter((r) => r.ownerId === id).map(reminderToDto);
+    return mockDelay(rows);
+  },
+  createBreweryReminderEndpoint(id: string, data: CreateReminderDto) {
+    const rid = mockId('rem');
+    db.breweryReminders.push({
+      id: rid, ownerId: id, name: data.name, description: data.description, type: data.type,
+      occurrenceDate: data.occurrenceDate, numberOfDaysToRemindBefore: data.numberOfDaysToRemindBefore,
+      isResolved: false,
+    });
+    return mockDelay(rid);
+  },
+  updateBreweryReminderEndpoint(id: string, data: UpdateReminderDto) {
+    const r = db.breweryReminders.find((x) => x.id === id);
+    if (!r) return Promise.reject(new MockNotFoundError('Připomínka'));
+    Object.assign(r, {
+      name: data.name, description: data.description, type: data.type, occurrenceDate: data.occurrenceDate,
+      numberOfDaysToRemindBefore: data.numberOfDaysToRemindBefore,
+      resolvedDate: data.resolvedDate, isResolved: data.resolvedDate != null,
+    });
+    return mockDelay(id);
+  },
+  setBreweryReminderResolvedDateEndpoint(id: string, req: SetBreweryReminderResolvedDateRequest) {
+    const r = db.breweryReminders.find((x) => x.id === id);
+    if (!r) return Promise.reject(new MockNotFoundError('Připomínka'));
+    r.resolvedDate = req.resolvedDate;
+    r.isResolved = req.resolvedDate != null;
+    return mockDelay(id);
+  },
+  deleteBreweryReminderEndpoint(id: string) {
+    const i = db.breweryReminders.findIndex((x) => x.id === id);
+    if (i >= 0) db.breweryReminders.splice(i, 1);
+    return mockDelay(id);
   },
 };
 

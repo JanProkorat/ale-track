@@ -1,6 +1,8 @@
 // Enum → Czech display strings, matching the backend's string enums and the
 // prototype's vocabulary. "Basa" is used for the Bottle kind per the domain.
 
+import { ProductKind, ProductType, Country } from 'src/generated/api-client';
+
 export const L = {
   orderState: {
     New: 'Nová',
@@ -59,6 +61,31 @@ export const L = {
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
   addrKind: { Official: 'Fakturační', Contact: 'Kontaktní' } as Record<string, string>,
 } as const;
+
+// The generated enums are numeric, but the backend serializes enum values as
+// strings on the wire (real mode) while demo seeds use the numeric enum. These
+// helpers resolve either representation to the enum's name, then to Czech —
+// so labels render correctly in BOTH modes.
+function enumName(enumObj: Record<string, string | number>, val: unknown): string | undefined {
+  if (val == null || val === '') return undefined;
+  if (typeof val === 'number') return enumObj[val] as string | undefined; // numeric → name (demo)
+  return String(val); // already the wire string name (real)
+}
+
+export function kindLabel(k?: ProductKind | string | number): string | undefined {
+  const name = enumName(ProductKind as unknown as Record<string, string | number>, k);
+  return name ? (L.kind[name] ?? name) : undefined;
+}
+
+export function ptypeLabel(t?: ProductType | string | number): string | undefined {
+  const name = enumName(ProductType as unknown as Record<string, string | number>, t);
+  return name ? (L.ptype[name] ?? name) : undefined;
+}
+
+export function countryLabel(c?: Country | string | number): string | undefined {
+  const name = enumName(Country as unknown as Record<string, string | number>, c);
+  return name ? (L.country[name] ?? name) : undefined;
+}
 
 export const KIND_ORDER: Record<string, number> = {
   Keg: 1,

@@ -11,6 +11,8 @@ import {
   UserRoleType,
   ProductKind,
   ProductType,
+  Country,
+  ReminderType,
 } from 'src/generated/api-client';
 
 export interface MockDb {
@@ -19,6 +21,42 @@ export interface MockDb {
   products: IProductListItemDto[];
   inventory: MockInventorySection[];
   drivers: MockDriver[];
+  breweries: MockBrewery[];
+  breweryReminders: MockReminder[];
+}
+
+// Plain address shape mirroring IAddressDto (kept local so the demo store holds
+// plain objects; the mock API wraps it in the generated AddressDto on the way out).
+export interface MockAddress {
+  streetName: string;
+  streetNumber: string;
+  city: string;
+  zip: string;
+  country: Country;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface MockBrewery {
+  id: string;
+  name: string;
+  color: string;
+  displayOrder: number;
+  officialAddress: MockAddress;
+  contactAddress?: MockAddress;
+}
+
+// Reminder store shared by breweries/clients; `ownerId` scopes it to its parent.
+export interface MockReminder {
+  id: string;
+  ownerId: string;
+  name: string;
+  description?: string;
+  type: ReminderType;
+  occurrenceDate?: Date;
+  numberOfDaysToRemindBefore: number;
+  isResolved: boolean;
+  resolvedDate?: Date;
 }
 
 // Note: the generated `IInventorySectionDto.items` is typed as the concrete
@@ -252,12 +290,37 @@ const DRIVERS_SEED: MockDriver[] = [
   },
 ];
 
+// Three breweries; ids match the `breweryId`s on PRODUCTS_SEED so the ceník
+// (per-brewery products) joins correctly in demo mode.
+const BREWERIES_SEED: MockBrewery[] = [
+  {
+    id: 'brw-0001', name: 'Pivovar Únětice', color: '#C7911F', displayOrder: 1,
+    officialAddress: { streetName: 'Rýznerova', streetNumber: '19', city: 'Únětice', zip: '25262', country: Country.Czechia, latitude: 50.1417, longitude: 14.3389 },
+  },
+  {
+    id: 'brw-0002', name: 'Pivovar Kácov', color: '#2F6F4E', displayOrder: 2,
+    officialAddress: { streetName: 'Pod Nádražím', streetNumber: '2', city: 'Kácov', zip: '28509', country: Country.Czechia, latitude: 49.7789, longitude: 15.0294 },
+    contactAddress: { streetName: 'Pod Nádražím', streetNumber: '2', city: 'Kácov', zip: '28509', country: Country.Czechia, latitude: 49.7789, longitude: 15.0294 },
+  },
+  {
+    id: 'brw-0003', name: 'Pivovar Rohozec', color: '#8B3A3A', displayOrder: 3,
+    officialAddress: { streetName: 'Malý Rohozec', streetNumber: '29', city: 'Turnov', zip: '51101', country: Country.Czechia, latitude: 50.5989, longitude: 15.1372 },
+  },
+];
+
+const BREWERY_REMINDERS_SEED: MockReminder[] = [
+  { id: 'rem-0001', ownerId: 'brw-0001', name: 'Objednat etikety', description: 'Doobjednat etikety na láhve 0,5 l.', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 6, 28), numberOfDaysToRemindBefore: 3, isResolved: false },
+  { id: 'rem-0002', ownerId: 'brw-0002', name: 'Roční revize sudů', type: ReminderType.OneTimeEvent, occurrenceDate: new Date(2026, 8, 15), numberOfDaysToRemindBefore: 7, isResolved: false },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
   users: structuredClone(USERS_SEED),
   products: structuredClone(PRODUCTS_SEED),
   inventory: structuredClone(INVENTORY_SEED),
   drivers: structuredClone(DRIVERS_SEED),
+  breweries: structuredClone(BREWERIES_SEED),
+  breweryReminders: structuredClone(BREWERY_REMINDERS_SEED),
 };
 
 /** New id for demo-created records. */
