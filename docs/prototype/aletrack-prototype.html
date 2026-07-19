@@ -379,7 +379,7 @@ const L = {
   orderState:{ New:'Nová', Planning:'Plánuje se', Delivering:'Rozváží se', Finished:'Dokončeno', Cancelled:'Zrušeno' },
   shipState:{ Created:'Vytvořeno', Loaded:'Naloženo', InTransit:'Na cestě', Delivered:'Doručeno', Cancelled:'Zrušeno' },
   deliveryState:{ InPlanning:'Plánuje se', OnTheWay:'Na cestě', Finished:'Dokončeno', Cancelled:'Zrušeno' },
-  kind:{ Keg:'Sud', Bottle:'Láhev', Can:'Plechovka', Multipack:'Multipack', Other:'Ostatní' },
+  kind:{ Keg:'Sud', Bottle:'Basa', Can:'Plechovka', Multipack:'Multipack', Other:'Ostatní' },
   ptype:{ PaleDraftBeer:'Světlé výčepní', PaleLager:'Světlý ležák', AmberLager:'Polotmavý ležák', DarkLager:'Tmavý ležák',
     SpecialBeer:'Speciál', NonAlcoholicBeer:'Nealko', Radler:'Radler', WheatBeer:'Pšeničné', FlavoredBeer:'Ochucené',
     Lemonade:'Limonáda', YeastLager:'Kroužkovaný ležák', Merchandise:'Merch', Other:'Ostatní' },
@@ -426,8 +426,12 @@ const DB = {
     p('b-frydlant','Albrecht Nealko','Plechovka 0,5 l, multipack 6','Can','NonAlcoholicBeer',0.5,0,0.5,204,169),
     p('b-frydlant','Albrecht IPA 15°','0,33 l láhev, karton 24','Bottle','SpecialBeer',6.5,15,0.33,720,595),
     p('b-frydlant','Frýdlantská 10°','Sud 30 l','Keg','PaleDraftBeer',4.2,10,30,990,818),
+    p('b-frydlant','Albrecht 12° Světlý ležák','Basa 0,5 l · 20 ks','Bottle','PaleLager',5.0,12,0.5,480,397),
+    p('b-frydlant','Albrecht 12° Světlý ležák','Sud 50 l','Keg','PaleLager',5.0,12,50,1990,1645),
     // Svijany
     p('b-svijany','Svijanský Máz 11°','Sud 50 l','Keg','PaleLager',4.8,11,50,1850,1529),
+    p('b-svijany','Svijanský Máz 11°','Sud 30 l','Keg','PaleLager',4.8,11,30,1180,975),
+    p('b-svijany','Svijanský Máz 11°','Basa 0,5 l · 20 ks','Bottle','PaleLager',4.8,11,0.5,510,421),
     p('b-svijany','Svijanský Rytíř 12°','Sud 30 l','Keg','PaleLager',5.2,12,30,1350,1116),
     p('b-svijany','Svijanská Kněžna 13°','Polotmavý, sud 30 l','Keg','AmberLager',5.6,13,30,1490,1231),
     p('b-svijany','Svijany 450 — láhev','0,5 l, basa 20 ks','Bottle','PaleLager',4.8,11,0.5,520,430),
@@ -1248,29 +1252,58 @@ function delOrder(id){ confirmDialog('Zrušit objednávku?','Objednávka bude na
   DB.orders.find(o=>o.id===id).state='Cancelled'; toast('Objednávka zrušena','trash'); go('orders'); },{yes:'Zrušit objednávku'}); }
 
 /* ---- Order editor: history-first product picker ---- */
-let OE={ draft:null, tab:'history', search:'', brewOpen:{} };
+let OE={ draft:null, tab:'history', search:'', brewOpen:{}, kind:'all', clientQuery:'' };
+function fmtLiters(x){ return x==null?'—':x.toLocaleString('cs-CZ')+' l'; }
 function viewOrderEditor(id){
   let clientId=null; const q=location.hash.split('?')[1]||''; const qp=new URLSearchParams(q); if(qp.get('client')) clientId=qp.get('client');
   if(id){ const o=DB.orders.find(x=>x.id===id); OE.draft={ id:o.id, number:o.number, clientId:o.clientId, requiredDeliveryDate:o.requiredDeliveryDate,
     state:o.state, note:o.note||'', items:o.items.map(it=>({...it})) }; }
   else { OE.draft={ id:null, clientId:clientId, requiredDeliveryDate:daysFromNow(3), state:'New', note:'', items:[] }; }
-  OE.tab= (OE.draft.clientId && orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; OE.search='';
-  AFTER=()=>{
-    const s=$('#oe-search'); if(s) s.oninput=e=>{ OE.search=e.target.value; oeRerenderCatalog(); };
-    const cs=$('#oe-client'); if(cs) cs.onchange=e=>{ OE.draft.clientId=e.target.value||null;
-      OE.tab=(OE.draft.clientId&&orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; oeRerenderCatalog(); };
-  };
+  OE.tab= (OE.draft.clientId && orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; OE.search=''; OE.kind='all'; OE.clientQuery='';
+  AFTER=oeWire;
   return oeHTML();
 }
+function oeWire(){
+  const s=$('#oe-search'); if(s) s.oninput=e=>{ OE.search=e.target.value; oeRerenderCatalog(); };
+  const ci=$('#oe-client-input'); if(ci){ ci.oninput=oeClientInput; ci.onfocus=oeClientInput;
+    ci.onblur=()=>setTimeout(()=>{ const l=$('#oe-client-list'); if(l) l.innerHTML=''; },160); }
+}
+function oeFullRerender(){ syncOEmeta(); $('#view').innerHTML=oeHTML(); oeWire(); }
 function orderHistoryProducts(clientId){
   const seen=new Set(); const list=[];
   DB.orders.filter(o=>o.clientId===clientId).sort((a,b)=>(b.createdDate||'').localeCompare(a.createdDate||''))
     .forEach(o=>o.items.forEach(it=>{ if(!seen.has(it.productId)){ seen.add(it.productId); const p=prodById(it.productId); if(p) list.push(p); } }));
   return list;
 }
+/* ---- client typeahead ---- */
+function oeClientPicker(){
+  const d=OE.draft;
+  if(d.clientId){ const c=clientById(d.clientId);
+    return `<div class="field col-2"><label>Klient <span class="req">*</span></label>
+      <div class="row gap8" style="padding:8px 10px;border:1px solid var(--amber);border-radius:var(--r-sm);background:var(--amber-soft)">
+        ${avatar(c.id,initials(c.name))}<div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(c.name)}</div>
+        <div class="t-mut" style="font-size:11.5px">${esc(c.businessName||'')}${c.businessName?' · ':''}${L.region[c.region]||''}</div></div>
+        ${d.id?'':`<button class="btn btn-sm btn-ghost" onclick="oeChangeClient()">Změnit</button>`}</div></div>`;
+  }
+  return `<div class="field col-2" style="position:relative"><label>Klient <span class="req">*</span></label>
+    <div class="fld">${icon('search',16)}<input id="oe-client-input" autocomplete="off" placeholder="Začněte psát název podniku nebo jméno…" value="${esc(OE.clientQuery)}"></div>
+    <div id="oe-client-list"></div></div>`;
+}
+function oeClientInput(){
+  const el=$('#oe-client-input'); if(!el) return; OE.clientQuery=el.value; const q=el.value.toLowerCase().trim();
+  const list=$('#oe-client-list'); if(!list) return;
+  const m=DB.clients.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.businessName||'').toLowerCase().includes(q)).slice(0,8);
+  list.innerHTML=`<div style="position:absolute;left:0;right:0;top:100%;margin-top:5px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:30;max-height:280px;overflow:auto;padding:5px">
+    ${m.length?m.map(c=>`<button type="button" class="row gap8" style="width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:var(--r-sm)" onmousedown="oePickClient('${c.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='none'">
+      ${avatar(c.id,initials(c.name))}<div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(c.name)}</div>
+      <div class="t-mut" style="font-size:11.5px">${esc(c.businessName||'')}${c.businessName?' · ':''}${L.region[c.region]||''}</div></div></button>`).join('')
+      :`<div class="t-mut" style="padding:11px;font-size:12.5px">Žádný klient neodpovídá „${esc(el.value)}"</div>`}</div>`;
+}
+function oePickClient(id){ OE.draft.clientId=id; OE.clientQuery=''; OE.tab=orderHistoryProducts(id).length?'history':'browse'; oeFullRerender(); }
+function oeChangeClient(){ OE.draft.clientId=null; OE.clientQuery=''; oeFullRerender(); const el=$('#oe-client-input'); if(el) el.focus(); }
+
 function oeHTML(){
   const d=OE.draft; const t=oeTotals();
-  const clientPick = d.id ? '' : `<div style="margin-bottom:16px">${field('Klient', sel('oe-client',[['','— vyberte klienta —'],...DB.clients.map(c=>[c.id,c.name])], d.clientId||''),{req:true})}</div>`;
   return `<div class="page">
     ${crumbs([{t:'Objednávky',href:'#/orders'},{t:d.id?('Úprava '+d.number):'Nová objednávka'}])}
     ${pageHead('Prodej', d.id?('Úprava '+d.number):'Nová objednávka','Vyberte produkty — nejdřív se nabízí dříve objednané.',
@@ -1279,11 +1312,11 @@ function oeHTML(){
       <div class="card"><div class="card-head">${icon('history',16)}<h3>Katalog produktů</h3></div>
         <div class="card-pad" id="oe-catalog-wrap">${oeCatalog()}</div></div>
       <div class="stack" style="gap:16px;position:sticky;top:78px">
-        <div class="card"><div class="card-pad">${clientPick}
-          <div class="form-grid" style="grid-template-columns:1fr">
-            ${field('Požadovaný termín dodání',inp('oe-date',d.requiredDeliveryDate||'','','date'))}
-            ${field('Poznámka k objednávce',txta('oe-note',d.note||'','Např. dovézt dopoledne…'))}
-          </div></div></div>
+        <div class="card"><div class="card-pad"><div class="form-grid" style="grid-template-columns:1fr">
+          ${oeClientPicker()}
+          ${field('Požadovaný termín dodání',inp('oe-date',d.requiredDeliveryDate||'','','date'))}
+          ${field('Poznámka k objednávce',txta('oe-note',d.note||'','Např. dovézt dopoledne…'))}
+        </div></div></div>
         <div class="card"><div class="card-head"><h3>Košík</h3><span class="tag" style="margin-left:auto" id="oe-count">${t.items} ks</span></div>
           <div id="oe-cart">${oeCart()}</div></div>
       </div></div></div>`;
@@ -1296,33 +1329,66 @@ function oeCatalog(){
     <button class="${OE.tab==='history'?'on':''}" onclick="OE.tab='history';oeRerenderCatalog()">${icon('history',14)} Dříve objednané ${hist.length?`<span style="opacity:.6">${hist.length}</span>`:''}</button>
     <button class="${OE.tab==='browse'?'on':''}" onclick="OE.tab='browse';oeRerenderCatalog()">${icon('brewery',14)} Procházet dle pivovaru</button></div>`;
   const search=`<div class="fld" style="margin-bottom:14px">${icon('search',16)}<input id="oe-search" placeholder="Hledat produkt…" value="${esc(OE.search)}"></div>`;
-  let content='';
   const flt=p=>!OE.search||p.name.toLowerCase().includes(OE.search.toLowerCase());
+  let content='';
   if(OE.tab==='history'){
     if(!d.clientId) content=`<div class="empty"><div class="t">Vyberte klienta</div><div>Zobrazí se produkty z jeho předchozích objednávek.</div></div>`;
     else if(!hist.length) content=`<div class="empty"><div>${icon('history',34)}</div><div class="t">Zatím žádná historie</div><div>Tento klient ještě nic neobjednal — přepněte na „Procházet".</div></div>`;
-    else content=`<div class="stack" style="gap:9px">${hist.filter(flt).map(p=>oeProductRow(p,true)).join('')}</div>`;
-  } else {
-    content=DB.breweries.map(b=>{ const prods=productsOf(b.id).filter(flt); if(!prods.length) return '';
-      const open=OE.brewOpen[b.id]!==false;
-      return `<div style="margin-bottom:10px"><button class="row gap8" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;font-weight:700" onclick="OE.brewOpen['${b.id}']=${!open};oeRerenderCatalog()">
-        <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut" style="font-weight:600;margin-left:6px">${prods.length}</span>
-        <span style="margin-left:auto;transform:rotate(${open?90:0}deg);transition:.2s;color:var(--text-3)">${icon('chevR',16)}</span></button>
-        ${open?`<div class="stack" style="gap:9px;margin-top:9px">${prods.map(p=>oeProductRow(p,false)).join('')}</div>`:''}</div>`;
-    }).join('');
+    else content=oeGroupList(hist.filter(flt),true);
+    return tabs+search+content;
   }
-  return tabs+search+content;
+  // browse: kind sub-tabs
+  const kinds=['Keg','Bottle','Can','Multipack','Other'];
+  const kindCounts={}; DB.products.forEach(p=>{ if(flt(p)) kindCounts[p.kind]=(kindCounts[p.kind]||0)+1; });
+  const kindTabs=`<div class="seg wrap" style="margin-bottom:14px;flex-wrap:wrap">
+    <button class="${OE.kind==='all'?'on':''}" onclick="OE.kind='all';oeRerenderCatalog()">Vše</button>
+    ${kinds.filter(k=>kindCounts[k]).map(k=>`<button class="${OE.kind===k?'on':''}" onclick="OE.kind='${k}';oeRerenderCatalog()">${L.kind[k]} <span style="opacity:.6">${kindCounts[k]}</span></button>`).join('')}</div>`;
+  const kindOk=p=>OE.kind==='all'||p.kind===OE.kind;
+  content=DB.breweries.map(b=>{ const prods=productsOf(b.id).filter(p=>flt(p)&&kindOk(p)); if(!prods.length) return '';
+    const open=OE.brewOpen[b.id]!==false;
+    return `<div style="margin-bottom:10px"><button class="row gap8" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;font-weight:700" onclick="OE.brewOpen['${b.id}']=${!open};oeRerenderCatalog()">
+      <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}<span class="t-mut" style="font-weight:600;margin-left:6px">${prods.length}</span>
+      <span style="margin-left:auto;transform:rotate(${open?90:0}deg);transition:.2s;color:var(--text-3)">${icon('chevR',16)}</span></button>
+      ${open?`<div style="margin-top:9px">${oeGroupList(prods,false)}</div>`:''}</div>`;
+  }).join('')||`<div class="empty" style="padding:30px"><div class="t">Žádné produkty v této kategorii</div></div>`;
+  return tabs+kindTabs+search+content;
 }
+/* group products by name so same-name / different-size variants cluster together */
+function oeGroupList(prods,histBadge){
+  const groups=[]; const idx={};
+  prods.forEach(p=>{ if(idx[p.name]==null){ idx[p.name]=groups.length; groups.push({name:p.name,items:[p]}); } else groups[idx[p.name]].items.push(p); });
+  return `<div class="stack" style="gap:9px">${groups.map(g=>g.items.length>1?oeVariantCard(g,histBadge):oeProductRow(g.items[0],histBadge)).join('')}</div>`;
+}
+function oeQtyCtrl(p,inCart){ return inCart?`<div class="row gap8" style="flex:0 0 auto"><button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',-1)">−</button>
+    <span class="t-strong tnum" style="min-width:20px;text-align:center">${inCart.quantity}</span>
+    <button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',1)">+</button></div>`
+    :`<button class="btn btn-soft btn-sm" style="flex:0 0 auto" onclick="oeAdd('${p.id}')">${icon('plus',14)}Přidat</button>`; }
 function oeProductRow(p,histBadge){
   const b=breweryById(p.breweryId); const inCart=OE.draft.items.find(it=>it.productId===p.id);
   return `<div class="row gap12" style="padding:10px;border:1px solid var(--border);border-radius:var(--r);${inCart?'background:var(--amber-soft);border-color:var(--amber-tint)':''}">
     <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color};flex:0 0 auto"></span>
     <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13.5px">${esc(p.name)}</div>
-      <div class="t-mut" style="font-size:12px">${kindChipText(p.kind)} · ${money(p.priceWithVat)}${histBadge?' · <span style="color:var(--info)">dříve objednáno</span>':''}</div></div>
-    ${inCart?`<div class="row gap8"><button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',-1)">−</button>
-      <span class="t-strong tnum" style="min-width:20px;text-align:center">${inCart.quantity}</span>
-      <button class="icon-btn" style="width:30px;height:30px" onclick="oeQty('${p.id}',1)">+</button></div>`
-      :`<button class="btn btn-soft btn-sm" onclick="oeAdd('${p.id}')">${icon('plus',14)}Přidat</button>`}</div>`;
+      <div class="row gap8 wrap" style="margin-top:4px"><span class="tag">${kindChipText(p.kind)}</span>
+        ${p.packageSize!=null?`<span class="tag" style="font-weight:800">${fmtLiters(p.packageSize)}</span>`:''}
+        <span class="t-strong tnum" style="font-size:12.5px">${money(p.priceWithVat)}</span>
+        ${histBadge?'<span class="tag" style="color:var(--info)">dříve objednáno</span>':''}</div></div>
+    ${oeQtyCtrl(p,inCart)}</div>`;
+}
+function oeVariantCard(g,histBadge){
+  const b=breweryById(g.items[0].breweryId);
+  return `<div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+    <div class="row gap8" style="padding:10px 11px;background:var(--surface-2)">
+      <span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color};flex:0 0 auto"></span>
+      <span class="t-strong" style="font-size:13.5px">${esc(g.name)}</span>
+      ${histBadge?'<span class="tag" style="color:var(--info)">dříve objednáno</span>':''}
+      <span class="tag" style="margin-left:auto">${g.items.length} ${plural(g.items.length,'velikost','velikosti','velikostí')}</span></div>
+    ${g.items.map(v=>{ const inCart=OE.draft.items.find(it=>it.productId===v.id);
+      return `<div class="row gap8" style="padding:9px 11px;border-top:1px solid var(--border);${inCart?'background:var(--amber-soft)':''}">
+        <span class="tag">${kindChipText(v.kind)}</span>
+        <span class="tag" style="font-weight:800">${fmtLiters(v.packageSize)}</span>
+        <span class="t-mut" style="font-size:11.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.description||'')}</span>
+        <span class="t-strong tnum" style="margin-left:auto;font-size:12.5px">${money(v.priceWithVat)}</span>
+        ${oeQtyCtrl(v,inCart)}</div>`; }).join('')}</div>`;
 }
 function oeCart(){
   if(!OE.draft.items.length) return `<div class="empty" style="padding:30px"><div>${icon('order',30)}</div><div class="t">Košík je prázdný</div><div style="font-size:12.5px">Přidejte produkty z katalogu.</div></div>`;
@@ -1331,7 +1397,7 @@ function oeCart(){
     return `<div class="row gap8" style="padding:11px 16px;border-bottom:1px solid var(--border)">
       <span class="dotc" style="width:8px;height:8px;border-radius:2px;background:${b.color};flex:0 0 auto"></span>
       <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
-        <div class="t-mut" style="font-size:11.5px">${money(p.priceWithVat*it.quantity)}</div></div>
+        <div class="t-mut" style="font-size:11.5px">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''} · ${money(p.priceWithVat*it.quantity)}</div></div>
       <button class="icon-btn" style="width:26px;height:26px" onclick="oeQty('${p.id}',-1)">−</button>
       <span class="tnum t-strong" style="min-width:18px;text-align:center">${it.quantity}</span>
       <button class="icon-btn" style="width:26px;height:26px" onclick="oeQty('${p.id}',1)">+</button>
@@ -1341,10 +1407,10 @@ function oeCart(){
 }
 function oeRerenderCatalog(){ $('#oe-catalog-wrap').innerHTML=oeCatalog(); const s=$('#oe-search'); if(s){ s.focus(); s.setSelectionRange(s.value.length,s.value.length); s.oninput=e=>{OE.search=e.target.value;oeRerenderCatalog();}; } }
 function oeRefreshCart(){ $('#oe-cart').innerHTML=oeCart(); $('#oe-count').textContent=oeTotals().items+' ks'; }
-function oeAdd(pid){ syncOEmeta(); if(OE.draft.clientId||OE.draft.id){} OE.draft.items.push({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:pid, quantity:1, reminderState:null }); oeRerenderCatalog(); oeRefreshCart(); }
+function oeAdd(pid){ syncOEmeta(); OE.draft.items.push({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:pid, quantity:1, reminderState:null }); oeRerenderCatalog(); oeRefreshCart(); }
 function oeQty(pid,delta){ const it=OE.draft.items.find(x=>x.productId===pid); if(!it)return; it.quantity+=delta; if(it.quantity<=0) OE.draft.items=OE.draft.items.filter(x=>x.productId!==pid); oeRerenderCatalog(); oeRefreshCart(); }
 function oeRemove(pid){ OE.draft.items=OE.draft.items.filter(x=>x.productId!==pid); oeRerenderCatalog(); oeRefreshCart(); }
-function syncOEmeta(){ if($('#oe-client')) OE.draft.clientId=$('#oe-client').value||null; if($('#oe-date')) OE.draft.requiredDeliveryDate=$('#oe-date').value||null; if($('#oe-note')) OE.draft.note=$('#oe-note').value; }
+function syncOEmeta(){ if($('#oe-date')) OE.draft.requiredDeliveryDate=$('#oe-date').value||null; if($('#oe-note')) OE.draft.note=$('#oe-note').value; }
 function oeSave(){ syncOEmeta(); const d=OE.draft;
   if(!d.clientId) return toast('Vyberte klienta','warnTri');
   if(!d.items.length) return toast('Přidejte alespoň jeden produkt','warnTri');
