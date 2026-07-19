@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngTuple } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Box, Stack, Typography } from '@mui/material';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
-import { DEPOT, haversine } from 'src/lib/geo';
+import { DEPOT, haversine, fetchRoadRoute, type LatLng, type RoadRoute } from 'src/lib/geo';
 
 export interface RouteStop {
   lat?: number;
@@ -33,27 +33,52 @@ function numberedPinIcon(color: string, n: number): L.DivIcon {
 
 function depotIcon(): L.DivIcon {
   const svg = `
-    <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="15" cy="15" r="14" fill="#1A2B4C" stroke="#fff" stroke-width="2.5"/>
-      <path d="M9 14 L15 9 L21 14 V21 H9 Z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
+    <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="#1A2B4C" stroke="#fff" stroke-width="2.5"/>
+      <path d="M10 15 L16 10 L22 15 V22 H10 Z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/>
     </svg>`;
-  return L.divIcon({ html: svg, className: 'route-map-depot', iconSize: [30, 30], iconAnchor: [15, 15] });
+  return L.divIcon({ html: svg, className: 'route-map-depot', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
 
-/** Leaflet route map for the shipment screens: a numbered marker per stop (in
- * delivery order) plus a polyline DEPOT -> stop 1 -> stop 2 -> ... -> DEPOT,
- * fit to bounds. Renders a placeholder when no stop has coordinates. */
+/** Leaflet route map for the shipment screens: the company depot (start + end)
+ * plus a numbered marker per stop in delivery order, connected by the actual
+ * fastest driving route (OSRM) DEPOT -> stop 1 -> ... -> DEPOT, falling back to
+ * straight lines if routing is unavailable. Placeholder when no stop is located. */
 export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?: number }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
-  const stats = useMemo(() => {
+  // Round-trip waypoints: depot -> each located stop (in order) -> depot.
+  const waypoints = useMemo<LatLng[]>(
+    () => [
+      { lat: DEPOT.lat, lng: DEPOT.lng },
+      ...located.map((s) => ({ lat: s.lat, lng: s.lng })),
+      { lat: DEPOT.lat, lng: DEPOT.lng },
+    ],
+    [located],
+  );
+  // Stable key so the routing effect only refires when coordinates change.
+  const wpKey = waypoints.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
+
+  const [road, setRoad] = useState<RoadRoute | null>(null);
+  useEffect(() => {
+    setRoad(null);
+    if (located.length === 0) return;
+    const ctrl = new AbortController();
+    fetchRoadRoute(waypoints, ctrl.signal)
+      .then((r) => setRoad(r))
+      .catch(() => { /* fall back to straight-line geometry + haversine estimate */ });
+    return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wpKey]);
+
+  // Straight-line fallback stats (used until/if the road route resolves).
+  const fallback = useMemo(() => {
     if (located.length === 0) return null;
-    const seq = [{ lat: DEPOT.lat, lng: DEPOT.lng }, ...located, { lat: DEPOT.lat, lng: DEPOT.lng }];
     let km = 0;
-    for (let i = 1; i < seq.length; i++) km += haversine(seq[i - 1], seq[i]);
+    for (let i = 1; i < waypoints.length; i++) km += haversine(waypoints[i - 1], waypoints[i]);
     const min = Math.round((km / 45) * 60) + (located.length - 1) * 12;
     return { km: Math.round(km * 10) / 10, min };
-  }, [located]);
+  }, [waypoints, located.length]);
 
   if (located.length === 0) {
     return (
@@ -78,22 +103,29 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
     );
   }
 
-  const positions: LatLngTuple[] = [
-    [DEPOT.lat, DEPOT.lng],
-    ...located.map((s): LatLngTuple => [s.lat, s.lng]),
-    [DEPOT.lat, DEPOT.lng],
-  ];
-  const bounds: LatLngBoundsExpression = positions;
+  const straight: LatLngTuple[] = waypoints.map((p): LatLngTuple => [p.lat, p.lng]);
+  const line: LatLngTuple[] = road ? road.path : straight;
+  const bounds: LatLngBoundsExpression = straight;
+  const stats = road ?? fallback;
 
   return (
     <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', '& .leaflet-container': { height: '100%', width: '100%' } }}>
       <Box sx={{ height }}>
-        <MapContainer bounds={bounds} boundsOptions={{ padding: [36, 36] }} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
+        <MapContainer bounds={bounds} boundsOptions={{ padding: [40, 40] }} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Polyline positions={positions} pathOptions={{ color: '#F08C00', weight: 3.5, dashArray: '9 7' }} />
-          <Marker position={[DEPOT.lat, DEPOT.lng]} icon={depotIcon()} />
+          <Polyline positions={line} pathOptions={{ color: '#F08C00', weight: 4, opacity: 0.9, dashArray: road ? undefined : '9 7' }} />
+          <Marker position={[DEPOT.lat, DEPOT.lng]} icon={depotIcon()}>
+            <Tooltip direction="top" offset={[0, -14]}>
+              <strong>{DEPOT.name}</strong> · start i cíl trasy
+              {DEPOT.address ? <><br />{DEPOT.address}</> : null}
+            </Tooltip>
+          </Marker>
           {located.map((s, i) => (
-            <Marker key={i} position={[s.lat, s.lng]} icon={numberedPinIcon(s.color ?? '#F08C00', i + 1)} />
+            <Marker key={i} position={[s.lat, s.lng]} icon={numberedPinIcon(s.color ?? '#F08C00', i + 1)}>
+              <Tooltip direction="top" offset={[0, -34]}>
+                <strong>{i + 1}. {s.label}</strong>
+              </Tooltip>
+            </Marker>
           ))}
         </MapContainer>
       </Box>

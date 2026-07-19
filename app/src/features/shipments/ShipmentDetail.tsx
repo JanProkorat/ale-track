@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Box, Breadcrumbs, Button, ButtonBase, Card, Checkbox, Chip, CircularProgress, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack, TextField, Typography,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/CloseOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -93,106 +95,164 @@ function invoiceOf(row: NakladkaRow): 1 | 2 {
   return row.firstInvoiceQuantity === 0 && row.secondInvoiceQuantity > 0 ? 2 : 1;
 }
 
-function InvoiceToggle({ value, onChange, disabled }: { value: 1 | 2; onChange: (v: 1 | 2) => void; disabled?: boolean }) {
+/** F1/F2 invoice picker — an unfilled segmented control (grey track, white
+ * active pill), matching the prototype's `.seg` rather than a solid amber fill. */
+function InvoiceSeg({ value, onChange, disabled }: { value: 1 | 2; onChange: (v: 1 | 2) => void; disabled?: boolean }) {
   return (
-    <Stack direction="row" spacing={0.5}>
-      {([1, 2] as const).map((n) => (
-        <ButtonBase
-          key={n}
-          disabled={disabled}
-          onClick={() => onChange(n)}
-          sx={{
-            px: 1.1, py: 0.4, borderRadius: 1, fontSize: 11.5, fontWeight: 700,
-            bgcolor: value === n ? 'warning.main' : 'action.hover',
-            color: value === n ? '#fff' : 'text.secondary',
-          }}
-        >
-          F{n}
-        </ButtonBase>
-      ))}
-    </Stack>
+    <Box sx={{ display: 'inline-flex', gap: '2px', p: '2px', borderRadius: 1.5, bgcolor: 'brand.surface3' }}>
+      {([1, 2] as const).map((n) => {
+        const on = value === n;
+        return (
+          <ButtonBase
+            key={n}
+            disabled={disabled}
+            onClick={() => onChange(n)}
+            sx={{
+              px: 1.1, py: 0.35, borderRadius: 1, fontSize: 11.5, fontWeight: 700,
+              bgcolor: on ? 'background.paper' : 'transparent',
+              color: on ? 'text.primary' : 'text.secondary',
+              boxShadow: on ? 1 : 'none',
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            F{n}
+          </ButtonBase>
+        );
+      })}
+    </Box>
   );
 }
 
-function ItemsHeader({ tab }: { tab: Tab }) {
-  const labelSx = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em' };
-  return (
-    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ pb: 0.5 }}>
-      <Typography sx={{ flex: 1, ...labelSx }}>Produkt</Typography>
-      <Typography sx={{ width: 60, textAlign: 'right', ...labelSx }}>Množství</Typography>
-      {tab === 'all' && <Typography sx={{ width: 68, textAlign: 'center', ...labelSx }}>Faktura</Typography>}
-      <Typography sx={{ width: 64, textAlign: 'center', ...labelSx }}>Naloženo</Typography>
-      <Typography sx={{ width: 64, textAlign: 'center', ...labelSx }}>Kontrola</Typography>
-      <Box sx={{ width: 32 }} />
-    </Stack>
-  );
-}
+const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
 
-function ItemRow({
-  row, tab, editable, checked, onLoaded, onInvoice, onToggleChecked, onRemove,
+function LoadingRow({
+  row, tab, editable, loaded, checked, onLoaded, onInvoice, onToggleChecked, onRemove,
 }: {
   row: NakladkaRow;
   tab: Tab;
   editable: boolean;
+  loaded: boolean;
   checked: boolean;
   onLoaded: (loaded: boolean) => void;
   onInvoice: (invoice: 1 | 2) => void;
   onToggleChecked: () => void;
   onRemove?: () => void;
 }) {
+  const chipText = `${kindLabel(row.kind) ?? ''}${row.packageSize != null ? ` · ${fmtLiters(row.packageSize)}` : ''}`.replace(/^ · /, '');
   return (
-    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1, borderTop: 1, borderColor: 'divider' }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{row.name}</Typography>
+    <TableRow hover>
+      <TableCell>
+        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
-          {row.kind != null && <Chip size="small" label={kindLabel(row.kind)} sx={{ height: 18, fontSize: 10.5 }} />}
-          {row.packageSize != null && <Chip size="small" label={fmtLiters(row.packageSize)} sx={{ height: 18, fontSize: 10.5, fontWeight: 800 }} />}
-          {row.dokladka && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dokládka ze skladu</Typography>}
+          {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
+          {row.dokladka && (
+            <Chip
+              size="small"
+              label={
+                <Stack direction="row" spacing={0.25} alignItems="center">
+                  <span>dokládka +{row.quantity}</span>
+                  {onRemove && editable && (
+                    <Box component="span" onClick={onRemove} sx={{ display: 'inline-flex', cursor: 'pointer', ml: 0.25 }} title="Odebrat dokládku">
+                      <CloseIcon sx={{ fontSize: 12 }} />
+                    </Box>
+                  )}
+                </Stack>
+              }
+              sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', bgcolor: (t) => t.vars!.palette.brand.infoTint }}
+            />
+          )}
         </Stack>
-      </Box>
-      <Typography sx={{ width: 60, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
-      <Box sx={{ width: 68, display: 'flex', justifyContent: 'center' }}>
-        {tab === 'all' && <InvoiceToggle value={invoiceOf(row)} onChange={onInvoice} disabled={!editable} />}
-      </Box>
-      <Box sx={{ width: 64, display: 'flex', justifyContent: 'center' }}>
-        <Checkbox size="small" checked={row.loaded} disabled={!editable} onChange={(e) => onLoaded(e.target.checked)} title="Naloženo (1. diktovaná nakládka)" />
-      </Box>
-      <Box sx={{ width: 64, display: 'flex', justifyContent: 'center' }}>
-        <Checkbox size="small" checked={checked} disabled={!editable || !row.loaded} onChange={onToggleChecked} title={row.loaded ? 'Kontrola (2. kolo)' : 'Nejdřív naložit'} />
-      </Box>
-      <Box sx={{ width: 32, display: 'flex', justifyContent: 'flex-end' }}>
+      </TableCell>
+      <TableCell align="right">
+        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{row.quantity} ks</Typography>
+        {row.dokladka && <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ze skladu</Typography>}
+      </TableCell>
+      {tab === 'all' && (
+        <TableCell align="center">
+          <InvoiceSeg value={invoiceOf(row)} onChange={onInvoice} disabled={!editable} />
+        </TableCell>
+      )}
+      <TableCell align="center" padding="checkbox">
+        <Checkbox size="small" checked={loaded} disabled={!editable} onChange={(e) => onLoaded(e.target.checked)} title="Naloženo (1. diktovaná nakládka)" />
+      </TableCell>
+      <TableCell align="center" padding="checkbox">
+        <Checkbox size="small" checked={checked} disabled={!editable || !loaded} onChange={onToggleChecked} title={loaded ? 'Kontrola (2. kontrolní kolo)' : 'Nejdřív naložit'} />
+      </TableCell>
+      <TableCell align="right" sx={{ width: 40, pl: 0 }}>
         {onRemove && editable && (
           <IconButton size="small" onClick={onRemove} sx={{ color: 'error.main' }} aria-label="Odebrat">
             <DeleteOutlineOutlinedIcon fontSize="small" />
           </IconButton>
         )}
-      </Box>
-    </Stack>
+      </TableCell>
+    </TableRow>
   );
 }
 
-function StopHeader({ stop, index, onDokladka, editable }: { stop: OutgoingShipmentStopDto; index: number; onDokladka: () => void; editable: boolean }) {
-  const address = stop.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && stop.contactAddress ? stop.contactAddress : stop.officialAddress;
+/** One bordered card = the header (numbered client + address + Dokládka button)
+ * followed by its own product table, matching the prototype's per-stop block. */
+function LoadingBlock({
+  index, color, title, subtitle, tab, editable, rows, onDokladka, renderRow, emptyText,
+}: {
+  index: number;
+  color: string;
+  title: string;
+  subtitle: string;
+  tab: Tab;
+  editable: boolean;
+  rows: NakladkaRow[];
+  onDokladka?: () => void;
+  renderRow: (row: NakladkaRow) => ReactNode;
+  emptyText: string;
+}) {
   return (
-    <Stack direction="row" spacing={1.25} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ mt: 1.5, mb: 0.75 }}>
-      <Stack direction="row" spacing={1.25} alignItems="center">
-        <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: colorForClient(stop.clientId ?? '') }}>
-          {index + 1}
-        </Box>
-        <Box>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{stop.clientName}</Typography>
-          <Typography sx={{ fontSize: 11.5 }} color="text.secondary">
-            {address ? `${address.streetName} ${address.streetNumber}, ${address.city}` : '—'} · {addrKindLabel(stop.selectedAddressKind)}
-          </Typography>
-        </Box>
+    <Box sx={{ mb: 1.75 }}>
+      <Stack direction="row" spacing={1.25} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
+        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+          <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>
+            {index + 1}
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>{subtitle}</Typography>
+          </Box>
+        </Stack>
+        {editable && onDokladka && (
+          <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={onDokladka}
+            sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
+            Dokládka ze skladu
+          </Button>
+        )}
       </Stack>
-      {editable && (
-        <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={onDokladka}>
-          Dokládka ze skladu
-        </Button>
+      {rows.length > 0 ? (
+        <Card variant="outlined">
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+                  <TableCell sx={HEAD_SX}>Produkt</TableCell>
+                  <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
+                  {tab === 'all' && <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>}
+                  <TableCell align="center" sx={HEAD_SX}>Naloženo</TableCell>
+                  <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
+                  <TableCell sx={{ ...HEAD_SX, width: 40 }} />
+                </TableRow>
+              </TableHead>
+              <TableBody>{rows.map(renderRow)}</TableBody>
+            </Table>
+          </TableContainer>
+        </Card>
+      ) : (
+        <Typography color="text.secondary" sx={{ fontSize: 12.5, py: 1 }}>{emptyText}</Typography>
       )}
-    </Stack>
+    </Box>
   );
+}
+
+function stopSubtitle(stop: OutgoingShipmentStopDto): string {
+  const address = stop.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && stop.contactAddress ? stop.contactAddress : stop.officialAddress;
+  const addr = address ? `${address.streetName} ${address.streetNumber}, ${address.city}` : '—';
+  return `${addr} · ${addrKindLabel(stop.selectedAddressKind)}`;
 }
 
 /** Vývoz detail: route map, advance-state header, and the nakládka card
@@ -220,7 +280,12 @@ export function ShipmentDetail({
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
   // state, reset whenever a different shipment is opened.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  useEffect(() => setCheckedIds(new Set()), [shipment.id]);
+  // "Naloženo" persists via the update mutation, but that round-trips through the
+  // API; an optimistic per-row override keeps the checkbox instant (and correct
+  // in demo mode where the mock may not echo the flag back). Reset per shipment.
+  const [loadedOverride, setLoadedOverride] = useState<Map<string, boolean>>(new Map());
+  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); }, [shipment.id]);
+  const isLoaded = (row: NakladkaRow) => loadedOverride.get(row.key) ?? row.loaded;
 
   const [dokladkaOpen, setDokladkaOpen] = useState(false);
   const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
@@ -243,7 +308,7 @@ export function ShipmentDetail({
     [stopsSorted, extraRows],
   );
   const totalN = combinedRows.length;
-  const loadedN = combinedRows.filter((r) => r.loaded).length;
+  const loadedN = combinedRows.filter((r) => isLoaded(r)).length;
   const checkedN = combinedRows.filter((r) => checkedIds.has(r.key)).length;
   const f1Count = combinedRows.filter((r) => r.firstInvoiceQuantity > 0).length;
   const f2Count = combinedRows.filter((r) => r.secondInvoiceQuantity > 0).length;
@@ -280,6 +345,7 @@ export function ShipmentDetail({
   }
 
   function setRowLoaded(row: NakladkaRow, loaded: boolean) {
+    setLoadedOverride((prev) => { const n = new Map(prev); n.set(row.key, loaded); return n; });
     const draft = draftFromShipment(shipment);
     if (row.orderItemId) {
       for (const co of draft.clientOrderShipments) {
@@ -425,50 +491,59 @@ export function ShipmentDetail({
                 <StatusPill tone={totalN > 0 && checkedN === totalN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${totalN}`} />
               </Stack>
 
-              {stopsSorted.length > 0 && <ItemsHeader tab={tab} />}
-              {stopsSorted.map((stop, i) => {
-                const rows = (stop.products ?? []).map(productRowFrom).filter((r) => inTab(r, tab));
-                return (
-                  <Box key={stop.orderId ?? i}>
-                    <StopHeader stop={stop} index={i} editable={nakladkaEditable} onDokladka={openDokladka} />
-                    {rows.length > 0 ? (
-                      rows.map((row) => (
-                        <ItemRow
-                          key={row.key}
-                          row={row}
-                          tab={tab}
-                          editable={nakladkaEditable}
-                          checked={checkedIds.has(row.key)}
-                          onLoaded={(loaded) => setRowLoaded(row, loaded)}
-                          onInvoice={(inv) => setRowInvoice(row, inv)}
-                          onToggleChecked={() => toggleChecked(row.key)}
-                        />
-                      ))
-                    ) : (
-                      <Typography color="text.secondary" sx={{ fontSize: 12.5, py: 1 }}>V této faktuře nemá klient žádné položky.</Typography>
-                    )}
-                  </Box>
-                );
-              })}
-
-              {extraRows.filter((r) => inTab(r, tab)).length > 0 && (
-                <Box sx={{ mt: 1 }}>
-                  <Divider sx={{ my: 1.5 }} />
-                  <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.5 }}>Dokládka ze skladu</Typography>
-                  {extraRows.filter((r) => inTab(r, tab)).map((row) => (
-                    <ItemRow
+              {stopsSorted.map((stop, i) => (
+                <LoadingBlock
+                  key={stop.orderId ?? i}
+                  index={i}
+                  color={colorForClient(stop.clientId ?? '')}
+                  title={stop.clientName ?? '—'}
+                  subtitle={stopSubtitle(stop)}
+                  tab={tab}
+                  editable={nakladkaEditable}
+                  rows={(stop.products ?? []).map(productRowFrom).filter((r) => inTab(r, tab))}
+                  onDokladka={openDokladka}
+                  emptyText="V této faktuře nemá klient žádné položky."
+                  renderRow={(row) => (
+                    <LoadingRow
                       key={row.key}
                       row={row}
                       tab={tab}
                       editable={nakladkaEditable}
+                      loaded={isLoaded(row)}
+                      checked={checkedIds.has(row.key)}
+                      onLoaded={(loaded) => setRowLoaded(row, loaded)}
+                      onInvoice={(inv) => setRowInvoice(row, inv)}
+                      onToggleChecked={() => toggleChecked(row.key)}
+                    />
+                  )}
+                />
+              ))}
+
+              {extraRows.filter((r) => inTab(r, tab)).length > 0 && (
+                <LoadingBlock
+                  index={stopsSorted.length}
+                  color="#1A2B4C"
+                  title="Dokládka ze skladu"
+                  subtitle="Kusy navíc mimo objednávky — při doručení se odečtou ze skladu"
+                  tab={tab}
+                  editable={nakladkaEditable}
+                  rows={extraRows.filter((r) => inTab(r, tab))}
+                  emptyText="Žádná dokládka."
+                  renderRow={(row) => (
+                    <LoadingRow
+                      key={row.key}
+                      row={row}
+                      tab={tab}
+                      editable={nakladkaEditable}
+                      loaded={isLoaded(row)}
                       checked={checkedIds.has(row.key)}
                       onLoaded={(loaded) => setRowLoaded(row, loaded)}
                       onInvoice={(inv) => setRowInvoice(row, inv)}
                       onToggleChecked={() => toggleChecked(row.key)}
                       onRemove={() => removeExtra(row.extraId)}
                     />
-                  ))}
-                </Box>
+                  )}
+                />
               )}
             </Box>
           </Card>
