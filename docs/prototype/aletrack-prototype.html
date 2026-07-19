@@ -833,7 +833,26 @@ function viewDashboard(){
         </div>
       </div>
     </div>
+    ${canSee('drivers')?dashDriverAvailability():''}
   </div>`;
+}
+function dashDriverAvailability(){
+  if(!DB.drivers.length) return '';
+  const days=[...Array(7)].map((_,i)=>{ const d=new Date(SEED_TODAY); d.setDate(d.getDate()+i); return d; });
+  const iso=d=>d.toISOString().slice(0,10);
+  const head=days.map(d=>{ const today=iso(d)===SEED_TODAY;
+    return `<th style="text-align:center;${today?'color:var(--amber-700)':''}"><div style="font-size:10.5px;text-transform:uppercase">${d.toLocaleDateString('cs-CZ',{weekday:'short'})}</div><div class="tnum" style="font-size:13px;font-weight:800">${d.getDate()}.</div></th>`; }).join('');
+  const hm=s=>s.slice(11,16).replace(/:00$/,'');
+  const rows=DB.drivers.map(dr=>{
+    const cells=days.map(d=>{ const slots=dr.availabilities.filter(a=>a.from.slice(0,10)===iso(d));
+      if(!slots.length) return `<td style="text-align:center"><span class="t-mut" style="opacity:.35">—</span></td>`;
+      const from=slots.map(s=>s.from).sort()[0]; const until=slots.map(s=>s.until).sort().slice(-1)[0];
+      return `<td style="text-align:center"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:${dr.color}22;color:${dr.color};white-space:nowrap">${hm(from)}–${hm(until)}</span></td>`; }).join('');
+    return `<tr><td><div class="row gap8"><span class="dotc" style="width:10px;height:10px;border-radius:99px;background:${dr.color};flex:0 0 auto"></span>
+      <span class="t-strong" style="font-size:13px;white-space:nowrap">${esc(dr.firstName)} ${esc(dr.lastName)}</span></div></td>${cells}</tr>`; }).join('');
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><span style="color:var(--amber)">${icon('cal',18)}</span><h3>Dostupnost řidičů tento týden</h3>
+    <a class="btn btn-sm btn-ghost" style="margin-left:auto;cursor:pointer" onclick="DRV_VIEW='calendar';go('drivers')">${icon('cal',14)}Celý kalendář</a></div>
+    <div class="card-pad" style="overflow-x:auto"><table class="tbl" style="min-width:660px"><thead><tr><th>Řidič</th>${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function schedRow(ic,date,title,pillHtml,href,meta){
   const d=new Date(date); const isToday=(''+date).slice(0,10)===SEED_TODAY;
