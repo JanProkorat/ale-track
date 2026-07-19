@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Box, Stack, Typography, Button, IconButton, Chip, Tooltip, Card } from '@mui/material';
-import AddIcon from '@mui/icons-material/AddOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
@@ -127,7 +127,12 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
     <Box>
       {editable && (
         <Box sx={{ mb: 2 }}>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setFormOpen(true)} sx={{ color: 'text.primary', borderColor: 'divider' }}>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => setFormOpen(true)}
+            sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+          >
             Nová připomínka
           </Button>
         </Box>

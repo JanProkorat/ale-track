@@ -3,7 +3,7 @@ import {
   Box, Stack, Typography, Button, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Card,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/AddOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
 import { useCurrency } from 'src/providers/CurrencyProvider';
@@ -172,7 +172,7 @@ export function Cenik({
           >
             Hromadná úprava cen
           </Button>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={onAdd} sx={{ color: 'text.primary', borderColor: 'divider' }}>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={onAdd} sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
             Přidat produkt
           </Button>
           <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
