@@ -29,7 +29,7 @@ public sealed class CreateBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Post("breweries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateBreweryEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

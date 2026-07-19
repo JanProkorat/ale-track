@@ -30,7 +30,7 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     {
         Delete("outgoing-shipments/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteOutgoingShipmentEndpoint))

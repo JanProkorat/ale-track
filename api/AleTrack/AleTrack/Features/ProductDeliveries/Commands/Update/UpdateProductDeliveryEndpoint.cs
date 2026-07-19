@@ -29,7 +29,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
     {
         Put("products/deliveries/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateProductDeliveryEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

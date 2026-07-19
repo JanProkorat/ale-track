@@ -48,7 +48,7 @@ public sealed class UpdateVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Put("vehicles/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Vehicles, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateVehicleEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

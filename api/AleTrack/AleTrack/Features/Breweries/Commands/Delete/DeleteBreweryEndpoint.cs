@@ -28,7 +28,7 @@ public sealed class DeleteBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Delete("breweries/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(DeleteBreweryEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

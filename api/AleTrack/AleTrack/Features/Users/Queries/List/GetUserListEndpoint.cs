@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Users.Models;
 using AleTrack.Features.Users.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -15,7 +16,7 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         Get("users");
         Description(b => b
-            .RequireRole(UserRoleType.Admin)
+            .RequirePermission(ModuleType.Users, PermissionLevel.View)
             .WithName(nameof(GetUserListEndpoint)));
         
         DontCatchExceptions();
@@ -40,6 +41,13 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 UserName = u.UserName,
                 UserRoles = u.UserRoles
                     .Select(r => r.Type)
+                    .ToList(),
+                Permissions = u.Permissions
+                    .Select(p => new ModulePermissionDto
+                    {
+                        Module = p.Module,
+                        Level = p.Level
+                    })
                     .ToList()
             })
             .ApplyFilterAndSort(req.Parameters)

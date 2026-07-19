@@ -29,7 +29,7 @@ public sealed class GetDriverDetailEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         Get("drivers/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetDriverDetailEndpoint)));
 

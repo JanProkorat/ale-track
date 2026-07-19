@@ -65,6 +65,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
     {
         var user = await dbContext.Users
             .Include(u => u.UserRoles)
+            .Include(u => u.Permissions)
             .FirstOrDefaultAsync(u => u.UserName == req.Data.UserName, ct);
             
         if (user is null)

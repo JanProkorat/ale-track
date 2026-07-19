@@ -34,6 +34,11 @@ public class AleTrackDbContext : DbContext
     /// DbSet of <see cref="UserRole"/>
     /// </summary>
     public virtual DbSet<UserRole> UserRoles => Set<UserRole>();
+
+    /// <summary>
+    /// Gets the collection of granular per-module user permissions.
+    /// </summary>
+    public virtual DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     
     /// <summary>
     /// DbSet of <see cref="Order"/>

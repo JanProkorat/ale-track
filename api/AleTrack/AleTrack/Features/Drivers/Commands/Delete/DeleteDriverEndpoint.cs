@@ -28,7 +28,7 @@ public sealed class DeleteDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Delete("drivers/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .WithName(nameof(DeleteDriverEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

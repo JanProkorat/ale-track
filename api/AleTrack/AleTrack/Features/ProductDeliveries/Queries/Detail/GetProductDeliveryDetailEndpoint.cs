@@ -29,7 +29,7 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
     {
         Get("products/deliveries/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetProductDeliveryDetailEndpoint)));
         

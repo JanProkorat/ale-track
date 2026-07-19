@@ -27,7 +27,7 @@ public sealed class GetClientNotesEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         Get("clients/{id:guid}/notes");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.View)
             .WithName(nameof(GetClientNotesEndpoint)));
         
         DontCatchExceptions();

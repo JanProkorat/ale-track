@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Features.Users.Models;
 
 namespace AleTrack.Features.Users.Commands.Create;
 
@@ -32,4 +33,9 @@ public sealed record CreateUserDto
     /// List of related roles
     /// </summary>
     public List<UserRoleType> UserRoles { get; set; } = [];
+
+    /// <summary>
+    /// Granular per-module permissions. Ignored for Admin-role users (they get full access).
+    /// </summary>
+    public List<ModulePermissionDto> Permissions { get; set; } = [];
 }

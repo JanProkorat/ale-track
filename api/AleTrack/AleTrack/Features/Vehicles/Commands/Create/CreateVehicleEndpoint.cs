@@ -29,7 +29,7 @@ public sealed class CreateVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Post("vehicles");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Vehicles, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateVehicleEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

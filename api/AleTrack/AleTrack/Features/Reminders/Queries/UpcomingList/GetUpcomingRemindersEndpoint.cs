@@ -14,7 +14,7 @@ public sealed class GetUpcomingRemindersEndpoint(AleTrackDbContext dbContext) : 
     {
         Get("reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetUpcomingRemindersEndpoint)));
         
         DontCatchExceptions();

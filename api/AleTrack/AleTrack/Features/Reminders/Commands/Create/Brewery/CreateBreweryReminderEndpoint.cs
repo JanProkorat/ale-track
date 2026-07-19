@@ -35,7 +35,7 @@ public sealed class CreateBreweryReminderEndpoint(AleTrackDbContext dbContext) :
     {
         Post("breweries/{id}/reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(CreateBreweryReminderEndpoint))

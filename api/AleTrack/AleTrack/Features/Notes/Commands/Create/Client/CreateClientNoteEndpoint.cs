@@ -35,7 +35,7 @@ public sealed class CreateClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Post("clients/{id}/notes");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(CreateClientNoteEndpoint))

@@ -24,7 +24,7 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
     {
         Get("inventory-items");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Inventory, PermissionLevel.View)
             .WithName(nameof(GetInventoryItemsListEndpoint)));
         
         DontCatchExceptions();

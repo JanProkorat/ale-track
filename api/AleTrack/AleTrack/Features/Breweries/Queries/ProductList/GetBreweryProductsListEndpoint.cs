@@ -39,7 +39,7 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
     {
         Get("breweries/{id}/products");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.View)
             .WithName(nameof(GetBreweryProductsListEndpoint)));
         
         DontCatchExceptions();

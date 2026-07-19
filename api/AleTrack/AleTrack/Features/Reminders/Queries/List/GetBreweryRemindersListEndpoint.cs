@@ -28,7 +28,7 @@ public sealed class GetBreweryRemindersListEndpoint(AleTrackDbContext dbContext)
     {
         Get("breweries/{id:guid}/reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.View)
             .WithName(nameof(GetBreweryRemindersListEndpoint)));
         
         DontCatchExceptions();

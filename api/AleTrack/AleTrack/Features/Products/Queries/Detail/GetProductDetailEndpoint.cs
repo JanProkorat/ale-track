@@ -27,7 +27,7 @@ public sealed class GetProductDetailEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Get("products/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetProductDetailEndpoint)));
 

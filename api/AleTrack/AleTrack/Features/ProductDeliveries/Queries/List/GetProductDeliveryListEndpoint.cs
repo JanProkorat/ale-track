@@ -27,7 +27,7 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
     {
         Get("products/deliveries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.View)
             .WithName(nameof(GetProductDeliveryListEndpoint)));
         
         DontCatchExceptions();

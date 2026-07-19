@@ -39,7 +39,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         Put("orders/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(UpdateOrderEndpoint))

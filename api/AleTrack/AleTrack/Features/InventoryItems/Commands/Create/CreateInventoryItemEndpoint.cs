@@ -38,7 +38,7 @@ public sealed class CreateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
     {
         Post("inventory-items");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Inventory, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateInventoryItemEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

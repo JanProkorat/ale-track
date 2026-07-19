@@ -34,7 +34,7 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
     {
         Put("users/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.Admin)
+            .RequirePermission(ModuleType.Users, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateUserEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -56,14 +56,15 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
         var user = await dbContext.Users
             .Where(u => u.PublicId == req.Id)
             .Include(u => u.UserRoles)
+            .Include(u => u.Permissions)
             .FirstOrDefaultAsync(ct);
-        
+
         if (user is null)
             ThrowHelper.PublicEntityNotFound(nameof(User), req.Id);
-        
+
         user!.FirstName = req.Data.FirstName;
         user.LastName = req.Data.LastName;
-        
+
         user.UserRoles.Clear();
         user.UserRoles = req.Data.UserRoles
             .Select(r => new UserRole
@@ -71,7 +72,17 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
                 Type = r
             })
             .ToList();
-        
+
+        user.Permissions.Clear();
+        user.Permissions = req.Data.Permissions
+            .Where(p => p.Level != PermissionLevel.None)
+            .Select(p => new UserPermission
+            {
+                Module = p.Module,
+                Level = p.Level
+            })
+            .ToList();
+
         dbContext.Users.Update(user);
         await dbContext.SaveChangesAsync(ct);
         

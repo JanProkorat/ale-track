@@ -29,7 +29,7 @@ public sealed class DeleteClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Delete("clients/notes/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteClientNoteEndpoint))

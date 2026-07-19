@@ -26,7 +26,7 @@ public sealed class GetBreweryDetailEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Get("breweries/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetBreweryDetailEndpoint)));
 

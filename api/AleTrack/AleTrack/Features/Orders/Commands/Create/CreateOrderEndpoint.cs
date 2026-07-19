@@ -30,7 +30,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         Post("orders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateOrderEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

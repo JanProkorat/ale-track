@@ -24,7 +24,7 @@ public sealed class GetBreweriesListEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Get("breweries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.View)
             .WithName(nameof(GetBreweriesListEndpoint)));
         
         DontCatchExceptions();

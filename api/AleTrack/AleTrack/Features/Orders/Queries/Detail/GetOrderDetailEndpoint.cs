@@ -28,7 +28,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         Get("orders/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetOrderDetailEndpoint)));
         

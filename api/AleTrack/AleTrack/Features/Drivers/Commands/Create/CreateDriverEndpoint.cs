@@ -26,7 +26,7 @@ public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Post("drivers");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateDriverEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

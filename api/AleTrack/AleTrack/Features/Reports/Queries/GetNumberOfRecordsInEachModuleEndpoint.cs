@@ -30,7 +30,7 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(AleTrackDbContext dbC
     {
         Get("reports/number-of-records-in-each-module");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetNumberOfRecordsInEachModuleEndpoint)));
         
         DontCatchExceptions();

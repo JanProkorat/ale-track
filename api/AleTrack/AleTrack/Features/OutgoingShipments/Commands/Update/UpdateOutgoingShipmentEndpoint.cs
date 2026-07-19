@@ -44,7 +44,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     {
         Put("outgoing-shipments/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateOutgoingShipmentEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

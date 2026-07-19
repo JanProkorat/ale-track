@@ -10,6 +10,11 @@ namespace AleTrack.Common.Utils;
 /// <inheritdoc/>
 internal sealed class JwtService(IConfiguration configuration) : IJwtService
 {
+    /// <summary>
+    /// Claim type carrying a single "Module:Level" per-module permission.
+    /// </summary>
+    public const string PermissionClaimType = "perm";
+
     /// <inheritdoc/>
     public string GenerateToken(User user)
     {
@@ -24,6 +29,10 @@ internal sealed class JwtService(IConfiguration configuration) : IJwtService
             new(ClaimTypes.Surname, user.LastName ?? string.Empty)
         };
         claims.AddRange(user.UserRoles.Select(role => new Claim(ClaimTypes.Role, role.Type.ToString())));
+
+        // Granular per-module permissions, e.g. "Orders:Edit". Admin users rely on
+        // the role claim instead (the authorization handler short-circuits on Admin).
+        claims.AddRange(user.Permissions.Select(p => new Claim(PermissionClaimType, $"{p.Module}:{p.Level}")));
 
         var expirationHours = configuration.GetValue("Jwt:AccessTokenExpirationHours", 1);
 

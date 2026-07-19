@@ -34,7 +34,7 @@ public sealed class SetBreweryReminderResolvedDateEndpoint(AleTrackDbContext dbC
     {
         Patch("breweries/reminders/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(SetBreweryReminderResolvedDateEndpoint))

@@ -34,7 +34,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
     {
         Get("products/client/{ClientId}/history");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetProductsByClientHistoryEndpoint)));
         
         DontCatchExceptions();

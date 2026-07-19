@@ -36,4 +36,10 @@ public interface IAppContext
     /// an empty list will be returned.
     /// </remarks>
     List<UserRoleType> Roles { get; }
+
+    /// <summary>
+    /// Gets the granular per-module permissions of the authenticated user, parsed from
+    /// the "perm" claims. Admin users get <see cref="PermissionLevel.Edit"/> on every module.
+    /// </summary>
+    IReadOnlyDictionary<ModuleType, PermissionLevel> Permissions { get; }
 }

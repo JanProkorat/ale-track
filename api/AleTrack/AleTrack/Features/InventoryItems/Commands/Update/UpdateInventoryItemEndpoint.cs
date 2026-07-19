@@ -31,7 +31,7 @@ public sealed class UpdateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
     {
         Put("inventory-items/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Inventory, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateInventoryItemEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

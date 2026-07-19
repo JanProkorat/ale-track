@@ -16,7 +16,7 @@ public sealed class GetOrderItemsRemindersListEndpoint(AleTrackDbContext dbConte
     {
         Get("order-items/reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetOrderItemsRemindersListEndpoint)));
         
         DontCatchExceptions();

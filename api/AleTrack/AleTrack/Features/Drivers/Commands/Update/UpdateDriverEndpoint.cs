@@ -37,7 +37,7 @@ public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Put("drivers/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateDriverEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

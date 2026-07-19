@@ -28,7 +28,7 @@ public sealed class CreateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
     {
         Post("users");
         Description(b => b
-            .RequireRole(UserRoleType.Admin)
+            .RequirePermission(ModuleType.Users, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateUserEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -56,6 +56,14 @@ public sealed class CreateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
                 .Select(r => new UserRole
                 {
                     Type = r
+                })
+                .ToList(),
+            Permissions = req.Data.Permissions
+                .Where(p => p.Level != PermissionLevel.None)
+                .Select(p => new UserPermission
+                {
+                    Module = p.Module,
+                    Level = p.Level
                 })
                 .ToList()
         };

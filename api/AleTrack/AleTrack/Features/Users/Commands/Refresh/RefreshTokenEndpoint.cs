@@ -64,6 +64,8 @@ public sealed class RefreshTokenEndpoint(AleTrackDbContext dbContext, IJwtServic
         var existingToken = await dbContext.RefreshTokens
             .Include(rt => rt.User)
                 .ThenInclude(u => u.UserRoles)
+            .Include(rt => rt.User)
+                .ThenInclude(u => u.Permissions)
             .FirstOrDefaultAsync(rt => rt.Token == hashedToken, ct);
 
         if (existingToken is null || existingToken.IsRevoked || existingToken.ExpiresAt < DateTime.UtcNow)

@@ -31,7 +31,7 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         Post("breweries/{id}/products");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateProductsEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

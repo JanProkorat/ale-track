@@ -18,7 +18,7 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
     {
         Get("outgoing-shipments");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
             .Produces<List<OutgoingShipmentListItemDto>>(StatusCodes.Status200OK)
             .WithName(nameof(GetOutgoingShipmentsListEndpoint)));
 

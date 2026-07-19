@@ -24,7 +24,7 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         Get("products");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetProductsListEndpoint)));
         
         DontCatchExceptions();

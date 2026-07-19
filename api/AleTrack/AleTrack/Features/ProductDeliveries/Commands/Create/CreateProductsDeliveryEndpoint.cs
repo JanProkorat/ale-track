@@ -26,7 +26,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
     {
         Post("products/deliveries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateProductsDeliveryEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

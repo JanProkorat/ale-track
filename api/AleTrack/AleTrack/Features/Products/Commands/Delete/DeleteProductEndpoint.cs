@@ -29,7 +29,7 @@ public sealed class DeleteProductEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Delete("products/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteProductEndpoint))

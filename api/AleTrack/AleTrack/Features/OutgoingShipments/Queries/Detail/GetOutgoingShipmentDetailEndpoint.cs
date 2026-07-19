@@ -30,7 +30,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
     {
         Get("outgoing-shipments/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
             .Produces<OutgoingShipmentDetailDto>()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetOutgoingShipmentDetailEndpoint)));

@@ -35,7 +35,7 @@ public sealed class CreateClientReminderEndpoint(AleTrackDbContext dbContext) : 
     {
         Post("clients/{id}/reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(CreateClientReminderEndpoint))

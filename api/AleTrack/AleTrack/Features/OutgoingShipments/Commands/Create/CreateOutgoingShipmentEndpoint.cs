@@ -31,7 +31,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     {
         Post("outgoing-shipments");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateOutgoingShipmentEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

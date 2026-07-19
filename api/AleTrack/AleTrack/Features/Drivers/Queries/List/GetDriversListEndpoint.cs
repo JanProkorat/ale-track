@@ -14,7 +14,7 @@ public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         Get("drivers");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.View)
             .WithName(nameof(GetDriversListEndpoint)));
         
         DontCatchExceptions();

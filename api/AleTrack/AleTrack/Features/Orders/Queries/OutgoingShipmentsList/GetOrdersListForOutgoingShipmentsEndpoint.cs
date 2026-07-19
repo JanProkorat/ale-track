@@ -25,7 +25,7 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
     {
         Get("outgoing-shipments/orders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.View)
             .WithName(nameof(GetOrdersListForOutgoingShipmentsEndpoint)));
         
         DontCatchExceptions();

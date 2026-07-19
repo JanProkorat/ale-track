@@ -35,7 +35,7 @@ public sealed class UpdateBreweryReminderEndpoint(AleTrackDbContext dbContext) :
     {
         Put("breweries/reminders/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(UpdateBreweryReminderEndpoint))
