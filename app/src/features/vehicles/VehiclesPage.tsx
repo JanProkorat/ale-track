@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { Button, Card, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Card, Divider, IconButton, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import LocalShippingIcon from '@mui/icons-material/LocalShippingOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
-import { SearchField } from 'src/components/common/SearchField';
-import { DataTable, type Column } from 'src/components/common/DataTable';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
@@ -18,8 +16,6 @@ import { VehicleDto, type VehicleListItemDto } from 'src/generated/api-client';
 import { useVehicles, useDeleteVehicle } from 'src/hooks/useVehicles';
 import { VehicleFormDrawer } from './VehicleFormDrawer';
 
-const weight = (kg: number | undefined) => (kg != null ? `${num(kg)} kg` : '—');
-
 export function VehiclesPage() {
   const { canEdit } = useAuth();
   const editable = canEdit('vehicles');
@@ -28,7 +24,6 @@ export function VehiclesPage() {
   const query = useVehicles();
   const del = useDeleteVehicle();
 
-  const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<VehicleDto | undefined>(undefined);
   const [confirm, setConfirm] = useState<VehicleListItemDto | null>(null);
@@ -53,98 +48,60 @@ export function VehiclesPage() {
     }
   };
 
-  const columns: Column<VehicleListItemDto>[] = [
-    {
-      key: 'name',
-      header: 'Vůz',
-      render: (v) => <Typography sx={{ fontWeight: 600 }}>{v.name}</Typography>,
-    },
-    {
-      key: 'maxWeight',
-      header: 'Nosnost',
-      align: 'right',
-      width: 160,
-      render: (v) => weight(v.maxWeight),
-    },
-    ...(editable
-      ? [
-          {
-            key: 'actions',
-            header: '',
-            align: 'right' as const,
-            width: 96,
-            render: (v: VehicleListItemDto) => (
-              <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                <Tooltip title="Upravit">
-                  <IconButton size="small" onClick={() => openEdit(v)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Smazat">
-                  <IconButton size="small" color="error" onClick={() => setConfirm(v)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ),
-          },
-        ]
-      : []),
-  ];
-
   return (
     <PageContainer>
       <PageHeader
         eyebrow="Evidence"
         title="Vozy"
-        subtitle="Vozový park pro rozvoz a svozy."
+        subtitle="Vozový park pro vývozy a dovozy do skladu."
         actions={
-          <>
-            <SearchField value={search} onChange={setSearch} placeholder="Hledat vůz…" />
-            {editable && (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-                Přidat vůz
-              </Button>
-            )}
-          </>
+          editable && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+              Nový vůz
+            </Button>
+          )
         }
       />
 
-      <Card sx={{ p: { xs: 1, sm: 1.5 } }}>
-        <QueryBoundary
-          query={query}
-          isEmpty={(rows) => rows.length === 0}
-          emptyState={
-            <EmptyState
-              icon={<LocalShippingIcon />}
-              title="Zatím žádné vozy"
-              description="Přidejte první vozidlo do vozového parku."
-              action={
-                editable && (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-                    Přidat vůz
-                  </Button>
-                )
-              }
-            />
-          }
-        >
-          {(rows) => {
-            const q = search.trim().toLowerCase();
-            const filtered = q ? rows.filter((v) => (v.name ?? '').toLowerCase().includes(q)) : rows;
-            if (filtered.length === 0) {
-              return <EmptyState title="Nic nenalezeno" description={`Pro „${search}" nemáme žádný vůz.`} dense />;
+      <QueryBoundary
+        query={query}
+        isEmpty={(rows) => rows.length === 0}
+        emptyState={
+          <EmptyState
+            icon={<LocalShippingIcon />}
+            title="Zatím žádné vozy"
+            description="Přidejte první vozidlo do vozového parku."
+            action={
+              editable && (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+                  Nový vůz
+                </Button>
+              )
             }
-            return (
-              <DataTable
-                columns={columns}
-                rows={filtered}
-                getRowKey={(v) => v.id ?? v.name ?? ''}
-              />
-            );
-          }}
-        </QueryBoundary>
-      </Card>
+          />
+        }
+      >
+        {(rows) => (
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.25, mx: 0.25 }}>
+              <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
+                {rows.length} vozů
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 1.75 }}>
+              {rows.map((v) => (
+                <VehicleTile
+                  key={v.id ?? v.name}
+                  vehicle={v}
+                  editable={editable}
+                  onEdit={() => openEdit(v)}
+                  onDelete={() => setConfirm(v)}
+                />
+              ))}
+            </Box>
+          </>
+        )}
+      </QueryBoundary>
 
       <VehicleFormDrawer open={formOpen} vehicle={editing} onClose={() => setFormOpen(false)} />
       <ConfirmDialog
@@ -160,5 +117,69 @@ export function VehiclesPage() {
         onClose={() => setConfirm(null)}
       />
     </PageContainer>
+  );
+}
+
+function VehicleTile({
+  vehicle,
+  editable,
+  onEdit,
+  onDelete,
+}: {
+  vehicle: VehicleListItemDto;
+  editable: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Card variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          sx={{
+            width: 46,
+            height: 46,
+            borderRadius: 2,
+            display: 'grid',
+            placeItems: 'center',
+            flexShrink: 0,
+            bgcolor: (t) => t.palette.brand.infoTint,
+            color: 'info.main',
+            '& svg': { fontSize: 22 },
+          }}
+        >
+          <LocalShippingIcon />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 15 }} noWrap>
+            {vehicle.name}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+            Nosnost {vehicle.maxWeight != null ? num(vehicle.maxWeight) : '—'} kg
+          </Typography>
+        </Box>
+      </Box>
+
+      {editable && (
+        <>
+          <Divider />
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditIcon fontSize="small" />}
+              sx={{ flex: 1 }}
+              onClick={onEdit}
+            >
+              Upravit
+            </Button>
+            <Tooltip title="Smazat">
+              <IconButton size="small" color="error" onClick={onDelete}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </>
+      )}
+    </Card>
   );
 }
