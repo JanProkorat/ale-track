@@ -18,7 +18,7 @@ import { countryLabel } from 'src/lib/labels';
 import { ProductKind, type AddressDto, type BreweryDto, type BreweryProductListItemDto } from 'src/generated/api-client';
 import { useBreweryProducts, useDeleteProduct } from 'src/hooks/useBreweryProducts';
 import { useBreweryReminders } from 'src/hooks/useBreweryReminders';
-import { CenikTable } from './CenikTable';
+import { Cenik } from './Cenik';
 import { ProductFormDrawer } from './ProductFormDrawer';
 import { RemindersPanel } from './RemindersPanel';
 import { NotesPanel } from './NotesPanel';
@@ -164,7 +164,7 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
                 action={editable && <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openAddProduct}>Přidat produkt</Button>} />
             }
           >
-            {(rows) => <CenikTable products={rows} editable={editable} onEdit={openEditProduct} onDelete={setConfirmProduct} />}
+            {(rows) => <Cenik products={rows} editable={editable} onEdit={openEditProduct} onDelete={setConfirmProduct} />}
           </QueryBoundary>
         </TitledCard>
       )}
