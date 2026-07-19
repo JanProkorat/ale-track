@@ -5,6 +5,7 @@ import { LoginPage } from 'src/pages/LoginPage';
 import { DashboardPage } from 'src/pages/DashboardPage';
 import { ModulePlaceholder } from 'src/pages/ModulePlaceholder';
 import { VehiclesPage } from 'src/features/vehicles/VehiclesPage';
+import { UsersPage } from 'src/features/users/UsersPage';
 import { LOGIN_PATH, PATHS } from './paths';
 
 const placeholder = (eyebrow: string, title: string, phase: string) => (
@@ -28,7 +29,7 @@ export const router = createBrowserRouter([
           { path: PATHS.clients, element: placeholder('Evidence', 'Klienti', 'P6') },
           { path: PATHS.drivers, element: placeholder('Evidence', 'Řidiči', 'P10') },
           { path: PATHS.vehicles, element: <VehiclesPage /> },
-          { path: PATHS.users, element: placeholder('Správa', 'Uživatelé', 'P12') },
+          { path: PATHS.users, element: <UsersPage /> },
         ],
       },
     ],

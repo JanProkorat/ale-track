@@ -11,6 +11,9 @@ import {
   VehicleDto,
   type CreateVehicleDto,
   type UpdateVehicleDto,
+  UserListItemDto,
+  type CreateUserDto,
+  type UpdateUserDto,
 } from 'src/generated/api-client';
 import { db, mockId, mockDelay, MockNotFoundError } from './db';
 
@@ -49,6 +52,51 @@ const impl: Partial<IClient> = {
   deleteVehicleEndpoint(id: string) {
     const i = db.vehicles.findIndex((x) => x.id === id);
     if (i >= 0) db.vehicles.splice(i, 1);
+    return mockDelay(id);
+  },
+
+  // ---- Users ---------------------------------------------------------------
+  getUserListEndpoint(parameters: { [key: string]: string }) {
+    const search = parameters?.['search'] ?? parameters?.['Search'];
+    const rows = db.users
+      .filter(
+        (u) =>
+          matches(u.firstName, search) || matches(u.lastName, search) || matches(u.userName, search)
+      )
+      .map(
+        (u) =>
+          new UserListItemDto({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            userName: u.userName,
+            userRoles: u.userRoles,
+          })
+      );
+    return mockDelay(rows);
+  },
+  createUserEndpoint(data: CreateUserDto) {
+    const id = mockId('usr');
+    db.users.unshift({
+      id,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      userName: data.userName,
+      userRoles: data.userRoles,
+    });
+    return mockDelay(id);
+  },
+  updateUserEndpoint(id: string, data: UpdateUserDto) {
+    const u = db.users.find((x) => x.id === id);
+    if (!u) return Promise.reject(new MockNotFoundError('Uživatel'));
+    u.firstName = data.firstName;
+    u.lastName = data.lastName;
+    u.userRoles = data.userRoles;
+    return mockDelay(id);
+  },
+  deleteUserEndpoint(id: string) {
+    const i = db.users.findIndex((x) => x.id === id);
+    if (i >= 0) db.users.splice(i, 1);
     return mockDelay(id);
   },
 };

@@ -3,10 +3,11 @@
 // reset on reload. Real (logged-in) sessions never touch this — they hit the
 // live API. Each module appends its collection + seed here as it's built.
 
-import { type IVehicleDto } from 'src/generated/api-client';
+import { type IVehicleDto, type IUserListItemDto, UserRoleType } from 'src/generated/api-client';
 
 export interface MockDb {
   vehicles: IVehicleDto[];
+  users: IUserListItemDto[];
 }
 
 const VEHICLES_SEED: IVehicleDto[] = [
@@ -16,8 +17,17 @@ const VEHICLES_SEED: IVehicleDto[] = [
   { id: 'veh-0004', name: 'Ford Transit (5U9 6631)', maxWeight: 1100 },
 ];
 
+const USERS_SEED: IUserListItemDto[] = [
+  { id: 'usr-0001', firstName: undefined, lastName: undefined, userName: 'admin', userRoles: [UserRoleType.Admin] },
+  { id: 'usr-0002', firstName: 'Jana', lastName: 'Nováková', userName: 'jana.novakova', userRoles: [UserRoleType.User] },
+  { id: 'usr-0003', firstName: 'Petr', lastName: 'Svoboda', userName: 'petr.svoboda', userRoles: [UserRoleType.User] },
+  { id: 'usr-0004', firstName: 'Lucie', lastName: 'Dvořáková', userName: 'lucie.dvorakova', userRoles: [UserRoleType.User] },
+  { id: 'usr-0005', firstName: 'Tomáš', lastName: 'Procházka', userName: 'tomas.prochazka', userRoles: [UserRoleType.User] },
+];
+
 export const db: MockDb = {
   vehicles: structuredClone(VEHICLES_SEED),
+  users: structuredClone(USERS_SEED),
 };
 
 /** New id for demo-created records. */
