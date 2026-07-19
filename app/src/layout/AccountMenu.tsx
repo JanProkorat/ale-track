@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import CheckIcon from '@mui/icons-material/Check';
+import { Chip } from '@mui/material';
 import { useAuth } from 'src/auth/AuthProvider';
 import { DEMO_USERS } from 'src/auth/mockUsers';
 import { initials } from 'src/lib/format';
@@ -22,7 +23,7 @@ export function AccountMenu({
   anchorEl: HTMLElement | null;
   onClose: () => void;
 }) {
-  const { user, switchUser, signOut } = useAuth();
+  const { user, isDemo, switchUser, signOut } = useAuth();
 
   return (
     <Menu
@@ -34,9 +35,12 @@ export function AccountMenu({
       slotProps={{ paper: { sx: { width: 300, mt: -1 } } }}
     >
       <Box sx={{ px: 2, py: 1.5 }}>
-        <Typography variant="caption" color="text.secondary" fontWeight={700}>
-          Přihlášený uživatel
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="caption" color="text.secondary" fontWeight={700}>
+            Přihlášený uživatel
+          </Typography>
+          {isDemo && <Chip label="demo" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: 10, fontWeight: 700 }} />}
+        </Stack>
         <Stack direction="row" spacing={1.5} alignItems="center" mt={1}>
           <Avatar sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', width: 36, height: 36 }}>
             {initials(user?.firstName, user?.lastName)}

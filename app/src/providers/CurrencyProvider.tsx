@@ -1,27 +1,32 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useAuth } from 'src/auth/AuthProvider';
+import { useExchangeRates, eurRateFromList } from 'src/hooks/useExchangeRates';
 
 export type Currency = 'CZK' | 'EUR';
 
 const STORAGE_KEY = 'aletrack.currency';
+const FALLBACK_EUR_RATE = 25.3;
 
 interface CurrencyContextValue {
   currency: Currency;
   setCurrency: (c: Currency) => void;
-  /** CZK per 1 EUR. Static in P1; sourced from GET /exchange-rates in P2. */
+  /** CZK per 1 EUR — live from GET /exchange-rates when signed in, else fallback. */
   eurRate: number;
-  rateUpdatedAt: string; // ISO date
+  rateUpdatedAt: string;
   /** Format a CZK-base amount into the active display currency. */
   formatMoney: (czk: number | null | undefined) => string;
 }
 
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
-const EUR_RATE = 25.3;
-
 export function CurrencyProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isDemo } = useAuth();
+  const { data: rates } = useExchangeRates(isAuthenticated && !isDemo);
   const [currency, setCurrencyState] = useState<Currency>(
     () => (localStorage.getItem(STORAGE_KEY) as Currency) || 'CZK'
   );
+
+  const eurRate = eurRateFromList(rates, FALLBACK_EUR_RATE);
 
   const value = useMemo<CurrencyContextValue>(() => {
     const setCurrency = (c: Currency) => {
@@ -34,18 +39,18 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         return `${new Intl.NumberFormat('cs-CZ', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        }).format(czk / EUR_RATE)} €`;
+        }).format(czk / eurRate)} €`;
       }
       return `${new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 2 }).format(czk)} Kč`;
     };
     return {
       currency,
       setCurrency,
-      eurRate: EUR_RATE,
+      eurRate,
       rateUpdatedAt: new Date().toISOString().slice(0, 10),
       formatMoney,
     };
-  }, [currency]);
+  }, [currency, eurRate]);
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 }
