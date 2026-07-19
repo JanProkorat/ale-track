@@ -1942,10 +1942,10 @@ function viewInventory(){
       ${invStat('Položek na skladě',DB.inventory.length,'stock',false,true)}
       ${invStat('Kusů celkem',num(totalKs),'box',false,false)}
       ${invStat('Nízká zásoba',low.length,'warnTri',low.length>0,false)}
-      <div style="flex:2;min-width:240px;border-left:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:12px 16px;flex-wrap:wrap">
-        <div class="fld" style="flex:1;min-width:170px;height:38px">${icon('search',16)}<input id="inv-search" placeholder="Hledat položku…" value="${esc(INV_SEARCH)}"></div>
-        <div style="width:190px">${sel('inv-brew',brewOpts,INV_BREW)}</div>
-        <div class="seg"><button id="inv-lay-list" class="${INV_LAYOUT==='list'?'on':''}" onclick="invSetLayout('list')" title="Seznam">${icon('menu',15)}</button>
+      <div style="flex:1 1 340px;min-width:300px;border-left:1px solid var(--border);display:flex;align-items:center;gap:9px;padding:11px 14px;flex-wrap:nowrap">
+        <div class="fld" style="flex:1 1 auto;min-width:120px;height:38px">${icon('search',16)}<input id="inv-search" placeholder="Hledat…" value="${esc(INV_SEARCH)}"></div>
+        <div style="width:168px;flex:0 0 auto">${sel('inv-brew',brewOpts,INV_BREW)}</div>
+        <div class="seg" style="flex:0 0 auto"><button id="inv-lay-list" class="${INV_LAYOUT==='list'?'on':''}" onclick="invSetLayout('list')" title="Seznam">${icon('menu',15)}</button>
           <button id="inv-lay-grid" class="${INV_LAYOUT==='grid'?'on':''}" onclick="invSetLayout('grid')" title="Mřížka">${icon('dash',15)}</button></div>
       </div>
     </div></div>
@@ -1953,10 +1953,10 @@ function viewInventory(){
     <div id="inv-results">${invResults()}</div></div>`;
 }
 function invStat(label,val,ic,crit,first){
-  return `<div style="flex:1;min-width:150px;padding:14px 18px;${first?'':'border-left:1px solid var(--border)'};display:flex;align-items:center;gap:12px">
-    <div style="width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:${crit?'var(--crit-tint)':'var(--surface-3)'};color:${crit?'var(--crit)':'var(--text-2)'}">${icon(ic,18)}</div>
-    <div style="min-width:0"><div class="t-mut" style="font-size:12px;font-weight:600;white-space:nowrap">${esc(label)}</div>
-      <div class="tnum" style="font-size:22px;font-weight:800;line-height:1.15;${crit?'color:var(--crit)':''}">${val}</div></div></div>`;
+  return `<div style="flex:0 1 auto;min-width:112px;padding:11px 15px;${first?'':'border-left:1px solid var(--border)'};display:flex;align-items:center;gap:10px">
+    <div style="width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;background:${crit?'var(--crit-tint)':'var(--surface-3)'};color:${crit?'var(--crit)':'var(--text-2)'}">${icon(ic,16)}</div>
+    <div style="min-width:0"><div class="t-mut" style="font-size:11.5px;font-weight:600;white-space:nowrap">${esc(label)}</div>
+      <div class="tnum" style="font-size:19px;font-weight:800;line-height:1.2;${crit?'color:var(--crit)':''}">${val}</div></div></div>`;
 }
 function invWire(){ const s=$('#inv-search'); if(s) s.oninput=()=>{ INV_SEARCH=s.value; invRerender(); };
   const b=$('#inv-brew'); if(b) b.onchange=()=>{ INV_BREW=b.value; invRerender(); }; }
