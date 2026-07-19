@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Box, Breadcrumbs, Button, ButtonBase, Card, Checkbox, Chip, CircularProgress, Dialog,
+  Box, Breadcrumbs, Button, Card, Checkbox, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
@@ -8,6 +8,7 @@ import CloseIcon from '@mui/icons-material/CloseOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
+import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -39,7 +40,7 @@ import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 
-type Tab = 'all' | 'f1' | 'f2';
+type Tab = 'summary' | 'orders';
 
 interface NakladkaRow {
   key: string;
@@ -86,59 +87,117 @@ function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
     loaded: e.isShipmentLoadingConfirmed ?? false,
   };
 }
-function inTab(row: NakladkaRow, tab: Tab): boolean {
-  if (tab === 'all') return true;
-  if (tab === 'f1') return row.firstInvoiceQuantity > 0;
-  return row.secondInvoiceQuantity > 0;
-}
-function invoiceOf(row: NakladkaRow): 1 | 2 {
-  return row.firstInvoiceQuantity === 0 && row.secondInvoiceQuantity > 0 ? 2 : 1;
-}
-
-/** F1/F2 invoice picker — an unfilled segmented control (grey track, white
- * active pill), matching the prototype's `.seg` rather than a solid amber fill. */
-function InvoiceSeg({ value, onChange, disabled }: { value: 1 | 2; onChange: (v: 1 | 2) => void; disabled?: boolean }) {
-  return (
-    <Box sx={{ display: 'inline-flex', gap: '2px', p: '2px', borderRadius: 1.5, bgcolor: 'brand.surface3' }}>
-      {([1, 2] as const).map((n) => {
-        const on = value === n;
-        return (
-          <ButtonBase
-            key={n}
-            disabled={disabled}
-            onClick={() => onChange(n)}
-            sx={{
-              px: 1.1, py: 0.35, borderRadius: 1, fontSize: 11.5, fontWeight: 700,
-              bgcolor: on ? 'background.paper' : 'transparent',
-              color: on ? 'text.primary' : 'text.secondary',
-              boxShadow: on ? 1 : 'none',
-              '&:hover': { color: 'text.primary' },
-            }}
-          >
-            F{n}
-          </ButtonBase>
-        );
-      })}
-    </Box>
-  );
+/** Effective invoice-2 quantity for a row (clamped to the row total). F1 is
+ * always the remainder, so a single value fully describes the split. */
+function f2Quantity(row: NakladkaRow): number {
+  return Math.max(0, Math.min(row.secondInvoiceQuantity, row.quantity));
 }
 
 const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
 
+function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
+  return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
+}
+
+/** F1/F2 split stepper: +/- moves one piece between invoices, F1 = remainder.
+ * Supports partial splits (e.g. 4 pieces on F1, 2 on F2). */
+function InvoiceSplit({ f2, quantity, onMove, disabled }: { f2: number; quantity: number; onMove: (delta: number) => void; disabled?: boolean }) {
+  const f1 = quantity - f2;
+  return (
+    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
+      <IconButton size="small" disabled={disabled || f2 <= 0} onClick={() => onMove(-1)} aria-label="Přesunout kus na fakturu 1" sx={{ width: 24, height: 24 }}>
+        <RemoveIcon sx={{ fontSize: 15 }} />
+      </IconButton>
+      <Box sx={{ minWidth: 78, textAlign: 'center', fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        <Box component="span" sx={{ color: f1 > 0 ? 'text.primary' : 'text.disabled' }}>F1 {f1}</Box>
+        <Box component="span" sx={{ color: 'text.disabled', mx: 0.5 }}>·</Box>
+        <Box component="span" sx={{ color: f2 > 0 ? 'warning.dark' : 'text.disabled' }}>F2 {f2}</Box>
+      </Box>
+      <IconButton size="small" disabled={disabled || f1 <= 0} onClick={() => onMove(1)} aria-label="Přesunout kus na fakturu 2" sx={{ width: 24, height: 24 }}>
+        <AddIcon sx={{ fontSize: 15 }} />
+      </IconButton>
+    </Stack>
+  );
+}
+
+interface AggRow {
+  key: string;
+  name: string;
+  kind?: ProductKind;
+  packageSize?: number;
+  quantity: number;
+}
+
+/** Collapse the per-order/per-dokládka rows into one line per distinct product
+ * (name + kind + package size), summing quantities — the brewery's prep list. */
+function aggregateRows(rows: NakladkaRow[]): AggRow[] {
+  const map = new Map<string, AggRow>();
+  const order: string[] = [];
+  for (const r of rows) {
+    const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
+    const existing = map.get(key);
+    if (existing) existing.quantity += r.quantity;
+    else { map.set(key, { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: r.quantity }); order.push(key); }
+  }
+  return order.map((k) => map.get(k)!);
+}
+
+/** "Celková nakládka" — aggregated products to prepare, no orders/checks/invoice. */
+function SummaryTable({ rows }: { rows: AggRow[] }) {
+  if (rows.length === 0) {
+    return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>Zatím žádné produkty k naložení.</Typography>;
+  }
+  const total = rows.reduce((s, r) => s + r.quantity, 0);
+  return (
+    <Card variant="outlined">
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+              <TableCell sx={HEAD_SX}>Produkt</TableCell>
+              <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((r) => {
+              const chipText = kindSizeChipText(r.kind, r.packageSize);
+              return (
+                <TableRow key={r.key} hover>
+                  <TableCell>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{r.name}</Typography>
+                    {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600, mt: 0.25 }} />}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', fontSize: 13.5 }}>{r.quantity} ks</Typography>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow>
+              <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Celkem k naložení</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', borderBottom: 'none' }}>{total} ks</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Card>
+  );
+}
+
 function LoadingRow({
-  row, tab, editable, loaded, checked, onLoaded, onInvoice, onToggleChecked, onRemove,
+  row, editable, loaded, checked, f2, onLoaded, onMoveInvoice, onToggleChecked, onRemove,
 }: {
   row: NakladkaRow;
-  tab: Tab;
   editable: boolean;
   loaded: boolean;
   checked: boolean;
+  f2: number;
   onLoaded: (loaded: boolean) => void;
-  onInvoice: (invoice: 1 | 2) => void;
+  onMoveInvoice: (delta: number) => void;
   onToggleChecked: () => void;
   onRemove?: () => void;
 }) {
-  const chipText = `${kindLabel(row.kind) ?? ''}${row.packageSize != null ? ` · ${fmtLiters(row.packageSize)}` : ''}`.replace(/^ · /, '');
+  const chipText = kindSizeChipText(row.kind, row.packageSize);
   return (
     <TableRow hover>
       <TableCell>
@@ -167,11 +226,9 @@ function LoadingRow({
         <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{row.quantity} ks</Typography>
         {row.dokladka && <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ze skladu</Typography>}
       </TableCell>
-      {tab === 'all' && (
-        <TableCell align="center">
-          <InvoiceSeg value={invoiceOf(row)} onChange={onInvoice} disabled={!editable} />
-        </TableCell>
-      )}
+      <TableCell align="center">
+        <InvoiceSplit f2={f2} quantity={row.quantity} onMove={onMoveInvoice} disabled={!editable} />
+      </TableCell>
       <TableCell align="center" padding="checkbox">
         <Checkbox size="small" checked={loaded} disabled={!editable} onChange={(e) => onLoaded(e.target.checked)} title="Naloženo (1. diktovaná nakládka)" />
       </TableCell>
@@ -192,13 +249,12 @@ function LoadingRow({
 /** One bordered card = the header (numbered client + address + Dokládka button)
  * followed by its own product table, matching the prototype's per-stop block. */
 function LoadingBlock({
-  index, color, title, subtitle, tab, editable, rows, onDokladka, renderRow, emptyText,
+  index, color, title, subtitle, editable, rows, onDokladka, renderRow, emptyText,
 }: {
   index: number;
   color: string;
   title: string;
   subtitle: string;
-  tab: Tab;
   editable: boolean;
   rows: NakladkaRow[];
   onDokladka?: () => void;
@@ -232,7 +288,7 @@ function LoadingBlock({
                 <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
                   <TableCell sx={HEAD_SX}>Produkt</TableCell>
                   <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
-                  {tab === 'all' && <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>}
+                  <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>
                   <TableCell align="center" sx={HEAD_SX}>Naloženo</TableCell>
                   <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
                   <TableCell sx={{ ...HEAD_SX, width: 40 }} />
@@ -275,17 +331,22 @@ export function ShipmentDetail({
   const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
 
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<Tab>('summary');
   // "Kontrola" (2nd check round) has no field on the real DTO (only a single
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
   // state, reset whenever a different shipment is opened.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  // "Naloženo" persists via the update mutation, but that round-trips through the
-  // API; an optimistic per-row override keeps the checkbox instant (and correct
-  // in demo mode where the mock may not echo the flag back). Reset per shipment.
+  // "Naloženo" and the invoice split persist via the update mutation, but that
+  // round-trips through the API; optimistic per-row overrides keep the controls
+  // instant (and correct in demo mode where the mock may not echo values back).
   const [loadedOverride, setLoadedOverride] = useState<Map<string, boolean>>(new Map());
-  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); }, [shipment.id]);
+  const [invoiceOverride, setInvoiceOverride] = useState<Map<string, number>>(new Map());
+  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); setInvoiceOverride(new Map()); }, [shipment.id]);
   const isLoaded = (row: NakladkaRow) => loadedOverride.get(row.key) ?? row.loaded;
+  const rowF2 = (row: NakladkaRow) => {
+    const raw = invoiceOverride.get(row.key) ?? f2Quantity(row);
+    return Math.max(0, Math.min(raw, row.quantity));
+  };
 
   const [dokladkaOpen, setDokladkaOpen] = useState(false);
   const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
@@ -307,11 +368,10 @@ export function ShipmentDetail({
     () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
     [stopsSorted, extraRows],
   );
+  const summaryRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
   const totalN = combinedRows.length;
   const loadedN = combinedRows.filter((r) => isLoaded(r)).length;
   const checkedN = combinedRows.filter((r) => checkedIds.has(r.key)).length;
-  const f1Count = combinedRows.filter((r) => r.firstInvoiceQuantity > 0).length;
-  const f2Count = combinedRows.filter((r) => r.secondInvoiceQuantity > 0).length;
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -360,11 +420,16 @@ export function ShipmentDetail({
     void save(draft);
   }
 
-  function setRowInvoice(row: NakladkaRow, invoice: 1 | 2) {
+  // Move `delta` pieces between invoices (+1 -> invoice 2, -1 -> invoice 1).
+  // F1 is always the remainder, so we only track the invoice-2 quantity.
+  function moveInvoice(row: NakladkaRow, delta: number) {
+    const nextF2 = Math.max(0, Math.min(rowF2(row) + delta, row.quantity));
+    if (nextF2 === rowF2(row)) return;
+    setInvoiceOverride((prev) => { const n = new Map(prev); n.set(row.key, nextF2); return n; });
     const draft = draftFromShipment(shipment);
     const apply = (target: { firstInvoiceQuantity?: number; secondInvoiceQuantity?: number }) => {
-      target.firstInvoiceQuantity = invoice === 1 ? row.quantity : 0;
-      target.secondInvoiceQuantity = invoice === 2 ? row.quantity : 0;
+      target.firstInvoiceQuantity = row.quantity - nextF2;
+      target.secondInvoiceQuantity = nextF2;
     };
     if (row.orderItemId) {
       for (const co of draft.clientOrderShipments) {
@@ -479,71 +544,79 @@ export function ShipmentDetail({
                 value={tab}
                 onChange={setTab}
                 options={[
-                  { value: 'all', label: <>Celková nakládka <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{totalN}</Box></> },
-                  { value: 'f1', label: <>Faktura 1 <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{f1Count}</Box></> },
-                  { value: 'f2', label: <>Faktura 2 <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{f2Count}</Box></> },
+                  { value: 'summary', label: <>Celková nakládka <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{summaryRows.length}</Box></> },
+                  { value: 'orders', label: <>Přehled objednávek <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{totalN}</Box></> },
                 ]}
               />
             </Stack>
             <Box sx={{ px: 2.5, py: 2 }}>
-              <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-                <StatusPill tone={totalN > 0 && loadedN === totalN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${totalN}`} />
-                <StatusPill tone={totalN > 0 && checkedN === totalN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${totalN}`} />
-              </Stack>
+              {tab === 'summary' ? (
+                <>
+                  <Typography color="text.secondary" sx={{ fontSize: 12.5, mb: 1.5 }}>
+                    Souhrn všech produktů k naložení do vozu — sečteno napříč objednávkami.
+                  </Typography>
+                  <SummaryTable rows={summaryRows} />
+                </>
+              ) : (
+                <>
+                  <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                    <StatusPill tone={totalN > 0 && loadedN === totalN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${totalN}`} />
+                    <StatusPill tone={totalN > 0 && checkedN === totalN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${totalN}`} />
+                  </Stack>
 
-              {stopsSorted.map((stop, i) => (
-                <LoadingBlock
-                  key={stop.orderId ?? i}
-                  index={i}
-                  color={colorForClient(stop.clientId ?? '')}
-                  title={stop.clientName ?? '—'}
-                  subtitle={stopSubtitle(stop)}
-                  tab={tab}
-                  editable={nakladkaEditable}
-                  rows={(stop.products ?? []).map(productRowFrom).filter((r) => inTab(r, tab))}
-                  onDokladka={openDokladka}
-                  emptyText="V této faktuře nemá klient žádné položky."
-                  renderRow={(row) => (
-                    <LoadingRow
-                      key={row.key}
-                      row={row}
-                      tab={tab}
+                  {stopsSorted.map((stop, i) => (
+                    <LoadingBlock
+                      key={stop.orderId ?? i}
+                      index={i}
+                      color={colorForClient(stop.clientId ?? '')}
+                      title={stop.clientName ?? '—'}
+                      subtitle={stopSubtitle(stop)}
                       editable={nakladkaEditable}
-                      loaded={isLoaded(row)}
-                      checked={checkedIds.has(row.key)}
-                      onLoaded={(loaded) => setRowLoaded(row, loaded)}
-                      onInvoice={(inv) => setRowInvoice(row, inv)}
-                      onToggleChecked={() => toggleChecked(row.key)}
+                      rows={(stop.products ?? []).map(productRowFrom)}
+                      onDokladka={openDokladka}
+                      emptyText="Klient nemá žádné položky."
+                      renderRow={(row) => (
+                        <LoadingRow
+                          key={row.key}
+                          row={row}
+                          editable={nakladkaEditable}
+                          loaded={isLoaded(row)}
+                          checked={checkedIds.has(row.key)}
+                          f2={rowF2(row)}
+                          onLoaded={(loaded) => setRowLoaded(row, loaded)}
+                          onMoveInvoice={(delta) => moveInvoice(row, delta)}
+                          onToggleChecked={() => toggleChecked(row.key)}
+                        />
+                      )}
+                    />
+                  ))}
+
+                  {extraRows.length > 0 && (
+                    <LoadingBlock
+                      index={stopsSorted.length}
+                      color="#1A2B4C"
+                      title="Dokládka ze skladu"
+                      subtitle="Kusy navíc mimo objednávky — při doručení se odečtou ze skladu"
+                      editable={nakladkaEditable}
+                      rows={extraRows}
+                      emptyText="Žádná dokládka."
+                      renderRow={(row) => (
+                        <LoadingRow
+                          key={row.key}
+                          row={row}
+                          editable={nakladkaEditable}
+                          loaded={isLoaded(row)}
+                          checked={checkedIds.has(row.key)}
+                          f2={rowF2(row)}
+                          onLoaded={(loaded) => setRowLoaded(row, loaded)}
+                          onMoveInvoice={(delta) => moveInvoice(row, delta)}
+                          onToggleChecked={() => toggleChecked(row.key)}
+                          onRemove={() => removeExtra(row.extraId)}
+                        />
+                      )}
                     />
                   )}
-                />
-              ))}
-
-              {extraRows.filter((r) => inTab(r, tab)).length > 0 && (
-                <LoadingBlock
-                  index={stopsSorted.length}
-                  color="#1A2B4C"
-                  title="Dokládka ze skladu"
-                  subtitle="Kusy navíc mimo objednávky — při doručení se odečtou ze skladu"
-                  tab={tab}
-                  editable={nakladkaEditable}
-                  rows={extraRows.filter((r) => inTab(r, tab))}
-                  emptyText="Žádná dokládka."
-                  renderRow={(row) => (
-                    <LoadingRow
-                      key={row.key}
-                      row={row}
-                      tab={tab}
-                      editable={nakladkaEditable}
-                      loaded={isLoaded(row)}
-                      checked={checkedIds.has(row.key)}
-                      onLoaded={(loaded) => setRowLoaded(row, loaded)}
-                      onInvoice={(inv) => setRowInvoice(row, inv)}
-                      onToggleChecked={() => toggleChecked(row.key)}
-                      onRemove={() => removeExtra(row.extraId)}
-                    />
-                  )}
-                />
+                </>
               )}
             </Box>
           </Card>

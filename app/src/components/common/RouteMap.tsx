@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
-import L, { type LatLngBoundsExpression, type LatLngTuple } from 'leaflet';
+import L, { type LatLngBoundsExpression, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import AddIcon from '@mui/icons-material/AddOutlined';
+import RemoveIcon from '@mui/icons-material/RemoveOutlined';
+import FullscreenIcon from '@mui/icons-material/FullscreenOutlined';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
+import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import { DEPOT, haversine, fetchRoadRoute, type LatLng, type RoadRoute } from 'src/lib/geo';
 
 export interface RouteStop {
@@ -71,6 +76,19 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wpKey]);
 
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const [isFull, setIsFull] = useState(false);
+  // Track native fullscreen and re-measure the map so tiles fill the new size.
+  useEffect(() => {
+    const onChange = () => {
+      setIsFull(document.fullscreenElement === wrapRef.current);
+      requestAnimationFrame(() => mapRef.current?.invalidateSize());
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   // Straight-line fallback stats (used until/if the road route resolves).
   const fallback = useMemo(() => {
     if (located.length === 0) return null;
@@ -108,10 +126,25 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
   const bounds: LatLngBoundsExpression = straight;
   const stats = road ?? fallback;
 
+  const fitRoute = () => mapRef.current?.fitBounds(straight, { padding: [40, 40] });
+  const toggleFull = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen?.();
+  };
+
   return (
-    <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', '& .leaflet-container': { height: '100%', width: '100%' } }}>
-      <Box sx={{ height }}>
-        <MapContainer bounds={bounds} boundsOptions={{ padding: [40, 40] }} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
+    <Box
+      ref={wrapRef}
+      sx={{
+        position: 'relative', borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider',
+        '& .leaflet-container': { height: '100%', width: '100%' },
+        '&:fullscreen': { borderRadius: 0, width: '100%', height: '100%' },
+      }}
+    >
+      <Box sx={{ height: isFull ? '100%' : height }}>
+        <MapContainer ref={mapRef} bounds={bounds} boundsOptions={{ padding: [40, 40] }} zoomControl={false} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <Polyline positions={line} pathOptions={{ color: '#F08C00', weight: 4, opacity: 0.9, dashArray: road ? undefined : '9 7' }} />
           <Marker position={[DEPOT.lat, DEPOT.lng]} icon={depotIcon()}>
@@ -129,6 +162,45 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
           ))}
         </MapContainer>
       </Box>
+
+      {/* Map controls: fullscreen, zoom, and reset-to-route (top-right). */}
+      <Stack
+        sx={{
+          position: 'absolute', top: 12, right: 12, zIndex: 1000,
+          bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
+          overflow: 'hidden', boxShadow: 2,
+          '& > button': {
+            width: 34, height: 34, display: 'grid', placeItems: 'center', cursor: 'pointer',
+            border: 'none', bgcolor: 'transparent', color: 'text.primary',
+            borderBottom: 1, borderColor: 'divider',
+            '&:last-of-type': { borderBottom: 'none' },
+            '&:hover': { bgcolor: 'action.hover' },
+            '& svg': { fontSize: 19 },
+          },
+        }}
+      >
+        <MuiTooltip title={isFull ? 'Ukončit celou obrazovku' : 'Celá obrazovka'} placement="left">
+          <Box component="button" type="button" onClick={toggleFull} aria-label="Celá obrazovka">
+            {isFull ? <FullscreenExitIcon /> : <FullscreenIcon />}
+          </Box>
+        </MuiTooltip>
+        <MuiTooltip title="Přiblížit" placement="left">
+          <Box component="button" type="button" onClick={() => mapRef.current?.zoomIn()} aria-label="Přiblížit">
+            <AddIcon />
+          </Box>
+        </MuiTooltip>
+        <MuiTooltip title="Oddálit" placement="left">
+          <Box component="button" type="button" onClick={() => mapRef.current?.zoomOut()} aria-label="Oddálit">
+            <RemoveIcon />
+          </Box>
+        </MuiTooltip>
+        <MuiTooltip title="Zpět na trasu" placement="left">
+          <Box component="button" type="button" onClick={fitRoute} aria-label="Zpět na trasu">
+            <CenterFocusStrongIcon />
+          </Box>
+        </MuiTooltip>
+      </Stack>
+
       {stats && (
         <Stack
           direction="row"
