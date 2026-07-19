@@ -1218,8 +1218,7 @@ function viewClientDetail(id){
   const rems=DB.reminders.filter(r=>r.kind==='Client'&&r.sectionId===id);
   const ed=canEdit('clients');
   const tabs=`<div class="tabs">
-    ${clTab('info','Info','info',tab)}
-    ${clTab('contacts','Kontakty','phone',tab,c.contacts.length)}
+    ${clTab('info','Info a kontakty','info',tab)}
     ${clTab('orders','Objednávky','order',tab,orders.length)}
     ${clTab('reminders','Připomínky','bell',tab,rems.length)}
     ${clTab('notes','Poznámky','note',tab)}</div>`;
@@ -1229,6 +1228,12 @@ function viewClientDetail(id){
         ${a&&a.latitude!=null?`<span class="tag" style="margin-left:auto">${icon('pin',11)}GPS</span>`:''}</div>
       <div class="card-pad" style="display:flex;flex-direction:column;gap:12px">
         ${a?`<div class="addr">${fmtAddrFull(a)}</div>${pointMap(a.latitude,a.longitude,{color:'#0E7C9B'})}`:`<div class="t-mut">${fallback}</div>`}</div></div>`;
+    const contactsCard=`<div class="card" style="grid-column:1/-1"><div class="card-head">${icon('phone',16)}<h3>Kontakty</h3>
+        <span class="tag">${c.contacts.length}</span>${ed?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="clientForm('${id}')">${icon('edit',14)}Upravit</button>`:''}</div>
+      <div class="card-pad">${c.contacts.length?`<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${c.contacts.map(ct=>`<div class="row gap12" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--r)">
+        <div class="ti-ico" style="background:var(--info-tint);color:var(--info);width:38px;height:38px;flex:0 0 auto">${icon(ct.type==='Email'?'mail':'phone',18)}</div>
+        <div style="min-width:0"><div class="t-mut" style="font-size:12px">${esc(ct.description||L.contact[ct.type])}</div><div class="t-strong" style="overflow:hidden;text-overflow:ellipsis">${esc(ct.value)}</div></div></div>`).join('')}</div>`
+        :`<div class="t-mut" style="font-size:13px">Žádné kontakty.${ed?' Přidejte je tlačítkem Upravit.':''}</div>`}</div></div>`;
     body=`<div class="grid" style="grid-template-columns:1fr 1fr">
       ${addrCard('Fakturační adresa','wallet',c.officialAddress,'')}
       ${addrCard('Kontaktní adresa','pin',c.contactAddress,'Shodná s fakturační adresou.')}
@@ -1240,13 +1245,8 @@ function viewClientDetail(id){
         <div class="tiles" style="grid-template-columns:1fr 1fr">
           ${miniStat('Objednávek',orders.length,'order')}
           ${miniStat('Otevřených',orders.filter(o=>o.state!=='Finished'&&o.state!=='Cancelled').length,'clock')}
-        </div></div></div></div>`;
-  } else if(tab==='contacts'){
-    body=`<div class="card-pad" style="padding:0">${ed?`<div class="toolbar"><button class="btn btn-ghost btn-sm" onclick="clientForm('${id}')">${icon('edit',15)}Upravit kontakty</button></div>`:''}
-      ${c.contacts.length?`<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${c.contacts.map(ct=>`<div class="tile" style="flex-direction:row;align-items:center;gap:12px">
-        <div class="ti-ico" style="background:var(--info-tint);color:var(--info)">${icon(ct.type==='Email'?'mail':'phone',18)}</div>
-        <div><div class="t-mut" style="font-size:12px">${esc(ct.description||L.contact[ct.type])}</div><div class="t-strong">${esc(ct.value)}</div></div></div>`).join('')}</div>`
-        :`<div class="empty"><div>${icon('phone',34)}</div><div class="t">Žádné kontakty</div></div>`}</div>`;
+        </div></div></div>
+      ${contactsCard}</div>`;
   } else if(tab==='orders'){
     body=`<div class="card-pad" style="padding:0">${ed?`<div class="toolbar"><a class="btn btn-primary btn-sm" href="#/orders/new?client=${id}">${icon('plus',15)}Nová objednávka</a></div>`:''}
       ${orders.length?ordersTable(orders,true):`<div class="empty"><div>${icon('order',34)}</div><div class="t">Žádné objednávky</div></div>`}</div>`;
