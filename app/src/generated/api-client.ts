@@ -9758,6 +9758,7 @@ export class OrderListItemDto implements IOrderListItemDto {
     id?: string;
     state?: OrderState;
     requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     clientName?: string;
     planningState?: PlanningState;
 
@@ -9775,6 +9776,7 @@ export class OrderListItemDto implements IOrderListItemDto {
             this.id = _data["id"];
             this.state = _data["state"];
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
+            this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
             this.clientName = _data["clientName"];
             this.planningState = _data["planningState"];
         }
@@ -9792,6 +9794,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data["id"] = this.id;
         data["state"] = this.state;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
+        data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
         data["clientName"] = this.clientName;
         data["planningState"] = this.planningState;
         return data;
@@ -9802,6 +9805,7 @@ export interface IOrderListItemDto {
     id?: string;
     state?: OrderState;
     requiredDeliveryDate?: Date | undefined;
+    actualDeliveryDate?: Date | undefined;
     clientName?: string;
     planningState?: PlanningState;
 }

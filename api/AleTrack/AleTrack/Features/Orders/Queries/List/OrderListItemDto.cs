@@ -22,7 +22,12 @@ public sealed record OrderListItemDto
     /// Latest date when order needs to be delivered to the client
     /// </summary>
     public DateOnly? RequiredDeliveryDate { get; set; }
-    
+
+    /// <summary>
+    /// Date the order was actually delivered (set when its shipment is delivered).
+    /// </summary>
+    public DateOnly? ActualDeliveryDate { get; set; }
+
     /// <summary>
     /// Name of the related client
     /// </summary>

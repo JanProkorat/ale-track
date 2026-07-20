@@ -128,6 +128,13 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
         : <Typography color="text.disabled">neurčeno</Typography>),
     },
     {
+      key: 'delivered',
+      header: 'Doručeno',
+      render: (o) => (o.actualDeliveryDate
+        ? <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{fmtDate(o.actualDeliveryDate)}</Typography>
+        : <Typography color="text.disabled">—</Typography>),
+    },
+    {
       key: 'chevron',
       header: '',
       align: 'right',
