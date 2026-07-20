@@ -66,24 +66,34 @@ public sealed record OutgoingShipmentDetailDto
 public sealed record OutgoingShipmentStopDto
 {
     /// <summary>
+    /// Public ID of the stop (needed to round-trip custom stops on update).
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Kind of the stop — order-based or a custom waypoint.
+    /// </summary>
+    public OutgoingShipmentStopKind Kind { get; set; }
+
+    /// <summary>
     /// Order of the stop in the shipment route
     /// </summary>
     public int Order {get; set; }
 
     /// <summary>
-    /// Public ID of the related client
+    /// Public ID of the related client (order stops only)
     /// </summary>
-    public Guid ClientId { get; set; }
+    public Guid? ClientId { get; set; }
 
     /// <summary>
-    /// Name of the related client
+    /// Name of the related client (order stops only)
     /// </summary>
-    public string ClientName { get; set; } = null!;
+    public string? ClientName { get; set; }
 
     /// <summary>
-    /// Official address of the client
+    /// Official address of the client (order stops only)
     /// </summary>
-    public AddressDto OfficialAddress { get; set; } = null!;
+    public AddressDto? OfficialAddress { get; set; }
 
     /// <summary>
     /// Contact address of the client
@@ -91,17 +101,37 @@ public sealed record OutgoingShipmentStopDto
     public AddressDto? ContactAddress { get; set; }
 
     /// <summary>
-    /// ID of the order associated with this stop
+    /// ID of the order associated with this stop (order stops only)
     /// </summary>
-    public Guid OrderId { get; set; }
-    
+    public Guid? OrderId { get; set; }
+
     /// <summary>
-    /// Kind of the selected address for the shipment
+    /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
-    
+
     /// <summary>
-    /// Products to be delivered at this stop
+    /// Label of a custom stop.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Note of a custom stop.
+    /// </summary>
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// Latitude of a custom stop.
+    /// </summary>
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude of a custom stop.
+    /// </summary>
+    public decimal? Longitude { get; set; }
+
+    /// <summary>
+    /// Products to be delivered at this stop (order stops only)
     /// </summary>
     public List<OutgoingShipmentOrderItemDto> Products { get; set; } = [];
 }

@@ -81,20 +81,24 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
         // Snapshot the orders currently on the shipment so we can free any that get removed.
-        var previousStopOrders = outgoingShipment!.Stops.Select(s => s.ClientOrder).ToList();
+        var previousStopOrders = outgoingShipment!.Stops
+            .Where(s => s.ClientOrder != null)
+            .Select(s => s.ClientOrder!)
+            .ToList();
 
         var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
+        var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
         var inventoryExtraItems = await GetInventoryExtraItemsAsync(req.Data.InventoryExtraShipments, outgoingShipment, ct);
         var clientExtraItems = await GetClientExtraItemsAsync(req.Data.ClientExtraShipments, outgoingShipment, ct);
         var customExtraItems = GetCustomExtraItems(req.Data.CustomExtraShipments, outgoingShipment);
-        
+
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
-        outgoingShipment.Stops = stops;
+        outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.InventoryExtraItems = inventoryExtraItems;
         outgoingShipment.ClientExtraItems = clientExtraItems;
         outgoingShipment.CustomExtraItems = customExtraItems;
@@ -112,7 +116,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         foreach (var requestStop in req.Data.ClientOrderShipments)
         {
-            var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder.PublicId == requestStop.ClientOrderId);
+            var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder != null && s.ClientOrder.PublicId == requestStop.ClientOrderId);
             if (relatedStop is null)
                 continue;
 
@@ -131,7 +135,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         // Order lifecycle follows the shipment: added → Planning, InTransit →
         // Delivering, Delivered → Finished (+ actual delivery date), Cancelled or
         // removed → back to New (freed for reuse).
-        var currentStopOrders = outgoingShipment.Stops.Select(s => s.ClientOrder).ToList();
+        var currentStopOrders = outgoingShipment.Stops
+            .Where(s => s.ClientOrder != null)
+            .Select(s => s.ClientOrder!)
+            .ToList();
         var currentOrderIds = currentStopOrders.Select(o => o.PublicId).ToHashSet();
 
         foreach (var removed in previousStopOrders.Where(o => !currentOrderIds.Contains(o.PublicId)))
@@ -213,9 +220,14 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
     private async Task<ICollection<OutgoingShipmentStop>> GetOrderStopsAsync(List<ClientOrderShipmentDto> clientOrderShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
+        // Work only with order stops here — custom stops are handled separately.
+        var orderStops = outgoingShipment.Stops
+            .Where(s => s.Kind == OutgoingShipmentStopKind.Order && s.ClientOrder != null)
+            .ToList();
+
         // Find orders present in the update request and not already linked to the outgoing shipment
-        var existingOrderIds = outgoingShipment.Stops
-            .Select(s => s.ClientOrder.PublicId)
+        var existingOrderIds = orderStops
+            .Select(s => s.ClientOrder!.PublicId)
             .ToHashSet();
 
         var newOrderIds = clientOrderShipments
@@ -223,7 +235,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Where(id => !existingOrderIds.Contains(id))
             .ToList();
 
-        var stops = new List<OutgoingShipmentStop>(outgoingShipment.Stops);
+        var stops = new List<OutgoingShipmentStop>(orderStops);
 
         // Add new orders
         if (newOrderIds.Count > 0)
@@ -253,6 +265,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 })
                 .Select(o => new OutgoingShipmentStop
                 {
+                    Kind = OutgoingShipmentStopKind.Order,
                     ClientOrder = o.order,
                     Order = o.requestOrder.Order,
                     SelectedAddressKind = o.requestOrder.SelectedAddressKind
@@ -262,16 +275,51 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         // Remove orders present on the entity but not in the update request
         stops = [.. stops.Where(s => clientOrderShipments
             .Select(cos => cos.ClientOrderId)
-            .Contains(s.ClientOrder.PublicId))];
-        
+            .Contains(s.ClientOrder!.PublicId))];
+
         // Update order of the stops
-        foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder.PublicId)))
+        foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder!.PublicId)))
         {
-            var matchingDto = clientOrderShipments.First(cos => cos.ClientOrderId == stop.ClientOrder.PublicId);
+            var matchingDto = clientOrderShipments.First(cos => cos.ClientOrderId == stop.ClientOrder!.PublicId);
             stop.Order = matchingDto.Order;
         }
 
         return stops;
+    }
+
+    private static List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
+    {
+        var existingById = outgoingShipment.Stops
+            .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
+            .ToDictionary(s => s.PublicId);
+
+        var result = new List<OutgoingShipmentStop>();
+        foreach (var dto in customStops)
+        {
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                existing.Order = dto.Order;
+                existing.Label = dto.Label;
+                existing.Note = dto.Note;
+                existing.Latitude = dto.Latitude;
+                existing.Longitude = dto.Longitude;
+                result.Add(existing);
+            }
+            else
+            {
+                result.Add(new OutgoingShipmentStop
+                {
+                    Kind = OutgoingShipmentStopKind.Custom,
+                    Order = dto.Order,
+                    Label = dto.Label,
+                    Note = dto.Note,
+                    Latitude = dto.Latitude,
+                    Longitude = dto.Longitude
+                });
+            }
+        }
+
+        return result;
     }
 
     private async Task<List<OutgoingShipmentDriver>> GetDriversAsync(List<Guid> driverIds, OutgoingShipment outgoingShipment, CancellationToken ct)

@@ -65,14 +65,26 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 {
                     Driver = d
                 })],
-            Stops = [.. req.Data.ClientOrderShipments
-                .OrderBy(cos => cos.Order)
-                .Select(cos => new OutgoingShipmentStop
-                {
-                    ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
-                    Order = cos.Order,
-                    SelectedAddressKind = cos.SelectedAddressKind
-                })]
+            Stops = [
+                .. req.Data.ClientOrderShipments
+                    .Select(cos => new OutgoingShipmentStop
+                    {
+                        Kind = OutgoingShipmentStopKind.Order,
+                        ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
+                        Order = cos.Order,
+                        SelectedAddressKind = cos.SelectedAddressKind
+                    }),
+                .. req.Data.CustomStops
+                    .Select(cs => new OutgoingShipmentStop
+                    {
+                        Kind = OutgoingShipmentStopKind.Custom,
+                        Order = cs.Order,
+                        Label = cs.Label,
+                        Note = cs.Note,
+                        Latitude = cs.Latitude,
+                        Longitude = cs.Longitude
+                    })
+            ]
         };
 
         // Orders added to a shipment move into planning.

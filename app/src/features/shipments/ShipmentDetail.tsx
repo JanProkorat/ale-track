@@ -441,9 +441,12 @@ export function ShipmentDetail({
     () => (shipment.stops ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [shipment.stops],
   );
-  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st) => {
+  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
+    if (st.orderId == null) {
+      return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
+    }
     const address = st.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && st.contactAddress ? st.contactAddress : st.officialAddress;
-    return { lat: address?.latitude, lng: address?.longitude, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? '') };
+    return { lat: address?.latitude, lng: address?.longitude, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
 
   const extraRows = useMemo(() => (shipment.inventoryExtraItems ?? []).map(extraRowFrom), [shipment.inventoryExtraItems]);
@@ -812,7 +815,7 @@ export function ShipmentDetail({
             </Stack>
           </Card>
 
-          <OrdersOverviewCard stops={stopsSorted} extraRows={extraRows} />
+          <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
         </Stack>
       </Box>
 

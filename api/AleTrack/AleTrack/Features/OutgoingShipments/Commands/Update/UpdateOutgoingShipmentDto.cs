@@ -34,6 +34,11 @@ public sealed record UpdateOutgoingShipmentDto
     public List<ClientOrderShipmentDto> ClientOrderShipments { get; set; } = [];
 
     /// <summary>
+    /// Custom (non-order) waypoints on the route
+    /// </summary>
+    public List<CustomStopDto> CustomStops { get; set; } = [];
+
+    /// <summary>
     /// State of the outgoing shipment
     /// </summary>
     public OutgoingShipmentState State { get; set; }

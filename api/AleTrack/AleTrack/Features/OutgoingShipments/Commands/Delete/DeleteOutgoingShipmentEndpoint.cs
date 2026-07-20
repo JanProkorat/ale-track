@@ -69,9 +69,9 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 break;
         }
 
-        foreach (var stop in outgoingShipment.Stops)
+        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder != null))
         {
-            foreach (var orderItem in stop.ClientOrder.OrderItems)
+            foreach (var orderItem in stop.ClientOrder!.OrderItems)
             {
                 orderItem.FirstInvoiceQuantity = null;
                 orderItem.SecondInvoiceQuantity = null;

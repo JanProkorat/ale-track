@@ -16,6 +16,8 @@ export interface RouteStop {
   lng?: number;
   label: string;
   color?: string;
+  /** 'custom' stops render as a diamond waypoint; 'order' (default) as a pin. */
+  kind?: 'order' | 'custom';
 }
 
 function fmtDur(min: number): string {
@@ -34,6 +36,16 @@ function numberedPinIcon(color: string, n: number): L.DivIcon {
       <text x="15" y="19.5" text-anchor="middle" font-size="12" font-weight="800" font-family="sans-serif" fill="${color}">${n}</text>
     </svg>`;
   return L.divIcon({ html: svg, className: 'route-map-pin', iconSize: [30, 38], iconAnchor: [15, 38] });
+}
+
+// A diamond waypoint for custom (non-order) stops, with its sequence number.
+function customPinIcon(color: string, n: number): L.DivIcon {
+  const svg = `
+    <svg width="32" height="38" viewBox="0 0 32 38" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 0 L32 16 L16 30 L0 16 Z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+      <text x="16" y="20.5" text-anchor="middle" font-size="12" font-weight="800" font-family="sans-serif" fill="#fff">${n}</text>
+    </svg>`;
+  return L.divIcon({ html: svg, className: 'route-map-custom', iconSize: [32, 38], iconAnchor: [16, 30] });
 }
 
 function depotIcon(): L.DivIcon {
@@ -154,9 +166,13 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
             </Tooltip>
           </Marker>
           {located.map((s, i) => (
-            <Marker key={i} position={[s.lat, s.lng]} icon={numberedPinIcon(s.color ?? '#F08C00', i + 1)}>
+            <Marker
+              key={i}
+              position={[s.lat, s.lng]}
+              icon={s.kind === 'custom' ? customPinIcon(s.color ?? '#1A2B4C', i + 1) : numberedPinIcon(s.color ?? '#F08C00', i + 1)}
+            >
               <Tooltip direction="top" offset={[0, -34]}>
-                <strong>{i + 1}. {s.label}</strong>
+                <strong>{i + 1}. {s.label}</strong>{s.kind === 'custom' ? ' · vlastní zastávka' : ''}
               </Tooltip>
             </Marker>
           ))}

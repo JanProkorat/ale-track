@@ -97,6 +97,61 @@ public sealed class UpdateOutgoingShipmentTests
     }
 
     [Fact]
+    public async Task ProcessAsync_UpdateOutgoingShipment_CustomStops_UpdatesExistingAndAddsNew()
+    {
+        var shipmentId = Guid.NewGuid();
+        var existingCustomId = Guid.NewGuid();
+
+        var existingCustom = new OutgoingShipmentStop
+        {
+            PublicId = existingCustomId,
+            Kind = OutgoingShipmentStopKind.Custom,
+            Order = 1,
+            Label = "Old label",
+            Latitude = 50.1m,
+            Longitude = 14.1m
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingCustom]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [outgoingShipment]);
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                ClientOrderShipments = [],
+                State = OutgoingShipmentState.Created,
+                CustomStops =
+                [
+                    new CustomStopDto { Id = existingCustomId, Order = 1, Label = "New label", Latitude = 50.2m, Longitude = 14.2m },
+                    new CustomStopDto { Id = null, Order = 2, Label = "Čerpací stanice", Latitude = 50.3m, Longitude = 14.3m }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        outgoingShipment.Stops.Should().HaveCount(2);
+        outgoingShipment.Stops.Should().OnlyContain(s => s.Kind == OutgoingShipmentStopKind.Custom);
+        var updated = outgoingShipment.Stops.First(s => s.PublicId == existingCustomId);
+        updated.Label.Should().Be("New label");
+        updated.Latitude.Should().Be(50.2m);
+        outgoingShipment.Stops.Should().ContainSingle(s => s.Label == "Čerpací stanice");
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdateOutgoingShipment_ExistingInventoryExtraItemWithoutProductId_Success()
     {
         // Regression: re-sending an existing dokládka whose ProductId is not

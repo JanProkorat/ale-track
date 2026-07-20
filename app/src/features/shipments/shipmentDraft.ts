@@ -7,6 +7,7 @@
 import {
   type OutgoingShipmentDetailDto,
   ClientOrderShipmentDto,
+  CustomStopDto,
   OrderItemInfoDto,
   InventoryExtraShipmentDto,
   ClientExtraShipmentDto,
@@ -16,14 +17,17 @@ import {
 
 export interface ShipmentDraft {
   clientOrderShipments: ClientOrderShipmentDto[];
+  customStops: CustomStopDto[];
   inventoryExtraShipments: InventoryExtraShipmentDto[];
   clientExtraShipments: ClientExtraShipmentDto[];
   customExtraShipments: CustomExtraShipmentDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
+  const stops = shipment.stops ?? [];
   return {
-    clientOrderShipments: (shipment.stops ?? []).map((st) => new ClientOrderShipmentDto({
+    // Order stops carry an orderId; custom stops don't.
+    clientOrderShipments: stops.filter((st) => st.orderId != null).map((st) => new ClientOrderShipmentDto({
       clientOrderId: st.orderId ?? '',
       order: st.order ?? 0,
       selectedAddressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official,
@@ -33,6 +37,14 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
         firstInvoiceQuantity: p.firstInvoiceQuantity,
         secondInvoiceQuantity: p.secondInvoiceQuantity,
       })),
+    })),
+    customStops: stops.filter((st) => st.orderId == null).map((st) => new CustomStopDto({
+      id: st.id,
+      order: st.order ?? 0,
+      label: st.label ?? '',
+      note: st.note,
+      latitude: st.latitude ?? 0,
+      longitude: st.longitude ?? 0,
     })),
     inventoryExtraShipments: (shipment.inventoryExtraItems ?? []).map((e) => {
       const dto = new InventoryExtraShipmentDto({

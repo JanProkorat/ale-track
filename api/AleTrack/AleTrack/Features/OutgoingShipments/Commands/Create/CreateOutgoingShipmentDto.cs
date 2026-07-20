@@ -28,4 +28,9 @@ public sealed record CreateOutgoingShipmentDto
     /// List of client order shipments to be included in the outgoing shipment
     /// </summary>
     public List<ClientOrderShipmentDto> ClientOrderShipments { get; set; } = [];
+
+    /// <summary>
+    /// Custom (non-order) waypoints on the route.
+    /// </summary>
+    public List<CustomStopDto> CustomStops { get; set; } = [];
 }

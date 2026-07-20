@@ -10,6 +10,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicatorOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
@@ -33,6 +34,7 @@ import {
   OutgoingShipmentState,
   OutgoingShipmentStopAddressKind,
   ClientOrderShipmentDto,
+  CustomStopDto,
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
@@ -42,11 +44,23 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useClients } from 'src/hooks/useClients';
 import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
+import { CustomStopDialog } from './CustomStopDialog';
 
 interface DraftStop {
-  orderId: string;
-  addressKind: OutgoingShipmentStopAddressKind;
+  /** Stable client-side identity: the orderId for order stops, or a generated
+   *  id for custom stops. Used as the sortable/dnd key. */
+  key: string;
+  kind: 'order' | 'custom';
   order: number;
+  addressKind: OutgoingShipmentStopAddressKind;
+  // order stops
+  orderId?: string;
+  // custom stops
+  customId?: string; // existing custom stop's PublicId (undefined when new)
+  label?: string;
+  note?: string;
+  lat?: number;
+  lng?: number;
 }
 
 function stopPoint(order: OutgoingShipmentOrderDto | undefined, addressKind: OutgoingShipmentStopAddressKind) {
@@ -66,8 +80,9 @@ function SortableStopRow({
   onRemove: () => void;
   onAddrKind: (kind: OutgoingShipmentStopAddressKind) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.orderId, disabled: locked });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.key, disabled: locked });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
+  const isCustom = stop.kind === 'custom';
   return (
     <Box
       ref={setNodeRef}
@@ -79,25 +94,34 @@ function SortableStopRow({
           <DragIndicatorIcon fontSize="small" />
         </Box>
       )}
-      <Box sx={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: colorForClient(order?.clientName ?? stop.orderId) }}>
-        {index + 1}
+      <Box sx={{
+        width: 28, height: 28, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0,
+        borderRadius: isCustom ? '4px' : '50%',
+        transform: isCustom ? 'rotate(45deg)' : undefined,
+        bgcolor: isCustom ? '#1A2B4C' : colorForClient(order?.clientName ?? stop.key),
+      }}>
+        <Box component="span" sx={{ transform: isCustom ? 'rotate(-45deg)' : undefined }}>{index + 1}</Box>
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{order?.clientName ?? '—'}</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{isCustom ? (stop.label || 'Vlastní zastávka') : (order?.clientName ?? '—')}</Typography>
         <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
-          {order?.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : 'bez termínu'}
+          {isCustom
+            ? (stop.note || 'Vlastní zastávka')
+            : (order?.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : 'bez termínu')}
         </Typography>
       </Box>
-      <Select
-        size="small"
-        value={stop.addressKind}
-        disabled={locked}
-        onChange={(e) => onAddrKind(Number(e.target.value) as OutgoingShipmentStopAddressKind)}
-        sx={{ width: 140, flexShrink: 0 }}
-      >
-        <MenuItem value={OutgoingShipmentStopAddressKind.Official}>Fakturační</MenuItem>
-        {order?.clientContactAddress && <MenuItem value={OutgoingShipmentStopAddressKind.Contact}>Kontaktní</MenuItem>}
-      </Select>
+      {!isCustom && (
+        <Select
+          size="small"
+          value={stop.addressKind}
+          disabled={locked}
+          onChange={(e) => onAddrKind(Number(e.target.value) as OutgoingShipmentStopAddressKind)}
+          sx={{ width: 140, flexShrink: 0 }}
+        >
+          <MenuItem value={OutgoingShipmentStopAddressKind.Official}>Fakturační</MenuItem>
+          {order?.clientContactAddress && <MenuItem value={OutgoingShipmentStopAddressKind.Contact}>Kontaktní</MenuItem>}
+        </Select>
+      )}
       {!locked && (
         <>
           <IconButton size="small" onClick={() => onMove(-1)} disabled={index === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
@@ -145,6 +169,7 @@ export function ShipmentEditor({
   const [driverIds, setDriverIds] = useState<string[]>([]);
   const [stops, setStops] = useState<DraftStop[]>([]);
   const [regionFilter, setRegionFilter] = useState<string>('all');
+  const [customStopOpen, setCustomStopOpen] = useState(false);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -158,7 +183,19 @@ export function ShipmentEditor({
     setStops((s.stops ?? [])
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map((st, i) => ({ orderId: st.orderId ?? '', addressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, order: i + 1 })));
+      .map((st, i): DraftStop => st.orderId != null
+        ? { key: st.orderId, kind: 'order', orderId: st.orderId, addressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, order: i + 1 }
+        : {
+            key: st.id ?? `custom-${i}`,
+            kind: 'custom',
+            customId: st.id,
+            label: st.label ?? '',
+            note: st.note,
+            lat: st.latitude,
+            lng: st.longitude,
+            addressKind: OutgoingShipmentStopAddressKind.Official,
+            order: i + 1,
+          }));
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -180,7 +217,7 @@ export function ShipmentEditor({
     return m;
   }, [clientsQuery.data]);
 
-  const usedOrderIds = useMemo(() => new Set(stops.map((s) => s.orderId)), [stops]);
+  const usedOrderIds = useMemo(() => new Set(stops.filter((s) => s.kind === 'order').map((s) => s.orderId)), [stops]);
   const ordersWithRegion = useMemo(
     () => availableOrders.map((o) => ({ order: o, region: regionByClientName.get(o.clientName ?? '') })),
     [availableOrders, regionByClientName],
@@ -194,15 +231,19 @@ export function ShipmentEditor({
     : ordersWithRegion.filter((x) => String(x.region) === regionFilter || usedOrderIds.has(x.order.id ?? ''));
 
   const stopsSorted = useMemo(() => stops.slice().sort((a, b) => a.order - b.order), [stops]);
-  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st) => {
-    const order = orderById.get(st.orderId);
+  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
+    if (st.kind === 'custom') {
+      return { lat: st.lat, lng: st.lng, label: st.label || 'Vlastní zastávka', color: '#1A2B4C', kind: 'custom' };
+    }
+    const order = orderById.get(st.orderId ?? '');
     const pt = stopPoint(order, st.addressKind);
-    return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.orderId) };
+    return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.key), kind: 'order' };
   }), [stopsSorted, orderById]);
 
   const selectedVehicle = (vehiclesQuery.data ?? []).find((v) => v.id === vehicleId);
   const totalWeight = useMemo(() => stopsSorted.reduce((sum, st) => {
-    const order = orderById.get(st.orderId);
+    if (st.kind === 'custom') return sum;
+    const order = orderById.get(st.orderId ?? '');
     return sum + (order?.items ?? []).reduce((s, it) => s + (it.weight ?? 0) * (it.quantity ?? 0), 0);
   }, 0), [stopsSorted, orderById]);
   const overloaded = Boolean(selectedVehicle?.maxWeight != null && totalWeight > selectedVehicle.maxWeight);
@@ -215,27 +256,39 @@ export function ShipmentEditor({
 
   function toggleOrder(orderId: string) {
     setStops((prev) => {
-      if (prev.some((s) => s.orderId === orderId)) {
-        return prev.filter((s) => s.orderId !== orderId).map((s, i) => ({ ...s, order: i + 1 }));
+      if (prev.some((s) => s.kind === 'order' && s.orderId === orderId)) {
+        return prev.filter((s) => !(s.kind === 'order' && s.orderId === orderId)).map((s, i) => ({ ...s, order: i + 1 }));
       }
-      return [...prev, { orderId, addressKind: OutgoingShipmentStopAddressKind.Official, order: prev.length + 1 }];
+      return [...prev, { key: orderId, kind: 'order' as const, orderId, addressKind: OutgoingShipmentStopAddressKind.Official, order: prev.length + 1 }];
     });
   }
-  function moveStop(orderId: string, dir: -1 | 1) {
+  function addCustomStop(stop: { label: string; note?: string; lat: number; lng: number }) {
+    setStops((prev) => [...prev, {
+      key: `custom-${crypto.randomUUID()}`,
+      kind: 'custom' as const,
+      label: stop.label,
+      note: stop.note,
+      lat: stop.lat,
+      lng: stop.lng,
+      addressKind: OutgoingShipmentStopAddressKind.Official,
+      order: prev.length + 1,
+    }]);
+  }
+  function moveStop(key: string, dir: -1 | 1) {
     setStops((prev) => {
       const arr = prev.slice().sort((a, b) => a.order - b.order);
-      const i = arr.findIndex((s) => s.orderId === orderId);
+      const i = arr.findIndex((s) => s.key === key);
       const j = i + dir;
       if (i < 0 || j < 0 || j >= arr.length) return prev;
       [arr[i].order, arr[j].order] = [arr[j].order, arr[i].order];
       return arr.map((s) => ({ ...s }));
     });
   }
-  function removeStop(orderId: string) {
-    setStops((prev) => prev.filter((s) => s.orderId !== orderId).map((s, i) => ({ ...s, order: i + 1 })));
+  function removeStop(key: string) {
+    setStops((prev) => prev.filter((s) => s.key !== key).map((s, i) => ({ ...s, order: i + 1 })));
   }
-  function setAddrKind(orderId: string, kind: OutgoingShipmentStopAddressKind) {
-    setStops((prev) => prev.map((s) => (s.orderId === orderId ? { ...s, addressKind: kind } : s)));
+  function setAddrKind(key: string, kind: OutgoingShipmentStopAddressKind) {
+    setStops((prev) => prev.map((s) => (s.key === key ? { ...s, addressKind: kind } : s)));
   }
   function toggleDriver(id: string) {
     setDriverIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -247,12 +300,18 @@ export function ShipmentEditor({
     if (!over || active.id === over.id) return;
     setStops((prev) => {
       const arr = prev.slice().sort((a, b) => a.order - b.order);
-      const oldIndex = arr.findIndex((s) => s.orderId === active.id);
-      const newIndex = arr.findIndex((s) => s.orderId === over.id);
+      const oldIndex = arr.findIndex((s) => s.key === active.id);
+      const newIndex = arr.findIndex((s) => s.key === over.id);
       if (oldIndex < 0 || newIndex < 0) return prev;
       return arrayMove(arr, oldIndex, newIndex).map((s, i) => ({ ...s, order: i + 1 }));
     });
   }
+
+  const stopCoords = (s: DraftStop) => {
+    if (s.kind === 'custom') return { lat: s.lat ?? DEPOT.lat, lng: s.lng ?? DEPOT.lng };
+    const pt = stopPoint(orderById.get(s.orderId ?? ''), s.addressKind);
+    return { lat: pt.lat ?? DEPOT.lat, lng: pt.lng ?? DEPOT.lng };
+  };
 
   function optimizeRoute() {
     if (stopsSorted.length < 2) { enqueueSnackbar('Málo zastávek', { variant: 'info' }); return; }
@@ -263,16 +322,12 @@ export function ShipmentEditor({
       let bestIdx = 0;
       let bestDist = Infinity;
       remaining.forEach((s, i) => {
-        const order = orderById.get(s.orderId);
-        const pt = stopPoint(order, s.addressKind);
-        const d = haversine(cur, { lat: pt.lat ?? DEPOT.lat, lng: pt.lng ?? DEPOT.lng });
+        const d = haversine(cur, stopCoords(s));
         if (d < bestDist) { bestDist = d; bestIdx = i; }
       });
       const [next] = remaining.splice(bestIdx, 1);
       ordered.push(next);
-      const order = orderById.get(next.orderId);
-      const pt = stopPoint(order, next.addressKind);
-      cur = { lat: pt.lat ?? cur.lat, lng: pt.lng ?? cur.lng };
+      cur = stopCoords(next);
     }
     setStops(ordered.map((s, i) => ({ ...s, order: i + 1 })));
     enqueueSnackbar('Trasa optimalizována (nejbližší soused).', { variant: 'success' });
@@ -284,14 +339,24 @@ export function ShipmentEditor({
     if (!name.trim()) { enqueueSnackbar('Zadejte název', { variant: 'warning' }); return; }
     if (stopsSorted.length === 0) { enqueueSnackbar('Přidejte alespoň jednu zastávku', { variant: 'warning' }); return; }
 
-    const clientOrderShipments = stopsSorted.map((st) => new ClientOrderShipmentDto({
-      clientOrderId: st.orderId,
-      order: st.order,
-      selectedAddressKind: st.addressKind,
-      // No per-item invoice/loading data here — the editor only reorders
-      // stops; the mock/backend preserves each item's existing nakládka
-      // state when this field is left undefined.
-    }));
+    const clientOrderShipments = stopsSorted
+      .filter((st) => st.kind === 'order')
+      .map((st) => new ClientOrderShipmentDto({
+        clientOrderId: st.orderId ?? '',
+        order: st.order,
+        selectedAddressKind: st.addressKind,
+        // No per-item invoice/loading data here — the editor only reorders
+        // stops; the mock/backend preserves each item's existing nakládka
+        // state when this field is left undefined.
+      }));
+
+    const customStops = stopsSorted
+      .filter((st) => st.kind === 'custom')
+      .map((st) => {
+        const dto = new CustomStopDto({ order: st.order, label: st.label ?? '', note: st.note, latitude: st.lat ?? 0, longitude: st.lng ?? 0 });
+        dto.id = st.customId; // undefined for new (base class, but keep the pattern explicit)
+        return dto;
+      });
 
     try {
       if (mode === 'edit' && shipmentId) {
@@ -305,6 +370,7 @@ export function ShipmentEditor({
             driverIds,
             state: shipmentQuery.data?.state ?? OutgoingShipmentState.Created,
             clientOrderShipments,
+            customStops,
             inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
             clientExtraShipments: existingDraft?.clientExtraShipments ?? [],
             customExtraShipments: existingDraft?.customExtraShipments ?? [],
@@ -319,6 +385,7 @@ export function ShipmentEditor({
           vehicleId: vehicleId ?? undefined,
           driverIds,
           clientOrderShipments,
+          customStops,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
         onDone(id);
@@ -371,6 +438,12 @@ export function ShipmentEditor({
               <RouteOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Pořadí zastávek</Typography>
               <Box sx={{ flex: 1 }} />
+              {!structureLocked && (
+                <Button size="small" variant="outlined" startIcon={<PlaceOutlinedIcon fontSize="small" />} onClick={() => setCustomStopOpen(true)}
+                  sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
+                  Vlastní zastávka
+                </Button>
+              )}
               {stopsSorted.length > 1 && !structureLocked && (
                 <Button size="small" variant="outlined" startIcon={<AutoAwesomeOutlinedIcon fontSize="small" />} onClick={optimizeRoute}>
                   Optimalizovat trasu
@@ -379,22 +452,22 @@ export function ShipmentEditor({
             </Stack>
             <Box sx={{ p: 2 }}>
               {stopsSorted.length === 0 ? (
-                <EmptyState title="Zatím žádné zastávky" description="Vyberte objednávky vpravo." dense />
+                <EmptyState title="Zatím žádné zastávky" description="Vyberte objednávky vpravo nebo přidejte vlastní zastávku." dense />
               ) : (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={stopsSorted.map((s) => s.orderId)} strategy={verticalListSortingStrategy}>
+                  <SortableContext items={stopsSorted.map((s) => s.key)} strategy={verticalListSortingStrategy}>
                     <Stack spacing={1}>
                       {stopsSorted.map((st, i) => (
                         <SortableStopRow
-                          key={st.orderId}
+                          key={st.key}
                           stop={st}
                           index={i}
                           total={stopsSorted.length}
                           locked={structureLocked}
-                          order={orderById.get(st.orderId)}
-                          onMove={(dir) => moveStop(st.orderId, dir)}
-                          onRemove={() => removeStop(st.orderId)}
-                          onAddrKind={(kind) => setAddrKind(st.orderId, kind)}
+                          order={st.orderId ? orderById.get(st.orderId) : undefined}
+                          onMove={(dir) => moveStop(st.key, dir)}
+                          onRemove={() => removeStop(st.key)}
+                          onAddrKind={(kind) => setAddrKind(st.key, kind)}
                         />
                       ))}
                     </Stack>
@@ -509,6 +582,8 @@ export function ShipmentEditor({
           </Card>
         </Stack>
       </Box>
+
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
     </Box>
   );
 }

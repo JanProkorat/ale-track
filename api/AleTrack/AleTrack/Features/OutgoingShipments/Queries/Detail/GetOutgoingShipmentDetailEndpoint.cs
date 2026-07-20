@@ -64,28 +64,36 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                 Stops = os.Stops
                     .Select(s => new OutgoingShipmentStopDto
                     {
+                        Id = s.PublicId,
+                        Kind = s.Kind,
                         Order = s.Order,
-                        ClientId = s.ClientOrder.Client.PublicId,
-                        ClientName = s.ClientOrder.Client.Name,
-                        OfficialAddress = s.ClientOrder.Client.OfficialAddress.ToDto(),
-                        ContactAddress = s.ClientOrder.Client.ContactAddress != null
+                        ClientId = s.ClientOrder != null ? s.ClientOrder.Client.PublicId : null,
+                        ClientName = s.ClientOrder != null ? s.ClientOrder.Client.Name : null,
+                        OfficialAddress = s.ClientOrder != null ? s.ClientOrder.Client.OfficialAddress.ToDto() : null,
+                        ContactAddress = s.ClientOrder != null && s.ClientOrder.Client.ContactAddress != null
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,
-                        OrderId = s.ClientOrder.PublicId,
+                        OrderId = s.ClientOrder != null ? s.ClientOrder.PublicId : null,
                         SelectedAddressKind = s.SelectedAddressKind,
-                        Products = s.ClientOrder.OrderItems
-                            .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
-                            .Select(oi => new OutgoingShipmentOrderItemDto
-                            {
-                                Id = oi.Product.PublicId,
-                                Name = oi.Product.Name,
-                                Quantity = oi.Quantity,
-                                Kind = oi.Product.Kind,
-                                PackageSize = oi.Product.PackageSize,
-                                Weight = oi.Product.Weight,
-                                OrderItemId = oi.PublicId
-                            })
-                            .ToList()
+                        Label = s.Label,
+                        Note = s.Note,
+                        Latitude = s.Latitude,
+                        Longitude = s.Longitude,
+                        Products = s.ClientOrder != null
+                            ? s.ClientOrder.OrderItems
+                                .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
+                                .Select(oi => new OutgoingShipmentOrderItemDto
+                                {
+                                    Id = oi.Product.PublicId,
+                                    Name = oi.Product.Name,
+                                    Quantity = oi.Quantity,
+                                    Kind = oi.Product.Kind,
+                                    PackageSize = oi.Product.PackageSize,
+                                    Weight = oi.Product.Weight,
+                                    OrderItemId = oi.PublicId
+                                })
+                                .ToList()
+                            : new List<OutgoingShipmentOrderItemDto>()
                     })
                     .ToList(),
                 InventoryExtraItems = os.InventoryExtraItems

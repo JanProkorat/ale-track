@@ -8550,13 +8550,19 @@ export interface IOutgoingShipmentDetailDto {
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
+    id?: string;
+    kind?: OutgoingShipmentStopKind;
     order?: number;
-    clientId?: string;
-    clientName?: string;
-    officialAddress?: AddressDto;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
-    orderId?: string;
+    orderId?: string | undefined;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    label?: string | undefined;
+    note?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
 
     constructor(data?: IOutgoingShipmentStopDto) {
@@ -8570,6 +8576,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
 
     init(_data?: any) {
         if (_data) {
+            this.id = _data["id"];
+            this.kind = _data["kind"];
             this.order = _data["order"];
             this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
@@ -8577,6 +8585,10 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
             this.orderId = _data["orderId"];
             this.selectedAddressKind = _data["selectedAddressKind"];
+            this.label = _data["label"];
+            this.note = _data["note"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
             if (Array.isArray(_data["products"])) {
                 this.products = [] as any;
                 for (let item of _data["products"])
@@ -8594,6 +8606,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["kind"] = this.kind;
         data["order"] = this.order;
         data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
@@ -8601,6 +8615,10 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
         data["orderId"] = this.orderId;
         data["selectedAddressKind"] = this.selectedAddressKind;
+        data["label"] = this.label;
+        data["note"] = this.note;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         if (Array.isArray(this.products)) {
             data["products"] = [];
             for (let item of this.products)
@@ -8611,14 +8629,25 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
 }
 
 export interface IOutgoingShipmentStopDto {
+    id?: string;
+    kind?: OutgoingShipmentStopKind;
     order?: number;
-    clientId?: string;
-    clientName?: string;
-    officialAddress?: AddressDto;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
-    orderId?: string;
+    orderId?: string | undefined;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    label?: string | undefined;
+    note?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
+}
+
+export enum OutgoingShipmentStopKind {
+    Order = 0,
+    Custom = 1,
 }
 
 export class AddressDto implements IAddressDto {
@@ -8955,6 +8984,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     clientOrderShipments!: ClientOrderShipmentDto[];
+    customStops?: CustomStopDto[];
     state!: OutgoingShipmentState;
     inventoryExtraShipments?: InventoryExtraShipmentDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
@@ -8986,6 +9016,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                 this.clientOrderShipments = [] as any;
                 for (let item of _data["clientOrderShipments"])
                     this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customStops"])) {
+                this.customStops = [] as any;
+                for (let item of _data["customStops"])
+                    this.customStops!.push(CustomStopDto.fromJS(item));
             }
             this.state = _data["state"];
             if (Array.isArray(_data["inventoryExtraShipments"])) {
@@ -9028,6 +9063,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
             for (let item of this.clientOrderShipments)
                 data["clientOrderShipments"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customStops)) {
+            data["customStops"] = [];
+            for (let item of this.customStops)
+                data["customStops"].push(item ? item.toJSON() : undefined as any);
+        }
         data["state"] = this.state;
         if (Array.isArray(this.inventoryExtraShipments)) {
             data["inventoryExtraShipments"] = [];
@@ -9054,6 +9094,7 @@ export interface IUpdateOutgoingShipmentDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     clientOrderShipments: ClientOrderShipmentDto[];
+    customStops?: CustomStopDto[];
     state: OutgoingShipmentState;
     inventoryExtraShipments?: InventoryExtraShipmentDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
@@ -9162,6 +9203,62 @@ export interface IOrderItemInfoDto {
     isLoadingConfirmed?: boolean;
     firstInvoiceQuantity?: number | undefined;
     secondInvoiceQuantity?: number | undefined;
+}
+
+export class CustomStopDto implements ICustomStopDto {
+    id?: string | undefined;
+    order?: number;
+    label?: string;
+    note?: string | undefined;
+    latitude?: number;
+    longitude?: number;
+
+    constructor(data?: ICustomStopDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.order = _data["order"];
+            this.label = _data["label"];
+            this.note = _data["note"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
+        }
+    }
+
+    static fromJS(data: any): CustomStopDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CustomStopDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["order"] = this.order;
+        data["label"] = this.label;
+        data["note"] = this.note;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
+        return data;
+    }
+}
+
+export interface ICustomStopDto {
+    id?: string | undefined;
+    order?: number;
+    label?: string;
+    note?: string | undefined;
+    latitude?: number;
+    longitude?: number;
 }
 
 export class ExtraShipmentDto implements IExtraShipmentDto {
@@ -9385,6 +9482,7 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     clientOrderShipments!: ClientOrderShipmentDto[];
+    customStops?: CustomStopDto[];
 
     constructor(data?: ICreateOutgoingShipmentDto) {
         if (data) {
@@ -9413,6 +9511,11 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
                 for (let item of _data["clientOrderShipments"])
                     this.clientOrderShipments!.push(ClientOrderShipmentDto.fromJS(item));
             }
+            if (Array.isArray(_data["customStops"])) {
+                this.customStops = [] as any;
+                for (let item of _data["customStops"])
+                    this.customStops!.push(CustomStopDto.fromJS(item));
+            }
         }
     }
 
@@ -9438,6 +9541,11 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
             for (let item of this.clientOrderShipments)
                 data["clientOrderShipments"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customStops)) {
+            data["customStops"] = [];
+            for (let item of this.customStops)
+                data["customStops"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -9448,6 +9556,7 @@ export interface ICreateOutgoingShipmentDto {
     vehicleId?: string | undefined;
     driverIds?: string[];
     clientOrderShipments: ClientOrderShipmentDto[];
+    customStops?: CustomStopDto[];
 }
 
 export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {
