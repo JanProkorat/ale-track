@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, Divider, IconButton, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useQueries } from '@tanstack/react-query';
@@ -17,6 +18,7 @@ import { qk } from 'src/api/queryKeys';
 import { apiErrorMessage } from 'src/api/errors';
 import { type BreweryListItemDto } from 'src/generated/api-client';
 import { useBreweries, useBrewery, useDeleteBrewery } from 'src/hooks/useBreweries';
+import { PATHS } from 'src/routes/paths';
 import { BreweryDetail } from './BreweryDetail';
 import { BreweryFormDrawer } from './BreweryFormDrawer';
 
@@ -40,18 +42,19 @@ export function BreweriesPage() {
   const editable = canEdit('breweries');
   const { enqueueSnackbar } = useSnackbar();
   const ds = useDataSource();
+  const navigate = useNavigate();
 
   const list = useBreweries();
   const breweries = list.data ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { id: selectedId } = useParams();
 
-  // Default the active tab to the first brewery once the list loads.
+  // Reflect the active brewery in the URL; default to the first once loaded.
   useEffect(() => {
     const rows = list.data;
     if (!rows || rows.length === 0) return;
     if (selectedId && rows.some((b) => b.id === selectedId)) return;
-    setSelectedId(rows[0]?.id ?? null);
-  }, [list.data, selectedId]);
+    if (rows[0]?.id) navigate(`${PATHS.breweries}/${rows[0].id}`, { replace: true });
+  }, [list.data, selectedId, navigate]);
 
   // Per-brewery product counts for the tab badges (shares cache with the detail).
   const countQueries = useQueries({
@@ -78,7 +81,7 @@ export function BreweriesPage() {
       await del.mutateAsync(selectedId);
       enqueueSnackbar('Pivovar smazán.', { variant: 'success' });
       setConfirmDelete(false);
-      setSelectedId(null);
+      navigate(PATHS.breweries);
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
     }
@@ -113,7 +116,7 @@ export function BreweriesPage() {
                       key={b.id}
                       role="tab"
                       aria-selected={active}
-                      onClick={() => setSelectedId(b.id ?? null)}
+                      onClick={() => navigate(`${PATHS.breweries}/${b.id}`)}
                       sx={{
                         display: 'flex', alignItems: 'center', gap: 1.1, cursor: 'pointer',
                         px: 2.1, py: 1.6, whiteSpace: 'nowrap',

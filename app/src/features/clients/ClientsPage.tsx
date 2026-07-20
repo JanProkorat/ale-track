@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, Card, Chip, Stack, Typography } from '@mui/material';
 import { useQueries } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -23,6 +24,7 @@ import { initials, plural } from 'src/lib/format';
 import { L, regionName, regionLabel, isEmailContact } from 'src/lib/labels';
 import { type AddressDto, type ClientDto, type ClientListItemDto } from 'src/generated/api-client';
 import { useClients, useClient, useDeleteClient } from 'src/hooks/useClients';
+import { PATHS } from 'src/routes/paths';
 import { ClientDetail } from './ClientDetail';
 import { ClientFormDrawer } from './ClientFormDrawer';
 
@@ -53,13 +55,14 @@ export function ClientsPage() {
   const editable = canEdit('clients');
   const { enqueueSnackbar } = useSnackbar();
   const ds = useDataSource();
+  const navigate = useNavigate();
+  const { id: selectedId } = useParams();
 
   const list = useClients();
   const clients = useMemo(() => list.data ?? [], [list.data]);
 
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingOpen, setEditingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -125,7 +128,7 @@ export function ClientsPage() {
       await del.mutateAsync(selectedId);
       enqueueSnackbar('Klient smazán.', { variant: 'success' });
       setConfirmDelete(false);
-      setSelectedId(null);
+      navigate(PATHS.clients);
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
     }
@@ -208,7 +211,7 @@ export function ClientsPage() {
             <ClientDetail
               client={client}
               editable={editable}
-              onBack={() => setSelectedId(null)}
+              onBack={() => navigate(PATHS.clients)}
               onEdit={openEdit}
               onDelete={() => setConfirmDelete(true)}
             />
@@ -286,7 +289,7 @@ export function ClientsPage() {
                             columns={columns}
                             rows={rows}
                             getRowKey={(c) => c.id ?? ''}
-                            onRowClick={(c) => setSelectedId(c.id ?? null)}
+                            onRowClick={(c) => navigate(`${PATHS.clients}/${c.id}`)}
                           />
                         </Card>
                       </Box>

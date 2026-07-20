@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
@@ -15,27 +15,23 @@ import { fmtDate } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName } from 'src/lib/labels';
 import { type OutgoingShipmentListItemDto } from 'src/generated/api-client';
 import { useShipments, useShipment } from 'src/hooks/useShipments';
+import { PATHS } from 'src/routes/paths';
 import { ShipmentDetail } from './ShipmentDetail';
 import { ShipmentEditor } from './ShipmentEditor';
 
-type EditorState = { mode: 'create' } | { mode: 'edit'; id: string } | null;
-
 /** Vývozy (Outgoing Shipments) — the app's most complex screen: route
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
- * master-detail pattern matches OrdersPage exactly. */
-export function ShipmentsPage() {
+ * is URL-driven: /vyvozy (list), /vyvozy/:id (detail), /vyvozy/new + /:id/edit. */
+export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
   const { canEdit } = useAuth();
   const editable = canEdit('shipments');
+  const navigate = useNavigate();
+  const { id } = useParams();
 
   const list = useShipments();
+  const detail = useShipment(view ? undefined : id);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorState, setEditorState] = useState<EditorState>(null);
-
-  const detail = useShipment(selectedId ?? undefined);
-
-  const openCreate = () => setEditorState({ mode: 'create' });
-  const openEdit = () => { if (selectedId) setEditorState({ mode: 'edit', id: selectedId }); };
+  const openCreate = () => navigate(`${PATHS.shipments}/new`);
 
   const columns: Column<OutgoingShipmentListItemDto>[] = [
     {
@@ -73,14 +69,14 @@ export function ShipmentsPage() {
     </Button>
   );
 
-  if (editorState) {
+  if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
         <ShipmentEditor
-          mode={editorState.mode}
-          shipmentId={editorState.mode === 'edit' ? editorState.id : undefined}
-          onDone={(id) => { setEditorState(null); setSelectedId(id); }}
-          onCancel={() => setEditorState(null)}
+          mode={view}
+          shipmentId={view === 'edit' ? id : undefined}
+          onDone={(savedId) => navigate(`${PATHS.shipments}/${savedId}`)}
+          onCancel={() => navigate(view === 'edit' && id ? `${PATHS.shipments}/${id}` : PATHS.shipments)}
         />
       </PageContainer>
     );
@@ -88,14 +84,14 @@ export function ShipmentsPage() {
 
   return (
     <PageContainer>
-      {selectedId ? (
+      {id ? (
         <QueryBoundary query={detail}>
           {(shipment) => (
             <ShipmentDetail
               shipment={shipment}
               editable={editable}
-              onBack={() => setSelectedId(null)}
-              onEdit={openEdit}
+              onBack={() => navigate(PATHS.shipments)}
+              onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
             />
           )}
         </QueryBoundary>
@@ -128,7 +124,7 @@ export function ShipmentsPage() {
                   </Typography>
                 </Stack>
                 <Card variant="outlined">
-                  <DataTable columns={columns} rows={rows} getRowKey={(s) => s.id ?? ''} onRowClick={(s) => setSelectedId(s.id ?? null)} />
+                  <DataTable columns={columns} rows={rows} getRowKey={(s) => s.id ?? ''} onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)} />
                 </Card>
               </>
             )}

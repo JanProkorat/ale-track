@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, Card, Stack, Typography } from '@mui/material';
 import { SegControl } from 'src/components/common/SegControl';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -17,6 +18,7 @@ import { fmtDate, orderNumber } from 'src/lib/format';
 import { ORDER_STATUS, orderStateName } from 'src/lib/labels';
 import { type OrderListItemDto } from 'src/generated/api-client';
 import { useOrders, useOrder, useDeleteOrder } from 'src/hooks/useOrders';
+import { PATHS } from 'src/routes/paths';
 import { OrderDetail } from './OrderDetail';
 import { OrderEditor } from './OrderEditor';
 
@@ -44,22 +46,20 @@ const SEGMENTS: [StatusFilter, string][] = [
   ['Cancelled', 'Zrušené'],
 ];
 
-type EditorState = { mode: 'create' } | { mode: 'edit'; id: string } | null;
-
-export function OrdersPage() {
+export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
   const { canEdit } = useAuth();
   const editable = canEdit('orders');
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+  const { id } = useParams();
 
   const list = useOrders();
   const orders = useMemo(() => list.data ?? [], [list.data]);
 
   const [filter, setFilter] = useState<StatusFilter>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorState, setEditorState] = useState<EditorState>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
-  const detail = useOrder(selectedId ?? undefined);
+  const detail = useOrder(view ? undefined : id);
   const del = useDeleteOrder();
 
   const counts = useMemo(() => {
@@ -75,8 +75,7 @@ export function OrdersPage() {
     return orders.filter((o) => orderStateName(o.state) === filter);
   }, [orders, filter]);
 
-  const openCreate = () => setEditorState({ mode: 'create' });
-  const openEdit = () => { if (selectedId) setEditorState({ mode: 'edit', id: selectedId }); };
+  const openCreate = () => navigate(`${PATHS.orders}/new`);
 
   const doCancel = async () => {
     if (!confirmCancelId) return;
@@ -84,7 +83,7 @@ export function OrdersPage() {
       await del.mutateAsync(confirmCancelId);
       enqueueSnackbar('Objednávka zrušena.', { variant: 'success' });
       setConfirmCancelId(null);
-      setSelectedId(null);
+      navigate(PATHS.orders);
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
     }
@@ -143,14 +142,14 @@ export function OrdersPage() {
     </Button>
   );
 
-  if (editorState) {
+  if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
         <OrderEditor
-          mode={editorState.mode}
-          orderId={editorState.mode === 'edit' ? editorState.id : undefined}
-          onDone={(id) => { setEditorState(null); setSelectedId(id); }}
-          onCancel={() => setEditorState(null)}
+          mode={view}
+          orderId={view === 'edit' ? id : undefined}
+          onDone={(savedId) => navigate(`${PATHS.orders}/${savedId}`)}
+          onCancel={() => navigate(view === 'edit' && id ? `${PATHS.orders}/${id}` : PATHS.orders)}
         />
       </PageContainer>
     );
@@ -158,15 +157,15 @@ export function OrdersPage() {
 
   return (
     <PageContainer>
-      {selectedId ? (
+      {id ? (
         <QueryBoundary query={detail}>
           {(order) => (
             <OrderDetail
               order={order}
               editable={editable}
-              onBack={() => setSelectedId(null)}
-              onEdit={openEdit}
-              onDelete={() => setConfirmCancelId(selectedId)}
+              onBack={() => navigate(PATHS.orders)}
+              onEdit={() => navigate(`${PATHS.orders}/${id}/edit`)}
+              onDelete={() => setConfirmCancelId(id)}
             />
           )}
         </QueryBoundary>
@@ -217,7 +216,7 @@ export function OrdersPage() {
                   <EmptyState icon={<ReceiptLongOutlinedIcon />} title="Žádné objednávky v tomto filtru" dense />
                 ) : (
                   <Card variant="outlined">
-                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => setSelectedId(o.id ?? null)} />
+                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => navigate(`${PATHS.orders}/${o.id}`)} />
                   </Card>
                 )}
               </>
