@@ -416,7 +416,7 @@ export function ShipmentDetail({
   const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
   const [dokladkaQty, setDokladkaQty] = useState('1');
 
-  const nakladkaEditable = editable && shipment.state !== OutgoingShipmentState.Delivered && shipment.state !== OutgoingShipmentState.Cancelled;
+  const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
   const stopsSorted = useMemo(
     () => (shipment.stops ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -453,19 +453,21 @@ export function ShipmentDetail({
   const stateName = shipStateName(shipment.state);
   const status = SHIP_STATUS[stateName ?? 'Created'] ?? SHIP_STATUS.Created;
 
-  // Lifecycle transitions available from the current state.
+  // Lifecycle transitions from the current state. The backend serializes the
+  // state as a string ("Created"), while the generated enum is numeric, so the
+  // logic keys off the normalized name (shipStateName), not the raw value.
   const S = OutgoingShipmentState;
-  const shipmentActive = shipment.state === S.Created || shipment.state === S.Loaded || shipment.state === S.InTransit;
+  const shipmentActive = stateName === 'Created' || stateName === 'Loaded' || stateName === 'InTransit';
   const forwardStep = ({
-    [S.Created]: { to: S.Loaded, label: 'Naložit', icon: <CheckIcon />, primary: false },
-    [S.Loaded]: { to: S.InTransit, label: 'Vyrazit', icon: <LocalShippingOutlinedIcon />, primary: false },
-    [S.InTransit]: { to: S.Delivered, label: 'Doručit', icon: <CheckIcon />, primary: true },
-  } as Partial<Record<OutgoingShipmentState, { to: OutgoingShipmentState; label: string; icon: ReactNode; primary: boolean }>>)[shipment.state ?? S.Created];
+    Created: { to: S.Loaded, label: 'Naložit', icon: <CheckIcon />, primary: false },
+    Loaded: { to: S.InTransit, label: 'Vyrazit', icon: <LocalShippingOutlinedIcon />, primary: false },
+    InTransit: { to: S.Delivered, label: 'Doručit', icon: <CheckIcon />, primary: true },
+  } as Record<string, { to: OutgoingShipmentState; label: string; icon: ReactNode; primary: boolean }>)[stateName ?? ''];
   const revertTo = ({
-    [S.Loaded]: S.Created,
-    [S.InTransit]: S.Loaded,
-    [S.Delivered]: S.InTransit,
-  } as Partial<Record<OutgoingShipmentState, OutgoingShipmentState>>)[shipment.state ?? S.Created];
+    Loaded: S.Created,
+    InTransit: S.Loaded,
+    Delivered: S.InTransit,
+  } as Record<string, OutgoingShipmentState>)[stateName ?? ''];
   const ghostBtnSx = { color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } } as const;
 
   async function save(draft: ShipmentDraft, nextState?: OutgoingShipmentState) {
@@ -663,7 +665,7 @@ export function ShipmentDetail({
               Zrušit vývoz
             </Button>
           )}
-          {editable && shipment.state === OutgoingShipmentState.Cancelled && (
+          {editable && stateName === 'Cancelled' && (
             <Button variant="outlined" startIcon={<ReplayIcon />} onClick={() => advance(OutgoingShipmentState.Created)} sx={ghostBtnSx}>
               Znovu otevřít
             </Button>

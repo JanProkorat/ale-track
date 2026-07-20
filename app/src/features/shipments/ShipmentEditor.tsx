@@ -26,7 +26,7 @@ import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { DEPOT, haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel } from 'src/lib/labels';
+import { regionLabel, shipStateName } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -163,9 +163,9 @@ export function ShipmentEditor({
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
   // are fixed — only drivers (and name/date) may still change. Created is open.
-  const structureLocked = mode === 'edit'
-    && shipmentQuery.data?.state != null
-    && shipmentQuery.data.state !== OutgoingShipmentState.Created;
+  // (State arrives as a string from the API; normalize before comparing.)
+  const lockedStateName = shipStateName(shipmentQuery.data?.state);
+  const structureLocked = mode === 'edit' && lockedStateName != null && lockedStateName !== 'Created';
 
   const availableOrders = useMemo(() => availableQuery.data ?? [], [availableQuery.data]);
   const orderById = useMemo(() => new Map(availableOrders.map((o) => [o.id ?? '', o])), [availableOrders]);
