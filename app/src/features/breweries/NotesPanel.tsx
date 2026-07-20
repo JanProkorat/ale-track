@@ -7,7 +7,6 @@ import { useSnackbar } from 'notistack';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtDate } from 'src/lib/format';
 import { useBreweryNotes, useCreateBreweryNote, useDeleteBreweryNote } from 'src/hooks/useBreweryNotes';
 
 export function NotesPanel({ breweryId, editable }: { breweryId: string; editable: boolean }) {
@@ -68,13 +67,10 @@ export function NotesPanel({ breweryId, editable }: { breweryId: string; editabl
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ whiteSpace: 'pre-wrap' }}>{n.text}</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
-                    {fmtDate(n.createdDate)}
-                  </Typography>
                 </Box>
                 {editable && (
                   <Tooltip title="Smazat">
-                    <IconButton size="small" onClick={() => remove(n.id)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+                    <IconButton size="small" onClick={() => remove(n.id ?? '')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>

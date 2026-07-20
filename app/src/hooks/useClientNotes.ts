@@ -1,7 +1,5 @@
-// Client notes — UNLIKE brewery notes, these are real backend endpoints, so
-// (unlike useBreweryNotes.ts, which goes through the client-side-only
-// src/mock/demoNotes store) this goes through useDataSource and works
-// identically in real and demo sessions.
+// Client notes — real backend endpoints, called through useDataSource() like
+// every other module hook.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';

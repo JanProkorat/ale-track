@@ -8,6 +8,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { DataTable, type Column } from 'src/components/common/DataTable';
+import { SearchField } from 'src/components/common/SearchField';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
@@ -57,6 +58,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
   const orders = useMemo(() => list.data ?? [], [list.data]);
 
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [clientSearch, setClientSearch] = useState('');
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   const detail = useOrder(view ? undefined : id);
@@ -71,9 +73,16 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
   }, [orders]);
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return orders;
-    return orders.filter((o) => orderStateName(o.state) === filter);
-  }, [orders, filter]);
+    const q = clientSearch.trim().toLowerCase();
+    const rows = orders.filter((o) => (filter === 'all' || orderStateName(o.state) === filter)
+      && (!q || (o.clientName ?? '').toLowerCase().includes(q)));
+    // Sort by requested delivery date, soonest first; orders without a date go last.
+    return [...rows].sort((a, b) => {
+      const ta = a.requiredDeliveryDate ? new Date(a.requiredDeliveryDate).getTime() : Infinity;
+      const tb = b.requiredDeliveryDate ? new Date(b.requiredDeliveryDate).getTime() : Infinity;
+      return ta - tb;
+    });
+  }, [orders, filter, clientSearch]);
 
   const openCreate = () => navigate(`${PATHS.orders}/new`);
 
@@ -213,6 +222,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
                       ),
                     }))}
                   />
+                  <SearchField value={clientSearch} onChange={setClientSearch} placeholder="Hledat klienta…" width={240} />
                   <Box sx={{ flex: 1 }} />
                   <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
                     {filtered.length} z {orders.length}

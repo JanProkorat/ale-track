@@ -50,4 +50,9 @@ public sealed class Brewery : PublicEntity
     /// Related reminders
     /// </summary>
     public List<BreweryReminder> Reminders { get; set; } = [];
+
+    /// <summary>
+    /// Collection of notes associated with the brewery
+    /// </summary>
+    public List<BreweryNote> Notes { get; set; } = [];
 }

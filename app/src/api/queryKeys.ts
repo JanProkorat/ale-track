@@ -20,6 +20,7 @@ export const qk = {
   breweryProducts: (breweryId: string, params: Params = {}) =>
     ['breweries', breweryId, 'products', params] as const,
   breweryReminders: (breweryId: string) => ['breweries', breweryId, 'reminders'] as const,
+  breweryNotes: (breweryId: string) => ['breweries', breweryId, 'notes'] as const,
 
   clients: resource('clients'),
   clientNotes: (clientId: string) => ['clients', clientId, 'notes'] as const,

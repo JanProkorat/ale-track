@@ -1,0 +1,477 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Box, Breadcrumbs, Button, Card, Chip, CircularProgress, Collapse, IconButton, Link, Stack,
+  TextField, ToggleButton, ToggleButtonGroup, Typography,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/AddOutlined';
+import RemoveIcon from '@mui/icons-material/RemoveOutlined';
+import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import CheckIcon from '@mui/icons-material/CheckOutlined';
+import ArrowUpIcon from '@mui/icons-material/KeyboardArrowUpOutlined';
+import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs, { type Dayjs } from 'dayjs';
+import { useSnackbar } from 'notistack';
+import { PageHeader } from 'src/components/common/PageHeader';
+import { Combobox } from 'src/components/common/Combobox';
+import { SearchField } from 'src/components/common/SearchField';
+import { EmptyState } from 'src/components/common/EmptyState';
+import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { apiErrorMessage } from 'src/api/errors';
+import { plural, fmtLiters, deliveryNumber } from 'src/lib/format';
+import { kindLabel } from 'src/lib/labels';
+import {
+  ProductKind,
+  CreateProductsDeliveryDto,
+  CreateProductDeliveryStopDto,
+  CreateProductDeliveryItemDto,
+  UpdateProductDeliveryDto,
+  UpdateProductDeliveryStopDto,
+  UpdateProductDeliveryItemDto,
+  ProductDeliveryState,
+  type BreweryProductListItemDto,
+} from 'src/generated/api-client';
+import { useBreweries } from 'src/hooks/useBreweries';
+import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
+import { useDrivers } from 'src/hooks/useDrivers';
+import { useVehicles } from 'src/hooks/useVehicles';
+import { useDelivery, useCreateDelivery, useUpdateDelivery } from 'src/hooks/useDeliveries';
+import { TOPBAR_H } from 'src/layout/Topbar';
+
+const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
+
+interface DraftItem { productId: string; quantity: number }
+interface DraftStop { key: string; publicId?: string; breweryId: string; note: string; items: DraftItem[] }
+
+let seq = 0;
+const newKey = () => `ds-${++seq}`;
+
+function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; onChange: (delta: number) => void }) {
+  if (qty <= 0) {
+    return (
+      <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={onAdd}
+        sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700, bgcolor: 'background.paper' }}>
+        Přidat
+      </Button>
+    );
+  }
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" flexShrink={0}>
+      <IconButton size="small" onClick={() => onChange(-1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Ubrat">
+        <RemoveIcon fontSize="small" />
+      </IconButton>
+      <Typography sx={{ minWidth: 22, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{qty}</Typography>
+      <IconButton size="small" onClick={() => onChange(1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Přidat">
+        <AddIcon fontSize="small" />
+      </IconButton>
+    </Stack>
+  );
+}
+
+/** One brewery stop: its own product catalog (search + kind filter), with a
+ * qty control per product. Loads the brewery's product list on its own. */
+function StopCard({
+  stop, index, total, color, breweryName, onRemove, onMove, onItemsChange,
+}: {
+  stop: DraftStop;
+  index: number;
+  total: number;
+  color?: string;
+  breweryName: string;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+  onItemsChange: (items: DraftItem[]) => void;
+}) {
+  const productsQuery = useBreweryProducts(stop.breweryId);
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<ProductKind | 'all'>('all');
+  const [collapsed, setCollapsed] = useState(false);
+
+  const qtyOf = (productId: string) => stop.items.find((i) => i.productId === productId)?.quantity ?? 0;
+  const addItem = (productId: string) => {
+    const ex = stop.items.find((i) => i.productId === productId);
+    onItemsChange(ex ? stop.items.map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)) : [...stop.items, { productId, quantity: 1 }]);
+  };
+  const changeQty = (productId: string, delta: number) => {
+    onItemsChange(stop.items
+      .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta } : i))
+      .filter((i) => i.quantity > 0));
+  };
+
+  const matches = (p: BreweryProductListItemDto) => {
+    const q = search.trim().toLowerCase();
+    return !q || (p.name ?? '').toLowerCase().includes(q);
+  };
+  const kindCounts = useMemo(() => {
+    const m = new Map<ProductKind, number>();
+    for (const p of products) if (matches(p)) { const k = p.kind ?? ProductKind.Other; m.set(k, (m.get(k) ?? 0) + 1); }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, search]);
+  const shown = products.filter((p) => matches(p) && (kind === 'all' || p.kind === kind));
+
+  // Group same-name variants (different sizes) into one card, first-seen order.
+  const groups = useMemo(() => {
+    const order: string[] = [];
+    const byName = new Map<string, BreweryProductListItemDto[]>();
+    for (const p of shown) {
+      const name = p.name ?? '';
+      if (!byName.has(name)) { byName.set(name, []); order.push(name); }
+      byName.get(name)!.push(p);
+    }
+    return order.map((name) => ({ name, items: byName.get(name)! }));
+     
+  }, [shown]);
+
+  const itemCount = stop.items.length;
+  const ks = stop.items.reduce((s, i) => s + i.quantity, 0);
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        onClick={() => setCollapsed((v) => !v)}
+        sx={{ px: 2, py: 1.5, borderBottom: collapsed ? 0 : 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+      >
+        <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0, transition: 'transform .15s', transform: collapsed ? 'rotate(-90deg)' : 'none' }} />
+        <Box sx={{ width: 26, height: 26, borderRadius: 1.5, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, bgcolor: `${color ?? '#7C3AED'}22`, color: color ?? '#7C3AED' }}>{index + 1}</Box>
+        <Typography sx={{ fontWeight: 700, fontSize: 14, flex: 1, minWidth: 0 }} noWrap>{breweryName}</Typography>
+        <Chip size="small" label={`${itemCount} ${plural(itemCount, 'položka', 'položky', 'položek')} · ${ks} ks`} sx={{ fontWeight: 600 }} />
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onMove(-1); }} disabled={index === 0} aria-label="Nahoru"><ArrowUpIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onMove(1); }} disabled={index === total - 1} aria-label="Dolů"><ArrowDownIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onRemove(); }} sx={{ color: 'error.main' }} aria-label="Odebrat pivovar"><DeleteIcon fontSize="small" /></IconButton>
+      </Stack>
+
+      <Collapse in={!collapsed} unmountOnExit>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ mb: 1.5 }}>
+          <SearchField value={search} onChange={setSearch} placeholder="Hledat produkt v pivovaru…" width="100%" />
+        </Box>
+        {productsQuery.isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>
+        ) : products.length === 0 ? (
+          <EmptyState title="Pivovar nemá produkty" dense />
+        ) : (
+          <>
+            <ToggleButtonGroup exclusive size="small" value={kind} onChange={(_e, v: ProductKind | 'all' | null) => v !== null && setKind(v)} sx={{ mb: 1.5, flexWrap: 'wrap' }}>
+              <ToggleButton value="all" sx={{ textTransform: 'none', fontWeight: 700 }}>Vše</ToggleButton>
+              {KIND_TABS.filter((k) => (kindCounts.get(k) ?? 0) > 0).map((k) => (
+                <ToggleButton key={k} value={k} sx={{ textTransform: 'none', fontWeight: 700 }}>
+                  {kindLabel(k)}<Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{kindCounts.get(k)}</Box>
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            {groups.length === 0 ? (
+              <EmptyState title="Nic nenalezeno" dense />
+            ) : (
+              <Stack spacing={1}>
+                {groups.map((g) => (
+                  <Box key={g.name} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+                    {g.items.length > 1 && (
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1.5, py: 1, bgcolor: 'action.hover' }}>
+                        <Box sx={{ width: 9, height: 9, borderRadius: '2px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
+                        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{g.name}</Typography>
+                        <Box sx={{ flex: 1 }} />
+                        <Chip size="small" label={`${g.items.length} ${plural(g.items.length, 'velikost', 'velikosti', 'velikostí')}`} sx={{ height: 20, fontSize: 11 }} />
+                      </Stack>
+                    )}
+                    {g.items.map((v) => {
+                      const qty = qtyOf(v.id ?? '');
+                      return (
+                        <Stack key={v.id} direction="row" spacing={1} alignItems="center"
+                          sx={{ px: 1.5, py: 1, borderTop: g.items.length > 1 ? 1 : 0, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            {g.items.length === 1 && <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{v.name}</Typography>}
+                            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: g.items.length === 1 ? 0.5 : 0 }}>
+                              <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
+                              {v.packageSize != null && <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
+                            </Stack>
+                          </Box>
+                          <QtyControl qty={qty} onAdd={() => addItem(v.id ?? '')} onChange={(d) => changeQty(v.id ?? '', d)} />
+                        </Stack>
+                      );
+                    })}
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </>
+        )}
+      </Box>
+      </Collapse>
+    </Card>
+  );
+}
+
+/** Dovoz editor: pick breweries, then products per brewery; date, vehicle,
+ * drivers, and a live pickup-route preview. Mirrors the prototype's deHTML. */
+export function DeliveryEditor({
+  mode,
+  deliveryId,
+  onDone,
+  onCancel,
+}: {
+  mode: 'create' | 'edit';
+  deliveryId?: string;
+  onDone: (id: string) => void;
+  onCancel: () => void;
+}) {
+  const { enqueueSnackbar } = useSnackbar();
+  const deliveryQuery = useDelivery(mode === 'edit' ? deliveryId : undefined);
+  const breweriesQuery = useBreweries();
+  const driversQuery = useDrivers();
+  const vehiclesQuery = useVehicles();
+  const createDelivery = useCreateDelivery();
+  const updateDelivery = useUpdateDelivery();
+
+  const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(1, 'day') : null);
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [driverIds, setDriverIds] = useState<string[]>([]);
+  const [note, setNote] = useState('');
+  const [stops, setStops] = useState<DraftStop[]>([]);
+  const [pickBrewery, setPickBrewery] = useState<string | null>(null);
+  const loadedRef = useRef(false);
+
+  // Preserve the existing delivery's state across an edit save.
+  const editState = deliveryQuery.data?.state;
+
+  useEffect(() => {
+    if (mode !== 'edit' || loadedRef.current || !deliveryQuery.data) return;
+    const d = deliveryQuery.data;
+    loadedRef.current = true;
+    setDeliveryDate(d.deliveryDate ? dayjs(d.deliveryDate) : null);
+    setVehicleId(d.vehicle?.id ?? null);
+    setDriverIds((d.drivers ?? []).map((dr) => dr.id ?? '').filter(Boolean));
+    setNote(d.note ?? '');
+    setStops((d.stops ?? []).map((s) => ({
+      key: newKey(),
+      publicId: s.id,
+      breweryId: s.brewery?.id ?? '',
+      note: s.note ?? '',
+      items: (s.products ?? []).map((p) => ({ productId: p.productId ?? '', quantity: p.quantity ?? 1 })),
+    })));
+  }, [mode, deliveryQuery.data]);
+
+  const breweries = useMemo(() => breweriesQuery.data ?? [], [breweriesQuery.data]);
+  const breweryById = useMemo(() => new Map(breweries.map((b) => [b.id ?? '', b])), [breweries]);
+  const usedBreweryIds = useMemo(() => new Set(stops.map((s) => s.breweryId)), [stops]);
+  const breweryOptions = breweries
+    .filter((b) => !usedBreweryIds.has(b.id ?? ''))
+    .map((b) => ({ value: b.id ?? '', label: b.name ?? '' }));
+
+  const addStop = (breweryId: string) => {
+    if (!breweryId || usedBreweryIds.has(breweryId)) return;
+    setStops((prev) => [...prev, { key: newKey(), breweryId, note: '', items: [] }]);
+    setPickBrewery(null);
+  };
+  const removeStop = (key: string) => setStops((prev) => prev.filter((s) => s.key !== key));
+  const moveStop = (key: string, dir: -1 | 1) => setStops((prev) => {
+    const i = prev.findIndex((s) => s.key === key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= prev.length) return prev;
+    const next = [...prev];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+  const setStopItems = (key: string, items: DraftItem[]) => setStops((prev) => prev.map((s) => (s.key === key ? { ...s, items } : s)));
+  const toggleDriver = (id: string) => setDriverIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const routeStops: RouteStop[] = useMemo(() => stops.map((s): RouteStop => {
+    const b = breweryById.get(s.breweryId);
+    return { lat: b?.latitude ?? undefined, lng: b?.longitude ?? undefined, label: b?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
+  }), [stops, breweryById]);
+
+  const busy = createDelivery.isPending || updateDelivery.isPending;
+
+  const handleSave = async () => {
+    if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jeden pivovar', { variant: 'warning' }); return; }
+    if (stops.some((s) => s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return; }
+    if (!deliveryDate) { enqueueSnackbar('Vyberte datum dovozu', { variant: 'warning' }); return; }
+    try {
+      if (mode === 'edit' && deliveryId) {
+        await updateDelivery.mutateAsync({
+          id: deliveryId,
+          data: new UpdateProductDeliveryDto({
+            deliveryDate: deliveryDate.toDate(),
+            state: editState ?? ProductDeliveryState.InPlanning,
+            driverIds,
+            vehicleId: vehicleId ?? undefined,
+            note: note.trim() || undefined,
+            stops: stops.map((s) => new UpdateProductDeliveryStopDto({
+              publicId: s.publicId,
+              breweryId: s.breweryId,
+              note: s.note.trim() || undefined,
+              products: s.items.map((it) => new UpdateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+            })),
+          }),
+        });
+        enqueueSnackbar('Dovoz uložen.', { variant: 'success' });
+        onDone(deliveryId);
+      } else {
+        const newId = await createDelivery.mutateAsync(new CreateProductsDeliveryDto({
+          deliveryDate: deliveryDate.toDate(),
+          driverIds,
+          vehicleId: vehicleId ?? undefined,
+          note: note.trim() || undefined,
+          stops: stops.map((s) => new CreateProductDeliveryStopDto({
+            breweryId: s.breweryId,
+            note: s.note.trim() || undefined,
+            products: s.items.map((it) => new CreateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+          })),
+        }));
+        enqueueSnackbar('Dovoz vytvořen.', { variant: 'success' });
+        onDone(newId);
+      }
+    } catch (e) {
+      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+    }
+  };
+
+  const title = mode === 'edit' ? `Úprava dovozu ${deliveryNumber(deliveryId)}` : 'Nový dovoz';
+
+  return (
+    <Box>
+      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
+        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onCancel} sx={{ fontSize: 13 }}>
+          Dovozy zboží
+        </Link>
+        <Typography color="text.primary" sx={{ fontSize: 13 }}>{title}</Typography>
+      </Breadcrumbs>
+
+      <PageHeader
+        eyebrow="Sklad"
+        title={title}
+        subtitle="Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů."
+        actions={(
+          <>
+            <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>
+            <Button variant="contained" startIcon={<CheckIcon />} onClick={handleSave} disabled={busy}>
+              {busy ? 'Ukládám…' : mode === 'edit' ? 'Uložit' : 'Vytvořit dovoz'}
+            </Button>
+          </>
+        )}
+      />
+
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' }, alignItems: 'start' }}>
+        <Stack spacing={2}>
+          {stops.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+                <RouteOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Plánovaná trasa svozu</Typography>
+                <Box sx={{ flex: 1 }} />
+                <Chip size="small" label="sklad → pivovary → sklad" />
+              </Stack>
+              <Box sx={{ p: 2 }}>
+                <RouteMap stops={routeStops} height={280} />
+              </Box>
+            </Card>
+          )}
+
+          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.disabled' }}>
+            Pivovary v dovozu ({stops.length})
+          </Typography>
+
+          {breweryOptions.length > 0 ? (
+            <Combobox
+              value={pickBrewery}
+              onChange={(v) => v && addStop(v)}
+              options={breweryOptions}
+              placeholder="Přidat pivovar — začněte psát název…"
+              fullWidth
+            />
+          ) : (
+            <Typography color="text.disabled" sx={{ fontSize: 13 }}>Všechny pivovary už jsou v dovozu.</Typography>
+          )}
+
+          {stops.length === 0 ? (
+            <EmptyState icon={<WarehouseOutlinedIcon />} title="Zatím žádný pivovar" description="Přidejte pivovar pomocí pole nahoře." dense />
+          ) : (
+            stops.map((s, i) => (
+              <StopCard
+                key={s.key}
+                stop={s}
+                index={i}
+                total={stops.length}
+                color={breweryById.get(s.breweryId)?.color}
+                breweryName={breweryById.get(s.breweryId)?.name ?? '—'}
+                onRemove={() => removeStop(s.key)}
+                onMove={(dir) => moveStop(s.key, dir)}
+                onItemsChange={(items) => setStopItems(s.key, items)}
+              />
+            ))
+          )}
+        </Stack>
+
+        <Stack spacing={2} sx={{ position: { lg: 'sticky' }, top: { lg: TOPBAR_H + 16 } }}>
+          <Card sx={{ p: 2.5 }}>
+            <Stack spacing={2}>
+              <DatePicker
+                label="Datum dovozu"
+                value={deliveryDate}
+                onChange={setDeliveryDate}
+                slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+              />
+              <Combobox
+                label="Vůz"
+                value={vehicleId}
+                onChange={setVehicleId}
+                options={(vehiclesQuery.data ?? []).map((v) => ({ value: v.id ?? '', label: v.name ?? '' }))}
+                placeholder="— vyberte vůz —"
+              />
+              <TextField
+                label="Poznámka"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Např. vrátit prázdné sudy…"
+                size="small"
+                fullWidth
+                multiline
+                minRows={2}
+              />
+            </Stack>
+          </Card>
+
+          <Card sx={{ overflow: 'hidden' }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Řidiči</Typography>
+            </Stack>
+            <Box sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {(driversQuery.data ?? []).length === 0 ? (
+                <Typography color="text.disabled" sx={{ fontSize: 13 }}>Žádní řidiči</Typography>
+              ) : (
+                (driversQuery.data ?? []).map((dr) => {
+                  const on = driverIds.includes(dr.id ?? '');
+                  const color = dr.color ?? '#7C3AED';
+                  return (
+                    <Chip
+                      key={dr.id}
+                      clickable
+                      onClick={() => toggleDriver(dr.id ?? '')}
+                      icon={on ? <CheckIcon sx={{ fontSize: 15 }} /> : undefined}
+                      label={`${dr.firstName ?? ''} ${dr.lastName ?? ''}`.trim()}
+                      variant={on ? 'filled' : 'outlined'}
+                      sx={{
+                        fontWeight: 600, height: 34,
+                        borderColor: on ? color : 'divider',
+                        bgcolor: on ? `${color}22` : 'transparent',
+                        '& .MuiChip-icon': { color },
+                      }}
+                    />
+                  );
+                })
+              )}
+            </Box>
+          </Card>
+        </Stack>
+      </Box>
+    </Box>
+  );
+}

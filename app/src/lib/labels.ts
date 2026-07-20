@@ -3,7 +3,7 @@
 
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
-  OutgoingShipmentState, OutgoingShipmentStopAddressKind,
+  OutgoingShipmentState, OutgoingShipmentStopAddressKind, ProductDeliveryState,
 } from 'src/generated/api-client';
 
 export const L = {
@@ -131,6 +131,12 @@ export function isReminderAdded(s?: OrderItemReminderState | string | number): b
  * `SHIP_STATUS`. */
 export function shipStateName(s?: OutgoingShipmentState | string | number): string | undefined {
   return enumName(OutgoingShipmentState as unknown as Record<string, string | number>, s);
+}
+
+/** The ProductDeliveryState enum's member name (e.g. "OnTheWay"), resolved
+ * from either wire representation — indexes `DELIVERY_STATUS`. */
+export function deliveryStateName(s?: ProductDeliveryState | string | number): string | undefined {
+  return enumName(ProductDeliveryState as unknown as Record<string, string | number>, s);
 }
 
 /** The stop's chosen address kind ("Official"/"Contact"), resolved from

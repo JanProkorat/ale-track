@@ -94,6 +94,11 @@ public class AleTrackDbContext : DbContext
     /// DbSet of <see cref="ClientNote"/>
     /// </summary>
     public virtual DbSet<ClientNote> ClientNotes => Set<ClientNote>();
+
+    /// <summary>
+    /// DbSet of <see cref="BreweryNote"/>
+    /// </summary>
+    public virtual DbSet<BreweryNote> BreweryNotes => Set<BreweryNote>();
     
     /// <summary>
     /// DbSet of <see cref="ClientReminder"/>

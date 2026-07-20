@@ -305,6 +305,18 @@ export interface IClient {
     deleteOrderEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets brewery notes list
+     * @return List of notes for a brewery
+     */
+    getBreweryNotesEndpoint(id: string, signal?: AbortSignal): Promise<NoteDto[]>;
+
+    /**
+     * Creates a brewery note
+     * @return Note created
+     */
+    createBreweryNoteEndpoint(id: string, data: CreateNoteDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Gets client notes list
      * @return List of notes for a client
      */
@@ -327,6 +339,12 @@ export interface IClient {
      * @return Note deleted
      */
     deleteClientNoteEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a brewery note
+     * @return Note deleted
+     */
+    deleteBreweryNoteEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
      * Gets countries list
@@ -3587,6 +3605,141 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets brewery notes list
+     * @return List of notes for a brewery
+     */
+    getBreweryNotesEndpoint(id: string, signal?: AbortSignal): Promise<NoteDto[]> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{id}/notes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetBreweryNotesEndpoint(_response);
+        });
+    }
+
+    protected processGetBreweryNotesEndpoint(response: Response): Promise<NoteDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(NoteDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<NoteDto[]>(null as any);
+    }
+
+    /**
+     * Creates a brewery note
+     * @return Note created
+     */
+    createBreweryNoteEndpoint(id: string, data: CreateNoteDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{id}/notes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateBreweryNoteEndpoint(_response);
+        });
+    }
+
+    protected processCreateBreweryNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : null as any;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Brewery not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Gets client notes list
      * @return List of notes for a client
      */
@@ -3818,6 +3971,70 @@ export class Client implements IClient {
     }
 
     protected processDeleteClientNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : null as any;
+    
+            return result202;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Note not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a brewery note
+     * @return Note deleted
+     */
+    deleteBreweryNoteEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/breweries/notes/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteBreweryNoteEndpoint(_response);
+        });
+    }
+
+    protected processDeleteBreweryNoteEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 202) {
@@ -10295,6 +10512,36 @@ export interface ICreateOrderItemDto {
     reminderState?: OrderItemReminderState | undefined;
 }
 
+export class GetBreweryNotesRequest implements IGetBreweryNotesRequest {
+
+    constructor(data?: IGetBreweryNotesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetBreweryNotesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetBreweryNotesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetBreweryNotesRequest {
+}
+
 export class GetClientNotesRequest implements IGetClientNotesRequest {
 
     constructor(data?: IGetClientNotesRequest) {
@@ -10389,6 +10636,36 @@ export class UpdateNoteDto implements IUpdateNoteDto {
 
 export interface IUpdateNoteDto {
     text: string;
+}
+
+export class DeleteBreweryNoteRequest implements IDeleteBreweryNoteRequest {
+
+    constructor(data?: IDeleteBreweryNoteRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteBreweryNoteRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteBreweryNoteRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteBreweryNoteRequest {
 }
 
 export class InventorySectionDto implements IInventorySectionDto {
@@ -11762,6 +12039,8 @@ export class BreweryListItemDto implements IBreweryListItemDto {
     name?: string;
     displayOrder?: number;
     color?: string;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
 
     constructor(data?: IBreweryListItemDto) {
         if (data) {
@@ -11778,6 +12057,8 @@ export class BreweryListItemDto implements IBreweryListItemDto {
             this.name = _data["name"];
             this.displayOrder = _data["displayOrder"];
             this.color = _data["color"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
         }
     }
 
@@ -11794,6 +12075,8 @@ export class BreweryListItemDto implements IBreweryListItemDto {
         data["name"] = this.name;
         data["displayOrder"] = this.displayOrder;
         data["color"] = this.color;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         return data;
     }
 }
@@ -11803,6 +12086,8 @@ export interface IBreweryListItemDto {
     name?: string;
     displayOrder?: number;
     color?: string;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
 }
 
 export class BreweryDto implements IBreweryDto {

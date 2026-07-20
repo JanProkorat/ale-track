@@ -7,12 +7,10 @@ import {
   Button,
   Typography,
   Alert,
-  Chip,
   IconButton,
   InputAdornment,
   FormControlLabel,
   Checkbox,
-  Divider,
 } from '@mui/material';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import Visibility from '@mui/icons-material/Visibility';
@@ -23,11 +21,9 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { useAuth } from 'src/auth/AuthProvider';
-import { DEMO_USERS } from 'src/auth/mockUsers';
 import { Logo } from 'src/components/common/Logo';
 import { PATHS } from 'src/routes/paths';
 import { useThemeMode } from 'src/theme/ThemeProvider';
-import { initials } from 'src/lib/format';
 
 const NAVY = '#1E2A3A';
 
@@ -38,7 +34,7 @@ const FEATURES = [
 ];
 
 export function LoginPage() {
-  const { signIn, signInDemo } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { resolved, toggle } = useThemeMode();
@@ -187,25 +183,6 @@ export function LoginPage() {
             </Button>
           </Stack>
 
-          <Divider sx={{ my: 3, fontSize: 12, color: 'text.secondary' }}>Prohlédnout bez připojení (demo)</Divider>
-          <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
-            {DEMO_USERS.map((u) => (
-              <Chip
-                key={u.id}
-                avatar={
-                  <Box component="span" sx={{ fontSize: 11, fontWeight: 800 }}>
-                    {initials(u.firstName, u.lastName)}
-                  </Box>
-                }
-                label={`${u.firstName} · ${u.roles.includes('Admin') ? 'admin' : 'uživatel'}`}
-                onClick={() => {
-                  signInDemo(u);
-                  navigate(PATHS.dashboard, { replace: true });
-                }}
-                sx={{ mb: 1 }}
-              />
-            ))}
-          </Stack>
         </Box>
       </Box>
     </Box>

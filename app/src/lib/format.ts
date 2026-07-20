@@ -46,3 +46,10 @@ export function orderNumber(id?: string): string {
   if (!id) return '—';
   return `#${id.slice(-6).toUpperCase()}`;
 }
+
+/** Short display number for a product delivery, derived from its id (the API
+ * has no stored delivery number) — same convention as orderNumber. */
+export function deliveryNumber(id?: string): string {
+  if (!id) return '—';
+  return `#${id.slice(-6).toUpperCase()}`;
+}

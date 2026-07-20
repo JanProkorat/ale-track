@@ -20,8 +20,8 @@ interface CurrencyContextValue {
 const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isDemo } = useAuth();
-  const { data: rates } = useExchangeRates(isAuthenticated && !isDemo);
+  const { isAuthenticated } = useAuth();
+  const { data: rates } = useExchangeRates(isAuthenticated);
   const [currency, setCurrencyState] = useState<Currency>(
     () => (localStorage.getItem(STORAGE_KEY) as Currency) || 'CZK'
   );

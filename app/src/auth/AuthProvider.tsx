@@ -19,17 +19,12 @@ import { apiErrorMessage } from 'src/api/errors';
 const TOKEN_KEY = 'authToken';
 const REFRESH_KEY = 'refreshToken';
 const USER_KEY = 'aletrack.user';
-const MODE_KEY = 'aletrack.authMode'; // 'real' | 'demo'
 
 interface AuthContextValue {
   user: CurrentUser | null;
   isAuthenticated: boolean;
-  isDemo: boolean;
   /** Real login against the backend. */
   signIn: (userName: string, password: string) => Promise<void>;
-  /** Client-side demo session (no backend) — for UI review / permission demo. */
-  signInDemo: (u: CurrentUser) => void;
-  switchUser: (u: CurrentUser) => void;
   signOut: () => void;
   canSee: (m: ModuleKey) => boolean;
   canEdit: (m: ModuleKey) => boolean;
@@ -37,52 +32,39 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function persistReal(u: CurrentUser, access: string, refresh: string) {
+function persist(u: CurrentUser, access: string, refresh: string) {
   localStorage.setItem(TOKEN_KEY, access);
   localStorage.setItem(REFRESH_KEY, refresh);
   localStorage.setItem(USER_KEY, JSON.stringify(u));
-  localStorage.setItem(MODE_KEY, 'real');
-}
-function persistDemo(u: CurrentUser) {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  localStorage.setItem(USER_KEY, JSON.stringify(u));
-  localStorage.setItem(MODE_KEY, 'demo');
 }
 function clearStorage() {
-  [TOKEN_KEY, REFRESH_KEY, USER_KEY, MODE_KEY].forEach((k) => localStorage.removeItem(k));
+  [TOKEN_KEY, REFRESH_KEY, USER_KEY].forEach((k) => localStorage.removeItem(k));
 }
 
-function restore(): { user: CurrentUser | null; demo: boolean } {
-  const mode = localStorage.getItem(MODE_KEY);
+function restore(): CurrentUser | null {
   try {
-    if (mode === 'real') {
-      const access = localStorage.getItem(TOKEN_KEY);
-      const refresh = localStorage.getItem(REFRESH_KEY);
-      if (access && refresh && !isTokenExpired(access)) {
-        setApiTokens(access, refresh);
-        return { user: userFromToken(access), demo: false };
-      }
-      clearStorage();
-    } else if (mode === 'demo') {
-      const raw = localStorage.getItem(USER_KEY);
-      if (raw) return { user: JSON.parse(raw) as CurrentUser, demo: true };
+    const access = localStorage.getItem(TOKEN_KEY);
+    const refresh = localStorage.getItem(REFRESH_KEY);
+    if (access && refresh && !isTokenExpired(access)) {
+      setApiTokens(access, refresh);
+      return userFromToken(access);
     }
+    clearStorage();
   } catch {
     clearStorage();
   }
-  return { user: null, demo: false };
+  return null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [{ user, demo }, setState] = useState(restore);
+  const [user, setUser] = useState<CurrentUser | null>(restore);
   const qc = useQueryClient();
 
   const signOut = useCallback(() => {
     clearStorage();
     setApiTokens(null, null);
     qc.clear();
-    setState({ user: null, demo: false });
+    setUser(null);
   }, [qc]);
 
   // Keep the api layer's refresh/failure handlers pointed at this provider.
@@ -111,34 +93,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = userFromToken(access);
     if (!u) throw new Error('Neplatný přihlašovací token.');
     setApiTokens(access, refresh);
-    persistReal(u, access, refresh);
+    persist(u, access, refresh);
     qc.clear();
-    setState({ user: u, demo: false });
+    setUser(u);
   }, [qc]);
-
-  const signInDemo = useCallback(
-    (u: CurrentUser) => {
-      setApiTokens(null, null);
-      persistDemo(u);
-      qc.clear();
-      setState({ user: u, demo: true });
-    },
-    [qc]
-  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isAuthenticated: user !== null,
-      isDemo: demo,
       signIn,
-      signInDemo,
-      switchUser: signInDemo,
       signOut,
       canSee: (m) => (user ? canSeePerms(user.perms, m) : false),
       canEdit: (m) => (user ? canEditPerms(user.perms, m) : false),
     }),
-    [user, demo, signIn, signInDemo, signOut]
+    [user, signIn, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

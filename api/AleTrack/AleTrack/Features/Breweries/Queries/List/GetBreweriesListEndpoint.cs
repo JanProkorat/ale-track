@@ -45,7 +45,9 @@ public sealed class GetBreweriesListEndpoint(AleTrackDbContext dbContext) : Endp
                 Id = c.PublicId,
                 Name = c.Name,
                 DisplayOrder = c.DisplayOrder,
-                Color = c.Color
+                Color = c.Color,
+                Latitude = c.OfficialAddress.Latitude,
+                Longitude = c.OfficialAddress.Longitude
             })
             .OrderBy(c => c.DisplayOrder)
             .ApplyFilterAndSort(req.Parameters)

@@ -448,12 +448,25 @@ export function OrderEditor({
       />
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1fr 380px' }, alignItems: 'start' }}>
-        <Card sx={{ overflow: 'hidden' }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        {/* Self-contained scroll pane (lg+): the catalog is capped to the
+            viewport and sticks in place, its body scrolls internally, and
+            overscrollBehavior: 'contain' stops that scroll from chaining to the
+            page at the ends. So a wheel over the catalog scrolls only the
+            catalog; a wheel anywhere else scrolls the page. On xs it flows
+            normally in the page (single column). */}
+        <Card sx={{
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          position: { lg: 'sticky' },
+          top: { lg: TOPBAR_H + 16 },
+          maxHeight: { lg: `calc(100vh - ${TOPBAR_H + 32}px)` },
+        }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider', flex: '0 0 auto' }}>
             <HistoryIcon fontSize="small" sx={{ color: 'text.secondary' }} />
             <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Katalog produktů</Typography>
           </Stack>
-          <Box sx={{ p: 2.5 }}>
+          <Box sx={{ p: 2.5, flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
             <ToggleButtonGroup
               exclusive
               size="small"

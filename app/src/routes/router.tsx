@@ -3,7 +3,6 @@ import { AppShell } from 'src/layout/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
 import { LoginPage } from 'src/pages/LoginPage';
 import { DashboardPage } from 'src/pages/DashboardPage';
-import { ModulePlaceholder } from 'src/pages/ModulePlaceholder';
 import { VehiclesPage } from 'src/features/vehicles/VehiclesPage';
 import { UsersPage } from 'src/features/users/UsersPage';
 import { InventoryPage } from 'src/features/inventory/InventoryPage';
@@ -12,11 +11,8 @@ import { BreweriesPage } from 'src/features/breweries/BreweriesPage';
 import { ClientsPage } from 'src/features/clients/ClientsPage';
 import { OrdersPage } from 'src/features/orders/OrdersPage';
 import { ShipmentsPage } from 'src/features/shipments/ShipmentsPage';
+import { DeliveriesPage } from 'src/features/deliveries/DeliveriesPage';
 import { LOGIN_PATH, PATHS } from './paths';
-
-const placeholder = (eyebrow: string, title: string, phase: string) => (
-  <ModulePlaceholder eyebrow={eyebrow} title={title} phase={phase} />
-);
 
 export const router = createBrowserRouter([
   { path: LOGIN_PATH, element: <LoginPage /> },
@@ -35,7 +31,10 @@ export const router = createBrowserRouter([
           { path: `${PATHS.shipments}/new`, element: <ShipmentsPage view="create" /> },
           { path: `${PATHS.shipments}/:id`, element: <ShipmentsPage /> },
           { path: `${PATHS.shipments}/:id/edit`, element: <ShipmentsPage view="edit" /> },
-          { path: PATHS.deliveries, element: placeholder('Sklad', 'Dovozy zboží', 'P8') },
+          { path: PATHS.deliveries, element: <DeliveriesPage /> },
+          { path: `${PATHS.deliveries}/new`, element: <DeliveriesPage view="create" /> },
+          { path: `${PATHS.deliveries}/:id`, element: <DeliveriesPage /> },
+          { path: `${PATHS.deliveries}/:id/edit`, element: <DeliveriesPage view="edit" /> },
           { path: PATHS.inventory, element: <InventoryPage /> },
           { path: PATHS.breweries, element: <BreweriesPage /> },
           { path: `${PATHS.breweries}/:id`, element: <BreweriesPage /> },
