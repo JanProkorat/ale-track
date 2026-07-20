@@ -2,15 +2,15 @@ import { type ModuleKey } from 'src/auth/permissions';
 
 export const PATHS: Record<ModuleKey, string> = {
   dashboard: '/',
-  orders: '/objednavky',
-  shipments: '/vyvozy',
-  deliveries: '/dovozy',
-  inventory: '/sklad',
-  breweries: '/pivovary',
-  clients: '/klienti',
-  drivers: '/ridici',
-  vehicles: '/vozy',
-  users: '/uzivatele',
+  orders: '/orders',
+  shipments: '/shipments',
+  deliveries: '/deliveries',
+  inventory: '/inventory',
+  breweries: '/breweries',
+  clients: '/clients',
+  drivers: '/drivers',
+  vehicles: '/vehicles',
+  users: '/users',
 };
 
-export const LOGIN_PATH = '/prihlaseni';
+export const LOGIN_PATH = '/login';

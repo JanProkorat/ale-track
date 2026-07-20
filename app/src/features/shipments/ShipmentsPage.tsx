@@ -21,7 +21,7 @@ import { ShipmentEditor } from './ShipmentEditor';
 
 /** Vývozy (Outgoing Shipments) — the app's most complex screen: route
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
- * is URL-driven: /vyvozy (list), /vyvozy/:id (detail), /vyvozy/new + /:id/edit. */
+ * is URL-driven: /shipments (list), /shipments/:id (detail), /shipments/new + /:id/edit. */
 export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
   const { canEdit } = useAuth();
   const editable = canEdit('shipments');
