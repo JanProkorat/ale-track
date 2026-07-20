@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
+    // MUST stay false: the generated NSwag API client copies props in a base-class
+    // constructor loop; with define semantics, derived-class field declarations
+    // (e.g. InventoryExtraShipmentDto.productId) reset those values to undefined
+    // after super(), silently dropping them from request payloads.
+    "useDefineForClassFields": false,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
