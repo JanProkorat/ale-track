@@ -234,11 +234,20 @@ function AggLoadingRow({
 
 /** "Celková nakládka" — the loading list: one row per distinct product with the
  * invoice/loaded/kontrola controls and the summed quantity. */
-function AggLoadingTable({ rows, renderRow, emptyText }: { rows: AggRow[]; renderRow: (a: AggRow) => ReactNode; emptyText: string }) {
+interface LoadingTotals {
+  quantity: number;
+  f1: number;
+  f2: number;
+  loaded: number;
+  checked: number;
+  count: number;
+}
+
+function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[]; totals: LoadingTotals; renderRow: (a: AggRow) => ReactNode; emptyText: string }) {
   if (rows.length === 0) {
     return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
   }
-  const total = rows.reduce((s, r) => s + r.quantity, 0);
+  const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
   return (
     <Card variant="outlined">
       <TableContainer sx={{ overflowX: 'auto' }}>
@@ -254,10 +263,20 @@ function AggLoadingTable({ rows, renderRow, emptyText }: { rows: AggRow[]; rende
           </TableHead>
           <TableBody>
             {rows.map(renderRow)}
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700, borderBottom: 'none' }}>Celkem k naložení</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', borderBottom: 'none' }}>{total} ks</TableCell>
-              <TableCell colSpan={3} sx={{ borderBottom: 'none' }} />
+            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+              <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
+              <TableCell align="right" sx={footSx}>{totals.quantity} ks</TableCell>
+              <TableCell align="center" sx={{ ...footSx, fontWeight: 700 }}>
+                <Box component="span">F1 {totals.f1}</Box>
+                <Box component="span" sx={{ color: 'text.disabled', mx: 0.5 }}>·</Box>
+                <Box component="span" sx={{ color: totals.f2 > 0 ? 'warning.dark' : 'text.disabled' }}>F2 {totals.f2}</Box>
+              </TableCell>
+              <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.loaded === totals.count ? 'success.main' : 'text.primary' }}>
+                {totals.loaded}/{totals.count}
+              </TableCell>
+              <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.checked === totals.count ? 'success.main' : 'text.primary' }}>
+                {totals.checked}/{totals.count}
+              </TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -444,6 +463,8 @@ export function ShipmentDetail({
   const productN = aggRows.length;
   const loadedN = aggRows.filter(aggLoaded).length;
   const checkedN = aggRows.filter(aggChecked).length;
+  const totalQty = aggRows.reduce((s, a) => s + a.quantity, 0);
+  const totalF2 = aggRows.reduce((s, a) => s + aggF2(a), 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -701,6 +722,7 @@ export function ShipmentDetail({
               </Stack>
               <AggLoadingTable
                 rows={aggRows}
+                totals={{ quantity: totalQty, f1: totalQty - totalF2, f2: totalF2, loaded: loadedN, checked: checkedN, count: productN }}
                 emptyText="Zatím žádné produkty k naložení."
                 renderRow={(agg) => (
                   <AggLoadingRow
