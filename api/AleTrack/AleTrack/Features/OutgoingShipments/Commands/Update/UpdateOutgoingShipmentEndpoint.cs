@@ -152,7 +152,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     order.State = OrderState.Delivering;
                     break;
                 default: // Created / Loaded
-                    if (order.State == OrderState.New)
+                    // New orders enter planning; reverting a shipment from InTransit
+                    // back to Loaded pulls its orders out of Delivering too.
+                    if (order.State is OrderState.New or OrderState.Delivering)
                         order.State = OrderState.Planning;
                     break;
             }

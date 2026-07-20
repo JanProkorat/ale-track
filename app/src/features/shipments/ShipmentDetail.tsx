@@ -15,8 +15,12 @@ import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
+import BlockIcon from '@mui/icons-material/BlockOutlined';
+import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
@@ -407,6 +411,7 @@ export function ShipmentDetail({
     return Math.max(0, Math.min(raw, row.quantity));
   };
 
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [dokladkaOpen, setDokladkaOpen] = useState(false);
   const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
   const [dokladkaQty, setDokladkaQty] = useState('1');
@@ -447,6 +452,21 @@ export function ShipmentDetail({
 
   const stateName = shipStateName(shipment.state);
   const status = SHIP_STATUS[stateName ?? 'Created'] ?? SHIP_STATUS.Created;
+
+  // Lifecycle transitions available from the current state.
+  const S = OutgoingShipmentState;
+  const shipmentActive = shipment.state === S.Created || shipment.state === S.Loaded || shipment.state === S.InTransit;
+  const forwardStep = ({
+    [S.Created]: { to: S.Loaded, label: 'Naložit', icon: <CheckIcon />, primary: false },
+    [S.Loaded]: { to: S.InTransit, label: 'Vyrazit', icon: <LocalShippingOutlinedIcon />, primary: false },
+    [S.InTransit]: { to: S.Delivered, label: 'Doručit', icon: <CheckIcon />, primary: true },
+  } as Partial<Record<OutgoingShipmentState, { to: OutgoingShipmentState; label: string; icon: ReactNode; primary: boolean }>>)[shipment.state ?? S.Created];
+  const revertTo = ({
+    [S.Loaded]: S.Created,
+    [S.InTransit]: S.Loaded,
+    [S.Delivered]: S.InTransit,
+  } as Partial<Record<OutgoingShipmentState, OutgoingShipmentState>>)[shipment.state ?? S.Created];
+  const ghostBtnSx = { color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } } as const;
 
   async function save(draft: ShipmentDraft, nextState?: OutgoingShipmentState) {
     try {
@@ -628,17 +648,28 @@ export function ShipmentDetail({
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <StatusPill tone={status.tone} label={status.label} />
-          {editable && shipment.state === OutgoingShipmentState.Created && (
-            <Button variant="outlined" startIcon={<CheckIcon />} onClick={() => advance(OutgoingShipmentState.Loaded)}>Naloženo</Button>
+          {editable && forwardStep && (
+            <Button variant={forwardStep.primary ? 'contained' : 'outlined'} startIcon={forwardStep.icon} onClick={() => advance(forwardStep.to)}>
+              {forwardStep.label}
+            </Button>
           )}
-          {editable && shipment.state === OutgoingShipmentState.Loaded && (
-            <Button variant="outlined" startIcon={<LocalShippingOutlinedIcon />} onClick={() => advance(OutgoingShipmentState.InTransit)}>Vyrazit</Button>
+          {editable && revertTo !== undefined && (
+            <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => advance(revertTo)} sx={ghostBtnSx}>
+              Vrátit
+            </Button>
           )}
-          {editable && shipment.state === OutgoingShipmentState.InTransit && (
-            <Button variant="contained" startIcon={<CheckIcon />} onClick={() => advance(OutgoingShipmentState.Delivered)}>Doručeno</Button>
+          {editable && shipmentActive && (
+            <Button variant="outlined" color="error" startIcon={<BlockIcon />} onClick={() => setConfirmCancel(true)}>
+              Zrušit vývoz
+            </Button>
           )}
-          {editable && (
-            <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper' }}>
+          {editable && shipment.state === OutgoingShipmentState.Cancelled && (
+            <Button variant="outlined" startIcon={<ReplayIcon />} onClick={() => advance(OutgoingShipmentState.Created)} sx={ghostBtnSx}>
+              Znovu otevřít
+            </Button>
+          )}
+          {editable && shipmentActive && (
+            <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={ghostBtnSx}>
               Upravit
             </Button>
           )}
@@ -792,6 +823,21 @@ export function ShipmentDetail({
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveDokladka()}>Přidat dokládku</Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmCancel}
+        title="Zrušit vývoz?"
+        message={
+          <>
+            Opravdu zrušit vývoz <strong>{shipment.name}</strong>? Objednávky se uvolní zpět k plánování
+            a rozúčtování nakládky se vymaže. Vývoz lze později znovu otevřít.
+          </>
+        }
+        confirmLabel="Zrušit vývoz"
+        busy={updateShipment.isPending}
+        onConfirm={() => { setConfirmCancel(false); advance(OutgoingShipmentState.Cancelled); }}
+        onClose={() => setConfirmCancel(false)}
+      />
     </Box>
   );
 }

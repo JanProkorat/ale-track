@@ -9,6 +9,7 @@ import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined
 import DragIndicatorIcon from '@mui/icons-material/DragIndicatorOutlined';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
@@ -54,17 +55,18 @@ function stopPoint(order: OutgoingShipmentOrderDto | undefined, addressKind: Out
 }
 
 function SortableStopRow({
-  stop, index, order, total, onMove, onRemove, onAddrKind,
+  stop, index, order, total, locked, onMove, onRemove, onAddrKind,
 }: {
   stop: DraftStop;
   index: number;
   order?: OutgoingShipmentOrderDto;
   total: number;
+  locked?: boolean;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   onAddrKind: (kind: OutgoingShipmentStopAddressKind) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.orderId });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.orderId, disabled: locked });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   return (
     <Box
@@ -72,9 +74,11 @@ function SortableStopRow({
       style={style}
       sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
     >
-      <Box {...attributes} {...listeners} sx={{ cursor: 'grab', color: 'text.disabled', display: 'flex', touchAction: 'none' }}>
-        <DragIndicatorIcon fontSize="small" />
-      </Box>
+      {!locked && (
+        <Box {...attributes} {...listeners} sx={{ cursor: 'grab', color: 'text.disabled', display: 'flex', touchAction: 'none' }}>
+          <DragIndicatorIcon fontSize="small" />
+        </Box>
+      )}
       <Box sx={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: colorForClient(order?.clientName ?? stop.orderId) }}>
         {index + 1}
       </Box>
@@ -87,21 +91,26 @@ function SortableStopRow({
       <Select
         size="small"
         value={stop.addressKind}
+        disabled={locked}
         onChange={(e) => onAddrKind(Number(e.target.value) as OutgoingShipmentStopAddressKind)}
         sx={{ width: 140, flexShrink: 0 }}
       >
         <MenuItem value={OutgoingShipmentStopAddressKind.Official}>Fakturační</MenuItem>
         {order?.clientContactAddress && <MenuItem value={OutgoingShipmentStopAddressKind.Contact}>Kontaktní</MenuItem>}
       </Select>
-      <IconButton size="small" onClick={() => onMove(-1)} disabled={index === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
-        <ArrowUpwardIcon fontSize="small" />
-      </IconButton>
-      <IconButton size="small" onClick={() => onMove(1)} disabled={index === total - 1} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
-        <ArrowDownwardIcon fontSize="small" />
-      </IconButton>
-      <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-        <DeleteOutlineOutlinedIcon fontSize="small" />
-      </IconButton>
+      {!locked && (
+        <>
+          <IconButton size="small" onClick={() => onMove(-1)} disabled={index === 0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+            <ArrowUpwardIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={() => onMove(1)} disabled={index === total - 1} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+            <ArrowDownwardIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
+            <DeleteOutlineOutlinedIcon fontSize="small" />
+          </IconButton>
+        </>
+      )}
     </Box>
   );
 }
@@ -151,6 +160,12 @@ export function ShipmentEditor({
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st, i) => ({ orderId: st.orderId ?? '', addressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, order: i + 1 })));
   }, [mode, shipmentQuery.data]);
+
+  // Once the shipment is Loaded (or beyond), its order composition and vehicle
+  // are fixed — only drivers (and name/date) may still change. Created is open.
+  const structureLocked = mode === 'edit'
+    && shipmentQuery.data?.state != null
+    && shipmentQuery.data.state !== OutgoingShipmentState.Created;
 
   const availableOrders = useMemo(() => availableQuery.data ?? [], [availableQuery.data]);
   const orderById = useMemo(() => new Map(availableOrders.map((o) => [o.id ?? '', o])), [availableOrders]);
@@ -338,6 +353,15 @@ export function ShipmentEditor({
         )}
       />
 
+      {structureLocked && (
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, px: 2, py: 1.25, borderRadius: 2, border: 1, borderColor: 'divider', bgcolor: 'brand.infoTint' }}>
+          <LockOutlinedIcon fontSize="small" sx={{ color: 'info.main' }} />
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'info.main' }}>
+            Vývoz je naložen — objednávky a vůz už nelze měnit. Upravit lze pouze řidiče, název a termín.
+          </Typography>
+        </Stack>
+      )}
+
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' }, alignItems: 'start' }}>
         <Stack spacing={2}>
           <RouteMap stops={routeStops} height={320} />
@@ -347,7 +371,7 @@ export function ShipmentEditor({
               <RouteOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Pořadí zastávek</Typography>
               <Box sx={{ flex: 1 }} />
-              {stopsSorted.length > 1 && (
+              {stopsSorted.length > 1 && !structureLocked && (
                 <Button size="small" variant="outlined" startIcon={<AutoAwesomeOutlinedIcon fontSize="small" />} onClick={optimizeRoute}>
                   Optimalizovat trasu
                 </Button>
@@ -366,6 +390,7 @@ export function ShipmentEditor({
                           stop={st}
                           index={i}
                           total={stopsSorted.length}
+                          locked={structureLocked}
                           order={orderById.get(st.orderId)}
                           onMove={(dir) => moveStop(st.orderId, dir)}
                           onRemove={() => removeStop(st.orderId)}
@@ -394,6 +419,7 @@ export function ShipmentEditor({
                 label="Vůz"
                 value={vehicleId}
                 onChange={setVehicleId}
+                disabled={structureLocked}
                 options={(vehiclesQuery.data ?? []).map((v): ComboOption => ({ value: v.id ?? '', label: v.name ?? '' }))}
                 placeholder="Vyberte vůz…"
                 fullWidth
@@ -459,14 +485,16 @@ export function ShipmentEditor({
                 return (
                   <Box
                     key={order.id}
-                    onClick={() => toggleOrder(order.id ?? '')}
+                    onClick={structureLocked ? undefined : () => toggleOrder(order.id ?? '')}
                     sx={{
-                      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, borderRadius: 2, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, borderRadius: 2,
+                      cursor: structureLocked ? 'default' : 'pointer',
+                      opacity: structureLocked && !inRoute ? 0.45 : 1,
                       border: 1, borderColor: inRoute ? 'warning.main' : 'divider',
                       bgcolor: inRoute ? 'brand.amberTint' : 'transparent',
                     }}
                   >
-                    <Checkbox checked={inRoute} size="small" sx={{ p: 0 }} />
+                    <Checkbox checked={inRoute} disabled={structureLocked} size="small" sx={{ p: 0 }} />
                     <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: colorForClient(order.clientName ?? order.id ?? ''), flexShrink: 0 }} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{order.clientName}</Typography>
