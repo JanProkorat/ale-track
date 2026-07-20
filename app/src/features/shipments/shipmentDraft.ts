@@ -34,22 +34,37 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
         secondInvoiceQuantity: p.secondInvoiceQuantity,
       })),
     })),
-    inventoryExtraShipments: (shipment.inventoryExtraItems ?? []).map((e) => new InventoryExtraShipmentDto({
-      id: e.id, productId: e.productId, quantity: e.quantity,
-      isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
-    })),
+    inventoryExtraShipments: (shipment.inventoryExtraItems ?? []).map((e) => {
+      const dto = new InventoryExtraShipmentDto({
+        id: e.id, quantity: e.quantity,
+        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
+        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
+      });
+      // productId is declared on the derived class; assign after the ctor so it
+      // survives regardless of `useDefineForClassFields` (a derived field init
+      // would otherwise wipe a value passed into the constructor).
+      dto.productId = e.productId;
+      return dto;
+    }),
     // Client extra has no prototype UI (flagged in the P7 report) — carried
     // through unchanged so an existing value is never silently dropped.
-    clientExtraShipments: (shipment.clientExtraItems ?? []).map((e) => new ClientExtraShipmentDto({
-      id: e.id, inventoryItemId: e.inventoryItemId, quantity: e.quantity,
-      isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
-    })),
-    customExtraShipments: (shipment.customExtraItems ?? []).map((e) => new CustomExtraShipmentDto({
-      id: e.id, description: e.name, quantity: e.quantity,
-      isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
-    })),
+    clientExtraShipments: (shipment.clientExtraItems ?? []).map((e) => {
+      const dto = new ClientExtraShipmentDto({
+        id: e.id, quantity: e.quantity,
+        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
+        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
+      });
+      dto.inventoryItemId = e.inventoryItemId;
+      return dto;
+    }),
+    customExtraShipments: (shipment.customExtraItems ?? []).map((e) => {
+      const dto = new CustomExtraShipmentDto({
+        id: e.id, quantity: e.quantity,
+        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
+        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
+      });
+      dto.description = e.name;
+      return dto;
+    }),
   };
 }

@@ -566,9 +566,12 @@ export function ShipmentDetail({
     if (existing) {
       existing.quantity = (existing.quantity ?? 0) + qty;
     } else {
-      draft.inventoryExtraShipments.push(new InventoryExtraShipmentDto({
-        productId: dokladkaProductId!, quantity: qty, isLoadingConfirmed: false, firstInvoiceQuantity: qty, secondInvoiceQuantity: 0,
-      }));
+      const dto = new InventoryExtraShipmentDto({
+        quantity: qty, isLoadingConfirmed: false, firstInvoiceQuantity: qty, secondInvoiceQuantity: 0,
+      });
+      // Assign the derived-class field after construction (see shipmentDraft.ts).
+      dto.productId = dokladkaProductId!;
+      draft.inventoryExtraShipments.push(dto);
     }
     await save(draft);
     setDokladkaOpen(false);
