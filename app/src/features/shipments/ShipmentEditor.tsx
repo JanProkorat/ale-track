@@ -557,7 +557,7 @@ export function ShipmentEditor({
                 ))}
               </Select>
             </Stack>
-            <Stack spacing={1} sx={{ p: 2, maxHeight: 440, overflowY: 'auto' }}>
+            <Stack spacing={1} sx={{ p: 2 }}>
               {shownOrders.length === 0 ? (
                 <EmptyState title="V tomto regionu nejsou objednávky" dense />
               ) : shownOrders.map(({ order }) => {
