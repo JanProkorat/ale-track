@@ -4,7 +4,6 @@ import {
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/CloseOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -45,6 +44,7 @@ interface NakladkaRow {
   key: string;
   orderItemId?: string;
   extraId?: string;
+  productId?: string;
   dokladka: boolean;
   name: string;
   kind?: ProductKind;
@@ -75,6 +75,7 @@ function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
   return {
     key: `extra-${e.id}`,
     extraId: e.id,
+    productId: e.productId,
     dokladka: true,
     name: e.name ?? '—',
     kind: e.kind,
@@ -165,7 +166,7 @@ interface AggRowState {
  * row with invoice split, Naloženo/Kontrola (aggregated across its source order
  * items, hence the indeterminate state) and a removable dokládka badge. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onMoveInvoice, onToggleChecked, onRemoveDokladka,
+  agg, state, editable, onLoaded, onMoveInvoice, onToggleChecked, onAdjustDokladka,
 }: {
   agg: AggRow;
   state: AggRowState;
@@ -173,9 +174,10 @@ function AggLoadingRow({
   onLoaded: (loaded: boolean) => void;
   onMoveInvoice: (delta: number) => void;
   onToggleChecked: () => void;
-  onRemoveDokladka?: () => void;
+  onAdjustDokladka?: (delta: number) => void;
 }) {
   const chipText = kindSizeChipText(agg.kind, agg.packageSize);
+  const adjustable = Boolean(onAdjustDokladka) && editable;
   return (
     <TableRow hover>
       <TableCell>
@@ -183,20 +185,25 @@ function AggLoadingRow({
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
           {agg.dokladkaQuantity > 0 && (
-            <Chip
-              size="small"
-              label={
-                <Stack direction="row" spacing={0.25} alignItems="center">
-                  <span>dokládka +{agg.dokladkaQuantity}</span>
-                  {onRemoveDokladka && editable && (
-                    <Box component="span" onClick={onRemoveDokladka} sx={{ display: 'inline-flex', cursor: 'pointer', ml: 0.25 }} title="Odebrat dokládku">
-                      <CloseIcon sx={{ fontSize: 12 }} />
-                    </Box>
-                  )}
-                </Stack>
-              }
-              sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', bgcolor: (t) => t.vars!.palette.brand.infoTint }}
-            />
+            <Box
+              sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.25, height: 20, borderRadius: 1,
+                px: adjustable ? 0.25 : 0.75, fontSize: 10.5, fontWeight: 700, color: 'info.main',
+                bgcolor: (t) => t.vars!.palette.brand.infoTint,
+              }}
+            >
+              {adjustable && (
+                <IconButton size="small" onClick={() => onAdjustDokladka!(-1)} aria-label="Ubrat kus dokládky" sx={{ width: 16, height: 16, color: 'inherit' }}>
+                  <RemoveIcon sx={{ fontSize: 12 }} />
+                </IconButton>
+              )}
+              <span>dokládka {agg.dokladkaQuantity}</span>
+              {adjustable && (
+                <IconButton size="small" onClick={() => onAdjustDokladka!(1)} aria-label="Přidat kus dokládky" sx={{ width: 16, height: 16, color: 'inherit' }}>
+                  <AddIcon sx={{ fontSize: 12 }} />
+                </IconButton>
+              )}
+            </Box>
           )}
         </Stack>
       </TableCell>
@@ -530,14 +537,36 @@ export function ShipmentDetail({
     });
   }
 
-  // Remove the dokládka (stock-extra) portion of an aggregated product line.
-  function removeDokladkaRows(rows: NakladkaRow[]) {
-    const extraIds = rows.filter((r) => r.extraId).map((r) => r.extraId);
-    if (extraIds.length === 0) return;
+  const stockQtyFor = (productId?: string) =>
+    productId == null ? 0 : (inventoryQuery.data ?? [])
+      .flatMap((s) => s.items ?? [])
+      .filter((i) => i.productId === productId)
+      .reduce((sum, i) => sum + (i.quantity ?? 0), 0);
+
+  // Adjust the dokládka (stock-extra) quantity of an aggregated product by
+  // `delta` (+1 / -1). Removes the item at zero; caps increases at stock on hand.
+  function adjustDokladka(agg: AggRow, delta: number) {
+    const extra = agg.sources.find((r) => r.extraId);
+    if (!extra) return;
     const draft = draftFromShipment(shipment);
-    draft.inventoryExtraShipments = draft.inventoryExtraShipments.filter((e) => !extraIds.includes(e.id));
+    const item = draft.inventoryExtraShipments.find((e) => e.id === extra.extraId);
+    if (!item) return;
+
+    const next = (item.quantity ?? 0) + delta;
+    if (next <= 0) {
+      draft.inventoryExtraShipments = draft.inventoryExtraShipments.filter((e) => e.id !== extra.extraId);
+      enqueueSnackbar('Dokládka odebrána.', { variant: 'success' });
+    } else {
+      if (delta > 0 && next > stockQtyFor(extra.productId)) {
+        enqueueSnackbar(`Na skladě je jen ${stockQtyFor(extra.productId)} ks`, { variant: 'warning' });
+        return;
+      }
+      item.quantity = next;
+      // Keep the extra's invoice split consistent with its new total (defaults to F1).
+      item.firstInvoiceQuantity = next;
+      item.secondInvoiceQuantity = 0;
+    }
     void save(draft);
-    enqueueSnackbar('Dokládka odebrána.', { variant: 'success' });
   }
 
   const stockOptions: ComboOption[] = useMemo(() => (inventoryQuery.data ?? [])
@@ -655,7 +684,7 @@ export function ShipmentDetail({
                     onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
                     onMoveInvoice={(delta) => moveAggInvoice(agg, delta)}
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
-                    onRemoveDokladka={agg.dokladkaQuantity > 0 ? () => removeDokladkaRows(agg.sources) : undefined}
+                    onAdjustDokladka={agg.dokladkaQuantity > 0 ? (delta) => adjustDokladka(agg, delta) : undefined}
                   />
                 )}
               />
