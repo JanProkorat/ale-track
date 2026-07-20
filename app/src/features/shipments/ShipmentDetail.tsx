@@ -25,7 +25,7 @@ import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel, addrKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
@@ -33,7 +33,6 @@ import {
   type OutgoingShipmentInventoryExtraItemDto,
   type ProductKind,
   OutgoingShipmentState,
-  OutgoingShipmentStopAddressKind,
   InventoryExtraShipmentDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
@@ -445,7 +444,7 @@ export function ShipmentDetail({
     if (st.orderId == null) {
       return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
     }
-    const address = st.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && st.contactAddress ? st.contactAddress : st.officialAddress;
+    const address = addrKindName(st.selectedAddressKind) === 'Contact' && st.contactAddress ? st.contactAddress : st.officialAddress;
     return { lat: address?.latitude, lng: address?.longitude, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
 

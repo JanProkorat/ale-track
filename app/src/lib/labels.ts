@@ -139,6 +139,14 @@ export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | numb
   return enumName(OutgoingShipmentStopAddressKind as unknown as Record<string, string | number>, k);
 }
 
+/** Normalize an address kind (which the API sends as a string) to the numeric
+ * enum value the MUI Select / write DTOs expect. */
+export function addrKindValue(k?: OutgoingShipmentStopAddressKind | string | number): OutgoingShipmentStopAddressKind {
+  return addrKindName(k) === 'Contact'
+    ? OutgoingShipmentStopAddressKind.Contact
+    : OutgoingShipmentStopAddressKind.Official;
+}
+
 export function addrKindLabel(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
   const name = addrKindName(k);
   return name ? (L.addrKind[name] ?? name) : undefined;

@@ -27,7 +27,7 @@ import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { DEPOT, haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel, shipStateName } from 'src/lib/labels';
+import { regionLabel, shipStateName, addrKindValue } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -184,7 +184,7 @@ export function ShipmentEditor({
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st, i): DraftStop => st.orderId != null
-        ? { key: st.orderId, kind: 'order', orderId: st.orderId, addressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, order: i + 1 }
+        ? { key: st.orderId, kind: 'order', orderId: st.orderId, addressKind: addrKindValue(st.selectedAddressKind), order: i + 1 }
         : {
             key: st.id ?? `custom-${i}`,
             kind: 'custom',
