@@ -31,7 +31,10 @@ export function AppShell() {
           onOpenPalette={() => setPaletteOpen(true)}
           onOpenCurrency={(el) => setCurrencyAnchor(el)}
         />
-        <Box component="main" sx={{ flex: 1, minWidth: 0 }}>
+        {/* flex '1 0 auto' (basis auto, no shrink) so main sizes to its content
+            and grows the document — otherwise flex-basis:0 + the 100vh sidebar
+            cap the page at one viewport and tall content can't be scrolled to. */}
+        <Box component="main" sx={{ flex: '1 0 auto', minWidth: 0 }}>
           <Outlet />
         </Box>
       </Box>
