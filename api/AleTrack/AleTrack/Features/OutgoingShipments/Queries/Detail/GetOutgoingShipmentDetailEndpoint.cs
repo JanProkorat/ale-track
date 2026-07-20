@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -95,6 +96,10 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                 .ToList()
                             : new List<OutgoingShipmentOrderItemDto>()
                     })
+                    .ToList(),
+                RouteViaPoints = os.RouteViaPoints
+                    .OrderBy(v => v.Order)
+                    .Select(v => new RoutePointDto { Latitude = v.Latitude, Longitude = v.Longitude })
                     .ToList(),
                 InventoryExtraItems = os.InventoryExtraItems
                     .Select(ei => new OutgoingShipmentInventoryExtraItemDto

@@ -47,26 +47,84 @@ export interface RoadRoute {
   min: number;
 }
 
-/** Fetch the actual fastest driving route through `points` (in order) from the
- * public OSRM demo server, returning road-following geometry + real distance/
- * duration. Rejects on network/HTTP error so callers can fall back to straight
- * lines. `signal` aborts an in-flight request when inputs change or on unmount. */
-export async function fetchRoadRoute(points: LatLng[], signal?: AbortSignal): Promise<RoadRoute> {
+/** Fetch the fastest driving route(s) through `points` (in order) from the
+ * public OSRM demo server. Returns road-following geometry + real distance/
+ * duration; routes[0] is the primary. With `alternatives`, OSRM may return a
+ * few options. Rejects on network/HTTP error so callers can fall back. */
+export async function fetchRoadRoute(points: LatLng[], opts?: { signal?: AbortSignal; alternatives?: boolean }): Promise<RoadRoute[]> {
   if (points.length < 2) throw new Error('need at least two points');
   // OSRM expects lng,lat pairs separated by semicolons.
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-  const res = await fetch(url, { signal });
+  const alt = opts?.alternatives ? '&alternatives=3' : '';
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson${alt}`;
+  const res = await fetch(url, { signal: opts?.signal });
   if (!res.ok) throw new Error(`OSRM ${res.status}`);
   const data = (await res.json()) as {
     code: string;
     routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[];
   };
-  const route = data.routes?.[0];
-  if (data.code !== 'Ok' || !route) throw new Error(`OSRM ${data.code}`);
-  return {
+  if (data.code !== 'Ok' || !data.routes?.length) throw new Error(`OSRM ${data.code}`);
+  return data.routes.map((route) => ({
     path: route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]),
     km: Math.round((route.distance / 1000) * 10) / 10,
     min: Math.round(route.duration / 60),
-  };
+  }));
+}
+
+/** Squared distance from point p to segment a-b (in lat/lng space; fine for the
+ * short local distances here), plus the projection parameter t in [0,1]. */
+function segDist(p: LatLng, a: LatLng, b: LatLng): { d2: number; t: number } {
+  const vx = b.lng - a.lng, vy = b.lat - a.lat;
+  const wx = p.lng - a.lng, wy = p.lat - a.lat;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2));
+  const cx = a.lng + t * vx, cy = a.lat + t * vy;
+  const dx = p.lng - cx, dy = p.lat - cy;
+  return { d2: dx * dx + dy * dy, t };
+}
+
+/** Insert each via point into the ordered `base` waypoint list at its nearest
+ * segment (ordered along that segment), producing the full OSRM waypoint
+ * sequence. Vias store only coordinates; their placement is derived here so it
+ * stays correct as stops move. */
+export function insertVias(base: LatLng[], vias: LatLng[]): LatLng[] {
+  if (vias.length === 0 || base.length < 2) return base;
+  // For each segment index, collect the vias assigned to it with their t.
+  const perSegment = new Map<number, { via: LatLng; t: number }[]>();
+  for (const via of vias) {
+    let bestSeg = 0, bestD2 = Infinity, bestT = 0;
+    for (let i = 0; i < base.length - 1; i++) {
+      const { d2, t } = segDist(via, base[i], base[i + 1]);
+      if (d2 < bestD2) { bestD2 = d2; bestSeg = i; bestT = t; }
+    }
+    const arr = perSegment.get(bestSeg) ?? [];
+    arr.push({ via, t: bestT });
+    perSegment.set(bestSeg, arr);
+  }
+  const out: LatLng[] = [];
+  for (let i = 0; i < base.length; i++) {
+    out.push(base[i]);
+    if (i < base.length - 1) {
+      const seg = perSegment.get(i);
+      if (seg) for (const { via } of seg.sort((x, y) => x.t - y.t)) out.push(via);
+    }
+  }
+  return out;
+}
+
+/** Pick the vertex of `alt` farthest from the `primary` polyline — a good via
+ * to bias future routing toward the chosen alternative. */
+export function viaFromAlternative(primary: [number, number][], alt: [number, number][]): LatLng {
+  let best: LatLng = { lat: alt[0][0], lng: alt[0][1] };
+  let bestMin = -1;
+  for (const [lat, lng] of alt) {
+    let minD2 = Infinity;
+    for (const [plat, plng] of primary) {
+      const dx = lng - plng, dy = lat - plat;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < minD2) minD2 = d2;
+    }
+    if (minD2 > bestMin) { bestMin = minD2; best = { lat, lng }; }
+  }
+  return best;
 }

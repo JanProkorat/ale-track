@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
+using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Detail;
 
@@ -43,6 +44,11 @@ public sealed record OutgoingShipmentDetailDto
     /// List of stops during the shipment
     /// </summary>
     public List<OutgoingShipmentStopDto> Stops { get; set; } = [];
+
+    /// <summary>
+    /// Via points that shape the road route (not visited stops)
+    /// </summary>
+    public List<RoutePointDto> RouteViaPoints { get; set; } = [];
 
     /// <summary>
     /// List of extra product items included in the shipment to be delivered to the inventory

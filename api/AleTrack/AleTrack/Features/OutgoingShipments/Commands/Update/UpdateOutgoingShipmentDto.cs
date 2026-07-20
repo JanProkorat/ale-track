@@ -39,6 +39,11 @@ public sealed record UpdateOutgoingShipmentDto
     public List<CustomStopDto> CustomStops { get; set; } = [];
 
     /// <summary>
+    /// Via points that shape the road route (not visited stops)
+    /// </summary>
+    public List<RoutePointDto> RouteViaPoints { get; set; } = [];
+
+    /// <summary>
     /// State of the outgoing shipment
     /// </summary>
     public OutgoingShipmentState State { get; set; }

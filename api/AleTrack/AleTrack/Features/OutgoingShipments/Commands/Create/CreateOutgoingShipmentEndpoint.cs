@@ -84,7 +84,9 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                         Latitude = cs.Latitude,
                         Longitude = cs.Longitude
                     })
-            ]
+            ],
+            RouteViaPoints = [.. req.Data.RouteViaPoints
+                .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })]
         };
 
         // Orders added to a shipment move into planning.

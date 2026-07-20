@@ -701,7 +701,7 @@ export function ShipmentDetail({
         </Stack>
       </Stack>
 
-      <RouteMap stops={routeStops} height={360} />
+      <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} />
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start', mt: 2.5 }}>
         <Stack spacing={2}>

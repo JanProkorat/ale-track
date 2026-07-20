@@ -75,6 +75,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .ThenInclude(ei => ei.Product)
         .Include(os => os.ClientExtraItems)
             .ThenInclude(ei => ei.InventoryItem)
+        .Include(os => os.RouteViaPoints)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -99,6 +100,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
         outgoingShipment.Stops = [.. stops, .. customStops];
+        outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
+            .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
         outgoingShipment.InventoryExtraItems = inventoryExtraItems;
         outgoingShipment.ClientExtraItems = clientExtraItems;
         outgoingShipment.CustomExtraItems = customExtraItems;

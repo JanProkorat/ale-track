@@ -35,6 +35,7 @@ import {
   OutgoingShipmentStopAddressKind,
   ClientOrderShipmentDto,
   CustomStopDto,
+  RoutePointDto,
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
@@ -170,6 +171,7 @@ export function ShipmentEditor({
   const [stops, setStops] = useState<DraftStop[]>([]);
   const [regionFilter, setRegionFilter] = useState<string>('all');
   const [customStopOpen, setCustomStopOpen] = useState(false);
+  const [viaPoints, setViaPoints] = useState<{ lat: number; lng: number }[]>([]);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -196,6 +198,7 @@ export function ShipmentEditor({
             addressKind: OutgoingShipmentStopAddressKind.Official,
             order: i + 1,
           }));
+    setViaPoints((s.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 })));
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -358,6 +361,8 @@ export function ShipmentEditor({
         return dto;
       });
 
+    const routeViaPoints = viaPoints.map((v) => new RoutePointDto({ latitude: v.lat, longitude: v.lng }));
+
     try {
       if (mode === 'edit' && shipmentId) {
         const existingDraft = shipmentQuery.data ? draftFromShipment(shipmentQuery.data) : undefined;
@@ -371,6 +376,7 @@ export function ShipmentEditor({
             state: shipmentQuery.data?.state ?? OutgoingShipmentState.Created,
             clientOrderShipments,
             customStops,
+            routeViaPoints,
             inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
             clientExtraShipments: existingDraft?.clientExtraShipments ?? [],
             customExtraShipments: existingDraft?.customExtraShipments ?? [],
@@ -386,6 +392,7 @@ export function ShipmentEditor({
           driverIds,
           clientOrderShipments,
           customStops,
+          routeViaPoints,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
         onDone(id);
@@ -431,7 +438,7 @@ export function ShipmentEditor({
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' }, alignItems: 'start' }}>
         <Stack spacing={2}>
-          <RouteMap stops={routeStops} height={320} />
+          <RouteMap stops={routeStops} viaPoints={viaPoints} editable={!structureLocked} onViasChange={setViaPoints} height={320} />
 
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>

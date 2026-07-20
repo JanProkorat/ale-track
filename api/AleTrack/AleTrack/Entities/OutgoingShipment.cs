@@ -49,6 +49,9 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentStop> Stops { get; set; } = [];
 
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentRoutePoint> RouteViaPoints { get; set; } = [];
+
     /// <summary>
     /// List of extra product items included in this outgoing shipment that will be stored in the inventory
     /// </summary>

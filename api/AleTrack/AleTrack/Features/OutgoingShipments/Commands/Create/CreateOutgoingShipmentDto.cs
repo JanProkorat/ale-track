@@ -33,4 +33,9 @@ public sealed record CreateOutgoingShipmentDto
     /// Custom (non-order) waypoints on the route.
     /// </summary>
     public List<CustomStopDto> CustomStops { get; set; } = [];
+
+    /// <summary>
+    /// Via points that shape the road route (not visited stops).
+    /// </summary>
+    public List<RoutePointDto> RouteViaPoints { get; set; } = [];
 }

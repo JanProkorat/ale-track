@@ -9,7 +9,13 @@ import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import FullscreenIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
-import { DEPOT, haversine, fetchRoadRoute, type LatLng, type RoadRoute } from 'src/lib/geo';
+import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
+import { DEPOT, haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
+
+function viaIcon(): L.DivIcon {
+  const svg = '<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="6" fill="#fff" stroke="#F08C00" stroke-width="3.5"/></svg>';
+  return L.divIcon({ html: svg, className: 'route-map-via', iconSize: [18, 18], iconAnchor: [9, 9] });
+}
 
 export interface RouteStop {
   lat?: number;
@@ -58,14 +64,23 @@ function depotIcon(): L.DivIcon {
 }
 
 /** Leaflet route map for the shipment screens: the company depot (start + end)
- * plus a numbered marker per stop in delivery order, connected by the actual
- * fastest driving route (OSRM) DEPOT -> stop 1 -> ... -> DEPOT, falling back to
- * straight lines if routing is unavailable. Placeholder when no stop is located. */
-export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?: number }) {
+ * plus a numbered marker per stop, connected by the actual fastest driving
+ * route (OSRM). In editable mode the route can be reshaped with via points —
+ * click the route to drop one, drag to move, click to remove — and OSRM
+ * alternatives can be shown and adopted. Placeholder when no stop is located. */
+export function RouteMap({
+  stops, height = 340, viaPoints = [], editable = false, onViasChange,
+}: {
+  stops: RouteStop[];
+  height?: number;
+  viaPoints?: LatLng[];
+  editable?: boolean;
+  onViasChange?: (vias: LatLng[]) => void;
+}) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
-  // Round-trip waypoints: depot -> each located stop (in order) -> depot.
-  const waypoints = useMemo<LatLng[]>(
+  // Base round-trip: depot -> each located stop (in order) -> depot.
+  const base = useMemo<LatLng[]>(
     () => [
       { lat: DEPOT.lat, lng: DEPOT.lng },
       ...located.map((s) => ({ lat: s.lat, lng: s.lng })),
@@ -73,20 +88,43 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
     ],
     [located],
   );
-  // Stable key so the routing effect only refires when coordinates change.
-  const wpKey = waypoints.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
+  // Full sequence with via points inserted at their nearest segment.
+  const full = useMemo(() => insertVias(base, viaPoints), [base, viaPoints]);
+  const fullKey = full.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
+  const baseKey = base.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
 
+  const [showAlts, setShowAlts] = useState(false);
   const [road, setRoad] = useState<RoadRoute | null>(null);
+  const [alts, setAlts] = useState<RoadRoute[]>([]);
+
+  // Primary route (through vias).
   useEffect(() => {
     setRoad(null);
     if (located.length === 0) return;
     const ctrl = new AbortController();
-    fetchRoadRoute(waypoints, ctrl.signal)
-      .then((r) => setRoad(r))
+    fetchRoadRoute(full, { signal: ctrl.signal })
+      .then((r) => setRoad(r[0] ?? null))
       .catch(() => { /* fall back to straight-line geometry + haversine estimate */ });
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wpKey]);
+  }, [fullKey]);
+
+  // Alternatives (base route, editable + toggled on).
+  useEffect(() => {
+    setAlts([]);
+    if (!editable || !showAlts || located.length === 0) return;
+    const ctrl = new AbortController();
+    fetchRoadRoute(base, { signal: ctrl.signal, alternatives: true })
+      .then((r) => setAlts(r.slice(1)))
+      .catch(() => { /* alternatives are optional */ });
+    return () => ctrl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseKey, editable, showAlts]);
+
+  const addVia = (lat: number, lng: number) => onViasChange?.([...viaPoints, { lat, lng }]);
+  const moveVia = (i: number, lat: number, lng: number) => onViasChange?.(viaPoints.map((v, idx) => (idx === i ? { lat, lng } : v)));
+  const removeVia = (i: number) => onViasChange?.(viaPoints.filter((_, idx) => idx !== i));
+  const adoptAlt = (alt: RoadRoute) => { if (road) onViasChange?.([...viaPoints, viaFromAlternative(road.path, alt.path)]); };
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -105,10 +143,10 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
   const fallback = useMemo(() => {
     if (located.length === 0) return null;
     let km = 0;
-    for (let i = 1; i < waypoints.length; i++) km += haversine(waypoints[i - 1], waypoints[i]);
+    for (let i = 1; i < full.length; i++) km += haversine(full[i - 1], full[i]);
     const min = Math.round((km / 45) * 60) + (located.length - 1) * 12;
     return { km: Math.round(km * 10) / 10, min };
-  }, [waypoints, located.length]);
+  }, [full, located.length]);
 
   if (located.length === 0) {
     return (
@@ -133,12 +171,13 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
     );
   }
 
-  const straight: LatLngTuple[] = waypoints.map((p): LatLngTuple => [p.lat, p.lng]);
+  const straight: LatLngTuple[] = full.map((p): LatLngTuple => [p.lat, p.lng]);
+  const boundsPts: LatLngTuple[] = base.map((p): LatLngTuple => [p.lat, p.lng]);
   const line: LatLngTuple[] = road ? road.path : straight;
-  const bounds: LatLngBoundsExpression = straight;
+  const bounds: LatLngBoundsExpression = boundsPts;
   const stats = road ?? fallback;
 
-  const fitRoute = () => mapRef.current?.fitBounds(straight, { padding: [40, 40] });
+  const fitRoute = () => mapRef.current?.fitBounds(boundsPts, { padding: [40, 40] });
   const toggleFull = () => {
     const el = wrapRef.current;
     if (!el) return;
@@ -158,7 +197,39 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
       <Box sx={{ height: isFull ? '100%' : height }}>
         <MapContainer ref={mapRef} bounds={bounds} boundsOptions={{ padding: [40, 40] }} zoomControl={false} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <Polyline positions={line} pathOptions={{ color: '#F08C00', weight: 4, opacity: 0.9, dashArray: road ? undefined : '9 7' }} />
+          {/* Alternative routes (behind the primary), clickable to adopt. */}
+          {editable && alts.map((alt, i) => (
+            <Polyline
+              key={`alt-${i}`}
+              positions={alt.path}
+              pathOptions={{ color: '#5A6675', weight: 4, opacity: 0.55, dashArray: '4 9', lineCap: 'round' }}
+              eventHandlers={{ click: () => adoptAlt(alt) }}
+            >
+              <Tooltip sticky>Použít tuto trasu · {alt.km} km · {fmtDur(alt.min)}</Tooltip>
+            </Polyline>
+          ))}
+          <Polyline
+            positions={line}
+            pathOptions={{ color: '#F08C00', weight: 4, opacity: 0.9, dashArray: road ? undefined : '9 7' }}
+            eventHandlers={editable ? { click: (e) => addVia(e.latlng.lat, e.latlng.lng) } : undefined}
+          >
+            {editable && <Tooltip sticky>Klikni pro přidání průjezdového bodu</Tooltip>}
+          </Polyline>
+          {/* Via points — draggable to move, click to remove (editable only). */}
+          {editable && viaPoints.map((v, i) => (
+            <Marker
+              key={`via-${i}`}
+              position={[v.lat, v.lng]}
+              draggable
+              icon={viaIcon()}
+              eventHandlers={{
+                dragend: (e) => { const ll = e.target.getLatLng(); moveVia(i, ll.lat, ll.lng); },
+                click: () => removeVia(i),
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -8]}>Průjezdový bod · klikni pro odebrání</Tooltip>
+            </Marker>
+          ))}
           <Marker position={[DEPOT.lat, DEPOT.lng]} icon={depotIcon()}>
             <Tooltip direction="top" offset={[0, -14]}>
               <strong>{DEPOT.name}</strong> · start i cíl trasy
@@ -195,6 +266,13 @@ export function RouteMap({ stops, height = 340 }: { stops: RouteStop[]; height?:
           },
         }}
       >
+        {editable && (
+          <MuiTooltip title={showAlts ? 'Skrýt alternativní trasy' : 'Alternativní trasy'} placement="left">
+            <Box component="button" type="button" onClick={() => setShowAlts((v) => !v)} aria-label="Alternativní trasy" sx={{ color: showAlts ? 'warning.main' : undefined }}>
+              <AltRouteIcon />
+            </Box>
+          </MuiTooltip>
+        )}
         <MuiTooltip title={isFull ? 'Ukončit celou obrazovku' : 'Celá obrazovka'} placement="left">
           <Box component="button" type="button" onClick={toggleFull} aria-label="Celá obrazovka">
             {isFull ? <FullscreenExitIcon /> : <FullscreenIcon />}
