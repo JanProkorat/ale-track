@@ -99,12 +99,17 @@ export const api = new Proxy(raw, {
   get(target, prop, receiver) {
     const value = Reflect.get(target, prop, receiver);
     if (typeof value !== 'function') return value;
-    if (typeof prop === 'string' && /List[A-Za-z]*Endpoint$/.test(prop)) {
+    // Any endpoint taking a filter dictionary (list endpoints, product history,
+    // …) serializes it as `Parameters=[object Object]`. Detect a plain-object
+    // arg (DTOs are class instances, so excluded) and stash it for the fetch
+    // layer; reset per call so it never leaks to the next request. fixParamsUrl
+    // only rewrites when the built URL actually contains `Parameters=`.
+    if (typeof prop === 'string' && prop.endsWith('Endpoint')) {
       return (...args: unknown[]) => {
         const dict = args.find(
           (a) => a != null && typeof a === 'object' && (a as object).constructor === Object
         ) as Record<string, string> | undefined;
-        if (dict) pendingListParams = dict;
+        pendingListParams = dict ?? null;
         return (value as (...a: unknown[]) => unknown).apply(target, args);
       };
     }
