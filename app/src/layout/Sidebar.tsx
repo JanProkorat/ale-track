@@ -6,18 +6,32 @@ import { NAV_GROUPS } from './nav-config';
 import { AccountMenu } from './AccountMenu';
 import { Logo } from 'src/components/common/Logo';
 import { useAuth } from 'src/auth/AuthProvider';
+import { useModuleCounts } from 'src/hooks/useReports';
 import { PATHS } from 'src/routes/paths';
 import { initials } from 'src/lib/format';
-
-const NAVY = '#1E2A3A';
+import { type ModuleKey } from 'src/auth/permissions';
 
 export const SIDEBAR_W = 250;
 export const SIDEBAR_W_COLLAPSED = 74;
+
+// Which module-counts field backs each nav item's badge (dashboard has none).
+const COUNT_FIELD: Partial<Record<ModuleKey, string>> = {
+  orders: 'ordersCount',
+  shipments: 'outgoingShipmentsCount',
+  deliveries: 'productDeliveriesCount',
+  inventory: 'inventoryItemsCount',
+  breweries: 'breweriesCount',
+  clients: 'clientsCount',
+  drivers: 'driversCount',
+  vehicles: 'vehiclesCount',
+  users: 'usersCount',
+};
 
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const { user, canSee } = useAuth();
   const { pathname } = useLocation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const counts = useModuleCounts().data as Record<string, number | undefined> | undefined;
 
   const isActive = (path: string) =>
     path === PATHS.dashboard ? pathname === path : pathname.startsWith(path);
@@ -28,7 +42,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
       sx={{
         width: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W,
         flex: `0 0 ${collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W}px`,
-        bgcolor: NAVY,
+        bgcolor: 'brand.navy',
         color: '#C6D0DC',
         display: 'flex',
         flexDirection: 'column',
@@ -73,6 +87,10 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
               )}
               {items.map((it) => {
                 const active = isActive(it.path);
+                const field = COUNT_FIELD[it.key];
+                const count = field ? counts?.[field] ?? 0 : 0;
+                // Prototype: badge shown only for non-active items with a count.
+                const showBadge = count > 0 && !active;
                 return (
                   <ButtonBase
                     key={it.key}
@@ -113,6 +131,30 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                       {it.icon}
                     </Box>
                     {!collapsed && <span>{it.label}</span>}
+                    {showBadge && (collapsed ? (
+                      <Box
+                        component="span"
+                        sx={{
+                          position: 'absolute', top: 3, right: 4,
+                          bgcolor: 'primary.main', color: '#3a2402',
+                          fontSize: 9, fontWeight: 800, lineHeight: 1.4,
+                          minWidth: 14, px: 0.5, borderRadius: 99, textAlign: 'center',
+                        }}
+                      >
+                        {count}
+                      </Box>
+                    ) : (
+                      <Box
+                        component="span"
+                        sx={{
+                          ml: 'auto', bgcolor: 'primary.main', color: '#3a2402',
+                          fontSize: 11, fontWeight: 800, lineHeight: 1.5,
+                          minWidth: 20, px: 0.9, py: '1px', borderRadius: 99, textAlign: 'center',
+                        }}
+                      >
+                        {count}
+                      </Box>
+                    ))}
                   </ButtonBase>
                 );
               })}

@@ -43,6 +43,7 @@ export function LoginPage() {
   const [userName, setUserName] = useState('admin');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,7 +51,7 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await signIn(userName, password);
+      await signIn(userName, password, remember);
       navigate(from, { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Přihlášení selhalo.');
@@ -176,7 +177,11 @@ export function LoginPage() {
               }}
             />
             <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <FormControlLabel control={<Checkbox defaultChecked size="small" />} label="Zapamatovat si mě" slotProps={{ typography: { fontSize: 13 } }} />
+              <FormControlLabel
+                control={<Checkbox checked={remember} onChange={(e) => setRemember(e.target.checked)} size="small" />}
+                label="Zapamatovat si mě"
+                slotProps={{ typography: { fontSize: 13 } }}
+              />
             </Stack>
             <Button type="submit" variant="contained" size="large" startIcon={<LoginOutlinedIcon />} disabled={busy} sx={{ height: 46 }}>
               {busy ? 'Přihlašuji…' : 'Přihlásit se'}

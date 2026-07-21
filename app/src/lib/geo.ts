@@ -30,6 +30,57 @@ function readDepot(): LatLng & { name: string; address?: string } {
   }
 }
 
+/** A postal address to geocode. `country` is the English country name or ISO
+ * code Nominatim understands (e.g. "Czechia", "Germany", "cz"). */
+export interface GeocodeAddress {
+  streetName?: string;
+  streetNumber?: string;
+  city?: string;
+  zip?: string;
+  country?: string;
+}
+
+/** Resolve an address to coordinates via OpenStreetMap Nominatim. Tries a
+ * structured query first, then falls back to a free-form one. Returns null when
+ * nothing matches or the request fails — callers should treat coords as
+ * optional (the map just won't plot that point). */
+export async function geocodeAddress(a: GeocodeAddress, signal?: AbortSignal): Promise<LatLng | null> {
+  const base = 'https://nominatim.openstreetmap.org/search';
+  const street = [a.streetName, a.streetNumber].filter(Boolean).join(' ').trim();
+
+  const run = async (params: URLSearchParams): Promise<LatLng | null> => {
+    params.set('format', 'jsonv2');
+    params.set('limit', '1');
+    const res = await fetch(`${base}?${params.toString()}`, { signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat?: string; lon?: string }>;
+    const hit = Array.isArray(data) ? data[0] : undefined;
+    if (!hit) return null;
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  };
+
+  try {
+    // Structured query — most precise when the parts are clean.
+    const structured = new URLSearchParams();
+    if (street) structured.set('street', street);
+    if (a.city) structured.set('city', a.city);
+    if (a.zip) structured.set('postalcode', a.zip);
+    if (a.country) structured.set('country', a.country);
+    if ([...structured.keys()].length > 0) {
+      const hit = await run(structured);
+      if (hit) return hit;
+    }
+    // Fallback — free-form, catches addresses the structured search misses.
+    const q = [street, a.zip, a.city, a.country].filter(Boolean).join(', ').trim();
+    if (!q) return null;
+    return await run(new URLSearchParams({ q }));
+  } catch {
+    return null;
+  }
+}
+
 /** Great-circle distance in km. */
 export function haversine(a: LatLng, b: LatLng): number {
   const R = 6371;

@@ -9,3 +9,12 @@ export function useModuleCounts() {
     queryFn: ({ signal }) => api.getNumberOfRecordsInEachModuleEndpoint(signal),
   });
 }
+
+/** Upcoming (unresolved) reminders across breweries and clients, grouped by
+ * section — for the dashboard "Připomínky" card. */
+export function useUpcomingReminders() {
+  return useQuery({
+    queryKey: [...qk.reminders, 'upcoming'] as const,
+    queryFn: ({ signal }) => api.getUpcomingRemindersEndpoint(signal),
+  });
+}

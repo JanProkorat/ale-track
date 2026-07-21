@@ -1,5 +1,11 @@
-import { Box, Card, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Box, Button, Card, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
+import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
 import dayjs from 'dayjs';
 import { fmtTime } from 'src/lib/format';
 import { type DriverListItemDto } from 'src/generated/api-client';
@@ -15,14 +21,39 @@ const ROW_HEIGHT = COLUMN_HEIGHT / HOURS;
 
 const fullName = (d: DriverListItemDto) => [d.firstName, d.lastName].filter(Boolean).join(' ');
 
-/** Week time-grid of driver availability + a color legend below it. */
+/** Week time-grid of driver availability + a color legend below it. The visible
+ * 7-day window is anchored on `anchor` (defaults to today) and can be moved by
+ * week or month; "Dnes" jumps back to the current week. */
 export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListItemDto[] }) {
-  const today = dayjs().startOf('day');
-  const days = Array.from({ length: 7 }, (_, i) => today.add(i, 'day'));
+  const realToday = dayjs().startOf('day');
+  const [anchor, setAnchor] = useState(() => dayjs().startOf('day'));
+  const days = Array.from({ length: 7 }, (_, i) => anchor.add(i, 'day'));
   const hourMarks = Array.from({ length: HOURS + 1 }, (_, i) => START_HOUR + i);
+  const rangeLabel = `${days[0].toDate().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })} – ${days[6].toDate().toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const isCurrentWeek = !realToday.isBefore(days[0], 'day') && !realToday.isAfter(days[6], 'day');
 
   return (
-    <Card variant="outlined" sx={{ p: 2, overflowX: 'auto' }}>
+    <Card variant="outlined" sx={{ p: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<TodayOutlinedIcon />}
+          onClick={() => setAnchor(dayjs().startOf('day'))}
+          disabled={isCurrentWeek}
+          sx={{ color: 'text.primary', borderColor: 'divider', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+        >
+          Dnes
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        <Tooltip title="Předchozí měsíc"><IconButton size="small" onClick={() => setAnchor((a) => a.subtract(1, 'month'))} aria-label="Předchozí měsíc"><KeyboardDoubleArrowLeftIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Předchozí týden"><IconButton size="small" onClick={() => setAnchor((a) => a.subtract(7, 'day'))} aria-label="Předchozí týden"><ChevronLeftIcon fontSize="small" /></IconButton></Tooltip>
+        <Typography sx={{ fontWeight: 700, fontSize: 13.5, minWidth: 170, textAlign: 'center' }}>{rangeLabel}</Typography>
+        <Tooltip title="Další týden"><IconButton size="small" onClick={() => setAnchor((a) => a.add(7, 'day'))} aria-label="Další týden"><ChevronRightIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Další měsíc"><IconButton size="small" onClick={() => setAnchor((a) => a.add(1, 'month'))} aria-label="Další měsíc"><KeyboardDoubleArrowRightIcon fontSize="small" /></IconButton></Tooltip>
+      </Stack>
+
+      <Box sx={{ overflowX: 'auto' }}>
       <Box sx={{ display: 'flex', minWidth: 760 }}>
         {/* Hour label column */}
         <Box sx={{ width: 46, flex: '0 0 auto' }}>
@@ -46,7 +77,7 @@ export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListIte
 
         {/* One column per day */}
         {days.map((day) => {
-          const isToday = day.isSame(today, 'day');
+          const isToday = day.isSame(realToday, 'day');
           const dayDate = day.toDate();
 
           const blocks = drivers.flatMap((driver) =>
@@ -138,6 +169,7 @@ export function DriverAvailabilityCalendar({ drivers }: { drivers: DriverListIte
             </Box>
           );
         })}
+      </Box>
       </Box>
 
       {/* Legend */}

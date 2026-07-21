@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useFieldArray, Controller, type Control, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { L, regionName } from 'src/lib/labels';
+import { geocodeAddress, type LatLng } from 'src/lib/geo';
 import {
   CreateClientDto,
   UpdateClientDto,
@@ -29,8 +30,6 @@ const addressSchema = z.object({
   city: z.string().trim().min(1, 'Město'),
   zip: z.string().trim().min(1, 'PSČ'),
   country: z.string().min(1, 'Země'),
-  latitude: z.string().refine((v) => v === '' || Number.isFinite(Number(v)), 'Číslo'),
-  longitude: z.string().refine((v) => v === '' || Number.isFinite(Number(v)), 'Číslo'),
 });
 type AddressValues = z.infer<typeof addressSchema>;
 
@@ -70,27 +69,31 @@ const REGION_OPTIONS = Object.entries(L.region).map(([value, label]) => ({ value
 const CONTACT_TYPE_OPTIONS = Object.entries(L.contact).map(([value, label]) => ({ value, label }));
 
 const emptyAddr: AddressValues = {
-  streetName: '', streetNumber: '', city: '', zip: '', country: String(Country.Czechia), latitude: '', longitude: '',
+  streetName: '', streetNumber: '', city: '', zip: '', country: String(Country.Czechia),
 };
 const empty: FormValues = {
   name: '', businessName: '', region: 'ZittauCity', official: emptyAddr, hasContact: false, contact: emptyAddr, contacts: [],
 };
 
-function addrToForm(a: { streetName?: string; streetNumber?: string; city?: string; zip?: string; country?: Country; latitude?: number; longitude?: number } | undefined): AddressValues {
+function addrToForm(a: { streetName?: string; streetNumber?: string; city?: string; zip?: string; country?: Country } | undefined): AddressValues {
   if (!a) return emptyAddr;
   return {
     streetName: a.streetName ?? '', streetNumber: a.streetNumber ?? '', city: a.city ?? '', zip: a.zip ?? '',
     country: a.country != null ? String(a.country) : String(Country.Czechia),
-    latitude: a.latitude != null ? String(a.latitude) : '', longitude: a.longitude != null ? String(a.longitude) : '',
   };
 }
-function toAddressDto(a: AddressValues): AddressDto {
+/** Coordinates are not entered by hand — they're geocoded from the address on
+ * save (see submit). Pass the resolved coords (or the previously stored ones as
+ * a fallback) so they persist on the entity. */
+function toAddressDto(a: AddressValues, coords?: LatLng | null): AddressDto {
   return new AddressDto({
     streetName: a.streetName, streetNumber: a.streetNumber, city: a.city, zip: a.zip,
     country: Number(a.country) as Country,
-    latitude: a.latitude === '' ? undefined : Number(a.latitude),
-    longitude: a.longitude === '' ? undefined : Number(a.longitude),
+    latitude: coords?.lat, longitude: coords?.lng,
   });
+}
+function coordsOf(a: { latitude?: number; longitude?: number } | undefined): LatLng | null {
+  return a && a.latitude != null && a.longitude != null ? { lat: a.latitude, lng: a.longitude } : null;
 }
 
 /** Reusable address field block bound to a react-hook-form path prefix —
@@ -124,16 +127,6 @@ function AddressFields({ control, prefix, errors }: {
         <Combobox label="Země" value={field.value || null} onChange={(v) => field.onChange(v ?? '')}
           options={COUNTRY_OPTIONS} clearable={false} error={Boolean(e?.country)} helperText={e?.country?.message} />
       )} />
-      <Stack direction="row" spacing={2}>
-        <Controller control={control} name={`${prefix}.latitude`} render={({ field }) => (
-          <TextField {...field} label="Zeměpisná šířka" type="number" fullWidth error={Boolean(e?.latitude)}
-            helperText={e?.latitude?.message ?? 'Volitelné — pro mapu'} />
-        )} />
-        <Controller control={control} name={`${prefix}.longitude`} render={({ field }) => (
-          <TextField {...field} label="Zeměpisná délka" type="number" fullWidth error={Boolean(e?.longitude)}
-            helperText={e?.longitude?.message ?? 'Volitelné'} />
-        )} />
-      </Stack>
     </Stack>
   );
 }
@@ -147,6 +140,7 @@ export function ClientFormDrawer({ open, client, onClose }: {
   const create = useCreateClient();
   const update = useUpdateClient();
   const editing = Boolean(client);
+  const [geocoding, setGeocoding] = useState(false);
 
   const { control, handleSubmit, reset, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -184,12 +178,33 @@ export function ClientFormDrawer({ open, client, onClose }: {
         description: c.description?.trim() || undefined,
         value: c.value!.trim(),
       }));
+
+    // Coordinates are derived from the address, not entered by hand: geocode
+    // each address on save and store the result. If geocoding fails, keep the
+    // previously stored coords (edit) so we never lose a known location.
+    setGeocoding(true);
+    let officialCoords: LatLng | null;
+    let contactCoords: LatLng | null = null;
+    try {
+      [officialCoords, contactCoords] = await Promise.all([
+        geocodeAddress({ ...v.official, country: Country[Number(v.official.country)] }),
+        v.hasContact ? geocodeAddress({ ...v.contact, country: Country[Number(v.contact.country)] }) : Promise.resolve(null),
+      ]);
+    } finally {
+      setGeocoding(false);
+    }
+    officialCoords = officialCoords ?? coordsOf(client?.officialAddress);
+    contactCoords = contactCoords ?? coordsOf(client?.contactAddress);
+    if (!officialCoords) {
+      enqueueSnackbar('Adresu se nepodařilo najít na mapě — GPS zůstane prázdné.', { variant: 'warning' });
+    }
+
     const common = {
       name: v.name,
       businessName: v.businessName?.trim() || undefined,
       region: Region[v.region as keyof typeof Region] as Region,
-      officialAddress: toAddressDto(v.official),
-      contactAddress: v.hasContact ? toAddressDto(v.contact) : undefined,
+      officialAddress: toAddressDto(v.official, officialCoords),
+      contactAddress: v.hasContact ? toAddressDto(v.contact, contactCoords) : undefined,
     };
     try {
       if (client?.id) {
@@ -210,7 +225,7 @@ export function ClientFormDrawer({ open, client, onClose }: {
     }
   });
 
-  const busy = create.isPending || update.isPending;
+  const busy = geocoding || create.isPending || update.isPending;
 
   return (
     <FormDrawer

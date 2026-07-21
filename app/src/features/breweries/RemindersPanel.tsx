@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Box, Stack, Typography, Button, IconButton, Chip, Tooltip, Card } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import dayjs from 'dayjs';
@@ -24,12 +25,14 @@ function ReminderCard({
   r,
   editable,
   onResolve,
+  onEdit,
   onDelete,
   resolving,
 }: {
   r: ReminderListItemDto;
   editable: boolean;
   onResolve: (r: ReminderListItemDto) => void;
+  onEdit: (r: ReminderListItemDto) => void;
   onDelete: (r: ReminderListItemDto) => void;
   resolving: boolean;
 }) {
@@ -83,6 +86,11 @@ function ReminderCard({
               Vyřešit
             </Button>
           )}
+          <Tooltip title="Upravit">
+            <IconButton size="small" onClick={() => onEdit(r)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Smazat">
             <IconButton size="small" onClick={() => onDelete(r)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
               <DeleteIcon fontSize="small" />
@@ -101,7 +109,11 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
   const del = useDeleteBreweryReminder(breweryId);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [formReminderId, setFormReminderId] = useState<string | undefined>(undefined);
   const [confirm, setConfirm] = useState<ReminderListItemDto | null>(null);
+
+  const openCreate = () => { setFormReminderId(undefined); setFormOpen(true); };
+  const openEdit = (r: ReminderListItemDto) => { setFormReminderId(r.id); setFormOpen(true); };
 
   const doResolve = async (r: ReminderListItemDto) => {
     if (!r.id) return;
@@ -130,7 +142,7 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
           <Button
             variant="outlined"
             startIcon={<AddIcon />}
-            onClick={() => setFormOpen(true)}
+            onClick={openCreate}
             sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
           >
             Nová připomínka
@@ -153,13 +165,13 @@ export function RemindersPanel({ breweryId, editable }: { breweryId: string; edi
         {(rows) => (
           <Stack spacing={1.25}>
             {rows.map((r) => (
-              <ReminderCard key={r.id} r={r} editable={editable} onResolve={doResolve} onDelete={setConfirm} resolving={resolve.isPending} />
+              <ReminderCard key={r.id} r={r} editable={editable} onResolve={doResolve} onEdit={openEdit} onDelete={setConfirm} resolving={resolve.isPending} />
             ))}
           </Stack>
         )}
       </QueryBoundary>
 
-      <ReminderFormDrawer open={formOpen} breweryId={breweryId} onClose={() => setFormOpen(false)} />
+      <ReminderFormDrawer open={formOpen} breweryId={breweryId} reminderId={formReminderId} onClose={() => setFormOpen(false)} />
       <ConfirmDialog
         open={confirm !== null}
         title="Smazat připomínku?"

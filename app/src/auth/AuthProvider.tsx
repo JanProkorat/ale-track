@@ -19,12 +19,20 @@ import { apiErrorMessage } from 'src/api/errors';
 const TOKEN_KEY = 'authToken';
 const REFRESH_KEY = 'refreshToken';
 const USER_KEY = 'aletrack.user';
+const KEYS = [TOKEN_KEY, REFRESH_KEY, USER_KEY];
+
+// Which Web Storage the current session lives in. "Remember me" persists to
+// localStorage (survives browser restarts); unchecked uses sessionStorage
+// (cleared when the tab/window closes). Tracked so token refreshes write back
+// to the same store the session was started in.
+let activeStore: Storage = localStorage;
 
 interface AuthContextValue {
   user: CurrentUser | null;
   isAuthenticated: boolean;
-  /** Real login against the backend. */
-  signIn: (userName: string, password: string) => Promise<void>;
+  /** Real login against the backend. `remember` persists the session across
+   * browser restarts (localStorage) vs. only for the tab session (sessionStorage). */
+  signIn: (userName: string, password: string, remember?: boolean) => Promise<void>;
   signOut: () => void;
   canSee: (m: ModuleKey) => boolean;
   canEdit: (m: ModuleKey) => boolean;
@@ -32,22 +40,30 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function persist(u: CurrentUser, access: string, refresh: string) {
-  localStorage.setItem(TOKEN_KEY, access);
-  localStorage.setItem(REFRESH_KEY, refresh);
-  localStorage.setItem(USER_KEY, JSON.stringify(u));
+function persist(u: CurrentUser, access: string, refresh: string, remember: boolean) {
+  activeStore = remember ? localStorage : sessionStorage;
+  // Never leave a copy behind in the other store.
+  const other = remember ? sessionStorage : localStorage;
+  KEYS.forEach((k) => other.removeItem(k));
+  activeStore.setItem(TOKEN_KEY, access);
+  activeStore.setItem(REFRESH_KEY, refresh);
+  activeStore.setItem(USER_KEY, JSON.stringify(u));
 }
 function clearStorage() {
-  [TOKEN_KEY, REFRESH_KEY, USER_KEY].forEach((k) => localStorage.removeItem(k));
+  [localStorage, sessionStorage].forEach((s) => KEYS.forEach((k) => s.removeItem(k)));
 }
 
 function restore(): CurrentUser | null {
   try {
-    const access = localStorage.getItem(TOKEN_KEY);
-    const refresh = localStorage.getItem(REFRESH_KEY);
-    if (access && refresh && !isTokenExpired(access)) {
-      setApiTokens(access, refresh);
-      return userFromToken(access);
+    // Prefer a remembered (localStorage) session, then a tab (sessionStorage) one.
+    for (const store of [localStorage, sessionStorage]) {
+      const access = store.getItem(TOKEN_KEY);
+      const refresh = store.getItem(REFRESH_KEY);
+      if (access && refresh && !isTokenExpired(access)) {
+        activeStore = store;
+        setApiTokens(access, refresh);
+        return userFromToken(access);
+      }
     }
     clearStorage();
   } catch {
@@ -71,8 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setAuthFailedHandler(() => signOut());
     setTokensRefreshedHandler((access, refresh) => {
-      localStorage.setItem(TOKEN_KEY, access);
-      localStorage.setItem(REFRESH_KEY, refresh);
+      // Write back to whichever store the session was started in.
+      activeStore.setItem(TOKEN_KEY, access);
+      activeStore.setItem(REFRESH_KEY, refresh);
     });
     return () => {
       setAuthFailedHandler(null);
@@ -80,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [signOut]);
 
-  const signIn = useCallback(async (userName: string, password: string) => {
+  const signIn = useCallback(async (userName: string, password: string, remember = true) => {
     let res;
     try {
       res = await api.loginEndpoint(new LoginUserDto({ userName, password }));
@@ -93,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = userFromToken(access);
     if (!u) throw new Error('Neplatný přihlašovací token.');
     setApiTokens(access, refresh);
-    persist(u, access, refresh);
+    persist(u, access, refresh, remember);
     qc.clear();
     setUser(u);
   }, [qc]);
