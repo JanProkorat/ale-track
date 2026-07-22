@@ -15,6 +15,7 @@ import { DELIVERY_STATUS, deliveryStateName } from 'src/lib/labels';
 import { type ProductDeliveryListItemDto } from 'src/generated/api-client';
 import { useDeliveries, useDelivery } from 'src/hooks/useDeliveries';
 import { PATHS } from 'src/routes/paths';
+import { backOrReplace } from 'src/routes/editorNav';
 import { DeliveryDetail } from './DeliveryDetail';
 import { DeliveryEditor } from './DeliveryEditor';
 
@@ -100,8 +101,10 @@ export function DeliveriesPage({ view }: { view?: 'create' | 'edit' }) {
         <DeliveryEditor
           mode={view}
           deliveryId={view === 'edit' ? id : undefined}
-          onDone={(savedId) => navigate(`${PATHS.deliveries}/${savedId}`)}
-          onCancel={() => navigate(view === 'edit' && id ? `${PATHS.deliveries}/${id}` : PATHS.deliveries)}
+          onDone={(savedId) => (view === 'edit'
+            ? backOrReplace(navigate, `${PATHS.deliveries}/${id}`)
+            : navigate(`${PATHS.deliveries}/${savedId}`, { replace: true }))}
+          onCancel={() => backOrReplace(navigate, view === 'edit' && id ? `${PATHS.deliveries}/${id}` : PATHS.deliveries)}
         />
       </PageContainer>
     );

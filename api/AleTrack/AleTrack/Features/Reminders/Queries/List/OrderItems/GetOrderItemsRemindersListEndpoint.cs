@@ -45,6 +45,7 @@ public sealed class GetOrderItemsRemindersListEndpoint(AleTrackDbContext dbConte
                     .OrderBy(r => r.Order.RequiredDeliveryDate)
                     .Select(i => new OrderItemReminderDto
                     {
+                        Id = i.PublicId,
                         OrderId = i.Order.PublicId,
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,

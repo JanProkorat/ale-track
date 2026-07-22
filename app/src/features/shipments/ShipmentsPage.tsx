@@ -11,11 +11,12 @@ import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { useAuth } from 'src/auth/AuthProvider';
-import { fmtDate } from 'src/lib/format';
+import { fmtDate, shipmentNumber } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName } from 'src/lib/labels';
 import { type OutgoingShipmentListItemDto } from 'src/generated/api-client';
 import { useShipments, useShipment } from 'src/hooks/useShipments';
 import { PATHS } from 'src/routes/paths';
+import { backOrReplace } from 'src/routes/editorNav';
 import { ShipmentDetail } from './ShipmentDetail';
 import { ShipmentEditor } from './ShipmentEditor';
 
@@ -34,6 +35,12 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
   const openCreate = () => navigate(`${PATHS.shipments}/new`);
 
   const columns: Column<OutgoingShipmentListItemDto>[] = [
+    {
+      key: 'number',
+      header: 'Číslo',
+      width: 110,
+      render: (s) => <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{shipmentNumber(s.id)}</Typography>,
+    },
     {
       key: 'name',
       header: 'Název',
@@ -75,8 +82,10 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
         <ShipmentEditor
           mode={view}
           shipmentId={view === 'edit' ? id : undefined}
-          onDone={(savedId) => navigate(`${PATHS.shipments}/${savedId}`)}
-          onCancel={() => navigate(view === 'edit' && id ? `${PATHS.shipments}/${id}` : PATHS.shipments)}
+          onDone={(savedId) => (view === 'edit'
+            ? backOrReplace(navigate, `${PATHS.shipments}/${id}`)
+            : navigate(`${PATHS.shipments}/${savedId}`, { replace: true }))}
+          onCancel={() => backOrReplace(navigate, view === 'edit' && id ? `${PATHS.shipments}/${id}` : PATHS.shipments)}
         />
       </PageContainer>
     );

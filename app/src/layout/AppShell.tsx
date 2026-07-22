@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
 import { CurrencyMenu } from './CurrencyMenu';
+import { NAV_GROUPS } from './nav-config';
+import { useAuth } from 'src/auth/AuthProvider';
+import { PATHS } from 'src/routes/paths';
+import { type ModuleKey } from 'src/auth/permissions';
+
+/** The module a path belongs to (longest matching nav prefix), or null for the
+ * dashboard / unknown paths. Used to gate direct-URL access. */
+function moduleForPath(pathname: string): ModuleKey | null {
+  const match = NAV_GROUPS
+    .flatMap((g) => g.items)
+    .filter((it) => it.path !== PATHS.dashboard && (pathname === it.path || pathname.startsWith(`${it.path}/`)))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+  return match ? match.key : null;
+}
 
 export function AppShell() {
+  const { canSee } = useAuth();
+  const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [currencyAnchor, setCurrencyAnchor] = useState<HTMLElement | null>(null);
@@ -21,6 +37,13 @@ export function AppShell() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Guard direct-URL access: if this path belongs to a module the user can't
+  // see, send them to the dashboard instead of rendering a page that only 403s.
+  const moduleKey = moduleForPath(pathname);
+  if (moduleKey && !canSee(moduleKey)) {
+    return <Navigate to={PATHS.dashboard} replace />;
+  }
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>

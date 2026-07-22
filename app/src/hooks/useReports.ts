@@ -11,10 +11,13 @@ export function useModuleCounts() {
 }
 
 /** Upcoming (unresolved) reminders across breweries and clients, grouped by
- * section — for the dashboard "Připomínky" card. */
-export function useUpcomingReminders() {
+ * section — for the dashboard "Připomínky" card and the header drawer. Pass
+ * `enabled` (e.g. the drawer's open flag) to defer the fetch until needed. */
+export function useUpcomingReminders(enabled = true) {
   return useQuery({
     queryKey: [...qk.reminders, 'upcoming'] as const,
     queryFn: ({ signal }) => api.getUpcomingRemindersEndpoint(signal),
+    enabled,
+    refetchOnWindowFocus: false,
   });
 }

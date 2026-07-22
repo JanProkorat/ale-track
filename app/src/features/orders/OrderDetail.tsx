@@ -1,13 +1,21 @@
-import { Box, Breadcrumbs, Button, Card, IconButton, Link, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Box, Breadcrumbs, Button, Card, IconButton, Link, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNoneOutlined';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutlined';
+import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
+import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
+import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, orderNumber } from 'src/lib/format';
-import { ORDER_STATUS, orderStateName, isReminderAdded } from 'src/lib/labels';
-import { type OrderDto } from 'src/generated/api-client';
+import { ORDER_STATUS, orderStateName, reminderStateName, reminderStateValue } from 'src/lib/labels';
+import { OrderItemReminderState, type OrderDto } from 'src/generated/api-client';
+import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
 
@@ -50,10 +58,36 @@ export function OrderDetail({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const setReminderState = useSetOrderItemReminderState();
   const items = order.orderItems ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
+
+  // Optimistic per-item reminder-state overrides, cleared when fresh order data
+  // arrives (the refetch after a successful update carries the persisted value).
+  const [override, setOverride] = useState<Map<string, OrderItemReminderState | undefined>>(new Map());
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; itemId: string } | null>(null);
+  useEffect(() => { setOverride(new Map()); }, [order]);
+
+  const effState = (id: string, wire?: OrderItemReminderState | string | number): OrderItemReminderState | undefined =>
+    override.has(id) ? override.get(id) : reminderStateValue(wire);
+
+  const setReminder = async (itemId: string, value: OrderItemReminderState | undefined) => {
+    setMenu(null);
+    const prev = override;
+    setOverride((m) => new Map(m).set(itemId, value));
+    try {
+      await setReminderState.mutateAsync({ itemId, orderId: order.id ?? undefined, state: value });
+      enqueueSnackbar('Hlídání položky aktualizováno.', { variant: 'success' });
+    } catch (e) {
+      setOverride(prev);
+      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+    }
+  };
+
+  const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
   return (
     <Box>
@@ -110,17 +144,31 @@ export function OrderDetail({
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Objednávka nemá žádné položky.</Typography>
             ) : (
               <Box sx={{ '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
-                {items.map((it) => (
-                  <Box key={it.id}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700 }}>{it.productName}</Typography>
-                      {isReminderAdded(it.reminderState) && (
-                        <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 700 }}>hlídáno</Typography>
+                {items.map((it) => {
+                  const rs = reminderStateName(effState(it.id ?? '', it.reminderState));
+                  return (
+                    <Box key={it.id}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700 }}>{it.productName}</Typography>
+                        {rs === 'Added' && <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 700 }}>hlídáno</Typography>}
+                        {rs === 'Resolved' && <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>vyřešeno</Typography>}
+                      </Box>
+                      <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>
+                      {editable && canEditOrder && (
+                        <Tooltip title="Hlídání položky">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => setMenu({ anchor: e.currentTarget, itemId: it.id ?? '' })}
+                            sx={{ ml: 1.5, color: rs === 'Added' ? 'info.main' : rs === 'Resolved' ? 'success.main' : 'text.disabled' }}
+                            aria-label="Hlídání položky"
+                          >
+                            {rs === 'Added' ? <NotificationsActiveIcon fontSize="small" /> : <NotificationsNoneIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>
-                  </Box>
-                ))}
+                  );
+                })}
               </Box>
             )}
           </Box>
@@ -156,6 +204,24 @@ export function OrderDetail({
           </Card>
         </Stack>
       </Box>
+
+      <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+        <MenuItem onClick={() => menu && setReminder(menu.itemId, OrderItemReminderState.Added)}>
+          <ListItemIcon><NotificationsActiveIcon fontSize="small" sx={{ color: 'info.main' }} /></ListItemIcon>
+          <ListItemText>Hlídat</ListItemText>
+          {menuState === 'Added' && <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />}
+        </MenuItem>
+        <MenuItem onClick={() => menu && setReminder(menu.itemId, OrderItemReminderState.Resolved)}>
+          <ListItemIcon><CheckCircleIcon fontSize="small" sx={{ color: 'success.main' }} /></ListItemIcon>
+          <ListItemText>Vyřešeno</ListItemText>
+          {menuState === 'Resolved' && <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />}
+        </MenuItem>
+        <MenuItem onClick={() => menu && setReminder(menu.itemId, undefined)}>
+          <ListItemIcon><NotificationsOffIcon fontSize="small" sx={{ color: 'text.disabled' }} /></ListItemIcon>
+          <ListItemText>Nehlídat</ListItemText>
+          {menuState === 'None' && <CheckIcon fontSize="small" color="primary" sx={{ ml: 1 }} />}
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

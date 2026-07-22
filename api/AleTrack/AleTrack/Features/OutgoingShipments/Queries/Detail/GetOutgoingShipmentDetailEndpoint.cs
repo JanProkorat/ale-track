@@ -141,6 +141,14 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Name = ei.Description
                     })
                     .ToList(),
+                Returns = os.Returns
+                    .Select(r => new ShipmentReturnDto
+                    {
+                        Id = r.PublicId,
+                        Name = r.Name,
+                        Quantity = r.Quantity,
+                    })
+                    .ToList(),
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Alert, Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlineOutlined';
-import ShieldIcon from '@mui/icons-material/ShieldOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
@@ -148,15 +147,6 @@ export function UsersPage() {
           </>
         }
       />
-
-      <Alert
-        severity="warning"
-        icon={<ShieldIcon />}
-        sx={{ mb: 2, bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'text.secondary', border: 1, borderColor: (t) => t.vars!.palette.brand.amberTint }}
-      >
-        <strong>Granulární oprávnění.</strong> U každého uživatele lze nastavit přístup ke každému
-        modulu zvlášť — bez přístupu / jen čtení / úpravy.
-      </Alert>
 
       <Card sx={{ p: { xs: 1, sm: 1.5 } }}>
         <QueryBoundary

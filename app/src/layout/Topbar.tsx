@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, IconButton, Tooltip, Badge, ButtonBase, Typography } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SearchIcon from '@mui/icons-material/Search';
@@ -7,8 +8,15 @@ import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useThemeMode } from 'src/theme/ThemeProvider';
 import { useCurrency } from 'src/providers/CurrencyProvider';
+import { RemindersDrawer } from 'src/features/reminders/RemindersDrawer';
 
 export const TOPBAR_H = 62;
+
+// Show the platform-correct search shortcut hint (⌘K on Apple, Ctrl+K elsewhere).
+// The handler itself accepts both metaKey and ctrlKey regardless.
+const IS_MAC = typeof navigator !== 'undefined'
+  && /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent);
+const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 
 export function Topbar({
   onToggleSidebar,
@@ -21,6 +29,7 @@ export function Topbar({
 }) {
   const { resolved, toggle } = useThemeMode();
   const { currency } = useCurrency();
+  const [remindersOpen, setRemindersOpen] = useState(false);
 
   return (
     <Box
@@ -78,7 +87,7 @@ export function Topbar({
             bgcolor: 'background.paper',
           }}
         >
-          ⌘K
+          {SEARCH_SHORTCUT}
         </Box>
       </ButtonBase>
 
@@ -106,7 +115,7 @@ export function Topbar({
       </ButtonBase>
 
       <Tooltip title="Připomínky">
-        <IconButton size="small">
+        <IconButton size="small" onClick={() => setRemindersOpen(true)} aria-label="Připomínky">
           <Badge color="error" variant="dot">
             <NotificationsNoneIcon />
           </Badge>
@@ -118,6 +127,8 @@ export function Topbar({
           {resolved === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
         </IconButton>
       </Tooltip>
+
+      <RemindersDrawer open={remindersOpen} onClose={() => setRemindersOpen(false)} />
     </Box>
   );
 }

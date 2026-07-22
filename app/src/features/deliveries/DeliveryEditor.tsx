@@ -40,12 +40,24 @@ import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useDelivery, useCreateDelivery, useUpdateDelivery } from 'src/hooks/useDeliveries';
+import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 
 const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
 
 interface DraftItem { productId: string; quantity: number }
 interface DraftStop { key: string; publicId?: string; breweryId: string; note: string; items: DraftItem[] }
+
+/** Serialized snapshot of the savable state, for unsaved-change detection. */
+function serializeDelivery(date: Dayjs | null, vehicleId: string | null, driverIds: string[], note: string, stops: DraftStop[]): string {
+  return JSON.stringify({
+    date: date ? date.toISOString() : null,
+    vehicleId,
+    driverIds: [...driverIds].sort(),
+    note: note.trim(),
+    stops: stops.map((s) => ({ breweryId: s.breweryId, note: s.note.trim(), items: s.items })),
+  });
+}
 
 let seq = 0;
 const newKey = () => `ds-${++seq}`;
@@ -238,25 +250,37 @@ export function DeliveryEditor({
   const [stops, setStops] = useState<DraftStop[]>([]);
   const [pickBrewery, setPickBrewery] = useState<string | null>(null);
   const loadedRef = useRef(false);
+  const baselineRef = useRef<string | null>(null);
 
   // Preserve the existing delivery's state across an edit save.
   const editState = deliveryQuery.data?.state;
 
   useEffect(() => {
+    if (mode === 'create') baselineRef.current = serializeDelivery(deliveryDate, vehicleId, driverIds, note, stops);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (mode !== 'edit' || loadedRef.current || !deliveryQuery.data) return;
     const d = deliveryQuery.data;
     loadedRef.current = true;
-    setDeliveryDate(d.deliveryDate ? dayjs(d.deliveryDate) : null);
-    setVehicleId(d.vehicle?.id ?? null);
-    setDriverIds((d.drivers ?? []).map((dr) => dr.id ?? '').filter(Boolean));
-    setNote(d.note ?? '');
-    setStops((d.stops ?? []).map((s) => ({
+    const loadedDate = d.deliveryDate ? dayjs(d.deliveryDate) : null;
+    const loadedVehicle = d.vehicle?.id ?? null;
+    const loadedDrivers = (d.drivers ?? []).map((dr) => dr.id ?? '').filter(Boolean);
+    const loadedNote = d.note ?? '';
+    const loadedStops: DraftStop[] = (d.stops ?? []).map((s) => ({
       key: newKey(),
       publicId: s.id,
       breweryId: s.brewery?.id ?? '',
       note: s.note ?? '',
       items: (s.products ?? []).map((p) => ({ productId: p.productId ?? '', quantity: p.quantity ?? 1 })),
-    })));
+    }));
+    setDeliveryDate(loadedDate);
+    setVehicleId(loadedVehicle);
+    setDriverIds(loadedDrivers);
+    setNote(loadedNote);
+    setStops(loadedStops);
+    baselineRef.current = serializeDelivery(loadedDate, loadedVehicle, loadedDrivers, loadedNote, loadedStops);
   }, [mode, deliveryQuery.data]);
 
   const breweries = useMemo(() => breweriesQuery.data ?? [], [breweriesQuery.data]);
@@ -290,11 +314,17 @@ export function DeliveryEditor({
 
   const busy = createDelivery.isPending || updateDelivery.isPending;
 
-  const handleSave = async () => {
-    if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jeden pivovar', { variant: 'warning' }); return; }
-    if (stops.some((s) => s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return; }
-    if (!deliveryDate) { enqueueSnackbar('Vyberte datum dovozu', { variant: 'warning' }); return; }
+  const snapshot = serializeDelivery(deliveryDate, vehicleId, driverIds, note, stops);
+  const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
+  const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
+
+  // Persist only (no navigation); returns the saved id or null on failure.
+  const persist = async (): Promise<string | null> => {
+    if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jeden pivovar', { variant: 'warning' }); return null; }
+    if (stops.some((s) => s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return null; }
+    if (!deliveryDate) { enqueueSnackbar('Vyberte datum dovozu', { variant: 'warning' }); return null; }
     try {
+      let savedId: string;
       if (mode === 'edit' && deliveryId) {
         await updateDelivery.mutateAsync({
           id: deliveryId,
@@ -312,10 +342,10 @@ export function DeliveryEditor({
             })),
           }),
         });
+        savedId = deliveryId;
         enqueueSnackbar('Dovoz uložen.', { variant: 'success' });
-        onDone(deliveryId);
       } else {
-        const newId = await createDelivery.mutateAsync(new CreateProductsDeliveryDto({
+        savedId = await createDelivery.mutateAsync(new CreateProductsDeliveryDto({
           deliveryDate: deliveryDate.toDate(),
           driverIds,
           vehicleId: vehicleId ?? undefined,
@@ -327,11 +357,18 @@ export function DeliveryEditor({
           })),
         }));
         enqueueSnackbar('Dovoz vytvořen.', { variant: 'success' });
-        onDone(newId);
       }
+      baselineRef.current = snapshot; // now clean
+      return savedId;
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+      return null;
     }
+  };
+
+  const handleSave = async () => {
+    const id = await persist();
+    if (id != null) { allowNext(); onDone(id); }
   };
 
   const title = mode === 'edit' ? `Úprava dovozu ${deliveryNumber(deliveryId)}` : 'Nový dovoz';
@@ -472,6 +509,8 @@ export function DeliveryEditor({
           </Card>
         </Stack>
       </Box>
+
+      <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
   );
 }

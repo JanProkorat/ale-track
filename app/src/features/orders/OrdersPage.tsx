@@ -20,6 +20,7 @@ import { ORDER_STATUS, orderStateName } from 'src/lib/labels';
 import { type OrderListItemDto } from 'src/generated/api-client';
 import { useOrders, useOrder, useDeleteOrder } from 'src/hooks/useOrders';
 import { PATHS } from 'src/routes/paths';
+import { backOrReplace } from 'src/routes/editorNav';
 import { OrderDetail } from './OrderDetail';
 import { OrderEditor } from './OrderEditor';
 
@@ -164,8 +165,10 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
         <OrderEditor
           mode={view}
           orderId={view === 'edit' ? id : undefined}
-          onDone={(savedId) => navigate(`${PATHS.orders}/${savedId}`)}
-          onCancel={() => navigate(view === 'edit' && id ? `${PATHS.orders}/${id}` : PATHS.orders)}
+          onDone={(savedId) => (view === 'edit'
+            ? backOrReplace(navigate, `${PATHS.orders}/${id}`)
+            : navigate(`${PATHS.orders}/${savedId}`, { replace: true }))}
+          onCancel={() => backOrReplace(navigate, view === 'edit' && id ? `${PATHS.orders}/${id}` : PATHS.orders)}
         />
       </PageContainer>
     );

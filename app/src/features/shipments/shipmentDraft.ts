@@ -13,6 +13,7 @@ import {
   InventoryExtraShipmentDto,
   ClientExtraShipmentDto,
   CustomExtraShipmentDto,
+  ShipmentReturnDto,
   OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
@@ -23,6 +24,7 @@ export interface ShipmentDraft {
   inventoryExtraShipments: InventoryExtraShipmentDto[];
   clientExtraShipments: ClientExtraShipmentDto[];
   customExtraShipments: CustomExtraShipmentDto[];
+  returns: ShipmentReturnDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -81,5 +83,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       dto.description = e.name;
       return dto;
     }),
+    returns: (shipment.returns ?? []).map((r) => new ShipmentReturnDto({ id: r.id, name: r.name, quantity: r.quantity })),
   };
 }

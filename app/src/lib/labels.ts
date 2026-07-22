@@ -126,6 +126,23 @@ export function isReminderAdded(s?: OrderItemReminderState | string | number): b
   return enumName(OrderItemReminderState as unknown as Record<string, string | number>, s) === 'Added';
 }
 
+export type ReminderName = 'None' | 'Added' | 'Resolved';
+
+/** The order-item reminder state's member name, resolved from either wire form
+ * ("None" when unset). */
+export function reminderStateName(s?: OrderItemReminderState | string | number): ReminderName {
+  if (s == null) return 'None';
+  const name = enumName(OrderItemReminderState as unknown as Record<string, string | number>, s);
+  return name === 'Resolved' ? 'Resolved' : name === 'Added' ? 'Added' : 'None';
+}
+
+/** Normalize an order-item reminder state to the numeric enum (or undefined for
+ * "not watched") for write DTOs. */
+export function reminderStateValue(s?: OrderItemReminderState | string | number): OrderItemReminderState | undefined {
+  const n = reminderStateName(s);
+  return n === 'Added' ? OrderItemReminderState.Added : n === 'Resolved' ? OrderItemReminderState.Resolved : undefined;
+}
+
 /** The OutgoingShipmentState enum's member name (e.g. "InTransit"), resolved
  * from either wire representation — indexes both `L.shipState` and
  * `SHIP_STATUS`. */

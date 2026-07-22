@@ -64,6 +64,11 @@ public sealed record OutgoingShipmentDetailDto
     /// List of custom extra product items included in the shipment
     /// </summary>
     public List<OutgoingShipmentCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back (empty kegs, bottles…)
+    /// </summary>
+    public List<ShipmentReturnDto> Returns { get; set; } = [];
 }
 
 /// <summary>

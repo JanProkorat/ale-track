@@ -41,7 +41,7 @@ export function FormDrawer({
       anchor="right"
       open={open}
       onClose={busy ? undefined : onClose}
-      slotProps={{ paper: { sx: { width: { xs: '100%', sm: width }, maxWidth: '100%' } } }}
+      slotProps={{ paper: { sx: { width: { xs: '100%', sm: width }, maxWidth: '100%', bgcolor: 'background.default', backgroundImage: 'none' } } }}
     >
       <Box
         component="form"

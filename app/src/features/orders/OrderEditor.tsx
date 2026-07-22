@@ -37,6 +37,7 @@ import {
 import { useClients } from 'src/hooks/useClients';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
+import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 
 const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
@@ -45,6 +46,11 @@ interface CartLine {
   productId: string;
   quantity: number;
   reminderState?: OrderItemReminderState;
+}
+
+/** Serialized snapshot of the savable form state, for unsaved-change detection. */
+function serializeForm(clientId: string | null, date: Dayjs | null, cart: CartLine[]): string {
+  return JSON.stringify({ clientId, date: date ? date.toISOString() : null, cart });
 }
 interface NameGroup {
   name: string;
@@ -231,25 +237,27 @@ function BreweryGroupPanel({
   onChange: (productId: string, delta: number) => void;
 }) {
   return (
-    <Box sx={{ mb: 1.25 }}>
+    // The whole brewery — header + its products — is one bordered card, so the
+    // products clearly live *inside* the brewery rather than beside it.
+    <Box sx={{ mb: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
       <Box
         component="button"
         type="button"
         onClick={onToggle}
         sx={{
           display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left',
-          bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1.5, px: 1.5, py: 1.1,
-          font: 'inherit', cursor: 'pointer', color: 'text.primary',
+          bgcolor: 'action.hover', border: 0, borderBottom: open ? 1 : 0, borderColor: 'divider',
+          px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
         }}
       >
+        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
         <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
         <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{brewery.breweryName}</Typography>
         <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{products.length}</Typography>
         <Box sx={{ flex: 1 }} />
-        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
       </Box>
       {open && (
-        <Box sx={{ mt: 1.1 }}>
+        <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
           <CatalogGroupList
             products={products}
             historyBadge={false}
@@ -299,17 +307,30 @@ export function OrderEditor({
   const [brewOpen, setBrewOpen] = useState<Record<string, boolean>>({});
   const autoTabClientRef = useRef<string | null>(null);
   const loadedOrderRef = useRef(false);
+  // Baseline of the savable state to compare against for unsaved changes.
+  const baselineRef = useRef<string | null>(null);
+
+  // Create mode has a stable initial baseline right away; edit mode sets it once
+  // the order loads (below).
+  useEffect(() => {
+    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Preload the draft from the existing order once its detail arrives (edit mode).
   useEffect(() => {
     if (mode !== 'edit' || loadedOrderRef.current || !orderQuery.data) return;
     const o = orderQuery.data;
     loadedOrderRef.current = true;
-    setClientId(o.client?.id ?? null);
-    setRequiredDate(o.requiredDeliveryDate ? dayjs(o.requiredDeliveryDate) : null);
-    setCart((o.orderItems ?? []).map((it) => ({ productId: it.productId ?? '', quantity: it.quantity ?? 1, reminderState: it.reminderState })));
+    const loadedClientId = o.client?.id ?? null;
+    const loadedDate = o.requiredDeliveryDate ? dayjs(o.requiredDeliveryDate) : null;
+    const loadedCart: CartLine[] = (o.orderItems ?? []).map((it) => ({ productId: it.productId ?? '', quantity: it.quantity ?? 1, reminderState: it.reminderState }));
+    setClientId(loadedClientId);
+    setRequiredDate(loadedDate);
+    setCart(loadedCart);
     setFallbackNames(Object.fromEntries((o.orderItems ?? []).map((it) => [it.productId ?? '', it.productName ?? '—'])));
-    autoTabClientRef.current = o.client?.id ?? null;
+    autoTabClientRef.current = loadedClientId;
+    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart);
   }, [mode, orderQuery.data]);
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
@@ -393,10 +414,16 @@ export function OrderEditor({
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
-  const handleSave = async () => {
-    if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return; }
-    if (cart.length === 0) { enqueueSnackbar('Přidejte alespoň jeden produkt', { variant: 'warning' }); return; }
+  const snapshot = serializeForm(clientId, requiredDate, cart);
+  const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
+  const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
+
+  // Persist only (no navigation); returns the saved id or null on failure.
+  const persist = async (): Promise<string | null> => {
+    if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
+    if (cart.length === 0) { enqueueSnackbar('Přidejte alespoň jeden produkt', { variant: 'warning' }); return null; }
     try {
+      let savedId: string;
       if (mode === 'edit' && orderId) {
         await updateOrder.mutateAsync({
           id: orderId,
@@ -406,20 +433,27 @@ export function OrderEditor({
             orderItems: cart.map((c) => new UpdateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
           }),
         });
+        savedId = orderId;
         enqueueSnackbar('Objednávka uložena.', { variant: 'success' });
-        onDone(orderId);
       } else {
-        const newId = await createOrder.mutateAsync(new CreateOrderDto({
+        savedId = await createOrder.mutateAsync(new CreateOrderDto({
           clientId,
           requiredDeliveryDate: requiredDate ? requiredDate.toDate() : undefined,
           orderItems: cart.map((c) => new CreateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
         }));
         enqueueSnackbar('Objednávka vytvořena.', { variant: 'success' });
-        onDone(newId);
       }
+      baselineRef.current = snapshot; // now clean
+      return savedId;
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+      return null;
     }
+  };
+
+  const handleSave = async () => {
+    const id = await persist();
+    if (id != null) { allowNext(); onDone(id); }
   };
 
   const title = mode === 'edit' ? `Úprava ${orderNumber(orderId)}` : 'Nová objednávka';
@@ -646,6 +680,8 @@ export function OrderEditor({
           </Card>
         </Stack>
       </Box>
+
+      <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
   );
 }

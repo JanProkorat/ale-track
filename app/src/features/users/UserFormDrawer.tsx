@@ -14,10 +14,12 @@ import {
 import { useCreateUser, useUpdateUser } from 'src/hooks/useUsers';
 import { PERM_MODULES, permsToDtos, dtosToPerms, isAdminUser } from './permissionModel';
 
-const LEVELS: { value: PermissionLevel; label: string }[] = [
-  { value: 'none', label: 'Bez přístupu' },
-  { value: 'view', label: 'Jen čtení' },
-  { value: 'edit', label: 'Úpravy' },
+// Each access level has its own semantic colour (matching the prototype):
+// no access = neutral, read-only = blue, edit = green.
+const LEVELS: { value: PermissionLevel; label: string; color: 'default' | 'info' | 'success' }[] = [
+  { value: 'none', label: 'Bez přístupu', color: 'default' },
+  { value: 'view', label: 'Jen čtení', color: 'info' },
+  { value: 'edit', label: 'Úpravy', color: 'success' },
 ];
 
 export function UserFormDrawer({
@@ -158,6 +160,7 @@ export function UserFormDrawer({
                         <TableCell key={l.value} align="center" sx={{ py: 0.25 }}>
                           <Radio
                             size="small"
+                            color={l.color}
                             checked={current === l.value}
                             onChange={() => setPerms((p) => ({ ...p, [m.key]: l.value }))}
                           />

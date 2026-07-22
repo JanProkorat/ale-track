@@ -38,4 +38,9 @@ public sealed record CreateOutgoingShipmentDto
     /// Via points that shape the road route (not visited stops).
     /// </summary>
     public List<RoutePointDto> RouteViaPoints { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back (empty kegs, bottles…).
+    /// </summary>
+    public List<ShipmentReturnDto> Returns { get; set; } = [];
 }

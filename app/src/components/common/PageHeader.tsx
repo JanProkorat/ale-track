@@ -15,11 +15,11 @@ export function PageHeader({
   return (
     <Stack
       direction="row"
-      alignItems="flex-end"
+      alignItems="center"
       spacing={2}
       flexWrap="wrap"
       useFlexGap
-      sx={{ mb: 2.75 }}
+      sx={{ mb: 1.5 }}
     >
       <Box sx={{ minWidth: 0 }}>
         {eyebrow && (

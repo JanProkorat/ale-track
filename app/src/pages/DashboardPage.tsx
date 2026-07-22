@@ -1,6 +1,8 @@
-import { useMemo, type ReactNode } from 'react';
-import { Box, Button, Card, Chip, Stack, Tooltip, Typography } from '@mui/material';
+import { Fragment, useMemo, type ReactNode } from 'react';
+import { Box, Button, Card, Chip, Stack, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
@@ -100,17 +102,24 @@ const TILE_CONFIG: Partial<Record<ModuleKey, { field: ModuleCountField; tone: St
 };
 
 const WEEKDAY_SHORT = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
-const AVAILABILITY_DAYS = 14;
 
 const fullName = (d: DriverListItemDto) => [d.firstName, d.lastName].filter(Boolean).join(' ');
 
-/** True if a driver's availability range covers the given calendar day
- * (inclusive on both ends, compared by calendar day not time-of-day). */
-function covers(day: Dayjs, from?: Date, until?: Date): boolean {
-  if (!from || !until) return false;
-  const start = dayjs(from).startOf('day');
-  const end = dayjs(until).startOf('day');
-  return !day.isBefore(start) && !day.isAfter(end);
+/** Hour label for an availability edge — "07", or "7:30" when not on the hour. */
+function hourLabel(d?: Date): string {
+  if (!d) return '';
+  const m = dayjs(d);
+  return m.minute() === 0 ? m.format('HH') : m.format('H:mm');
+}
+
+/** A driver's availability window on a given day (earliest start → latest end),
+ * or null if not available that day. */
+function daySlots(driver: DriverListItemDto, day: Dayjs): { from: Date; until: Date } | null {
+  const slots = (driver.availableDates ?? []).filter((a) => a.from && dayjs(a.from).isSame(day, 'day'));
+  if (slots.length === 0) return null;
+  const froms = slots.map((s) => s.from as Date).sort((a, b) => a.getTime() - b.getTime());
+  const untils = slots.map((s) => (s.until ?? s.from) as Date).sort((a, b) => a.getTime() - b.getTime());
+  return { from: froms[0], until: untils[untils.length - 1] };
 }
 
 export function DashboardPage() {
@@ -134,10 +143,8 @@ export function DashboardPage() {
     (it) => TILE_CONFIG[it.key] !== undefined && canSee(it.key)
   );
 
-  const days = useMemo(
-    () => Array.from({ length: AVAILABILITY_DAYS }, (_, i) => dayjs().startOf('day').add(i, 'day')),
-    []
-  );
+  // This week's 7 days, starting today (matching the prototype's availability grid).
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => today.add(i, 'day')), [today]);
 
   // "Tento týden" — upcoming shipments + deliveries (from today on), by date.
   const weekRows = useMemo(() => {
@@ -219,9 +226,12 @@ export function DashboardPage() {
         </QueryBoundary>
       </Box>
 
+      {/* Driver availability is pulled above the grid (order: -1) so it sits
+          above the low-stock card, while staying full-width. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {(showWeek || showLowStock || showReminders) && (
         <Box sx={{
-          display: 'grid', gap: 2, alignItems: 'start', mb: 3,
+          display: 'grid', gap: 2, alignItems: 'start',
           gridTemplateColumns: { xs: '1fr', md: showReminders && (showWeek || showLowStock) ? '1.4fr 1fr' : '1fr' },
         }}>
           {(showWeek || showLowStock) && (
@@ -320,18 +330,18 @@ export function DashboardPage() {
         </Box>
       )}
 
-      <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          flexWrap="wrap"
-          spacing={1}
-          sx={{ mb: 2 }}
-        >
-          <Typography variant="h6">Dostupnost řidičů</Typography>
-          <Button component={RouterLink} to={PATHS.drivers} size="small">
-            Otevřít řidiče
+      <Card sx={{ p: { xs: 2, sm: 2.5 }, order: -1 }}>
+        <Stack direction="row" alignItems="center" spacing={1.25} flexWrap="wrap" sx={{ mb: 2 }}>
+          <CalendarMonthOutlinedIcon sx={{ color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ flex: 1 }}>Dostupnost řidičů tento týden</Typography>
+          <Button
+            component={RouterLink}
+            to={PATHS.drivers}
+            size="small"
+            startIcon={<CalendarMonthOutlinedIcon />}
+            sx={{ color: 'text.primary', borderColor: 'divider', border: 1, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+          >
+            Celý kalendář
           </Button>
         </Stack>
 
@@ -351,70 +361,59 @@ export function DashboardPage() {
           }
         >
           {(drivers) => (
-            <Box>
-              <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1 }}>
-                {days.map((day) => {
-                  const available = drivers.filter((d) =>
-                    (d.availableDates ?? []).some((a) => covers(day, a.from, a.until))
-                  );
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box sx={{ minWidth: 720, display: 'grid', gridTemplateColumns: `minmax(130px, 1.4fr) repeat(7, minmax(72px, 1fr))` }}>
+                {/* Header row */}
+                <Box sx={{ px: 1.5, py: 1.25, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'flex-end' }}>
+                  <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.disabled' }}>Řidič</Typography>
+                </Box>
+                {weekDays.map((d) => {
+                  const isToday = d.isSame(today, 'day');
                   return (
-                    <Box
-                      key={day.toISOString()}
-                      sx={{
-                        minWidth: 64,
-                        flex: '0 0 auto',
-                        textAlign: 'center',
-                        borderRadius: 1.5,
-                        bgcolor: 'background.default',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        py: 1,
-                        px: 0.5,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-                        {day.format('D. M.')}
+                    <Box key={d.toISOString()} sx={{ px: 1, py: 1.25, borderBottom: 1, borderColor: 'divider', textAlign: 'center' }}>
+                      <Typography sx={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: isToday ? 'warning.main' : 'text.disabled' }}>
+                        {WEEKDAY_SHORT[d.day()]}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                        {WEEKDAY_SHORT[day.day()]}
+                      <Typography sx={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: isToday ? 'warning.dark' : 'text.primary' }}>
+                        {d.date()}.
                       </Typography>
-                      {available.length > 0 ? (
-                        <Stack direction="row" spacing={0.5} justifyContent="center" flexWrap="wrap">
-                          {available.map((d) => (
-                            <Tooltip key={d.id} title={fullName(d)}>
-                              <Box
-                                sx={{
-                                  width: 10,
-                                  height: 10,
-                                  borderRadius: '50%',
-                                  bgcolor: d.color || 'grey.400',
-                                }}
-                              />
-                            </Tooltip>
-                          ))}
-                        </Stack>
-                      ) : (
-                        <Typography color="text.disabled">—</Typography>
-                      )}
                     </Box>
                   );
                 })}
-              </Box>
 
-              <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mt: 2 }}>
-                {drivers.map((d) => (
-                  <Stack key={d.id} direction="row" spacing={0.6} alignItems="center">
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: d.color || 'grey.400' }} />
-                    <Typography variant="caption" color="text.secondary">
-                      {fullName(d)}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
+                {/* One row per driver */}
+                {drivers.map((dr, i) => {
+                  const color = dr.color || '#8791A0';
+                  const rowBorder = i === 0 ? {} : { borderTop: 1, borderColor: 'divider' };
+                  return (
+                    <Fragment key={dr.id ?? fullName(dr)}>
+                      <Box sx={{ ...rowBorder, px: 1.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{fullName(dr)}</Typography>
+                      </Box>
+                      {weekDays.map((d) => {
+                        const slot = daySlots(dr, d);
+                        return (
+                          <Box key={d.toISOString()} sx={{ ...rowBorder, px: 1, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {slot ? (
+                              <Box component="span" sx={{ px: 1, py: 0.4, borderRadius: 1, fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', bgcolor: alpha(color, 0.16), color, whiteSpace: 'nowrap' }}>
+                                {hourLabel(slot.from)}–{hourLabel(slot.until)}
+                              </Box>
+                            ) : (
+                              <Typography component="span" color="text.disabled">—</Typography>
+                            )}
+                          </Box>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </Box>
             </Box>
           )}
         </QueryBoundary>
       </Card>
+      </Box>
     </PageContainer>
   );
 }

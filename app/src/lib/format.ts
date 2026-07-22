@@ -53,3 +53,10 @@ export function deliveryNumber(id?: string): string {
   if (!id) return '—';
   return `#${id.slice(-6).toUpperCase()}`;
 }
+
+/** Short display number for an outgoing shipment, derived from its id — same
+ * convention as orderNumber/deliveryNumber. */
+export function shipmentNumber(id?: string): string {
+  if (!id) return '—';
+  return `#${id.slice(-6).toUpperCase()}`;
+}
