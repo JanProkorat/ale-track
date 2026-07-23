@@ -69,11 +69,12 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
     private async Task<List<DeliveryStop>> CreateDeliveryStopsAsync(List<CreateProductDeliveryStopDto> requestStops, CancellationToken cancellationToken)
     {
         var breweryIds = requestStops
-            .Select(s => s.BreweryId)
+            .Where(s => s.Kind == DeliveryStopKind.Brewery)
+            .Select(s => s.BreweryId!.Value)
             .ToList();
-        
+
         var breweries = await GetBreweriesAsync(breweryIds, cancellationToken);
-        
+
         var productIds = requestStops
             .SelectMany(s => s.Products)
             .Select(p => p.ProductId)
@@ -81,17 +82,34 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
             .ToList();
 
         var products = await GetProductsAsync(productIds, cancellationToken);
-        
+
         var deliveryStops = new List<DeliveryStop>();
 
-        foreach (var requestStop in requestStops)
+        foreach (var (requestStop, index) in requestStops.Select((s, i) => (s, i)))
         {
+            if (requestStop.Kind == DeliveryStopKind.Custom)
+            {
+                deliveryStops.Add(new DeliveryStop
+                {
+                    Order = index,
+                    Kind = DeliveryStopKind.Custom,
+                    Label = requestStop.Label,
+                    Note = requestStop.Note,
+                    Latitude = requestStop.Latitude,
+                    Longitude = requestStop.Longitude
+                });
+                continue;
+            }
+
             var relatedProducts = products
                 .Where(p => requestStop.Products.Any(dp => dp.ProductId == p.PublicId))
                 .ToList();
-            
+
             deliveryStops.Add(new DeliveryStop
             {
+                Order = index,
+                Kind = DeliveryStopKind.Brewery,
+                Note = requestStop.Note,
                 Brewery = breweries.First(b => b.PublicId == requestStop.BreweryId),
                 Items = requestStop.Products
                     .Select(p => new DeliveryItem
@@ -103,7 +121,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
                     .ToList()
             });
         }
-        
+
         return deliveryStops;
     }
 

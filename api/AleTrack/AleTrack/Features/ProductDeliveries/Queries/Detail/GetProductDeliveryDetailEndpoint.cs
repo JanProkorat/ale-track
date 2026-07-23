@@ -59,12 +59,17 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
                     .Select(dr => new DriverInfoDto(dr.PublicId, dr.FirstName, dr.LastName))
                     .ToList(),
                 Stops = d.Stops
-                    .OrderBy(s => s.Brewery.DisplayOrder)
+                    .OrderBy(s => s.Order)
                     .Select(s => new ProductDeliveryStopDto
                     {
                         Id = s.PublicId,
+                        Order = s.Order,
+                        Kind = s.Kind,
                         Note = s.Note,
-                        Brewery = new BreweryInfoDto(s.Brewery.PublicId, s.Brewery.Name),
+                        Brewery = s.Brewery != null ? new BreweryInfoDto(s.Brewery.PublicId, s.Brewery.Name) : null,
+                        Label = s.Label,
+                        Latitude = s.Latitude,
+                        Longitude = s.Longitude,
                         Products = s.Items
                             .Select(i => new ProductDeliveryItemDto(i.Product.PublicId, i.Product.Name, i.Quantity, i.Note))
                             .ToList()
