@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -10,19 +11,18 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
-  InputAdornment,
-  List,
-  ListItemButton,
-  ListItemText,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
-import SearchIcon from '@mui/icons-material/SearchOutlined';
 import { useSnackbar } from 'notistack';
 import { DEPOT, searchAddresses, type AddressHit } from 'src/lib/geo';
+
+/** Min. characters before an address search fires, and the debounce after the
+ * last keystroke — keeps us within Nominatim's ~1 request/second guidance. */
+const MIN_QUERY = 3;
+const DEBOUNCE_MS = 350;
 
 function pinIcon(): L.DivIcon {
   const svg = `
@@ -37,9 +37,9 @@ function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }
   return null;
 }
 
-/** Recenter the map when an address is picked from search. Keyed by lat/lng so it
- * only fires on a *searched* point — manual map clicks don't re-key it, so the
- * view stays put while the user clicks around. */
+/** Recenter the map when an address is picked from search. Fires only when the
+ * coordinates change (effect deps), so manual map clicks and unrelated
+ * re-renders don't yank the view. */
 function Recenter({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
   useEffect(() => {
@@ -48,9 +48,9 @@ function Recenter({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
-/** Dialog to add a custom (non-order) stop. Set the point either by searching an
- * address and picking a match, or by clicking the map directly; then name it.
- * Returns lat/lng + label + note to the caller. */
+/** Dialog to add a custom (non-order) stop. Set the point either by typing an
+ * address and picking a match from the dropdown, or by clicking the map
+ * directly; then name it. Returns lat/lng + label + note to the caller. */
 export function CustomStopDialog({
   open,
   onClose,
@@ -67,45 +67,61 @@ export function CustomStopDialog({
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<AddressHit[]>([]);
+  const [options, setOptions] = useState<AddressHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
-  const searchAbort = useRef<AbortController | null>(null);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abort = useRef<AbortController | null>(null);
+
+  const cancelSearch = () => {
+    if (debounce.current) clearTimeout(debounce.current);
+    abort.current?.abort();
+  };
+
+  // Type-ahead: debounce a Nominatim lookup as the user types (reason 'input').
+  // Programmatic input changes (selection reset / clear) don't reach here.
+  const onType = (value: string) => {
+    setQuery(value);
+    cancelSearch();
+    const q = value.trim();
+    if (q.length < MIN_QUERY) { setOptions([]); setSearched(false); setSearching(false); return; }
+    setSearching(true);
+    debounce.current = setTimeout(async () => {
+      const ctrl = new AbortController();
+      abort.current = ctrl;
+      const hits = await searchAddresses(q, ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      setOptions(hits);
+      setSearching(false);
+      setSearched(true);
+    }, DEBOUNCE_MS);
+  };
 
   const reset = () => {
-    searchAbort.current?.abort();
+    cancelSearch();
     setPoint(null);
     setSearchedPoint(null);
     setLabel('');
     setNote('');
     setQuery('');
-    setResults([]);
+    setOptions([]);
     setSearching(false);
     setSearched(false);
   };
   const close = () => { reset(); onClose(); };
 
-  const runSearch = async () => {
-    const q = query.trim();
-    if (!q) return;
-    searchAbort.current?.abort();
-    const ctrl = new AbortController();
-    searchAbort.current = ctrl;
-    setSearching(true);
-    setSearched(false);
-    const hits = await searchAddresses(q, ctrl.signal);
-    if (ctrl.signal.aborted) return;
-    setResults(hits);
-    setSearching(false);
-    setSearched(true);
-  };
+  // Cancel any in-flight/debounced search if the dialog unmounts.
+  useEffect(() => () => cancelSearch(), []);
 
   const pickResult = (hit: AddressHit) => {
+    cancelSearch();
     setPoint({ lat: hit.lat, lng: hit.lng });
     setSearchedPoint({ lat: hit.lat, lng: hit.lng });
     setLabel((prev) => prev.trim() || hit.label);
-    setResults([]);
+    setQuery(hit.label);
+    setOptions([]);
     setSearched(false);
+    setSearching(false);
   };
 
   const pickOnMap = (lat: number, lng: number) => {
@@ -121,6 +137,9 @@ export function CustomStopDialog({
     onClose();
   };
 
+  const noOptionsText =
+    query.trim().length < MIN_QUERY ? `Zadejte alespoň ${MIN_QUERY} znaky` : searched ? 'Adresu se nepodařilo najít' : 'Hledám…';
+
   return (
     <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
       <DialogTitle>Vlastní zastávka</DialogTitle>
@@ -128,40 +147,39 @@ export function CustomStopDialog({
         <Typography color="text.secondary" sx={{ fontSize: 13, mb: 1.5 }}>
           Najděte místo podle adresy, nebo klikněte přímo do mapy, poté zastávku pojmenujte.
         </Typography>
-        <TextField
-          fullWidth
+        <Autocomplete<AddressHit>
           size="small"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runSearch(); } }}
-          placeholder="Najít podle adresy (např. Pražská 12, Liberec)…"
-          sx={{ mb: 1 }}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                {searching ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  <IconButton size="small" edge="end" onClick={() => void runSearch()} aria-label="Hledat adresu">
-                    <SearchIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </InputAdornment>
-            ),
+          fullWidth
+          openOnFocus={false}
+          options={options}
+          loading={searching}
+          filterOptions={(x) => x}
+          inputValue={query}
+          getOptionLabel={(o) => o.label}
+          isOptionEqualToValue={(a, b) => a.lat === b.lat && a.lng === b.lng}
+          noOptionsText={noOptionsText}
+          onInputChange={(_, value, reason) => {
+            if (reason === 'input') onType(value);
+            else if (reason === 'clear') { setQuery(''); setOptions([]); setSearched(false); cancelSearch(); }
           }}
+          onChange={(_, value) => { if (value) pickResult(value); }}
+          sx={{ mb: 2 }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Najít podle adresy (např. Pražská 12, Liberec)…"
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {searching ? <CircularProgress size={18} /> : null}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+            />
+          )}
         />
-        {searched && results.length === 0 && (
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>Adresu se nepodařilo najít.</Typography>
-        )}
-        {results.length > 0 && (
-          <List dense disablePadding sx={{ mb: 1, maxHeight: 168, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-            {results.map((hit, i) => (
-              <ListItemButton key={`${hit.lat},${hit.lng},${i}`} onClick={() => pickResult(hit)}>
-                <ListItemText primary={hit.label} primaryTypographyProps={{ fontSize: 13 }} />
-              </ListItemButton>
-            ))}
-          </List>
-        )}
         <Box sx={{ borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', mb: 2, '& .leaflet-container': { height: 280, width: '100%' } }}>
           <MapContainer center={[DEPOT.lat, DEPOT.lng]} zoom={10} attributionControl={false} style={{ height: 280, width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
