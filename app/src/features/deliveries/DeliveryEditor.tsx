@@ -13,6 +13,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -33,8 +34,10 @@ import {
   UpdateProductDeliveryStopDto,
   UpdateProductDeliveryItemDto,
   ProductDeliveryState,
+  DeliveryStopKind,
   type BreweryProductListItemDto,
 } from 'src/generated/api-client';
+import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
@@ -46,7 +49,19 @@ import { TOPBAR_H } from 'src/layout/Topbar';
 const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
 
 interface DraftItem { productId: string; quantity: number }
-interface DraftStop { key: string; publicId?: string; breweryId: string; note: string; items: DraftItem[] }
+/** A route stop: either a brewery (with its own product list) or a custom
+ * free-form waypoint (label + coordinates, no products). */
+interface DraftStop {
+  key: string;
+  publicId?: string;
+  kind: 'brewery' | 'custom';
+  breweryId: string; // '' for custom stops
+  note: string;
+  items: DraftItem[]; // [] for custom stops
+  label?: string; // custom stops only
+  lat?: number; // custom stops only
+  lng?: number; // custom stops only
+}
 
 /** Serialized snapshot of the savable state, for unsaved-change detection. */
 function serializeDelivery(date: Dayjs | null, vehicleId: string | null, driverIds: string[], note: string, stops: DraftStop[]): string {
@@ -55,7 +70,7 @@ function serializeDelivery(date: Dayjs | null, vehicleId: string | null, driverI
     vehicleId,
     driverIds: [...driverIds].sort(),
     note: note.trim(),
-    stops: stops.map((s) => ({ breweryId: s.breweryId, note: s.note.trim(), items: s.items })),
+    stops: stops.map((s) => ({ kind: s.kind, breweryId: s.breweryId, note: s.note.trim(), items: s.items, label: s.label, lat: s.lat, lng: s.lng })),
   });
 }
 
@@ -249,6 +264,7 @@ export function DeliveryEditor({
   const [note, setNote] = useState('');
   const [stops, setStops] = useState<DraftStop[]>([]);
   const [pickBrewery, setPickBrewery] = useState<string | null>(null);
+  const [customStopOpen, setCustomStopOpen] = useState(false);
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
 
@@ -268,13 +284,26 @@ export function DeliveryEditor({
     const loadedVehicle = d.vehicle?.id ?? null;
     const loadedDrivers = (d.drivers ?? []).map((dr) => dr.id ?? '').filter(Boolean);
     const loadedNote = d.note ?? '';
-    const loadedStops: DraftStop[] = (d.stops ?? []).map((s) => ({
-      key: newKey(),
-      publicId: s.id,
-      breweryId: s.brewery?.id ?? '',
-      note: s.note ?? '',
-      items: (s.products ?? []).map((p) => ({ productId: p.productId ?? '', quantity: p.quantity ?? 1 })),
-    }));
+    const loadedStops: DraftStop[] = (d.stops ?? []).map((s) => s.kind === DeliveryStopKind.Custom
+      ? {
+          key: newKey(),
+          publicId: s.id,
+          kind: 'custom' as const,
+          breweryId: '',
+          note: s.note ?? '',
+          items: [],
+          label: s.label ?? '',
+          lat: s.latitude ?? undefined,
+          lng: s.longitude ?? undefined,
+        }
+      : {
+          key: newKey(),
+          publicId: s.id,
+          kind: 'brewery' as const,
+          breweryId: s.brewery?.id ?? '',
+          note: s.note ?? '',
+          items: (s.products ?? []).map((p) => ({ productId: p.productId ?? '', quantity: p.quantity ?? 1 })),
+        });
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
     setDriverIds(loadedDrivers);
@@ -285,15 +314,19 @@ export function DeliveryEditor({
 
   const breweries = useMemo(() => breweriesQuery.data ?? [], [breweriesQuery.data]);
   const breweryById = useMemo(() => new Map(breweries.map((b) => [b.id ?? '', b])), [breweries]);
-  const usedBreweryIds = useMemo(() => new Set(stops.map((s) => s.breweryId)), [stops]);
+  const usedBreweryIds = useMemo(() => new Set(stops.filter((s) => s.kind === 'brewery').map((s) => s.breweryId)), [stops]);
   const breweryOptions = breweries
     .filter((b) => !usedBreweryIds.has(b.id ?? ''))
     .map((b) => ({ value: b.id ?? '', label: b.name ?? '' }));
 
   const addStop = (breweryId: string) => {
     if (!breweryId || usedBreweryIds.has(breweryId)) return;
-    setStops((prev) => [...prev, { key: newKey(), breweryId, note: '', items: [] }]);
+    setStops((prev) => [...prev, { key: newKey(), kind: 'brewery', breweryId, note: '', items: [] }]);
     setPickBrewery(null);
+  };
+  const addCustomStop = (stop: { label: string; note?: string; lat: number; lng: number }) => {
+    setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
+    setCustomStopOpen(false);
   };
   const removeStop = (key: string) => setStops((prev) => prev.filter((s) => s.key !== key));
   const moveStop = (key: string, dir: -1 | 1) => setStops((prev) => {
@@ -308,6 +341,9 @@ export function DeliveryEditor({
   const toggleDriver = (id: string) => setDriverIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const routeStops: RouteStop[] = useMemo(() => stops.map((s): RouteStop => {
+    if (s.kind === 'custom') {
+      return { lat: s.lat, lng: s.lng, label: s.label || 'Vlastní zastávka', color: '#1A2B4C', kind: 'custom' };
+    }
     const b = breweryById.get(s.breweryId);
     return { lat: b?.latitude ?? undefined, lng: b?.longitude ?? undefined, label: b?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
   }), [stops, breweryById]);
@@ -320,8 +356,8 @@ export function DeliveryEditor({
 
   // Persist only (no navigation); returns the saved id or null on failure.
   const persist = async (): Promise<string | null> => {
-    if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jeden pivovar', { variant: 'warning' }); return null; }
-    if (stops.some((s) => s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return null; }
+    if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jednu zastávku', { variant: 'warning' }); return null; }
+    if (stops.some((s) => s.kind === 'brewery' && s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return null; }
     if (!deliveryDate) { enqueueSnackbar('Vyberte datum dovozu', { variant: 'warning' }); return null; }
     try {
       let savedId: string;
@@ -336,9 +372,13 @@ export function DeliveryEditor({
             note: note.trim() || undefined,
             stops: stops.map((s) => new UpdateProductDeliveryStopDto({
               publicId: s.publicId,
-              breweryId: s.breweryId,
+              kind: s.kind === 'custom' ? DeliveryStopKind.Custom : DeliveryStopKind.Brewery,
+              breweryId: s.kind === 'custom' ? undefined : s.breweryId,
+              label: s.kind === 'custom' ? s.label : undefined,
+              latitude: s.kind === 'custom' ? s.lat : undefined,
+              longitude: s.kind === 'custom' ? s.lng : undefined,
               note: s.note.trim() || undefined,
-              products: s.items.map((it) => new UpdateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+              products: s.kind === 'custom' ? [] : s.items.map((it) => new UpdateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
             })),
           }),
         });
@@ -351,9 +391,13 @@ export function DeliveryEditor({
           vehicleId: vehicleId ?? undefined,
           note: note.trim() || undefined,
           stops: stops.map((s) => new CreateProductDeliveryStopDto({
-            breweryId: s.breweryId,
+            kind: s.kind === 'custom' ? DeliveryStopKind.Custom : DeliveryStopKind.Brewery,
+            breweryId: s.kind === 'custom' ? undefined : s.breweryId,
+            label: s.kind === 'custom' ? s.label : undefined,
+            latitude: s.kind === 'custom' ? s.lat : undefined,
+            longitude: s.kind === 'custom' ? s.lng : undefined,
             note: s.note.trim() || undefined,
-            products: s.items.map((it) => new CreateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+            products: s.kind === 'custom' ? [] : s.items.map((it) => new CreateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
           })),
         }));
         enqueueSnackbar('Dovoz vytvořen.', { variant: 'success' });
@@ -412,9 +456,16 @@ export function DeliveryEditor({
             </Card>
           )}
 
-          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.disabled' }}>
-            Pivovary v dovozu ({stops.length})
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.disabled' }}>
+              Zastávky v dovozu ({stops.length})
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Button size="small" variant="outlined" startIcon={<PlaceOutlinedIcon fontSize="small" />} onClick={() => setCustomStopOpen(true)}
+              sx={{ color: 'text.primary', borderColor: 'divider', fontWeight: 700 }}>
+              Vlastní zastávka
+            </Button>
+          </Stack>
 
           {breweryOptions.length > 0 ? (
             <Combobox
@@ -429,20 +480,31 @@ export function DeliveryEditor({
           )}
 
           {stops.length === 0 ? (
-            <EmptyState icon={<WarehouseOutlinedIcon />} title="Zatím žádný pivovar" description="Přidejte pivovar pomocí pole nahoře." dense />
+            <EmptyState icon={<WarehouseOutlinedIcon />} title="Zatím žádná zastávka" description="Přidejte pivovar polem nahoře, nebo vlastní zastávku tlačítkem." dense />
           ) : (
             stops.map((s, i) => (
-              <StopCard
-                key={s.key}
-                stop={s}
-                index={i}
-                total={stops.length}
-                color={breweryById.get(s.breweryId)?.color}
-                breweryName={breweryById.get(s.breweryId)?.name ?? '—'}
-                onRemove={() => removeStop(s.key)}
-                onMove={(dir) => moveStop(s.key, dir)}
-                onItemsChange={(items) => setStopItems(s.key, items)}
-              />
+              s.kind === 'custom' ? (
+                <CustomStopCard
+                  key={s.key}
+                  stop={s}
+                  index={i}
+                  total={stops.length}
+                  onRemove={() => removeStop(s.key)}
+                  onMove={(dir) => moveStop(s.key, dir)}
+                />
+              ) : (
+                <StopCard
+                  key={s.key}
+                  stop={s}
+                  index={i}
+                  total={stops.length}
+                  color={breweryById.get(s.breweryId)?.color}
+                  breweryName={breweryById.get(s.breweryId)?.name ?? '—'}
+                  onRemove={() => removeStop(s.key)}
+                  onMove={(dir) => moveStop(s.key, dir)}
+                  onItemsChange={(items) => setStopItems(s.key, items)}
+                />
+              )
             ))
           )}
         </Stack>
@@ -510,7 +572,42 @@ export function DeliveryEditor({
         </Stack>
       </Box>
 
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
+
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
+  );
+}
+
+/** A custom (non-brewery) route stop: label + coordinates, no product catalog. */
+function CustomStopCard({
+  stop, index, total, onRemove, onMove,
+}: {
+  stop: DraftStop;
+  index: number;
+  total: number;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+}) {
+  const CUSTOM_COLOR = '#1A2B4C';
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.5 }}>
+        <Box sx={{ width: 26, height: 26, borderRadius: 1.5, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, bgcolor: `${CUSTOM_COLOR}22`, color: CUSTOM_COLOR }}>{index + 1}</Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={0.75}>
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{stop.label || 'Vlastní zastávka'}</Typography>
+            <Chip size="small" icon={<PlaceOutlinedIcon sx={{ fontSize: 13 }} />} label="Vlastní" sx={{ height: 20, fontSize: 11 }} />
+          </Stack>
+          {stop.note && <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{stop.note}</Typography>}
+          {stop.lat != null && stop.lng != null && (
+            <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>{stop.lat.toFixed(5)}, {stop.lng.toFixed(5)}</Typography>
+          )}
+        </Box>
+        <IconButton size="small" onClick={() => onMove(-1)} disabled={index === 0} aria-label="Nahoru"><ArrowUpIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={() => onMove(1)} disabled={index === total - 1} aria-label="Dolů"><ArrowDownIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={onRemove} sx={{ color: 'error.main' }} aria-label="Odebrat zastávku"><DeleteIcon fontSize="small" /></IconButton>
+      </Stack>
+    </Card>
   );
 }

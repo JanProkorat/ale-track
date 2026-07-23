@@ -48,7 +48,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useClients } from 'src/hooks/useClients';
 import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
-import { CustomStopDialog } from './CustomStopDialog';
+import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
