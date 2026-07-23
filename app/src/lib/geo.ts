@@ -81,6 +81,42 @@ export async function geocodeAddress(a: GeocodeAddress, signal?: AbortSignal): P
   }
 }
 
+/** A geocoding candidate for interactive address search. */
+export interface AddressHit {
+  /** Human-readable place name (Nominatim `display_name`). */
+  label: string;
+  lat: number;
+  lng: number;
+}
+
+/** Search OpenStreetMap Nominatim for up to 5 places matching a free-form
+ * address query, for interactive pick-from-a-list UIs. Unlike `geocodeAddress`
+ * (single best match on form save), this returns the candidates so the user can
+ * disambiguate. Returns [] on a blank query, no match, or any error — callers
+ * treat an empty list as "nothing found". */
+export async function searchAddresses(query: string, signal?: AbortSignal): Promise<AddressHit[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const base = 'https://nominatim.openstreetmap.org/search';
+  const params = new URLSearchParams({ q, format: 'jsonv2', limit: '5' });
+  try {
+    const res = await fetch(`${base}?${params.toString()}`, { signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
+    if (!Array.isArray(data)) return [];
+    return data.reduce<AddressHit[]>((acc, hit) => {
+      const lat = Number(hit.lat);
+      const lng = Number(hit.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        acc.push({ label: hit.display_name ?? `${lat}, ${lng}`, lat, lng });
+      }
+      return acc;
+    }, []);
+  } catch {
+    return [];
+  }
+}
+
 /** Great-circle distance in km. */
 export function haversine(a: LatLng, b: LatLng): number {
   const R = 6371;
