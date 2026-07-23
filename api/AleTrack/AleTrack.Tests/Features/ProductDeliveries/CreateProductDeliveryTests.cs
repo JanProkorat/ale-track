@@ -147,6 +147,84 @@ public sealed class CreateProductDeliveryTests
     }
 
     [Fact]
+    public async Task ProcessAsync_CreateProductDelivery_WithCustomStop_Success()
+    {
+        var brewery1Id = Guid.NewGuid();
+        var brewery1 = BreweryBuilder.BuildEntity(publicId: brewery1Id);
+
+        var product1Id = Guid.NewGuid();
+        var product1 = ProductBuilder.BuildEntity(publicId: product1Id);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            breweries: [brewery1],
+            products: [product1]
+        );
+
+        var command = new CreateProductsDeliveryRequest
+        {
+            Data = ProductDeliveryBuilder.BuildCreateDto(
+                stops:
+                [
+                    ProductDeliveryBuilder.BuildCreateStopDto(
+                        breweryId: brewery1Id,
+                        products:
+                        [
+                            ProductDeliveryBuilder.BuildCreateItemDto(productId: product1Id, quantity: 5)
+                        ]
+                    ),
+                    ProductDeliveryBuilder.BuildCreateCustomStopDto(
+                        label: "Čerpací stanice Shell",
+                        latitude: 50.12m,
+                        longitude: 14.44m,
+                        note: "Zastávka na tankování"
+                    )
+                ]
+            )
+        };
+
+        var endpoint = EndpointBuilder<CreateProductsDeliveryRequest, CreateProductsDeliveryEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        dbContext.Verify(e => e.ProductDeliveries.Add(It.Is<ProductDelivery>(pd =>
+            pd.Stops.Count == 2 &&
+            pd.Stops.Any(s =>
+                s.Kind == DeliveryStopKind.Brewery && s.Brewery == brewery1 && s.Order == 0 && s.Items.Count == 1) &&
+            pd.Stops.Any(s =>
+                s.Kind == DeliveryStopKind.Custom && s.Brewery == null && s.BreweryId == null &&
+                s.Label == "Čerpací stanice Shell" && s.Latitude == 50.12m && s.Longitude == 14.44m &&
+                s.Note == "Zastávka na tankování" && s.Order == 1 && s.Items.Count == 0)
+        )), Times.Once);
+
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_CreateProductDelivery_CustomStopOnly_DoesNotRequireBrewery()
+    {
+        var dbContext = AleTrackDbContextMockFactory.CreateMock();
+
+        var command = new CreateProductsDeliveryRequest
+        {
+            Data = ProductDeliveryBuilder.BuildCreateDto(
+                stops:
+                [
+                    ProductDeliveryBuilder.BuildCreateCustomStopDto(label: "Sklad Praha", latitude: 50.08m, longitude: 14.42m)
+                ]
+            )
+        };
+
+        var endpoint = EndpointBuilder<CreateProductsDeliveryRequest, CreateProductsDeliveryEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        dbContext.Verify(e => e.ProductDeliveries.Add(It.Is<ProductDelivery>(pd =>
+            pd.Stops.Count == 1 &&
+            pd.Stops.Single().Kind == DeliveryStopKind.Custom &&
+            pd.Stops.Single().Brewery == null
+        )), Times.Once);
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ProcessAsync_CreateProductDelivery_VehicleNotFound()
     {
         var driver1Id = Guid.NewGuid();
