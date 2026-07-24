@@ -79,28 +79,25 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
 
         // Remove stops that are not in the request
         delivery.Stops.RemoveAll(s => !requestStopIds.Contains(s.PublicId));
-        
+
         var breweries = await GetBreweriesAsync(req.Data.Stops, ct);
         var products = await GetProductsAsync(req.Data.Stops, ct);
-        
-        // Add new stops that are in the request
-        var stopsToAdd = req.Data.Stops
-            .Where(s => s.PublicId is null)
-            .ToList();
-        
-        delivery.Stops.AddRange(CreateNewStops(stopsToAdd, breweries, products));
-        
-        // Update existing stops
-        var requestStepsWithUpdatedData = req.Data.Stops
-            .Where(s => s.PublicId is not null)
-            .ToList();
-        
-        var stopsToUpdate = delivery.Stops
-            .Where(s => requestStepsWithUpdatedData.Any(r => r.PublicId == s.PublicId))
-            .ToList();
-        
-        UpdateDeliveryStops(stopsToUpdate, requestStepsWithUpdatedData, breweries, products);
-        
+
+        // Reconcile in request order — the list position is the stop's Order.
+        for (var index = 0; index < req.Data.Stops.Count; index++)
+        {
+            var request = req.Data.Stops[index];
+            if (request.PublicId is null)
+            {
+                delivery.Stops.Add(BuildStop(request, index, breweries, products));
+            }
+            else
+            {
+                var existing = delivery.Stops.First(s => s.PublicId == request.PublicId);
+                ApplyStop(existing, request, index, breweries, products);
+            }
+        }
+
         // When the delivery is finished, fill inventory with the products from the delivery
         if (req.Data.State is ProductDeliveryState.Finished)
             await CreateInventoryItemsAsync(delivery.Stops, ct);
@@ -151,44 +148,45 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
             dbContext.InventoryItems.AddRange(newInventoryItems);
     }
     
-    private static void UpdateDeliveryStops(List<DeliveryStop> stopsToUpdate, List<UpdateProductDeliveryStopDto> requestStepsWithUpdatedData, List<Brewery> breweries, List<Product> products)
+    private static DeliveryStop BuildStop(UpdateProductDeliveryStopDto request, int order, List<Brewery> breweries, List<Product> products)
     {
-        foreach (var stop in stopsToUpdate)
-        {
-            var relatedRequestStop = requestStepsWithUpdatedData.First(r => r.PublicId == stop.PublicId);
-            var relatedBrewery = breweries.First(b => b.PublicId == relatedRequestStop.BreweryId);
-            
-            stop.Brewery = relatedBrewery;
-            stop.Note = relatedRequestStop.Note;
-            
-            stop.Items.Clear();
-            stop.Items = relatedRequestStop.Products
-                .Select(p => new DeliveryItem
-                {
-                    Product = products.First(pr => pr.PublicId == p.ProductId),
-                    Quantity = p.Quantity,
-                    Note = p.Note
-                })
-                .ToList();
-        }
+        var stop = new DeliveryStop();
+        ApplyStop(stop, request, order, breweries, products);
+        return stop;
     }
 
-    private static List<DeliveryStop> CreateNewStops(List<UpdateProductDeliveryStopDto> stopsToAdd, List<Brewery> breweries, List<Product> products)
-        => stopsToAdd
-            .Select(request => new DeliveryStop
+    private static void ApplyStop(DeliveryStop stop, UpdateProductDeliveryStopDto request, int order, List<Brewery> breweries, List<Product> products)
+    {
+        stop.Order = order;
+        stop.Kind = request.Kind;
+        stop.Note = request.Note;
+
+        if (request.Kind == DeliveryStopKind.Custom)
+        {
+            stop.Brewery = null;
+            stop.BreweryId = null;
+            stop.Label = request.Label;
+            stop.Latitude = request.Latitude;
+            stop.Longitude = request.Longitude;
+            stop.Items.Clear();
+            stop.Items = [];
+            return;
+        }
+
+        stop.Brewery = breweries.First(b => b.PublicId == request.BreweryId);
+        stop.Label = null;
+        stop.Latitude = null;
+        stop.Longitude = null;
+        stop.Items.Clear();
+        stop.Items = request.Products
+            .Select(p => new DeliveryItem
             {
-                Brewery = breweries.First(b => b.PublicId == request.BreweryId),
-                Note = request.Note,
-                Items = request.Products
-                    .Select(p => new DeliveryItem
-                    {
-                        Product = products.First(pr => pr.PublicId == p.ProductId),
-                        Quantity = p.Quantity,
-                        Note = p.Note
-                    })
-                    .ToList()
+                Product = products.First(pr => pr.PublicId == p.ProductId),
+                Quantity = p.Quantity,
+                Note = p.Note
             })
             .ToList();
+    }
 
     private async Task<List<Product>> GetProductsAsync(List<UpdateProductDeliveryStopDto> stops, CancellationToken cancellationToken)
     {
@@ -216,9 +214,11 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
     private async Task<List<Brewery>> GetBreweriesAsync(List<UpdateProductDeliveryStopDto> requestStops, CancellationToken cancellationToken)
     {
         var breweriesInRequest = requestStops
-            .Select(s => s.BreweryId)
+            .Where(s => s.Kind == DeliveryStopKind.Brewery && s.BreweryId is not null)
+            .Select(s => s.BreweryId!.Value)
+            .Distinct()
             .ToList();
-        
+
         var breweries = await dbContext.Breweries
             .Where(b => breweriesInRequest.Contains(b.PublicId))
             .ToListAsync(cancellationToken);

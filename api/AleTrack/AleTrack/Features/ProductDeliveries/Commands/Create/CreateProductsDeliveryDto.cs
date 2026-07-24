@@ -1,3 +1,5 @@
+using AleTrack.Common.Enums;
+
 namespace AleTrack.Features.ProductDeliveries.Commands.Create;
 
 /// <summary>
@@ -37,17 +39,37 @@ public sealed record CreateProductsDeliveryDto
 public sealed record CreateProductDeliveryStopDto
 {
     /// <summary>
-    /// ID of related brewery
+    /// Whether this stop is a brewery or a custom waypoint.
     /// </summary>
-    public Guid BreweryId { get; set; }
-    
+    public DeliveryStopKind Kind { get; set; }
+
+    /// <summary>
+    /// ID of related brewery. Required for brewery stops, null for custom stops.
+    /// </summary>
+    public Guid? BreweryId { get; set; }
+
+    /// <summary>
+    /// Display name of a custom stop. Required for custom stops, null for brewery stops.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Latitude of a custom stop. Required for custom stops.
+    /// </summary>
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude of a custom stop. Required for custom stops.
+    /// </summary>
+    public decimal? Longitude { get; set; }
+
     /// <summary>
     /// Note to the delivery
     /// </summary>
     public string? Note { get; set; }
-    
+
     /// <summary>
-    /// Products to be delivered
+    /// Products to be delivered (brewery stops only)
     /// </summary>
     public List<CreateProductDeliveryItemDto> Products { get; set; } = [];
 }

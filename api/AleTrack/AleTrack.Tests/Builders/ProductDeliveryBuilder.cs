@@ -48,15 +48,30 @@ public static class ProductDeliveryBuilder
     public static CreateProductDeliveryStopDto BuildCreateStopDto(
         Guid? breweryId = null,
         string? note = null,
-        List<CreateProductDeliveryItemDto>? products = null)
+        List<CreateProductDeliveryItemDto>? products = null,
+        DeliveryStopKind kind = DeliveryStopKind.Brewery,
+        string? label = null,
+        decimal? latitude = null,
+        decimal? longitude = null)
     {
         return new CreateProductDeliveryStopDto
         {
-            BreweryId = breweryId ?? Guid.NewGuid(),
+            Kind = kind,
+            BreweryId = kind == DeliveryStopKind.Custom ? null : (breweryId ?? Guid.NewGuid()),
+            Label = label,
+            Latitude = latitude,
+            Longitude = longitude,
             Note = note,
             Products = products ?? []
         };
     }
+
+    public static CreateProductDeliveryStopDto BuildCreateCustomStopDto(
+        string? label = null,
+        decimal latitude = 50.1m,
+        decimal longitude = 14.4m,
+        string? note = null)
+        => BuildCreateStopDto(kind: DeliveryStopKind.Custom, label: label ?? "Čerpací stanice", latitude: latitude, longitude: longitude, note: note);
 
     public static CreateProductDeliveryItemDto BuildCreateItemDto(
         Guid? productId = null,
@@ -94,16 +109,32 @@ public static class ProductDeliveryBuilder
         Guid? publicId = null,
         Guid? breweryId = null,
         string? note = null,
-        List<UpdateProductDeliveryItemDto>? products = null)
+        List<UpdateProductDeliveryItemDto>? products = null,
+        DeliveryStopKind kind = DeliveryStopKind.Brewery,
+        string? label = null,
+        decimal? latitude = null,
+        decimal? longitude = null)
     {
         return new UpdateProductDeliveryStopDto
         {
             PublicId = publicId,
-            BreweryId = breweryId ?? Guid.NewGuid(),
+            Kind = kind,
+            BreweryId = kind == DeliveryStopKind.Custom ? null : (breweryId ?? Guid.NewGuid()),
+            Label = label,
+            Latitude = latitude,
+            Longitude = longitude,
             Note = note,
             Products = products ?? []
         };
     }
+
+    public static UpdateProductDeliveryStopDto BuildUpdateCustomStopDto(
+        Guid? publicId = null,
+        string? label = null,
+        decimal latitude = 50.1m,
+        decimal longitude = 14.4m,
+        string? note = null)
+        => BuildUpdateStopDto(publicId: publicId, kind: DeliveryStopKind.Custom, label: label ?? "Čerpací stanice", latitude: latitude, longitude: longitude, note: note);
 
     public static UpdateProductDeliveryItemDto BuildUpdateItemDto(
         Guid? productId = null,
@@ -122,12 +153,22 @@ public static class ProductDeliveryBuilder
         Guid? publicId = null,
         Brewery? brewery = null,
         List<DeliveryItem>? items = null,
-        string? note = null)
+        string? note = null,
+        int order = 0,
+        DeliveryStopKind kind = DeliveryStopKind.Brewery,
+        string? label = null,
+        decimal? latitude = null,
+        decimal? longitude = null)
     {
         return new DeliveryStop
         {
             PublicId = publicId ?? Guid.NewGuid(),
-            Brewery = brewery ?? BreweryBuilder.BuildEntity(),
+            Order = order,
+            Kind = kind,
+            Brewery = kind == DeliveryStopKind.Custom ? null : (brewery ?? BreweryBuilder.BuildEntity()),
+            Label = label,
+            Latitude = latitude,
+            Longitude = longitude,
             Items = items ?? [],
             Note = note
         };

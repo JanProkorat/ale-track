@@ -52,10 +52,35 @@ public record ProductDeliveryStopDto
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Info about related brewery
+    /// Position of this stop on the route (0-based).
     /// </summary>
-    public BreweryInfoDto Brewery { get; set; } = null!;
-    
+    public int Order { get; set; }
+
+    /// <summary>
+    /// Whether this stop is a brewery or a custom waypoint.
+    /// </summary>
+    public DeliveryStopKind Kind { get; set; }
+
+    /// <summary>
+    /// Info about related brewery. Null for custom stops.
+    /// </summary>
+    public BreweryInfoDto? Brewery { get; set; }
+
+    /// <summary>
+    /// Display name of a custom stop. Null for brewery stops.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Latitude of a custom stop. Null for brewery stops.
+    /// </summary>
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude of a custom stop. Null for brewery stops.
+    /// </summary>
+    public decimal? Longitude { get; set; }
+
     /// <summary>
     /// Note to the delivery stop
     /// </summary>

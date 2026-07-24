@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using FastEndpoints;
 using FluentValidation;
@@ -65,8 +66,28 @@ public sealed class CreateProductDeliveryStopDtoValidator : Validator<CreateProd
 {
     public CreateProductDeliveryStopDtoValidator()
     {
-        RuleFor(r => r.BreweryId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        
+        RuleFor(r => r.BreweryId)
+            .NotNull()
+            .When(r => r.Kind == DeliveryStopKind.Brewery)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
+        RuleFor(r => r.Label)
+            .NotEmpty()
+            .When(r => r.Kind == DeliveryStopKind.Custom)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Label)
+            .MaximumLength(100)
+            .When(r => r.Label != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+        RuleFor(r => r.Latitude)
+            .NotNull()
+            .When(r => r.Kind == DeliveryStopKind.Custom)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Longitude)
+            .NotNull()
+            .When(r => r.Kind == DeliveryStopKind.Custom)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
         RuleFor(r => r.Note)
             .MaximumLength(200)
             .When(r => r.Note != null)

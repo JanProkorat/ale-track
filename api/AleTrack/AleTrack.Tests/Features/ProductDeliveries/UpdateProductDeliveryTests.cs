@@ -111,6 +111,74 @@ public sealed class UpdateProductDeliveryTests
     }
 
     [Fact]
+    public async Task ProcessAsync_UpdateProductDelivery_AddCustomStop_Success()
+    {
+        var deliveryId = Guid.NewGuid();
+
+        var brewery1Id = Guid.NewGuid();
+        var brewery1 = BreweryBuilder.BuildEntity(publicId: brewery1Id);
+
+        var product1Id = Guid.NewGuid();
+        var product1 = ProductBuilder.BuildEntity(publicId: product1Id);
+
+        var existingStopId = Guid.NewGuid();
+        var existingStop = ProductDeliveryBuilder.BuildDeliveryStopEntity(
+            publicId: existingStopId,
+            brewery: brewery1,
+            order: 0,
+            items: [ProductDeliveryBuilder.BuildDeliveryItemEntity(product: product1, quantity: 15)]
+        );
+
+        var productDelivery = ProductDeliveryBuilder.BuildEntity(
+            publicId: deliveryId,
+            state: ProductDeliveryState.InPlanning,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            productDeliveries: [productDelivery],
+            breweries: [brewery1],
+            products: [product1]
+        );
+
+        var command = new UpdateProductDeliveryRequest
+        {
+            Id = deliveryId,
+            Data = ProductDeliveryBuilder.BuildUpdateDto(
+                state: ProductDeliveryState.InPlanning,
+                stops:
+                [
+                    ProductDeliveryBuilder.BuildUpdateStopDto(
+                        publicId: existingStopId,
+                        breweryId: brewery1Id,
+                        products: [ProductDeliveryBuilder.BuildUpdateItemDto(productId: product1Id, quantity: 25)]
+                    ),
+                    ProductDeliveryBuilder.BuildUpdateCustomStopDto(label: "Benzínka", latitude: 49.9m, longitude: 14.1m)
+                ]
+            )
+        };
+
+        var endpoint = EndpointBuilder<UpdateProductDeliveryRequest, UpdateProductDeliveryEndpoint>.Create(dbContext.Object);
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        productDelivery.Stops.Should().HaveCount(2);
+
+        var custom = productDelivery.Stops.Single(s => s.Kind == DeliveryStopKind.Custom);
+        custom.Label.Should().Be("Benzínka");
+        custom.Latitude.Should().Be(49.9m);
+        custom.Longitude.Should().Be(14.1m);
+        custom.Brewery.Should().BeNull();
+        custom.Order.Should().Be(1);
+        custom.Items.Should().BeEmpty();
+
+        productDelivery.Stops.Single(s => s.Kind == DeliveryStopKind.Brewery).Order.Should().Be(0);
+
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdateProductDelivery_AddNewStop()
     {
         var deliveryId = Guid.NewGuid();

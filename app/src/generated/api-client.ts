@@ -8134,7 +8134,12 @@ export interface IDriverInfoDto {
 
 export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
     id?: string;
-    brewery?: BreweryInfoDto;
+    order?: number;
+    kind?: DeliveryStopKind;
+    brewery?: BreweryInfoDto | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: ProductDeliveryItemDto[];
 
@@ -8150,7 +8155,12 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
     init(_data?: any) {
         if (_data) {
             this.id = _data["id"];
+            this.order = _data["order"];
+            this.kind = _data["kind"];
             this.brewery = _data["brewery"] ? BreweryInfoDto.fromJS(_data["brewery"]) : undefined as any;
+            this.label = _data["label"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
             this.note = _data["note"];
             if (Array.isArray(_data["products"])) {
                 this.products = [] as any;
@@ -8170,7 +8180,12 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
+        data["order"] = this.order;
+        data["kind"] = this.kind;
         data["brewery"] = this.brewery ? this.brewery.toJSON() : undefined as any;
+        data["label"] = this.label;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         data["note"] = this.note;
         if (Array.isArray(this.products)) {
             data["products"] = [];
@@ -8183,9 +8198,19 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
 
 export interface IProductDeliveryStopDto {
     id?: string;
-    brewery?: BreweryInfoDto;
+    order?: number;
+    kind?: DeliveryStopKind;
+    brewery?: BreweryInfoDto | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: ProductDeliveryItemDto[];
+}
+
+export enum DeliveryStopKind {
+    Brewery = 0,
+    Custom = 1,
 }
 
 export class BreweryInfoDto implements IBreweryInfoDto {
@@ -8410,7 +8435,11 @@ export interface IUpdateProductDeliveryDto {
 
 export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopDto {
     publicId?: string | undefined;
-    breweryId?: string;
+    kind?: DeliveryStopKind;
+    breweryId?: string | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: UpdateProductDeliveryItemDto[];
 
@@ -8426,7 +8455,11 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
     init(_data?: any) {
         if (_data) {
             this.publicId = _data["publicId"];
+            this.kind = _data["kind"];
             this.breweryId = _data["breweryId"];
+            this.label = _data["label"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
             this.note = _data["note"];
             if (Array.isArray(_data["products"])) {
                 this.products = [] as any;
@@ -8446,7 +8479,11 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["publicId"] = this.publicId;
+        data["kind"] = this.kind;
         data["breweryId"] = this.breweryId;
+        data["label"] = this.label;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         data["note"] = this.note;
         if (Array.isArray(this.products)) {
             data["products"] = [];
@@ -8459,7 +8496,11 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
 
 export interface IUpdateProductDeliveryStopDto {
     publicId?: string | undefined;
-    breweryId?: string;
+    kind?: DeliveryStopKind;
+    breweryId?: string | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: UpdateProductDeliveryItemDto[];
 }
@@ -8629,7 +8670,11 @@ export interface ICreateProductsDeliveryDto {
 }
 
 export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopDto {
-    breweryId?: string;
+    kind?: DeliveryStopKind;
+    breweryId?: string | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: CreateProductDeliveryItemDto[];
 
@@ -8644,7 +8689,11 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
 
     init(_data?: any) {
         if (_data) {
+            this.kind = _data["kind"];
             this.breweryId = _data["breweryId"];
+            this.label = _data["label"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
             this.note = _data["note"];
             if (Array.isArray(_data["products"])) {
                 this.products = [] as any;
@@ -8663,7 +8712,11 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
         data["breweryId"] = this.breweryId;
+        data["label"] = this.label;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
         data["note"] = this.note;
         if (Array.isArray(this.products)) {
             data["products"] = [];
@@ -8675,7 +8728,11 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
 }
 
 export interface ICreateProductDeliveryStopDto {
-    breweryId?: string;
+    kind?: DeliveryStopKind;
+    breweryId?: string | undefined;
+    label?: string | undefined;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
     note?: string | undefined;
     products?: CreateProductDeliveryItemDto[];
 }
