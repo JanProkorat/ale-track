@@ -117,7 +117,6 @@ export function CustomStopDialog({
     cancelSearch();
     setPoint({ lat: hit.lat, lng: hit.lng });
     setSearchedPoint({ lat: hit.lat, lng: hit.lng });
-    setLabel((prev) => prev.trim() || hit.label);
     setQuery(hit.label);
     setOptions([]);
     setSearched(false);
