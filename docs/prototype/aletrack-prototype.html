@@ -428,6 +428,7 @@ const IC = {
   sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   history:'<path d="M3 3v6h6M3 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/>',
   moveTo:'<path d="M3 12h11M11 8l4 4-4 4M20 4v16"/>',
+  chart:'<path d="M3 3v18h18M7 15l3-4 3 3 4-6"/>',
 };
 function icon(name, size=18, sw=1.9){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${IC[name]||''}</svg>`;
@@ -490,7 +491,7 @@ const KIND_ORDER={Keg:1,Bottle:2,Can:3,Multipack:4,Other:5};
 function addr(street,no,city,zip,country,lat,lng){ return {streetName:street,streetNumber:no,city,zip,country,latitude:lat,longitude:lng}; }
 // Warehouse (company depot) — Žitava
 const DEPOT = { name:'Sklad AleTrack', lat:50.897, lng:14.807 };
-const MODULES=['dashboard','breweries','clients','orders','shipments','deliveries','inventory','drivers','vehicles','users'];
+const MODULES=['dashboard','reports','breweries','clients','orders','shipments','deliveries','inventory','drivers','vehicles','users'];
 function allPerms(v){ const o={}; MODULES.forEach(m=>o[m]=v?'edit':'none'); return o; }
 function makePerms(map){ const o={}; MODULES.forEach(m=>o[m]=map[m]||'none'); o.dashboard='view'; return o; }
 
@@ -685,6 +686,7 @@ const NAV=[
   { group:null, items:[ ['dashboard','dash','Nástěnka'] ] },
   { group:'Prodej', items:[ ['orders','order','Objednávky'], ['shipments','ship','Vývozy'] ] },
   { group:'Sklad', items:[ ['deliveries','import','Dovozy zboží'], ['inventory','stock','Sklad'] ] },
+  { group:'Analýza', items:[ ['reports','chart','Reporty'] ] },
   { group:'Evidence', items:[ ['breweries','brewery','Pivovary'], ['clients','client','Klienti'], ['drivers','driver','Řidiči'], ['vehicles','vehicle','Vozy'] ] },
   { group:'Správa', items:[ ['users','users','Uživatelé'] ] },
 ];
@@ -774,9 +776,204 @@ function confirmDialog(title,msg,onYes,{danger=true,yes='Smazat'}={}){
   $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
 }
 
+/* ============ REPORTS (Reporty) ============ */
+let REP = { tab:'volume', period:90, gran:'week', cMetric:'kg' };
+const TYPE_PALETTE = ['#F08C00','#0E7C9B','#7C3AED','#15873F','#C22A2A','#0891B2','#B4620A','#DB2777','#5A6675','#2F855A','#9333EA','#0284C7'];
+const REP_RANGE = { 30:'posledních 30 dní', 90:'posledních 90 dní', 180:'posledních 6 měsíců' };
+
+/* deterministic PRNG so the mocked history is stable across re-renders */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/* approximate net weight per delivered unit (kg) — mirrors backend Product.Weight (Kind + PackageSize) */
+function unitWeightKg(p){ if(!p) return 1;
+  if(p.kind==='Keg') return +(p.packageSize*1.03+1.5).toFixed(1);
+  if(p.kind==='Bottle') return 12;            // vratná basa 20×0,5 l
+  if(p.kind==='Can'||p.kind==='Multipack') return 4;
+  return 1; }
+function nf(n,d=0){ return new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:d,minimumFractionDigits:d}).format(n); }
+function fmtKg(kg){ return kg>=1000 ? nf(kg/1000,1)+' t' : nf(kg)+' kg'; }
+function sumBy(arr,keyFn,valFn){ const m=new Map(); arr.forEach(r=>{ const k=keyFn(r); m.set(k,(m.get(k)||0)+valFn(r)); }); return m; }
+function repBucketLabel(k){ if(/^\d{4}-\d{2}$/.test(k)){ const mm=+k.slice(5,7); return ['','led','úno','bře','dub','kvě','čvn','čvc','srp','zář','říj','lis','pro'][mm]; }
+  const d=new Date(k); return d.getDate()+'.'+(d.getMonth()+1)+'.'; }
+
+/* ---- synthetic 26-week history of COMPLETED outgoing deliveries ---- */
+let REPORT_DATA=null;
+function reportData(){ if(!REPORT_DATA) REPORT_DATA=buildReportData(); return REPORT_DATA; }
+function buildReportData(){
+  const rnd=mulberry32(20260719), products=DB.products, clients=DB.clients;
+  const today=new Date(SEED_TODAY), WEEKS=26, recs=[];
+  const seasonal=m=>[0.8,0.82,0.9,1.0,1.15,1.3,1.45,1.4,1.15,1.0,0.9,1.05][m];
+  for(let w=WEEKS-1; w>=0; w--){
+    const d=new Date(today); d.setDate(d.getDate()-w*7);
+    const iso=d.toISOString().slice(0,10), season=seasonal(d.getMonth());
+    const nOrders=4+Math.floor(rnd()*5);
+    for(let o=0;o<nOrders;o++){
+      const client=clients[Math.floor(rnd()*clients.length)], nLines=2+Math.floor(rnd()*3);
+      for(let l=0;l<nLines;l++){
+        const p=products[Math.floor(rnd()*products.length)];
+        const baseQty=p.kind==='Keg'?(2+Math.floor(rnd()*6)):(4+Math.floor(rnd()*16));
+        const qty=Math.max(1,Math.round(baseQty*season));
+        recs.push({ date:iso, week:iso, month:iso.slice(0,7), clientId:client.id, breweryId:p.breweryId,
+          productId:p.id, kind:p.kind, type:p.type, qty, kg:+(qty*unitWeightKg(p)).toFixed(1) });
+      }
+    }
+  }
+  return { recs };
+}
+function repFiltered(){ const {recs}=reportData(); const c=new Date(SEED_TODAY); c.setDate(c.getDate()-REP.period);
+  const ci=c.toISOString().slice(0,10); return recs.filter(r=>r.date>=ci); }
+function seriesByBucket(recs,gran){ const m=sumBy(recs, r=>gran==='month'?r.month:r.week, r=>r.kg);
+  return [...m.keys()].sort().map(k=>({label:k, value:m.get(k)})); }
+
+/* ---- chart primitives (inline SVG, themed via CSS vars) ---- */
+function chArea(points,{height=210,color='var(--amber)'}={}){
+  const W=760,H=height,padL=46,padB=26,padT=12,padR=10, n=points.length||1;
+  const max=Math.max(1,...points.map(p=>p.value));
+  const x=i=> padL+(n<=1?0:(i/(n-1))*(W-padL-padR)), y=v=> padT+(1-v/max)*(H-padT-padB);
+  const line=points.map((p,i)=>`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const area=`${padL},${y(0).toFixed(1)} ${line} ${x(n-1).toFixed(1)},${y(0).toFixed(1)}`;
+  const ticks=[0,.25,.5,.75,1].map(f=>{ const v=max*f, yy=y(v);
+    return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 4"/><text x="${padL-8}" y="${(yy+3).toFixed(1)}" text-anchor="end" style="font-size:10px;fill:var(--text-3)">${nf(v)}</text>`; }).join('');
+  const step=Math.max(1,Math.ceil(n/8));
+  const xl=points.map((p,i)=>(i%step===0||i===n-1)?`<text x="${x(i).toFixed(1)}" y="${H-8}" text-anchor="middle" style="font-size:10px;fill:var(--text-3)">${repBucketLabel(p.label)}</text>`:'').join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block"><defs><linearGradient id="repGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.30"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${ticks}<polygon points="${area}" fill="url(#repGrad)"/><polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>${points.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="2.6" fill="${color}"/>`).join('')}${xl}</svg>`;
+}
+function chDonut(parts,{size=158,center=null}={}){
+  const total=parts.reduce((s,p)=>s+p.value,0)||1, r=(size/2)-12, c=2*Math.PI*r; let off=0;
+  const rings=parts.map(p=>{ const len=(p.value/total)*c;
+    const seg=`<circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${p.color}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(c-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${size/2} ${size/2})"/>`;
+    off+=len; return seg; }).join('');
+  const ctr=center?`<text x="50%" y="47%" text-anchor="middle" dominant-baseline="middle" style="font-weight:800;font-size:19px;fill:var(--text)">${center.v}</text><text x="50%" y="61%" text-anchor="middle" style="font-size:10px;fill:var(--text-3);text-transform:uppercase;letter-spacing:.05em">${center.l}</text>`:'';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex:0 0 auto"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--surface-3)" stroke-width="18"/>${rings}${ctr}</svg>`;
+}
+function hBars(rows,{fmt=(v)=>nf(v)}={}){
+  const max=Math.max(1,...rows.map(r=>r.value));
+  return `<div style="display:flex;flex-direction:column;gap:11px">`+rows.map(r=>`<div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--text)">${esc(r.label)}</span><span class="tnum" style="color:var(--text-2);font-weight:700">${fmt(r.value)}</span></div><div style="height:9px;border-radius:6px;background:var(--surface-3);overflow:hidden"><div style="height:100%;width:${(r.value/max*100).toFixed(1)}%;border-radius:6px;background:${r.color||'var(--amber)'}"></div></div></div>`).join('')+`</div>`;
+}
+function legend(parts,fmt){ return `<div style="display:flex;flex-direction:column;gap:8px;width:100%">`+parts.map(p=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px"><span style="width:10px;height:10px;border-radius:3px;background:${p.color};flex:0 0 auto"></span><span style="flex:1;color:var(--text)">${esc(p.label)}</span><span class="tnum" style="color:var(--text-2);font-weight:700">${fmt(p.value)}</span></div>`).join('')+`</div>`; }
+function chGroupBars(rows,{aColor='var(--info)',bColor='var(--amber)'}={}){
+  const W=760,H=220,padL=46,padB=28,padT=12,padR=10, n=rows.length||1;
+  const max=Math.max(1,...rows.flatMap(r=>[r.a,r.b])), gW=(W-padL-padR)/n, bw=Math.min(20,gW*0.26);
+  const y=v=>padT+(1-v/max)*(H-padT-padB), base=y(0);
+  const ticks=[0,.5,1].map(f=>{ const v=max*f, yy=y(v); return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--border)" stroke-dasharray="3 4"/><text x="${padL-8}" y="${(yy+3).toFixed(1)}" text-anchor="end" style="font-size:10px;fill:var(--text-3)">${nf(v)}</text>`; }).join('');
+  const bars=rows.map((r,i)=>{ const cx=padL+gW*i+gW/2; return `<rect x="${(cx-bw-2).toFixed(1)}" y="${y(r.a).toFixed(1)}" width="${bw.toFixed(1)}" height="${(base-y(r.a)).toFixed(1)}" rx="3" fill="${aColor}"/><rect x="${(cx+2).toFixed(1)}" y="${y(r.b).toFixed(1)}" width="${bw.toFixed(1)}" height="${(base-y(r.b)).toFixed(1)}" rx="3" fill="${bColor}"/><text x="${cx.toFixed(1)}" y="${H-9}" text-anchor="middle" style="font-size:10px;fill:var(--text-3)">${repBucketLabel(r.label)}</text>`; }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${ticks}${bars}</svg>`;
+}
+function repKpi(label,val,sub,ic,col){
+  return `<div class="card" style="padding:15px 16px;display:flex;flex-direction:column;gap:9px"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:${col}1a;color:${col}">${icon(ic,17)}</span><span class="eyebrow" style="margin:0">${esc(label)}</span></div><div class="tnum" style="font-size:25px;font-weight:800;letter-spacing:-.5px;line-height:1">${val}</div>${sub?`<div class="sub" style="margin:0;font-size:12px">${sub}</div>`:''}</div>`;
+}
+
+function repHandlers(){}
+function repSetTab(t){ REP.tab=t; renderRoute(); }
+function repSetPeriod(p){ REP.period=p; renderRoute(); }
+function repSetGran(g){ REP.gran=g; renderRoute(); }
+function repSetCMetric(m){ REP.cMetric=m; renderRoute(); }
+
+function viewReports(){
+  const recs=repFiltered();
+  const controls=`<div class="toolbar" style="margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="seg"><button class="${REP.tab==='volume'?'on':''}" onclick="repSetTab('volume')">Objem</button><button class="${REP.tab==='clients'?'on':''}" onclick="repSetTab('clients')">Klienti</button><button class="${REP.tab==='operational'?'on':''}" onclick="repSetTab('operational')">Provoz</button></div>
+    <div class="seg"><button class="${REP.period===30?'on':''}" onclick="repSetPeriod(30)">30 dní</button><button class="${REP.period===90?'on':''}" onclick="repSetPeriod(90)">90 dní</button><button class="${REP.period===180?'on':''}" onclick="repSetPeriod(180)">6 měsíců</button></div>
+    <span class="count-note" style="margin-left:auto">${nf(recs.length)} položek · ${REP_RANGE[REP.period]}</span></div>`;
+  const body = REP.tab==='clients'?repClients(recs) : REP.tab==='operational'?repOps(recs) : repVolume(recs);
+  return `<div class="page">
+    ${pageHead('Analýza','Reporty','Dokončené vývozy · '+REP_RANGE[REP.period]+'. Data v prototypu jsou generovaná (hmotnosti přibližné).','')}
+    ${controls}${body}</div>`;
+}
+
+function repVolume(recs){
+  const totKg=recs.reduce((s,r)=>s+r.kg,0);
+  const kegU=recs.filter(r=>r.kind==='Keg').reduce((s,r)=>s+r.qty,0);
+  const botU=recs.filter(r=>r.kind==='Bottle').reduce((s,r)=>s+r.qty,0);
+  const canU=recs.filter(r=>r.kind==='Can'||r.kind==='Multipack').reduce((s,r)=>s+r.qty,0);
+  const clientsServed=new Set(recs.map(r=>r.clientId)).size;
+  const points=seriesByBucket(recs,REP.gran);
+  const byBrew=DB.breweries.map(b=>({label:b.name, value:recs.filter(r=>r.breweryId===b.id).reduce((s,r)=>s+r.kg,0), color:b.color})).filter(r=>r.value>0).sort((a,b)=>b.value-a.value);
+  const typeParts=[...sumBy(recs,r=>r.type,r=>r.kg).entries()].sort((a,b)=>b[1]-a[1]).map(([t,v],i)=>({label:L.ptype[t]||t, value:v, color:TYPE_PALETTE[i%TYPE_PALETTE.length]}));
+  const kinds=['Keg','Bottle','Can','Multipack','Other'];
+  const kindRows=kinds.map(k=>{ const rr=recs.filter(r=>r.kind===k); return {k, u:rr.reduce((s,r)=>s+r.qty,0), kg:rr.reduce((s,r)=>s+r.kg,0)}; }).filter(r=>r.u>0);
+  const kindTable=`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Obal</th><th style="text-align:right">Kusů</th><th style="text-align:right">Hmotnost</th><th style="text-align:right">Podíl</th></tr></thead><tbody>${kindRows.map(r=>`<tr><td>${kindChip(r.k)}</td><td class="num">${nf(r.u)}</td><td class="num">${fmtKg(r.kg)}</td><td class="num">${nf(r.kg/(totKg||1)*100,1)} %</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px">
+      ${repKpi('Celkem dodáno',fmtKg(totKg),clientsServed+' klientů obslouženo','chart','#F08C00')}
+      ${repKpi('Sudy',nf(kegU)+' ks',null,'box','#0E7C9B')}
+      ${repKpi('Lahve (basy)',nf(botU)+' ks',null,'box','#7C3AED')}
+      ${repKpi('Plechovky / multipack',nf(canU)+' ks',null,'box','#15873F')}
+    </div>
+    <div class="stack" style="gap:16px">
+      <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('chart',18)}</span><h3>Dodané množství v čase</h3>
+        <div class="seg" style="margin-left:auto"><button class="${REP.gran==='week'?'on':''}" onclick="repSetGran('week')">Týdně</button><button class="${REP.gran==='month'?'on':''}" onclick="repSetGran('month')">Měsíčně</button></div></div>
+        <div class="card-pad">${chArea(points,{})}</div></div>
+      <div class="grid" style="grid-template-columns:1.25fr 1fr;align-items:start;gap:16px">
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('brewery',18)}</span><h3>Podle pivovaru</h3></div><div class="card-pad">${hBars(byBrew,{fmt:fmtKg})}</div></div>
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('tag',18)}</span><h3>Podle typu</h3></div><div class="card-pad" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">${chDonut(typeParts,{center:{v:fmtKg(totKg),l:'celkem'}})}<div style="flex:1;min-width:170px">${legend(typeParts,fmtKg)}</div></div></div>
+      </div>
+      <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('box',18)}</span><h3>Podle obalu</h3></div>${kindTable}</div>
+    </div>`;
+}
+
+function repClients(recs){
+  const totKg=recs.reduce((s,r)=>s+r.kg,0)||1;
+  const byClient=DB.clients.map(c=>{ const rr=recs.filter(r=>r.clientId===c.id); return {c, kg:rr.reduce((s,r)=>s+r.kg,0), u:rr.reduce((s,r)=>s+r.qty,0), days:new Set(rr.map(r=>r.date)).size}; }).filter(x=>x.kg>0).sort((a,b)=>b.kg-a.kg);
+  const deliveries=byClient.reduce((s,x)=>s+x.days,0);
+  const topRegion=[...sumBy(recs,r=>{const c=clientById(r.clientId);return c?c.region:'Other';},r=>r.kg).entries()].sort((a,b)=>b[1]-a[1])[0];
+  const metric=REP.cMetric, mfmt=metric==='kg'?fmtKg:(v)=>nf(v)+' ks';
+  const topRows=byClient.slice(0,10).map(x=>({label:x.c.name, value:metric==='kg'?x.kg:x.u, color:'var(--amber)'}));
+  const regionParts=[...sumBy(recs,r=>{const c=clientById(r.clientId);return c?c.region:'Other';},r=>r.kg).entries()].sort((a,b)=>b[1]-a[1]).map(([rg,v])=>({label:L.region[rg]||rg, value:v, color:'var(--info)'}));
+  const table=`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Klient</th><th>Region</th><th style="text-align:right">Rozvozů</th><th style="text-align:right">Kusů</th><th style="text-align:right">Hmotnost</th><th style="text-align:right">Podíl</th></tr></thead><tbody>${byClient.map(x=>`<tr class="clickable" onclick="go('clients/${x.c.id}')"><td style="font-weight:600">${esc(x.c.name)}</td><td><span class="tag">${icon('pin',12)}${L.region[x.c.region]||x.c.region}</span></td><td class="num">${nf(x.days)}</td><td class="num">${nf(x.u)}</td><td class="num">${fmtKg(x.kg)}</td><td class="num">${nf(x.kg/totKg*100,1)} %</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px">
+      ${repKpi('Klientů obslouženo',nf(byClient.length),null,'client','#0891B2')}
+      ${repKpi('Rozvozů celkem',nf(deliveries),null,'ship','#0E7C9B')}
+      ${repKpi('Průměr na klienta',fmtKg(Math.round(totKg/byClient.length)),null,'chart','#F08C00')}
+      ${repKpi('Nejsilnější region',topRegion?(L.region[topRegion[0]]||topRegion[0]):'—',topRegion?fmtKg(topRegion[1]):'','pin','#7C3AED')}
+    </div>
+    <div class="stack" style="gap:16px">
+      <div class="grid" style="grid-template-columns:1.25fr 1fr;align-items:start;gap:16px">
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('client',18)}</span><h3>Nejlepší klienti</h3>
+          <div class="seg" style="margin-left:auto"><button class="${metric==='kg'?'on':''}" onclick="repSetCMetric('kg')">Hmotnost</button><button class="${metric==='units'?'on':''}" onclick="repSetCMetric('units')">Kusy</button></div></div>
+          <div class="card-pad">${hBars(topRows,{fmt:mfmt})}</div></div>
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('map',18)}</span><h3>Podle regionu</h3></div><div class="card-pad">${hBars(regionParts,{fmt:fmtKg})}</div></div>
+      </div>
+      <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('client',18)}</span><h3>Všichni klienti</h3></div>${table}</div>
+    </div>`;
+}
+
+function repOps(recs){
+  const kegU=recs.filter(r=>r.kind==='Keg').reduce((s,r)=>s+r.qty,0);
+  const rozvozu=new Set(recs.map(r=>r.date+'|'+r.clientId)).size;
+  const shipCount=Math.max(1,Math.round(rozvozu/1.6));
+  const statusParts=[
+    {label:'Doručeno', value:Math.round(shipCount*0.86), color:'var(--ok)'},
+    {label:'Na cestě', value:Math.round(shipCount*0.05), color:'var(--amber)'},
+    {label:'Vytvořeno', value:Math.round(shipCount*0.05), color:'var(--info)'},
+    {label:'Zrušeno', value:Math.max(0,shipCount-Math.round(shipCount*0.96)), color:'var(--grey-pill)'},
+  ];
+  const onTime=91;
+  const gauge=chDonut([{value:onTime,color:'var(--ok)'},{value:100-onTime,color:'var(--surface-3)'}],{center:{v:onTime+' %',l:'včas'}});
+  const months=[...sumBy(recs,r=>r.month,r=>r.kg).entries()].sort();
+  const grouped=months.map(([m,out],i)=>({label:m, a:out, b:Math.round(out*(1.04+(((i%3)-1)*0.05)))}));
+  const drWeights=[0.34,0.28,0.22,0.16];
+  const drivers=DB.drivers.map((d,i)=>({label:d.firstName+' '+d.lastName, value:Math.round(shipCount*(drWeights[i]||0.1)), color:d.color})).sort((a,b)=>b.value-a.value);
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px">
+      ${repKpi('Vývozů celkem',nf(shipCount),rozvozu+' zastávek','ship','#0E7C9B')}
+      ${repKpi('Doručeno včas',onTime+' %','vůči požadovanému termínu','check','#15873F')}
+      ${repKpi('Vratných obalů',nf(Math.round(kegU*0.85))+' ks','prázdné sudy zpět','import','#B4620A')}
+      ${repKpi('Aktivních řidičů',nf(DB.drivers.length),null,'driver','#DB2777')}
+    </div>
+    <div class="stack" style="gap:16px">
+      <div class="grid" style="grid-template-columns:1fr 1fr;align-items:start;gap:16px">
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('ship',18)}</span><h3>Vývozy podle stavu</h3></div><div class="card-pad" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">${chDonut(statusParts,{center:{v:nf(shipCount),l:'vývozů'}})}<div style="flex:1;min-width:150px">${legend(statusParts,(v)=>nf(v))}</div></div></div>
+        <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('clock',18)}</span><h3>Dodržení termínu</h3></div><div class="card-pad" style="display:flex;justify-content:center">${gauge}</div></div>
+      </div>
+      <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('import',18)}</span><h3>Dovoz vs. vývoz podle měsíce</h3>
+        <div style="margin-left:auto;display:flex;gap:14px;font-size:12px"><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--info)"></span>Dovoz</span><span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--amber)"></span>Vývoz</span></div></div>
+        <div class="card-pad">${chGroupBars(grouped,{})}</div></div>
+      <div class="card"><div class="card-head"><span style="color:var(--amber)">${icon('driver',18)}</span><h3>Vývozy podle řidiče</h3></div><div class="card-pad">${hBars(drivers,{fmt:(v)=>nf(v)+' vývozů'})}</div></div>
+    </div>`;
+}
+
 /* ============ ROUTER ============ */
 const ROUTES=[
   [/^dashboard$/, ()=>viewDashboard()],
+  [/^reports$/, ()=>viewReports()],
   [/^breweries$/, ()=>viewBreweries()],
   [/^breweries\/(.+)$/, m=>viewBreweryDetail(m[1])],
   [/^clients$/, ()=>viewClients()],
