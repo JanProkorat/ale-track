@@ -10,6 +10,7 @@ import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
@@ -64,6 +65,7 @@ export function OrderDetail({
   const items = order.orderItems ?? [];
   const returns = order.returns ?? [];
   const notes = order.notes ?? [];
+  const extras = order.customExtraItems ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
@@ -93,7 +95,7 @@ export function OrderDetail({
   const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
   // Both sidebar cards hide when empty, so the whole column can be absent.
-  const hasSidebar = returns.length > 0 || notes.length > 0;
+  const hasSidebar = returns.length > 0 || extras.length > 0 || notes.length > 0;
 
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
@@ -216,6 +218,26 @@ export function OrderDetail({
                       {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
                     </Box>
                     <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Card>
+          )}
+
+          {extras.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky navíc</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {extras.length}
+                </Box>
+              </Stack>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {extras.map((e) => (
+                  <Box key={e.id}>
+                    <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{e.description}</Typography>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.quantity} ks</Typography>
                   </Box>
                 ))}
               </Box>

@@ -43,6 +43,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
+import { overdrawnStock } from './nakladkaSourcing';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 
 interface NakladkaRow {
@@ -69,6 +70,8 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
   return {
     key: p.orderItemId ?? p.id ?? '',
     orderItemId: p.orderItemId,
+    // OutgoingShipmentOrderItemDto.id is the product's public id.
+    productId: p.id,
     dokladka: false,
     name: p.name ?? '—',
     kind: p.kind,
@@ -152,7 +155,7 @@ interface AggRowState {
  * indeterminate state) and a removable dokládka badge. Invoicing is not this
  * card's concern; it lives in the Fakturace section. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka,
+  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka, onAdjustSourcing,
 }: {
   agg: AggRow;
   state: AggRowState;
@@ -160,9 +163,11 @@ function AggLoadingRow({
   onLoaded: (loaded: boolean) => void;
   onToggleChecked: () => void;
   onAdjustDokladka?: (delta: number) => void;
+  onAdjustSourcing?: (delta: number) => void;
 }) {
   const chipText = kindSizeChipText(agg.kind, agg.packageSize);
   const adjustable = Boolean(onAdjustDokladka) && editable;
+  const sourceable = Boolean(onAdjustSourcing) && editable;
   return (
     <TableRow hover>
       <TableCell>
@@ -194,7 +199,31 @@ function AggLoadingRow({
       </TableCell>
       <TableCell align="right">
         <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{agg.quantity} ks</Typography>
-        {agg.fromInventory > 0 && (
+        {sourceable ? (
+          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end" sx={{ mt: 0.25 }}>
+            <IconButton
+              size="small"
+              onClick={() => onAdjustSourcing!(-1)}
+              disabled={agg.fromInventory === 0}
+              aria-label="Ubrat kus ze skladu"
+              sx={{ width: 16, height: 16, color: 'info.main' }}
+            >
+              <RemoveIcon sx={{ fontSize: 12 }} />
+            </IconButton>
+            <Typography sx={{ fontSize: 11, color: agg.fromInventory > 0 ? 'info.main' : 'text.disabled', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {`${agg.fromInventory} ze skladu`}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={() => onAdjustSourcing!(1)}
+              disabled={agg.fromInventory >= agg.orderQuantity}
+              aria-label="Přidat kus ze skladu"
+              sx={{ width: 16, height: 16, color: 'info.main' }}
+            >
+              <AddIcon sx={{ fontSize: 12 }} />
+            </IconButton>
+          </Stack>
+        ) : agg.fromInventory > 0 && (
           <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
             {`z toho ${agg.fromInventory} ze skladu`}
           </Typography>
@@ -466,26 +495,8 @@ export function ShipmentDetail({
     [stopsSorted],
   );
 
-  // Stock entries this shipment draws more from than they currently hold. Not an
-  // error — a booked delivery may still arrive before loading — but the depot
-  // should see it before the truck leaves.
-  const overdrawn = useMemo(() => {
-    const drawn = new Map<string, { name: string; taken: number; available: number }>();
-    for (const st of stopsSorted) {
-      for (const p of st.products ?? []) {
-        const id = p.inventoryItemId;
-        if (!id || (p.quantityFromInventory ?? 0) <= 0) continue;
-        const entry = drawn.get(id) ?? {
-          name: p.inventoryItemName ?? p.name ?? '—',
-          taken: 0,
-          available: p.inventoryItemAvailable ?? 0,
-        };
-        entry.taken += p.quantityFromInventory ?? 0;
-        drawn.set(id, entry);
-      }
-    }
-    return [...drawn.values()].filter((e) => e.taken > e.available);
-  }, [stopsSorted]);
+  // Warned about rather than blocked: a booked delivery may still land in time.
+  const overdrawn = useMemo(() => overdrawnStock(stopsSorted), [stopsSorted]);
   const combinedRows = useMemo(
     () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
     [stopsSorted, extraRows],
@@ -607,6 +618,48 @@ export function ShipmentDetail({
       }
       item.quantity = next;
     }
+    void save(draft);
+  }
+
+  /** The stock entry holding this product, if any. */
+  const stockItemFor = (productId?: string) =>
+    productId == null ? undefined : (inventoryQuery.data ?? [])
+      .flatMap((sec) => sec.items ?? [])
+      .find((i) => i.productId === productId);
+
+  // Move a piece of an aggregated product between "from the brewery" and "from our
+  // stock". Ordered quantities never change — only where the pieces come from.
+  // An aggregated line can span several orders, so a increase lands on the first
+  // row with brewery pieces left and a decrease comes off the last sourced one.
+  function adjustSourcing(agg: AggRow, delta: number) {
+    const orderRows = agg.sources.filter((r) => r.orderItemId);
+    const target = delta > 0
+      ? orderRows.find((r) => r.fromInventory < r.quantity)
+      : [...orderRows].reverse().find((r) => r.fromInventory > 0);
+
+    if (!target) {
+      if (delta > 0) enqueueSnackbar('Všechny kusy už jsou ze skladu.', { variant: 'info' });
+      return;
+    }
+
+    const stockItem = stockItemFor(target.productId);
+    if (delta > 0 && !stockItem) {
+      enqueueSnackbar('Produkt není veden na skladě.', { variant: 'warning' });
+      return;
+    }
+
+    const draft = draftFromShipment(shipment);
+    const item = draft.clientOrderShipments
+      .flatMap((cos) => cos.orderItems ?? [])
+      .find((i) => i.orderItemId === target.orderItemId);
+    if (!item) return;
+
+    const next = (item.quantityFromInventory ?? 0) + delta;
+    item.quantityFromInventory = Math.max(0, Math.min(next, target.quantity));
+    item.inventoryItemId = item.quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined;
+
+    // Deliberately no stock cap here: drawing more than is on hand is allowed and
+    // surfaced by the banner, because a booked delivery may still arrive in time.
     void save(draft);
   }
 
@@ -738,6 +791,7 @@ export function ShipmentDetail({
                     onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
                     onAdjustDokladka={agg.dokladkaQuantity > 0 ? (delta) => adjustDokladka(agg, delta) : undefined}
+                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
                   />
                 )}
               />
