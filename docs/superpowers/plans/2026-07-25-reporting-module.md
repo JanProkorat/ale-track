@@ -51,6 +51,10 @@ route `#/reports`.
 - **v1 counts order-line products only** — `OutgoingShipmentCustomExtraItem` and
   `OutgoingShipmentClientExtraItem` are excluded by design (documented spec
   limitation). Say so in a code comment in each handler.
+- **Both sides of `IncomingVsOutgoing` are actuals.** Outgoing counts `Delivered` shipments;
+  incoming must likewise count only `ProductDeliveryState.Finished` deliveries. The two
+  series share one kilogram axis, so mixing planned/cancelled Dovozy with delivered Vyvozy
+  would compare unlike quantities.
 - **On-time:** % of `OrderState.Finished` orders with
   `ActualDeliveryDate <= RequiredDeliveryDate`; orders with a null
   `RequiredDeliveryDate` are excluded from both numerator and denominator.
@@ -1933,7 +1937,13 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
 
         // Incoming weight per month — raw columns only, weight computed below.
         var incomingRows = await dbContext.DeliveryItems
-            .Where(di => di.DeliveryStop.Delivery.Date >= req.From && di.DeliveryStop.Delivery.Date <= req.To)
+            // Finished only, mirroring the outgoing side's delivered-only rule. The spec's
+            // "delivered = actuals, not plans" principle applies to both sides of this chart:
+            // counting planned or cancelled Dovozy against delivered Vyvozy would compare
+            // unlike quantities on a shared axis.
+            .Where(di => di.DeliveryStop.Delivery.State == ProductDeliveryState.Finished
+                         && di.DeliveryStop.Delivery.Date >= req.From
+                         && di.DeliveryStop.Delivery.Date <= req.To)
             .Select(di => new
             {
                 di.DeliveryStop.Delivery.Date,
