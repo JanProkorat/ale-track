@@ -20,7 +20,7 @@ public sealed class GetClientVolumeEndpointTests
     {
         // Arrange — one client in ZittauCity, two lines on one delivered stop.
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             region: Region.ZittauCity,
             lines:
@@ -63,7 +63,7 @@ public sealed class GetClientVolumeEndpointTests
     {
         // Arrange — two clients, the second heavier, both on delivered stops.
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             lines: [new(ProductKind.Can, ProductType.Radler, CanSize.ZeroPointFiveLiters, quantity: 10)]);
 
@@ -95,7 +95,7 @@ public sealed class GetClientVolumeEndpointTests
     public async Task HandleAsync_ExcludesShipmentsThatAreNotDelivered()
     {
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Cancelled,
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
 
@@ -114,7 +114,7 @@ public sealed class GetClientVolumeEndpointTests
         // Regression guard for the "order stops only" filter (Task 1 review finding):
         // a Custom-kind stop must contribute nothing to the client report.
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)],
             stopKind: OutgoingShipmentStopKind.Custom);
@@ -133,7 +133,38 @@ public sealed class GetClientVolumeEndpointTests
     }
 
     [Fact]
-    public async Task HandleAsync_ReturnsZeroedDto_ForEmptyWindow()
+    public async Task HandleAsync_CountsDeliveriesAsDistinctStops_NotDistinctDates()
+    {
+        // Arrange — one client, TWO stops on the SAME delivery date (same shipment).
+        // The headline semantic under test: Deliveries/TotalDeliveries must count distinct
+        // delivered stops, not distinct dates — collapsing same-date stops into 1 would be wrong.
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
+
+        var twoStops = DeliveredShipmentBuilder.AddSecondStopForSameClient(
+            fixture,
+            lines: [new(ProductKind.Can, ProductType.Radler, CanSize.ZeroPointFiveLiters, quantity: 10)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientVolumeRequest,
+            ClientVolumeReportDto, GetClientVolumeEndpoint>.Create(twoStops.DbContext.Object);
+
+        // Act
+        await endpoint.HandleAsync(Window(), CancellationToken.None);
+
+        // Assert
+        var response = endpoint.Response;
+        response.ClientsServed.Should().Be(1);
+        response.TopClients.Should().HaveCount(1);
+
+        // Same delivery date, two distinct stops — must count as 2, not 1.
+        response.TopClients[0].Deliveries.Should().Be(2);
+        response.TotalDeliveries.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReturnsZeroedDto_ForNoData()
     {
         var dbContext = AleTrackDbContextMockFactory.CreateMock();
 

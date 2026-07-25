@@ -49,9 +49,6 @@ public static class DeliveredShipmentBuilder
         var driver = DriverBuilder.BuildEntity(firstName: "Jan", lastName: "Novák", color: "#0072B2");
         driver.Id = 1;
 
-        var products = new List<Product>();
-        var orderItems = new List<OrderItem>();
-
         var order = new Order
         {
             Id = 1,
@@ -85,33 +82,7 @@ public static class DeliveredShipmentBuilder
         order.OutgoingShipmentStop = stop;
         order.OutgoingShipmentStopId = stop.Id;
 
-        var nextId = 1L;
-        foreach (var line in lines)
-        {
-            var product = ProductBuilder.BuildEntity(
-                name: $"Produkt {nextId}",
-                kind: line.Kind,
-                type: line.Type,
-                packageSize: line.PackageSize);
-            product.Id = nextId;
-            product.BreweryId = brewery.Id;
-            product.Brewery = brewery;
-            products.Add(product);
-
-            orderItems.Add(new OrderItem
-            {
-                Id = nextId,
-                PublicId = Guid.NewGuid(),
-                OrderId = order.Id,
-                Order = order,
-                ProductId = product.Id,
-                Product = product,
-                Quantity = line.Quantity
-            });
-
-            nextId++;
-        }
-
+        var (products, orderItems) = BuildLines(order, brewery, startId: 1, lines);
         order.OrderItems = orderItems;
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
@@ -130,6 +101,13 @@ public static class DeliveredShipmentBuilder
     /// Adds a second client with its own order and stop on the SAME delivered shipment, and
     /// returns a fixture whose mocked DbContext sees both. Used to assert ordering and grouping.
     /// </summary>
+    /// <remarks>
+    /// This consumes <paramref name="fixture"/>: it mutates <c>fixture.Shipment.Stops</c> in
+    /// place (adding the second stop), but the returned fixture is the only one whose
+    /// <c>DbContext</c> actually sees the second order/item. Callers must use the returned
+    /// fixture, not the original — the original's <c>DbContext</c> mock still only knows about
+    /// order 1, even though its <c>Shipment.Stops</c> now (confusingly) has two entries.
+    /// </remarks>
     public static DeliveredShipmentFixture AddSecondClient(
         DeliveredShipmentFixture fixture,
         string clientName,
@@ -165,9 +143,94 @@ public static class DeliveredShipmentBuilder
         order.OutgoingShipmentStopId = stop.Id;
         fixture.Shipment.Stops.Add(stop);
 
+        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: 100, lines);
+        order.OrderItems = orderItems;
+
+        var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
+        var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [fixture.Client, client],
+            breweries: [fixture.Brewery],
+            products: allProducts,
+            orders: [fixture.Order, order],
+            orderItems: allOrderItems,
+            drivers: [fixture.Driver],
+            outgoingShipments: [fixture.Shipment]);
+
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+    }
+
+    /// <summary>
+    /// Adds a second order and stop for the SAME client on the SAME delivered shipment (so on
+    /// the same delivery date), and returns a fixture whose mocked DbContext sees both. Used to
+    /// pin that a report's "Deliveries" counts distinct delivered <em>stops</em>, not distinct
+    /// delivery <em>dates</em> — two stops sharing one date must still count as 2.
+    /// </summary>
+    /// <remarks>
+    /// Consumes <paramref name="fixture"/> the same way <see cref="AddSecondClient"/> does:
+    /// callers must use the returned fixture, not the original.
+    /// </remarks>
+    public static DeliveredShipmentFixture AddSecondStopForSameClient(
+        DeliveredShipmentFixture fixture,
+        List<LineSpec> lines)
+    {
+        var order = new Order
+        {
+            Id = 2,
+            PublicId = Guid.NewGuid(),
+            Client = fixture.Client,
+            ClientId = fixture.Client.Id,
+            State = OrderState.Finished,
+            CreatedDate = fixture.Shipment.DeliveryDate!.Value.AddDays(-7)
+        };
+
+        var stop = new OutgoingShipmentStop
+        {
+            Id = 2,
+            PublicId = Guid.NewGuid(),
+            Kind = OutgoingShipmentStopKind.Order,
+            Order = 2,
+            OutgoingShipmentId = fixture.Shipment.Id,
+            OutgoingShipment = fixture.Shipment,
+            ClientOrderId = order.Id,
+            ClientOrder = order
+        };
+
+        order.OutgoingShipmentStop = stop;
+        order.OutgoingShipmentStopId = stop.Id;
+        fixture.Shipment.Stops.Add(stop);
+
+        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: 100, lines);
+        order.OrderItems = orderItems;
+
+        var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
+        var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [fixture.Client],
+            breweries: [fixture.Brewery],
+            products: allProducts,
+            orders: [fixture.Order, order],
+            orderItems: allOrderItems,
+            drivers: [fixture.Driver],
+            outgoingShipments: [fixture.Shipment]);
+
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+    }
+
+    /// <summary>
+    /// Builds products and order items for <paramref name="order"/> from <paramref name="lines"/>,
+    /// assigning sequential ids starting at <paramref name="startId"/>. Shared by every fixture
+    /// path that wires a set of order lines onto an order (<see cref="Build"/>,
+    /// <see cref="AddSecondClient"/>, <see cref="AddSecondStopForSameClient"/>).
+    /// </summary>
+    private static (List<Product> Products, List<OrderItem> OrderItems) BuildLines(
+        Order order, Brewery brewery, long startId, List<LineSpec> lines)
+    {
         var products = new List<Product>();
         var orderItems = new List<OrderItem>();
-        var nextId = 100L;
+        var nextId = startId;
 
         foreach (var line in lines)
         {
@@ -177,8 +240,8 @@ public static class DeliveredShipmentBuilder
                 type: line.Type,
                 packageSize: line.PackageSize);
             product.Id = nextId;
-            product.BreweryId = fixture.Brewery.Id;
-            product.Brewery = fixture.Brewery;
+            product.BreweryId = brewery.Id;
+            product.Brewery = brewery;
             products.Add(product);
 
             orderItems.Add(new OrderItem
@@ -195,20 +258,6 @@ public static class DeliveredShipmentBuilder
             nextId++;
         }
 
-        order.OrderItems = orderItems;
-
-        var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
-        var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
-
-        var dbContext = AleTrackDbContextMockFactory.CreateMock(
-            clients: [fixture.Client, client],
-            breweries: [fixture.Brewery],
-            products: allProducts,
-            orders: [fixture.Order, order],
-            orderItems: allOrderItems,
-            drivers: [fixture.Driver],
-            outgoingShipments: [fixture.Shipment]);
-
-        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+        return (products, orderItems);
     }
 }

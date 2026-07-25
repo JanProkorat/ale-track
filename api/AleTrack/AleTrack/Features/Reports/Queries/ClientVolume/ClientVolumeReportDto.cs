@@ -8,7 +8,7 @@ public sealed record ClientVolumeReportDto
     /// <summary>Distinct clients with at least one delivered line.</summary>
     public int ClientsServed { get; set; }
 
-    /// <summary>Distinct delivered shipment stops across all clients — one stop is one drop-off.</summary>
+    /// <summary>Sum of each client's distinct delivered-stop count — one stop is one drop-off.</summary>
     public int TotalDeliveries { get; set; }
 
     public decimal TotalWeightKg { get; set; }

@@ -73,6 +73,7 @@ public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext)
                     WeightKg = g.Sum(r => r.WeightKg)
                 })
                 .OrderByDescending(r => r.WeightKg)
+                .ThenBy(r => r.Region)
                 .ToList()
         };
 
