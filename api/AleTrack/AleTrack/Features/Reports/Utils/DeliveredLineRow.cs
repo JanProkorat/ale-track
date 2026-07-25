@@ -10,7 +10,16 @@ namespace AleTrack.Features.Reports.Utils;
 /// </summary>
 public sealed record DeliveredLineRow
 {
-    public DateOnly Date { get; init; }
+    /// <summary>
+    /// The shipment's delivery timestamp, straight out of the `timestamptz` column. The day is
+    /// derived in memory (<see cref="Date"/>) because casting a mapped column to a date inside
+    /// the query is either untranslatable or session-timezone dependent.
+    /// </summary>
+    public DateTime DeliveredAtUtc { get; init; }
+
+    /// <summary>Delivery day, derived client-side from <see cref="DeliveredAtUtc"/>.</summary>
+    public DateOnly Date => DateOnly.FromDateTime(DeliveredAtUtc);
+
     public long ClientId { get; init; }
     public string ClientName { get; init; } = null!;
     public Region ClientRegion { get; init; }
@@ -42,8 +51,9 @@ public static class DeliveredLineQuery
     /// </summary>
     public static IQueryable<DeliveredLineRow> Project(AleTrackDbContext dbContext, DateOnly from, DateOnly to)
     {
-        var fromDate = from.ToDateTime(TimeOnly.MinValue);
-        var toDate = to.ToDateTime(TimeOnly.MaxValue);
+        // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
+        var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var toDate = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         return dbContext.OrderItems
             .Where(oi => oi.Order.OutgoingShipmentStop != null
@@ -54,7 +64,7 @@ public static class DeliveredLineQuery
                          && oi.Order.OutgoingShipmentStop.OutgoingShipment.DeliveryDate <= toDate)
             .Select(oi => new DeliveredLineRow
             {
-                Date = DateOnly.FromDateTime(oi.Order.OutgoingShipmentStop!.OutgoingShipment.DeliveryDate!.Value),
+                DeliveredAtUtc = oi.Order.OutgoingShipmentStop!.OutgoingShipment.DeliveryDate!.Value,
                 ClientId = oi.Order.ClientId,
                 ClientName = oi.Order.Client.Name,
                 ClientRegion = oi.Order.Client.Region,

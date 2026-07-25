@@ -34,10 +34,10 @@ public sealed class ProductWeightCalculatorTests
     }
 
     [Fact]
-    public void ProductWeight_DelegatesToCalculator()
+    public void ProductWeight_ReturnsTheMappedWeight()
     {
         var product = new Product { Kind = ProductKind.Keg, PackageSize = KegSize.FiftyLiters };
-        product.Weight.Should().Be(ProductWeightCalculator.Compute(ProductKind.Keg, KegSize.FiftyLiters));
+        product.Weight.Should().Be(PackageWeight.SixtyTwoKilos);
     }
 }
 
@@ -177,6 +177,50 @@ public sealed class GetDeliveryVolumeEndpointTests
         }, CancellationToken.None);
 
         endpoint.Response.TotalWeightKg.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_IncludesADeliveryLateOnTheClosingDay()
+    {
+        // Regression guard: the window's upper bound must be built from TimeOnly.MaxValue, not
+        // TimeOnly.MinValue — a delivery in the evening of the closing day must still be included.
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 31, 18, 30, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+
+        await endpoint.HandleAsync(new GetDeliveryVolumeRequest
+        {
+            From = new DateOnly(2026, 7, 1),
+            To = new DateOnly(2026, 7, 31),
+            Granularity = ReportGranularity.Week
+        }, CancellationToken.None);
+
+        endpoint.Response.TotalWeightKg.Should().Be(62m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_IncludesADeliveryAtMidnightOnTheOpeningDay()
+    {
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+
+        await endpoint.HandleAsync(new GetDeliveryVolumeRequest
+        {
+            From = new DateOnly(2026, 7, 1),
+            To = new DateOnly(2026, 7, 31),
+            Granularity = ReportGranularity.Week
+        }, CancellationToken.None);
+
+        endpoint.Response.TotalWeightKg.Should().Be(62m);
     }
 
     [Fact]
