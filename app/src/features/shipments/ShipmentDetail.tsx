@@ -351,6 +351,44 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
   );
 }
 
+/** Vratky the driver collects on this route. Returns belong to the orders, not
+ * to the shipment, so this is read-only and grouped per stop — two orders for
+ * one client read as two groups, which is what the driver actually walks. */
+export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
+  const groups = stops.filter((st) => (st.returns ?? []).length > 0);
+  if (groups.length === 0) return null;
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Vratky</Typography>
+      </Stack>
+      <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
+        {groups.map((stop) => (
+          <Box key={stop.id} sx={{ px: 2.5, py: 1.5 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '2px', flexShrink: 0, bgcolor: colorForClient(stop.clientId ?? '') }} />
+              <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{stop.clientName ?? '—'}</Typography>
+            </Stack>
+            <Stack spacing={1}>
+              {(stop.returns ?? []).map((r) => (
+                <Stack key={r.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 13.5 }} noWrap>{r.name}</Typography>
+                    {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
 /** Vývoz detail: route map, advance-state header, and the nakládka card
  * (invoice-split tabs, two-stage loading check, dokládka-from-stock). Matches
  * the prototype's viewShipmentDetail + shipLoadingCard. */
@@ -781,21 +819,7 @@ export function ShipmentDetail({
 
           <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
 
-          {(shipment.returns ?? []).length > 0 && (
-            <Card sx={{ overflow: 'hidden' }}>
-              <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Vratky</Typography>
-              </Stack>
-              <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
-                {(shipment.returns ?? []).map((r) => (
-                  <Stack key={r.id} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                    <Typography sx={{ fontSize: 13.5 }} noWrap>{r.name}</Typography>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
-                  </Stack>
-                ))}
-              </Stack>
-            </Card>
-          )}
+          <ReturnsCard stops={stopsSorted} />
         </Stack>
       </Box>
 

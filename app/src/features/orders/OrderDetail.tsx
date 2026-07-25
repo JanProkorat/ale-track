@@ -9,6 +9,7 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNoneOutlined
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
@@ -61,6 +62,7 @@ export function OrderDetail({
   const { enqueueSnackbar } = useSnackbar();
   const setReminderState = useSetOrderItemReminderState();
   const items = order.orderItems ?? [];
+  const returns = order.returns ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
@@ -175,6 +177,29 @@ export function OrderDetail({
         </Card>
 
         <Stack spacing={2}>
+          {returns.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {returns.length}
+                </Box>
+              </Stack>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {returns.map((r) => (
+                  <Box key={r.id}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
+                      {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
+                    </Box>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Card>
+          )}
+
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Doručení</Typography>

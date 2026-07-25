@@ -520,7 +520,7 @@ export class Client implements IClient {
 
     constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
         this.http = http ? http : window as any;
-        this.baseUrl = baseUrl ?? "http://localhost:8080";
+        this.baseUrl = baseUrl ?? "http://localhost:8099";
     }
 
     /**
@@ -9397,7 +9397,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
     clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
     customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
-    returns?: ShipmentReturnDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -9444,11 +9443,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OutgoingShipmentCustomExtraItemDto.fromJS(item));
-            }
-            if (Array.isArray(_data["returns"])) {
-                this.returns = [] as any;
-                for (let item of _data["returns"])
-                    this.returns!.push(ShipmentReturnDto.fromJS(item));
             }
         }
     }
@@ -9497,11 +9491,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.returns)) {
-            data["returns"] = [];
-            for (let item of this.returns)
-                data["returns"].push(item ? item.toJSON() : undefined as any);
-        }
         return data;
     }
 }
@@ -9518,7 +9507,6 @@ export interface IOutgoingShipmentDetailDto {
     inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
     clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
     customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
-    returns?: ShipmentReturnDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -9536,6 +9524,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     latitude?: number | undefined;
     longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
+    returns?: OrderReturnDto[];
 
     constructor(data?: IOutgoingShipmentStopDto) {
         if (data) {
@@ -9565,6 +9554,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
                 this.products = [] as any;
                 for (let item of _data["products"])
                     this.products!.push(OutgoingShipmentOrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["returns"])) {
+                this.returns = [] as any;
+                for (let item of _data["returns"])
+                    this.returns!.push(OrderReturnDto.fromJS(item));
             }
         }
     }
@@ -9596,6 +9590,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             for (let item of this.products)
                 data["products"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.returns)) {
+            data["returns"] = [];
+            for (let item of this.returns)
+                data["returns"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -9615,6 +9614,7 @@ export interface IOutgoingShipmentStopDto {
     latitude?: number | undefined;
     longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
+    returns?: OrderReturnDto[];
 }
 
 export enum OutgoingShipmentStopKind {
@@ -9785,6 +9785,54 @@ export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductD
     orderItemId?: string;
 }
 
+export class OrderReturnDto implements IOrderReturnDto {
+    id?: string | undefined;
+    name?: string;
+    quantity?: number;
+    note?: string | undefined;
+
+    constructor(data?: IOrderReturnDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): OrderReturnDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderReturnDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IOrderReturnDto {
+    id?: string | undefined;
+    name?: string;
+    quantity?: number;
+    note?: string | undefined;
+}
+
 export class RoutePointDto implements IRoutePointDto {
     latitude?: number;
     longitude?: number;
@@ -9922,50 +9970,6 @@ export class OutgoingShipmentCustomExtraItemDto extends OutgoingShipmentProductD
 export interface IOutgoingShipmentCustomExtraItemDto extends IOutgoingShipmentProductDto {
 }
 
-export class ShipmentReturnDto implements IShipmentReturnDto {
-    id?: string | undefined;
-    name?: string;
-    quantity?: number;
-
-    constructor(data?: IShipmentReturnDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.quantity = _data["quantity"];
-        }
-    }
-
-    static fromJS(data: any): ShipmentReturnDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new ShipmentReturnDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["quantity"] = this.quantity;
-        return data;
-    }
-}
-
-export interface IShipmentReturnDto {
-    id?: string | undefined;
-    name?: string;
-    quantity?: number;
-}
-
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
 
     constructor(data?: IGetOutgoingShipmentDetailRequest) {
@@ -10038,7 +10042,6 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     inventoryExtraShipments?: InventoryExtraShipmentDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
     customExtraShipments?: CustomExtraShipmentDto[];
-    returns?: ShipmentReturnDto[];
 
     constructor(data?: IUpdateOutgoingShipmentDto) {
         if (data) {
@@ -10093,11 +10096,6 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                 for (let item of _data["customExtraShipments"])
                     this.customExtraShipments!.push(CustomExtraShipmentDto.fromJS(item));
             }
-            if (Array.isArray(_data["returns"])) {
-                this.returns = [] as any;
-                for (let item of _data["returns"])
-                    this.returns!.push(ShipmentReturnDto.fromJS(item));
-            }
         }
     }
 
@@ -10149,11 +10147,6 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
             for (let item of this.customExtraShipments)
                 data["customExtraShipments"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.returns)) {
-            data["returns"] = [];
-            for (let item of this.returns)
-                data["returns"].push(item ? item.toJSON() : undefined as any);
-        }
         return data;
     }
 }
@@ -10170,7 +10163,6 @@ export interface IUpdateOutgoingShipmentDto {
     inventoryExtraShipments?: InventoryExtraShipmentDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
     customExtraShipments?: CustomExtraShipmentDto[];
-    returns?: ShipmentReturnDto[];
 }
 
 export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
@@ -10626,7 +10618,6 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
     clientOrderShipments!: ClientOrderShipmentDto[];
     customStops?: CustomStopDto[];
     routeViaPoints?: RoutePointDto[];
-    returns?: ShipmentReturnDto[];
 
     constructor(data?: ICreateOutgoingShipmentDto) {
         if (data) {
@@ -10665,11 +10656,6 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
                 for (let item of _data["routeViaPoints"])
                     this.routeViaPoints!.push(RoutePointDto.fromJS(item));
             }
-            if (Array.isArray(_data["returns"])) {
-                this.returns = [] as any;
-                for (let item of _data["returns"])
-                    this.returns!.push(ShipmentReturnDto.fromJS(item));
-            }
         }
     }
 
@@ -10705,11 +10691,6 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
             for (let item of this.routeViaPoints)
                 data["routeViaPoints"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.returns)) {
-            data["returns"] = [];
-            for (let item of this.returns)
-                data["returns"].push(item ? item.toJSON() : undefined as any);
-        }
         return data;
     }
 }
@@ -10722,7 +10703,6 @@ export interface ICreateOutgoingShipmentDto {
     clientOrderShipments: ClientOrderShipmentDto[];
     customStops?: CustomStopDto[];
     routeViaPoints?: RoutePointDto[];
-    returns?: ShipmentReturnDto[];
 }
 
 export class AddShipmentInvoiceDto implements IAddShipmentInvoiceDto {
@@ -10944,6 +10924,7 @@ export class OrderDto implements IOrderDto {
     actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
     orderItems?: OrderItemDto[];
+    returns?: OrderReturnDto[];
 
     constructor(data?: IOrderDto) {
         if (data) {
@@ -10966,6 +10947,11 @@ export class OrderDto implements IOrderDto {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
                     this.orderItems!.push(OrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["returns"])) {
+                this.returns = [] as any;
+                for (let item of _data["returns"])
+                    this.returns!.push(OrderReturnDto.fromJS(item));
             }
         }
     }
@@ -10990,6 +10976,11 @@ export class OrderDto implements IOrderDto {
             for (let item of this.orderItems)
                 data["orderItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.returns)) {
+            data["returns"] = [];
+            for (let item of this.returns)
+                data["returns"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11002,6 +10993,7 @@ export interface IOrderDto {
     actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
     orderItems?: OrderItemDto[];
+    returns?: OrderReturnDto[];
 }
 
 export class ClientInfoDto implements IClientInfoDto {
@@ -11179,6 +11171,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     actualDeliveryDate?: Date | undefined;
     state?: OrderState;
     orderItems?: UpdateOrderItemDto[];
+    returns?: OrderReturnDto[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -11199,6 +11192,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
                     this.orderItems!.push(UpdateOrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["returns"])) {
+                this.returns = [] as any;
+                for (let item of _data["returns"])
+                    this.returns!.push(OrderReturnDto.fromJS(item));
             }
         }
     }
@@ -11221,6 +11219,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.orderItems)
                 data["orderItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.returns)) {
+            data["returns"] = [];
+            for (let item of this.returns)
+                data["returns"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11231,6 +11234,7 @@ export interface IUpdateOrderDto {
     actualDeliveryDate?: Date | undefined;
     state?: OrderState;
     orderItems?: UpdateOrderItemDto[];
+    returns?: OrderReturnDto[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
@@ -11357,6 +11361,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     clientId!: string;
     requiredDeliveryDate?: Date | undefined;
     orderItems?: CreateOrderItemDto[];
+    returns?: OrderReturnDto[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -11375,6 +11380,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
                     this.orderItems!.push(CreateOrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["returns"])) {
+                this.returns = [] as any;
+                for (let item of _data["returns"])
+                    this.returns!.push(OrderReturnDto.fromJS(item));
             }
         }
     }
@@ -11395,6 +11405,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.orderItems)
                 data["orderItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.returns)) {
+            data["returns"] = [];
+            for (let item of this.returns)
+                data["returns"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11403,6 +11418,7 @@ export interface ICreateOrderDto {
     clientId: string;
     requiredDeliveryDate?: Date | undefined;
     orderItems?: CreateOrderItemDto[];
+    returns?: OrderReturnDto[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {
