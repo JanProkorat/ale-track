@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
@@ -44,6 +45,31 @@ public sealed class OrderItem : PublicEntity
     /// </summary>
     [Column("is_shipment_loading_confirmed")]
     public bool IsShipmentLoadingConfirmed { get; set; }
+
+    /// <summary>
+    /// How many of this item's pieces are taken from our own inventory rather than
+    /// supplied by the brewery. The client still ordered — and is billed for —
+    /// <see cref="Quantity"/>; this only records where the goods came from.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="IsShipmentLoadingConfirmed"/>, this describes the loading the
+    /// order currently sits on, and is cleared when the order is freed for another
+    /// shipment. Never greater than <see cref="Quantity"/>.
+    /// </remarks>
+    [Column("quantity_from_inventory")]
+    public int QuantityFromInventory { get; set; }
+
+    /// <summary>
+    /// ID of the stock entry the inventory-sourced pieces come from. Null when none are.
+    /// </summary>
+    [Column("inventory_item_id")]
+    public long? InventoryItemId { get; set; }
+
+    /// <summary>
+    /// Stock entry the inventory-sourced pieces come from.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
+    public InventoryItem? InventoryItem { get; set; }
     
     /// <summary>
     /// The parent <see cref="Order"/> related to this item.

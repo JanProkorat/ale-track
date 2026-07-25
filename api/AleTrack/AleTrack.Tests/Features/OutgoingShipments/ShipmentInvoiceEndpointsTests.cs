@@ -41,8 +41,10 @@ public sealed class ShipmentInvoiceEndpointsTests
         first.ClientName.Should().Be("Klient A");
         first.StopOrder.Should().Be(1);
         first.Sequence.Should().Be(1);
-        first.Lines.Sum(l => l.Quantity).Should().Be(14, "10 ordered + 4 from stock");
-        first.Lines.Should().Contain(l => l.IsFromStock && l.Quantity == 4);
+        first.Lines.Sum(l => l.Quantity).Should()
+            .Be(10, "4 of the 10 come from stock, but sourcing adds no billable pieces");
+        first.Lines.Should().Contain(l => l.IsFromStock,
+            "the line is flagged so the office can see part of it came from our own stock");
         first.Lines.Should().OnlyContain(l => l.OrderingClientId == first.ClientId, "nothing is cross-billed yet");
         result.Invoices[1].ClientName.Should().Be("Klient B");
         dbContext.Verify(d => d.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -56,7 +58,9 @@ public sealed class ShipmentInvoiceEndpointsTests
 
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
-        var line = endpoint.Response.Invoices[0].Lines.First(l => !l.IsFromStock);
+        // Client A's line is stock-flagged now that its order item is partly sourced,
+        // so take a purely brewery-supplied line instead.
+        var line = endpoint.Response.Invoices.SelectMany(i => i.Lines).First(l => !l.IsFromStock);
         line.Name.Should().Be("Albrecht 12°");
         line.Kind.Should().Be(ProductKind.Keg);
         line.PackageSize.Should().Be(30);
@@ -245,22 +249,25 @@ public sealed class ShipmentInvoiceEndpointsTests
     }
 
     [Fact]
-    public async Task MoveInvoiceLine_ClientExtraItem_CanBeMovedToo()
+    public async Task MoveInvoiceLine_StockSourcedPieces_AreMovedBySplittingTheOrderItemsLine()
     {
+        // Inventory sourcing is no longer its own line kind — the pieces are billed as
+        // part of the order item that they fulfil. Billing them to someone else is done
+        // by splitting that line, which is what this used to prove for a separate kind.
         var scenario = Scenario.Build();
         ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
 
         await Move(scenario, new MoveInvoiceLineDto
         {
             FromInvoiceId = scenario.InvoiceOf(Scenario.ClientAId).PublicId,
-            SourceKind = InvoiceLineSourceKind.ClientExtraItem,
-            SourceItemId = scenario.StockExtra.PublicId,
-            Quantity = 4,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 2,
             ToInvoiceId = scenario.InvoiceOf(Scenario.ClientBId).PublicId
         });
 
         scenario.InvoiceOf(Scenario.ClientBId).Lines
-            .Single(l => l.ClientExtraItemId == scenario.StockExtra.Id).Quantity.Should().Be(4);
+            .Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should().Be(2);
     }
 
     [Fact]
@@ -465,7 +472,6 @@ public sealed class ShipmentInvoiceEndpointsTests
         internal required Client ClientA { get; init; }
         internal required Client ClientB { get; init; }
         internal required OrderItem OrderItemA { get; init; }
-        internal required OutgoingShipmentClientExtraItem StockExtra { get; init; }
         internal Guid ShipmentId => Shipment.PublicId;
 
         internal OutgoingShipmentInvoice InvoiceOf(long clientId) =>
@@ -516,19 +522,16 @@ public sealed class ShipmentInvoiceEndpointsTests
                 }
             });
 
-            var stockExtra = new OutgoingShipmentClientExtraItem
-            {
-                Id = 21, PublicId = Guid.NewGuid(), Quantity = 4,
-                ClientId = ClientAId, Client = clientA,
-                OutgoingShipment = shipment,
-                InventoryItem = new InventoryItem { Id = 31, PublicId = Guid.NewGuid(), Product = product }
-            };
-            shipment.ClientExtraItems.Add(stockExtra);
+            // Part of client A's ordered pieces come out of our own stock. This changes
+            // nothing about what is billed — only where the goods came from.
+            itemA.QuantityFromInventory = 4;
+            itemA.InventoryItem = new InventoryItem { Id = 31, PublicId = Guid.NewGuid(), Product = product };
+            itemA.InventoryItemId = 31;
 
             return new Scenario
             {
                 Shipment = shipment, ClientA = clientA, ClientB = clientB,
-                OrderItemA = itemA, StockExtra = stockExtra
+                OrderItemA = itemA
             };
         }
     }

@@ -272,25 +272,27 @@ public sealed class ShipmentInvoiceReconcilerTests
     #region extra items
 
     [Fact]
-    public void Reconcile_ClientAndCustomExtras_AreBilledToTheirClient()
+    public void Reconcile_StockSourcingIsNotBilled_ButCustomExtrasAre()
     {
-        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
-        shipment.ClientExtraItems.Add(new OutgoingShipmentClientExtraItem
+        var stopA = OrderStop(ClientA, order: 1, (itemId: 1, qty: 5));
+        var stopC = OrderStop(ClientC, order: 2);
+        var shipment = Shipment(stopA, stopC);
+
+        // Two of client A's five pieces come out of our own stock. That is sourcing,
+        // not extra quantity, so the invoice still shows five.
+        stopA.ClientOrder!.OrderItems.Single().QuantityFromInventory = 2;
+
+        stopC.ClientOrder!.CustomExtraItems.Add(new OrderCustomExtraItem
         {
-            Id = 100, PublicId = Guid.NewGuid(), ClientId = ClientA, Quantity = 4
-        });
-        shipment.CustomExtraItems.Add(new OutgoingShipmentCustomExtraItem
-        {
-            Id = 200, PublicId = Guid.NewGuid(), ClientId = ClientC, Quantity = 2, Description = "Vratné basy"
+            Id = 200, PublicId = Guid.NewGuid(), Quantity = 2, Description = "Vratné basy"
         });
 
         ShipmentInvoiceReconciler.Reconcile(shipment);
 
-        InvoiceFor(shipment, ClientA).Lines.Sum(l => l.Quantity).Should().Be(9, "5 ordered + 4 from stock");
-        InvoiceFor(shipment, ClientA).Lines.Should()
-            .Contain(l => l.SourceKind == InvoiceLineSourceKind.ClientExtraItem && l.ClientExtraItemId == 100);
+        InvoiceFor(shipment, ClientA).Lines.Sum(l => l.Quantity).Should()
+            .Be(5, "sourcing from stock does not add billable pieces");
         InvoiceFor(shipment, ClientC).Lines.Should()
-            .ContainSingle().Which.CustomExtraItemId.Should().Be(200, "a custom extra creates an invoice for its client");
+            .ContainSingle().Which.CustomExtraItemId.Should().Be(200, "a custom extra is billed to its order's client");
         AssertBalanced(shipment);
     }
 
@@ -310,19 +312,24 @@ public sealed class ShipmentInvoiceReconcilerTests
     }
 
     [Fact]
-    public void Reconcile_ExtraWithoutAClient_IsSkippedRatherThanGuessedAt()
+    public void Reconcile_EveryCustomExtraIsBilled_BecauseItAlwaysHasAClient()
     {
-        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
-        shipment.CustomExtraItems.Add(new OutgoingShipmentCustomExtraItem
+        // Replaces the old "extra without a client is skipped" case: that state was only
+        // reachable while extras hung off the shipment with a nullable ClientId. Owned by
+        // an order, an extra always has a client, so none can be skipped.
+        var stop = OrderStop(ClientA, order: 1, (itemId: 1, qty: 5));
+        var shipment = Shipment(stop);
+        stop.ClientOrder!.CustomExtraItems.Add(new OrderCustomExtraItem
         {
-            Id = 400, PublicId = Guid.NewGuid(), ClientId = null, Quantity = 3, Description = "Nepřiřazeno"
+            Id = 400, PublicId = Guid.NewGuid(), Quantity = 3, Description = "Přiřazeno objednávkou"
         });
 
         ShipmentInvoiceReconciler.Reconcile(shipment);
 
         shipment.Invoices.SelectMany(i => i.Lines).Should()
-            .NotContain(l => l.SourceKind == InvoiceLineSourceKind.CustomExtraItem);
-        shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should().Be(5);
+            .ContainSingle(l => l.SourceKind == InvoiceLineSourceKind.CustomExtraItem);
+        shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should().Be(8, "5 ordered + 3 custom");
+        AssertBalanced(shipment);
     }
 
     #endregion
@@ -359,8 +366,7 @@ public sealed class ShipmentInvoiceReconcilerTests
     {
         var carried =
             shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.OrderItems).Sum(i => i.Quantity)
-            + shipment.ClientExtraItems.Where(i => i.ClientId is not null).Sum(i => i.Quantity)
-            + shipment.CustomExtraItems.Where(i => i.ClientId is not null).Sum(i => i.Quantity);
+            + shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.CustomExtraItems).Sum(i => i.Quantity);
 
         shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should()
             .Be(carried, "every billable piece must be covered by exactly one invoice line");

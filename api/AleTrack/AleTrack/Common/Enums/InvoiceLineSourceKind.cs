@@ -12,9 +12,11 @@ public enum InvoiceLineSourceKind
     /// <summary>An item of a client order delivered on this shipment.</summary>
     OrderItem = 0,
 
-    /// <summary>An extra item taken from the inventory and delivered to a client (dokládka).</summary>
-    ClientExtraItem = 1,
-
-    /// <summary>A free-form extra item delivered to a client.</summary>
+    /// <summary>
+    /// An item the client wants that no brewery supplies. Value 2 is kept so stored
+    /// lines survive; 1 used to mean an inventory dokládka, which is no longer a
+    /// billable source of its own — those pieces are billed as part of the order item
+    /// they fulfil.
+    /// </summary>
     CustomExtraItem = 2
 }

@@ -103,8 +103,6 @@ public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : En
 
         var client = shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!.Client)
             .Concat(shipment.Invoices.Select(i => i.Client))
-            .Concat(shipment.ClientExtraItems.Select(e => e.Client))
-            .Concat(shipment.CustomExtraItems.Select(e => e.Client))
             .FirstOrDefault(c => c is not null && c.PublicId == req.Data.ClientId);
 
         // Only clients taking part in this shipment can be invoiced for it.

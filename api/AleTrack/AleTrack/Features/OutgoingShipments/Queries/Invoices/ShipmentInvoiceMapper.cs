@@ -65,7 +65,6 @@ public static class ShipmentInvoiceMapper
         line.SourceKind switch
         {
             InvoiceLineSourceKind.OrderItem => FromOrderItem(shipment, line),
-            InvoiceLineSourceKind.ClientExtraItem => FromClientExtra(shipment, line),
             InvoiceLineSourceKind.CustomExtraItem => FromCustomExtra(shipment, line),
             _ => null
         };
@@ -90,40 +89,21 @@ public static class ShipmentInvoiceMapper
             Quantity = line.Quantity,
             OrderingClientId = order.Client?.PublicId ?? Guid.Empty,
             OrderingClientName = order.Client?.Name ?? string.Empty,
-            IsFromStock = false
+            // Sourcing does not change what is billed, but the split is worth surfacing:
+            // true when any of this item's pieces came out of our own stock.
+            IsFromStock = item.QuantityFromInventory > 0
         };
     }
 
-    private static ShipmentInvoiceLineDto? FromClientExtra(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
-    {
-        var extra = shipment.ClientExtraItems.FirstOrDefault(e => e.Id == line.ClientExtraItemId);
-        if (extra is null)
-            return null;
-
-        var product = extra.InventoryItem?.Product;
-        return new ShipmentInvoiceLineDto
-        {
-            Id = line.PublicId,
-            SourceKind = line.SourceKind,
-            SourceItemId = extra.PublicId,
-            ProductId = product?.PublicId,
-            Name = extra.InventoryItem?.Name ?? product?.Name ?? string.Empty,
-            Kind = product?.Kind,
-            PackageSize = product?.PackageSize,
-            PriceWithVat = product?.PriceWithVat,
-            Quantity = line.Quantity,
-            OrderingClientId = extra.Client?.PublicId ?? Guid.Empty,
-            OrderingClientName = extra.Client?.Name ?? string.Empty,
-            // A client extra is taken from the inventory, which is exactly what "dokládka" means.
-            IsFromStock = true
-        };
-    }
 
     private static ShipmentInvoiceLineDto? FromCustomExtra(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
     {
-        var extra = shipment.CustomExtraItems.FirstOrDefault(e => e.Id == line.CustomExtraItemId);
-        if (extra is null)
+        var match = ShipmentInvoiceGraph.CustomExtrasOf(shipment)
+            .FirstOrDefault(x => x.Extra.Id == line.CustomExtraItemId);
+        if (match.Extra is null)
             return null;
+
+        var (extra, owningOrder) = match;
 
         return new ShipmentInvoiceLineDto
         {
@@ -136,8 +116,8 @@ public static class ShipmentInvoiceMapper
             PackageSize = null,
             PriceWithVat = null,
             Quantity = line.Quantity,
-            OrderingClientId = extra.Client?.PublicId ?? Guid.Empty,
-            OrderingClientName = extra.Client?.Name ?? string.Empty,
+            OrderingClientId = owningOrder.Client?.PublicId ?? Guid.Empty,
+            OrderingClientName = owningOrder.Client?.Name ?? string.Empty,
             IsFromStock = false
         };
     }

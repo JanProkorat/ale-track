@@ -261,27 +261,16 @@ public static class ShipmentInvoiceReconciler
             }
         }
 
-        foreach (var item in shipment.ClientExtraItems.Where(i => i.ClientId is not null))
-        {
-            sources.Add(new BillableSource
-            {
-                Kind = InvoiceLineSourceKind.ClientExtraItem,
-                ItemId = RequirePersisted(item.Id, nameof(OutgoingShipmentClientExtraItem)),
-                OrderingClientId = item.ClientId!.Value,
-                OrderingClient = item.Client,
-                Quantity = item.Quantity,
-                Name = item.InventoryItem?.Name ?? item.InventoryItem?.Product?.Name
-            });
-        }
-
-        foreach (var item in shipment.CustomExtraItems.Where(i => i.ClientId is not null))
+        // Inventory sourcing is not a billable source: those pieces are already covered
+        // by the order item they fulfil, so billing them again would double-charge.
+        foreach (var (item, order) in ShipmentInvoiceGraph.CustomExtrasOf(shipment))
         {
             sources.Add(new BillableSource
             {
                 Kind = InvoiceLineSourceKind.CustomExtraItem,
-                ItemId = RequirePersisted(item.Id, nameof(OutgoingShipmentCustomExtraItem)),
-                OrderingClientId = item.ClientId!.Value,
-                OrderingClient = item.Client,
+                ItemId = RequirePersisted(item.Id, nameof(OrderCustomExtraItem)),
+                OrderingClientId = order.ClientId,
+                OrderingClient = order.Client,
                 Quantity = item.Quantity,
                 Name = item.Description
             });
@@ -342,9 +331,6 @@ public static class ShipmentInvoiceReconciler
             case InvoiceLineSourceKind.OrderItem:
                 line.OrderItemId = source.ItemId;
                 break;
-            case InvoiceLineSourceKind.ClientExtraItem:
-                line.ClientExtraItemId = source.ItemId;
-                break;
             case InvoiceLineSourceKind.CustomExtraItem:
                 line.CustomExtraItemId = source.ItemId;
                 break;
@@ -362,7 +348,6 @@ public static class ShipmentInvoiceReconciler
         (line.SourceKind, line.SourceKind switch
         {
             InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
-            InvoiceLineSourceKind.ClientExtraItem => line.ClientExtraItemId ?? 0,
             InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
             _ => 0
         });
@@ -373,8 +358,6 @@ public static class ShipmentInvoiceReconciler
     private static string? NameOf(OutgoingShipmentInvoiceLine line) => line.SourceKind switch
     {
         InvoiceLineSourceKind.OrderItem => line.OrderItem?.Product?.Name,
-        InvoiceLineSourceKind.ClientExtraItem =>
-            line.ClientExtraItem?.InventoryItem?.Name ?? line.ClientExtraItem?.InventoryItem?.Product?.Name,
         InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItem?.Description,
         _ => null
     };

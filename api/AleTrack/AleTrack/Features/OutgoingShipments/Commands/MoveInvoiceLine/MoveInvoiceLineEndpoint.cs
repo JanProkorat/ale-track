@@ -164,8 +164,6 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
 
         var client = shipment.Invoices.Select(i => i.Client)
             .Concat(shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!.Client))
-            .Concat(shipment.ClientExtraItems.Select(e => e.Client))
-            .Concat(shipment.CustomExtraItems.Select(e => e.Client))
             .FirstOrDefault(c => c is not null && c.PublicId == data.ToClientId!.Value);
 
         // Only clients that already take part in this shipment may be billed on it.

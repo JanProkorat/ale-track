@@ -73,8 +73,13 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     .ThenInclude(oi => oi.Product)
         .Include(os => os.InventoryExtraItems)
             .ThenInclude(ei => ei.Product)
-        .Include(os => os.ClientExtraItems)
-            .ThenInclude(ei => ei.InventoryItem)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.OrderItems)
+                    .ThenInclude(oi => oi.InventoryItem)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.CustomExtraItems)
         .Include(os => os.RouteViaPoints)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
@@ -92,8 +97,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
         var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
         var inventoryExtraItems = await GetInventoryExtraItemsAsync(req.Data.InventoryExtraShipments, outgoingShipment, ct);
-        var clientExtraItems = await GetClientExtraItemsAsync(req.Data.ClientExtraShipments, outgoingShipment, ct);
-        var customExtraItems = GetCustomExtraItems(req.Data.CustomExtraShipments, outgoingShipment);
 
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
@@ -103,8 +106,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
         outgoingShipment.InventoryExtraItems = inventoryExtraItems;
-        outgoingShipment.ClientExtraItems = clientExtraItems;
-        outgoingShipment.CustomExtraItems = customExtraItems;
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -112,8 +113,14 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (_statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(req.Data.State);
         
+        // Both checks must be taken before the new state is assigned below.
+        // isTransitioningToLoaded used to be computed after that assignment, so it was
+        // always false and inventory was never actually drawn down.
         var isTransitioningToDelivered = outgoingShipment.State != OutgoingShipmentState.Delivered
                                         && req.Data.State == OutgoingShipmentState.Delivered;
+
+        var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
+                                      && req.Data.State == OutgoingShipmentState.Loaded;
 
         outgoingShipment.State = req.Data.State;
 
@@ -130,9 +137,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             }
         }
         
-        var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
-                                     && req.Data.State == OutgoingShipmentState.Loaded;
-
         // Order lifecycle follows the shipment: added → Planning, InTransit →
         // Delivering, Delivered → Finished (+ actual delivery date), Cancelled or
         // removed → back to New (freed for reuse).
@@ -172,7 +176,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ResetOrderItemsForReuse(outgoingShipment);
 
         if (isTransitioningToLoaded)
-            SubtractFromInventory(outgoingShipment.ClientExtraItems);
+            SubtractFromInventory(outgoingShipment);
 
         if (isTransitioningToDelivered && outgoingShipment.InventoryExtraItems.Count > 0)
             await AddExtraItemsToInventoryAsync(outgoingShipment.InventoryExtraItems, ct);
@@ -182,38 +186,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         await Send.NoContentAsync(ct);
     }
 
-    private List<OutgoingShipmentCustomExtraItem> GetCustomExtraItems(List<CustomExtraShipmentDto> extraItems, OutgoingShipment outgoingShipment)
-    {
-        var newItems = extraItems
-            .Where(ei => ei.Id is null)
-            .ToList();
-        
-        var resultItems = newItems
-            .Select(i => new OutgoingShipmentCustomExtraItem
-            {
-                Description = i.Description,
-                IsShipmentLoadingConfirmed = i.IsLoadingConfirmed,
-                Quantity = i.Quantity
-            })
-            .ToList();
-        
-        var existingItems = extraItems
-            .Where(ei => ei.Id is not null 
-                         && outgoingShipment.CustomExtraItems.Any(ei2 => ei2.PublicId == ei.Id.Value))
-            .ToList();
-        
-        foreach (var item in existingItems)
-        {
-            var existing = outgoingShipment.CustomExtraItems.First(ei => ei.PublicId == item.Id!.Value);
-            existing.Description = item.Description;
-            existing.IsShipmentLoadingConfirmed = item.IsLoadingConfirmed;
-            existing.Quantity = item.Quantity;
-            
-            resultItems.Add(existing);
-        }
-        
-        return resultItems;
-    }
 
     private async Task<ICollection<OutgoingShipmentStop>> GetOrderStopsAsync(List<ClientOrderShipmentDto> clientOrderShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
@@ -379,20 +351,41 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         return vehicle;
     }
 
-    private static void SubtractFromInventory(ICollection<OutgoingShipmentClientExtraItem> extraItems)
+    /// <summary>
+    /// Takes the inventory-sourced pieces of each order item out of stock. Runs on the
+    /// transition to Loaded — stock is consumed when the truck is packed.
+    /// </summary>
+    /// <remarks>
+    /// Stock is allowed to go negative: the depot may knowingly load against a delivery
+    /// that has not been booked in yet, and the nakládka warns about it rather than
+    /// blocking the load.
+    /// </remarks>
+    private static void SubtractFromInventory(OutgoingShipment outgoingShipment)
     {
-        foreach (var item in extraItems)
-            item.InventoryItem.Quantity -= item.Quantity;
+        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder is not null))
+        foreach (var item in stop.ClientOrder!.OrderItems.Where(i => i.QuantityFromInventory > 0 && i.InventoryItem is not null))
+            item.InventoryItem!.Quantity -= item.QuantityFromInventory;
     }
 
+    /// <summary>
+    /// Clears the shipment-scoped fields on a freed order so it can be planned onto
+    /// another loading. Null-guarded: a custom stop has no order, and the previous
+    /// version dereferenced ClientOrder unconditionally.
+    /// </summary>
     private static void ResetOrderItemsForReuse(OutgoingShipment outgoingShipment)
     {
-        foreach (var stop in outgoingShipment.Stops)
+        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder is not null))
         {
-            foreach (var orderItem in stop.ClientOrder.OrderItems)
+            foreach (var orderItem in stop.ClientOrder!.OrderItems)
             {
                 orderItem.IsShipmentLoadingConfirmed = false;
+                orderItem.QuantityFromInventory = 0;
+                orderItem.InventoryItem = null;
+                orderItem.InventoryItemId = null;
             }
+
+            foreach (var extra in stop.ClientOrder.CustomExtraItems)
+                extra.IsShipmentLoadingConfirmed = false;
         }
     }
 
@@ -430,64 +423,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             dbContext.InventoryItems.AddRange(newInventoryItems);
     }
 
-    private async Task<List<OutgoingShipmentClientExtraItem>> GetClientExtraItemsAsync(List<ClientExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
-    {
-        if (extraShipments.Count == 0)
-            return [];
-
-        var existingById = outgoingShipment.ClientExtraItems
-            .ToDictionary(ei => ei.PublicId);
-
-        // Only new items need their inventory item resolved — existing items are
-        // matched by Id and keep their already-linked inventory item.
-        var newProductIds = extraShipments
-            .Where(es => es.Id is null || !existingById.ContainsKey(es.Id.Value))
-            .Select(es => es.InventoryItemId)
-            .Distinct()
-            .ToList();
-
-        var productsByPublicId = new Dictionary<Guid, InventoryItem>();
-        if (newProductIds.Count > 0)
-        {
-            var fetchedProducts = await dbContext.InventoryItems
-                .Where(p => newProductIds.Contains(p.PublicId))
-                .ToListAsync(ct);
-
-            if (fetchedProducts.Count != newProductIds.Count)
-            {
-                var notFound = newProductIds.Except(fetchedProducts.Select(p => p.PublicId)).ToList();
-                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFound);
-            }
-
-            productsByPublicId = fetchedProducts.ToDictionary(p => p.PublicId);
-        }
-
-        var result = new List<OutgoingShipmentClientExtraItem>();
-
-        foreach (var dto in extraShipments)
-        {
-            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
-            {
-                // Update existing item
-                existing.Quantity = dto.Quantity;
-                existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
-                result.Add(existing);
-            }
-            else
-            {
-                // Create new item
-                result.Add(new OutgoingShipmentClientExtraItem
-                {
-                    PublicId = Guid.NewGuid(),
-                    InventoryItem = productsByPublicId[dto.InventoryItemId],
-                    IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
-                    Quantity = dto.Quantity
-                });
-            }
-        }
-
-        return result;
-    }
     
     private async Task<List<OutgoingShipmentInventoryExtraItem>> GetInventoryExtraItemsAsync(List<InventoryExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
