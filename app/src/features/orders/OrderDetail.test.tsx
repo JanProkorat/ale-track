@@ -54,18 +54,35 @@ describe('OrderDetail', () => {
     expect(within(heading.parentElement!).getByText('Zitavsky klient')).toBeInTheDocument();
   });
 
-  it('shows the required delivery date instead of the creation date', () => {
+  it('shows the deadline instead of the creation date', () => {
     renderDetail(order({ requiredDeliveryDate: new Date('2026-07-31T00:00:00Z') }));
 
-    expect(screen.getByText(/požadovaný termín/)).toBeInTheDocument();
-    expect(screen.queryByText(/vytvořeno/)).not.toBeInTheDocument();
+    const header = screen.getByRole('heading', { level: 1 }).closest('div')!.parentElement!;
+    expect(within(header).getByText(/Doručit nejpozději:/)).toBeInTheDocument();
+    expect(within(header).queryByText(/Vytvořeno:/)).not.toBeInTheDocument();
+    expect(within(header).getByText('31. 7. 2026')).toBeInTheDocument();
+  });
+
+  it('shows the actual delivery date once delivered, in place of the deadline', () => {
+    renderDetail(order({
+      state: OrderState.Finished,
+      requiredDeliveryDate: new Date('2026-07-31T00:00:00Z'),
+      actualDeliveryDate: new Date('2026-08-02T00:00:00Z'),
+    }));
+
+    const header = screen.getByRole('heading', { level: 1 }).closest('div')!.parentElement!;
+    expect(within(header).getByText(/Doručeno:/)).toBeInTheDocument();
+    expect(within(header).getByText('2. 8. 2026')).toBeInTheDocument();
+    expect(within(header).queryByText(/Doručit nejpozději:/)).not.toBeInTheDocument();
+    expect(within(header).queryByText('31. 7. 2026')).not.toBeInTheDocument();
   });
 
   it('falls back to the creation date when no term is set', () => {
     renderDetail(order({ requiredDeliveryDate: undefined }));
 
-    expect(screen.getByText(/vytvořeno/)).toBeInTheDocument();
-    expect(screen.queryByText(/požadovaný termín/)).not.toBeInTheDocument();
+    const header = screen.getByRole('heading', { level: 1 }).closest('div')!.parentElement!;
+    expect(within(header).getByText(/Vytvořeno:/)).toBeInTheDocument();
+    expect(within(header).queryByText(/Doručit nejpozději:/)).not.toBeInTheDocument();
   });
 
   it('no longer renders the redundant Klient card', () => {

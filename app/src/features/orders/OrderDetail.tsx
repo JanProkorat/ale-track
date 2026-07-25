@@ -90,6 +90,15 @@ export function OrderDetail({
 
   const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
+  // Once it has arrived the deadline is history — show when it actually landed.
+  // Before that the deadline is the number people work to; the creation date is
+  // only a last resort for an order with no term yet.
+  const headerDate = order.actualDeliveryDate
+    ? { label: 'Doručeno:', value: fmtDate(order.actualDeliveryDate) }
+    : order.requiredDeliveryDate
+      ? { label: 'Doručit nejpozději:', value: fmtDate(order.requiredDeliveryDate) }
+      : { label: 'Vytvořeno:', value: fmtDate(order.createdDate) };
+
   return (
     <Box>
       <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
@@ -110,17 +119,9 @@ export function OrderDetail({
               {order.client?.name ?? '—'}
             </Typography>
           </Stack>
-          {/* The date that matters day to day is when it has to be there; the
-              creation date is only worth showing when no term is set yet. */}
           <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
-            {order.requiredDeliveryDate ? (
-              <>
-                {'požadovaný termín '}
-                <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{fmtDate(order.requiredDeliveryDate)}</Box>
-              </>
-            ) : (
-              <>{'vytvořeno '}{fmtDate(order.createdDate)}</>
-            )}
+            {headerDate.label}{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{headerDate.value}</Box>
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
@@ -230,7 +231,7 @@ export function OrderDetail({
             </Stack>
             <Stack spacing={1.5} sx={{ p: 2.5 }}>
               <Stack direction="row" justifyContent="space-between">
-                <Typography color="text.secondary">Požadovaný termín</Typography>
+                <Typography color="text.secondary">Doručit nejpozději</Typography>
                 <Typography sx={{ fontWeight: 600 }}>{order.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : '—'}</Typography>
               </Stack>
               <Stack direction="row" justifyContent="space-between">
