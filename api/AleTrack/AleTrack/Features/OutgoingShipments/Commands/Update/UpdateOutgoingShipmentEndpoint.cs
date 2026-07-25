@@ -245,6 +245,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Where(id => !existingOrderIds.Contains(id))
             .ToList();
 
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, clientOrderShipments, ct);
+
         var stops = new List<OutgoingShipmentStop>(orderStops);
 
         // Add new orders
@@ -278,7 +280,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     Kind = OutgoingShipmentStopKind.Order,
                     ClientOrder = o.order,
                     Order = o.requestOrder.Order,
-                    SelectedAddressKind = o.requestOrder.SelectedAddressKind
+                    SelectedAddressKind = o.requestOrder.SelectedAddressKind,
+                    ClientDeliveryPlaceId = o.requestOrder.ClientDeliveryPlaceId.HasValue
+                        ? placeIds[o.requestOrder.ClientDeliveryPlaceId.Value]
+                        : null
                 }));
         }
 
@@ -287,11 +292,16 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Select(cos => cos.ClientOrderId)
             .Contains(s.ClientOrder!.PublicId))];
 
-        // Update order of the stops
+        // Update already-linked stops. Before this feature only Order was
+        // written here, so changing a stop's address kind never persisted.
         foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder!.PublicId)))
         {
             var matchingDto = clientOrderShipments.First(cos => cos.ClientOrderId == stop.ClientOrder!.PublicId);
             stop.Order = matchingDto.Order;
+            stop.SelectedAddressKind = matchingDto.SelectedAddressKind;
+            stop.ClientDeliveryPlaceId = matchingDto.ClientDeliveryPlaceId.HasValue
+                ? placeIds[matchingDto.ClientDeliveryPlaceId.Value]
+                : null;
         }
 
         return stops;
