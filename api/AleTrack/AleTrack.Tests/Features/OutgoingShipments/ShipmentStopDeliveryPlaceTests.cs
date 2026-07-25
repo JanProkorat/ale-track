@@ -2,7 +2,9 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Queries.OutgoingShipmentsList;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
+using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
@@ -355,5 +357,80 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    // Guards the asymmetry that is the whole reason ClientDeliveryPlace has no
+    // global query filter: the shipment detail must keep resolving a place
+    // that has since been soft-deleted, so historical shipments still render
+    // their delivery address instead of silently losing it.
+    [Fact]
+    public async Task ProcessAsync_ShipmentDetail_ResolvesSoftDeletedPlace()
+    {
+        var shipmentId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(client: client);
+
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Zrušená hospoda", isDeleted: true);
+
+        var stop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            ClientDeliveryPlace = place
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [stop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            orders: [order],
+            outgoingShipments: [outgoingShipment],
+            clientDeliveryPlaces: [place]
+        );
+
+        var request = new GetOutgoingShipmentDetailRequest { Id = shipmentId };
+        var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
+            .Create(dbContext.Object);
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var returnedStop = endpoint.Response.Stops.Single();
+        returnedStop.DeliveryPlace.Should().NotBeNull("a soft-deleted place must still render on shipments that already used it");
+        returnedStop.DeliveryPlace!.Name.Should().Be("Zrušená hospoda");
+    }
+
+    // The mirror-image assertion: the orders-list projection (which feeds the
+    // shipment editor's picker) must exclude soft-deleted places, since a
+    // removed place should no longer be offered as a destination.
+    [Fact]
+    public async Task ProcessAsync_OrdersForShipments_ExcludesSoftDeletedPlaces()
+    {
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var activePlace = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Aktivní místo");
+        var deletedPlace = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Smazané místo", isDeleted: true);
+
+        var order = OrderBuilder.BuildEntity(client: client);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            orders: [order],
+            clientDeliveryPlaces: [activePlace, deletedPlace]
+        );
+
+        var request = new GetOrdersListForOutgoingShipmentsRequest();
+        var endpoint = EndpointWithResponseBuilder<GetOrdersListForOutgoingShipmentsRequest, List<OutgoingShipmentOrderDto>, GetOrdersListForOutgoingShipmentsEndpoint>
+            .Create(dbContext.Object);
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var returnedOrder = endpoint.Response.Single();
+        returnedOrder.ClientDeliveryPlaces.Should().ContainSingle()
+            .Which.Name.Should().Be("Aktivní místo");
     }
 }
