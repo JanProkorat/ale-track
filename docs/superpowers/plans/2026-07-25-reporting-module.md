@@ -1976,7 +1976,7 @@ which moves to Order.Returns once feat/order-returns lands."
 
 ---
 
-## Task 4: Register the module, regenerate the client, wire the hooks and the page shell
+## Task 4: Register the module, regenerate the client, wire the hooks and the model
 
 **Files:**
 - Modify: `api/AleTrack/AleTrack/Common/Enums/ModuleType.cs` (append `Reports`)
@@ -1990,8 +1990,7 @@ which moves to Order.Returns once feat/order-returns lands."
 - Modify: `app/src/hooks/useReports.ts` (three new hooks)
 - Modify: `app/src/generated/api-client.ts` (regenerate — never hand-edit)
 - Create: `app/src/features/reports/reportModel.ts`
-- Create: `app/src/features/reports/ReportsPage.tsx`
-- Test: `app/src/features/reports/reportModel.test.ts`, `app/src/features/reports/ReportsPage.test.tsx`
+- Test: `app/src/features/reports/reportModel.test.ts`
 
 **Interfaces:**
 - Consumes from Tasks 1–3: routes `reports/delivery-volume`, `reports/client-volume`,
@@ -2009,7 +2008,6 @@ which moves to Order.Returns once feat/order-returns lands."
   - `fmtKg(kg: number) → string`, `sharePct(part: number, total: number) → string`
   - `useDeliveryVolume(from, to, granularity, enabled)`, `useClientVolume(from, to, enabled)`,
     `useOperationsReport(from, to, enabled)`
-  - `<ReportsPage />` — the route element
   - `qk.reportVolume(params)`, `qk.reportClients(params)`, `qk.reportOperations(params)`
 
 **Why the backend enum changes here:** `PERM_MODULES` in `permissionModel.ts:19` is
@@ -2122,7 +2120,10 @@ const KEY_TO_MODULE: Record<string, ModuleType> = {
 ```
 
 `src/routes/router.tsx` — import and add the route inside the `AppShell` children,
-directly after the dashboard index route:
+directly after the dashboard index route. **`ReportsPage` is created in Task 8**, so add
+this import and route only once that task runs — or add them now and accept a red
+typecheck until Task 8, whichever your execution order makes cleaner. Do not stub the
+component.
 
 ```tsx
 import { ReportsPage } from 'src/features/reports/ReportsPage';
@@ -2343,201 +2344,17 @@ cd app && yarn vitest run src/features/reports/reportModel.test.ts
 
 Expected: PASS, 7 tests.
 
-- [ ] **Step 11: Write the failing page test**
-
-`app/src/features/reports/ReportsPage.test.tsx`:
-
-```tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material';
-import { theme } from 'src/theme/theme';
-import { ReportsPage } from './ReportsPage';
-
-const useDeliveryVolume = vi.fn();
-const useClientVolume = vi.fn();
-const useOperationsReport = vi.fn();
-
-vi.mock('src/hooks/useReports', () => ({
-  useDeliveryVolume: (...args: unknown[]) => useDeliveryVolume(...args),
-  useClientVolume: (...args: unknown[]) => useClientVolume(...args),
-  useOperationsReport: (...args: unknown[]) => useOperationsReport(...args),
-}));
-
-const loading = { data: undefined, isLoading: true, isError: false, error: null };
-const empty = {
-  data: {
-    totalWeightKg: 0, totalUnits: 0, clientsServed: 0,
-    unitsByKind: [], byBrewery: [], byType: [], series: [],
-  },
-  isLoading: false, isError: false, error: null,
-};
-
-function renderPage() {
-  return render(
-    <ThemeProvider theme={theme}>
-      <MemoryRouter>
-        <ReportsPage />
-      </MemoryRouter>
-    </ThemeProvider>
-  );
-}
-
-describe('ReportsPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    useDeliveryVolume.mockReturnValue(empty);
-    useClientVolume.mockReturnValue(loading);
-    useOperationsReport.mockReturnValue(loading);
-  });
-
-  it('opens on Objem with the 90-day preset and only fetches the active tab', () => {
-    renderPage();
-
-    expect(screen.getByText('Reporty')).toBeInTheDocument();
-    expect(screen.getByText('Objem')).toBeInTheDocument();
-
-    // Active tab enabled, the other two disabled.
-    expect(useDeliveryVolume.mock.calls[0][3]).toBe(true);
-    expect(useClientVolume.mock.calls[0][2]).toBe(false);
-    expect(useOperationsReport.mock.calls[0][2]).toBe(false);
-
-    // 90 days is the default window: 90 days between from and to.
-    const [from, to] = useDeliveryVolume.mock.calls[0] as [string, string];
-    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
-    expect(days).toBe(90);
-  });
-
-  it('refetches with a narrower window when the period preset changes', () => {
-    renderPage();
-    const before = useDeliveryVolume.mock.calls[0][0] as string;
-
-    fireEvent.click(screen.getByText('30 dní'));
-
-    const after = useDeliveryVolume.mock.calls.at(-1)![0] as string;
-    expect(after).not.toBe(before);
-    expect(Date.parse(after)).toBeGreaterThan(Date.parse(before));
-  });
-
-  it('switches the enabled query when a different tab is selected', () => {
-    renderPage();
-
-    fireEvent.click(screen.getByText('Klienti'));
-
-    expect(useClientVolume.mock.calls.at(-1)![2]).toBe(true);
-    expect(useDeliveryVolume.mock.calls.at(-1)![3]).toBe(false);
-  });
-
-  it('renders the error state instead of a tab body when the query fails', () => {
-    useDeliveryVolume.mockReturnValue({
-      data: undefined, isLoading: false, isError: true, error: new Error('boom'),
-    });
-
-    renderPage();
-
-    expect(screen.getByText('Data se nepodařilo načíst.')).toBeInTheDocument();
-  });
-});
-```
-
-- [ ] **Step 12: Run it and watch it fail**
-
-```bash
-cd app && yarn vitest run src/features/reports/ReportsPage.test.tsx
-```
-
-Expected: FAIL — cannot resolve `./ReportsPage`.
-
-- [ ] **Step 13: Write the page shell**
-
-`app/src/features/reports/ReportsPage.tsx`. The three tab components arrive in Tasks
-5–7; until then import them as stubs you create empty and fill in later — or write this
-file at the end of Task 5. Either way the shell owns the control row and the fetching:
-
-```tsx
-import { useMemo, useState } from 'react';
-import { Stack, Typography } from '@mui/material';
-import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
-import { SegControl } from 'src/components/common/SegControl';
-import { QueryBoundary } from 'src/components/common/QueryBoundary';
-import { useClientVolume, useDeliveryVolume, useOperationsReport } from 'src/hooks/useReports';
-import { num } from 'src/lib/format';
-import {
-  PERIOD_LABEL, PERIOD_OPTIONS, TAB_OPTIONS, apiGranularity, periodRange,
-  type ReportPeriod, type ReportTab, type VolumeGranularity,
-} from './reportModel';
-import { VolumeTab } from './VolumeTab';
-import { ClientsTab } from './ClientsTab';
-import { OperationalTab } from './OperationalTab';
-
-/**
- * Reporty — one page, three tabs, a shared period preset. Only the active tab's query
- * runs; the other two stay disabled so switching tabs is the only thing that fetches.
- */
-export function ReportsPage() {
-  const [tab, setTab] = useState<ReportTab>('volume');
-  const [period, setPeriod] = useState<ReportPeriod>('90');
-  const [granularity, setGranularity] = useState<VolumeGranularity>('week');
-
-  const { from, to } = useMemo(() => periodRange(period), [period]);
-
-  const volume = useDeliveryVolume(from, to, apiGranularity(granularity), tab === 'volume');
-  const clients = useClientVolume(from, to, tab === 'clients');
-  const operations = useOperationsReport(from, to, tab === 'operational');
-
-  return (
-    <PageContainer>
-      <PageHeader
-        eyebrow="Analýza"
-        title="Reporty"
-        subtitle={`Dokončené vývozy · ${PERIOD_LABEL[period]}.`}
-      />
-
-      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-        <SegControl value={tab} onChange={setTab} options={TAB_OPTIONS} />
-        <SegControl value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
-      </Stack>
-
-      {tab === 'volume' && (
-        <QueryBoundary query={volume}>
-          {(data) => (
-            <VolumeTab
-              data={data}
-              granularity={granularity}
-              onGranularityChange={setGranularity}
-            />
-          )}
-        </QueryBoundary>
-      )}
-
-      {tab === 'clients' && (
-        <QueryBoundary query={clients}>{(data) => <ClientsTab data={data} />}</QueryBoundary>
-      )}
-
-      {tab === 'operational' && (
-        <QueryBoundary query={operations}>{(data) => <OperationalTab data={data} />}</QueryBoundary>
-      )}
-    </PageContainer>
-  );
-}
-```
-
-> Note the shape: the tab components take **loaded data as a plain prop** and never call
-> a hook on possibly-missing data — the rule in `app/CLAUDE.md` under *Data fetching*.
-
-- [ ] **Step 14: Run the tests and the typecheck**
+- [ ] **Step 11: Run the tests and the typecheck**
 
 ```bash
 cd app && yarn vitest run src/features/reports/ && yarn typecheck
 ```
 
-Expected: model tests pass; `ReportsPage.test.tsx` passes once Tasks 5–7's components
-exist. If you are executing tasks in order, write minimal placeholder components
-(`export function VolumeTab() { return null; }`) so this task ends green, and replace
-them in Tasks 5–7.
+Expected: `reportModel.test.ts` passes (7 tests) and `yarn typecheck` is clean. No page
+or tab component exists yet — the route added in Step 4 is wired in Task 8, so do **not**
+create placeholder components here.
 
-- [ ] **Step 15: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add api/AleTrack/AleTrack/Common/Enums/ModuleType.cs app/package.json app/yarn.lock \
@@ -2606,6 +2423,7 @@ node ~/.claude/plugins/.../dataviz/scripts/validate_palette.js "<comma,separated
 ```ts
 import { describe, it, expect } from 'vitest';
 import { ProductType } from 'src/generated/api-client';
+import { ptypeLabel } from 'src/lib/labels';
 import {
   REPORT_PALETTE_DARK,
   REPORT_PALETTE_LIGHT,
@@ -2642,28 +2460,48 @@ describe('foldTypes', () => {
   const palette = REPORT_PALETTE_LIGHT;
 
   it('colours a type by identity, so reordering the rows does not repaint it', () => {
-    const ascending = foldTypes(
+    const pale = { type: ProductType.PaleLager, weightKg: 90, units: 9 };
+    const dark = { type: ProductType.DarkLager, weightKg: 10, units: 1 };
+
+    const ascending = foldTypes([dark, pale], palette);
+    const descending = foldTypes([pale, dark], palette);
+
+    // Each type keeps its own slot colour whichever order it arrived in, and the two
+    // types never share a colour.
+    const paleColor = palette[typeSlot(ProductType.PaleLager)];
+    const darkColor = palette[typeSlot(ProductType.DarkLager)];
+    expect(paleColor).not.toBe(darkColor);
+
+    for (const rows of [ascending, descending]) {
+      expect(rows.find((r) => r.value === 90)!.color).toBe(paleColor);
+      expect(rows.find((r) => r.value === 10)!.color).toBe(darkColor);
+    }
+  });
+
+  it('changing which type leads does not change any type\'s colour', () => {
+    // The prototype's bug: it sorted by volume, then indexed the palette by position,
+    // so a period change repainted every slice. Guard against a regression.
+    const heavyPale = foldTypes(
       [
+        { type: ProductType.PaleLager, weightKg: 900, units: 9 },
         { type: ProductType.DarkLager, weightKg: 10, units: 1 },
-        { type: ProductType.PaleLager, weightKg: 90, units: 9 },
       ],
       palette
     );
-    const descending = foldTypes(
+    const heavyDark = foldTypes(
       [
-        { type: ProductType.PaleLager, weightKg: 90, units: 9 },
-        { type: ProductType.DarkLager, weightKg: 10, units: 1 },
+        { type: ProductType.PaleLager, weightKg: 10, units: 1 },
+        { type: ProductType.DarkLager, weightKg: 900, units: 9 },
       ],
       palette
     );
 
-    const paleAsc = ascending.find((r) => r.label === descending.find((d) => d.label === r.label)?.label);
-    expect(paleAsc).toBeDefined();
+    const colorOf = (rows: typeof heavyPale, label: string) => rows.find((r) => r.label === label)!.color;
+    const paleLabel = ptypeLabel(ProductType.PaleLager)!;
+    const darkLabel = ptypeLabel(ProductType.DarkLager)!;
 
-    // Same type => same colour in both orderings.
-    const colorFor = (rows: typeof ascending, label: string) => rows.find((r) => r.label === label)!.color;
-    const paleLabel = ascending.find((r) => r.value === 90)!.label;
-    expect(colorFor(ascending, paleLabel)).toBe(colorFor(descending, paleLabel));
+    expect(colorOf(heavyPale, paleLabel)).toBe(colorOf(heavyDark, paleLabel));
+    expect(colorOf(heavyPale, darkLabel)).toBe(colorOf(heavyDark, darkLabel));
   });
 
   it('merges everything beyond the fixed six into one Ostatní row', () => {
@@ -2829,7 +2667,7 @@ export function foldTypes(rows: TypeVolumeRow[], palette: readonly string[]): Ch
 cd app && yarn vitest run src/features/reports/reportPalette.test.ts
 ```
 
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Write the chart card wrapper**
 
@@ -3019,9 +2857,6 @@ export function VolumeTab({
   const breweries = data.byBrewery ?? [];
   const series = data.series ?? [];
 
-  const unitsOf = (...names: string[]) =>
-    kinds.filter((k) => names.includes(String(kindLabel(k.kind) ?? k.kind))).reduce((s, k) => s + (k.units ?? 0), 0);
-
   // Kind buckets the prototype's KPIs use; cans and multipacks share one tile.
   const kegUnits = kinds.filter((k) => String(k.kind) === 'Keg' || Number(k.kind) === 1).reduce((s, k) => s + (k.units ?? 0), 0);
   const bottleUnits = kinds.filter((k) => String(k.kind) === 'Bottle' || Number(k.kind) === 2).reduce((s, k) => s + (k.units ?? 0), 0);
@@ -3168,7 +3003,7 @@ function KpiRow({
 > whether enum fields arrive as strings or numbers (the `kind` filters above accept
 > both, matching `labels.ts`'s `enumName` approach), and whether `series[].bucketStart`
 > is a `string` or a `Date` — `fmtDateShort` takes both, but the chart's x labels must
-> read like the prototype's `20.7.`. Delete the unused `unitsOf` helper if it stays unused.
+> read like the prototype's `20.7.`.
 
 - [ ] **Step 9: Run the tests, typecheck and lint**
 
@@ -3815,7 +3650,230 @@ vývoz share one kilogram axis."
 
 ---
 
-## Task 8: Look at it, update the spec, verify the whole thing
+## Task 8: The page shell that ties the tabs together
+
+**Files:**
+- Create: `app/src/features/reports/ReportsPage.tsx`
+- Test: `app/src/features/reports/ReportsPage.test.tsx`
+- Modify: `app/src/routes/router.tsx` (only if Task 4 deferred the import/route)
+
+**Interfaces:**
+- Consumes: `useDeliveryVolume`, `useClientVolume`, `useOperationsReport` (Task 4);
+  `periodRange`, `apiGranularity`, `PERIOD_LABEL`, `PERIOD_OPTIONS`, `TAB_OPTIONS`,
+  `type ReportTab`, `type ReportPeriod`, `type VolumeGranularity` (Task 4);
+  `<VolumeTab data granularity onGranularityChange>` (Task 5), `<ClientsTab data>`
+  (Task 6), `<OperationalTab data>` (Task 7); `PageContainer`, `PageHeader`,
+  `SegControl`, `QueryBoundary`.
+- Produces: `<ReportsPage />` — the element for `PATHS.reports`.
+
+This is the last piece: the three tabs are standalone components that take loaded data as
+a prop, so they were built and tested before the shell existed. The shell adds the control
+row, resolves the period preset to a date window, and keeps the two inactive tabs' queries
+disabled so switching tabs is the only thing that fetches.
+
+- [ ] **Step 1: Write the failing page test**
+
+`app/src/features/reports/ReportsPage.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material';
+import { theme } from 'src/theme/theme';
+import { ReportsPage } from './ReportsPage';
+
+const useDeliveryVolume = vi.fn();
+const useClientVolume = vi.fn();
+const useOperationsReport = vi.fn();
+
+vi.mock('src/hooks/useReports', () => ({
+  useDeliveryVolume: (...args: unknown[]) => useDeliveryVolume(...args),
+  useClientVolume: (...args: unknown[]) => useClientVolume(...args),
+  useOperationsReport: (...args: unknown[]) => useOperationsReport(...args),
+}));
+
+const loading = { data: undefined, isLoading: true, isError: false, error: null };
+const empty = {
+  data: {
+    totalWeightKg: 0, totalUnits: 0, clientsServed: 0,
+    unitsByKind: [], byBrewery: [], byType: [], series: [],
+  },
+  isLoading: false, isError: false, error: null,
+};
+
+function renderPage() {
+  return render(
+    <ThemeProvider theme={theme}>
+      <MemoryRouter>
+        <ReportsPage />
+      </MemoryRouter>
+    </ThemeProvider>
+  );
+}
+
+describe('ReportsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDeliveryVolume.mockReturnValue(empty);
+    useClientVolume.mockReturnValue(loading);
+    useOperationsReport.mockReturnValue(loading);
+  });
+
+  it('opens on Objem with the 90-day preset and only fetches the active tab', () => {
+    renderPage();
+
+    expect(screen.getByText('Reporty')).toBeInTheDocument();
+    expect(screen.getByText('Objem')).toBeInTheDocument();
+
+    // Active tab enabled, the other two disabled.
+    expect(useDeliveryVolume.mock.calls[0][3]).toBe(true);
+    expect(useClientVolume.mock.calls[0][2]).toBe(false);
+    expect(useOperationsReport.mock.calls[0][2]).toBe(false);
+
+    // 90 days is the default window: 90 days between from and to.
+    const [from, to] = useDeliveryVolume.mock.calls[0] as [string, string];
+    const days = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    expect(days).toBe(90);
+  });
+
+  it('refetches with a narrower window when the period preset changes', () => {
+    renderPage();
+    const before = useDeliveryVolume.mock.calls[0][0] as string;
+
+    fireEvent.click(screen.getByText('30 dní'));
+
+    const after = useDeliveryVolume.mock.calls.at(-1)![0] as string;
+    expect(after).not.toBe(before);
+    expect(Date.parse(after)).toBeGreaterThan(Date.parse(before));
+  });
+
+  it('switches the enabled query when a different tab is selected', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByText('Klienti'));
+
+    expect(useClientVolume.mock.calls.at(-1)![2]).toBe(true);
+    expect(useDeliveryVolume.mock.calls.at(-1)![3]).toBe(false);
+  });
+
+  it('renders the error state instead of a tab body when the query fails', () => {
+    useDeliveryVolume.mockReturnValue({
+      data: undefined, isLoading: false, isError: true, error: new Error('boom'),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Data se nepodařilo načíst.')).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+```bash
+cd app && yarn vitest run src/features/reports/ReportsPage.test.tsx
+```
+
+Expected: FAIL — cannot resolve `./ReportsPage`.
+
+- [ ] **Step 3: Write the page shell**
+
+`app/src/features/reports/ReportsPage.tsx` — all three tab components already exist
+(Tasks 5–7), so this wires them up for real. The shell owns the control row and the
+fetching:
+
+```tsx
+import { useMemo, useState } from 'react';
+import { Stack, Typography } from '@mui/material';
+import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
+import { SegControl } from 'src/components/common/SegControl';
+import { QueryBoundary } from 'src/components/common/QueryBoundary';
+import { useClientVolume, useDeliveryVolume, useOperationsReport } from 'src/hooks/useReports';
+import { num } from 'src/lib/format';
+import {
+  PERIOD_LABEL, PERIOD_OPTIONS, TAB_OPTIONS, apiGranularity, periodRange,
+  type ReportPeriod, type ReportTab, type VolumeGranularity,
+} from './reportModel';
+import { VolumeTab } from './VolumeTab';
+import { ClientsTab } from './ClientsTab';
+import { OperationalTab } from './OperationalTab';
+
+/**
+ * Reporty — one page, three tabs, a shared period preset. Only the active tab's query
+ * runs; the other two stay disabled so switching tabs is the only thing that fetches.
+ */
+export function ReportsPage() {
+  const [tab, setTab] = useState<ReportTab>('volume');
+  const [period, setPeriod] = useState<ReportPeriod>('90');
+  const [granularity, setGranularity] = useState<VolumeGranularity>('week');
+
+  const { from, to } = useMemo(() => periodRange(period), [period]);
+
+  const volume = useDeliveryVolume(from, to, apiGranularity(granularity), tab === 'volume');
+  const clients = useClientVolume(from, to, tab === 'clients');
+  const operations = useOperationsReport(from, to, tab === 'operational');
+
+  return (
+    <PageContainer>
+      <PageHeader
+        eyebrow="Analýza"
+        title="Reporty"
+        subtitle={`Dokončené vývozy · ${PERIOD_LABEL[period]}.`}
+      />
+
+      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <SegControl value={tab} onChange={setTab} options={TAB_OPTIONS} />
+        <SegControl value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      </Stack>
+
+      {tab === 'volume' && (
+        <QueryBoundary query={volume}>
+          {(data) => (
+            <VolumeTab
+              data={data}
+              granularity={granularity}
+              onGranularityChange={setGranularity}
+            />
+          )}
+        </QueryBoundary>
+      )}
+
+      {tab === 'clients' && (
+        <QueryBoundary query={clients}>{(data) => <ClientsTab data={data} />}</QueryBoundary>
+      )}
+
+      {tab === 'operational' && (
+        <QueryBoundary query={operations}>{(data) => <OperationalTab data={data} />}</QueryBoundary>
+      )}
+    </PageContainer>
+  );
+}
+```
+
+> Note the shape: the tab components take **loaded data as a plain prop** and never call
+> a hook on possibly-missing data — the rule in `app/CLAUDE.md` under *Data fetching*.
+
+
+- [ ] **Step 4: Run the tests, typecheck and lint**
+
+```bash
+cd app && yarn vitest run src/features/reports/ && yarn typecheck && yarn lint
+```
+
+Expected: every report test passes, including `ReportsPage.test.tsx` (4 tests). If Task 4
+deferred the router import, add it now and re-run.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/src/features/reports/ReportsPage.tsx app/src/features/reports/ReportsPage.test.tsx app/src/routes/router.tsx
+git commit -m "feat(reports): Reporty page shell with the tab and period controls"
+```
+
+---
+
+## Task 9: Look at it, update the spec, verify the whole thing
 
 The validator checked colour, not layout. Nothing in Tasks 1–7 has actually been *seen*.
 
@@ -3919,7 +3977,7 @@ and the charting library → Tasks 5–7; testing → the TDD steps throughout; 
 reconciliation → Task 8. The spec's deferred items (revenue/Tržby, export, custom ranges,
 extra-item volume) stay out, as specced.
 
-**2. Deliberate deviations, all recorded in commit messages and Task 8's spec update.**
+**2. Deliberate deviations, all recorded in commit messages and Task 9's spec update.**
 - `clientsServed` added to the volume DTO (prototype KPI needs it).
 - `totalShipments`, `totalStops`, `activeDrivers` added to the operations DTO (same reason).
 - Query keys are `qk.reportVolume`-style siblings, because `qk.reports` is a flat array
@@ -3950,5 +4008,6 @@ consumer indexes it numerically.
 
 **5. Task independence.** Tasks 1–3 are backend-only and each ends with a green suite.
 Task 4 is the only task that must run after all three (the client is generated from the
-live Swagger doc). Tasks 5–7 each end green on their own. Task 4 Step 14 notes the
-placeholder-component trick so it can end green before Tasks 5–7 exist.
+live Swagger doc). Tasks 5–7 build the three tabs as standalone components that take
+loaded data as a prop, so each ends green on its own without a page to host it; Task 8
+adds that page last. No task creates a placeholder component.
