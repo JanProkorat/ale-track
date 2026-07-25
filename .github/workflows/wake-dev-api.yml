@@ -1,0 +1,44 @@
+name: Wake Dev API
+
+# Render free instances spin down after 15 minutes idle and can take 30-60s to cold
+# start - longer than cron-job.org's 30s ceiling, which is why the first keepalive ping
+# of the day reports a failure even though it does trigger the wake. This job waits
+# patiently instead, so the service is already warm when that schedule starts.
+#
+# Note: GitHub disables scheduled workflows in repositories with no activity for 60 days.
+
+on:
+  schedule:
+    # 05:00 UTC = 07:00 Prague in summer, 06:00 in winter - ahead of the 08:00 keepalive
+    # window either way, so no DST handling is needed.
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for liveness, then warm the database connection
+        env:
+          BASE_URL: ${{ vars.DEV_API_BASE_URL || 'https://dev-aletrack.onrender.com' }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 "$BASE_URL/health/live" || true)
+            echo "attempt $attempt: /health/live -> $code"
+
+            if [ "$code" = "200" ]; then
+              # The first database connection on a fresh instance costs ~10s. Pay it here
+              # rather than leaving it for the first real user request.
+              curl -s -o /dev/null -w '/health/ready -> %{http_code} in %{time_total}s\n' \
+                --max-time 60 "$BASE_URL/health/ready" || true
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::$BASE_URL never returned 200 from /health/live - the service is not coming up."
+          exit 1
