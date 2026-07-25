@@ -5,7 +5,7 @@
 
 // fireEvent rather than user-event: the latter is not a dependency of this project
 // and adding one for a test file is not worth it. MUI's Select opens on mouseDown.
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -147,7 +147,7 @@ describe('client bands', () => {
     expect(screen.getByText(/Zatím bez položek/)).toBeInTheDocument();
   });
 
-  it('collapses a band and leaves its siblings open', () => {
+  it('collapses a band and leaves its siblings open', async () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -160,11 +160,23 @@ describe('client bands', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
 
-    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+    // The panel animates out, so it is still mounted for the duration of the transition.
+    await waitForElementToBeRemoved(() => screen.queryByText('Albrecht 12°'));
     expect(screen.getByText('Lager 50')).toBeInTheDocument();
   });
 
-  it('offers collapse-all only when there is more than one client', () => {
+  it('animates the panel out rather than removing it instantly', () => {
+    renderSection();
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sbalit' }));
+
+    // Still present immediately after the click — that is the transition running. Without
+    // the Collapse wrapper this row would already be gone.
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+
+  it('offers collapse-all only when there is more than one client', async () => {
     renderSection();
     expect(screen.queryByRole('button', { name: /Sbalit vše/ })).not.toBeInTheDocument();
 
@@ -180,7 +192,7 @@ describe('client bands', () => {
 
     const collapseAll = screen.getByRole('button', { name: /Sbalit vše/ });
     fireEvent.click(collapseAll);
-    expect(screen.getByRole('button', { name: /Rozbalit vše/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rozbalit vše/ })).toBeInTheDocument());
     unmount();
   });
 });

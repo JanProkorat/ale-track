@@ -17,9 +17,9 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Card, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, Typography,
+  Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
+  DialogTitle, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
@@ -343,8 +343,7 @@ function InvoicingContent({ shipmentId, editable, data }: {
                 key={band.clientId}
                 sx={{ py: 1.5, ...(index > 0 ? { borderTop: 1, borderColor: 'divider' } : null) }}
               >
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap
-                  sx={{ mb: collapsed.has(band.clientId) ? 0 : 1.25 }}>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                   <Box
                     sx={{
                       width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
@@ -376,7 +375,10 @@ function InvoicingContent({ shipmentId, editable, data }: {
                     onClick={() => toggleBand(band.clientId)}
                     aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
                     sx={{
-                      width: 28, height: 28, transition: 'transform .15s',
+                      width: 28, height: 28,
+                      transition: (t) => t.transitions.create('transform', {
+                        duration: t.transitions.duration.shortest,
+                      }),
                       transform: collapsed.has(band.clientId) ? 'none' : 'rotate(180deg)',
                     }}
                   >
@@ -384,8 +386,8 @@ function InvoicingContent({ shipmentId, editable, data }: {
                   </IconButton>
                 </Stack>
 
-                {!collapsed.has(band.clientId) && (
-                  <Card variant="outlined">
+                <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
+                  <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
                         <TableHead>
@@ -448,7 +450,7 @@ function InvoicingContent({ shipmentId, editable, data }: {
                       </Table>
                     </TableContainer>
                   </Card>
-                )}
+                </Collapse>
               </Box>
             ))
           )}
