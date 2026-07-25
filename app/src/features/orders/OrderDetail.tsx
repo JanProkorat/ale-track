@@ -92,6 +92,9 @@ export function OrderDetail({
 
   const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
+  // Both sidebar cards hide when empty, so the whole column can be absent.
+  const hasSidebar = returns.length > 0 || notes.length > 0;
+
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
   // only a last resort for an order with no term yet.
@@ -148,8 +151,10 @@ export function OrderDetail({
 
       {stateName !== 'Cancelled' && <StatusFlow stateName={stateName} />}
 
-      {/* Two columns on md+ (items | sidebar), stacked in DOM order below that. */}
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start' }}>
+      {/* Two columns on md+ (items | sidebar), stacked in DOM order below that.
+          With nothing to put in the sidebar the second column is dropped
+          entirely rather than left as dead space beside the items. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: hasSidebar ? '1.5fr 1fr' : '1fr' }, alignItems: 'start' }}>
         <Card sx={{ overflow: 'hidden' }}>
           <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky</Typography>
@@ -192,6 +197,7 @@ export function OrderDetail({
           </Box>
         </Card>
 
+        {hasSidebar && (
         <Stack spacing={2}>
           {returns.length > 0 && (
             <Card sx={{ overflow: 'hidden' }}>
@@ -239,6 +245,7 @@ export function OrderDetail({
             </Card>
           )}
         </Stack>
+        )}
       </Box>
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>

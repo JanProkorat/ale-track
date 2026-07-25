@@ -44,6 +44,23 @@ function cardTitles(container: HTMLElement): string[] {
     .filter((t) => ['Položky', 'Vratky', 'Poznámky', 'Doručení', 'Klient'].includes(t));
 }
 
+/** The two-column grid wrapping the items card and the sidebar. */
+function grid(container: HTMLElement): HTMLElement {
+  const itemsCard = Array.from(container.querySelectorAll('.MuiCard-root'))
+    .find((c) => c.textContent?.startsWith('Položky'));
+  return itemsCard!.parentElement as HTMLElement;
+}
+
+/** The emotion rules emitted for the grid, so the responsive column template
+ *  (which happy-dom does not resolve) can still be asserted. */
+function gridCss(container: HTMLElement): string {
+  const cls = Array.from(grid(container).classList).find((c) => c.startsWith('css-'));
+  if (!cls) return '';
+  const css = Array.from(document.querySelectorAll('style')).map((s) => s.textContent ?? '').join('\n');
+  const at = css.indexOf(`.${cls}{`);
+  return at === -1 ? '' : css.slice(at, at + 800);
+}
+
 describe('OrderDetail', () => {
   it('puts the client name on the order-number line', () => {
     renderDetail(order());
@@ -118,5 +135,25 @@ describe('OrderDetail', () => {
     const { container } = renderDetail(order({ notes: [] }));
 
     expect(cardTitles(container)).not.toContain('Poznámky');
+  });
+
+  it('drops the sidebar column entirely when it would be empty', () => {
+    const { container } = renderDetail(order({ returns: [], notes: [] }));
+
+    // Only the items card remains, it is the grid's sole child (no empty
+    // sibling holding a column open), and the md two-column rule is gone so it
+    // spans the full width instead of leaving dead space beside it.
+    expect(cardTitles(container)).toEqual(['Položky']);
+    expect(grid(container).children).toHaveLength(1);
+    expect(gridCss(container)).not.toContain('1.5fr');
+  });
+
+  it('keeps the two-column grid as soon as one sidebar card has content', () => {
+    const { container } = renderDetail(order({
+      notes: [new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' })],
+    }));
+
+    expect(grid(container).children).toHaveLength(2);
+    expect(gridCss(container)).toContain('1.5fr 1fr');
   });
 });
