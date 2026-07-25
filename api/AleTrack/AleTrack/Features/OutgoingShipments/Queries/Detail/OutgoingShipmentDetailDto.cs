@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Utils;
 
@@ -64,11 +65,6 @@ public sealed record OutgoingShipmentDetailDto
     /// List of custom extra product items included in the shipment
     /// </summary>
     public List<OutgoingShipmentCustomExtraItemDto> CustomExtraItems { get; set; } = [];
-
-    /// <summary>
-    /// Returnable items the client hands back (empty kegs, bottles…)
-    /// </summary>
-    public List<ShipmentReturnDto> Returns { get; set; } = [];
 }
 
 /// <summary>
@@ -145,6 +141,13 @@ public sealed record OutgoingShipmentStopDto
     /// Products to be delivered at this stop (order stops only)
     /// </summary>
     public List<OutgoingShipmentOrderItemDto> Products { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this stop's order (order
+    /// stops only — always empty for custom stops). Read-only here; returns are
+    /// owned and edited by the order.
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
 }
 
 public record OutgoingShipmentProductDto

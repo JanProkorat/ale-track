@@ -41,6 +41,12 @@ public static class ErrorCodes
     public const string ValidationMinValueNotMatchedError = "VALIDATION_MINVALUE_NOT_MATCHED_ERROR";
     
     /// <summary>
+    /// Error code for case when a required delivery date is today or in the past.
+    /// Distinct from the generic min-value code so clients can show a precise message.
+    /// </summary>
+    public const string DeliveryDateInPast = "DELIVERY_DATE_IN_PAST";
+
+    /// <summary>
     /// Error code for case when a requested entity is not found
     /// </summary>
     public const string NotfoundError = "ENTITY_NOT_FOUND";

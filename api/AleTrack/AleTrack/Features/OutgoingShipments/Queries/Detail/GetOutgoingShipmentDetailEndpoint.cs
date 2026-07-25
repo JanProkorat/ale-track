@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -94,7 +95,18 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     OrderItemId = oi.PublicId
                                 })
                                 .ToList()
-                            : new List<OutgoingShipmentOrderItemDto>()
+                            : new List<OutgoingShipmentOrderItemDto>(),
+                        Returns = s.ClientOrder != null
+                            ? s.ClientOrder.Returns
+                                .Select(r => new OrderReturnDto
+                                {
+                                    Id = r.PublicId,
+                                    Name = r.Name,
+                                    Quantity = r.Quantity,
+                                    Note = r.Note
+                                })
+                                .ToList()
+                            : new List<OrderReturnDto>()
                     })
                     .ToList(),
                 RouteViaPoints = os.RouteViaPoints
@@ -133,14 +145,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Quantity = ei.Quantity,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
                         Name = ei.Description
-                    })
-                    .ToList(),
-                Returns = os.Returns
-                    .Select(r => new ShipmentReturnDto
-                    {
-                        Id = r.PublicId,
-                        Name = r.Name,
-                        Quantity = r.Quantity,
                     })
                     .ToList(),
             })

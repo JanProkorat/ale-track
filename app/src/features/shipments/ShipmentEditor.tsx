@@ -14,7 +14,6 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -39,7 +38,6 @@ import {
   RoutePointDto,
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
-  ShipmentReturnDto,
 } from 'src/generated/api-client';
 import { useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
@@ -67,10 +65,8 @@ interface DraftStop {
   lng?: number;
 }
 
-interface DraftReturn { id?: string; name: string; quantity: number }
-
 /** Serialized snapshot of the savable state, for unsaved-change detection. */
-function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[], returns: DraftReturn[]): string {
+function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[]): string {
   return JSON.stringify({
     name: name.trim(),
     date: date ? date.toISOString() : null,
@@ -78,7 +74,6 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     driverIds: [...driverIds].sort(),
     stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind })),
     vias: viaPoints.map((v) => ({ lat: v.lat, lng: v.lng })),
-    returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity })),
   });
 }
 
@@ -190,12 +185,11 @@ export function ShipmentEditor({
   const [regionFilter, setRegionFilter] = useState<string>('all');
   const [customStopOpen, setCustomStopOpen] = useState(false);
   const [viaPoints, setViaPoints] = useState<{ lat: number; lng: number }[]>([]);
-  const [returns, setReturns] = useState<DraftReturn[]>([]);
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, returns);
+    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -224,15 +218,13 @@ export function ShipmentEditor({
             order: i + 1,
           });
     const loadedVias = (s.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }));
-    const loadedReturns: DraftReturn[] = (s.returns ?? []).map((r) => ({ id: r.id, name: r.name ?? '', quantity: r.quantity ?? 0 }));
     setName(loadedName);
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
     setDriverIds(loadedDrivers);
     setStops(loadedStops);
     setViaPoints(loadedVias);
-    setReturns(loadedReturns);
-    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias, loadedReturns);
+    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias);
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -372,7 +364,7 @@ export function ShipmentEditor({
 
   const busy = createShipment.isPending || updateShipment.isPending;
 
-  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, returns);
+  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -402,10 +394,6 @@ export function ShipmentEditor({
 
     const routeViaPoints = viaPoints.map((v) => new RoutePointDto({ latitude: v.lat, longitude: v.lng }));
 
-    const returnsPayload = returns
-      .filter((r) => r.name.trim())
-      .map((r) => new ShipmentReturnDto({ id: r.id, name: r.name.trim(), quantity: r.quantity }));
-
     try {
       let savedId: string;
       if (mode === 'edit' && shipmentId) {
@@ -424,7 +412,6 @@ export function ShipmentEditor({
             inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
             clientExtraShipments: existingDraft?.clientExtraShipments ?? [],
             customExtraShipments: existingDraft?.customExtraShipments ?? [],
-            returns: returnsPayload,
           }),
         });
         savedId = shipmentId;
@@ -438,7 +425,6 @@ export function ShipmentEditor({
           clientOrderShipments,
           customStops,
           routeViaPoints,
-          returns: returnsPayload,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
       }
@@ -638,45 +624,6 @@ export function ShipmentEditor({
                   </Box>
                 );
               })}
-            </Stack>
-          </Card>
-
-          {/* Vratky — empty kegs/bottles the client hands back on delivery.
-              Editable in any state (returns come back at delivery time, even
-              when the route composition is already locked). */}
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
-              <Button size="small" startIcon={<AddOutlinedIcon fontSize="small" />} onClick={() => setReturns((rs) => [...rs, { name: '', quantity: 1 }])}>
-                Přidat
-              </Button>
-            </Stack>
-            <Stack spacing={1} sx={{ p: 2 }}>
-              {returns.length === 0 ? (
-                <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  Žádné vratky. Přidejte položky, které klient vrací (prázdné sudy, lahve…).
-                </Typography>
-              ) : returns.map((r, i) => (
-                <Stack key={i} direction="row" spacing={1} alignItems="center">
-                  <TextField
-                    size="small"
-                    placeholder="Např. prázdné sudy 50 l"
-                    value={r.name}
-                    onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    type="number"
-                    value={r.quantity}
-                    onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, quantity: Math.max(0, Number(e.target.value) || 0) } : x)))}
-                    slotProps={{ htmlInput: { min: 0, style: { width: 56, textAlign: 'right' } } }}
-                  />
-                  <IconButton size="small" onClick={() => setReturns((rs) => rs.filter((_, j) => j !== i))} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-                    <DeleteOutlineOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              ))}
             </Stack>
           </Card>
         </Stack>

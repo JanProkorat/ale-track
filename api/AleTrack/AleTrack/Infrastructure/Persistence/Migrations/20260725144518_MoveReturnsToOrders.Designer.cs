@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725144518_MoveReturnsToOrders")]
+    partial class MoveReturnsToOrders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -681,43 +684,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("order_items");
-                });
-
-            modelBuilder.Entity("AleTrack.Entities.OrderNote", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_created");
-
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("order_id");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("order_notes");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OrderReturn", b =>
@@ -1827,17 +1793,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OrderNote", b =>
-                {
-                    b.HasOne("AleTrack.Entities.Order", "Order")
-                        .WithMany("Notes")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.OrderReturn", b =>
                 {
                     b.HasOne("AleTrack.Entities.Order", "Order")
@@ -2119,8 +2074,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.Order", b =>
                 {
-                    b.Navigation("Notes");
-
                     b.Navigation("OrderItems");
 
                     b.Navigation("Returns");

@@ -71,12 +71,6 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentCustomExtraItem> CustomExtraItems { get; set; } = [];
 
     /// <summary>
-    /// Returnable items the client hands back (empty kegs, bottles…)
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentReturn> Returns { get; set; } = [];
-
-    /// <summary>
     /// Invoices to be issued for this shipment — by default one per client on the route.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]

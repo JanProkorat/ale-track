@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Create;
 
 namespace AleTrack.Features.Orders.Commands.Create;
@@ -21,9 +22,19 @@ public sealed record CreateOrderDto
     public DateOnly? RequiredDeliveryDate { get; set; }
 
     /// <summary>
+    /// Free-form notes about the order.
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
+
+    /// <summary>
     /// List of items included in the order
     /// </summary>
     public List<CreateOrderItemDto> OrderItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…).
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
 }
 
 /// <summary>

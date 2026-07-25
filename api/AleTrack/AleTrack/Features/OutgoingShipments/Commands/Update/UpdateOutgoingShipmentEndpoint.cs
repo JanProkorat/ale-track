@@ -76,7 +76,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         .Include(os => os.ClientExtraItems)
             .ThenInclude(ei => ei.InventoryItem)
         .Include(os => os.RouteViaPoints)
-        .Include(os => os.Returns)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -95,7 +94,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var inventoryExtraItems = await GetInventoryExtraItemsAsync(req.Data.InventoryExtraShipments, outgoingShipment, ct);
         var clientExtraItems = await GetClientExtraItemsAsync(req.Data.ClientExtraShipments, outgoingShipment, ct);
         var customExtraItems = GetCustomExtraItems(req.Data.CustomExtraShipments, outgoingShipment);
-        var returns = GetReturns(req.Data.Returns, outgoingShipment);
 
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
@@ -107,7 +105,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.InventoryExtraItems = inventoryExtraItems;
         outgoingShipment.ClientExtraItems = clientExtraItems;
         outgoingShipment.CustomExtraItems = customExtraItems;
-        outgoingShipment.Returns = returns;
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -183,24 +180,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         await dbContext.SaveChangesAsync(ct);
 
         await Send.NoContentAsync(ct);
-    }
-
-    private static List<OutgoingShipmentReturn> GetReturns(List<ShipmentReturnDto> returns, OutgoingShipment outgoingShipment)
-    {
-        var result = returns
-            .Where(r => r.Id is null)
-            .Select(r => new OutgoingShipmentReturn { Name = r.Name, Quantity = r.Quantity })
-            .ToList();
-
-        foreach (var r in returns.Where(r => r.Id is not null && outgoingShipment.Returns.Any(x => x.PublicId == r.Id!.Value)))
-        {
-            var existing = outgoingShipment.Returns.First(x => x.PublicId == r.Id!.Value);
-            existing.Name = r.Name;
-            existing.Quantity = r.Quantity;
-            result.Add(existing);
-        }
-
-        return result;
     }
 
     private List<OutgoingShipmentCustomExtraItem> GetCustomExtraItems(List<CustomExtraShipmentDto> extraItems, OutgoingShipment outgoingShipment)
