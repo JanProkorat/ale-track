@@ -44,6 +44,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
+import { ShipmentInvoicing } from './ShipmentInvoicing';
 
 interface NakladkaRow {
   key: string;
@@ -796,6 +797,12 @@ export function ShipmentDetail({
             </Card>
           )}
         </Stack>
+      </Box>
+
+      {/* Full width below the grid: the split needs the whole row, and its audience
+          (the office doing the billing) is not the nakládka's. */}
+      <Box sx={{ mt: 2.5 }}>
+        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} />
       </Box>
 
       <Dialog open={dokladkaOpen} onClose={() => setDokladkaOpen(false)} maxWidth="xs" fullWidth>
