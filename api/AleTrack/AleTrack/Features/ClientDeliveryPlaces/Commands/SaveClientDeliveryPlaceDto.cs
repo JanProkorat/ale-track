@@ -53,6 +53,10 @@ public sealed class SaveClientDeliveryPlaceDtoValidator : Validator<SaveClientDe
 {
     public SaveClientDeliveryPlaceDtoValidator()
     {
+        RuleFor(dto => dto.Address)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
         RuleFor(dto => dto.Name)
             .NotEmpty()
             .WithErrorCode(ErrorCodes.ValidationNotEmptyError);

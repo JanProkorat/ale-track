@@ -2,9 +2,12 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.ClientDeliveryPlaces;
+using AleTrack.Features.ClientDeliveryPlaces.Commands;
 using AleTrack.Features.ClientDeliveryPlaces.Commands.Create;
 using AleTrack.Features.ClientDeliveryPlaces.Commands.Delete;
 using AleTrack.Features.ClientDeliveryPlaces.Commands.Update;
+using AleTrack.Features.ClientDeliveryPlaces.Queries.List;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -167,5 +170,85 @@ public sealed class ClientDeliveryPlaceTests
         place.IsDeleted.Should().BeTrue();
         dbContext.Verify(e => e.ClientDeliveryPlaces.Remove(It.IsAny<ClientDeliveryPlace>()), Times.Never);
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ListPlaces_ExcludesSoftDeletedPlace()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        var livePlace = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Živá zahrádka");
+        var deletedPlace = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Smazaná zahrádka", isDeleted: true);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            clientDeliveryPlaces: [livePlace, deletedPlace]);
+
+        var request = new GetClientDeliveryPlacesRequest { Id = clientId };
+
+        var endpoint = EndpointWithResponseBuilder<GetClientDeliveryPlacesRequest,
+            List<ClientDeliveryPlaceDto>, GetClientDeliveryPlacesEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var response = endpoint.Response;
+        response.Should().HaveCount(1);
+        response[0].Name.Should().Be("Živá zahrádka");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ListPlaces_ExcludesPlaceBelongingToSoftDeletedClient()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.IsDeleted = true;
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Zahrádka");
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            clientDeliveryPlaces: [place]);
+
+        var request = new GetClientDeliveryPlacesRequest { Id = clientId };
+
+        var endpoint = EndpointWithResponseBuilder<GetClientDeliveryPlacesRequest,
+            List<ClientDeliveryPlaceDto>, GetClientDeliveryPlacesEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        endpoint.Response.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ListPlaces_ReturnsLivePlacesOrderedByName()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        var placeC = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Céčko");
+        var placeA = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Áčko");
+        var placeB = ClientDeliveryPlaceBuilder.BuildEntity(client: client, name: "Béčko");
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            clientDeliveryPlaces: [placeC, placeA, placeB]);
+
+        var request = new GetClientDeliveryPlacesRequest { Id = clientId };
+
+        var endpoint = EndpointWithResponseBuilder<GetClientDeliveryPlacesRequest,
+            List<ClientDeliveryPlaceDto>, GetClientDeliveryPlacesEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var response = endpoint.Response;
+        response.Should().HaveCount(3);
+        response.Select(p => p.Name).Should().ContainInOrder("Áčko", "Béčko", "Céčko");
+    }
+
+    [Fact]
+    public void SaveClientDeliveryPlaceDtoValidator_NullAddress_FailsValidation()
+    {
+        var validator = new SaveClientDeliveryPlaceDtoValidator();
+
+        var dto = ClientDeliveryPlaceBuilder.BuildSaveDto();
+        dto.Address = null!;
+
+        var result = validator.Validate(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.PropertyName == nameof(SaveClientDeliveryPlaceDto.Address))
+            .Which.ErrorCode.Should().Be(ErrorCodes.ValidationNotNullError);
     }
 }
