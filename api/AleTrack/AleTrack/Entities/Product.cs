@@ -102,30 +102,7 @@ public sealed class Product : PublicEntity
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public double? Weight
-    {
-        get
-        {
-            if (PackageSize == null)
-                return null;
-
-            return Kind switch
-            {
-                ProductKind.Bottle when PackageSize == BottleSize.OneLiter => PackageWeight.OneKilo,
-                ProductKind.Bottle when PackageSize == BottleSize.TwoLiters => PackageWeight.TwoKilos,
-                ProductKind.Bottle when PackageSize == BottleSize.TenLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.FiveLiters => PackageWeight.FiveKilos,
-                ProductKind.Keg when PackageSize == KegSize.FifteenLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.TwentyLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.ThirtyLiters => PackageWeight.FortyTwoKilos,
-                ProductKind.Keg when PackageSize == KegSize.FiftyLiters => PackageWeight.SixtyTwoKilos,
-                ProductKind.Can when PackageSize == CanSize.ZeroPointThreeThreeLiters => PackageWeight.ZeroPointThree,
-                ProductKind.Can when PackageSize == CanSize.ZeroPointFiveLiters => PackageWeight.ZeroPointFive,
-                ProductKind.Can when PackageSize == CanSize.TwoLiters => PackageWeight.TwoKilos,
-                _ => null
-            };
-        }
-    }
+    public double? Weight => ProductWeightCalculator.Compute(Kind, PackageSize);
     
     /// <summary>
     /// Display order based on the Product kind
