@@ -21,10 +21,14 @@ import { theme } from 'src/theme/theme';
 const moveMutate = vi.fn();
 const addMutate = vi.fn();
 const deleteMutate = vi.fn();
-let invoicesResponse: ShipmentInvoicesDto;
+let invoicesResponse: ShipmentInvoicesDto | undefined;
+// The query can also be loading or failed. An earlier version of the mock always handed
+// back a response, which is why it could not catch the crash on a missing one.
+let queryState: { isLoading: boolean; isError: boolean; error?: unknown } =
+  { isLoading: false, isError: false };
 
 vi.mock('src/hooks/useShipmentInvoices', () => ({
-  useShipmentInvoices: () => ({ data: invoicesResponse, isLoading: false }),
+  useShipmentInvoices: () => ({ data: invoicesResponse, ...queryState }),
   useMoveInvoiceLine: () => ({ mutate: moveMutate, isPending: false }),
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
@@ -82,6 +86,7 @@ function renderSection(editable = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  queryState = { isLoading: false, isError: false };
   invoicesResponse = new ShipmentInvoicesDto({
     isEditable: true,
     adjustments: [],
@@ -436,5 +441,37 @@ describe('add and delete', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Smazat fakturu' }));
 
     expect(screen.getByText(/Faktura obsahuje 2 ks/)).toBeInTheDocument();
+  });
+});
+
+describe('query states', () => {
+  it('shows a spinner while loading', () => {
+    invoicesResponse = undefined;
+    queryState = { isLoading: true, isError: false };
+
+    renderSection();
+
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  it('does not crash when the query resolves without data', () => {
+    // Regression: totals were computed in a useMemo above the `if (!data)` guard, so this
+    // threw "Cannot read properties of undefined (reading 'invoices')".
+    invoicesResponse = undefined;
+    queryState = { isLoading: false, isError: false };
+
+    expect(() => renderSection()).not.toThrow();
+    expect(screen.getByText(/nepodařilo načíst/)).toBeInTheDocument();
+  });
+
+  it('reports a failed load instead of rendering nothing', () => {
+    invoicesResponse = undefined;
+    queryState = { isLoading: false, isError: true, error: new Error('Nelze se připojit') };
+
+    renderSection();
+
+    // An invisible section would read as "nothing to invoice", which is a different claim.
+    expect(screen.getByText('Fakturace')).toBeInTheDocument();
+    expect(screen.queryByText(/vše rozděleno/)).not.toBeInTheDocument();
   });
 });

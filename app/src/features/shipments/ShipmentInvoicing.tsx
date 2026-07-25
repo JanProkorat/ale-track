@@ -195,10 +195,51 @@ interface MoveTarget {
   group: LineGroup;
 }
 
+/** Query states only. The split itself renders in InvoicingContent, which receives
+ *  `data` as a plain prop — so nothing inside it has to cope with a missing response,
+ *  and no hook can run before the data exists. An earlier version computed totals in a
+ *  useMemo above the `if (!data)` guard and crashed whenever the query had no data;
+ *  the `data!` assertion needed to compile that is exactly what hid the mistake. */
 export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string; editable: boolean }) {
+  const { data, isLoading, isError, error } = useShipmentInvoices(shipmentId);
+
+  if (isLoading) {
+    return (
+      <Card sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress size={24} />
+      </Card>
+    );
+  }
+
+  // Say so rather than silently rendering nothing — an invisible section reads as
+  // "this shipment has nothing to invoice", which is a different and wrong message.
+  if (isError || !data) {
+    return (
+      <Card>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+          <ReceiptLongOutlinedIcon sx={{ fontSize: 19, color: 'text.secondary' }} />
+          <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Fakturace</Typography>
+        </Stack>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 2.5 }}>
+          <WarningAmberIcon sx={{ fontSize: 19, color: 'error.main' }} />
+          <Typography sx={{ fontSize: 13 }} color="text.secondary">
+            {isError ? apiErrorMessage(error) : 'Rozdělení na faktury se nepodařilo načíst.'}
+          </Typography>
+        </Stack>
+      </Card>
+    );
+  }
+
+  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} />;
+}
+
+function InvoicingContent({ shipmentId, editable, data }: {
+  shipmentId: string;
+  editable: boolean;
+  data: ShipmentInvoicesDto;
+}) {
   const { formatMoney } = useCurrency();
   const { enqueueSnackbar } = useSnackbar();
-  const { data, isLoading } = useShipmentInvoices(shipmentId);
   const move = useMoveInvoiceLine(shipmentId);
   const addInvoice = useAddShipmentInvoice(shipmentId);
   const deleteInvoice = useDeleteShipmentInvoice(shipmentId);
@@ -208,20 +249,10 @@ export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ShipmentInvoiceDto | null>(null);
 
-  const bands = useMemo(() => (data ? toBands(data) : []), [data]);
+  const bands = useMemo(() => toBands(data), [data]);
   // The section is read-only whenever the shipment is, and the server has the final say.
-  const canEdit = editable && (data?.isEditable ?? false);
-
-  const totals = useMemo(() => sectionTotals(data!, bands), [bands, data]);
-
-  if (isLoading) {
-    return (
-      <Card sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress size={24} />
-      </Card>
-    );
-  }
-  if (!data) return null;
+  const canEdit = editable && (data.isEditable ?? false);
+  const totals = useMemo(() => sectionTotals(data, bands), [bands, data]);
 
   const toggleBand = (clientId: string) => setCollapsed((prev) => {
     const next = new Set(prev);
