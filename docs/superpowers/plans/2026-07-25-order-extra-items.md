@@ -1,5 +1,14 @@
 # Order Extra Items Implementation Plan
 
+> **SUPERSEDED — do not execute.** This plan moved *both* extra kinds onto the
+> order. That was wrong for inventory-sourced items: an order records what the
+> client wants, not where the pieces come from. The shipped design keeps sourcing
+> on the shipment as `OrderItem.quantity_from_inventory`, and moves only custom
+> extras to the order. See the *Correction* section at the top of
+> [`../specs/2026-07-25-order-extra-items-design.md`](../specs/2026-07-25-order-extra-items-design.md).
+> Kept for the record — Tasks 2, 3 and 6–8 still describe the custom-extra half
+> accurately.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move client extras (dokládka from inventory) and custom extras off `OutgoingShipment` and onto `Order`, so the billed client is structural rather than a nullable column.
