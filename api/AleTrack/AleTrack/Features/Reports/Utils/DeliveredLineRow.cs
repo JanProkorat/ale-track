@@ -21,6 +21,7 @@ public sealed record DeliveredLineRow
     public DateOnly Date => DateOnly.FromDateTime(DeliveredAtUtc);
 
     public long ClientId { get; init; }
+    public Guid ClientPublicId { get; init; }
     public string ClientName { get; init; } = null!;
     public Region ClientRegion { get; init; }
     public long BreweryId { get; init; }
@@ -49,6 +50,13 @@ public static class DeliveredLineQuery
     /// client/custom extra items are excluded from v1 volume by design (see the module spec).
     /// Projects raw columns only — never touch <c>Product.Weight</c> here, EF cannot translate it.
     /// </summary>
+    /// <remarks>
+    /// Callers must materialize (e.g. <c>ToListAsync</c>) before touching <see cref="DeliveredLineRow.Date"/>
+    /// or <see cref="DeliveredLineRow.WeightKg"/> — both are computed in memory and composing a further
+    /// <c>.Where</c>/<c>.OrderBy</c> onto the still-deferred <see cref="IQueryable{T}"/> reproduces the
+    /// untranslatable-property bug. <c>Moq.EntityFrameworkCore</c> mocks LINQ-to-objects, so this mistake
+    /// passes tests and only fails against a real Npgsql provider.
+    /// </remarks>
     public static IQueryable<DeliveredLineRow> Project(AleTrackDbContext dbContext, DateOnly from, DateOnly to)
     {
         // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
@@ -66,6 +74,7 @@ public static class DeliveredLineQuery
             {
                 DeliveredAtUtc = oi.Order.OutgoingShipmentStop!.OutgoingShipment.DeliveryDate!.Value,
                 ClientId = oi.Order.ClientId,
+                ClientPublicId = oi.Order.Client.PublicId,
                 ClientName = oi.Order.Client.Name,
                 ClientRegion = oi.Order.Client.Region,
                 BreweryId = oi.Product.BreweryId,
