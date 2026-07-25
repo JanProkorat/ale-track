@@ -20,6 +20,7 @@ import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/gene
 import { useClientReminders } from 'src/hooks/useClientReminders';
 import { RemindersPanel } from './RemindersPanel';
 import { NotesPanel } from './NotesPanel';
+import { DeliveryPlacesPanel } from './DeliveryPlacesPanel';
 
 type SubTab = 'info' | 'orders' | 'reminders' | 'notes';
 
@@ -200,6 +201,10 @@ export function ClientDetail({
               </Stack>
             )}
           </TitledCard>
+
+          <Box sx={{ gridColumn: '1 / -1' }}>
+            <DeliveryPlacesPanel clientId={clientId} editable={editable} />
+          </Box>
 
           <TitledCard title="Obchodní údaje">
             <Stack spacing={1.5}>
