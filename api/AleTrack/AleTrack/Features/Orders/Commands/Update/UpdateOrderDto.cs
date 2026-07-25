@@ -34,6 +34,11 @@ public sealed record UpdateOrderDto
     
     
     /// <summary>
+    /// Free-form notes about the order.
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
+
+    /// <summary>
     /// List of items included in the order
     /// </summary>
     public List<UpdateOrderItemDto> OrderItems { get; set; } = [];

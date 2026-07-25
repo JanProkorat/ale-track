@@ -42,6 +42,11 @@ public sealed record OrderDto
     public DateTime CreatedDate { get; set; }
 
     /// <summary>
+    /// Free-form notes about the order, oldest first
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
+
+    /// <summary>
     /// Collection of items associated with the order.
     /// </summary>
     public List<OrderItemDto> OrderItems { get; set; } = [];

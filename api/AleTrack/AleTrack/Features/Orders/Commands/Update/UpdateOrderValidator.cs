@@ -45,6 +45,10 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
             .WithErrorCode(ErrorCodes.DeliveryDateInPast)
             .WithMessage("Required delivery date must be in the future.");
         
+        RuleFor(r => r.Notes)
+            .ForEach(n => n.SetValidator(new OrderNoteDtoValidator()))
+            .When(r => r.Notes.Count > 0);
+
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new UpdateOrderItemDtoValidator()))
             .When(i => i.OrderItems.Count > 0);

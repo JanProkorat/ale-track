@@ -16,7 +16,8 @@ public static class OrderBuilder
         DateOnly? requiredDeliveryDate = null,
         DateOnly? actualDeliveryDate = null,
         List<OrderItem>? orderItems = null,
-        List<OrderReturn>? returns = null)
+        List<OrderReturn>? returns = null,
+        List<OrderNote>? notes = null)
     {
         return new Order
         {
@@ -27,7 +28,8 @@ public static class OrderBuilder
             RequiredDeliveryDate = requiredDeliveryDate,
             ActualDeliveryDate = actualDeliveryDate,
             OrderItems = orderItems ?? [],
-            Returns = returns ?? []
+            Returns = returns ?? [],
+            Notes = notes ?? []
         };
     }
 
@@ -35,7 +37,8 @@ public static class OrderBuilder
         Guid? clientId = null,
         DateOnly? requiredDeliveryDate = null,
         List<CreateOrderItemDto>? orderItems = null,
-        List<OrderReturnDto>? returns = null)
+        List<OrderReturnDto>? returns = null,
+        List<OrderNoteDto>? notes = null)
     {
         return new CreateOrderDto
         {
@@ -50,7 +53,8 @@ public static class OrderBuilder
                     ReminderState = OrderItemReminderState.Added
                 }
             ],
-            Returns = returns ?? []
+            Returns = returns ?? [],
+            Notes = notes ?? []
         };
     }
 
@@ -60,7 +64,8 @@ public static class OrderBuilder
         DateOnly? actualDeliveryDate = null,
         OrderState state = OrderState.Planning,
         List<UpdateOrderItemDto>? orderItems = null,
-        List<OrderReturnDto>? returns = null)
+        List<OrderReturnDto>? returns = null,
+        List<OrderNoteDto>? notes = null)
     {
         return new UpdateOrderDto
         {
@@ -77,7 +82,8 @@ public static class OrderBuilder
                     ReminderState = OrderItemReminderState.Added
                 }
             ],
-            Returns = returns ?? []
+            Returns = returns ?? [],
+            Notes = notes ?? []
         };
     }
 }

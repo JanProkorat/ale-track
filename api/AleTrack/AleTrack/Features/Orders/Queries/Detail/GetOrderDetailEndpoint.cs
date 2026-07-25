@@ -55,6 +55,15 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                 ActualDeliveryDate = o.ActualDeliveryDate,
                 State = o.State,
                 CreatedDate = o.CreatedDate,
+                Notes = o.Notes
+                    .OrderBy(n => n.DateCreated)
+                    .Select(n => new OrderNoteDto
+                    {
+                        Id = n.PublicId,
+                        Text = n.Text,
+                        DateCreated = n.DateCreated
+                    })
+                    .ToList(),
                 Client = new ClientInfoDto
                 {
                     Id = o.Client.PublicId,

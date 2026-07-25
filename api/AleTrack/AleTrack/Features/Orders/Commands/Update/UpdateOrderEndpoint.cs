@@ -64,6 +64,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Include(o => o.Client)
             .Include(o => o.OrderItems)
             .Include(o => o.Returns)
+            .Include(o => o.Notes)
             .FirstOrDefaultAsync(ct);
         
         if (order is null)
@@ -101,6 +102,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         }
         
         order.Returns = GetReturns(req.Data.Returns, order);
+        order.Notes = GetNotes(req.Data.Notes, order);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
@@ -124,6 +126,28 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             existing.Name = r.Name;
             existing.Quantity = r.Quantity;
             existing.Note = r.Note;
+            result.Add(existing);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Diffs the posted notes against the persisted ones, the same way as returns.
+    /// <see cref="OrderNote.DateCreated"/> is server-owned: kept as-is on an
+    /// existing note, stamped now on a new one.
+    /// </summary>
+    private static List<OrderNote> GetNotes(List<OrderNoteDto> notes, Order order)
+    {
+        var result = notes
+            .Where(n => n.Id is null)
+            .Select(n => new OrderNote { Text = n.Text, DateCreated = DateTime.UtcNow })
+            .ToList();
+
+        foreach (var n in notes.Where(n => n.Id is not null && order.Notes.Any(x => x.PublicId == n.Id!.Value)))
+        {
+            var existing = order.Notes.First(x => x.PublicId == n.Id!.Value);
+            existing.Text = n.Text;
             result.Add(existing);
         }
 

@@ -62,6 +62,11 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             RequiredDeliveryDate = req.Data.RequiredDeliveryDate
         };
 
+        foreach (var note in req.Data.Notes)
+        {
+            order.Notes.Add(new OrderNote { Text = note.Text, DateCreated = DateTime.UtcNow });
+        }
+
         foreach (var orderItem in req.Data.OrderItems)
         {
             var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);

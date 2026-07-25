@@ -10923,6 +10923,7 @@ export class OrderDto implements IOrderDto {
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
+    notes?: OrderNoteDto[];
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
 
@@ -10943,6 +10944,11 @@ export class OrderDto implements IOrderDto {
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
             this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : undefined as any;
+            if (Array.isArray(_data["notes"])) {
+                this.notes = [] as any;
+                for (let item of _data["notes"])
+                    this.notes!.push(OrderNoteDto.fromJS(item));
+            }
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
@@ -10971,6 +10977,11 @@ export class OrderDto implements IOrderDto {
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
         data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : undefined as any;
+        if (Array.isArray(this.notes)) {
+            data["notes"] = [];
+            for (let item of this.notes)
+                data["notes"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
             for (let item of this.orderItems)
@@ -10992,6 +11003,7 @@ export interface IOrderDto {
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     createdDate?: Date;
+    notes?: OrderNoteDto[];
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
 }
@@ -11034,6 +11046,50 @@ export class ClientInfoDto implements IClientInfoDto {
 export interface IClientInfoDto {
     id?: string;
     name?: string;
+}
+
+export class OrderNoteDto implements IOrderNoteDto {
+    id?: string | undefined;
+    text?: string;
+    dateCreated?: Date | undefined;
+
+    constructor(data?: IOrderNoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.text = _data["text"];
+            this.dateCreated = _data["dateCreated"] ? new Date(_data["dateCreated"].toString()) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): OrderNoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderNoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["text"] = this.text;
+        data["dateCreated"] = this.dateCreated ? this.dateCreated.toISOString() : undefined as any;
+        return data;
+    }
+}
+
+export interface IOrderNoteDto {
+    id?: string | undefined;
+    text?: string;
+    dateCreated?: Date | undefined;
 }
 
 export class OrderItemDto implements IOrderItemDto {
@@ -11170,6 +11226,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     state?: OrderState;
+    notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
 
@@ -11188,6 +11245,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
             this.state = _data["state"];
+            if (Array.isArray(_data["notes"])) {
+                this.notes = [] as any;
+                for (let item of _data["notes"])
+                    this.notes!.push(OrderNoteDto.fromJS(item));
+            }
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
@@ -11214,6 +11276,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
         data["state"] = this.state;
+        if (Array.isArray(this.notes)) {
+            data["notes"] = [];
+            for (let item of this.notes)
+                data["notes"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
             for (let item of this.orderItems)
@@ -11233,6 +11300,7 @@ export interface IUpdateOrderDto {
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     state?: OrderState;
+    notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
 }
@@ -11360,6 +11428,7 @@ export interface INoteDto {
 export class CreateOrderDto implements ICreateOrderDto {
     clientId!: string;
     requiredDeliveryDate?: Date | undefined;
+    notes?: OrderNoteDto[];
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
 
@@ -11376,6 +11445,11 @@ export class CreateOrderDto implements ICreateOrderDto {
         if (_data) {
             this.clientId = _data["clientId"];
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
+            if (Array.isArray(_data["notes"])) {
+                this.notes = [] as any;
+                for (let item of _data["notes"])
+                    this.notes!.push(OrderNoteDto.fromJS(item));
+            }
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
@@ -11400,6 +11474,11 @@ export class CreateOrderDto implements ICreateOrderDto {
         data = typeof data === 'object' ? data : {};
         data["clientId"] = this.clientId;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
+        if (Array.isArray(this.notes)) {
+            data["notes"] = [];
+            for (let item of this.notes)
+                data["notes"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
             for (let item of this.orderItems)
@@ -11417,6 +11496,7 @@ export class CreateOrderDto implements ICreateOrderDto {
 export interface ICreateOrderDto {
     clientId: string;
     requiredDeliveryDate?: Date | undefined;
+    notes?: OrderNoteDto[];
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
 }

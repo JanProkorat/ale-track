@@ -9,6 +9,7 @@ import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutl
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
@@ -62,6 +63,7 @@ export function OrderDetail({
   const setReminderState = useSetOrderItemReminderState();
   const items = order.orderItems ?? [];
   const returns = order.returns ?? [];
+  const notes = order.notes ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
@@ -146,20 +148,9 @@ export function OrderDetail({
 
       {stateName !== 'Cancelled' && <StatusFlow stateName={stateName} />}
 
-      {/* Two columns on md+ (items | sidebar). Stacked below that, where the
-          sidebar's `display: contents` dissolves it so its cards become direct
-          children of this flex column and `order` can interleave them: Doručení
-          reads first, then the item list, then vratky. */}
-      <Box
-        sx={{
-          display: { xs: 'flex', md: 'grid' },
-          flexDirection: 'column',
-          alignItems: { xs: 'stretch', md: 'start' },
-          gap: 2.5,
-          gridTemplateColumns: { md: '1.5fr 1fr' },
-        }}
-      >
-        <Card sx={{ overflow: 'hidden', order: { xs: 2, md: 0 } }}>
+      {/* Two columns on md+ (items | sidebar), stacked in DOM order below that. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start' }}>
+        <Card sx={{ overflow: 'hidden' }}>
           <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky</Typography>
             <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
@@ -201,9 +192,9 @@ export function OrderDetail({
           </Box>
         </Card>
 
-        <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2 }}>
+        <Stack spacing={2}>
           {returns.length > 0 && (
-            <Card sx={{ overflow: 'hidden', order: { xs: 3, md: 0 } }}>
+            <Card sx={{ overflow: 'hidden' }}>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                 <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                 <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
@@ -225,22 +216,29 @@ export function OrderDetail({
             </Card>
           )}
 
-          <Card sx={{ overflow: 'hidden', order: { xs: 1, md: 0 } }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Doručení</Typography>
-            </Stack>
-            <Stack spacing={1.5} sx={{ p: 2.5 }}>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography color="text.secondary">Doručit nejpozději</Typography>
-                <Typography sx={{ fontWeight: 600 }}>{order.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : '—'}</Typography>
+          {notes.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <StickyNote2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Poznámky</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {notes.length}
+                </Box>
               </Stack>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography color="text.secondary">Skutečné doručení</Typography>
-                <Typography sx={{ fontWeight: 600 }}>{order.actualDeliveryDate ? fmtDate(order.actualDeliveryDate) : '—'}</Typography>
-              </Stack>
-            </Stack>
-          </Card>
-        </Box>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {notes.map((n) => (
+                  <Box key={n.id}>
+                    {/* Notes are free text and often multi-line — keep the breaks. */}
+                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>{n.text}</Typography>
+                    {n.dateCreated && (
+                      <Typography variant="caption" color="text.secondary">{fmtDate(n.dateCreated)}</Typography>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            </Card>
+          )}
+        </Stack>
       </Box>
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>

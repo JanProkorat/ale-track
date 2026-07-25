@@ -1,7 +1,7 @@
-// Vratky editing in the order editor. Returns are owned by the order, so this
-// is the only place they can be created or changed — the vývoz just displays
-// them. Covers the row CRUD, the note round-trip, blank-row dropping on save,
-// and that a return edit alone marks the form dirty.
+// Vratky and poznámky editing in the order editor. Both are owned by the order,
+// so this is the only place they can be created or changed. Covers the row CRUD,
+// the note round-trip, blank-row dropping on save, and that editing either one
+// alone marks the form dirty.
 
 // fireEvent rather than user-event, matching ShipmentInvoicing.test.tsx —
 // user-event is not a dependency of this project.
@@ -11,7 +11,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderReturnDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
+import { OrderDto, OrderReturnDto, OrderNoteDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
@@ -41,7 +41,7 @@ vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) 
 
 const { OrderEditor } = await import('./OrderEditor');
 
-function order(returns: OrderReturnDto[]): OrderDto {
+function order(returns: OrderReturnDto[], notes: OrderNoteDto[] = []): OrderDto {
   return new OrderDto({
     id: 'order-1',
     client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
@@ -50,6 +50,7 @@ function order(returns: OrderReturnDto[]): OrderDto {
       new OrderItemDto({ id: 'item-1', orderId: 'order-1', productId: 'prod-1', productName: 'Albrecht 12°', quantity: 2 }),
     ],
     returns,
+    notes,
   });
 }
 
@@ -80,13 +81,22 @@ function nameInputs(): HTMLInputElement[] {
   return within(returnsCard()).getAllByPlaceholderText('Např. prázdné sudy 50 l') as HTMLInputElement[];
 }
 
+/** The Poznámky card, located by its heading. */
+function notesCard(): HTMLElement {
+  return screen.getByText('Poznámky').closest('.MuiCard-root') as HTMLElement;
+}
+
+function noteInputs(): HTMLTextAreaElement[] {
+  return within(notesCard()).getAllByPlaceholderText('Např. dovézt dopoledne…') as HTMLTextAreaElement[];
+}
+
 beforeEach(() => {
   updateMutate.mockReset().mockResolvedValue(undefined);
   createMutate.mockReset().mockResolvedValue('new-id');
   orderResponse = order([]);
 });
 
-describe('OrderEditor — vratky', () => {
+describe('OrderEditor — vratky a poznámky', () => {
   it('shows the empty state until a row is added', () => {
     renderEditor();
 
@@ -169,6 +179,56 @@ describe('OrderEditor — vratky', () => {
     expect(returns[0].quantity).toBe(1);
     // An empty note is omitted rather than sent as ''.
     expect(returns[0].note).toBeUndefined();
+  });
+
+  it('round-trips any number of notes, dropping blank ones', async () => {
+    orderResponse = order([], [new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' })]);
+
+    renderEditor();
+
+    const notes = notesCard();
+    expect((within(notes).getAllByPlaceholderText('Např. dovézt dopoledne…')[0] as HTMLInputElement).value)
+      .toBe('Dovézt dopoledne');
+
+    // A second, filled note and a third left blank.
+    fireEvent.click(within(notes).getByRole('button', { name: 'Přidat' }));
+    fireEvent.change(noteInputs()[1], { target: { value: 'Volat na vrátnici' } });
+    fireEvent.click(within(notes).getByRole('button', { name: 'Přidat' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    const sent = updateMutate.mock.calls[0][0].data.notes;
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ id: 'n1', text: 'Dovézt dopoledne' });
+    expect(sent[1].id).toBeUndefined();
+    expect(sent[1].text).toBe('Volat na vrátnici');
+  });
+
+  it('removes a note', () => {
+    orderResponse = order([], [
+      new OrderNoteDto({ id: 'n1', text: 'První' }),
+      new OrderNoteDto({ id: 'n2', text: 'Druhá' }),
+    ]);
+
+    renderEditor();
+    expect(noteInputs()).toHaveLength(2);
+
+    fireEvent.click(within(notesCard()).getAllByRole('button', { name: 'Odebrat poznámku' })[0]);
+
+    expect(noteInputs()).toHaveLength(1);
+    expect(noteInputs()[0].value).toBe('Druhá');
+  });
+
+  it('marks the form dirty when only a note changed', () => {
+    orderResponse = order([], [new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' })]);
+
+    renderEditor();
+
+    const save = screen.getByRole('button', { name: /Uložit/i });
+    fireEvent.change(noteInputs()[0], { target: { value: 'Dovézt odpoledne' } });
+
+    expect(save).not.toBeDisabled();
   });
 
   it('marks the form dirty when only a return changed', () => {

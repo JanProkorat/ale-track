@@ -1,12 +1,10 @@
-// Header and card composition of the order detail. The responsive ordering
-// itself is CSS (`display: contents` + `order`) and cannot be asserted in
-// happy-dom; what is checked here is the DOM these rules operate on, plus the
-// header content that replaced the removed Klient card.
+// Header and card composition of the order detail: which date the header shows
+// at each stage, and which cards exist now that Klient and Doručení are gone.
 
 import { render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderDto, OrderItemDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
+import { ClientInfoDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -26,6 +24,7 @@ function order(over: Partial<OrderDto> = {}): OrderDto {
       new OrderItemDto({ id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Svijanela Herbal Cola', quantity: 1 }),
     ],
     returns: [],
+    notes: [],
     ...over,
   });
 }
@@ -38,11 +37,11 @@ function renderDetail(o: OrderDto) {
   );
 }
 
-/** Card elements in DOM order — the order the CSS `order` rules rearrange. */
+/** Titles of the page's cards, in DOM order. */
 function cardTitles(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('.MuiCard-root'))
     .map((card) => card.querySelector('p, h6')?.textContent ?? '')
-    .filter((t) => ['Položky', 'Vratky', 'Doručení', 'Klient'].includes(t));
+    .filter((t) => ['Položky', 'Vratky', 'Poznámky', 'Doručení', 'Klient'].includes(t));
 }
 
 describe('OrderDetail', () => {
@@ -93,11 +92,31 @@ describe('OrderDetail', () => {
     expect(screen.getByText('Zitavsky klient')).toBeInTheDocument();
   });
 
-  it('keeps items before the sidebar cards in the DOM', () => {
+  it('renders items, then vratky, then poznámky — and no Doručení card', () => {
     const { container } = renderDetail(order({
       returns: [new OrderReturnDto({ id: 'r1', name: 'Sud', quantity: 4 })],
+      notes: [new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' })],
     }));
 
-    expect(cardTitles(container)).toEqual(['Položky', 'Vratky', 'Doručení']);
+    expect(cardTitles(container)).toEqual(['Položky', 'Vratky', 'Poznámky']);
+  });
+
+  it('lists every note, keeping line breaks', () => {
+    renderDetail(order({
+      notes: [
+        new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' }),
+        new OrderNoteDto({ id: 'n2', text: 'Volat na vrátnici' }),
+      ],
+    }));
+
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getByText('Volat na vrátnici')).toBeInTheDocument();
+    expect(screen.getByText('Dovézt dopoledne')).toHaveStyle({ whiteSpace: 'pre-wrap' });
+  });
+
+  it('hides the Poznámky card when the order has none', () => {
+    const { container } = renderDetail(order({ notes: [] }));
+
+    expect(cardTitles(container)).not.toContain('Poznámky');
   });
 });

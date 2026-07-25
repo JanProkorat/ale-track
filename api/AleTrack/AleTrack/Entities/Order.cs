@@ -24,6 +24,12 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
     /// </summary>
     [Column("created_date")]
     public DateTime CreatedDate { get; set; }
+
+    /// <summary>
+    /// Free-form notes about the order (e.g. "dovézt dopoledne")
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OrderNote> Notes { get; set; } = [];
     
     /// <summary>
     /// Related items to be ordered
