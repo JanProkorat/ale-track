@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
@@ -56,7 +57,8 @@ public sealed class ShipmentStopDeliveryPlaceTests
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
-            e.PropertyName == nameof(ClientOrderShipmentDto.ClientDeliveryPlaceId));
+            e.PropertyName == nameof(ClientOrderShipmentDto.ClientDeliveryPlaceId)
+            && e.ErrorCode == ErrorCodes.ValidationError);
     }
 
     [Theory]
@@ -129,5 +131,229 @@ public sealed class ShipmentStopDeliveryPlaceTests
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
         updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.Contact);
+    }
+
+    // Happy path for ShipmentStopDeliveryPlaceResolver: an existing stop that
+    // switches to DeliveryPlace gets both SelectedAddressKind and the
+    // resolved ClientDeliveryPlaceId written by the same update loop.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_SwitchesExistingStopToDeliveryPlace_ResolvesFk()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var placeId = Guid.NewGuid();
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(publicId: placeId, client: client);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = OutgoingShipmentStopAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order],
+            clientDeliveryPlaces: [place]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        ClientDeliveryPlaceId = placeId
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
+    }
+
+    // Cross-client rejection: "the one way this schema can go wrong" per the
+    // resolver's doc comment. The delivery place belongs to a different
+    // client than the order it is requested on.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_DeliveryPlaceFromDifferentClient_ThrowsBadRequest()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var orderClient = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: orderClient);
+
+        var otherClient = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var placeId = Guid.NewGuid();
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(publicId: placeId, client: otherClient);
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order],
+            clientDeliveryPlaces: [place]
+        );
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        ClientDeliveryPlaceId = placeId
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+    }
+
+    // Soft-deleted rejection: ClientDeliveryPlace has no global query filter,
+    // so the resolver's own `!p.IsDeleted` check is the only thing standing
+    // between a deleted place and a shipment stop.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_SoftDeletedDeliveryPlace_ThrowsNotFound()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var placeId = Guid.NewGuid();
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(publicId: placeId, client: client, isDeleted: true);
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order],
+            clientDeliveryPlaces: [place]
+        );
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        ClientDeliveryPlaceId = placeId
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    // Missing-place 404: distinct from the soft-deleted case above — this ID
+    // never existed at all.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_UnknownDeliveryPlace_ThrowsNotFound()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        ClientDeliveryPlaceId = Guid.NewGuid()
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
 }

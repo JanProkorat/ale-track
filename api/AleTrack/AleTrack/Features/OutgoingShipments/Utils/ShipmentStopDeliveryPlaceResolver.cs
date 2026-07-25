@@ -20,6 +20,15 @@ public static class ShipmentStopDeliveryPlaceResolver
     /// this schema can go wrong, so the check is a DB lookup rather than a
     /// validator rule.
     /// </summary>
+    /// <remarks>
+    /// Precondition: this method does not itself verify that every
+    /// <see cref="ClientOrderShipmentDto.ClientOrderId"/> refers to an
+    /// existing order. When an order ID cannot be resolved to a client, the
+    /// cross-client check is silently skipped for that entry — safe only
+    /// because both shipment endpoints separately 404 on unknown orders
+    /// elsewhere in the same request. A caller that resolves delivery places
+    /// before validating order existence would lose this check.
+    /// </remarks>
     public static async Task<Dictionary<Guid, long>> ResolveAsync(
         AleTrackDbContext dbContext,
         List<ClientOrderShipmentDto> clientOrderShipments,
