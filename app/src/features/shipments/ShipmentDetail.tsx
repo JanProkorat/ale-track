@@ -844,53 +844,62 @@ export function ShipmentDetail({
         </Stack>
 
         <Stack spacing={2}>
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Vůz</Typography>
-            </Stack>
-            <Box sx={{ p: 2.5 }}>
-              {!shipment.vehicleId ? (
-                <Typography color="text.secondary">Vůz nepřiřazen</Typography>
-              ) : vehicleQuery.isLoading ? (
-                <CircularProgress size={20} />
-              ) : vehicle ? (
-                <Stack spacing={1.5}>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Box sx={{ width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: 'action.hover' }}>
-                      <DirectionsCarOutlinedIcon fontSize="small" />
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700 }} noWrap>{vehicle.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">Nosnost {num(vehicle.maxWeight ?? 0)} kg</Typography>
-                    </Box>
+          {/* Both are short, sparse cards — side by side they read as one "kdo a čím" block
+              instead of two mostly-empty rows. */}
+          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, alignItems: 'stretch' }}>
+            <Card sx={{ overflow: 'hidden', height: '100%' }}>
+              <Stack direction="row" alignItems="center" sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Vůz</Typography>
+              </Stack>
+              <Box sx={{ p: 2 }}>
+                {!shipment.vehicleId ? (
+                  <Typography variant="body2" color="text.secondary">Vůz nepřiřazen</Typography>
+                ) : vehicleQuery.isLoading ? (
+                  <CircularProgress size={20} />
+                ) : vehicle ? (
+                  <Stack spacing={1.25}>
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <Box sx={{ width: 32, height: 32, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: 'action.hover' }}>
+                        <DirectionsCarOutlinedIcon fontSize="small" />
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{vehicle.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">Nosnost {num(vehicle.maxWeight ?? 0)} kg</Typography>
+                      </Box>
+                    </Stack>
+                    <Divider />
+                    <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1}>
+                      <Typography variant="body2" color="text.secondary">Odhad. hmotnost</Typography>
+                      <Typography sx={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', color: overloaded ? 'error.main' : 'success.main' }}>
+                        {num(Math.round(totalWeight))} kg
+                      </Typography>
+                    </Stack>
+                    {overloaded && <StatusPill tone="crit" label="Překročena nosnost!" />}
                   </Stack>
-                  <Divider />
-                  <Stack direction="row" justifyContent="space-between">
-                    <Typography color="text.secondary">Odhad. hmotnost nákladu</Typography>
-                    <Typography sx={{ fontWeight: 700, color: overloaded ? 'error.main' : 'success.main' }}>{num(Math.round(totalWeight))} kg</Typography>
-                  </Stack>
-                  {overloaded && <StatusPill tone="crit" label="Překročena nosnost!" />}
-                </Stack>
-              ) : null}
-            </Box>
-          </Card>
+                ) : null}
+              </Box>
+            </Card>
 
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Řidiči</Typography>
-            </Stack>
-            <Stack spacing={1.5} sx={{ p: 2.5 }}>
-              {assignedDrivers.length > 0 ? assignedDrivers.map((d) => (
-                <Stack key={d.id} direction="row" spacing={1.5} alignItems="center">
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: d.color ?? 'text.disabled', flexShrink: 0 }} />
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }} noWrap>{d.firstName} {d.lastName}</Typography>
-                    {d.phoneNumber && <Typography variant="caption" color="text.secondary">{d.phoneNumber}</Typography>}
+            <Card sx={{ overflow: 'hidden', height: '100%' }}>
+              <Stack direction="row" alignItems="center" sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Řidiči</Typography>
+              </Stack>
+              <Stack spacing={1.25} sx={{ p: 2 }}>
+                {assignedDrivers.length > 0 ? assignedDrivers.map((d) => (
+                  /* The colour rides a full-height bar instead of a dot: a dot has to pick a line
+                     to sit on, and picks wrong as soon as the phone line is empty. */
+                  <Box key={d.id} sx={{ pl: 1.25, borderLeft: 3, borderColor: d.color ?? 'text.disabled', minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{d.firstName} {d.lastName}</Typography>
+                    {/* Rendered even when empty so a driver without a phone occupies the same
+                        height as one with it — the card must not resize per driver. */}
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                        {d.phoneNumber || '\u00A0'}
+                    </Typography>
                   </Box>
-                </Stack>
-              )) : <Typography color="text.secondary">Bez řidiče</Typography>}
-            </Stack>
-          </Card>
+                )) : <Typography variant="body2" color="text.secondary">Bez řidiče</Typography>}
+              </Stack>
+            </Card>
+          </Box>
 
           <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
 
