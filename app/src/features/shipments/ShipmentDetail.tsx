@@ -31,16 +31,24 @@ import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
   type OutgoingShipmentOrderItemDto,
-  type OutgoingShipmentInventoryExtraItemDto,
+  type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
   OutgoingShipmentState,
-  InventoryExtraShipmentDto,
+  StockPurchaseDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 import { useUpdateShipment } from 'src/hooks/useShipments';
 import { useVehicle } from 'src/hooks/useVehicles';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
+import { useProducts } from 'src/hooks/useProducts';
+import {
+  useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetPurchaseInvoiceLine, useUpdatePurchaseInvoice,
+} from 'src/hooks/usePurchaseInvoices';
+import { columnTotals, isSplit, orderedInvoices } from './purchaseSplitModel';
+import {
+  PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
+} from './PurchaseInvoiceColumns';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
@@ -51,7 +59,7 @@ interface NakladkaRow {
   orderItemId?: string;
   extraId?: string;
   productId?: string;
-  dokladka: boolean;
+  stockPurchase: boolean;
   name: string;
   kind?: ProductKind;
   packageSize?: number;
@@ -72,7 +80,7 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     orderItemId: p.orderItemId,
     // OutgoingShipmentOrderItemDto.id is the product's public id.
     productId: p.id,
-    dokladka: false,
+    stockPurchase: false,
     name: p.name ?? '—',
     kind: p.kind,
     packageSize: p.packageSize,
@@ -85,12 +93,12 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     inventoryAvailable: p.inventoryItemAvailable,
   };
 }
-function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
+function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
   return {
     key: `extra-${e.id}`,
     extraId: e.id,
     productId: e.productId,
-    dokladka: true,
+    stockPurchase: true,
     name: e.name ?? '—',
     kind: e.kind,
     packageSize: e.packageSize,
@@ -108,19 +116,21 @@ function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | u
 
 interface AggRow {
   key: string;
+  /** Product this line is of — what a brewery-invoice line is keyed by. */
+  productId?: string;
   name: string;
   kind?: ProductKind;
   packageSize?: number;
   quantity: number;
   orderQuantity: number;
-  dokladkaQuantity: number;
+  stockPurchaseQuantity: number;
   /** Pieces of this product taken from our own stock to fulfil orders. */
   fromInventory: number;
-  dokladka: boolean;           // every source is a dokládka (pure stock extra)
-  sources: NakladkaRow[];      // underlying per-order / per-dokládka rows
+  stockPurchase: boolean;      // every source is bought for our warehouse, none ordered
+  sources: NakladkaRow[];      // underlying per-order / per-stock-purchase rows
 }
 
-/** Collapse the per-order/per-dokládka rows into one line per distinct product
+/** Collapse the per-order/per-stock-purchase rows into one line per distinct product
  * (name + kind + package size), summing quantities. This is the loading list —
  * two orders with the same product become a single line with the total. */
 function aggregateRows(rows: NakladkaRow[]): AggRow[] {
@@ -130,13 +140,13 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
     const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
     let agg = map.get(key);
     if (!agg) {
-      agg = { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, dokladkaQuantity: 0, fromInventory: 0, dokladka: true, sources: [] };
+      agg = { key, productId: r.productId, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
       map.set(key, agg);
       order.push(key);
     }
     agg.quantity += r.quantity;
-    if (r.dokladka) agg.dokladkaQuantity += r.quantity;
-    else { agg.orderQuantity += r.quantity; agg.dokladka = false; }
+    if (r.stockPurchase) agg.stockPurchaseQuantity += r.quantity;
+    else { agg.orderQuantity += r.quantity; agg.stockPurchase = false; }
     agg.fromInventory += r.fromInventory;
     agg.sources.push(r);
   }
@@ -152,21 +162,23 @@ interface AggRowState {
 
 /** One aggregated product line on "Celková nakládka" — the operational loading
  * row with Naloženo/Kontrola (aggregated across its source order items, hence the
- * indeterminate state) and a removable dokládka badge. Invoicing is not this
+ * indeterminate state) and a removable "Zboží na sklad" badge. Invoicing is not this
  * card's concern; it lives in the Fakturace section. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka, onAdjustSourcing,
+  agg, state, editable, onLoaded, onToggleChecked, onAdjustStockPurchase, onAdjustSourcing, invoiceCells,
 }: {
   agg: AggRow;
   state: AggRowState;
   editable: boolean;
   onLoaded: (loaded: boolean) => void;
   onToggleChecked: () => void;
-  onAdjustDokladka?: (delta: number) => void;
+  onAdjustStockPurchase?: (delta: number) => void;
   onAdjustSourcing?: (delta: number) => void;
+  /** The brewery-invoice columns, when the run is split across more than one. */
+  invoiceCells?: ReactNode;
 }) {
   const chipText = kindSizeChipText(agg.kind, agg.packageSize);
-  const adjustable = Boolean(onAdjustDokladka) && editable;
+  const adjustable = Boolean(onAdjustStockPurchase) && editable;
   const sourceable = Boolean(onAdjustSourcing) && editable;
   return (
     <TableRow hover>
@@ -174,7 +186,7 @@ function AggLoadingRow({
         <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{agg.name}</Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
-          {agg.dokladkaQuantity > 0 && (
+          {agg.stockPurchaseQuantity > 0 && (
             <Box
               sx={{
                 display: 'inline-flex', alignItems: 'center', gap: 0.25, height: 20, borderRadius: 1,
@@ -183,13 +195,13 @@ function AggLoadingRow({
               }}
             >
               {adjustable && (
-                <IconButton size="small" onClick={() => onAdjustDokladka!(-1)} aria-label="Ubrat kus dokládky" sx={{ width: 16, height: 16, color: 'inherit' }}>
+                <IconButton size="small" onClick={() => onAdjustStockPurchase!(-1)} aria-label="Ubrat kus zboží na sklad" sx={{ width: 16, height: 16, color: 'inherit' }}>
                   <RemoveIcon sx={{ fontSize: 12 }} />
                 </IconButton>
               )}
-              <span>dokládka {agg.dokladkaQuantity}</span>
+              <span>na sklad {agg.stockPurchaseQuantity}</span>
               {adjustable && (
-                <IconButton size="small" onClick={() => onAdjustDokladka!(1)} aria-label="Přidat kus dokládky" sx={{ width: 16, height: 16, color: 'inherit' }}>
+                <IconButton size="small" onClick={() => onAdjustStockPurchase!(1)} aria-label="Přidat kus zboží na sklad" sx={{ width: 16, height: 16, color: 'inherit' }}>
                   <AddIcon sx={{ fontSize: 12 }} />
                 </IconButton>
               )}
@@ -228,12 +240,15 @@ function AggLoadingRow({
             {`z toho ${agg.fromInventory} ze skladu`}
           </Typography>
         )}
-        {agg.dokladkaQuantity > 0 && (
+        {agg.stockPurchaseQuantity > 0 && (
           <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
-            {agg.orderQuantity > 0 ? `${agg.orderQuantity} obj. + ${agg.dokladkaQuantity} dokl.` : `${agg.dokladkaQuantity} ze skladu`}
+            {agg.orderQuantity > 0
+              ? `${agg.orderQuantity} obj. + ${agg.stockPurchaseQuantity} na sklad`
+              : `${agg.stockPurchaseQuantity} na sklad`}
           </Typography>
         )}
       </TableCell>
+      {invoiceCells}
       <TableCell align="center" padding="checkbox">
         <Checkbox size="small" checked={state.loaded} indeterminate={state.loadedIndeterminate} disabled={!editable} onChange={() => onLoaded(!state.loaded)} title="Naloženo (1. diktovaná nakládka)" />
       </TableCell>
@@ -253,7 +268,15 @@ interface LoadingTotals {
   count: number;
 }
 
-function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[]; totals: LoadingTotals; renderRow: (a: AggRow) => ReactNode; emptyText: string }) {
+function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
+  rows: AggRow[];
+  totals: LoadingTotals;
+  renderRow: (a: AggRow) => ReactNode;
+  emptyText: string;
+  /** Brewery-invoice column headers and totals; absent when the run is on one invoice. */
+  invoiceHeaders?: ReactNode;
+  invoiceFooters?: (footSx: object) => ReactNode;
+}) {
   if (rows.length === 0) {
     return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
   }
@@ -266,6 +289,7 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
               <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
+              {invoiceHeaders}
               <TableCell align="center" sx={HEAD_SX}>Nadiktováno</TableCell>
               <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
             </TableRow>
@@ -275,6 +299,7 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
               <TableCell align="right" sx={footSx}>{totals.quantity} ks</TableCell>
+              {invoiceFooters?.(footSx)}
               <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.loaded === totals.count ? 'success.main' : 'text.primary' }}>
                 {totals.loaded}/{totals.count}
               </TableCell>
@@ -338,7 +363,7 @@ function OverviewRow({ avatar, title, rows, open, onToggle }: {
 }
 
 /** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
- * row per client, expandable to its products), plus a dokládka row listing all
+ * row per client, expandable to its products), plus a stock-purchase row listing all
  * stock extras when present. Read-only; the loading workflow lives elsewhere. */
 function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopDto[]; extraRows: NakladkaRow[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -384,10 +409,10 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
                   <WarehouseOutlinedIcon />
                 </Box>
               }
-              title="Dokládka ze skladu"
+              title="Zboží na sklad"
               rows={extraRows}
-              open={expanded.has('dokladka')}
-              onToggle={() => toggle('dokladka')}
+              open={expanded.has('stockPurchase')}
+              onToggle={() => toggle('stockPurchase')}
             />
           )}
         </Box>
@@ -437,7 +462,7 @@ export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
 }
 
 /** Vývoz detail: route map, advance-state header, and the nakládka card
- * (invoice-split tabs, two-stage loading check, dokládka-from-stock). Matches
+ * (invoice-split tabs, two-stage loading check, goods bought for our own warehouse). Matches
  * the prototype's viewShipmentDetail + shipLoadingCard. */
 export function ShipmentDetail({
   shipment,
@@ -455,6 +480,11 @@ export function ShipmentDetail({
   const vehicleQuery = useVehicle(shipment.vehicleId ?? undefined);
   const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
+  const productsQuery = useProducts();
+  const addPurchaseInvoice = useAddPurchaseInvoice(shipment.id);
+  const deletePurchaseInvoice = useDeletePurchaseInvoice(shipment.id);
+  const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
+  const updatePurchaseInvoice = useUpdatePurchaseInvoice(shipment.id);
 
   // "Kontrola" (2nd check round) has no field on the real DTO (only a single
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
@@ -467,9 +497,9 @@ export function ShipmentDetail({
   const isLoaded = (row: NakladkaRow) => loadedOverride.get(row.key) ?? row.loaded;
 
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [dokladkaOpen, setDokladkaOpen] = useState(false);
-  const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
-  const [dokladkaQty, setDokladkaQty] = useState('1');
+  const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
+  const [stockPurchaseProductId, setStockPurchaseProductId] = useState<string | null>(null);
+  const [stockPurchaseQty, setStockPurchaseQty] = useState('1');
 
   const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
@@ -485,7 +515,7 @@ export function ShipmentDetail({
     return { lat: address?.latitude, lng: address?.longitude, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
 
-  const extraRows = useMemo(() => (shipment.inventoryExtraItems ?? []).map(extraRowFrom), [shipment.inventoryExtraItems]);
+  const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
   // Custom extras belong to the orders on the route; the nakládka only lists them.
   const customExtras = useMemo(
@@ -502,6 +532,15 @@ export function ShipmentDetail({
     [stopsSorted, extraRows],
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
+
+  // Brewery-invoice columns only exist once the run is actually split across two
+  // invoices; a single one is the default and needs no column to say so.
+  const purchaseInvoices = useMemo(() => orderedInvoices(shipment.purchaseInvoices ?? []), [shipment.purchaseInvoices]);
+  const purchaseSplit = isSplit(purchaseInvoices);
+  const purchaseTotals = useMemo(
+    () => (purchaseSplit ? columnTotals(aggRows, purchaseInvoices) : []),
+    [purchaseSplit, aggRows, purchaseInvoices],
+  );
   // Aggregated-row state derives from the per-source overrides: a product line is
   // "loaded" only when all its source order items are, and indeterminate between.
   const aggLoaded = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => isLoaded(r));
@@ -574,7 +613,7 @@ export function ShipmentDetail({
           if (oi) oi.isLoadingConfirmed = loaded;
         }
       } else if (row.extraId) {
-        const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
+        const e = draft.stockPurchases.find((x) => x.id === row.extraId);
         if (e) e.isLoadingConfirmed = loaded;
       }
     }
@@ -592,30 +631,25 @@ export function ShipmentDetail({
     });
   }
 
-  const stockQtyFor = (productId?: string) =>
-    productId == null ? 0 : (inventoryQuery.data ?? [])
-      .flatMap((s) => s.items ?? [])
-      .filter((i) => i.productId === productId)
-      .reduce((sum, i) => sum + (i.quantity ?? 0), 0);
-
-  // Adjust the dokládka (stock-extra) quantity of an aggregated product by
-  // `delta` (+1 / -1). Removes the item at zero; caps increases at stock on hand.
-  function adjustDokladka(agg: AggRow, delta: number) {
+  // Adjust the "Zboží na sklad" quantity of an aggregated product by `delta`
+  // (+1 / -1). Removes the item at zero.
+  //
+  // No stock-on-hand cap: these pieces are bought from the brewery *for* our
+  // warehouse and are added to inventory when the shipment is delivered. Capping
+  // them at what we already hold was the old "dokládka ze skladu" reading of this
+  // feature, and it was backwards.
+  function adjustStockPurchase(agg: AggRow, delta: number) {
     const extra = agg.sources.find((r) => r.extraId);
     if (!extra) return;
     const draft = draftFromShipment(shipment);
-    const item = draft.inventoryExtraShipments.find((e) => e.id === extra.extraId);
+    const item = draft.stockPurchases.find((e) => e.id === extra.extraId);
     if (!item) return;
 
     const next = (item.quantity ?? 0) + delta;
     if (next <= 0) {
-      draft.inventoryExtraShipments = draft.inventoryExtraShipments.filter((e) => e.id !== extra.extraId);
-      enqueueSnackbar('Dokládka odebrána.', { variant: 'success' });
+      draft.stockPurchases = draft.stockPurchases.filter((e) => e.id !== extra.extraId);
+      enqueueSnackbar('Zboží na sklad odebráno.', { variant: 'success' });
     } else {
-      if (delta > 0 && next > stockQtyFor(extra.productId)) {
-        enqueueSnackbar(`Na skladě je jen ${stockQtyFor(extra.productId)} ks`, { variant: 'warning' });
-        return;
-      }
       item.quantity = next;
     }
     void save(draft);
@@ -663,42 +697,53 @@ export function ShipmentDetail({
     void save(draft);
   }
 
-  const stockOptions: ComboOption[] = useMemo(() => (inventoryQuery.data ?? [])
-    .flatMap((s) => s.items ?? [])
-    .filter((i) => i.productId && (i.quantity ?? 0) > 0)
-    .map((i) => ({
-      value: i.productId!,
-      label: `${i.name}${i.packageSize != null ? ` (${fmtLiters(i.packageSize)})` : ''} — skladem ${i.quantity} ks`,
-    })), [inventoryQuery.data]);
+  // The brewery's catalogue, not our stock: this buys goods we do not have yet.
+  // The on-hand figure rides along as a hint, because knowing we already hold 40
+  // is what decides whether to buy more.
+  const purchaseOptions: ComboOption[] = useMemo(() => {
+    const onHandByProduct = new Map<string, number>();
+    for (const item of (inventoryQuery.data ?? []).flatMap((s) => s.items ?? [])) {
+      if (item.productId) onHandByProduct.set(item.productId, (onHandByProduct.get(item.productId) ?? 0) + (item.quantity ?? 0));
+    }
 
-  function openDokladka() {
-    setDokladkaProductId(null);
-    setDokladkaQty('1');
-    setDokladkaOpen(true);
+    return (productsQuery.data ?? [])
+      .filter((p) => p.id)
+      .map((p) => {
+        const onHand = onHandByProduct.get(p.id!) ?? 0;
+        return {
+          value: p.id!,
+          label: `${p.name}${p.packageSize != null ? ` (${fmtLiters(p.packageSize)})` : ''}`
+            + (onHand > 0 ? ` — skladem ${onHand} ks` : ''),
+        };
+      });
+  }, [productsQuery.data, inventoryQuery.data]);
+
+  function openStockPurchase() {
+    setStockPurchaseProductId(null);
+    setStockPurchaseQty('1');
+    setStockPurchaseOpen(true);
   }
 
-  async function saveDokladka() {
-    const stockItem = (inventoryQuery.data ?? []).flatMap((s) => s.items ?? []).find((i) => i.productId === dokladkaProductId);
-    const qty = parseInt(dokladkaQty, 10) || 0;
-    if (!stockItem) { enqueueSnackbar('Vyberte produkt', { variant: 'warning' }); return; }
+  async function saveStockPurchase() {
+    const qty = parseInt(stockPurchaseQty, 10) || 0;
+    if (!stockPurchaseProductId) { enqueueSnackbar('Vyberte produkt', { variant: 'warning' }); return; }
     if (qty <= 0) { enqueueSnackbar('Zadejte počet kusů', { variant: 'warning' }); return; }
-    if (qty > (stockItem.quantity ?? 0)) { enqueueSnackbar(`Na skladě je jen ${stockItem.quantity} ks`, { variant: 'warning' }); return; }
 
     const draft = draftFromShipment(shipment);
-    const existing = draft.inventoryExtraShipments.find((e) => e.productId === dokladkaProductId);
+    const existing = draft.stockPurchases.find((e) => e.productId === stockPurchaseProductId);
     if (existing) {
       existing.quantity = (existing.quantity ?? 0) + qty;
     } else {
-      const dto = new InventoryExtraShipmentDto({
+      const dto = new StockPurchaseDto({
         quantity: qty, isLoadingConfirmed: false,
       });
       // Assign the derived-class field after construction (see shipmentDraft.ts).
-      dto.productId = dokladkaProductId!;
-      draft.inventoryExtraShipments.push(dto);
+      dto.productId = stockPurchaseProductId!;
+      draft.stockPurchases.push(dto);
     }
     await save(draft);
-    setDokladkaOpen(false);
-    enqueueSnackbar('Dokládka přidána do nakládky.', { variant: 'success' });
+    setStockPurchaseOpen(false);
+    enqueueSnackbar('Zboží na sklad přidáno do nakládky.', { variant: 'success' });
   }
 
   return (
@@ -761,9 +806,17 @@ export function ShipmentDetail({
               <Box sx={{ flex: 1 }} />
               {nakladkaEditable && (
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openDokladka}
-                    sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
-                    Dokládka ze skladu
+                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
+                    sx={ghostBtnSx}>
+                    Zboží na sklad
+                  </Button>
+                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
+                    disabled={addPurchaseInvoice.isPending}
+                    onClick={() => addPurchaseInvoice.mutate(undefined, {
+                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo přidat'), { variant: 'error' }),
+                    })}
+                    sx={ghostBtnSx}>
+                    Faktura pivovaru
                   </Button>
                 </Stack>
               )}
@@ -777,6 +830,19 @@ export function ShipmentDetail({
                 rows={aggRows}
                 totals={{ quantity: totalQty, loaded: loadedN, checked: checkedN, count: productN }}
                 emptyText="Zatím žádné produkty k naložení."
+                invoiceHeaders={purchaseSplit && (
+                  <PurchaseInvoiceHeaderCells
+                    invoices={purchaseInvoices}
+                    editable={nakladkaEditable}
+                    onLabel={(invoiceId, label) => updatePurchaseInvoice.mutate({ invoiceId, label })}
+                    onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
+                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
+                    })}
+                  />
+                )}
+                invoiceFooters={purchaseSplit
+                  ? (footSx) => <PurchaseInvoiceFooterCells totals={purchaseTotals} sx={footSx} />
+                  : undefined}
                 renderRow={(agg) => (
                   <AggLoadingRow
                     key={agg.key}
@@ -790,8 +856,19 @@ export function ShipmentDetail({
                     }}
                     onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
-                    onAdjustDokladka={agg.dokladkaQuantity > 0 ? (delta) => adjustDokladka(agg, delta) : undefined}
+                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                     onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                    invoiceCells={purchaseSplit && (
+                      <PurchaseInvoiceRowCells
+                        row={agg}
+                        invoices={purchaseInvoices}
+                        editable={nakladkaEditable}
+                        onSet={(invoiceId, quantity) => setPurchaseInvoiceLine.mutate(
+                          { invoiceId, productId: agg.productId!, quantity },
+                          { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Rozdělení se nepodařilo uložit'), { variant: 'error' }) },
+                        )}
+                      />
+                    )}
                   />
                 )}
               />
@@ -913,18 +990,18 @@ export function ShipmentDetail({
         <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} />
       </Box>
 
-      <Dialog open={dokladkaOpen} onClose={() => setDokladkaOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Dokládka ze skladu</DialogTitle>
+      <Dialog open={stockPurchaseOpen} onClose={() => setStockPurchaseOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Zboží na sklad</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary" sx={{ fontSize: 13, mb: 2 }}>
-            Přidá kusy produktu ze skladu navíc k objednávce. Při doručení vývozu se automaticky odečtou ze skladu.
+            Nákup od pivovaru nad rámec objednávek — zboží se veze s vývozem a při doručení se naskladní.
           </Typography>
           <Stack spacing={2}>
             <Combobox
-              label="Produkt (skladem)"
-              value={dokladkaProductId}
-              onChange={setDokladkaProductId}
-              options={stockOptions}
+              label="Produkt"
+              value={stockPurchaseProductId}
+              onChange={setStockPurchaseProductId}
+              options={purchaseOptions}
               placeholder="Vyberte produkt…"
               fullWidth
             />
@@ -933,15 +1010,15 @@ export function ShipmentDetail({
               type="number"
               size="small"
               fullWidth
-              value={dokladkaQty}
-              onChange={(e) => setDokladkaQty(e.target.value)}
+              value={stockPurchaseQty}
+              onChange={(e) => setStockPurchaseQty(e.target.value)}
               slotProps={{ htmlInput: { min: 1 } }}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDokladkaOpen(false)} color="inherit">Zrušit</Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveDokladka()}>Přidat dokládku</Button>
+          <Button onClick={() => setStockPurchaseOpen(false)} color="inherit">Zrušit</Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveStockPurchase()}>Přidat na sklad</Button>
         </DialogActions>
       </Dialog>
 

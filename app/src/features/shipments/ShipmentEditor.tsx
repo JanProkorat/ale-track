@@ -409,7 +409,7 @@ export function ShipmentEditor({
             clientOrderShipments,
             customStops,
             routeViaPoints,
-            inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
+            stockPurchases: existingDraft?.stockPurchases ?? [],
           }),
         });
         savedId = shipmentId;
