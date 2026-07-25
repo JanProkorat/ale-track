@@ -91,6 +91,15 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         Quantity = r.Quantity,
                         Note = r.Note
                     })
+                    .ToList(),
+                CustomExtraItems = o.CustomExtraItems
+                    .Select(e => new OrderCustomExtraItemDto
+                    {
+                        Id = e.PublicId,
+                        Description = e.Description,
+                        Quantity = e.Quantity,
+                        IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
+                    })
                     .ToList()
             })
             .FirstOrDefaultAsync(ct);

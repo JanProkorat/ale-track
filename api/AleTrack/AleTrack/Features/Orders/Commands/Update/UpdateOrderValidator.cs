@@ -56,6 +56,10 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
         RuleFor(r => r.Returns)
             .ForEach(i => i.SetValidator(new OrderReturnDtoValidator()))
             .When(i => i.Returns.Count > 0);
+
+        RuleFor(r => r.CustomExtraItems)
+            .ForEach(e => e.SetValidator(new OrderCustomExtraItemDtoValidator()))
+            .When(r => r.CustomExtraItems.Count > 0);
     }
 }
 

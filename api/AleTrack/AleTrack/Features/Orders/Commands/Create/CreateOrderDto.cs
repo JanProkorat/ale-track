@@ -35,6 +35,12 @@ public sealed record CreateOrderDto
     /// Returnable items the client hands back against this order (empty kegs, bottles…).
     /// </summary>
     public List<OrderReturnDto> Returns { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies.
+    /// </summary>
+    public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
 }
 
 /// <summary>

@@ -124,6 +124,19 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         outgoingShipment.State = req.Data.State;
 
+        var requestedInventoryIds = req.Data.ClientOrderShipments
+            .SelectMany(cos => cos.OrderItems)
+            .Where(i => i.QuantityFromInventory > 0 && i.InventoryItemId is not null)
+            .Select(i => i.InventoryItemId!.Value)
+            .Distinct()
+            .ToList();
+
+        var inventoryByPublicId = requestedInventoryIds.Count == 0
+            ? []
+            : await dbContext.InventoryItems
+                .Where(i => requestedInventoryIds.Contains(i.PublicId))
+                .ToDictionaryAsync(i => i.PublicId, ct);
+
         foreach (var requestStop in req.Data.ClientOrderShipments)
         {
             var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder != null && s.ClientOrder.PublicId == requestStop.ClientOrderId);
@@ -133,7 +146,35 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             foreach (var requestOrderItem in requestStop.OrderItems)
             {
                 var relatedItem = relatedStop.ClientOrder.OrderItems.FirstOrDefault(i => i.PublicId == requestOrderItem.OrderItemId);
-                relatedItem?.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
+                if (relatedItem is null)
+                    continue;
+
+                relatedItem.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
+
+                // Sourcing: how many of the ordered pieces come out of our own stock.
+                // More than was ordered is nonsense; more than is *in* stock is allowed,
+                // because a booked-in delivery may still arrive before loading — the
+                // nakládka warns about it instead of blocking.
+                if (requestOrderItem.QuantityFromInventory > relatedItem.Quantity)
+                    ThrowHelper.BadRequest(
+                        $"Cannot source {requestOrderItem.QuantityFromInventory} pieces from inventory for an order item of {relatedItem.Quantity}.");
+
+                relatedItem.QuantityFromInventory = Math.Max(0, requestOrderItem.QuantityFromInventory);
+                relatedItem.InventoryItem = relatedItem.QuantityFromInventory > 0
+                    ? inventoryByPublicId.GetValueOrDefault(requestOrderItem.InventoryItemId ?? Guid.Empty)
+                    : null;
+                relatedItem.InventoryItemId = relatedItem.InventoryItem?.Id;
+
+                if (relatedItem.QuantityFromInventory > 0 && relatedItem.InventoryItem is null)
+                    ThrowHelper.PublicEntityNotFound(nameof(InventoryItem), requestOrderItem.InventoryItemId ?? Guid.Empty);
+            }
+
+            // Extras are the order's rows; the shipment only confirms them.
+            foreach (var info in requestStop.CustomExtraItems)
+            {
+                var extra = relatedStop.ClientOrder.CustomExtraItems.FirstOrDefault(e => e.PublicId == info.Id);
+                if (extra is not null)
+                    extra.IsShipmentLoadingConfirmed = info.IsLoadingConfirmed;
             }
         }
         

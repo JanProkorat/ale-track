@@ -92,7 +92,13 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
                                     Weight = oi.Product.Weight,
-                                    OrderItemId = oi.PublicId
+                                    OrderItemId = oi.PublicId,
+                                    QuantityFromInventory = oi.QuantityFromInventory,
+                                    InventoryItemId = oi.InventoryItem != null ? oi.InventoryItem.PublicId : null,
+                                    InventoryItemName = oi.InventoryItem != null
+                                        ? (oi.InventoryItem.Name ?? (oi.InventoryItem.Product != null ? oi.InventoryItem.Product.Name : null))
+                                        : null,
+                                    InventoryItemAvailable = oi.InventoryItem != null ? oi.InventoryItem.Quantity : null
                                 })
                                 .ToList()
                             : new List<OutgoingShipmentOrderItemDto>(),
@@ -106,7 +112,18 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Note = r.Note
                                 })
                                 .ToList()
-                            : new List<OrderReturnDto>()
+                            : new List<OrderReturnDto>(),
+                        CustomExtraItems = s.ClientOrder != null
+                            ? s.ClientOrder.CustomExtraItems
+                                .Select(e => new OrderCustomExtraItemDto
+                                {
+                                    Id = e.PublicId,
+                                    Description = e.Description,
+                                    Quantity = e.Quantity,
+                                    IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
+                                })
+                                .ToList()
+                            : new List<OrderCustomExtraItemDto>()
                     })
                     .ToList(),
                 RouteViaPoints = os.RouteViaPoints
