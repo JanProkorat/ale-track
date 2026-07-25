@@ -98,8 +98,6 @@ internal static class OperationalDataBuilder
                     Product = dokladkaProduct,
                     Quantity = 6,
                     IsShipmentLoadingConfirmed = false,
-                    FirstInvoiceQuantity = 6,
-                    SecondInvoiceQuantity = 0,
                 },
             ],
         };

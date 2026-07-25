@@ -130,8 +130,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             {
                 var relatedItem = relatedStop.ClientOrder.OrderItems.FirstOrDefault(i => i.PublicId == requestOrderItem.OrderItemId);
                 relatedItem?.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
-                relatedItem?.FirstInvoiceQuantity = requestOrderItem.FirstInvoiceQuantity;
-                relatedItem?.SecondInvoiceQuantity = requestOrderItem.SecondInvoiceQuantity;
             }
         }
         
@@ -215,8 +213,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Select(i => new OutgoingShipmentCustomExtraItem
             {
                 Description = i.Description,
-                FirstInvoiceQuantity = i.FirstInvoiceQuantity,
-                SecondInvoiceQuantity = i.SecondInvoiceQuantity,
                 IsShipmentLoadingConfirmed = i.IsLoadingConfirmed,
                 Quantity = i.Quantity
             })
@@ -231,8 +227,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         {
             var existing = outgoingShipment.CustomExtraItems.First(ei => ei.PublicId == item.Id!.Value);
             existing.Description = item.Description;
-            existing.FirstInvoiceQuantity = item.FirstInvoiceQuantity;
-            existing.SecondInvoiceQuantity = item.SecondInvoiceQuantity;
             existing.IsShipmentLoadingConfirmed = item.IsLoadingConfirmed;
             existing.Quantity = item.Quantity;
             
@@ -418,8 +412,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         {
             foreach (var orderItem in stop.ClientOrder.OrderItems)
             {
-                orderItem.FirstInvoiceQuantity = null;
-                orderItem.SecondInvoiceQuantity = null;
                 orderItem.IsShipmentLoadingConfirmed = false;
             }
         }
@@ -500,8 +492,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 // Update existing item
                 existing.Quantity = dto.Quantity;
                 existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
-                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
-                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
                 result.Add(existing);
             }
             else
@@ -512,8 +502,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     PublicId = Guid.NewGuid(),
                     InventoryItem = productsByPublicId[dto.InventoryItemId],
                     IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
-                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
-                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
                     Quantity = dto.Quantity
                 });
             }
@@ -564,8 +552,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 // Update existing item
                 existing.Quantity = dto.Quantity;
                 existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
-                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
-                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
                 result.Add(existing);
             }
             else
@@ -576,8 +562,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     PublicId = Guid.NewGuid(),
                     Product = productsByPublicId[dto.ProductId],
                     IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
-                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
-                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
                     Quantity = dto.Quantity
                 });
             }

@@ -76,6 +76,12 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentReturn> Returns { get; set; } = [];
 
+    /// <summary>
+    /// Invoices to be issued for this shipment — by default one per client on the route.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentInvoice> Invoices { get; set; } = [];
+
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;
 
