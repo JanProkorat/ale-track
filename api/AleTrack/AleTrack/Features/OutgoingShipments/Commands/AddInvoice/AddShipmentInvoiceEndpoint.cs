@@ -88,12 +88,14 @@ public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : En
     /// <inheritdoc />
     public override async Task HandleAsync(AddShipmentInvoiceRequest req, CancellationToken ct)
     {
-        var shipment = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
-        if (shipment is null)
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        if (split is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
             return;
         }
+
+        var shipment = split.Shipment;
 
         if (!ShipmentInvoiceGraph.IsEditable(shipment))
         {

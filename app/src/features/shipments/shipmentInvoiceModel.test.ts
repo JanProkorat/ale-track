@@ -7,8 +7,8 @@ import {
   ShipmentInvoicesDto,
 } from 'src/generated/api-client';
 import {
-  groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled, moveTargetOptions,
-  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
 } from './shipmentInvoiceModel';
 
 const CLIENT_A = 'client-a';
@@ -280,10 +280,19 @@ describe('moveTargetOptions', () => {
     expect(moveTargetOptions(data, from, group).map((o) => o.value)).not.toContain('inv:inv-from');
   });
 
-  it('offers every other invoice plus a new one per client', () => {
+  it('offers every other invoice plus a new one per client, and excluding them from invoicing', () => {
     expect(moveTargetOptions(data, from, group).map((o) => o.value)).toEqual([
-      'inv:inv-a2', 'new:client-a', 'inv:inv-b1', 'new:client-b',
+      'inv:inv-a2', 'new:client-a', 'inv:inv-b1', 'new:client-b', 'private',
     ]);
+  });
+
+  it('offers every invoice and no private option when the pieces already are private', () => {
+    const options = moveTargetOptions(data, null, group);
+
+    expect(options.map((o) => o.value)).toEqual([
+      'inv:inv-from', 'inv:inv-a2', 'new:client-a', 'inv:inv-b1', 'new:client-b',
+    ]);
+    expect(options.some((o) => o.value === 'private')).toBe(false);
   });
 
   it('marks the client who ordered the pieces, so billing someone else is a visible choice', () => {
@@ -325,6 +334,74 @@ describe('sectionTotals', () => {
       quantity: 12,
       value: 1100,
       crossBilled: 1,
+      privateQuantity: 0,
     });
+  });
+});
+
+describe('private pieces', () => {
+  it('files them under the client who ordered them, not under an invoice', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: CLIENT_A, sequence: 1, stopOrder: 1, lines: [line({ quantity: 6 })] }),
+      ],
+      privateLines: [line({ quantity: 4 })],
+    });
+
+    const [band] = toBands(data);
+
+    expect(band.privateQuantity).toBe(4);
+    expect(band.privateLines).toHaveLength(1);
+  });
+
+  it('keeps them out of the billed quantity and value', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: CLIENT_A, sequence: 1, stopOrder: 1, lines: [line({ quantity: 6, priceWithVat: 100 })] }),
+      ],
+      privateLines: [line({ quantity: 4, priceWithVat: 100 })],
+    });
+
+    const bands = toBands(data);
+
+    expect(bands[0].quantity).toBe(6);
+    expect(bands[0].value).toBe(600);
+    expect(sectionTotals(data, bands)).toMatchObject({ quantity: 6, value: 600, privateQuantity: 4 });
+  });
+
+  it('opens a band for a client whose every piece is private', () => {
+    // Their invoice can be missing entirely if the response predates one being materialised;
+    // dropping the pieces on the floor would hide goods that are on the van.
+    const data = new ShipmentInvoicesDto({
+      invoices: [invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 1, lines: [] })],
+      privateLines: [line({ quantity: 3 })],
+    });
+
+    const band = toBands(data).find((b) => b.clientId === CLIENT_A);
+
+    expect(band).toBeDefined();
+    expect(band!.privateQuantity).toBe(3);
+    expect(band!.stopOrder).toBeUndefined();
+  });
+
+  it('merges private pieces of the same product into one row', () => {
+    const groups = groupLineList([
+      line({ quantity: 3, sourceItemId: 'own' }),
+      line({ quantity: 2, sourceItemId: 'other' }),
+      line({ productId: LAGER, name: 'Lager 50°', quantity: 1 }),
+    ]);
+
+    expect(groups.map((g) => [g.name, g.quantity])).toEqual([
+      ['Albrecht 12°', 5],
+      ['Lager 50°', 1],
+    ]);
+  });
+
+  it('never calls a private line cross-billed — nobody is being billed', () => {
+    const foreign = line({ orderingClientId: CLIENT_B, orderingClientName: 'Klient B' });
+
+    expect(isCrossBilled(null, foreign)).toBe(false);
+    expect(partOrigin(null, foreign)).toBe('z vlastní objednávky');
+    expect(partOrigin(null, line({ isFromStock: true }))).toBe('ze skladu');
   });
 });

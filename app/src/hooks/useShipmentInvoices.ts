@@ -26,13 +26,16 @@ export function useShipmentInvoices(shipmentId: string | undefined) {
 }
 
 export interface MoveInvoiceLineArgs {
-  fromInvoiceId: string;
+  /** Origin invoice; omitted when the pieces come off the private ones. */
+  fromInvoiceId?: string;
   sourceKind: InvoiceLineSourceKind;
   sourceItemId: string;
   quantity: number;
-  /** Target invoice, or `toClientId` to open a new one for that client. */
+  /** Target invoice, `toClientId` to open a new one for that client, or `toPrivate` for none. */
   toInvoiceId?: string;
   toClientId?: string;
+  /** Excludes the pieces from every invoice — still delivered, never billed. */
+  toPrivate?: boolean;
 }
 
 export function useMoveInvoiceLine(shipmentId: string | undefined) {

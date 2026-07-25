@@ -92,23 +92,27 @@ public static class ShipmentInvoiceReconciler
     }
 
     /// <summary>
-    /// Brings <paramref name="shipment"/>'s invoices in line with its items.
+    /// Brings a shipment's invoices in line with its items.
     /// </summary>
     /// <remarks>
     /// Guarantees on return:
     /// <list type="number">
     /// <item>every client with billable items has at least one invoice,</item>
     /// <item>every line points at an item the shipment still carries,</item>
-    /// <item>for every billable item, its lines' quantities sum to the item's quantity.</item>
+    /// <item>for every billable item, the quantities of its invoice lines <em>and</em> its
+    /// private lines sum to the item's quantity.</item>
     /// </list>
     /// </remarks>
-    /// <param name="shipment">
+    /// <param name="split">
     /// Shipment with stops (incl. orders and their items), extra items and invoices (incl.
-    /// lines) loaded.
+    /// lines) loaded, together with its private lines.
     /// </param>
-    public static ReconcileResult Reconcile(OutgoingShipment shipment)
+    public static ReconcileResult Reconcile(ShipmentInvoiceSplit split)
     {
-        ArgumentNullException.ThrowIfNull(shipment);
+        ArgumentNullException.ThrowIfNull(split);
+
+        var shipment = split.Shipment;
+        var privateLines = split.PrivateLines;
 
         var adjustments = new List<InvoiceAdjustment>();
         var removedInvoices = new List<OutgoingShipmentInvoice>();
@@ -126,7 +130,8 @@ public static class ShipmentInvoiceReconciler
                     group.Select(s => s.OrderingClient).FirstOrDefault(c => c is not null), sequence: 1));
         }
 
-        // 2. Lines whose source item is no longer on the shipment.
+        // 2. Lines whose source item is no longer on the shipment — private ones included: the
+        //    pieces are gone, so there is nothing left to keep off an invoice.
         foreach (var invoice in shipment.Invoices.ToList())
         {
             foreach (var line in invoice.Lines.ToList())
@@ -134,16 +139,20 @@ public static class ShipmentInvoiceReconciler
                 if (sourceKeys.Contains(KeyOf(line)))
                     continue;
 
-                adjustments.Add(new InvoiceAdjustment
-                {
-                    Kind = InvoiceAdjustmentKind.SourceRemoved,
-                    SourceKind = line.SourceKind,
-                    ItemName = NameOf(line),
-                    Quantity = line.Quantity
-                });
+                adjustments.Add(SourceRemoved(line));
                 invoice.Lines.Remove(line);
                 removedLines.Add(line);
             }
+        }
+
+        foreach (var line in privateLines.ToList())
+        {
+            if (sourceKeys.Contains(KeyOf(line)))
+                continue;
+
+            adjustments.Add(SourceRemoved(line));
+            privateLines.Remove(line);
+            removedLines.Add(line);
         }
 
         // 3. Invoices with no reason left to exist. An invoice of a client who no longer
@@ -158,11 +167,13 @@ public static class ShipmentInvoiceReconciler
             removedInvoices.Add(invoice);
         }
 
-        // 4. Cover every source item exactly once.
+        // 4. Cover every source item exactly once, counting private pieces as covered — they are
+        //    accounted for, just not billed.
         foreach (var source in sources)
         {
             var placements = shipment.Invoices
-                .SelectMany(i => i.Lines.Select(l => (Invoice: i, Line: l)))
+                .SelectMany(i => i.Lines.Select(l => (Invoice: (OutgoingShipmentInvoice?)i, Line: l)))
+                .Concat(privateLines.Select(l => (Invoice: (OutgoingShipmentInvoice?)null, Line: l)))
                 .Where(x => KeyOf(x.Line) == source.Key)
                 .ToList();
 
@@ -178,12 +189,13 @@ public static class ShipmentInvoiceReconciler
                     if (assigned > 0)
                         adjustments.Add(Adjustment(InvoiceAdjustmentKind.QuantityAdded, source, diff));
 
+                    // Surplus is always billed. Pieces become private only when the user says so.
                     var home = HomeInvoiceFor(shipment, source);
                     var existing = home.Lines.FirstOrDefault(l => KeyOf(l) == source.Key);
                     if (existing is not null)
                         existing.Quantity += diff;
                     else
-                        home.Lines.Add(BuildLine(source, diff));
+                        home.Lines.Add(BuildLine(shipment, source, diff));
                     break;
                 }
                 case < 0:
@@ -191,13 +203,16 @@ public static class ShipmentInvoiceReconciler
                     var over = -diff;
                     adjustments.Add(Adjustment(InvoiceAdjustmentKind.QuantityRemoved, source, over));
 
-                    // Trim other clients' invoices first, then the ordering client's extra
-                    // invoices, and their first invoice last. Taking from the owner first would
-                    // make the product vanish from the invoice of whoever ordered it and
-                    // survive only on someone else's — worse than losing the exception.
+                    // Private pieces go first, then other clients' invoices, then the ordering
+                    // client's extra invoices, and their first invoice last. Taking from the owner
+                    // first would make the product vanish from the invoice of whoever ordered it
+                    // and survive only on someone else's — worse than losing the exception. Losing
+                    // the private mark is the mildest failure of the three: it is visible on the
+                    // invoice and reported in the banner, whereas silently un-billing pieces would
+                    // cost money nobody notices.
                     var order = placements
-                        .OrderBy(x => x.Invoice.ClientId == source.OrderingClientId ? 1 : 0)
-                        .ThenByDescending(x => x.Invoice.Sequence);
+                        .OrderBy(x => TrimRank(x.Invoice, source))
+                        .ThenByDescending(x => x.Invoice?.Sequence ?? 0);
 
                     foreach (var placement in order)
                     {
@@ -222,6 +237,12 @@ public static class ShipmentInvoiceReconciler
                 invoice.Lines.Remove(line);
                 removedLines.Add(line);
             }
+        }
+
+        foreach (var line in privateLines.Where(l => l.Quantity <= 0).ToList())
+        {
+            privateLines.Remove(line);
+            removedLines.Add(line);
         }
 
         return new ReconcileResult
@@ -317,11 +338,30 @@ public static class ShipmentInvoiceReconciler
             Sequence = sequence
         };
 
-    private static OutgoingShipmentInvoiceLine BuildLine(BillableSource source, int quantity)
+    /// <summary>
+    /// Where a placement sits in the trim order: private pieces first, then other clients'
+    /// invoices, then the ordering client's own.
+    /// </summary>
+    private static int TrimRank(OutgoingShipmentInvoice? invoice, BillableSource source) =>
+        invoice is null ? 0
+        : invoice.ClientId != source.OrderingClientId ? 1
+        : 2;
+
+    private static InvoiceAdjustment SourceRemoved(OutgoingShipmentInvoiceLine line) =>
+        new()
+        {
+            Kind = InvoiceAdjustmentKind.SourceRemoved,
+            SourceKind = line.SourceKind,
+            ItemName = NameOf(line),
+            Quantity = line.Quantity
+        };
+
+    private static OutgoingShipmentInvoiceLine BuildLine(OutgoingShipment shipment, BillableSource source, int quantity)
     {
         var line = new OutgoingShipmentInvoiceLine
         {
             PublicId = Guid.NewGuid(),
+            OutgoingShipmentId = shipment.Id,
             SourceKind = source.Kind,
             Quantity = quantity
         };

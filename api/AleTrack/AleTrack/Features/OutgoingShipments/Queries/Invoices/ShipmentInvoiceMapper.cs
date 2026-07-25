@@ -18,8 +18,9 @@ public static class ShipmentInvoiceMapper
     /// <summary>
     /// Maps the shipment's invoices and a reconciliation result into the response DTO.
     /// </summary>
-    public static ShipmentInvoicesDto ToDto(OutgoingShipment shipment, ReconcileResult reconcileResult)
+    public static ShipmentInvoicesDto ToDto(ShipmentInvoiceSplit split, ReconcileResult reconcileResult)
     {
+        var shipment = split.Shipment;
         var stopOrders = ShipmentInvoiceGraph.StopOrderByClientId(shipment);
 
         var invoices = shipment.Invoices
@@ -44,6 +45,14 @@ public static class ShipmentInvoiceMapper
         return new ShipmentInvoicesDto
         {
             Invoices = invoices,
+            // Flat, not grouped: the client who ordered the pieces is on every line already, and
+            // the UI needs them under that client's band rather than under an invoice.
+            PrivateLines = split.PrivateLines
+                .Select(line => ToLineDto(shipment, line))
+                .Where(line => line is not null)
+                .Select(line => line!)
+                .OrderBy(line => line.Name)
+                .ToList(),
             IsEditable = ShipmentInvoiceGraph.IsEditable(shipment),
             Adjustments = reconcileResult.Adjustments
                 .Select(a => new InvoiceAdjustmentDto

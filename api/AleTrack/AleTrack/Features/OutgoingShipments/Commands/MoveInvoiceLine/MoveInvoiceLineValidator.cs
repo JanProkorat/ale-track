@@ -24,9 +24,12 @@ public sealed class MoveInvoiceLineDtoValidator : AbstractValidator<MoveInvoiceL
 {
     public MoveInvoiceLineDtoValidator()
     {
+        // Null means "off the private pieces"; an explicitly empty Guid is a caller mistake.
+        // NotEmpty() cannot express that on a Guid? — it only rejects null.
         RuleFor(dto => dto.FromInvoiceId)
-            .NotEmpty()
-            .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+            .Must(id => id != Guid.Empty)
+            .WithErrorCode(ErrorCodes.ValidationNotEmptyError)
+            .When(dto => dto.FromInvoiceId.HasValue);
 
         RuleFor(dto => dto.SourceItemId)
             .NotEmpty()
@@ -40,10 +43,11 @@ public sealed class MoveInvoiceLineDtoValidator : AbstractValidator<MoveInvoiceL
             .GreaterThan(0)
             .WithErrorCode(ErrorCodes.ValidationError);
 
-        // Exactly one target: an existing invoice, or a client to open a new one for.
+        // Exactly one target: an existing invoice, a client to open a new one for, or no invoice
+        // at all.
         RuleFor(dto => dto)
-            .Must(dto => dto.ToInvoiceId.HasValue ^ dto.ToClientId.HasValue)
+            .Must(dto => new[] { dto.ToInvoiceId.HasValue, dto.ToClientId.HasValue, dto.ToPrivate }.Count(x => x) == 1)
             .WithErrorCode(ErrorCodes.ValidationError)
-            .WithMessage("Specify either ToInvoiceId or ToClientId, not both and not neither.");
+            .WithMessage("Specify exactly one of ToInvoiceId, ToClientId or ToPrivate.");
     }
 }
