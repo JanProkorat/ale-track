@@ -37,8 +37,8 @@ public static class ClientDeliveryPlaceBuilder
         string? name = null,
         string? note = null,
         AddressDto? address = null,
-        decimal latitude = 50.897m,
-        decimal longitude = 14.807m,
+        decimal? latitude = 50.897m,
+        decimal? longitude = 14.807m,
         Country? country = Country.Czechia)
     {
         return new SaveClientDeliveryPlaceDto

@@ -250,5 +250,40 @@ public sealed class ClientDeliveryPlaceTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().ContainSingle(e => e.PropertyName == nameof(SaveClientDeliveryPlaceDto.Address))
             .Which.ErrorCode.Should().Be(ErrorCodes.ValidationNotNullError);
+
+        // The null Address must not make the new length rules throw an NRE —
+        // they are guarded by When(dto => dto.Address is not null), so the
+        // only error reported is the NotNull one above.
+        result.Errors.Should().OnlyContain(e => e.PropertyName == nameof(SaveClientDeliveryPlaceDto.Address));
+    }
+
+    [Fact]
+    public void SaveClientDeliveryPlaceDtoValidator_OverLengthStreetName_FailsValidation()
+    {
+        var validator = new SaveClientDeliveryPlaceDtoValidator();
+
+        var dto = ClientDeliveryPlaceBuilder.BuildSaveDto();
+        dto.Address.StreetName = new string('A', 51);
+
+        var result = validator.Validate(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should()
+            .ContainSingle(e => e.PropertyName == "Address.StreetName")
+            .Which.ErrorCode.Should().Be(ErrorCodes.ValidationMaxLengthError);
+    }
+
+    [Fact]
+    public void SaveClientDeliveryPlaceDtoValidator_NullLatitude_FailsValidation()
+    {
+        var validator = new SaveClientDeliveryPlaceDtoValidator();
+
+        var dto = ClientDeliveryPlaceBuilder.BuildSaveDto(latitude: null);
+
+        var result = validator.Validate(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e => e.PropertyName == nameof(SaveClientDeliveryPlaceDto.Latitude))
+            .Which.ErrorCode.Should().Be(ErrorCodes.ValidationNotNullError);
     }
 }
