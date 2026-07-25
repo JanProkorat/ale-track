@@ -31,4 +31,14 @@ public static class ProductWeightCalculator
             _ => null
         };
     }
+
+    /// <summary>
+    /// Total weight in kilograms of <paramref name="quantity"/> units of one line, or 0 when the
+    /// product has no derivable unit weight. The single formula both report sides share —
+    /// <see cref="AleTrack.Features.Reports.Utils.DeliveredLineRow.WeightKg"/> (outgoing) and the incoming-weight
+    /// projection in <c>GetOperationsEndpoint</c> — so the one-axis incoming/outgoing chart
+    /// cannot drift apart from a duplicated cast/rounding difference.
+    /// </summary>
+    public static decimal ComputeLineWeightKg(ProductKind kind, double? packageSize, int quantity) =>
+        (decimal)((Compute(kind, packageSize) ?? 0d) * quantity);
 }

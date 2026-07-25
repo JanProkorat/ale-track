@@ -179,7 +179,9 @@ public static class DeliveredShipmentBuilder
     /// </remarks>
     public static DeliveredShipmentFixture AddSecondStopForSameClient(
         DeliveredShipmentFixture fixture,
-        List<LineSpec> lines)
+        List<LineSpec> lines,
+        DateOnly? requiredDeliveryDate = null,
+        DateOnly? actualDeliveryDate = null)
     {
         // Derived, not hardcoded — see the id-collision finding on DeliveredShipmentBuilder:
         // chaining this with AddSecondClient on one fixture must not yield duplicate ids.
@@ -192,7 +194,9 @@ public static class DeliveredShipmentBuilder
             Client = fixture.Client,
             ClientId = fixture.Client.Id,
             State = OrderState.Finished,
-            CreatedDate = fixture.Shipment.DeliveryDate!.Value.AddDays(-7)
+            CreatedDate = fixture.Shipment.DeliveryDate!.Value.AddDays(-7),
+            RequiredDeliveryDate = requiredDeliveryDate,
+            ActualDeliveryDate = actualDeliveryDate
         };
 
         var stop = new OutgoingShipmentStop
@@ -231,6 +235,79 @@ public static class DeliveredShipmentBuilder
     }
 
     /// <summary>
+    /// Appends a second, independent <see cref="OutgoingShipment"/> — its own id, state, stop,
+    /// order, lines and returns — alongside <paramref name="fixture"/>'s original shipment. Used
+    /// to pin that a shipment-scoped aggregate (e.g. <c>ReturnableUnits</c>) only counts the
+    /// shipments in the state it claims to, not every shipment the mocked DbContext knows about.
+    /// </summary>
+    /// <remarks>
+    /// Consumes <paramref name="fixture"/> the same way <see cref="AddSecondClient"/> does:
+    /// callers must use the returned fixture, not the original. <c>fixture.Shipment</c> on the
+    /// returned fixture still refers to the original (first) shipment.
+    /// </remarks>
+    public static DeliveredShipmentFixture AddSecondShipment(
+        DeliveredShipmentFixture fixture,
+        DateTime deliveryDate,
+        OutgoingShipmentState state,
+        List<LineSpec> lines,
+        List<OutgoingShipmentReturn>? returns = null)
+    {
+        // A high, fixed id band keeps this second shipment's ids clear of anything the other
+        // Add* helpers derive from fixture.Shipment.Stops.Count / fixture.OrderItems.Count.
+        const long secondShipmentId = 2;
+        const long secondOrderStopId = 900;
+
+        var secondShipment = OutgoingShipmentBuilder.BuildEntity(deliveryDate: deliveryDate, state: state);
+        secondShipment.Id = secondShipmentId;
+        secondShipment.Returns = returns ?? [];
+        secondShipment.Drivers = [];
+
+        var order = new Order
+        {
+            Id = secondOrderStopId,
+            PublicId = Guid.NewGuid(),
+            Client = fixture.Client,
+            ClientId = fixture.Client.Id,
+            State = OrderState.Finished,
+            CreatedDate = deliveryDate.AddDays(-7)
+        };
+
+        var stop = new OutgoingShipmentStop
+        {
+            Id = secondOrderStopId,
+            PublicId = Guid.NewGuid(),
+            Kind = OutgoingShipmentStopKind.Order,
+            Order = 1,
+            OutgoingShipmentId = secondShipment.Id,
+            OutgoingShipment = secondShipment,
+            ClientOrderId = order.Id,
+            ClientOrder = order
+        };
+
+        order.OutgoingShipmentStop = stop;
+        order.OutgoingShipmentStopId = stop.Id;
+        secondShipment.Stops = [stop];
+
+        var nextItemStartId = secondOrderStopId + fixture.OrderItems.Count;
+        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: nextItemStartId, lines);
+        order.OrderItems = orderItems;
+
+        var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
+        var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [fixture.Client],
+            breweries: [fixture.Brewery],
+            products: allProducts,
+            orders: [fixture.Order, order],
+            orderItems: allOrderItems,
+            drivers: [fixture.Driver],
+            outgoingShipments: [fixture.Shipment, secondShipment]);
+
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+    }
+
+    /// <summary>
     /// Adds one incoming product delivery (Dovoz) in the same fixture so the incoming-vs-outgoing
     /// series has something on the incoming side.
     /// </summary>
@@ -239,7 +316,8 @@ public static class DeliveredShipmentBuilder
         DateOnly date,
         ProductKind kind,
         double packageSize,
-        int quantity)
+        int quantity,
+        ProductDeliveryState state = ProductDeliveryState.Finished)
     {
         var product = ProductBuilder.BuildEntity(
             name: "Dovezený produkt",
@@ -255,7 +333,7 @@ public static class DeliveredShipmentBuilder
             Id = 1,
             PublicId = Guid.NewGuid(),
             Date = date,
-            State = ProductDeliveryState.Finished
+            State = state
         };
 
         var stop = new DeliveryStop

@@ -35,8 +35,7 @@ public sealed record DeliveredLineRow
     public double? PackageSize { get; init; }
 
     /// <summary>Line weight in kg, or 0 when the product has no derivable unit weight.</summary>
-    public decimal WeightKg =>
-        (decimal)((ProductWeightCalculator.Compute(Kind, PackageSize) ?? 0d) * Quantity);
+    public decimal WeightKg => ProductWeightCalculator.ComputeLineWeightKg(Kind, PackageSize, Quantity);
 }
 
 /// <summary>

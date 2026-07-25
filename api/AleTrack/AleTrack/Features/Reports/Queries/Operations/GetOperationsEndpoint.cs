@@ -90,7 +90,13 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
 
         // Incoming weight per month — raw columns only, weight computed below.
         var incomingRows = await dbContext.DeliveryItems
-            .Where(di => di.DeliveryStop.Delivery.Date >= req.From && di.DeliveryStop.Delivery.Date <= req.To)
+            // Finished only, mirroring the outgoing side's delivered-only rule. The spec's
+            // "delivered = actuals, not plans" principle applies to both sides of this chart:
+            // counting planned or cancelled Dovozy against delivered Vyvozy would compare
+            // unlike quantities on a shared axis.
+            .Where(di => di.DeliveryStop.Delivery.State == ProductDeliveryState.Finished
+                         && di.DeliveryStop.Delivery.Date >= req.From
+                         && di.DeliveryStop.Delivery.Date <= req.To)
             .Select(di => new
             {
                 di.DeliveryStop.Delivery.Date,
@@ -104,7 +110,7 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
             .GroupBy(r => ReportBucketing.BucketStart(r.Date, ReportGranularity.Month))
             .ToDictionary(
                 g => g.Key,
-                g => g.Sum(r => (decimal)((ProductWeightCalculator.Compute(r.Kind, r.PackageSize) ?? 0d) * r.Quantity)));
+                g => g.Sum(r => ProductWeightCalculator.ComputeLineWeightKg(r.Kind, r.PackageSize, r.Quantity)));
 
         var result = new OperationsReportDto
         {

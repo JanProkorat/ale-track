@@ -16,7 +16,8 @@ public sealed record OperationsReportDto
 
     /// <summary>
     /// Percent of finished orders delivered by their required date. Orders without a required
-    /// date are excluded from the ratio; 0 when nothing qualifies.
+    /// date, or without an actual delivery date yet, are excluded from the ratio; 0 when nothing
+    /// qualifies.
     /// </summary>
     public decimal OnTimePercentage { get; set; }
 

@@ -65,6 +65,7 @@ public sealed class GetOperationsEndpointTests
 
         var response = endpoint.Response;
         response.TotalShipments.Should().Be(1);
+        response.ShipmentsByState.Should().HaveCount(1);
         response.ShipmentsByState[0].State.Should().Be(OutgoingShipmentState.InTransit);
         response.ByDriver.Should().BeEmpty();
     }
@@ -110,6 +111,29 @@ public sealed class GetOperationsEndpointTests
         var noRequiredEndpoint = Endpoint(noRequired);
         await noRequiredEndpoint.HandleAsync(Window(), CancellationToken.None);
         noRequiredEndpoint.Response.OnTimePercentage.Should().Be(0m);
+
+        // Mixed: one on-time order (required 07-20, actual 07-19) plus one order with a null
+        // RequiredDeliveryDate on the SAME shipment. If the null-required order were counted as
+        // late instead of excluded from the denominator, this would read 50m (1 of 2), not 100m
+        // (1 of 1) — the single-order fixtures above cannot distinguish those two outcomes since
+        // both give 0%/100% either way.
+        var mixedBase = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            orderState: OrderState.Finished,
+            requiredDeliveryDate: new DateOnly(2026, 7, 20),
+            actualDeliveryDate: new DateOnly(2026, 7, 19),
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var mixed = DeliveredShipmentBuilder.AddSecondStopForSameClient(
+            mixedBase,
+            requiredDeliveryDate: null,
+            actualDeliveryDate: new DateOnly(2026, 7, 19),
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var mixedEndpoint = Endpoint(mixed);
+        await mixedEndpoint.HandleAsync(Window(), CancellationToken.None);
+        mixedEndpoint.Response.OnTimePercentage.Should().Be(100m);
     }
 
     [Fact]
@@ -125,7 +149,18 @@ public sealed class GetOperationsEndpointTests
                 new OutgoingShipmentReturn { Name = "Basa", Quantity = 2 }
             ]);
 
-        var endpoint = Endpoint(fixture);
+        // A second shipment, still InTransit, with its own returns. Because `delivered.Sum(...)`
+        // and `shipments.Sum(...)` are numerically identical when the fixture has only one
+        // (Delivered) shipment, a swap of one for the other would ship silently without this:
+        // the InTransit shipment's 10 returned units must NOT be added to the total below.
+        var withSecondShipment = DeliveredShipmentBuilder.AddSecondShipment(
+            fixture,
+            deliveryDate: new DateTime(2026, 7, 22, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.InTransit,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)],
+            returns: [new OutgoingShipmentReturn { Name = "Sud 30 l — prázdný", Quantity = 10 }]);
+
+        var endpoint = Endpoint(withSecondShipment);
 
         await endpoint.HandleAsync(Window(), CancellationToken.None);
 
@@ -156,6 +191,36 @@ public sealed class GetOperationsEndpointTests
         response.IncomingVsOutgoing.Should().HaveCount(1);
         response.IncomingVsOutgoing[0].Month.Should().Be(new DateOnly(2026, 7, 1));
         response.IncomingVsOutgoing[0].IncomingWeightKg.Should().Be(210m);
+        response.IncomingVsOutgoing[0].OutgoingWeightKg.Should().Be(124m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExcludesNonFinishedIncomingDeliveriesFromIncomingWeight()
+    {
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
+
+        // A Dovoz still InPlanning must not inflate IncomingWeightKg — only Finished deliveries
+        // are actuals. Outgoing is already delivered-only; this pins the same rule on the
+        // incoming side of the shared-axis chart.
+        var withPlannedIncoming = DeliveredShipmentBuilder.WithIncomingDelivery(
+            fixture,
+            date: new DateOnly(2026, 7, 15),
+            kind: ProductKind.Keg,
+            packageSize: KegSize.ThirtyLiters,
+            quantity: 5,
+            state: ProductDeliveryState.InPlanning);
+
+        var endpoint = Endpoint(withPlannedIncoming);
+
+        await endpoint.HandleAsync(Window(), CancellationToken.None);
+
+        // The planned delivery contributes no month bucket at all — outgoing weight still shows.
+        var response = endpoint.Response;
+        response.IncomingVsOutgoing.Should().HaveCount(1);
+        response.IncomingVsOutgoing[0].IncomingWeightKg.Should().Be(0m);
         response.IncomingVsOutgoing[0].OutgoingWeightKg.Should().Be(124m);
     }
 
