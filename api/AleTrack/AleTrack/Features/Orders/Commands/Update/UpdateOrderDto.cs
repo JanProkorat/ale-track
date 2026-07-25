@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Update;
 
 namespace AleTrack.Features.Orders.Commands.Update;
@@ -36,6 +37,11 @@ public sealed record UpdateOrderDto
     /// List of items included in the order
     /// </summary>
     public List<UpdateOrderItemDto> OrderItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…).
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
 }
 
 /// <summary>

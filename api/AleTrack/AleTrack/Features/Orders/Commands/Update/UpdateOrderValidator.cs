@@ -1,4 +1,5 @@
 using AleTrack.Common.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Update;
 using FastEndpoints;
 using FluentValidation;
@@ -46,6 +47,10 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new UpdateOrderItemDtoValidator()))
             .When(i => i.OrderItems.Count > 0);
+
+        RuleFor(r => r.Returns)
+            .ForEach(i => i.SetValidator(new OrderReturnDtoValidator()))
+            .When(i => i.Returns.Count > 0);
     }
 }
 

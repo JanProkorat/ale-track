@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Features.Orders.Utils;
 
 namespace AleTrack.Features.Orders.Queries.Detail;
 
@@ -44,6 +45,11 @@ public sealed record OrderDto
     /// Collection of items associated with the order.
     /// </summary>
     public List<OrderItemDto> OrderItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…)
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
 }
 
 /// <summary>

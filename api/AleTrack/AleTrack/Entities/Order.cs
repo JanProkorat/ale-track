@@ -30,7 +30,13 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OrderItem> OrderItems { get; set; } = [];
-    
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…)
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OrderReturn> Returns { get; set; } = [];
+
     /// <summary>
     /// Related client
     /// </summary>

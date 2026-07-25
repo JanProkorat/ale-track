@@ -76,6 +76,16 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             });
         }
         
+        foreach (var orderReturn in req.Data.Returns)
+        {
+            order.Returns.Add(new OrderReturn
+            {
+                Name = orderReturn.Name,
+                Quantity = orderReturn.Quantity,
+                Note = orderReturn.Note
+            });
+        }
+
         client!.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(ct);

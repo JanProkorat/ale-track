@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -71,6 +72,15 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         ReminderState = i.ReminderState,
                         BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
                         DisplayOrder = i.Product.DisplayOrder
+                    })
+                    .ToList(),
+                Returns = o.Returns
+                    .Select(r => new OrderReturnDto
+                    {
+                        Id = r.PublicId,
+                        Name = r.Name,
+                        Quantity = r.Quantity,
+                        Note = r.Note
                     })
                     .ToList()
             })

@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Commands.Create;
 using AleTrack.Features.Orders.Commands.Update;
+using AleTrack.Features.Orders.Utils;
 
 namespace AleTrack.Tests.Builders;
 
@@ -14,7 +15,8 @@ public static class OrderBuilder
         DateTime? createdDate = null,
         DateOnly? requiredDeliveryDate = null,
         DateOnly? actualDeliveryDate = null,
-        List<OrderItem>? orderItems = null)
+        List<OrderItem>? orderItems = null,
+        List<OrderReturn>? returns = null)
     {
         return new Order
         {
@@ -24,14 +26,16 @@ public static class OrderBuilder
             CreatedDate = createdDate ?? DateTime.UtcNow,
             RequiredDeliveryDate = requiredDeliveryDate,
             ActualDeliveryDate = actualDeliveryDate,
-            OrderItems = orderItems ?? []
+            OrderItems = orderItems ?? [],
+            Returns = returns ?? []
         };
     }
 
     public static CreateOrderDto BuildCreateDto(
         Guid? clientId = null,
         DateOnly? requiredDeliveryDate = null,
-        List<CreateOrderItemDto>? orderItems = null)
+        List<CreateOrderItemDto>? orderItems = null,
+        List<OrderReturnDto>? returns = null)
     {
         return new CreateOrderDto
         {
@@ -45,7 +49,8 @@ public static class OrderBuilder
                     Quantity = 10,
                     ReminderState = OrderItemReminderState.Added
                 }
-            ]
+            ],
+            Returns = returns ?? []
         };
     }
 
@@ -54,7 +59,8 @@ public static class OrderBuilder
         DateOnly? requiredDeliveryDate = null,
         DateOnly? actualDeliveryDate = null,
         OrderState state = OrderState.Planning,
-        List<UpdateOrderItemDto>? orderItems = null)
+        List<UpdateOrderItemDto>? orderItems = null,
+        List<OrderReturnDto>? returns = null)
     {
         return new UpdateOrderDto
         {
@@ -70,7 +76,8 @@ public static class OrderBuilder
                     Quantity = 15,
                     ReminderState = OrderItemReminderState.Added
                 }
-            ]
+            ],
+            Returns = returns ?? []
         };
     }
 }
