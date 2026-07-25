@@ -4,7 +4,6 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
-import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
@@ -105,10 +104,23 @@ export function OrderDetail({
           <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
             Objednávka
           </Typography>
-          <Typography variant="h1" sx={{ fontSize: 26, fontFamily: 'monospace' }}>{orderNumber(order.id)}</Typography>
+          <Stack direction="row" alignItems="baseline" spacing={1.5} flexWrap="wrap" sx={{ rowGap: 0 }}>
+            <Typography variant="h1" sx={{ fontSize: 26, fontFamily: 'monospace' }}>{orderNumber(order.id)}</Typography>
+            <Typography sx={{ fontSize: 18, fontWeight: 700, color: 'primary.dark', minWidth: 0 }} noWrap>
+              {order.client?.name ?? '—'}
+            </Typography>
+          </Stack>
+          {/* The date that matters day to day is when it has to be there; the
+              creation date is only worth showing when no term is set yet. */}
           <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
-            <Box component="span" sx={{ color: 'primary.dark', fontWeight: 700 }}>{order.client?.name ?? '—'}</Box>
-            {' · vytvořeno '}{fmtDate(order.createdDate)}
+            {order.requiredDeliveryDate ? (
+              <>
+                {'požadovaný termín '}
+                <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{fmtDate(order.requiredDeliveryDate)}</Box>
+              </>
+            ) : (
+              <>{'vytvořeno '}{fmtDate(order.createdDate)}</>
+            )}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
@@ -133,8 +145,20 @@ export function OrderDetail({
 
       {stateName !== 'Cancelled' && <StatusFlow stateName={stateName} />}
 
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start' }}>
-        <Card sx={{ overflow: 'hidden' }}>
+      {/* Two columns on md+ (items | sidebar). Stacked below that, where the
+          sidebar's `display: contents` dissolves it so its cards become direct
+          children of this flex column and `order` can interleave them: Doručení
+          reads first, then the item list, then vratky. */}
+      <Box
+        sx={{
+          display: { xs: 'flex', md: 'grid' },
+          flexDirection: 'column',
+          alignItems: { xs: 'stretch', md: 'start' },
+          gap: 2.5,
+          gridTemplateColumns: { md: '1.5fr 1fr' },
+        }}
+      >
+        <Card sx={{ overflow: 'hidden', order: { xs: 2, md: 0 } }}>
           <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky</Typography>
             <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
@@ -176,9 +200,9 @@ export function OrderDetail({
           </Box>
         </Card>
 
-        <Stack spacing={2}>
+        <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2 }}>
           {returns.length > 0 && (
-            <Card sx={{ overflow: 'hidden' }}>
+            <Card sx={{ overflow: 'hidden', order: { xs: 3, md: 0 } }}>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                 <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                 <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
@@ -200,7 +224,7 @@ export function OrderDetail({
             </Card>
           )}
 
-          <Card sx={{ overflow: 'hidden' }}>
+          <Card sx={{ overflow: 'hidden', order: { xs: 1, md: 0 } }}>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Doručení</Typography>
             </Stack>
@@ -215,19 +239,7 @@ export function OrderDetail({
               </Stack>
             </Stack>
           </Card>
-
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Klient</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 2.5 }}>
-              <Box sx={{ width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: (t) => t.vars!.palette.brand.infoTint, color: 'info.main' }}>
-                <LocalMallOutlinedIcon fontSize="small" />
-              </Box>
-              <Typography sx={{ fontWeight: 700 }}>{order.client?.name ?? '—'}</Typography>
-            </Stack>
-          </Card>
-        </Stack>
+        </Box>
       </Box>
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
