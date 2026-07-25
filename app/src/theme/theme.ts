@@ -77,6 +77,47 @@ export const theme = createTheme({
       styleOverrides: { root: { borderRadius: 8 } },
     },
     MuiPaper: { styleOverrides: { rounded: { borderRadius: 16 } } },
+    // Dialogs follow the prototype's .modal / .modal-head / .modal-body / .modal-foot:
+    // flat --surface with a divider under the head and above the foot.
+    MuiDialog: {
+      styleOverrides: {
+        // MUI tints dark-mode Paper by elevation, and a Dialog sits at 24 — enough to
+        // wash background.paper out well away from the prototype's --surface. Same
+        // reason MuiCard already clears it.
+        paper: { backgroundImage: 'none' },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: ({ theme: t }) => ({
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '18px 22px',
+          fontSize: 17,
+          borderBottom: `1px solid ${t.vars.palette.divider}`,
+        }),
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          padding: 22,
+          // MUI zeroes the top padding when a title precedes the content, which assumed
+          // the two were visually joined. They are separated by a divider now.
+          '.MuiDialogTitle-root + &': { paddingTop: 22 },
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: ({ theme: t }) => ({
+          gap: 10,
+          padding: '16px 22px',
+          borderTop: `1px solid ${t.vars.palette.divider}`,
+        }),
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: ({ theme: t }) => ({

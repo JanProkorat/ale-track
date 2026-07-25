@@ -46,18 +46,6 @@ public sealed class OrderItem : PublicEntity
     public bool IsShipmentLoadingConfirmed { get; set; }
     
     /// <summary>
-    /// Number of pieces to be put on the first invoice
-    /// </summary>
-    [Column("first_invoice_quantity")]
-    public int? FirstInvoiceQuantity { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the second invoice
-    /// </summary>
-    [Column("second_invoice_quantity")]
-    public int? SecondInvoiceQuantity { get; set; }
-    
-    /// <summary>
     /// The parent <see cref="Order"/> related to this item.
     /// </summary>
     public Order Order { get; set; } = null!;

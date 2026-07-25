@@ -6,7 +6,10 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  Box,
+  IconButton,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/CloseOutlined';
 
 /** Confirmation for destructive/irreversible actions (delete, cancel). */
 export function ConfirmDialog({
@@ -32,11 +35,16 @@ export function ConfirmDialog({
 }) {
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontSize: 18 }}>{title}</DialogTitle>
+      <DialogTitle>
+        <Box component="span" sx={{ flex: 1 }}>{title}</Box>
+        <IconButton onClick={onClose} disabled={busy} aria-label="Zavřít" size="small">
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ fontSize: 14 }}>{message}</DialogContentText>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions>
         <Button onClick={onClose} disabled={busy} color="inherit">
           {cancelLabel}
         </Button>

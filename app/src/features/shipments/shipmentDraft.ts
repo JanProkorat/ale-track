@@ -38,8 +38,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       orderItems: (st.products ?? []).map((p) => new OrderItemInfoDto({
         orderItemId: p.orderItemId,
         isLoadingConfirmed: p.isShipmentLoadingConfirmed,
-        firstInvoiceQuantity: p.firstInvoiceQuantity,
-        secondInvoiceQuantity: p.secondInvoiceQuantity,
       })),
     })),
     customStops: stops.filter((st) => st.orderId == null).map((st) => new CustomStopDto({
@@ -55,7 +53,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       const dto = new InventoryExtraShipmentDto({
         id: e.id, quantity: e.quantity,
         isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
       });
       // productId is declared on the derived class; assign after the ctor so it
       // survives regardless of `useDefineForClassFields` (a derived field init
@@ -69,7 +66,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       const dto = new ClientExtraShipmentDto({
         id: e.id, quantity: e.quantity,
         isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
       });
       dto.inventoryItemId = e.inventoryItemId;
       return dto;
@@ -78,7 +74,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       const dto = new CustomExtraShipmentDto({
         id: e.id, quantity: e.quantity,
         isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-        firstInvoiceQuantity: e.firstInvoiceQuantity, secondInvoiceQuantity: e.secondInvoiceQuantity,
       });
       dto.description = e.name;
       return dto;

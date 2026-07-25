@@ -33,19 +33,7 @@ public sealed class OutgoingShipmentInventoryExtraItem : PublicEntity
     /// </summary>
     [Column("is_shipment_loading_confirmed")]
     public bool IsShipmentLoadingConfirmed { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the first invoice
-    /// </summary>
-    [Column("first_invoice_quantity")]
-    public int? FirstInvoiceQuantity { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the second invoice
-    /// </summary>
-    [Column("second_invoice_quantity")]
-    public int? SecondInvoiceQuantity { get; set; }
-    
+
     /// <summary>
     /// Outgoing shipment associated with this extra item
     /// </summary>

@@ -68,8 +68,6 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                         Kind = oi.Product.Kind,
                         Type = oi.Product.Type,
                         IsShipmentLoadingConfirmed = oi.IsShipmentLoadingConfirmed,
-                        FirstInvoiceQuantity = oi.FirstInvoiceQuantity,
-                        SecondInvoiceQuantity = oi.SecondInvoiceQuantity,
                         BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder,
                         DisplayOrder = oi.Product.DisplayOrder
                     })

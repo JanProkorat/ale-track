@@ -31,6 +31,10 @@ public static class AleTrackDbContextMockFactory
     /// <param name="deliveryItems">The collection of DeliveryItem entities to include in the mocked DbContext.</param>
     /// <param name="inventoryItems">The collection of InventoryItem entities to include in the mocked DbContext.</param>
     /// <param name="clientNotes">The collection of ClientNote entities to include in the mocked DbContext.</param>
+    /// <param name="outgoingShipments">The collection of OutgoingShipment entities to include in the mocked DbContext.</param>
+    /// <param name="outgoingShipmentInvoices">The collection of OutgoingShipmentInvoice entities to include in the mocked DbContext.</param>
+    /// <param name="outgoingShipmentInvoiceLines">The collection of OutgoingShipmentInvoiceLine entities to include in the mocked DbContext.</param>
+    /// <param name="refreshTokens">The collection of RefreshToken entities to include in the mocked DbContext.</param>
     /// <returns>A mock of the AleTrackDbContext configured with the provided entity data.</returns>
     public static Mock<AleTrackDbContext> CreateMock(
         ICollection<Client>? clients = null,
@@ -47,6 +51,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<InventoryItem>? inventoryItems = null,
         ICollection<ClientNote>? clientNotes = null,
         ICollection<OutgoingShipment>? outgoingShipments = null,
+        ICollection<OutgoingShipmentInvoice>? outgoingShipmentInvoices = null,
+        ICollection<OutgoingShipmentInvoiceLine>? outgoingShipmentInvoiceLines = null,
         ICollection<RefreshToken>? refreshTokens = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
@@ -66,6 +72,8 @@ public static class AleTrackDbContextMockFactory
             inventoryItems ?? [],
             clientNotes ?? [],
             outgoingShipments ?? [],
+            outgoingShipmentInvoices ?? [],
+            outgoingShipmentInvoiceLines ?? [],
             refreshTokens ?? []);
     }
 
@@ -102,6 +110,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<InventoryItem> inventoryItems,
         ICollection<ClientNote> clientNotes,
         ICollection<OutgoingShipment> outgoingShipments,
+        ICollection<OutgoingShipmentInvoice> outgoingShipmentInvoices,
+        ICollection<OutgoingShipmentInvoiceLine> outgoingShipmentInvoiceLines,
         ICollection<RefreshToken> refreshTokens)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
@@ -118,6 +128,8 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<InventoryItem>>(x => x.InventoryItems).ReturnsDbSet(inventoryItems);
         dbContextMock.Setup<DbSet<ClientNote>>(x => x.ClientNotes).ReturnsDbSet(clientNotes);
         dbContextMock.Setup<DbSet<OutgoingShipment>>(x => x.OutgoingShipments).ReturnsDbSet(outgoingShipments);
+        dbContextMock.Setup<DbSet<OutgoingShipmentInvoice>>(x => x.OutgoingShipmentInvoices).ReturnsDbSet(outgoingShipmentInvoices);
+        dbContextMock.Setup<DbSet<OutgoingShipmentInvoiceLine>>(x => x.OutgoingShipmentInvoiceLines).ReturnsDbSet(outgoingShipmentInvoiceLines);
         dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
                 
         return dbContextMock;

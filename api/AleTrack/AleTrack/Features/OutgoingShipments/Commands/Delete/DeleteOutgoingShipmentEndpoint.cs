@@ -73,8 +73,6 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         {
             foreach (var orderItem in stop.ClientOrder!.OrderItems)
             {
-                orderItem.FirstInvoiceQuantity = null;
-                orderItem.SecondInvoiceQuantity = null;
                 orderItem.IsShipmentLoadingConfirmed = false;
             }
         }

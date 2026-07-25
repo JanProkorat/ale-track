@@ -111,6 +111,16 @@ public class AleTrackDbContext : DbContext
     public virtual DbSet<OutgoingShipment> OutgoingShipments => Set<OutgoingShipment>();
 
     /// <summary>
+    /// DbSet of <see cref="OutgoingShipmentInvoice"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipmentInvoice> OutgoingShipmentInvoices => Set<OutgoingShipmentInvoice>();
+
+    /// <summary>
+    /// DbSet of <see cref="OutgoingShipmentInvoiceLine"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipmentInvoiceLine> OutgoingShipmentInvoiceLines => Set<OutgoingShipmentInvoiceLine>();
+
+    /// <summary>
     /// DbSet of <see cref="RefreshToken"/>
     /// </summary>
     public virtual DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

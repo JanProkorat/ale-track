@@ -109,8 +109,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Kind = ei.Product.Kind,
                         PackageSize = ei.Product.PackageSize,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
-                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
-                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
                         ProductId = ei.Product.PublicId,
                         Name = ei.Product.Name
                     })
@@ -123,8 +121,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Kind = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.Kind : null,
                         PackageSize = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.PackageSize : null,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
-                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
-                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
                         InventoryItemId = ei.InventoryItem.PublicId,
                         ProductId = ei.InventoryItem.Product != null ? ei.InventoryItem.Product.PublicId : null,
                         Name = ei.InventoryItem.Name ?? (ei.InventoryItem.Product != null ? ei.InventoryItem.Product.Name : string.Empty)
@@ -136,8 +132,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Id = ei.PublicId,
                         Quantity = ei.Quantity,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
-                        FirstInvoiceQuantity = ei.FirstInvoiceQuantity,
-                        SecondInvoiceQuantity = ei.SecondInvoiceQuantity,
                         Name = ei.Description
                     })
                     .ToList(),

@@ -35,17 +35,16 @@ public sealed class OutgoingShipmentClientExtraItem : PublicEntity
     public bool IsShipmentLoadingConfirmed { get; set; }
     
     /// <summary>
-    /// Number of pieces to be put on the first invoice
+    /// ID of the <see cref="Client"/> this extra item is delivered to.
     /// </summary>
-    [Column("first_invoice_quantity")]
-    public int? FirstInvoiceQuantity { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the second invoice
-    /// </summary>
-    [Column("second_invoice_quantity")]
-    public int? SecondInvoiceQuantity { get; set; }
-    
+    /// <remarks>
+    /// Needed for invoicing: the item is billable, so it has to default onto that client's
+    /// invoice. Nullable because rows created before invoicing existed have no client
+    /// recorded — treat null as "not yet attributed" rather than "nobody".
+    /// </remarks>
+    [Column("client_id")]
+    public long? ClientId { get; set; }
+
     /// <summary>
     /// Outgoing shipment associated with this extra item
     /// </summary>
@@ -56,4 +55,10 @@ public sealed class OutgoingShipmentClientExtraItem : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.NoAction)]
     public InventoryItem InventoryItem { get; set; } = null!;
+
+    /// <summary>
+    /// Client this extra item is delivered to
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
+    public Client? Client { get; set; }
 }
