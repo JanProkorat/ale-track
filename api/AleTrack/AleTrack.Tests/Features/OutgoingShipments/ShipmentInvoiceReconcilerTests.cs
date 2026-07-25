@@ -62,6 +62,20 @@ public sealed class ShipmentInvoiceReconcilerTests
         shipment.Invoices.SelectMany(i => i.Lines).Should().OnlyContain(l => l.PublicId != Guid.Empty);
     }
 
+    [Fact]
+    public void Reconcile_NewInvoiceGetsItsClientNavigationFilled()
+    {
+        // The response is mapped from this same in-memory graph, so a created invoice with only
+        // ClientId set would surface as a blank client name on the first read after materialising.
+        var client = new Client { Id = ClientA, PublicId = Guid.NewGuid(), Name = "Klient A" };
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 3)));
+        shipment.Stops.Single().ClientOrder!.Client = client;
+
+        ShipmentInvoiceReconciler.Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Client.Should().BeSameAs(client);
+    }
+
     #endregion
 
     #region quantity drift

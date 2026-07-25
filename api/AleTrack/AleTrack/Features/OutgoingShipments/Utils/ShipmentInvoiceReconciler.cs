@@ -81,6 +81,13 @@ public static class ShipmentInvoiceReconciler
         public required int Quantity { get; init; }
         public string? Name { get; init; }
 
+        /// <summary>
+        /// The ordering client entity, when the graph had it loaded. Carried so a freshly created
+        /// invoice gets its navigation filled — the response is mapped from the same in-memory
+        /// graph, and a null navigation would surface as a blank client name.
+        /// </summary>
+        public Client? OrderingClient { get; init; }
+
         public (InvoiceLineSourceKind, long) Key => (Kind, ItemId);
     }
 
@@ -112,10 +119,11 @@ public static class ShipmentInvoiceReconciler
         var billableClientIds = sources.Select(s => s.OrderingClientId).Distinct().ToList();
 
         // 1. Every client receiving something gets an invoice to receive it on.
-        foreach (var clientId in billableClientIds)
+        foreach (var group in sources.GroupBy(s => s.OrderingClientId))
         {
-            if (shipment.Invoices.All(i => i.ClientId != clientId))
-                shipment.Invoices.Add(BuildInvoice(shipment, clientId, sequence: 1));
+            if (shipment.Invoices.All(i => i.ClientId != group.Key))
+                shipment.Invoices.Add(BuildInvoice(shipment, group.Key,
+                    group.Select(s => s.OrderingClient).FirstOrDefault(c => c is not null), sequence: 1));
         }
 
         // 2. Lines whose source item is no longer on the shipment.
@@ -170,7 +178,7 @@ public static class ShipmentInvoiceReconciler
                     if (assigned > 0)
                         adjustments.Add(Adjustment(InvoiceAdjustmentKind.QuantityAdded, source, diff));
 
-                    var home = HomeInvoiceFor(shipment, source.OrderingClientId);
+                    var home = HomeInvoiceFor(shipment, source);
                     var existing = home.Lines.FirstOrDefault(l => KeyOf(l) == source.Key);
                     if (existing is not null)
                         existing.Quantity += diff;
@@ -246,6 +254,7 @@ public static class ShipmentInvoiceReconciler
                     Kind = InvoiceLineSourceKind.OrderItem,
                     ItemId = RequirePersisted(item.Id, nameof(OrderItem)),
                     OrderingClientId = stop.ClientOrder.ClientId,
+                    OrderingClient = stop.ClientOrder.Client,
                     Quantity = item.Quantity,
                     Name = item.Product?.Name
                 });
@@ -259,6 +268,7 @@ public static class ShipmentInvoiceReconciler
                 Kind = InvoiceLineSourceKind.ClientExtraItem,
                 ItemId = RequirePersisted(item.Id, nameof(OutgoingShipmentClientExtraItem)),
                 OrderingClientId = item.ClientId!.Value,
+                OrderingClient = item.Client,
                 Quantity = item.Quantity,
                 Name = item.InventoryItem?.Name ?? item.InventoryItem?.Product?.Name
             });
@@ -271,6 +281,7 @@ public static class ShipmentInvoiceReconciler
                 Kind = InvoiceLineSourceKind.CustomExtraItem,
                 ItemId = RequirePersisted(item.Id, nameof(OutgoingShipmentCustomExtraItem)),
                 OrderingClientId = item.ClientId!.Value,
+                OrderingClient = item.Client,
                 Quantity = item.Quantity,
                 Name = item.Description
             });
@@ -282,17 +293,18 @@ public static class ShipmentInvoiceReconciler
     /// <summary>
     /// The invoice a client's pieces default onto — their lowest-sequence one.
     /// </summary>
-    private static OutgoingShipmentInvoice HomeInvoiceFor(OutgoingShipment shipment, long clientId)
+    private static OutgoingShipmentInvoice HomeInvoiceFor(OutgoingShipment shipment, BillableSource source)
     {
         var home = shipment.Invoices
-            .Where(i => i.ClientId == clientId)
+            .Where(i => i.ClientId == source.OrderingClientId)
             .OrderBy(i => i.Sequence)
             .FirstOrDefault();
 
         if (home is not null)
             return home;
 
-        home = BuildInvoice(shipment, clientId, sequence: NextSequenceFor(shipment, clientId));
+        home = BuildInvoice(shipment, source.OrderingClientId, source.OrderingClient,
+            sequence: NextSequenceFor(shipment, source.OrderingClientId));
         shipment.Invoices.Add(home);
         return home;
     }
@@ -306,12 +318,13 @@ public static class ShipmentInvoiceReconciler
         return used.Count == 0 ? 1 : used.Max() + 1;
     }
 
-    private static OutgoingShipmentInvoice BuildInvoice(OutgoingShipment shipment, long clientId, int sequence) =>
+    private static OutgoingShipmentInvoice BuildInvoice(OutgoingShipment shipment, long clientId, Client? client, int sequence) =>
         new()
         {
             PublicId = Guid.NewGuid(),
             OutgoingShipment = shipment,
             ClientId = clientId,
+            Client = client!,
             Sequence = sequence
         };
 
