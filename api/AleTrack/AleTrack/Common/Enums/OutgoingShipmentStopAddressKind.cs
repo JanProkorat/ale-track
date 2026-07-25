@@ -8,10 +8,15 @@ public enum OutgoingShipmentStopAddressKind
     /// <summary>
     /// Official address of the stop
     /// </summary>
-    Official,
-    
+    Official = 0,
+
     /// <summary>
     /// Contact address of the stop
     /// </summary>
-    Contact
+    Contact = 1,
+
+    /// <summary>
+    /// A delivery place saved on the client
+    /// </summary>
+    DeliveryPlace = 2
 }
