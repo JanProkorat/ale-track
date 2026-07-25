@@ -4,7 +4,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
+import { ClientInfoDto, OrderCustomExtraItemDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -25,6 +25,7 @@ function order(over: Partial<OrderDto> = {}): OrderDto {
     ],
     returns: [],
     notes: [],
+    customExtraItems: [],
     ...over,
   });
 }
@@ -41,7 +42,7 @@ function renderDetail(o: OrderDto) {
 function cardTitles(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('.MuiCard-root'))
     .map((card) => card.querySelector('p, h6')?.textContent ?? '')
-    .filter((t) => ['Položky', 'Vratky', 'Poznámky', 'Doručení', 'Klient'].includes(t));
+    .filter((t) => ['Položky', 'Vratky', 'Položky navíc', 'Poznámky', 'Doručení', 'Klient'].includes(t));
 }
 
 /** The two-column grid wrapping the items card and the sidebar. */
@@ -109,13 +110,31 @@ describe('OrderDetail', () => {
     expect(screen.getByText('Zitavsky klient')).toBeInTheDocument();
   });
 
-  it('renders items, then vratky, then poznámky — and no Doručení card', () => {
+  it('renders items, then vratky, extras and poznámky — and no Doručení card', () => {
     const { container } = renderDetail(order({
       returns: [new OrderReturnDto({ id: 'r1', name: 'Sud', quantity: 4 })],
+      customExtraItems: [new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100 })],
       notes: [new OrderNoteDto({ id: 'n1', text: 'Dovézt dopoledne' })],
     }));
 
-    expect(cardTitles(container)).toEqual(['Položky', 'Vratky', 'Poznámky']);
+    expect(cardTitles(container)).toEqual(['Položky', 'Vratky', 'Položky navíc', 'Poznámky']);
+  });
+
+  it('lists custom extras and hides the card when there are none', () => {
+    renderDetail(order({ customExtraItems: [new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100 })] }));
+    expect(screen.getByText('Tácky')).toBeInTheDocument();
+    expect(screen.getByText('100 ks')).toBeInTheDocument();
+
+    const { container } = renderDetail(order({ customExtraItems: [] }));
+    expect(cardTitles(container)).not.toContain('Položky navíc');
+  });
+
+  it('counts extras toward the sidebar, so the grid keeps two columns', () => {
+    const { container } = renderDetail(order({
+      customExtraItems: [new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100 })],
+    }));
+
+    expect(gridCss(container)).toContain('1.5fr 1fr');
   });
 
   it('lists every note, keeping line breaks', () => {

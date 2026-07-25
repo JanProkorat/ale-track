@@ -14,11 +14,11 @@ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined
 import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
@@ -35,7 +35,6 @@ import {
   type ProductKind,
   OutgoingShipmentState,
   InventoryExtraShipmentDto,
-  CustomExtraShipmentDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 import { useUpdateShipment } from 'src/hooks/useShipments';
@@ -44,6 +43,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
+import { overdrawnStock } from './nakladkaSourcing';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 
 interface NakladkaRow {
@@ -58,12 +58,20 @@ interface NakladkaRow {
   quantity: number;
   weight: number;
   loaded: boolean;
+  /** Of `quantity`, how many pieces come from our own stock (order rows only). */
+  fromInventory: number;
+  inventoryItemId?: string;
+  inventoryItemName?: string;
+  /** Pieces on hand in that stock entry, for the over-draw warning. */
+  inventoryAvailable?: number;
 }
 
 function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
   return {
     key: p.orderItemId ?? p.id ?? '',
     orderItemId: p.orderItemId,
+    // OutgoingShipmentOrderItemDto.id is the product's public id.
+    productId: p.id,
     dokladka: false,
     name: p.name ?? '—',
     kind: p.kind,
@@ -71,6 +79,10 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     quantity: p.quantity ?? 0,
     weight: p.weight ?? 0,
     loaded: p.isShipmentLoadingConfirmed ?? false,
+    fromInventory: p.quantityFromInventory ?? 0,
+    inventoryItemId: p.inventoryItemId,
+    inventoryItemName: p.inventoryItemName,
+    inventoryAvailable: p.inventoryItemAvailable,
   };
 }
 function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
@@ -85,6 +97,7 @@ function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
     quantity: e.quantity ?? 0,
     weight: e.weight ?? 0,
     loaded: e.isShipmentLoadingConfirmed ?? false,
+    fromInventory: 0,
   };
 }
 const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
@@ -101,6 +114,8 @@ interface AggRow {
   quantity: number;
   orderQuantity: number;
   dokladkaQuantity: number;
+  /** Pieces of this product taken from our own stock to fulfil orders. */
+  fromInventory: number;
   dokladka: boolean;           // every source is a dokládka (pure stock extra)
   sources: NakladkaRow[];      // underlying per-order / per-dokládka rows
 }
@@ -115,13 +130,14 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
     const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
     let agg = map.get(key);
     if (!agg) {
-      agg = { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, dokladkaQuantity: 0, dokladka: true, sources: [] };
+      agg = { key, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, dokladkaQuantity: 0, fromInventory: 0, dokladka: true, sources: [] };
       map.set(key, agg);
       order.push(key);
     }
     agg.quantity += r.quantity;
     if (r.dokladka) agg.dokladkaQuantity += r.quantity;
     else { agg.orderQuantity += r.quantity; agg.dokladka = false; }
+    agg.fromInventory += r.fromInventory;
     agg.sources.push(r);
   }
   return order.map((k) => map.get(k)!);
@@ -139,7 +155,7 @@ interface AggRowState {
  * indeterminate state) and a removable dokládka badge. Invoicing is not this
  * card's concern; it lives in the Fakturace section. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka,
+  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka, onAdjustSourcing,
 }: {
   agg: AggRow;
   state: AggRowState;
@@ -147,9 +163,11 @@ function AggLoadingRow({
   onLoaded: (loaded: boolean) => void;
   onToggleChecked: () => void;
   onAdjustDokladka?: (delta: number) => void;
+  onAdjustSourcing?: (delta: number) => void;
 }) {
   const chipText = kindSizeChipText(agg.kind, agg.packageSize);
   const adjustable = Boolean(onAdjustDokladka) && editable;
+  const sourceable = Boolean(onAdjustSourcing) && editable;
   return (
     <TableRow hover>
       <TableCell>
@@ -181,6 +199,35 @@ function AggLoadingRow({
       </TableCell>
       <TableCell align="right">
         <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{agg.quantity} ks</Typography>
+        {sourceable ? (
+          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end" sx={{ mt: 0.25 }}>
+            <IconButton
+              size="small"
+              onClick={() => onAdjustSourcing!(-1)}
+              disabled={agg.fromInventory === 0}
+              aria-label="Ubrat kus ze skladu"
+              sx={{ width: 16, height: 16, color: 'info.main' }}
+            >
+              <RemoveIcon sx={{ fontSize: 12 }} />
+            </IconButton>
+            <Typography sx={{ fontSize: 11, color: agg.fromInventory > 0 ? 'info.main' : 'text.disabled', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {`${agg.fromInventory} ze skladu`}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={() => onAdjustSourcing!(1)}
+              disabled={agg.fromInventory >= agg.orderQuantity}
+              aria-label="Přidat kus ze skladu"
+              sx={{ width: 16, height: 16, color: 'info.main' }}
+            >
+              <AddIcon sx={{ fontSize: 12 }} />
+            </IconButton>
+          </Stack>
+        ) : agg.fromInventory > 0 && (
+          <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+            {`z toho ${agg.fromInventory} ze skladu`}
+          </Typography>
+        )}
         {agg.dokladkaQuantity > 0 && (
           <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
             {agg.orderQuantity > 0 ? `${agg.orderQuantity} obj. + ${agg.dokladkaQuantity} dokl.` : `${agg.dokladkaQuantity} ze skladu`}
@@ -423,9 +470,6 @@ export function ShipmentDetail({
   const [dokladkaOpen, setDokladkaOpen] = useState(false);
   const [dokladkaProductId, setDokladkaProductId] = useState<string | null>(null);
   const [dokladkaQty, setDokladkaQty] = useState('1');
-  const [extraOpen, setExtraOpen] = useState(false);
-  const [extraName, setExtraName] = useState('');
-  const [extraQty, setExtraQty] = useState('1');
 
   const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
@@ -442,6 +486,17 @@ export function ShipmentDetail({
   }), [stopsSorted]);
 
   const extraRows = useMemo(() => (shipment.inventoryExtraItems ?? []).map(extraRowFrom), [shipment.inventoryExtraItems]);
+
+  // Custom extras belong to the orders on the route; the nakládka only lists them.
+  const customExtras = useMemo(
+    () => stopsSorted.flatMap((st) => (st.customExtraItems ?? []).map((extra) => ({
+      clientName: st.clientName ?? '—', extra,
+    }))),
+    [stopsSorted],
+  );
+
+  // Warned about rather than blocked: a booked delivery may still land in time.
+  const overdrawn = useMemo(() => overdrawnStock(stopsSorted), [stopsSorted]);
   const combinedRows = useMemo(
     () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
     [stopsSorted, extraRows],
@@ -566,6 +621,48 @@ export function ShipmentDetail({
     void save(draft);
   }
 
+  /** The stock entry holding this product, if any. */
+  const stockItemFor = (productId?: string) =>
+    productId == null ? undefined : (inventoryQuery.data ?? [])
+      .flatMap((sec) => sec.items ?? [])
+      .find((i) => i.productId === productId);
+
+  // Move a piece of an aggregated product between "from the brewery" and "from our
+  // stock". Ordered quantities never change — only where the pieces come from.
+  // An aggregated line can span several orders, so a increase lands on the first
+  // row with brewery pieces left and a decrease comes off the last sourced one.
+  function adjustSourcing(agg: AggRow, delta: number) {
+    const orderRows = agg.sources.filter((r) => r.orderItemId);
+    const target = delta > 0
+      ? orderRows.find((r) => r.fromInventory < r.quantity)
+      : [...orderRows].reverse().find((r) => r.fromInventory > 0);
+
+    if (!target) {
+      if (delta > 0) enqueueSnackbar('Všechny kusy už jsou ze skladu.', { variant: 'info' });
+      return;
+    }
+
+    const stockItem = stockItemFor(target.productId);
+    if (delta > 0 && !stockItem) {
+      enqueueSnackbar('Produkt není veden na skladě.', { variant: 'warning' });
+      return;
+    }
+
+    const draft = draftFromShipment(shipment);
+    const item = draft.clientOrderShipments
+      .flatMap((cos) => cos.orderItems ?? [])
+      .find((i) => i.orderItemId === target.orderItemId);
+    if (!item) return;
+
+    const next = (item.quantityFromInventory ?? 0) + delta;
+    item.quantityFromInventory = Math.max(0, Math.min(next, target.quantity));
+    item.inventoryItemId = item.quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined;
+
+    // Deliberately no stock cap here: drawing more than is on hand is allowed and
+    // surfaced by the banner, because a booked delivery may still arrive in time.
+    void save(draft);
+  }
+
   const stockOptions: ComboOption[] = useMemo(() => (inventoryQuery.data ?? [])
     .flatMap((s) => s.items ?? [])
     .filter((i) => i.productId && (i.quantity ?? 0) > 0)
@@ -602,39 +699,6 @@ export function ShipmentDetail({
     await save(draft);
     setDokladkaOpen(false);
     enqueueSnackbar('Dokládka přidána do nakládky.', { variant: 'success' });
-  }
-
-  function openExtra() {
-    setExtraName('');
-    setExtraQty('1');
-    setExtraOpen(true);
-  }
-
-  // Custom extra item — an arbitrary named item loaded onto the truck that isn't
-  // a stock product (promo material, packaging…). New items carry no id.
-  async function saveExtra() {
-    const qty = parseInt(extraQty, 10) || 0;
-    if (!extraName.trim()) { enqueueSnackbar('Zadejte název položky', { variant: 'warning' }); return; }
-    if (qty <= 0) { enqueueSnackbar('Zadejte počet kusů', { variant: 'warning' }); return; }
-
-    const draft = draftFromShipment(shipment);
-    const dto = new CustomExtraShipmentDto({
-      quantity: qty, isLoadingConfirmed: false,
-    });
-    // Assign the derived-class field after construction (see shipmentDraft.ts).
-    dto.description = extraName.trim();
-    draft.customExtraShipments.push(dto);
-    await save(draft);
-    setExtraOpen(false);
-    enqueueSnackbar('Extra položka přidána.', { variant: 'success' });
-  }
-
-  function removeCustomExtra(id?: string) {
-    if (!id) return;
-    const draft = draftFromShipment(shipment);
-    draft.customExtraShipments = draft.customExtraShipments.filter((e) => e.id !== id);
-    void save(draft);
-    enqueueSnackbar('Extra položka odebrána.', { variant: 'success' });
   }
 
   return (
@@ -701,10 +765,6 @@ export function ShipmentDetail({
                     sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
                     Dokládka ze skladu
                   </Button>
-                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openExtra}
-                    sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
-                    Extra položka
-                  </Button>
                 </Stack>
               )}
             </Stack>
@@ -731,36 +791,51 @@ export function ShipmentDetail({
                     onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
                     onAdjustDokladka={agg.dokladkaQuantity > 0 ? (delta) => adjustDokladka(agg, delta) : undefined}
+                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
                   />
                 )}
               />
             </Box>
           </Card>
 
-          {(nakladkaEditable || (shipment.customExtraItems ?? []).length > 0) && (
+          {overdrawn.length > 0 && (
+            <Card sx={{ overflow: 'hidden', borderColor: 'warning.main', borderWidth: 1, borderStyle: 'solid' }}>
+              <Stack direction="row" spacing={1.5} sx={{ px: 2.5, py: 1.75 }}>
+                <WarningAmberOutlinedIcon fontSize="small" sx={{ color: 'warning.main', mt: 0.25, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+                    Ze skladu je odebráno víc, než je skladem
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Nakládku to nezablokuje — zásoba se může doplnit dřív, než vývoz vyjede.
+                  </Typography>
+                  <Stack sx={{ mt: 1 }} spacing={0.25}>
+                    {overdrawn.map((e) => (
+                      <Typography key={e.name} sx={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                        <Box component="span" sx={{ fontWeight: 700 }}>{e.name}</Box>
+                        {` — odebráno ${e.taken} ks, skladem ${e.available} ks`}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              </Stack>
+            </Card>
+          )}
+
+          {customExtras.length > 0 && (
             <Card sx={{ overflow: 'hidden' }}>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                 <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Extra položky (vratné obaly ap.)</Typography>
-                {nakladkaEditable && (
-                  <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={openExtra}>Přidat</Button>
-                )}
               </Stack>
               <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
-                {(shipment.customExtraItems ?? []).length === 0 ? (
-                  <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                    Žádné extra položky. Přidejte položku, která není ze skladu (propagační materiál, obaly…).
-                  </Typography>
-                ) : (shipment.customExtraItems ?? []).map((e) => (
-                  <Stack key={e.id} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                    <Typography sx={{ minWidth: 0 }} noWrap>{e.name}</Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.quantity} ks</Typography>
-                      {nakladkaEditable && (
-                        <IconButton size="small" onClick={() => removeCustomExtra(e.id)} aria-label="Odebrat extra položku" sx={{ color: 'error.main' }}>
-                          <DeleteOutlineOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Stack>
+                {/* Owned by the order — added there, only displayed here. */}
+                {customExtras.map(({ clientName, extra }) => (
+                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography noWrap>{extra.description}</Typography>
+                      <Typography variant="caption" color="text.secondary">{clientName}</Typography>
+                    </Box>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{extra.quantity} ks</Typography>
                   </Stack>
                 ))}
               </Stack>
@@ -861,38 +936,6 @@ export function ShipmentDetail({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={extraOpen} onClose={() => setExtraOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Extra položka</DialogTitle>
-        <DialogContent>
-          <Typography color="text.secondary" sx={{ fontSize: 13, mb: 2 }}>
-            Přidá do nakládky položku, která není ze skladu (propagační materiál, obaly apod.).
-          </Typography>
-          <Stack spacing={2}>
-            <TextField
-              label="Název položky"
-              size="small"
-              fullWidth
-              autoFocus
-              value={extraName}
-              onChange={(e) => setExtraName(e.target.value)}
-              placeholder="Např. reklamní tácky"
-            />
-            <TextField
-              label="Počet kusů"
-              type="number"
-              size="small"
-              fullWidth
-              value={extraQty}
-              onChange={(e) => setExtraQty(e.target.value)}
-              slotProps={{ htmlInput: { min: 1 } }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setExtraOpen(false)} color="inherit">Zrušit</Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveExtra()}>Přidat položku</Button>
-        </DialogActions>
-      </Dialog>
 
       <ConfirmDialog
         open={confirmCancel}

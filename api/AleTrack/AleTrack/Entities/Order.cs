@@ -30,6 +30,12 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OrderNote> Notes { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies — billed with the order.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OrderCustomExtraItem> CustomExtraItems { get; set; } = [];
     
     /// <summary>
     /// Related items to be ordered

@@ -410,8 +410,6 @@ export function ShipmentEditor({
             customStops,
             routeViaPoints,
             inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
-            clientExtraShipments: existingDraft?.clientExtraShipments ?? [],
-            customExtraShipments: existingDraft?.customExtraShipments ?? [],
           }),
         });
         savedId = shipmentId;

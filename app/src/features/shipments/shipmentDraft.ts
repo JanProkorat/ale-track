@@ -10,9 +10,8 @@ import {
   CustomStopDto,
   RoutePointDto,
   OrderItemInfoDto,
+  ExtraItemInfoDto,
   InventoryExtraShipmentDto,
-  ClientExtraShipmentDto,
-  CustomExtraShipmentDto,
   OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
@@ -21,8 +20,6 @@ export interface ShipmentDraft {
   customStops: CustomStopDto[];
   routeViaPoints: RoutePointDto[];
   inventoryExtraShipments: InventoryExtraShipmentDto[];
-  clientExtraShipments: ClientExtraShipmentDto[];
-  customExtraShipments: CustomExtraShipmentDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -36,6 +33,14 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       orderItems: (st.products ?? []).map((p) => new OrderItemInfoDto({
         orderItemId: p.orderItemId,
         isLoadingConfirmed: p.isShipmentLoadingConfirmed,
+        // How many of the ordered pieces come out of our stock rather than the
+        // brewery. Round-tripped so an unrelated save never silently drops it.
+        quantityFromInventory: p.quantityFromInventory ?? 0,
+        inventoryItemId: p.inventoryItemId,
+      })),
+      customExtraItems: (st.customExtraItems ?? []).map((e) => new ExtraItemInfoDto({
+        id: e.id,
+        isLoadingConfirmed: e.isLoadingConfirmed,
       })),
     })),
     customStops: stops.filter((st) => st.orderId == null).map((st) => new CustomStopDto({
@@ -56,24 +61,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       // survives regardless of `useDefineForClassFields` (a derived field init
       // would otherwise wipe a value passed into the constructor).
       dto.productId = e.productId;
-      return dto;
-    }),
-    // Client extra has no prototype UI (flagged in the P7 report) — carried
-    // through unchanged so an existing value is never silently dropped.
-    clientExtraShipments: (shipment.clientExtraItems ?? []).map((e) => {
-      const dto = new ClientExtraShipmentDto({
-        id: e.id, quantity: e.quantity,
-        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      });
-      dto.inventoryItemId = e.inventoryItemId;
-      return dto;
-    }),
-    customExtraShipments: (shipment.customExtraItems ?? []).map((e) => {
-      const dto = new CustomExtraShipmentDto({
-        id: e.id, quantity: e.quantity,
-        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      });
-      dto.description = e.name;
       return dto;
     }),
   };

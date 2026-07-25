@@ -91,6 +91,15 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             });
         }
 
+        foreach (var extra in req.Data.CustomExtraItems)
+        {
+            order.CustomExtraItems.Add(new OrderCustomExtraItem
+            {
+                Description = extra.Description,
+                Quantity = extra.Quantity
+            });
+        }
+
         client!.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(ct);

@@ -56,15 +56,7 @@ public sealed record OutgoingShipmentDetailDto
     /// </summary>
     public List<OutgoingShipmentInventoryExtraItemDto> InventoryExtraItems { get; set; } = [];
     
-    /// <summary>
-    /// List of extra product items included in the shipment to be delivered to the client taken from the inventory
-    /// </summary>
-    public List<OutgoingShipmentClientExtraItemDto> ClientExtraItems { get; set; } = [];
     
-    /// <summary>
-    /// List of custom extra product items included in the shipment
-    /// </summary>
-    public List<OutgoingShipmentCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 }
 
 /// <summary>
@@ -148,6 +140,12 @@ public sealed record OutgoingShipmentStopDto
     /// owned and edited by the order.
     /// </summary>
     public List<OrderReturnDto> Returns { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies (order stops only; always empty
+    /// for a custom stop). Read-only here — they are owned and edited by the order.
+    /// </summary>
+    public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 }
 
 public record OutgoingShipmentProductDto
@@ -196,7 +194,28 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     /// <summary>
     /// ID of the related order item
     /// </summary>
-    public Guid OrderItemId { get; set; }    
+    public Guid OrderItemId { get; set; }
+
+    /// <summary>
+    /// How many of <see cref="OutgoingShipmentProductDto.Quantity"/> pieces come from our
+    /// own stock rather than the brewery. Zero when the brewery supplied all of them.
+    /// </summary>
+    public int QuantityFromInventory { get; set; }
+
+    /// <summary>
+    /// Stock entry the sourced pieces come from. Null when nothing is sourced.
+    /// </summary>
+    public Guid? InventoryItemId { get; set; }
+
+    /// <summary>
+    /// Display name of that stock entry, so the nakládka can name the source.
+    /// </summary>
+    public string? InventoryItemName { get; set; }
+
+    /// <summary>
+    /// Pieces currently on hand in that stock entry, for the over-draw warning.
+    /// </summary>
+    public int? InventoryItemAvailable { get; set; }
 }
 
 /// <summary>
@@ -210,27 +229,4 @@ public sealed record OutgoingShipmentInventoryExtraItemDto : OutgoingShipmentPro
     public Guid ProductId { get; set; }
 }
 
-/// <summary>
-/// Data transfer object representing an extra product item in an outgoing shipment taken from the inventory
-/// and to be delivered to the client.
-/// </summary>
-public record OutgoingShipmentClientExtraItemDto : OutgoingShipmentProductDto
-{
-    /// <summary>
-    /// ID of the inventory item this extra product is taken from.
-    /// Null if its taken from clients order and not from inventory.
-    /// </summary>
-    public Guid InventoryItemId { get; set; }
-    
-    /// <summary>
-    /// ID of the related product.
-    /// </summary>
-    public Guid? ProductId { get; set; }   
-}
 
-/// <summary>
-/// Data transfer object representing a custom extra product item in an outgoing shipment.
-/// </summary>
-public record OutgoingShipmentCustomExtraItemDto : OutgoingShipmentProductDto
-{
-}

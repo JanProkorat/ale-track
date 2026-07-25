@@ -49,15 +49,9 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     [Column("order_item_id")]
     public long? OrderItemId { get; set; }
 
-    /// <summary>
-    /// ID of the billed <see cref="OutgoingShipmentClientExtraItem"/>. Set only when
-    /// <see cref="SourceKind"/> is <see cref="InvoiceLineSourceKind.ClientExtraItem"/>.
-    /// </summary>
-    [Column("client_extra_item_id")]
-    public long? ClientExtraItemId { get; set; }
 
     /// <summary>
-    /// ID of the billed <see cref="OutgoingShipmentCustomExtraItem"/>. Set only when
+    /// ID of the billed <see cref="OrderCustomExtraItem"/>. Set only when
     /// <see cref="SourceKind"/> is <see cref="InvoiceLineSourceKind.CustomExtraItem"/>.
     /// </summary>
     [Column("custom_extra_item_id")]
@@ -75,17 +69,11 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public OrderItem? OrderItem { get; set; }
 
-    /// <summary>
-    /// Billed client extra item. Null unless <see cref="SourceKind"/> is
-    /// <see cref="InvoiceLineSourceKind.ClientExtraItem"/>.
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public OutgoingShipmentClientExtraItem? ClientExtraItem { get; set; }
 
     /// <summary>
     /// Billed custom extra item. Null unless <see cref="SourceKind"/> is
     /// <see cref="InvoiceLineSourceKind.CustomExtraItem"/>.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
-    public OutgoingShipmentCustomExtraItem? CustomExtraItem { get; set; }
+    public OrderCustomExtraItem? CustomExtraItem { get; set; }
 }

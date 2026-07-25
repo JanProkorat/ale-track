@@ -65,6 +65,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Include(o => o.OrderItems)
             .Include(o => o.Returns)
             .Include(o => o.Notes)
+            .Include(o => o.CustomExtraItems)
             .FirstOrDefaultAsync(ct);
         
         if (order is null)
@@ -103,6 +104,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
+        order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
@@ -148,6 +150,29 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         {
             var existing = order.Notes.First(x => x.PublicId == n.Id!.Value);
             existing.Text = n.Text;
+            result.Add(existing);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Diffs posted custom extras against the persisted ones, like returns and notes.
+    /// <see cref="OrderCustomExtraItem.IsShipmentLoadingConfirmed"/> is left alone —
+    /// it belongs to the shipment, and an order edit must not un-confirm a loaded item.
+    /// </summary>
+    private static List<OrderCustomExtraItem> GetCustomExtras(List<OrderCustomExtraItemDto> extras, Order order)
+    {
+        var result = extras
+            .Where(e => e.Id is null)
+            .Select(e => new OrderCustomExtraItem { Description = e.Description, Quantity = e.Quantity })
+            .ToList();
+
+        foreach (var e in extras.Where(e => e.Id is not null && order.CustomExtraItems.Any(x => x.PublicId == e.Id!.Value)))
+        {
+            var existing = order.CustomExtraItems.First(x => x.PublicId == e.Id!.Value);
+            existing.Description = e.Description;
+            existing.Quantity = e.Quantity;
             result.Add(existing);
         }
 

@@ -59,18 +59,6 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentInventoryExtraItem> InventoryExtraItems { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in this outgoing shipment that will be taken from the inventory and shiped to the client
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentClientExtraItem> ClientExtraItems { get; set; } = [];
-    
-    /// <summary>
-    /// List of custom extra product items included in this outgoing shipment
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentCustomExtraItem> CustomExtraItems { get; set; } = [];
-
-    /// <summary>
     /// Invoices to be issued for this shipment — by default one per client on the route.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]

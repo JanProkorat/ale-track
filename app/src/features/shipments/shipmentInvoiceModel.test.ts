@@ -128,7 +128,7 @@ describe('originChips', () => {
     const inv = invoice({
       lines: [
         line({ quantity: 10, sourceItemId: 'ordered' }),
-        line({ quantity: 4, sourceItemId: 'stock', sourceKind: InvoiceLineSourceKind.ClientExtraItem, isFromStock: true }),
+        line({ quantity: 4, sourceItemId: 'stock', sourceKind: InvoiceLineSourceKind.OrderItem, isFromStock: true }),
       ],
     });
 

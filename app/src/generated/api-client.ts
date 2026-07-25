@@ -9297,7 +9297,6 @@ export interface IShipmentInvoiceLineDto {
 
 export enum InvoiceLineSourceKind {
     OrderItem = 0,
-    ClientExtraItem = 1,
     CustomExtraItem = 2,
 }
 
@@ -9395,8 +9394,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
-    clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
-    customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -9433,16 +9430,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.inventoryExtraItems = [] as any;
                 for (let item of _data["inventoryExtraItems"])
                     this.inventoryExtraItems!.push(OutgoingShipmentInventoryExtraItemDto.fromJS(item));
-            }
-            if (Array.isArray(_data["clientExtraItems"])) {
-                this.clientExtraItems = [] as any;
-                for (let item of _data["clientExtraItems"])
-                    this.clientExtraItems!.push(OutgoingShipmentClientExtraItemDto.fromJS(item));
-            }
-            if (Array.isArray(_data["customExtraItems"])) {
-                this.customExtraItems = [] as any;
-                for (let item of _data["customExtraItems"])
-                    this.customExtraItems!.push(OutgoingShipmentCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -9481,16 +9468,6 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.inventoryExtraItems)
                 data["inventoryExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.clientExtraItems)) {
-            data["clientExtraItems"] = [];
-            for (let item of this.clientExtraItems)
-                data["clientExtraItems"].push(item ? item.toJSON() : undefined as any);
-        }
-        if (Array.isArray(this.customExtraItems)) {
-            data["customExtraItems"] = [];
-            for (let item of this.customExtraItems)
-                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
-        }
         return data;
     }
 }
@@ -9505,8 +9482,6 @@ export interface IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     inventoryExtraItems?: OutgoingShipmentInventoryExtraItemDto[];
-    clientExtraItems?: OutgoingShipmentClientExtraItemDto[];
-    customExtraItems?: OutgoingShipmentCustomExtraItemDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -9525,6 +9500,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 
     constructor(data?: IOutgoingShipmentStopDto) {
         if (data) {
@@ -9559,6 +9535,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
                 this.returns = [] as any;
                 for (let item of _data["returns"])
                     this.returns!.push(OrderReturnDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -9595,6 +9576,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             for (let item of this.returns)
                 data["returns"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -9615,6 +9601,7 @@ export interface IOutgoingShipmentStopDto {
     longitude?: number | undefined;
     products?: OutgoingShipmentOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 }
 
 export enum OutgoingShipmentStopKind {
@@ -9754,6 +9741,10 @@ export interface IOutgoingShipmentProductDto {
 
 export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentOrderItemDto {
     orderItemId?: string;
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
+    inventoryItemName?: string | undefined;
+    inventoryItemAvailable?: number | undefined;
 
     constructor(data?: IOutgoingShipmentOrderItemDto) {
         super(data);
@@ -9763,6 +9754,10 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
         super.init(_data);
         if (_data) {
             this.orderItemId = _data["orderItemId"];
+            this.quantityFromInventory = _data["quantityFromInventory"];
+            this.inventoryItemId = _data["inventoryItemId"];
+            this.inventoryItemName = _data["inventoryItemName"];
+            this.inventoryItemAvailable = _data["inventoryItemAvailable"];
         }
     }
 
@@ -9776,6 +9771,10 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
+        data["quantityFromInventory"] = this.quantityFromInventory;
+        data["inventoryItemId"] = this.inventoryItemId;
+        data["inventoryItemName"] = this.inventoryItemName;
+        data["inventoryItemAvailable"] = this.inventoryItemAvailable;
         super.toJSON(data);
         return data;
     }
@@ -9783,6 +9782,10 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
 
 export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductDto {
     orderItemId?: string;
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
+    inventoryItemName?: string | undefined;
+    inventoryItemAvailable?: number | undefined;
 }
 
 export class OrderReturnDto implements IOrderReturnDto {
@@ -9831,6 +9834,54 @@ export interface IOrderReturnDto {
     name?: string;
     quantity?: number;
     note?: string | undefined;
+}
+
+export class OrderCustomExtraItemDto implements IOrderCustomExtraItemDto {
+    id?: string | undefined;
+    description?: string;
+    quantity?: number;
+    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IOrderCustomExtraItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.description = _data["description"];
+            this.quantity = _data["quantity"];
+            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+        }
+    }
+
+    static fromJS(data: any): OrderCustomExtraItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderCustomExtraItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["description"] = this.description;
+        data["quantity"] = this.quantity;
+        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        return data;
+    }
+}
+
+export interface IOrderCustomExtraItemDto {
+    id?: string | undefined;
+    description?: string;
+    quantity?: number;
+    isLoadingConfirmed?: boolean;
 }
 
 export class RoutePointDto implements IRoutePointDto {
@@ -9904,70 +9955,6 @@ export class OutgoingShipmentInventoryExtraItemDto extends OutgoingShipmentProdu
 
 export interface IOutgoingShipmentInventoryExtraItemDto extends IOutgoingShipmentProductDto {
     productId?: string;
-}
-
-export class OutgoingShipmentClientExtraItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentClientExtraItemDto {
-    inventoryItemId?: string;
-    productId?: string | undefined;
-
-    constructor(data?: IOutgoingShipmentClientExtraItemDto) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-        if (_data) {
-            this.inventoryItemId = _data["inventoryItemId"];
-            this.productId = _data["productId"];
-        }
-    }
-
-    static override fromJS(data: any): OutgoingShipmentClientExtraItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OutgoingShipmentClientExtraItemDto();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["inventoryItemId"] = this.inventoryItemId;
-        data["productId"] = this.productId;
-        super.toJSON(data);
-        return data;
-    }
-}
-
-export interface IOutgoingShipmentClientExtraItemDto extends IOutgoingShipmentProductDto {
-    inventoryItemId?: string;
-    productId?: string | undefined;
-}
-
-export class OutgoingShipmentCustomExtraItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentCustomExtraItemDto {
-
-    constructor(data?: IOutgoingShipmentCustomExtraItemDto) {
-        super(data);
-    }
-
-    override init(_data?: any) {
-        super.init(_data);
-    }
-
-    static override fromJS(data: any): OutgoingShipmentCustomExtraItemDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OutgoingShipmentCustomExtraItemDto();
-        result.init(data);
-        return result;
-    }
-
-    override toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        super.toJSON(data);
-        return data;
-    }
-}
-
-export interface IOutgoingShipmentCustomExtraItemDto extends IOutgoingShipmentProductDto {
 }
 
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
@@ -10170,6 +10157,7 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
     order!: number;
     selectedAddressKind!: OutgoingShipmentStopAddressKind;
     orderItems?: OrderItemInfoDto[];
+    customExtraItems?: ExtraItemInfoDto[];
 
     constructor(data?: IClientOrderShipmentDto) {
         if (data) {
@@ -10189,6 +10177,11 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
                     this.orderItems!.push(OrderItemInfoDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(ExtraItemInfoDto.fromJS(item));
             }
         }
     }
@@ -10210,6 +10203,11 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
             for (let item of this.orderItems)
                 data["orderItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -10219,11 +10217,14 @@ export interface IClientOrderShipmentDto {
     order: number;
     selectedAddressKind: OutgoingShipmentStopAddressKind;
     orderItems?: OrderItemInfoDto[];
+    customExtraItems?: ExtraItemInfoDto[];
 }
 
 export class OrderItemInfoDto implements IOrderItemInfoDto {
     orderItemId?: string;
     isLoadingConfirmed?: boolean;
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
 
     constructor(data?: IOrderItemInfoDto) {
         if (data) {
@@ -10238,6 +10239,8 @@ export class OrderItemInfoDto implements IOrderItemInfoDto {
         if (_data) {
             this.orderItemId = _data["orderItemId"];
             this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+            this.quantityFromInventory = _data["quantityFromInventory"];
+            this.inventoryItemId = _data["inventoryItemId"];
         }
     }
 
@@ -10252,12 +10255,56 @@ export class OrderItemInfoDto implements IOrderItemInfoDto {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
         data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        data["quantityFromInventory"] = this.quantityFromInventory;
+        data["inventoryItemId"] = this.inventoryItemId;
         return data;
     }
 }
 
 export interface IOrderItemInfoDto {
     orderItemId?: string;
+    isLoadingConfirmed?: boolean;
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
+}
+
+export class ExtraItemInfoDto implements IExtraItemInfoDto {
+    id?: string;
+    isLoadingConfirmed?: boolean;
+
+    constructor(data?: IExtraItemInfoDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.isLoadingConfirmed = _data["isLoadingConfirmed"];
+        }
+    }
+
+    static fromJS(data: any): ExtraItemInfoDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExtraItemInfoDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["isLoadingConfirmed"] = this.isLoadingConfirmed;
+        return data;
+    }
+}
+
+export interface IExtraItemInfoDto {
+    id?: string;
     isLoadingConfirmed?: boolean;
 }
 
@@ -10926,6 +10973,7 @@ export class OrderDto implements IOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 
     constructor(data?: IOrderDto) {
         if (data) {
@@ -10958,6 +11006,11 @@ export class OrderDto implements IOrderDto {
                 this.returns = [] as any;
                 for (let item of _data["returns"])
                     this.returns!.push(OrderReturnDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -10992,6 +11045,11 @@ export class OrderDto implements IOrderDto {
             for (let item of this.returns)
                 data["returns"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11006,6 +11064,7 @@ export interface IOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 }
 
 export class ClientInfoDto implements IClientInfoDto {
@@ -11229,6 +11288,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -11259,6 +11319,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.returns = [] as any;
                 for (let item of _data["returns"])
                     this.returns!.push(OrderReturnDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -11291,6 +11356,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.returns)
                 data["returns"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11303,6 +11373,7 @@ export interface IUpdateOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
@@ -11431,6 +11502,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -11459,6 +11531,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.returns = [] as any;
                 for (let item of _data["returns"])
                     this.returns!.push(OrderReturnDto.fromJS(item));
+            }
+            if (Array.isArray(_data["customExtraItems"])) {
+                this.customExtraItems = [] as any;
+                for (let item of _data["customExtraItems"])
+                    this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
             }
         }
     }
@@ -11489,6 +11566,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.returns)
                 data["returns"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.customExtraItems)) {
+            data["customExtraItems"] = [];
+            for (let item of this.customExtraItems)
+                data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11499,6 +11581,7 @@ export interface ICreateOrderDto {
     notes?: OrderNoteDto[];
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
+    customExtraItems?: OrderCustomExtraItemDto[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {

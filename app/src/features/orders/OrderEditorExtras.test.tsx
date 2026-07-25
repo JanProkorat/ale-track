@@ -11,7 +11,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderReturnDto, OrderNoteDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
+import { OrderDto, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
@@ -41,7 +41,7 @@ vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) 
 
 const { OrderEditor } = await import('./OrderEditor');
 
-function order(returns: OrderReturnDto[], notes: OrderNoteDto[] = []): OrderDto {
+function order(returns: OrderReturnDto[], notes: OrderNoteDto[] = [], customExtraItems: OrderCustomExtraItemDto[] = []): OrderDto {
   return new OrderDto({
     id: 'order-1',
     client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
@@ -51,6 +51,7 @@ function order(returns: OrderReturnDto[], notes: OrderNoteDto[] = []): OrderDto 
     ],
     returns,
     notes,
+    customExtraItems,
   });
 }
 
@@ -88,6 +89,15 @@ function notesCard(): HTMLElement {
 
 function noteInputs(): HTMLTextAreaElement[] {
   return within(notesCard()).getAllByPlaceholderText('Např. dovézt dopoledne…') as HTMLTextAreaElement[];
+}
+
+/** The Položky navíc card, located by its heading. */
+function extrasCard(): HTMLElement {
+  return screen.getByText('Položky navíc').closest('.MuiCard-root') as HTMLElement;
+}
+
+function extraInputs(): HTMLInputElement[] {
+  return within(extrasCard()).getAllByPlaceholderText('Např. tácky') as HTMLInputElement[];
 }
 
 beforeEach(() => {
@@ -228,6 +238,43 @@ describe('OrderEditor — vratky a poznámky', () => {
     const save = screen.getByRole('button', { name: /Uložit/i });
     fireEvent.change(noteInputs()[0], { target: { value: 'Dovézt odpoledne' } });
 
+    expect(save).not.toBeDisabled();
+  });
+
+  it('round-trips custom extras, dropping blank rows', async () => {
+    orderResponse = order([], [], [new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100 })]);
+
+    renderEditor();
+    expect(extraInputs()[0].value).toBe('Tácky');
+
+    fireEvent.click(within(extrasCard()).getByRole('button', { name: 'Přidat' }));
+    fireEvent.change(extraInputs()[1], { target: { value: 'Sklo' } });
+    // A third row left blank must not reach the API.
+    fireEvent.click(within(extrasCard()).getByRole('button', { name: 'Přidat' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    const sent = updateMutate.mock.calls[0][0].data.customExtraItems;
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ id: 'x1', description: 'Tácky', quantity: 100 });
+    expect(sent[1].id).toBeUndefined();
+    expect(sent[1].description).toBe('Sklo');
+  });
+
+  it('removes a custom extra and marks the form dirty when only one changed', () => {
+    orderResponse = order([], [], [
+      new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100 }),
+      new OrderCustomExtraItemDto({ id: 'x2', description: 'Sklo', quantity: 6 }),
+    ]);
+
+    renderEditor();
+    const save = screen.getByRole('button', { name: /Uložit/i });
+
+    fireEvent.click(within(extrasCard()).getAllByRole('button', { name: 'Odebrat položku navíc' })[0]);
+
+    expect(extraInputs()).toHaveLength(1);
+    expect(extraInputs()[0].value).toBe('Sklo');
     expect(save).not.toBeDisabled();
   });
 
