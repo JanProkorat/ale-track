@@ -509,10 +509,13 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
   const selected = parts.find((p) => p.id === partId) ?? parts[0];
   const max = selected?.quantity ?? 0;
   const [quantity, setQuantity] = useState(String(max));
-  const [targetValue, setTargetValue] = useState('');
 
   // Targets grouped per client: their existing invoices, plus a new one.
   const options = useMemo(() => moveTargetOptions(data, invoice, group), [data, invoice, group]);
+  // Preselect the first target so the dialog opens ready to submit. Options are built in
+  // route order starting with the source's own client, so the default is another invoice of
+  // the same client — never a silent cross-billing to somebody else.
+  const [targetValue, setTargetValue] = useState(options[0]?.value ?? '');
 
   const qty = Number.parseInt(quantity, 10);
   const qtyError = !Number.isFinite(qty) || qty <= 0 || qty > max;
@@ -531,12 +534,28 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
   };
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      // MUI tints dark-mode Paper by elevation, which washes background.paper out; the
+      // prototype's modal sits flat on --surface, and that token is background.paper here.
+      slotProps={{ paper: { sx: { backgroundImage: 'none' } } }}
+    >
+      <DialogTitle
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1.5, fontSize: 17,
+          borderBottom: 1, borderColor: 'divider',
+        }}
+      >
         <EastIcon sx={{ fontSize: 20 }} />
-        Přesunout na jinou fakturu
+        <Box component="span" sx={{ flex: 1 }}>Přesunout na jinou fakturu</Box>
+        <IconButton onClick={onClose} aria-label="Zavřít" size="small">
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ pt: 2.5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center"
           sx={{ p: 1.5, mb: 2, border: 1, borderColor: 'divider', borderRadius: 1.5, bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -574,6 +593,7 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
           <TextField
             label="Počet kusů k přesunu"
             type="number"
+            autoFocus
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             error={qtyError}
@@ -603,9 +623,14 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
           </TextField>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} color="inherit">Zrušit</Button>
-        <Button onClick={submit} variant="contained" disabled={pending || qtyError || !targetValue}>
+      <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Button onClick={onClose} color="inherit" variant="outlined">Zrušit</Button>
+        <Button
+          onClick={submit}
+          variant="contained"
+          startIcon={<EastIcon />}
+          disabled={pending || qtyError || !targetValue}
+        >
           Přesunout
         </Button>
       </DialogActions>

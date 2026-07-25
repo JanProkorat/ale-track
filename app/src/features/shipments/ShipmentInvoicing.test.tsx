@@ -397,11 +397,30 @@ describe('move dialog', () => {
     expect(moveMutate).not.toHaveBeenCalled();
   });
 
-  it('cannot submit without a target', () => {
+  it('opens with a target preselected and ready to submit', () => {
     renderSection();
     fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
 
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Přesunout' })).toBeDisabled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Přesunout' })).toBeEnabled();
+    // The default must be another invoice of the source's own client — never a silent
+    // cross-billing to somebody else.
+    expect(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }))
+      .toHaveTextContent('+ nová faktura 2');
+  });
+
+  it('submits the preselected target without touching the dropdown', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate).toHaveBeenCalledTimes(1);
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: 'inv-a',
+      toClientId: CLIENT_A,
+      toInvoiceId: undefined,
+      quantity: 5,
+    });
   });
 
   it('offers every other invoice plus a new one per client, ordered by route', () => {
