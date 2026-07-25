@@ -427,6 +427,7 @@ const IC = {
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>', warnTri:'<path d="M12 3 2 20h20zM12 9v5M12 18h.01"/>',
   sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   history:'<path d="M3 3v6h6M3 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/>',
+  moveTo:'<path d="M3 12h11M11 8l4 4-4 4M20 4v16"/>',
 };
 function icon(name, size=18, sw=1.9){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${IC[name]||''}</svg>`;
@@ -625,10 +626,19 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
       vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
   ];
   function stop(orderId,kind,order){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, order,
-    items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:0, loaded:false, checked:false, inv:1, source:'order' })) }; }
+    items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:0, loaded:false, checked:false, source:'order' })) }; }
   // demo: a pure dokládka (product not in the order) + a merged dokládka on an existing order line
-  DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:0, dokladkaQty:4, loaded:false, checked:false, inv:1, source:'dokladka' });
+  DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:0, dokladkaQty:4, loaded:false, checked:false, source:'dokladka' });
   (function(){ const alb=DB.shipments[0].stops[0].items.find(i=>i.productId===byName('Albrecht 12° Světlý').id); if(alb) alb.dokladkaQty=2; })();
+  // demo invoice split on s-1: a 2nd invoice for the 1st client + one cross-client line billed to the 2nd client
+  (function seedInvoices(){ const s=DB.shipments[0]; const [a,b]=s.stops.slice().sort((x,y)=>x.order-y.order);
+    s.invoices=[ { id:'fak-1', clientId:a.clientId, seq:1, lines:[] }, { id:'fak-2', clientId:a.clientId, seq:2, lines:[] },
+                 { id:'fak-3', clientId:b.clientId, seq:1, lines:[] } ];
+    const maz=a.items.find(i=>i.productId===byName('Svijanský Máz').id);   // → 2nd invoice of the same client
+    if(maz) s.invoices[1].lines.push({ id:'fl-1', itemId:maz.id, qty:2 });
+    const alb=a.items.find(i=>i.productId===byName('Albrecht 12° Světlý').id); // → invoice of ANOTHER client
+    if(alb) s.invoices[2].lines.push({ id:'fl-2', itemId:alb.id, qty:2 });
+  })();
   // Deliveries (Dovozy)
   DB.deliveries=[
     { id:'d-1', number:'DOV-2026-030', date:daysFromNow(2), state:'InPlanning', vehicleId:'v-iveco', driverIds:['dr-novak'], note:'Zavézt i prázdné sudy zpět',
@@ -1704,7 +1714,7 @@ function viewShipments(){
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Název</th><th>Stav</th><th>Datum</th><th style="text-align:right">Zast.</th><th>Vůz</th><th>Řidiči</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
-let SL={ shipId:null, tab:'all', dokStop:null };
+let SL={ shipId:null, dokStop:null };
 function viewShipmentDetail(id){
   id=id.split('?')[0]; const s=DB.shipments.find(x=>x.id===id); if(!s) return notFound('Vývoz');
   SL.shipId=id;
@@ -1738,7 +1748,8 @@ function viewShipmentDetail(id){
         <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad stack" style="gap:10px">
           ${s.driverIds.length?s.driverIds.map(did=>{const d=driverById(did);return `<div class="row gap12"><span class="dotc" style="width:12px;height:12px;border-radius:99px;background:${d.color}"></span>
             <div><div class="t-strong">${esc(d.firstName)} ${esc(d.lastName)}</div><div class="t-mut" style="font-size:12px">${esc(d.phoneNumber||'')}</div></div></div>`;}).join(''):'<span class="t-mut">Bez řidiče</span>'}</div></div>
-      </div></div></div>`;
+      </div></div>
+    <div id="ship-inv" style="margin-top:16px">${shipInvoiceCard(s)}</div></div>`;
 }
 function estWeight(p){ if(!p) return 0; if(p.kind==='Keg') return (p.packageSize||30)*1.05+8; if(p.kind==='Bottle') return (p.packageSize||0.5)*20*1.1; if(p.kind==='Can'||p.kind==='Multipack') return (p.packageSize||6)*1.05; return 5; }
 function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to;
@@ -1751,11 +1762,11 @@ function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to
 
 /* ============ VÝVOZ — NAKLÁDKA (loading, invoices, dokládka) ============ */
 function slFind(s,itemId){ for(const st of s.stops){ const it=st.items.find(i=>i.id===itemId); if(it) return it; } return null; }
-function slRerender(){ const s=DB.shipments.find(x=>x.id===SL.shipId); const el=$('#ship-load'); if(el&&s) el.innerHTML=shipLoadingCard(s); }
-function slSetTab(t){ SL.tab=t; slRerender(); }
+function slRerender(){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const el=$('#ship-load'); if(el) el.innerHTML=shipLoadingCard(s);
+  const iv=$('#ship-inv'); if(iv) iv.innerHTML=shipInvoiceCard(s); }   // loading edits change what there is to invoice
 function slToggle(itemId,field){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(!it)return;
   it[field]=!it[field]; if(field==='loaded'&&!it.loaded) it.checked=false; slRerender(); }
-function slSetInvoice(itemId,inv){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(it){ it.inv=inv; slRerender(); } }
 function slRemoveItem(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId)); toast('Dokládka odebrána','trash'); slRerender(); }
 function slQty(it){ return (it.quantity||0)+(it.dokladkaQty||0); }
 function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*slQty(it); }
@@ -1767,15 +1778,10 @@ function shipLoadingCard(s){
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
   const all=stopsSorted.flatMap(st=>st.items);
   const totalN=all.length, loadedN=all.filter(i=>i.loaded).length, checkedN=all.filter(i=>i.checked).length;
-  const f1=all.filter(i=>i.inv===1), f2=all.filter(i=>i.inv===2);
-  const tabTotal=(SL.tab==='f1'?f1:SL.tab==='f2'?f2:all).reduce((x,i)=>x+slPrice(i),0);
-  const inTab=i=>SL.tab==='all'||(SL.tab==='f1'&&i.inv===1)||(SL.tab==='f2'&&i.inv===2);
-  const seg=`<div class="seg" style="flex-wrap:wrap">
-    <button class="${SL.tab==='all'?'on':''}" onclick="slSetTab('all')">Celková nakládka <span style="opacity:.6">${totalN}</span></button>
-    <button class="${SL.tab==='f1'?'on':''}" onclick="slSetTab('f1')">Faktura 1 <span style="opacity:.6">${f1.length}</span></button>
-    <button class="${SL.tab==='f2'?'on':''}" onclick="slSetTab('f2')">Faktura 2 <span style="opacity:.6">${f2.length}</span></button></div>`;
+  const loadValue=all.reduce((x,i)=>x+slPrice(i),0);
+  const totalPieces=all.reduce((x,i)=>x+slQty(i),0);
   const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
-    const items=st.items.filter(inTab);
+    const items=st.items;
     const rows=items.map(it=>{ const p=prodById(it.productId); const dq=it.dokladkaQty||0; const pure=it.quantity===0; const qty=slQty(it);
       const qtyCell = dq>0
         ? `<div class="tnum t-strong">${qty} ks</div><div class="t-mut tnum" style="font-size:11px">${pure?`${dq} ze skladu`:`${it.quantity} obj. + ${dq} dokl.`}</div>`
@@ -1785,9 +1791,6 @@ function shipLoadingCard(s){
         <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
           <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${dokBadge}</div></td>
         <td class="num">${qtyCell}</td>
-        ${SL.tab==='all'?`<td style="text-align:center"><div class="seg" style="display:inline-flex">
-          <button class="${it.inv===1?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',1)"`:'disabled'}>F1</button>
-          <button class="${it.inv===2?'on':''}" style="padding:4px 10px" ${editable?`onclick="slSetInvoice('${it.id}',2)"`:'disabled'}>F2</button></div></td>`:''}
         <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
         <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
         <td style="width:34px;text-align:right">${pure&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" title="Odebrat" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
@@ -1796,16 +1799,16 @@ function shipLoadingCard(s){
         <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
           <div><div class="t-strong" style="font-size:13.5px">${esc(cl.name)}</div><div class="t-mut" style="font-size:11.5px">${fmtAddr(a)} · ${L.addrKind[st.addressKind]}</div></div></div>
         ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
-      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th>${SL.tab==='all'?'<th style="text-align:center">Faktura</th>':''}<th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-        :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">V této faktuře nemá klient žádné položky.</div>`}</div>`; }).join('');
+      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+        :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">Klient nemá v této nakládce žádné položky.</div>`}</div>`; }).join('');
   return `<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
-      <div style="margin-left:auto">${seg}</div></div>
+      <span class="sub" style="margin-left:auto">Co naložit do vozu — pro řidiče a přípravu v pivovaru</span></div>
     <div class="card-pad">
       <div class="row gap8" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:6px">
         <div class="row gap8">
           <span class="pill ${loadedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Naloženo ${loadedN}/${totalN}</span>
           <span class="pill ${checkedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Zkontrolováno ${checkedN}/${totalN}</span></div>
-        <div class="t-mut" style="font-size:13px">${SL.tab==='all'?'Hodnota nakládky':SL.tab==='f1'?'Faktura 1':'Faktura 2'}: <span class="t-strong" style="color:var(--amber-700)">${money(tabTotal)}</span></div>
+        <div class="t-mut" style="font-size:13px">${num(totalPieces)} ks · <span class="t-strong" style="color:var(--amber-700)">${money(loadValue)}</span></div>
       </div>
       ${stopBlocks}
     </div></div>`;
@@ -1830,8 +1833,304 @@ function slSaveDokladka(){ const invId=val('dok-prod'); const qty=parseInt(val('
   const s=DB.shipments.find(x=>x.id===SL.shipId); const st=s.stops.find(x=>x.orderId===SL.dokStop); if(!st) return;
   const existing=st.items.find(i=>i.productId===inv.productId);
   if(existing){ existing.dokladkaQty=(existing.dokladkaQty||0)+qty; existing.fromInventoryId=inv.id; toast('Dokládka sloučena k položce'); }
-  else { st.items.push({ id:'dok-'+Math.random().toString(36).slice(2,7), productId:inv.productId, quantity:0, dokladkaQty:qty, loaded:false, checked:false, inv:1, source:'dokladka', fromInventoryId:inv.id }); toast('Dokládka přidána do nakládky'); }
+  else { st.items.push({ id:'dok-'+Math.random().toString(36).slice(2,7), productId:inv.productId, quantity:0, dokladkaQty:qty, loaded:false, checked:false, source:'dokladka', fromInventoryId:inv.id }); toast('Dokládka přidána do nakládky'); }
   closeOverlay(); slRerender(); }
+
+/* ============ VÝVOZ — FAKTURACE ============
+   Mirrors the backend shape: one invoice per (shipment, client, seq), each holding
+   lines that reference a source item (order item / dokládka) + a quantity. A line
+   whose source item belongs to another client's order is a cross-client line.
+   NOTE: the fak* prefix is deliberate — inv* belongs to the Sklad module. */
+let FA={ shipId:null, invId:null, lineId:null, closed:{} };
+function fakNewId(){ return 'fak-'+Math.random().toString(36).slice(2,7); }
+function fakLineId(){ return 'fl-'+Math.random().toString(36).slice(2,7); }
+/** Every billable item in the shipment, paired with the stop (= ordering client) it came from. */
+function fakBillables(s){ return s.stops.slice().sort((a,b)=>a.order-b.order).flatMap(st=>st.items.map(it=>({it,st}))); }
+function fakSrc(s,itemId){ for(const st of s.stops){ const it=st.items.find(i=>i.id===itemId); if(it) return {it,st}; } return null; }
+function fakStopIndex(s,clientId){ const so=s.stops.slice().sort((a,b)=>a.order-b.order); const i=so.findIndex(st=>st.clientId===clientId); return i<0?99:i; }
+function fakHomeFor(s,clientId){ let v=s.invoices.filter(x=>x.clientId===clientId).sort((a,b)=>a.seq-b.seq)[0];
+  if(!v){ v={id:fakNewId(),clientId,seq:1,lines:[]}; s.invoices.push(v); } return v; }
+/** Reconcile — the one piece of real logic. Guarantees: every client in the shipment has
+ *  at least one invoice, every line points at an item still present, and every loaded piece
+ *  is covered exactly once. Surplus lands on the ordering client's 1st invoice.
+ *  Anything it had to change to an ALREADY-split item is appended to s.fakLog, so the UI can
+ *  tell the user their split was adjusted underneath them. Materialising the default split for
+ *  the first time is not a change and is never logged. */
+function fakEnsure(s){
+  if(!s.invoices) s.invoices=[];
+  const log=[];
+  const src=fakBillables(s);
+  const clients=[...new Set(src.map(x=>x.st.clientId))];
+  clients.forEach(cid=>{ if(!s.invoices.some(v=>v.clientId===cid)) s.invoices.push({id:fakNewId(),clientId:cid,seq:1,lines:[]}); });
+  s.invoices=s.invoices.filter(v=>clients.includes(v.clientId)||v.lines.length);
+  // lines pointing at items that left the shipment entirely
+  const known=new Set(src.map(x=>x.it.id));
+  s.invoices.forEach(v=>{ v.lines=v.lines.filter(l=>{
+    if(known.has(l.itemId)) return true;
+    log.push({t:'gone',productId:(s.fakItemProduct||{})[l.itemId],qty:l.qty}); return false; }); });
+  src.forEach(({it,st})=>{
+    const total=slQty(it);
+    let assigned=0; s.invoices.forEach(v=>v.lines.forEach(l=>{ if(l.itemId===it.id) assigned+=l.qty; }));
+    const diff=total-assigned;
+    if(diff>0){ const home=fakHomeFor(s,st.clientId); const l=home.lines.find(x=>x.itemId===it.id);
+      // assigned>0 means this item was already split — so this is drift, not first materialisation
+      if(assigned>0) log.push({t:'inc',productId:it.productId,qty:diff,clientId:st.clientId});
+      if(l) l.qty+=diff; else home.lines.push({id:fakLineId(),itemId:it.id,qty:diff}); }
+    else if(diff<0){ let over=-diff;
+      log.push({t:'dec',productId:it.productId,qty:over,clientId:st.clientId});
+      // Trim order: other clients' invoices first, then the ordering client's extra invoices,
+      // and their 1st invoice last — so a quantity cut never turns an ordinary line into a
+      // cross-client one by wiping the owner's claim first.
+      const rank=v=>(v.clientId===st.clientId?1:0);
+      s.invoices.slice().sort((a,b)=>rank(a)-rank(b)||b.seq-a.seq).forEach(v=>v.lines.forEach(l=>{
+        if(l.itemId===it.id&&over>0){ const t=Math.min(over,l.qty); l.qty-=t; over-=t; } })); }
+  });
+  s.invoices.forEach(v=>{ v.lines=v.lines.filter(l=>l.qty>0); });
+  // remember itemId -> productId so a later removal can still name the product
+  s.fakItemProduct=Object.fromEntries(src.map(({it})=>[it.id,it.productId]));
+  if(log.length) s.fakLog=[...(s.fakLog||[]),...log];
+  return s.invoices;
+}
+function fakClearLog(){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  delete s.fakLog; fakRerender(); }
+/** Banner telling the user the split was adjusted because the loading changed under it. */
+function fakLogBanner(s){
+  const log=s.fakLog||[]; if(!log.length) return '';
+  const items=log.map(e=>{ const p=prodById(e.productId); const nm=esc(p?p.name:'položka');
+    if(e.t==='gone') return `<li><b>${nm}</b> — odebrána z nakládky, řádky faktur zrušeny (${e.qty} ks)`;
+    if(e.t==='inc') return `<li><b>${nm}</b> — přidáno ${e.qty} ks na 1. fakturu objednavatele`;
+    return `<li><b>${nm}</b> — odebráno ${e.qty} ks (nejdřív z přefakturovaných)`; }).join('');
+  return `<div class="row gap12" style="align-items:flex-start;padding:11px 13px;margin-bottom:12px;
+      border:1px solid var(--amber);background:var(--amber-soft);border-radius:var(--r)">
+    <span style="color:var(--amber-700);flex:0 0 auto;margin-top:1px">${icon('warnTri',17)}</span>
+    <div style="flex:1;min-width:0">
+      <div class="t-strong" style="font-size:13px">Množství v nakládce se změnilo — rozdělení na faktury bylo upraveno</div>
+      <ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--text-2);line-height:1.65">${items}</ul>
+      <div class="t-mut" style="font-size:11.5px;margin-top:6px">Zkontrolujte rozdělení, případně kusy přesuňte ručně.</div>
+    </div>
+    <button class="icon-btn" style="width:26px;height:26px;flex:0 0 auto" title="Skrýt" onclick="fakClearLog()">${icon('close',14)}</button>
+  </div>`;
+}
+function fakSorted(s){ return s.invoices.slice().sort((a,b)=>fakStopIndex(s,a.clientId)-fakStopIndex(s,b.clientId)||a.seq-b.seq); }
+function fakPieces(v){ return v.lines.reduce((x,l)=>x+l.qty,0); }
+function fakValue(s,v){ return v.lines.reduce((x,l)=>{ const q=fakSrc(s,l.itemId);
+  return x+((q?prodById(q.it.productId)?.priceWithVat:0)||0)*l.qty; },0); }
+function fakLabel(s,v){ const cl=clientById(v.clientId); return `${cl?cl.name:'—'} · Faktura ${v.seq}`; }
+function fakIsCross(s,v,l){ const q=fakSrc(s,l.itemId); return !!q&&q.st.clientId!==v.clientId; }
+/** Clients that own a band, in route order. */
+function fakClients(s){ const order=[...new Set(fakBillables(s).map(x=>x.st.clientId))];
+  s.invoices.forEach(v=>{ if(!order.includes(v.clientId)) order.push(v.clientId); });
+  return order.sort((a,b)=>fakStopIndex(s,a)-fakStopIndex(s,b)); }
+function fakInvoicesOf(s,cid){ return s.invoices.filter(v=>v.clientId===cid).sort((a,b)=>a.seq-b.seq); }
+function fakRerender(){ const s=DB.shipments.find(x=>x.id===SL.shipId); const el=$('#ship-inv'); if(el&&s) el.innerHTML=shipInvoiceCard(s); }
+
+/* ---- band collapse state (per shipment + client) ---- */
+function fakBandKey(s,cid){ return s.id+':'+cid; }
+function fakBandOpen(s,cid){ return !FA.closed[fakBandKey(s,cid)]; }
+function fakToggleBand(cid){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const k=fakBandKey(s,cid); FA.closed[k]=!FA.closed[k]; fakRerender(); }
+function fakSetAllBands(closed){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  fakClients(s).forEach(cid=>{ FA.closed[fakBandKey(s,cid)]=closed; }); fakRerender(); }
+
+/* ---- rendering ----
+   Lines are full-width table rows, not cards: a client normally has exactly one
+   invoice, and a fixed-width card would leave most of the row empty. The invoice
+   only gets its own sub-header row once a client actually has more than one. */
+/** Collapse an invoice's lines to one row per product. The same product can arrive from
+ *  several sources (own order, another client's order, stock) — those become chips on the
+ *  single row rather than duplicate rows. `parts` keeps the exact per-source breakdown, which
+ *  is what a move actually operates on. */
+function fakGroups(s,v){
+  const map=new Map(); const order=[];
+  v.lines.forEach(l=>{ const q=fakSrc(s,l.itemId); if(!q) return;
+    let g=map.get(q.it.productId);
+    if(!g){ g={productId:q.it.productId,qty:0,parts:[]}; map.set(q.it.productId,g); order.push(q.it.productId); }
+    g.qty+=l.qty; g.parts.push({line:l,src:q}); });
+  return order.map(k=>map.get(k));
+}
+/** Human label for where one part's pieces came from. */
+function fakPartOrigin(s,v,part){
+  if(part.src.it.source==='dokladka') return 'ze skladu';
+  if(part.src.st.clientId!==v.clientId) return `z obj. ${clientById(part.src.st.clientId)?.name||'—'}`;
+  return 'z vlastní objednávky';
+}
+/** One product row on an invoice: name, origin chips, total quantity, value, move action. */
+function fakGroupTr(s,v,g,editable){
+  const p=prodById(g.productId);
+  const merged=g.parts.length>1;
+  const qty=n=>merged?`${n} ks `:'';
+  const chip=(cls,ic,txt)=>`<span class="pill ${cls}" style="height:19px;font-size:10.5px;padding:0 7px">${icon(ic,10)}${txt}</span>`;
+  const stock=g.parts.filter(x=>x.src.it.source==='dokladka').reduce((a,x)=>a+x.line.qty,0);
+  const withDokladka=g.parts.some(x=>x.src.it.source!=='dokladka'&&(x.src.it.dokladkaQty||0)>0);
+  const foreign=new Map();
+  g.parts.forEach(x=>{ if(x.src.it.source!=='dokladka'&&x.src.st.clientId!==v.clientId)
+    foreign.set(x.src.st.clientId,(foreign.get(x.src.st.clientId)||0)+x.line.qty); });
+  const badges=[
+    stock>0?chip('s-info','stock',stock===g.qty?'ze skladu':`${stock} ks ze skladu`):'',
+    withDokladka?chip('s-info','stock','obsahuje dokládku'):'',
+    ...[...foreign].map(([cid,n])=>chip('s-amber','warnTri',`${qty(n)}z obj. ${esc(clientById(cid)?.name||'—')}`)),
+  ].filter(Boolean).join('');
+  return `<tr>
+    <td><div class="row gap8" style="flex-wrap:wrap">
+      <span class="t-strong" style="font-size:13px">${esc(p?p.name:'—')}</span>
+      <span class="tag">${kindChipText(p?.kind)}${p?.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${badges}</div></td>
+    <td class="num"><span class="t-strong">${g.qty} ks</span></td>
+    <td class="num">${money((p?.priceWithVat||0)*g.qty)}</td>
+    <td style="width:44px;text-align:right">${editable?`<button class="icon-btn" style="width:26px;height:26px" title="Přesunout kusy na jinou fakturu"
+      onclick="fakMoveModal('${v.id}','${g.productId}')">${icon('moveTo',13)}</button>`:''}</td></tr>`;
+}
+/** Tinted group header for one invoice — only rendered when the client has 2+. */
+function fakInvoiceTr(s,v,editable){
+  return `<tr style="background:var(--surface-2)">
+    <td class="t-strong" style="font-size:12px">Faktura ${v.seq}</td>
+    <td class="num t-strong" style="font-size:12px">${fakPieces(v)} ks</td>
+    <td class="num t-strong" style="font-size:12px;color:var(--amber-700)">${money(fakValue(s,v))}</td>
+    <td style="text-align:right">${editable&&v.seq>1?`<button class="icon-btn" style="width:26px;height:26px;color:var(--crit)" title="Smazat fakturu" onclick="fakDelete('${v.id}')">${icon('trash',12)}</button>`:''}</td></tr>`;
+}
+function fakEmptyTr(){ return `<tr><td colspan="4" class="t-mut" style="font-size:12.5px">Zatím bez položek — přesuňte je z jiné faktury.</td></tr>`; }
+/** One client band: header with the stop number + rollup, then that client's invoice cards
+ *  stacked full-width below it. Bands stack vertically, so nothing wraps sideways. */
+function fakBand(s,cid,first,editable){
+  const vs=fakInvoicesOf(s,cid); const cl=clientById(cid); const idx=fakStopIndex(s,cid);
+  const pieces=vs.reduce((x,v)=>x+fakPieces(v),0);
+  const value=vs.reduce((x,v)=>x+fakValue(s,v),0);
+  const cross=vs.reduce((n,v)=>n+v.lines.filter(l=>fakIsCross(s,v,l)).length,0);
+  const open=fakBandOpen(s,cid);
+  const split=vs.length>1;   // only label individual invoices once there is more than one
+  const rows=vs.map(v=>{
+    const lines=fakGroups(s,v).map(g=>fakGroupTr(s,v,g,editable)).join('')||fakEmptyTr();
+    return (split?fakInvoiceTr(s,v,editable):'')+lines;
+  }).join('');
+  return `<div style="padding:12px 0;${first?'':'border-top:1px solid var(--border)'}">
+    <div class="row gap8" style="flex-wrap:wrap;margin-bottom:${open?'10px':'0'}">
+      <span class="av" style="width:26px;height:26px;background:${colorFor(cid)};color:#fff;font-size:12px;flex:0 0 auto">${idx<99?idx+1:'?'}</span>
+      <div style="flex:1;min-width:0">
+        <div class="t-strong" style="font-size:13.5px">${esc(cl?cl.name:'—')}</div>
+        <div class="t-mut" style="font-size:11.5px">${vs.length} ${plural(vs.length,'faktura','faktury','faktur')} · ${num(pieces)} ks · ${money(value)}</div></div>
+      ${cross?`<span class="pill s-amber"><span class="d"></span>${cross}× přefakturováno</span>`:''}
+      ${editable?`<button class="btn btn-sm btn-ghost" onclick="fakAddFor('${cid}')">${icon('plus',13)}Faktura</button>`:''}
+      <button class="icon-btn" style="width:28px;height:28px;transition:transform .15s;transform:${open?'rotate(180deg)':'none'}"
+        title="${open?'Sbalit':'Rozbalit'}" onclick="fakToggleBand('${cid}')">${icon('chevD',15)}</button>
+    </div>
+    ${open?`<div class="tbl-wrap"><table class="tbl" style="min-width:0">
+      <thead><tr><th>Produkt</th><th style="text-align:right;width:90px">Množství</th><th style="text-align:right;width:120px">Hodnota</th><th style="width:44px"></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`:''}
+  </div>`;
+}
+function shipInvoiceCard(s){
+  const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
+  fakEnsure(s);
+  const clients=fakClients(s);
+  const totalPieces=fakBillables(s).reduce((x,{it})=>x+slQty(it),0);
+  const billed=s.invoices.reduce((x,v)=>x+fakPieces(v),0);
+  const totalValue=s.invoices.reduce((x,v)=>x+fakValue(s,v),0);
+  const crossN=s.invoices.reduce((n,v)=>n+v.lines.filter(l=>fakIsCross(s,v,l)).length,0);
+  const rest=totalPieces-billed;
+  const openN=clients.filter(cid=>fakBandOpen(s,cid)).length;
+  const bands=clients.map((cid,i)=>fakBand(s,cid,i===0,editable)).join('')
+    ||`<div class="t-mut" style="font-size:13px;padding:8px 2px">Vývoz nemá žádné položky k fakturaci.</div>`;
+  return `<div class="card"><div class="card-head">${icon('wallet',18)}<h3>Fakturace</h3>
+      <span class="sub" style="margin-left:auto">Rozdělení položek vývozu na faktury — pro fakturaci klientům</span></div>
+    <div class="card-pad">
+      ${fakLogBanner(s)}
+      <div class="row gap8" style="justify-content:space-between;flex-wrap:wrap">
+        <div class="row gap8" style="flex-wrap:wrap">
+          <span class="pill s-grey"><span class="d"></span>${s.invoices.length} ${plural(s.invoices.length,'faktura','faktury','faktur')} · ${clients.length} ${plural(clients.length,'klient','klienti','klientů')}</span>
+          <span class="pill ${rest===0?'s-ok':'s-crit'}"><span class="d"></span>${rest===0?`vše rozděleno · ${num(billed)} ks`:`${num(rest)} ks nerozděleno`}</span>
+          ${crossN?`<span class="pill s-amber"><span class="d"></span>${crossN} ${plural(crossN,'položka fakturována','položky fakturovány','položek fakturováno')} jinému klientovi</span>`:''}
+        </div>
+        <div class="row gap8">
+          <span class="t-mut" style="font-size:13px">Celkem <span class="t-strong" style="color:var(--amber-700)">${money(totalValue)}</span></span>
+          ${clients.length>1?`<button class="btn btn-sm btn-ghost" onclick="fakSetAllBands(${openN>0})">${icon(openN>0?'arrowU':'arrowD',13)}${openN>0?'Sbalit vše':'Rozbalit vše'}</button>`:''}</div>
+      </div>
+      ${bands}
+    </div></div>`;
+}
+
+/** Resolve the product group a move dialog is operating on. */
+function fakGroupOf(s,invId,productId){
+  const v=s.invoices.find(x=>x.id===invId); if(!v) return null;
+  return fakGroups(s,v).find(g=>g.productId===productId)||null;
+}
+/** Move N pieces of one product to another invoice — including an invoice of a different client.
+ *  Rows are merged per product, so when a product on this invoice came from several sources the
+ *  dialog asks which origin to take the pieces from. */
+function fakMoveModal(invId,productId){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const from=s.invoices.find(x=>x.id===invId); const g=fakGroupOf(s,invId,productId);
+  if(!from||!g||!g.parts.length) return;
+  const p=prodById(productId);
+  FA.shipId=s.id; FA.invId=invId; FA.productId=productId;
+  // biggest part first, so the default pick is the most likely one
+  const parts=g.parts.slice().sort((a,b)=>b.line.qty-a.line.qty);
+  const owners=[...new Set(g.parts.map(x=>x.src.st.clientId))];
+  const groups=fakClients(s).map(cid=>{
+    const vs=fakInvoicesOf(s,cid); if(!vs.length) return '';
+    const cl=clientById(cid);
+    const opts=vs.filter(v=>v.id!==invId).map(v=>`<option value="${v.id}">Faktura ${v.seq} — ${fakPieces(v)} ks</option>`).join('')
+      +`<option value="new:${cid}">+ nová faktura ${Math.max(...vs.map(v=>v.seq))+1}</option>`;
+    return `<optgroup label="${esc(cl?cl.name:'—')}${owners.includes(cid)?' — objednavatel':''}">${opts}</optgroup>`; }).join('');
+  const srcField=parts.length>1
+    ? field('Původ kusů',`<select class="select" id="fmv-src">${parts.map(x=>
+        `<option value="${x.line.id}">${esc(fakPartOrigin(s,from,x))} — ${x.line.qty} ks</option>`).join('')}</select>`,
+        {hint:'Tento produkt je na faktuře z více zdrojů. Přesouvá se vždy z jednoho z nich.'})
+    : '';
+  openOverlay(`<div class="modal-head">${icon('moveTo',18)}<h3>Přesunout na jinou fakturu</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <div class="row gap12" style="padding:11px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface-2);margin-bottom:14px">
+        <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(p?p.name:'—')}</div>
+          <div class="t-mut" style="font-size:11.5px">z ${esc(fakLabel(s,from))} · ${esc(fakPartOrigin(s,from,parts[0]))}${parts.length>1?` a ${parts.length-1} dalš${parts.length===2?'ího zdroje':'ích zdrojů'}`:''}</div></div>
+        <span class="tnum t-strong">${g.qty} ks</span></div>
+      <div class="form-grid" style="grid-template-columns:1fr">
+        ${srcField}
+        ${field('Počet kusů k přesunu',inp('fmv-qty',String(parts[0].line.qty),'','number'),{hint:`Ze zvoleného zdroje lze přesunout nejvýš ${parts[0].line.qty} ks. Zbytek zůstane zde.`})}
+        ${field('Cílová faktura',`<select class="select" id="fmv-target">${groups}</select>`,{hint:'Můžete zvolit i fakturu jiného klienta — položka se označí jako přefakturovaná.'})}
+      </div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="fmv-save">${icon('moveTo',15)}Přesunout</button></div>`,{center:true});
+  $('#fmv-save').onclick=fakSaveMove; $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+function fakSaveMove(){
+  const s=DB.shipments.find(x=>x.id===FA.shipId); if(!s) return closeOverlay();
+  const from=s.invoices.find(x=>x.id===FA.invId); const g=fakGroupOf(s,FA.invId,FA.productId);
+  if(!from||!g||!g.parts.length) return closeOverlay();
+  const pick=val('fmv-src');
+  const part=(pick&&g.parts.find(x=>x.line.id===pick))
+    ||(g.parts.length===1?g.parts[0]:g.parts.slice().sort((a,b)=>b.line.qty-a.line.qty)[0]);
+  if(!part) return toast('Vyberte původ kusů','warnTri');
+  const l=part.line;
+  const qty=parseInt(val('fmv-qty'))||0; const target=val('fmv-target');
+  if(qty<=0) return toast('Zadejte počet kusů','warnTri');
+  if(qty>l.qty) return toast('Z tohoto zdroje lze přesunout jen '+l.qty+' ks','warnTri');
+  let to;
+  if(target.startsWith('new:')){ const cid=target.slice(4);
+    const seq=Math.max(0,...s.invoices.filter(v=>v.clientId===cid).map(v=>v.seq))+1;
+    to={id:fakNewId(),clientId:cid,seq,lines:[]}; s.invoices.push(to); }
+  else to=s.invoices.find(v=>v.id===target);
+  if(!to) return toast('Vyberte cílovou fakturu','warnTri');
+  const ex=to.lines.find(x=>x.itemId===l.itemId);
+  if(ex) ex.qty+=qty; else to.lines.push({id:fakLineId(),itemId:l.itemId,qty});
+  l.qty-=qty; if(l.qty<=0) from.lines=from.lines.filter(x=>x.id!==l.id);
+  FA.closed[fakBandKey(s,to.clientId)]=false;   // never hide the destination
+  closeOverlay(); fakRerender(); toast(`Přesunuto ${qty} ks → ${fakLabel(s,to)}`);
+}
+/** Add an empty extra invoice for one client, ready to receive moved lines. */
+function fakAddFor(clientId){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const seq=Math.max(0,...s.invoices.filter(v=>v.clientId===clientId).map(v=>v.seq))+1;
+  s.invoices.push({id:fakNewId(),clientId,seq,lines:[]});
+  FA.closed[fakBandKey(s,clientId)]=false;
+  fakRerender(); toast(`Faktura ${seq} pro ${clientById(clientId)?.name} vytvořena`);
+}
+/** Deleting an invoice just drops it — reconcile returns its pieces to the ordering client's 1st invoice. */
+function fakDelete(invId){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); const v=s&&s.invoices.find(x=>x.id===invId); if(!v) return;
+  const n=fakPieces(v);
+  const go=()=>{ s.invoices=s.invoices.filter(x=>x.id!==invId); fakRerender();
+    toast(n?`Faktura smazána — ${n} ks vráceno objednavateli`:'Faktura smazána','trash'); };
+  if(n) confirmDialog('Smazat fakturu?',`Faktura obsahuje ${n} ks. Položky se vrátí na 1. fakturu klienta, který je objednal.`,go);
+  else go();
+}
 
 /* ---- Shipment planner ---- */
 let SH={ draft:null, drag:null, regionFilter:'all' };
@@ -1938,7 +2237,7 @@ function seSave(){ seSyncMeta(); const d=SH.draft; if(!d.name)return toast('Zade
     const existing=(DB.shipments.find(x=>x.id===d.id)||{stops:[]}).stops.find(x=>x.orderId===st.orderId);
     const keep=existing?existing.items.filter(i=>i.source==='dokladka'):[];
     return { ...st, items:[...o.items.map(it=>{ const prev=existing&&existing.items.find(x=>x.orderItemId===it.id);
-      return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:prev?(prev.dokladkaQty||0):0, fromInventoryId:prev?prev.fromInventoryId:null, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, inv:prev?prev.inv:1, source:'order' }; }), ...keep] }; };
+      return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:prev?(prev.dokladkaQty||0):0, fromInventoryId:prev?prev.fromInventoryId:null, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, source:'order' }; }), ...keep] }; };
   if(d.id){ const s=DB.shipments.find(x=>x.id===d.id); Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom }); toast('Vývoz uložen'); go('shipments/'+d.id); }
   else { const s={ id:'s-'+Math.random().toString(36).slice(2,7), number:'VYV-2026-'+(53+DB.shipments.length), name:d.name, state:'Created',
     deliveryDate:d.deliveryDate, vehicleId:d.vehicleId, driverIds:d.driverIds, stops:d.stops.map(build), extraCustom:d.extraCustom };
