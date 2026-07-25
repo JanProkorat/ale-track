@@ -81,11 +81,13 @@ try
         .AddDbContextCheck<AleTrackDbContext>("Database", tags: ["ready"]);
 
     // Bound every check, so an unreachable dependency reports Unhealthy instead of
-    // blocking the request until the caller gives up.
+    // blocking the request until the caller gives up. The first connection after a cold
+    // start was measured at ~9.9s against the remote database, so keep enough headroom
+    // that a slow cold connect does not flap readiness to Unhealthy.
     services.Configure<HealthCheckServiceOptions>(options =>
     {
         foreach (var registration in options.Registrations)
-            registration.Timeout = TimeSpan.FromSeconds(10);
+            registration.Timeout = TimeSpan.FromSeconds(20);
     });
     
     // Add JWT Service
