@@ -90,7 +90,7 @@ public sealed class GetDeliveryVolumeEndpointTests
     {
         // Arrange — one delivered shipment with two lines from one brewery.
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             lines:
             [
@@ -139,7 +139,7 @@ public sealed class GetDeliveryVolumeEndpointTests
     public async Task HandleAsync_ExcludesShipmentsThatAreNotDelivered()
     {
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.InTransit,
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
 
@@ -162,7 +162,7 @@ public sealed class GetDeliveryVolumeEndpointTests
     public async Task HandleAsync_ExcludesShipmentsOutsideTheWindow()
     {
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 6, 30),
+            deliveryDate: new DateTime(2026, 6, 30, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
 
@@ -228,7 +228,7 @@ public sealed class GetDeliveryVolumeEndpointTests
     {
         // Multipack has no weight mapping — it must still count as units, at 0 kg.
         var fixture = DeliveredShipmentBuilder.Build(
-            deliveryDate: new DateTime(2026, 7, 20),
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.Delivered,
             lines: [new(ProductKind.Multipack, ProductType.Mix, packageSize: 6, quantity: 4)]);
 

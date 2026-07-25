@@ -115,11 +115,16 @@ public static class DeliveredShipmentBuilder
         List<LineSpec> lines)
     {
         var client = ClientBuilder.BuildEntity(name: clientName, region: region);
-        client.Id = 2;
+        // Derived, not hardcoded: chaining this with AddSecondStopForSameClient on one fixture
+        // must not yield duplicate ids — see the id-collision finding on DeliveredShipmentBuilder.
+        // The stop count grows monotonically across the whole fixture, so it is safe to reuse as
+        // the shared id source for the client/order/stop triple added in this call.
+        var nextStopId = fixture.Shipment.Stops.Count + 1;
+        client.Id = nextStopId;
 
         var order = new Order
         {
-            Id = 2,
+            Id = nextStopId,
             PublicId = Guid.NewGuid(),
             Client = client,
             ClientId = client.Id,
@@ -129,10 +134,10 @@ public static class DeliveredShipmentBuilder
 
         var stop = new OutgoingShipmentStop
         {
-            Id = 2,
+            Id = nextStopId,
             PublicId = Guid.NewGuid(),
             Kind = OutgoingShipmentStopKind.Order,
-            Order = 2,
+            Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
             ClientOrderId = order.Id,
@@ -143,7 +148,8 @@ public static class DeliveredShipmentBuilder
         order.OutgoingShipmentStopId = stop.Id;
         fixture.Shipment.Stops.Add(stop);
 
-        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: 100, lines);
+        var nextItemStartId = 100 + fixture.OrderItems.Count;
+        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: nextItemStartId, lines);
         order.OrderItems = orderItems;
 
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
@@ -175,9 +181,13 @@ public static class DeliveredShipmentBuilder
         DeliveredShipmentFixture fixture,
         List<LineSpec> lines)
     {
+        // Derived, not hardcoded — see the id-collision finding on DeliveredShipmentBuilder:
+        // chaining this with AddSecondClient on one fixture must not yield duplicate ids.
+        var nextStopId = fixture.Shipment.Stops.Count + 1;
+
         var order = new Order
         {
-            Id = 2,
+            Id = nextStopId,
             PublicId = Guid.NewGuid(),
             Client = fixture.Client,
             ClientId = fixture.Client.Id,
@@ -187,10 +197,10 @@ public static class DeliveredShipmentBuilder
 
         var stop = new OutgoingShipmentStop
         {
-            Id = 2,
+            Id = nextStopId,
             PublicId = Guid.NewGuid(),
             Kind = OutgoingShipmentStopKind.Order,
-            Order = 2,
+            Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
             ClientOrderId = order.Id,
@@ -201,7 +211,8 @@ public static class DeliveredShipmentBuilder
         order.OutgoingShipmentStopId = stop.Id;
         fixture.Shipment.Stops.Add(stop);
 
-        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: 100, lines);
+        var nextItemStartId = 100 + fixture.OrderItems.Count;
+        var (products, orderItems) = BuildLines(order, fixture.Brewery, startId: nextItemStartId, lines);
         order.OrderItems = orderItems;
 
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
@@ -217,6 +228,74 @@ public static class DeliveredShipmentBuilder
             outgoingShipments: [fixture.Shipment]);
 
         return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+    }
+
+    /// <summary>
+    /// Adds one incoming product delivery (Dovoz) in the same fixture so the incoming-vs-outgoing
+    /// series has something on the incoming side.
+    /// </summary>
+    public static DeliveredShipmentFixture WithIncomingDelivery(
+        DeliveredShipmentFixture fixture,
+        DateOnly date,
+        ProductKind kind,
+        double packageSize,
+        int quantity)
+    {
+        var product = ProductBuilder.BuildEntity(
+            name: "Dovezený produkt",
+            kind: kind,
+            type: ProductType.PaleLager,
+            packageSize: packageSize);
+        product.Id = 500;
+        product.BreweryId = fixture.Brewery.Id;
+        product.Brewery = fixture.Brewery;
+
+        var delivery = new ProductDelivery
+        {
+            Id = 1,
+            PublicId = Guid.NewGuid(),
+            Date = date,
+            State = ProductDeliveryState.Finished
+        };
+
+        var stop = new DeliveryStop
+        {
+            Id = 1,
+            PublicId = Guid.NewGuid(),
+            DeliveryId = delivery.Id,
+            Delivery = delivery,
+            Order = 1,
+            Kind = DeliveryStopKind.Brewery,
+            BreweryId = fixture.Brewery.Id
+        };
+
+        var item = new DeliveryItem
+        {
+            Id = 1,
+            DeliveryStopId = stop.Id,
+            DeliveryStop = stop,
+            ProductId = product.Id,
+            Product = product,
+            Quantity = quantity
+        };
+
+        stop.Items = [item];
+        delivery.Stops = [stop];
+
+        var allProducts = fixture.OrderItems.Select(oi => oi.Product).Append(product).ToList();
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [fixture.Client],
+            breweries: [fixture.Brewery],
+            products: allProducts,
+            orders: [fixture.Order],
+            orderItems: fixture.OrderItems,
+            drivers: [fixture.Driver],
+            productDeliveries: [delivery],
+            deliveryItems: [item],
+            outgoingShipments: [fixture.Shipment]);
+
+        return fixture with { DbContext = dbContext };
     }
 
     /// <summary>
