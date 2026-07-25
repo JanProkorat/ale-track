@@ -3,3 +3,6 @@
 
 # Local Claude Code settings (personal, per-machine)
 .claude/settings.local.json
+
+# Claude Code worktrees
+.claude/worktrees/
