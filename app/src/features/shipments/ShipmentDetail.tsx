@@ -56,8 +56,6 @@ interface NakladkaRow {
   packageSize?: number;
   quantity: number;
   weight: number;
-  firstInvoiceQuantity: number;
-  secondInvoiceQuantity: number;
   loaded: boolean;
 }
 
@@ -71,8 +69,6 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     packageSize: p.packageSize,
     quantity: p.quantity ?? 0,
     weight: p.weight ?? 0,
-    firstInvoiceQuantity: p.firstInvoiceQuantity ?? 0,
-    secondInvoiceQuantity: p.secondInvoiceQuantity ?? 0,
     loaded: p.isShipmentLoadingConfirmed ?? false,
   };
 }
@@ -87,42 +83,13 @@ function extraRowFrom(e: OutgoingShipmentInventoryExtraItemDto): NakladkaRow {
     packageSize: e.packageSize,
     quantity: e.quantity ?? 0,
     weight: e.weight ?? 0,
-    firstInvoiceQuantity: e.firstInvoiceQuantity ?? 0,
-    secondInvoiceQuantity: e.secondInvoiceQuantity ?? 0,
     loaded: e.isShipmentLoadingConfirmed ?? false,
   };
 }
-/** Effective invoice-2 quantity for a row (clamped to the row total). F1 is
- * always the remainder, so a single value fully describes the split. */
-function f2Quantity(row: NakladkaRow): number {
-  return Math.max(0, Math.min(row.secondInvoiceQuantity, row.quantity));
-}
-
 const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
-}
-
-/** F1/F2 split stepper: +/- moves one piece between invoices, F1 = remainder.
- * Supports partial splits (e.g. 4 pieces on F1, 2 on F2). */
-function InvoiceSplit({ f2, quantity, onMove, disabled }: { f2: number; quantity: number; onMove: (delta: number) => void; disabled?: boolean }) {
-  const f1 = quantity - f2;
-  return (
-    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
-      <IconButton size="small" disabled={disabled || f2 <= 0} onClick={() => onMove(-1)} aria-label="Přesunout kus na fakturu 1" sx={{ width: 24, height: 24 }}>
-        <RemoveIcon sx={{ fontSize: 15 }} />
-      </IconButton>
-      <Box sx={{ minWidth: 78, textAlign: 'center', fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-        <Box component="span" sx={{ color: f1 > 0 ? 'text.primary' : 'text.disabled' }}>F1 {f1}</Box>
-        <Box component="span" sx={{ color: 'text.disabled', mx: 0.5 }}>·</Box>
-        <Box component="span" sx={{ color: f2 > 0 ? 'warning.dark' : 'text.disabled' }}>F2 {f2}</Box>
-      </Box>
-      <IconButton size="small" disabled={disabled || f1 <= 0} onClick={() => onMove(1)} aria-label="Přesunout kus na fakturu 2" sx={{ width: 24, height: 24 }}>
-        <AddIcon sx={{ fontSize: 15 }} />
-      </IconButton>
-    </Stack>
-  );
 }
 
 interface AggRow {
@@ -164,20 +131,19 @@ interface AggRowState {
   loadedIndeterminate: boolean;
   checked: boolean;
   checkedIndeterminate: boolean;
-  f2: number;
 }
 
 /** One aggregated product line on "Celková nakládka" — the operational loading
- * row with invoice split, Naloženo/Kontrola (aggregated across its source order
- * items, hence the indeterminate state) and a removable dokládka badge. */
+ * row with Naloženo/Kontrola (aggregated across its source order items, hence the
+ * indeterminate state) and a removable dokládka badge. Invoicing is not this
+ * card's concern; it lives in the Fakturace section. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onMoveInvoice, onToggleChecked, onAdjustDokladka,
+  agg, state, editable, onLoaded, onToggleChecked, onAdjustDokladka,
 }: {
   agg: AggRow;
   state: AggRowState;
   editable: boolean;
   onLoaded: (loaded: boolean) => void;
-  onMoveInvoice: (delta: number) => void;
   onToggleChecked: () => void;
   onAdjustDokladka?: (delta: number) => void;
 }) {
@@ -220,9 +186,6 @@ function AggLoadingRow({
           </Typography>
         )}
       </TableCell>
-      <TableCell align="center">
-        <InvoiceSplit f2={state.f2} quantity={agg.quantity} onMove={onMoveInvoice} disabled={!editable} />
-      </TableCell>
       <TableCell align="center" padding="checkbox">
         <Checkbox size="small" checked={state.loaded} indeterminate={state.loadedIndeterminate} disabled={!editable} onChange={() => onLoaded(!state.loaded)} title="Naloženo (1. diktovaná nakládka)" />
       </TableCell>
@@ -234,11 +197,9 @@ function AggLoadingRow({
 }
 
 /** "Celková nakládka" — the loading list: one row per distinct product with the
- * invoice/loaded/kontrola controls and the summed quantity. */
+ * loaded/kontrola controls and the summed quantity. */
 interface LoadingTotals {
   quantity: number;
-  f1: number;
-  f2: number;
   loaded: number;
   checked: number;
   count: number;
@@ -257,7 +218,6 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
               <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
-              <TableCell align="center" sx={HEAD_SX}>Faktura</TableCell>
               <TableCell align="center" sx={HEAD_SX}>Nadiktováno</TableCell>
               <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
             </TableRow>
@@ -267,11 +227,6 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText }: { rows: AggRow[
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
               <TableCell align="right" sx={footSx}>{totals.quantity} ks</TableCell>
-              <TableCell align="center" sx={{ ...footSx, fontWeight: 700 }}>
-                <Box component="span">F1 {totals.f1}</Box>
-                <Box component="span" sx={{ color: 'text.disabled', mx: 0.5 }}>·</Box>
-                <Box component="span" sx={{ color: totals.f2 > 0 ? 'warning.dark' : 'text.disabled' }}>F2 {totals.f2}</Box>
-              </TableCell>
               <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.loaded === totals.count ? 'success.main' : 'text.primary' }}>
                 {totals.loaded}/{totals.count}
               </TableCell>
@@ -419,17 +374,11 @@ export function ShipmentDetail({
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
   // state, reset whenever a different shipment is opened.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  // "Naloženo" and the invoice split persist via the update mutation, but that
-  // round-trips through the API; optimistic per-row overrides keep the controls
-  // instant (and correct in demo mode where the mock may not echo values back).
+  // "Naloženo" persists via the update mutation, but that round-trips through the
+  // API; an optimistic per-row override keeps the control instant.
   const [loadedOverride, setLoadedOverride] = useState<Map<string, boolean>>(new Map());
-  const [invoiceOverride, setInvoiceOverride] = useState<Map<string, number>>(new Map());
-  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); setInvoiceOverride(new Map()); }, [shipment.id]);
+  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); }, [shipment.id]);
   const isLoaded = (row: NakladkaRow) => loadedOverride.get(row.key) ?? row.loaded;
-  const rowF2 = (row: NakladkaRow) => {
-    const raw = invoiceOverride.get(row.key) ?? f2Quantity(row);
-    return Math.max(0, Math.min(raw, row.quantity));
-  };
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [dokladkaOpen, setDokladkaOpen] = useState(false);
@@ -465,13 +414,11 @@ export function ShipmentDetail({
   const aggLoadedIndeterminate = (a: AggRow) => a.sources.some((r) => isLoaded(r)) && !aggLoaded(a);
   const aggChecked = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => checkedIds.has(r.key));
   const aggCheckedIndeterminate = (a: AggRow) => a.sources.some((r) => checkedIds.has(r.key)) && !aggChecked(a);
-  const aggF2 = (a: AggRow) => a.sources.reduce((s, r) => s + rowF2(r), 0);
 
   const productN = aggRows.length;
   const loadedN = aggRows.filter(aggLoaded).length;
   const checkedN = aggRows.filter(aggChecked).length;
   const totalQty = aggRows.reduce((s, a) => s + a.quantity, 0);
-  const totalF2 = aggRows.reduce((s, a) => s + aggF2(a), 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -541,42 +488,6 @@ export function ShipmentDetail({
     void save(draft);
   }
 
-  // Distribute `targetF2` invoice-2 pieces across a product's source rows (fill
-  // each up to its own quantity, in order); F1 is the remainder per row.
-  function applyInvoiceDistribution(rows: NakladkaRow[], targetF2: number) {
-    let remaining = targetF2;
-    const nextOverride = new Map(invoiceOverride);
-    const draft = draftFromShipment(shipment);
-    for (const row of rows) {
-      const give = Math.max(0, Math.min(remaining, row.quantity));
-      remaining -= give;
-      nextOverride.set(row.key, give);
-      const apply = (target: { firstInvoiceQuantity?: number; secondInvoiceQuantity?: number }) => {
-        target.firstInvoiceQuantity = row.quantity - give;
-        target.secondInvoiceQuantity = give;
-      };
-      if (row.orderItemId) {
-        for (const co of draft.clientOrderShipments) {
-          const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
-          if (oi) apply(oi);
-        }
-      } else if (row.extraId) {
-        const e = draft.inventoryExtraShipments.find((x) => x.id === row.extraId);
-        if (e) apply(e);
-      }
-    }
-    setInvoiceOverride(nextOverride);
-    void save(draft);
-  }
-
-  // Move `delta` pieces of an aggregated product between invoices (+1 -> F2).
-  function moveAggInvoice(agg: AggRow, delta: number) {
-    const current = aggF2(agg);
-    const next = Math.max(0, Math.min(current + delta, agg.quantity));
-    if (next === current) return;
-    applyInvoiceDistribution(agg.sources, next);
-  }
-
   // Toggle "Kontrola" for a whole product: check all sources, or clear all.
   function toggleCheckedRows(rows: NakladkaRow[]) {
     setCheckedIds((prev) => {
@@ -612,9 +523,6 @@ export function ShipmentDetail({
         return;
       }
       item.quantity = next;
-      // Keep the extra's invoice split consistent with its new total (defaults to F1).
-      item.firstInvoiceQuantity = next;
-      item.secondInvoiceQuantity = 0;
     }
     void save(draft);
   }
@@ -646,7 +554,7 @@ export function ShipmentDetail({
       existing.quantity = (existing.quantity ?? 0) + qty;
     } else {
       const dto = new InventoryExtraShipmentDto({
-        quantity: qty, isLoadingConfirmed: false, firstInvoiceQuantity: qty, secondInvoiceQuantity: 0,
+        quantity: qty, isLoadingConfirmed: false,
       });
       // Assign the derived-class field after construction (see shipmentDraft.ts).
       dto.productId = dokladkaProductId!;
@@ -672,7 +580,7 @@ export function ShipmentDetail({
 
     const draft = draftFromShipment(shipment);
     const dto = new CustomExtraShipmentDto({
-      quantity: qty, isLoadingConfirmed: false, firstInvoiceQuantity: qty, secondInvoiceQuantity: 0,
+      quantity: qty, isLoadingConfirmed: false,
     });
     // Assign the derived-class field after construction (see shipmentDraft.ts).
     dto.description = extraName.trim();
@@ -768,7 +676,7 @@ export function ShipmentDetail({
               </Stack>
               <AggLoadingTable
                 rows={aggRows}
-                totals={{ quantity: totalQty, f1: totalQty - totalF2, f2: totalF2, loaded: loadedN, checked: checkedN, count: productN }}
+                totals={{ quantity: totalQty, loaded: loadedN, checked: checkedN, count: productN }}
                 emptyText="Zatím žádné produkty k naložení."
                 renderRow={(agg) => (
                   <AggLoadingRow
@@ -780,10 +688,8 @@ export function ShipmentDetail({
                       loadedIndeterminate: aggLoadedIndeterminate(agg),
                       checked: aggChecked(agg),
                       checkedIndeterminate: aggCheckedIndeterminate(agg),
-                      f2: aggF2(agg),
                     }}
                     onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
-                    onMoveInvoice={(delta) => moveAggInvoice(agg, delta)}
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
                     onAdjustDokladka={agg.dokladkaQuantity > 0 ? (delta) => adjustDokladka(agg, delta) : undefined}
                   />
