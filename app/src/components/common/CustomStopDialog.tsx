@@ -14,7 +14,9 @@ import {
   Stack,
   TextField,
   Typography,
+  IconButton,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/CloseOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import { useSnackbar } from 'notistack';
 import { DEPOT, searchAddresses, type AddressHit } from 'src/lib/geo';
@@ -141,7 +143,12 @@ export function CustomStopDialog({
 
   return (
     <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
-      <DialogTitle>Vlastní zastávka</DialogTitle>
+      <DialogTitle>
+        <Box component="span" sx={{ flex: 1 }}>Vlastní zastávka</Box>
+        <IconButton onClick={onClose} aria-label="Zavřít" size="small">
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </DialogTitle>
       <DialogContent>
         <Typography color="text.secondary" sx={{ fontSize: 13, mb: 1.5 }}>
           Najděte místo podle adresy, nebo klikněte přímo do mapy, poté zastávku pojmenujte.
@@ -197,7 +204,7 @@ export function CustomStopDialog({
           )}
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions>
         <Button onClick={close} color="inherit">Zrušit</Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={confirm}>Přidat zastávku</Button>
       </DialogActions>

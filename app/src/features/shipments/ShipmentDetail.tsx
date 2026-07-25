@@ -831,7 +831,7 @@ export function ShipmentDetail({
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions>
           <Button onClick={() => setDokladkaOpen(false)} color="inherit">Zrušit</Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveDokladka()}>Přidat dokládku</Button>
         </DialogActions>
@@ -864,7 +864,7 @@ export function ShipmentDetail({
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions>
           <Button onClick={() => setExtraOpen(false)} color="inherit">Zrušit</Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => void saveExtra()}>Přidat položku</Button>
         </DialogActions>

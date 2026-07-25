@@ -536,28 +536,15 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
   };
 
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      // MUI tints dark-mode Paper by elevation, which washes background.paper out; the
-      // prototype's modal sits flat on --surface, and that token is background.paper here.
-      slotProps={{ paper: { sx: { backgroundImage: 'none' } } }}
-    >
-      <DialogTitle
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1.5, fontSize: 17,
-          borderBottom: 1, borderColor: 'divider',
-        }}
-      >
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
         <EastIcon sx={{ fontSize: 20 }} />
         <Box component="span" sx={{ flex: 1 }}>Přesunout na jinou fakturu</Box>
         <IconButton onClick={onClose} aria-label="Zavřít" size="small">
           <CloseIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ pt: 2.5 }}>
+      <DialogContent>
         <Stack direction="row" spacing={1.5} alignItems="center"
           sx={{ p: 1.5, mb: 2, border: 1, borderColor: 'divider', borderRadius: 1.5, bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -625,7 +612,7 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
           </TextField>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+      <DialogActions>
         <Button onClick={onClose} color="inherit" variant="outlined">Zrušit</Button>
         <Button
           onClick={submit}

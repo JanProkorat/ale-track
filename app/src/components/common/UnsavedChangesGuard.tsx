@@ -47,11 +47,11 @@ export function UnsavedChangesDialog({ blocker, onSave, busy = false }: {
 
   return (
     <Dialog open={blocked} onClose={() => blocker.reset?.()} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 800 }}>Neuložené změny</DialogTitle>
+      <DialogTitle>Neuložené změny</DialogTitle>
       <DialogContent>
         <DialogContentText>Máte neuložené změny. Chcete je před odchodem uložit?</DialogContentText>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
+      <DialogActions sx={{ flexWrap: 'wrap' }}>
         <Button onClick={() => blocker.reset?.()} color="inherit">Zrušit</Button>
         <Button onClick={() => blocker.proceed?.()} color="error">Zahodit změny</Button>
         <Button onClick={saveAndLeave} variant="contained" disabled={busy}>Uložit a odejít</Button>
