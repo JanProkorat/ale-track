@@ -12,9 +12,12 @@ namespace AleTrack.Features.OutgoingShipments.Commands.AddPurchaseInvoice;
 /// Endpoint opening another invoice the brewery issues to us for this shipment.
 /// </summary>
 /// <remarks>
-/// On a shipment that has none yet this creates <em>two</em>: the remainder invoice (sequence 1,
-/// which never stores lines) and the first invoice that can hold them. One click has to produce a
-/// visible split, and a lone remainder invoice would be a column with nothing to put in it.
+/// The nakládka always shows two invoice columns, whether or not anything is stored behind them,
+/// so "add one" means going past those two: the shipment ends up with
+/// <c>max(current, 2) + 1</c> invoices. From nothing that is three; from three, four.
+///
+/// Writing into one of the two default columns needs no call here — the line endpoint
+/// materialises invoices 1 and 2 on first use.
 ///
 /// Deliberately <see cref="EndpointWithoutRequest"/> rather than a request DTO holding just the
 /// route ID: on POST, FastEndpoints binds a request DTO from the body and answers 415 when the
@@ -66,10 +69,10 @@ public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : En
             return;
         }
 
-        if (shipment.PurchaseInvoices.Count == 0)
+        // Past the two columns the table always shows — see the remarks above.
+        var target = Math.Max(shipment.PurchaseInvoices.Count, 2) + 1;
+        while (shipment.PurchaseInvoices.Count < target)
             AppendInvoice(shipment);
-
-        AppendInvoice(shipment);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);

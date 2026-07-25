@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OutgoingShipmentPurchaseInvoiceDto, OutgoingShipmentPurchaseInvoiceLineDto } from 'src/generated/api-client';
 import {
-  purchasedTotal, rowSplit, capFor, columnTotals, isSplit, orderedInvoices,
+  purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt,
   type PurchasableRow,
 } from './purchaseSplitModel';
 
@@ -43,11 +43,50 @@ describe('purchasedTotal', () => {
   });
 });
 
+describe('columnsOf', () => {
+  it('offers two columns even when nothing is stored', () => {
+    // The table shows the split from the start; the second invoice is created on
+    // the first write, not on load.
+    expect(columnsOf([])).toEqual([{ sequence: 1 }, { sequence: 2 }]);
+  });
+
+  it('pads a single stored invoice up to two', () => {
+    expect(columnsOf([invoice(1, 'i1')])).toEqual([{ sequence: 1, id: 'i1' }, { sequence: 2 }]);
+  });
+
+  it('keeps every stored invoice past the second', () => {
+    expect(columnsOf([invoice(1, 'i1'), invoice(2, 'i2'), invoice(3, 'i3')])).toHaveLength(3);
+  });
+
+  it('orders by sequence, not by response order', () => {
+    const shuffled = [invoice(3, 'i3'), invoice(1, 'i1'), invoice(2, 'i2')];
+    expect(columnsOf(shuffled).map((c) => c.id)).toEqual(['i1', 'i2', 'i3']);
+  });
+
+  it('does not mutate its argument', () => {
+    const invoices = [invoice(2, 'i2'), invoice(1, 'i1')];
+    columnsOf(invoices);
+    expect(invoices.map((i) => i.id)).toEqual(['i2', 'i1']);
+  });
+});
+
+describe('claimAt', () => {
+  const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 3], [LEZAK, 2], [IPA, 1]])];
+
+  it('sums the lines of that product on that invoice', () => {
+    expect(claimAt(invoices, 2, LEZAK)).toBe(5);
+  });
+
+  it('is zero for a column with no invoice behind it', () => {
+    expect(claimAt(invoices, 3, LEZAK)).toBe(0);
+  });
+});
+
 describe('rowSplit', () => {
   const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
 
-  it('is empty when there are no invoices', () => {
-    expect(rowSplit(row({ orderQuantity: 24 }), [])).toEqual([]);
+  it('shows the whole total as remainder when nothing is stored', () => {
+    expect(rowSplit(row({ orderQuantity: 24 }), [])).toEqual([24, 0]);
   });
 
   it('puts everything unclaimed on the remainder', () => {
@@ -58,14 +97,9 @@ describe('rowSplit', () => {
     expect(rowSplit(row({ productId: IPA, orderQuantity: 6 }), invoices)).toEqual([6, 0]);
   });
 
-  it('sums several lines of the same product on one invoice', () => {
-    const merged = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 3], [LEZAK, 2]])];
-    expect(rowSplit(row({ orderQuantity: 10 }), merged)).toEqual([5, 5]);
-  });
-
   it('never shows a negative remainder when stored claims outrun the total', () => {
     // Reachable between a nakládka edit and the next write, which is when the
-    // server re-clamps. Showing -3 would read as a data-entry error.
+    // server re-clamps. Showing -2 would read as a data-entry error.
     expect(rowSplit(row({ orderQuantity: 2 }), invoices)).toEqual([0, 4]);
   });
 
@@ -78,21 +112,25 @@ describe('rowSplit', () => {
 describe('capFor', () => {
   const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]]), invoice(3, 'i3', [[LEZAK, 3]])];
 
-  it('leaves out the invoice being edited', () => {
-    expect(capFor(row({ orderQuantity: 12 }), invoices, 'i2')).toBe(9);
-    expect(capFor(row({ orderQuantity: 12 }), invoices, 'i3')).toBe(8);
+  it('leaves out the column being edited', () => {
+    expect(capFor(row({ orderQuantity: 12 }), invoices, 2)).toBe(9);
+    expect(capFor(row({ orderQuantity: 12 }), invoices, 3)).toBe(8);
   });
 
   it('is the whole purchased total when nothing else claims the product', () => {
-    expect(capFor(row({ productId: IPA, orderQuantity: 5 }), invoices, 'i2')).toBe(5);
+    expect(capFor(row({ productId: IPA, orderQuantity: 5 }), invoices, 2)).toBe(5);
+  });
+
+  it('is the whole purchased total on an unsplit shipment', () => {
+    expect(capFor(row({ orderQuantity: 24 }), [], 2)).toBe(24);
   });
 
   it('is zero for a row bought entirely from our own stock', () => {
-    expect(capFor(row({ orderQuantity: 5, fromInventory: 5 }), invoices, 'i2')).toBe(0);
+    expect(capFor(row({ orderQuantity: 5, fromInventory: 5 }), invoices, 2)).toBe(0);
   });
 
   it('never goes negative', () => {
-    expect(capFor(row({ orderQuantity: 2 }), invoices, 'i2')).toBe(0);
+    expect(capFor(row({ orderQuantity: 2 }), invoices, 2)).toBe(0);
   });
 });
 
@@ -107,23 +145,7 @@ describe('columnTotals', () => {
     expect(columnTotals(rows, invoices)).toEqual([29, 5]);
   });
 
-  it('is all zeroes for no rows', () => {
-    expect(columnTotals([], [invoice(1, 'i1'), invoice(2, 'i2')])).toEqual([0, 0]);
-  });
-});
-
-describe('isSplit', () => {
-  it('needs at least two invoices', () => {
-    expect(isSplit([])).toBe(false);
-    expect(isSplit([invoice(1, 'i1')])).toBe(false);
-    expect(isSplit([invoice(1, 'i1'), invoice(2, 'i2')])).toBe(true);
-  });
-});
-
-describe('orderedInvoices', () => {
-  it('does not mutate its argument', () => {
-    const invoices = [invoice(2, 'i2'), invoice(1, 'i1')];
-    orderedInvoices(invoices);
-    expect(invoices.map((i) => i.id)).toEqual(['i2', 'i1']);
+  it('has an entry per default column even with no rows and no invoices', () => {
+    expect(columnTotals([], [])).toEqual([0, 0]);
   });
 });

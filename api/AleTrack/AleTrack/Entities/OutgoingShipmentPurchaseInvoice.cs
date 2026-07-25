@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
@@ -36,18 +35,11 @@ public sealed class OutgoingShipmentPurchaseInvoice : PublicEntity
     /// Position of this invoice within the shipment, starting at 1.
     /// </summary>
     /// <remarks>
-    /// Ordering only — this is not an invoice number. The brewery's real number, if the user
-    /// bothers to type it, goes in <see cref="Label"/>.
+    /// Ordering only — this is not an invoice number. The brewery's own number is not recorded:
+    /// the split says how many pieces went where, and the paperwork lives outside this app.
     /// </remarks>
     [Column("sequence")]
     public int Sequence { get; set; }
-
-    /// <summary>
-    /// Free-text label for the brewery's own invoice number. Optional.
-    /// </summary>
-    [Column("label")]
-    [MaxLength(30)]
-    public string? Label { get; set; }
 
     /// <summary>
     /// Outgoing shipment this invoice belongs to

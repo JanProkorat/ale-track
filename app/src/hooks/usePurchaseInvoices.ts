@@ -8,7 +8,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { SetPurchaseInvoiceLineDto, UpdatePurchaseInvoiceDto } from 'src/generated/api-client';
+import { SetPurchaseInvoiceLineDto } from 'src/generated/api-client';
 
 function useInvalidateShipment(shipmentId: string | undefined) {
   const qc = useQueryClient();
@@ -37,7 +37,8 @@ export function useDeletePurchaseInvoice(shipmentId: string | undefined) {
 }
 
 export interface SetPurchaseInvoiceLineArgs {
-  invoiceId: string;
+  /** Which invoice, by column position. The server creates it if it does not exist yet. */
+  sequence: number;
   productId: string;
   quantity: number;
 }
@@ -46,27 +47,11 @@ export function useSetPurchaseInvoiceLine(shipmentId: string | undefined) {
   const ds = useDataSource();
   const invalidate = useInvalidateShipment(shipmentId);
   return useMutation({
-    mutationFn: ({ invoiceId, productId, quantity }: SetPurchaseInvoiceLineArgs) =>
+    mutationFn: ({ sequence, productId, quantity }: SetPurchaseInvoiceLineArgs) =>
       ds.setPurchaseInvoiceLineEndpoint(
         shipmentId!,
-        invoiceId,
-        new SetPurchaseInvoiceLineDto({ productId, quantity }),
+        new SetPurchaseInvoiceLineDto({ sequence, productId, quantity }),
       ),
-    onSuccess: invalidate,
-  });
-}
-
-export interface UpdatePurchaseInvoiceArgs {
-  invoiceId: string;
-  label?: string;
-}
-
-export function useUpdatePurchaseInvoice(shipmentId: string | undefined) {
-  const ds = useDataSource();
-  const invalidate = useInvalidateShipment(shipmentId);
-  return useMutation({
-    mutationFn: ({ invoiceId, label }: UpdatePurchaseInvoiceArgs) =>
-      ds.updatePurchaseInvoiceEndpoint(shipmentId!, invoiceId, new UpdatePurchaseInvoiceDto({ label })),
     onSuccess: invalidate,
   });
 }

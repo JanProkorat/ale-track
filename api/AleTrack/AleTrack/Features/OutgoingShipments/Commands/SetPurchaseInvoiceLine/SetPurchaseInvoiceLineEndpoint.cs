@@ -11,10 +11,15 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.OutgoingShipments.Commands.SetPurchaseInvoiceLine;
 
 /// <summary>
-/// How many pieces of one product sit on this brewery invoice.
+/// How many pieces of one product sit on one of the shipment's brewery invoices.
 /// </summary>
 public sealed record SetPurchaseInvoiceLineDto
 {
+    /// <summary>
+    /// Which invoice, by position within the shipment. Never 1 — that one is the remainder.
+    /// </summary>
+    public int Sequence { get; set; }
+
     /// <summary>
     /// Public ID of the product.
     /// </summary>
@@ -37,12 +42,7 @@ public sealed record SetPurchaseInvoiceLineRequest
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Public ID of the purchase invoice.
-    /// </summary>
-    public Guid InvoiceId { get; set; }
-
-    /// <summary>
-    /// Product and quantity to store.
+    /// Invoice, product and quantity to store.
     /// </summary>
     [FromBody]
     public SetPurchaseInvoiceLineDto Data { get; set; } = null!;
@@ -56,9 +56,11 @@ public sealed class SetPurchaseInvoiceLineValidator : Validator<SetPurchaseInvoi
     public SetPurchaseInvoiceLineValidator()
     {
         RuleFor(r => r.Id).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-        RuleFor(r => r.InvoiceId).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
         RuleFor(r => r.Data).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Data.ProductId).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+        RuleFor(r => r.Data.Sequence)
+            .GreaterThanOrEqualTo(2)
+            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
         RuleFor(r => r.Data.Quantity)
             .GreaterThanOrEqualTo(0)
             .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
@@ -69,12 +71,17 @@ public sealed class SetPurchaseInvoiceLineValidator : Validator<SetPurchaseInvoi
 /// Endpoint setting how many pieces of a product sit on one brewery invoice.
 /// </summary>
 /// <remarks>
-/// Upsert: the line is created, updated or — at quantity zero — deleted. The quantity is clamped
-/// to what the run buys of that product minus the other invoices' claims, so the remainder
-/// invoice can never be driven negative by a too-large entry.
+/// The invoice is addressed by <see cref="SetPurchaseInvoiceLineDto.Sequence"/>, not by ID, and
+/// missing invoices up to it are created here. The nakládka shows two invoice columns from the
+/// start, so the second one usually has nothing behind it until the first number is typed into
+/// it; materialising on write keeps runs that never split free of empty rows, and keeps the
+/// client from having to create an invoice and then write to it in two round trips.
 ///
-/// The remainder invoice (sequence 1) rejects writes: it holds whatever the others do not, and
-/// storing lines on it would give the same pieces two homes.
+/// Sequence 1 is rejected: it is the remainder, holding whatever the others do not, and storing
+/// lines on it would give the same pieces two homes.
+///
+/// The quantity is clamped to what the run buys of that product minus the other invoices'
+/// claims, so the remainder can never be driven negative by a too-large entry.
 /// </remarks>
 /// <param name="dbContext"></param>
 public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpoint<SetPurchaseInvoiceLineRequest>
@@ -82,7 +89,7 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override void Configure()
     {
-        Put("outgoing-shipments/{Id:guid}/purchase-invoices/{InvoiceId:guid}/lines");
+        Put("outgoing-shipments/{Id:guid}/purchase-invoices/lines");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
@@ -98,7 +105,7 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
                 s.Summary = "Sets a product's quantity on a brewery invoice";
                 s.Responses[StatusCodes.Status204NoContent] = "Quantity stored";
                 s.Responses[StatusCodes.Status400BadRequest] = "Shipment no longer editable, or the remainder invoice was targeted";
-                s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment, invoice or product not found";
+                s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment or product not found";
             }
         );
     }
@@ -119,14 +126,7 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
             return;
         }
 
-        var invoice = shipment.PurchaseInvoices.FirstOrDefault(i => i.PublicId == req.InvoiceId);
-        if (invoice is null)
-        {
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipmentPurchaseInvoice), req.InvoiceId);
-            return;
-        }
-
-        if (invoice.Sequence == 1)
+        if (req.Data.Sequence < 2)
         {
             ThrowHelper.BadRequest("The remainder invoice holds what the others do not; it cannot be written to.");
             return;
@@ -140,6 +140,8 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Product), req.Data.ProductId);
             return;
         }
+
+        var invoice = PurchaseInvoiceSplit.EnsureSequence(shipment, req.Data.Sequence);
 
         var quantity = Math.Min(req.Data.Quantity, PurchaseInvoiceSplit.CapFor(shipment, invoice, product.Id));
         var line = invoice.Lines.FirstOrDefault(l => l.ProductId == product.Id);

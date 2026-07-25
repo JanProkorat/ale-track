@@ -280,28 +280,22 @@ export interface IClient {
     deleteOutgoingShipmentEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
-     * Sets the label of a brewery invoice
-     * @return Label stored
-     */
-    updatePurchaseInvoiceEndpoint(id: string, invoiceId: string, data: UpdatePurchaseInvoiceDto, signal?: AbortSignal): Promise<string>;
-
-    /**
-     * Deletes a brewery invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the remainder
-     */
-    deletePurchaseInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string>;
-
-    /**
      * Sets a product's quantity on a brewery invoice
      * @return Quantity stored
      */
-    setPurchaseInvoiceLineEndpoint(id: string, invoiceId: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string>;
+    setPurchaseInvoiceLineEndpoint(id: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string>;
 
     /**
      * Moves pieces of a shipment item to another invoice, or off invoicing
      * @return Pieces moved
      */
     moveInvoiceLineEndpoint(id: string, data: MoveInvoiceLineDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a brewery invoice of an outgoing shipment
+     * @return Invoice deleted, its pieces returned to the remainder
+     */
+    deletePurchaseInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string>;
 
     /**
      * Deletes an additional invoice of an outgoing shipment
@@ -3402,163 +3396,14 @@ export class Client implements IClient {
     }
 
     /**
-     * Sets the label of a brewery invoice
-     * @return Label stored
-     */
-    updatePurchaseInvoiceEndpoint(id: string, invoiceId: string, data: UpdatePurchaseInvoiceDto, signal?: AbortSignal): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/purchase-invoices/{InvoiceId}";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
-        if (invoiceId === undefined || invoiceId === null)
-            throw new globalThis.Error("The parameter 'invoiceId' must be defined.");
-        url_ = url_.replace("{InvoiceId}", encodeURIComponent("" + invoiceId));
-        url_ = url_.replace(/[?&]$/, "");
-
-        const content_ = JSON.stringify(data);
-
-        let options_: RequestInit = {
-            body: content_,
-            method: "PATCH",
-            signal,
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processUpdatePurchaseInvoiceEndpoint(_response);
-        });
-    }
-
-    protected processUpdatePurchaseInvoiceEndpoint(response: Response): Promise<string> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
-            return response.text().then((_responseText) => {
-            let result204: any = null;
-            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-                result204 = resultData204 !== undefined ? resultData204 : null as any;
-    
-            return result204;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("Shipment no longer editable", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            let result404: any = null;
-            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result404 = FailureResponse.fromJS(resultData404);
-            return throwException("Outgoing shipment or invoice not found", status, _responseText, _headers, result404);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string>(null as any);
-    }
-
-    /**
-     * Deletes a brewery invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the remainder
-     */
-    deletePurchaseInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/purchase-invoices/{InvoiceId}";
-        if (id === undefined || id === null)
-            throw new globalThis.Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
-        if (invoiceId === undefined || invoiceId === null)
-            throw new globalThis.Error("The parameter 'invoiceId' must be defined.");
-        url_ = url_.replace("{InvoiceId}", encodeURIComponent("" + invoiceId));
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "DELETE",
-            signal,
-            headers: {
-                "Accept": "application/json"
-            }
-        };
-
-        return this.http.fetch(url_, options_).then((_response: Response) => {
-            return this.processDeletePurchaseInvoiceEndpoint(_response);
-        });
-    }
-
-    protected processDeletePurchaseInvoiceEndpoint(response: Response): Promise<string> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
-            return response.text().then((_responseText) => {
-            let result204: any = null;
-            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-                result204 = resultData204 !== undefined ? resultData204 : null as any;
-    
-            return result204;
-            });
-        } else if (status === 400) {
-            return response.text().then((_responseText) => {
-            return throwException("Shipment no longer editable, or this is the remainder invoice", status, _responseText, _headers);
-            });
-        } else if (status === 401) {
-            return response.text().then((_responseText) => {
-            let result401: any = null;
-            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result401 = FailureResponse.fromJS(resultData401);
-            return throwException("Unauthorized", status, _responseText, _headers, result401);
-            });
-        } else if (status === 403) {
-            return response.text().then((_responseText) => {
-            let result403: any = null;
-            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result403 = FailureResponse.fromJS(resultData403);
-            return throwException("Forbidden", status, _responseText, _headers, result403);
-            });
-        } else if (status === 404) {
-            return response.text().then((_responseText) => {
-            let result404: any = null;
-            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-            result404 = FailureResponse.fromJS(resultData404);
-            return throwException("Outgoing shipment or invoice not found", status, _responseText, _headers, result404);
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<string>(null as any);
-    }
-
-    /**
      * Sets a product's quantity on a brewery invoice
      * @return Quantity stored
      */
-    setPurchaseInvoiceLineEndpoint(id: string, invoiceId: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string> {
-        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/purchase-invoices/{InvoiceId}/lines";
+    setPurchaseInvoiceLineEndpoint(id: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/purchase-invoices/lines";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
-        if (invoiceId === undefined || invoiceId === null)
-            throw new globalThis.Error("The parameter 'invoiceId' must be defined.");
-        url_ = url_.replace("{InvoiceId}", encodeURIComponent("" + invoiceId));
         url_ = url_.replace(/[?&]$/, "");
 
         const content_ = JSON.stringify(data);
@@ -3612,7 +3457,7 @@ export class Client implements IClient {
             let result404: any = null;
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
-            return throwException("Outgoing shipment, invoice or product not found", status, _responseText, _headers, result404);
+            return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -3685,6 +3530,77 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment, invoice, item or client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a brewery invoice of an outgoing shipment
+     * @return Invoice deleted, its pieces returned to the remainder
+     */
+    deletePurchaseInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/purchase-invoices/{InvoiceId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (invoiceId === undefined || invoiceId === null)
+            throw new globalThis.Error("The parameter 'invoiceId' must be defined.");
+        url_ = url_.replace("{InvoiceId}", encodeURIComponent("" + invoiceId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeletePurchaseInvoiceEndpoint(_response);
+        });
+    }
+
+    protected processDeletePurchaseInvoiceEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment no longer editable, or this is the remainder invoice", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or invoice not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -10297,7 +10213,6 @@ export interface IOutgoingShipmentStockPurchaseItemDto extends IOutgoingShipment
 export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurchaseInvoiceDto {
     id?: string;
     sequence?: number;
-    label?: string | undefined;
     lines?: OutgoingShipmentPurchaseInvoiceLineDto[];
 
     constructor(data?: IOutgoingShipmentPurchaseInvoiceDto) {
@@ -10313,7 +10228,6 @@ export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurc
         if (_data) {
             this.id = _data["id"];
             this.sequence = _data["sequence"];
-            this.label = _data["label"];
             if (Array.isArray(_data["lines"])) {
                 this.lines = [] as any;
                 for (let item of _data["lines"])
@@ -10333,7 +10247,6 @@ export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurc
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["sequence"] = this.sequence;
-        data["label"] = this.label;
         if (Array.isArray(this.lines)) {
             data["lines"] = [];
             for (let item of this.lines)
@@ -10346,7 +10259,6 @@ export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurc
 export interface IOutgoingShipmentPurchaseInvoiceDto {
     id?: string;
     sequence?: number;
-    label?: string | undefined;
     lines?: OutgoingShipmentPurchaseInvoiceLineDto[];
 }
 
@@ -10448,42 +10360,6 @@ export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceReque
 }
 
 export interface IDeletePurchaseInvoiceRequest {
-}
-
-export class UpdatePurchaseInvoiceDto implements IUpdatePurchaseInvoiceDto {
-    label?: string | undefined;
-
-    constructor(data?: IUpdatePurchaseInvoiceDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.label = _data["label"];
-        }
-    }
-
-    static fromJS(data: any): UpdatePurchaseInvoiceDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UpdatePurchaseInvoiceDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["label"] = this.label;
-        return data;
-    }
-}
-
-export interface IUpdatePurchaseInvoiceDto {
-    label?: string | undefined;
 }
 
 export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
@@ -10977,6 +10853,7 @@ export interface ICustomExtraShipmentDto extends IExtraShipmentDto {
 }
 
 export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
+    sequence?: number;
     productId?: string;
     quantity?: number;
 
@@ -10991,6 +10868,7 @@ export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
 
     init(_data?: any) {
         if (_data) {
+            this.sequence = _data["sequence"];
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
         }
@@ -11005,6 +10883,7 @@ export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["sequence"] = this.sequence;
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
         return data;
@@ -11012,6 +10891,7 @@ export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
 }
 
 export interface ISetPurchaseInvoiceLineDto {
+    sequence?: number;
     productId?: string;
     quantity?: number;
 }

@@ -148,7 +148,6 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                     {
                         Id = pi.PublicId,
                         Sequence = pi.Sequence,
-                        Label = pi.Label,
                         Lines = pi.Lines
                             .Select(l => new OutgoingShipmentPurchaseInvoiceLineDto
                             {

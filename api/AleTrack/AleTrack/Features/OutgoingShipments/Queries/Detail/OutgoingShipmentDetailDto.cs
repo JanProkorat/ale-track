@@ -79,11 +79,6 @@ public sealed record OutgoingShipmentPurchaseInvoiceDto
     public int Sequence { get; set; }
 
     /// <summary>
-    /// The brewery's own invoice number, when the user typed it in
-    /// </summary>
-    public string? Label { get; set; }
-
-    /// <summary>
     /// Pieces claimed by this invoice, by product. Always empty for sequence 1: that invoice is
     /// the remainder and holds whatever the others leave.
     /// </summary>

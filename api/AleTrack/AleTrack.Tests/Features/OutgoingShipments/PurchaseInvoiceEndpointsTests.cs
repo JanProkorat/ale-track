@@ -5,7 +5,6 @@ using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.AddPurchaseInvoice;
 using AleTrack.Features.OutgoingShipments.Commands.DeletePurchaseInvoice;
 using AleTrack.Features.OutgoingShipments.Commands.SetPurchaseInvoiceLine;
-using AleTrack.Features.OutgoingShipments.Commands.UpdatePurchaseInvoice;
 using AleTrack.Infrastructure.Persistence;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
@@ -23,16 +22,16 @@ public sealed class PurchaseInvoiceEndpointsTests
     #region add
 
     [Fact]
-    public async Task AddPurchaseInvoice_FirstOne_CreatesTheRemainderAndOneThatHoldsLines()
+    public async Task AddPurchaseInvoice_OnAnUnsplitShipment_GoesPastTheTwoDefaultColumns()
     {
+        // The table shows two invoice columns whether or not anything is stored, so "add one"
+        // has to produce a third — creating only two would change nothing on screen.
         var scenario = Scenario.Build();
         var dbContext = scenario.Mock();
 
         await Add(scenario, dbContext);
 
-        scenario.Shipment.PurchaseInvoices.Should().HaveCount(2,
-            "a lone remainder invoice would be a column with nothing to put in it");
-        scenario.Shipment.PurchaseInvoices.Select(i => i.Sequence).Should().BeEquivalentTo([1, 2]);
+        scenario.Shipment.PurchaseInvoices.Select(i => i.Sequence).Should().BeEquivalentTo([1, 2, 3]);
         scenario.Shipment.PurchaseInvoices.Should().OnlyContain(i => i.Lines.Count == 0);
         dbContext.Verify(d => d.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -73,13 +72,26 @@ public sealed class PurchaseInvoiceEndpointsTests
     #region set line
 
     [Fact]
+    public async Task SetLine_OnAShipmentWithNoInvoices_MaterialisesTheTwoItAddresses()
+    {
+        // The second column is written to before it exists — that is the normal first edit.
+        var scenario = Scenario.Build();
+
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+
+        scenario.Shipment.PurchaseInvoices.Select(i => i.Sequence).Should().BeEquivalentTo([1, 2]);
+        scenario.Shipment.PurchaseInvoices.Single(i => i.Sequence == 2).Lines.Single().Quantity.Should().Be(4);
+        scenario.Shipment.PurchaseInvoices.Single(i => i.Sequence == 1).Lines.Should().BeEmpty("invoice 1 is the remainder");
+    }
+
+    [Fact]
     public async Task SetLine_StoresTheQuantityAndLeavesTheRestAsRemainder()
     {
         var scenario = Scenario.Build();
         var second = scenario.AddInvoices(2)[1];
         var dbContext = scenario.Mock();
 
-        await SetLine(scenario, dbContext, second.PublicId, quantity: 4);
+        await SetLine(scenario, dbContext, sequence: 2, quantity: 4);
 
         second.Lines.Single().Quantity.Should().Be(4);
         scenario.RemainderOf(scenario.Product.Id).Should().Be(11, "15 bought, 4 claimed");
@@ -94,7 +106,7 @@ public sealed class PurchaseInvoiceEndpointsTests
         var scenario = Scenario.Build();
         var second = scenario.AddInvoices(2)[1];
 
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 99);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 99);
 
         second.Lines.Single().Quantity.Should().Be(15);
         scenario.RemainderOf(scenario.Product.Id).Should().Be(0);
@@ -107,7 +119,7 @@ public sealed class PurchaseInvoiceEndpointsTests
         scenario.OrderItemA.QuantityFromInventory = 4;
         var second = scenario.AddInvoices(2)[1];
 
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 99);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 99);
 
         second.Lines.Single().Quantity.Should().Be(11, "4 of the 15 were bought on an earlier run");
     }
@@ -117,9 +129,9 @@ public sealed class PurchaseInvoiceEndpointsTests
     {
         var scenario = Scenario.Build();
         var second = scenario.AddInvoices(2)[1];
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 4);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
 
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 0);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 0);
 
         second.Lines.Should().BeEmpty("a zero-quantity row would be indistinguishable from no claim at all");
     }
@@ -129,9 +141,9 @@ public sealed class PurchaseInvoiceEndpointsTests
     {
         var scenario = Scenario.Build();
         var second = scenario.AddInvoices(2)[1];
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 4);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
 
-        await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 7);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 7);
 
         second.Lines.Should().ContainSingle().Which.Quantity.Should().Be(7);
     }
@@ -142,7 +154,7 @@ public sealed class PurchaseInvoiceEndpointsTests
         var scenario = Scenario.Build();
         var remainder = scenario.AddInvoices(2)[0];
 
-        var act = async () => await SetLine(scenario, scenario.Mock(), remainder.PublicId, quantity: 3);
+        var act = async () => await SetLine(scenario, scenario.Mock(), sequence: 1, quantity: 3);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
     }
@@ -155,7 +167,7 @@ public sealed class PurchaseInvoiceEndpointsTests
         scenario.OrderItemB.QuantityFromInventory = scenario.OrderItemB.Quantity;
         var second = scenario.AddInvoices(2)[1];
 
-        var act = async () => await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 1);
+        var act = async () => await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 1);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
@@ -166,7 +178,7 @@ public sealed class PurchaseInvoiceEndpointsTests
         var scenario = Scenario.Build(state: OutgoingShipmentState.Delivered);
         var second = scenario.AddInvoices(2)[1];
 
-        var act = async () => await SetLine(scenario, scenario.Mock(), second.PublicId, quantity: 1);
+        var act = async () => await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 1);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
     }
@@ -180,8 +192,8 @@ public sealed class PurchaseInvoiceEndpointsTests
     {
         var scenario = Scenario.Build();
         var invoices = scenario.AddInvoices(3);
-        await SetLine(scenario, scenario.Mock(), invoices[1].PublicId, quantity: 4);
-        await SetLine(scenario, scenario.Mock(), invoices[2].PublicId, quantity: 3);
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+        await SetLine(scenario, scenario.Mock(), sequence: 3, quantity: 3);
 
         await Delete(scenario, scenario.Mock(), invoices[2].PublicId);
 
@@ -235,33 +247,6 @@ public sealed class PurchaseInvoiceEndpointsTests
 
     #endregion
 
-    #region label
-
-    [Fact]
-    public async Task UpdatePurchaseInvoice_StoresATrimmedLabel()
-    {
-        var scenario = Scenario.Build();
-        var second = scenario.AddInvoices(2)[1];
-
-        await UpdateLabel(scenario, scenario.Mock(), second.PublicId, "  2026-0453 ");
-
-        second.Label.Should().Be("2026-0453");
-    }
-
-    [Fact]
-    public async Task UpdatePurchaseInvoice_BlankLabel_ClearsIt()
-    {
-        var scenario = Scenario.Build();
-        var second = scenario.AddInvoices(2)[1];
-        await UpdateLabel(scenario, scenario.Mock(), second.PublicId, "2026-0453");
-
-        await UpdateLabel(scenario, scenario.Mock(), second.PublicId, "   ");
-
-        second.Label.Should().BeNull();
-    }
-
-    #endregion
-
     #region helpers
 
     private static Task Add(Scenario scenario, Mock<AleTrackDbContext> dbContext) =>
@@ -278,14 +263,13 @@ public sealed class PurchaseInvoiceEndpointsTests
         await endpoint.HandleAsync(CancellationToken.None);
     }
 
-    private static async Task SetLine(Scenario scenario, Mock<AleTrackDbContext> dbContext, Guid invoiceId, int quantity)
+    private static async Task SetLine(Scenario scenario, Mock<AleTrackDbContext> dbContext, int sequence, int quantity)
     {
         var endpoint = EndpointBuilder<SetPurchaseInvoiceLineRequest, SetPurchaseInvoiceLineEndpoint>.Create(dbContext.Object);
         await endpoint.HandleAsync(new SetPurchaseInvoiceLineRequest
         {
             Id = scenario.ShipmentId,
-            InvoiceId = invoiceId,
-            Data = new SetPurchaseInvoiceLineDto { ProductId = scenario.Product.PublicId, Quantity = quantity }
+            Data = new SetPurchaseInvoiceLineDto { Sequence = sequence, ProductId = scenario.Product.PublicId, Quantity = quantity }
         }, CancellationToken.None);
     }
 
@@ -295,17 +279,6 @@ public sealed class PurchaseInvoiceEndpointsTests
         await endpoint.HandleAsync(new DeletePurchaseInvoiceRequest
         {
             Id = scenario.ShipmentId, InvoiceId = invoiceId
-        }, CancellationToken.None);
-    }
-
-    private static async Task UpdateLabel(Scenario scenario, Mock<AleTrackDbContext> dbContext, Guid invoiceId, string? label)
-    {
-        var endpoint = EndpointBuilder<UpdatePurchaseInvoiceRequest, UpdatePurchaseInvoiceEndpoint>.Create(dbContext.Object);
-        await endpoint.HandleAsync(new UpdatePurchaseInvoiceRequest
-        {
-            Id = scenario.ShipmentId,
-            InvoiceId = invoiceId,
-            Data = new UpdatePurchaseInvoiceDto { Label = label }
         }, CancellationToken.None);
     }
 

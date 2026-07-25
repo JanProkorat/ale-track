@@ -43,9 +43,9 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
 import {
-  useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetPurchaseInvoiceLine, useUpdatePurchaseInvoice,
+  useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
-import { columnTotals, isSplit, orderedInvoices } from './purchaseSplitModel';
+import { columnTotals } from './purchaseSplitModel';
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
 } from './PurchaseInvoiceColumns';
@@ -484,7 +484,6 @@ export function ShipmentDetail({
   const addPurchaseInvoice = useAddPurchaseInvoice(shipment.id);
   const deletePurchaseInvoice = useDeletePurchaseInvoice(shipment.id);
   const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
-  const updatePurchaseInvoice = useUpdatePurchaseInvoice(shipment.id);
 
   // "Kontrola" (2nd check round) has no field on the real DTO (only a single
   // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
@@ -533,14 +532,11 @@ export function ShipmentDetail({
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
 
-  // Brewery-invoice columns only exist once the run is actually split across two
-  // invoices; a single one is the default and needs no column to say so.
-  const purchaseInvoices = useMemo(() => orderedInvoices(shipment.purchaseInvoices ?? []), [shipment.purchaseInvoices]);
-  const purchaseSplit = isSplit(purchaseInvoices);
-  const purchaseTotals = useMemo(
-    () => (purchaseSplit ? columnTotals(aggRows, purchaseInvoices) : []),
-    [purchaseSplit, aggRows, purchaseInvoices],
-  );
+  // Two brewery-invoice columns are always on screen; the second usually has no
+  // invoice behind it until a number is typed into it, which the server then
+  // materialises. Anything beyond two comes from "+ Faktura pivovaru".
+  const purchaseInvoices = useMemo(() => shipment.purchaseInvoices ?? [], [shipment.purchaseInvoices]);
+  const purchaseTotals = useMemo(() => columnTotals(aggRows, purchaseInvoices), [aggRows, purchaseInvoices]);
   // Aggregated-row state derives from the per-source overrides: a product line is
   // "loaded" only when all its source order items are, and indeterminate between.
   const aggLoaded = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => isLoaded(r));
@@ -830,19 +826,16 @@ export function ShipmentDetail({
                 rows={aggRows}
                 totals={{ quantity: totalQty, loaded: loadedN, checked: checkedN, count: productN }}
                 emptyText="Zatím žádné produkty k naložení."
-                invoiceHeaders={purchaseSplit && (
+                invoiceHeaders={(
                   <PurchaseInvoiceHeaderCells
                     invoices={purchaseInvoices}
                     editable={nakladkaEditable}
-                    onLabel={(invoiceId, label) => updatePurchaseInvoice.mutate({ invoiceId, label })}
                     onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
                       onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
                     })}
                   />
                 )}
-                invoiceFooters={purchaseSplit
-                  ? (footSx) => <PurchaseInvoiceFooterCells totals={purchaseTotals} sx={footSx} />
-                  : undefined}
+                invoiceFooters={(footSx) => <PurchaseInvoiceFooterCells totals={purchaseTotals} sx={footSx} />}
                 renderRow={(agg) => (
                   <AggLoadingRow
                     key={agg.key}
@@ -858,13 +851,13 @@ export function ShipmentDetail({
                     onToggleChecked={() => toggleCheckedRows(agg.sources)}
                     onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                     onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    invoiceCells={purchaseSplit && (
+                    invoiceCells={(
                       <PurchaseInvoiceRowCells
                         row={agg}
                         invoices={purchaseInvoices}
                         editable={nakladkaEditable}
-                        onSet={(invoiceId, quantity) => setPurchaseInvoiceLine.mutate(
-                          { invoiceId, productId: agg.productId!, quantity },
+                        onSet={(sequence, quantity) => setPurchaseInvoiceLine.mutate(
+                          { sequence, productId: agg.productId!, quantity },
                           { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Rozdělení se nepodařilo uložit'), { variant: 'error' }) },
                         )}
                       />

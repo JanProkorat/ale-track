@@ -133,4 +133,25 @@ public static class PurchaseInvoiceSplit
     /// </summary>
     public static int NextSequence(OutgoingShipment shipment) =>
         shipment.PurchaseInvoices.Count == 0 ? 1 : shipment.PurchaseInvoices.Max(i => i.Sequence) + 1;
+
+    /// <summary>
+    /// The invoice at <paramref name="sequence"/>, creating it and any gap below it.
+    /// </summary>
+    /// <remarks>
+    /// The table shows two invoice columns from the start, so the second one is usually written
+    /// to before it exists. Creating on write rather than on read keeps runs that never split
+    /// free of empty rows.
+    /// </remarks>
+    public static OutgoingShipmentPurchaseInvoice EnsureSequence(OutgoingShipment shipment, int sequence)
+    {
+        while (NextSequence(shipment) <= sequence)
+            shipment.PurchaseInvoices.Add(new OutgoingShipmentPurchaseInvoice
+            {
+                PublicId = Guid.NewGuid(),
+                OutgoingShipment = shipment,
+                Sequence = NextSequence(shipment)
+            });
+
+        return shipment.PurchaseInvoices.Single(i => i.Sequence == sequence);
+    }
 }
