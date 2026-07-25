@@ -8,7 +8,9 @@ using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using FluentValidation;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -68,11 +70,25 @@ try
         })
         .AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton);
 
-    services.CreateDbContext(connectionString);
+    // Detailed errors and sensitive data logging write query parameter values into the log.
+    // Development.Local is the only environment that targets a developer's own database;
+    // every other one (including Development, which points at the shared remote DB) keeps them off.
+    services.CreateDbContext(connectionString, builder.Environment.IsEnvironment("Development.Local"));
 
-    // Health checks registration
+    // Health checks registration. The database check is tagged so that it can be excluded
+    // from liveness - see the endpoint mapping below.
     services.AddHealthChecks()
-        .AddDbContextCheck<AleTrackDbContext>("Database");
+        .AddDbContextCheck<AleTrackDbContext>("Database", tags: ["ready"]);
+
+    // Bound every check, so an unreachable dependency reports Unhealthy instead of
+    // blocking the request until the caller gives up. The first connection after a cold
+    // start was measured at ~9.9s against the remote database, so keep enough headroom
+    // that a slow cold connect does not flap readiness to Unhealthy.
+    services.Configure<HealthCheckServiceOptions>(options =>
+    {
+        foreach (var registration in options.Registrations)
+            registration.Timeout = TimeSpan.FromSeconds(20);
+    });
     
     // Add JWT Service
     services.AddScoped<IJwtService, JwtService>();
@@ -106,8 +122,11 @@ try
 
     // await application.ApplyMigrationsAsync();
     
-    // Map health checks endpoints before authentication/authorization middlewares
-    application.MapHealthChecks("/health/live");
+    // Map health checks endpoints before authentication/authorization middlewares.
+    // Liveness runs no checks on purpose: it answers 200 as soon as Kestrel is listening.
+    // Including the database check here makes the platform kill a perfectly healthy
+    // instance whenever the database is cold or briefly unreachable.
+    application.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
     application.MapHealthChecks("/health/ready");
     
     if (application.Environment.IsProduction())
