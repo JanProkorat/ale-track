@@ -43,7 +43,8 @@ public sealed class CreateOrderDtoValidator : Validator<CreateOrderDto>
         RuleFor(r => r.RequiredDeliveryDate)
             .GreaterThan(DateOnly.FromDateTime(DateTime.Today))
             .When(d => d.RequiredDeliveryDate != null)
-            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+            .WithErrorCode(ErrorCodes.DeliveryDateInPast)
+            .WithMessage("Required delivery date must be in the future.");
 
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new CreateOrderItemDtoValidator()))
