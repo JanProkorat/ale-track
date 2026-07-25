@@ -30,6 +30,17 @@ route `#/reports`.
   **`Moq.EntityFrameworkCore` will NOT catch a violation** — mocked DbSets are
   LINQ-to-objects, so a computed property evaluates fine in tests and explodes in
   production. This is the single highest-risk trap in this plan.
+- **Npgsql rejects `DateTimeKind.Unspecified` against a `timestamptz` column.**
+  `OutgoingShipment.DeliveryDate` is `timestamp with time zone`, and
+  `EnableLegacyTimestampBehavior` is not set anywhere in this solution. So
+  `DateOnly.ToDateTime(TimeOnly.MinValue)` — which returns `Kind=Unspecified` — throws
+  *"Cannot write DateTime with Kind=Unspecified"* the moment the query runs. Always use
+  the three-arg overload: `from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)`.
+  **And never call `DateOnly.FromDateTime` on a mapped column inside a projection** —
+  either it fails to translate, or it becomes a `::date` cast whose result depends on the
+  session `TimeZone`, making day/week bucketing non-deterministic. Carry the raw
+  `DateTime` out of SQL and derive the day in memory. Both mistakes are invisible to
+  `Moq.EntityFrameworkCore` for the same reason the weight trap is.
 - **Weight logic must not be duplicated.** Task 1 extracts `Product.Weight`'s switch
   into `ProductWeightCalculator.Compute(ProductKind, double?)` and has
   `Product.Weight` delegate to it. Reports call the same static.
@@ -187,10 +198,12 @@ public sealed class ProductWeightCalculatorTests
     }
 
     [Fact]
-    public void ProductWeight_DelegatesToCalculator()
+    public void ProductWeight_ReturnsTheMappedWeight()
     {
+        // Asserts the literal, not `== Compute(...)`, so a wrong mapping fails the test
+        // rather than only a removed delegation.
         var product = new Product { Kind = ProductKind.Keg, PackageSize = KegSize.FiftyLiters };
-        product.Weight.Should().Be(ProductWeightCalculator.Compute(ProductKind.Keg, KegSize.FiftyLiters));
+        product.Weight.Should().Be(PackageWeight.SixtyTwoKilos);
     }
 }
 ```
@@ -414,7 +427,15 @@ namespace AleTrack.Features.Reports.Utils;
 /// </summary>
 public sealed record DeliveredLineRow
 {
-    public DateOnly Date { get; init; }
+    /// <summary>
+    /// The shipment's delivery timestamp, straight out of the `timestamptz` column. The day is
+    /// derived in memory (<see cref="Date"/>) because casting a mapped column to a date inside
+    /// the query is either untranslatable or session-timezone dependent.
+    /// </summary>
+    public DateTime DeliveredAtUtc { get; init; }
+
+    /// <summary>Delivery day, derived client-side from <see cref="DeliveredAtUtc"/>.</summary>
+    public DateOnly Date => DateOnly.FromDateTime(DeliveredAtUtc);
     public long ClientId { get; init; }
     public string ClientName { get; init; } = null!;
     public Region ClientRegion { get; init; }
@@ -446,8 +467,9 @@ public static class DeliveredLineQuery
     /// </summary>
     public static IQueryable<DeliveredLineRow> Project(AleTrackDbContext dbContext, DateOnly from, DateOnly to)
     {
-        var fromDate = from.ToDateTime(TimeOnly.MinValue);
-        var toDate = to.ToDateTime(TimeOnly.MaxValue);
+        // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
+        var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var toDate = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         return dbContext.OrderItems
             .Where(oi => oi.Order.OutgoingShipmentStop != null
@@ -458,7 +480,7 @@ public static class DeliveredLineQuery
                          && oi.Order.OutgoingShipmentStop.OutgoingShipment.DeliveryDate <= toDate)
             .Select(oi => new DeliveredLineRow
             {
-                Date = DateOnly.FromDateTime(oi.Order.OutgoingShipmentStop!.OutgoingShipment.DeliveryDate!.Value),
+                DeliveredAtUtc = oi.Order.OutgoingShipmentStop!.OutgoingShipment.DeliveryDate!.Value,
                 ClientId = oi.Order.ClientId,
                 ClientName = oi.Order.Client.Name,
                 ClientRegion = oi.Order.Client.Region,
@@ -627,6 +649,50 @@ public sealed class GetDeliveryVolumeEndpointTests
         }, CancellationToken.None);
 
         endpoint.Response.TotalWeightKg.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_IncludesADeliveryLateOnTheClosingDay()
+    {
+        // The window's To is inclusive to end-of-day. Regressing TimeOnly.MaxValue to
+        // MinValue would silently drop everything delivered after midnight on the To date.
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 31, 18, 30, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+
+        await endpoint.HandleAsync(new GetDeliveryVolumeRequest
+        {
+            From = new DateOnly(2026, 7, 1),
+            To = new DateOnly(2026, 7, 31),
+            Granularity = ReportGranularity.Week
+        }, CancellationToken.None);
+
+        endpoint.Response.TotalWeightKg.Should().Be(62m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_IncludesADeliveryAtMidnightOnTheOpeningDay()
+    {
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+
+        await endpoint.HandleAsync(new GetDeliveryVolumeRequest
+        {
+            From = new DateOnly(2026, 7, 1),
+            To = new DateOnly(2026, 7, 31),
+            Granularity = ReportGranularity.Week
+        }, CancellationToken.None);
+
+        endpoint.Response.TotalWeightKg.Should().Be(62m);
     }
 
     [Fact]
@@ -1820,8 +1886,9 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetOperationsRequest req, CancellationToken ct)
     {
-        var fromDate = req.From.ToDateTime(TimeOnly.MinValue);
-        var toDate = req.To.ToDateTime(TimeOnly.MaxValue);
+        // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
+        var fromDate = req.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var toDate = req.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         // Shipment-level facts. Projected flat so nothing computed leaks into SQL.
         var shipments = await dbContext.OutgoingShipments
