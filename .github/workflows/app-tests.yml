@@ -32,5 +32,19 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      # Cheapest check first. `yarn lint` alone exits 0 on warnings, so the count is
+      # ratcheted instead: the 4 existing react-refresh/only-export-components warnings
+      # are tolerated, a 5th fails the build. Clearing them means splitting the hook out
+      # of each provider file and touching ~30 import sites, which is its own change —
+      # lower this number when that happens.
+      - name: Lint
+        run: yarn lint --max-warnings 4
+
+      # `yarn build` is `tsc --noEmit && vite build`, so this is the typecheck as well as
+      # the bundle. Vitest transpiles through SWC and never checks types, so without this
+      # step a type error reaches dev unnoticed.
+      - name: Typecheck and build
+        run: yarn build
+
       - name: Run tests
         run: yarn test:run
