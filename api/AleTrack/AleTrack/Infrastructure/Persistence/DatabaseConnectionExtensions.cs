@@ -89,7 +89,11 @@ public static class DatabaseConnectionExtensions
     /// <param name="connectionString">
     /// The database connection string used to connect to the specified database server.
     /// </param>
-    public static void CreateDbContext(this IServiceCollection services, string connectionString)
+    /// <param name="enableSensitiveDataLogging">
+    /// When true, enables detailed errors and sensitive data logging. These write query
+    /// parameter values into the log, so they must stay off outside local development.
+    /// </param>
+    public static void CreateDbContext(this IServiceCollection services, string connectionString, bool enableSensitiveDataLogging)
     {
         services.AddDbContext<AleTrackDbContext>(options =>
         {
@@ -97,8 +101,12 @@ public static class DatabaseConnectionExtensions
             {
                 npgsqlOptions.EnableRetryOnFailure();
             });
-            
+
             options.UseCombineOf(new PublicEntityInterceptor());
+
+            if (!enableSensitiveDataLogging)
+                return;
+
             options.EnableDetailedErrors();
             options.EnableSensitiveDataLogging();
         });
