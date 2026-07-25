@@ -4,6 +4,74 @@
 **Status:** Approved, ready for planning
 **Precedent:** [`2026-07-25-order-returns-design.md`](2026-07-25-order-returns-design.md)
 
+## Correction (superseding the original design below)
+
+The first cut of this design moved **both** extra kinds onto the order. That was
+wrong for inventory-sourced items, and the reason is worth writing down: **an
+order records what the client wants, not where the pieces come from.**
+
+The real case: a client orders 20 of beer A, the brewery supplies only 15, so the
+missing 5 come out of our own inventory. The client still receives — and is billed
+for — 20. Sourcing is a fact about *this loading*, so it belongs to the shipment.
+
+| Kind | Owner | Why |
+|---|---|---|
+| Inventory-sourced pieces | **Shipment** | Fulfilment detail of a loading, not of the order. |
+| Custom items (nothing a brewery supplies, client wants them) | **Order** | The client asked for them; they are part of what was ordered. |
+| `InventoryExtraItem` (stock returning to the depot) | **Shipment**, unchanged | No client, no order. |
+
+### Sourcing model
+
+`OrderItem` gains two columns, alongside the `IsShipmentLoadingConfirmed` flag
+that is already shipment-scoped data living there:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `quantity_from_inventory` | `int`, default 0 | How many of this item's pieces come from our stock rather than the brewery |
+| `inventory_item_id` | `long?`, FK, nullable | Which stock entry they come from; null when nothing is sourced |
+
+Chosen over a separate join table because it mirrors the existing pattern exactly
+and `ResetOrderItemsForReuse` — which already clears the loading flag when an
+order is freed for another shipment — clears the sourcing in the same loop. The
+trade-off is that an order carries a field only meaningful while it sits on a
+shipment, which is a wart the codebase already has.
+
+**Invariant:** `quantity_from_inventory <= quantity`. Sourcing more than was
+ordered is a validation error. Sourcing more than is *in stock* is **not** an
+error — stock can be replenished before the truck is loaded — it raises a warning
+banner on the nakládka instead.
+
+### Invoicing is untouched
+
+The order item is billed once, at its full quantity, regardless of where the
+pieces came from. Billing part of a line differently is already possible by
+splitting the line onto another invoice, so sourcing needs no billing concept of
+its own.
+
+Consequently `InvoiceLineSourceKind.ClientExtraItem` and
+`OutgoingShipmentInvoiceLine.ClientExtraItemId` are **removed** — nothing produces
+them any more. `ShipmentInvoiceLineDto.IsFromStock` stays, now derived from
+whether the order item has any inventory sourcing, so the Fakturace UI keeps its
+signal.
+
+### Capability note
+
+`OutgoingShipmentClientExtraItem` is deleted rather than reshaped, which removes
+"deliver stock to a client that is not on their order". That case is now expressed
+by composition: add the piece to the order, then source it from inventory. Nothing
+is lost, and the result is one consistent way to say it.
+
+### Nakládka
+
+Each order-item row shows its split — e.g. `20 ks (5 ze skladu)` — and the depot
+edits the sourced quantity there while loading. A banner appears when the pieces
+drawn from a stock entry across the shipment exceed what that entry holds.
+
+---
+
+*Everything below is the original design. The `OrderClientExtraItem` half of it is
+superseded by the correction above; the `OrderCustomExtraItem` half still stands.*
+
 ## Problem
 
 Two of the three "extra item" kinds on an outgoing shipment are really additions
