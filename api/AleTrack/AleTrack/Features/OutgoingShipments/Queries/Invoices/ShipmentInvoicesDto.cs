@@ -14,6 +14,12 @@ public sealed record ShipmentInvoicesDto
     public List<ShipmentInvoiceDto> Invoices { get; set; } = [];
 
     /// <summary>
+    /// Pieces deliberately kept off every invoice — delivered, not billed. The UI groups them
+    /// under the client who ordered them and labels them <em>soukromé</em>.
+    /// </summary>
+    public List<ShipmentInvoiceLineDto> PrivateLines { get; set; } = [];
+
+    /// <summary>
     /// Changes reconciliation had to make to an existing split because the shipment's contents
     /// moved underneath it. Empty in the normal case; the UI shows these as a banner.
     /// </summary>

@@ -280,7 +280,7 @@ export interface IClient {
     deleteOutgoingShipmentEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
-     * Moves pieces of a shipment item to another invoice
+     * Moves pieces of a shipment item to another invoice, or off invoicing
      * @return Pieces moved
      */
     moveInvoiceLineEndpoint(id: string, data: MoveInvoiceLineDto, signal?: AbortSignal): Promise<string>;
@@ -3378,7 +3378,7 @@ export class Client implements IClient {
     }
 
     /**
-     * Moves pieces of a shipment item to another invoice
+     * Moves pieces of a shipment item to another invoice, or off invoicing
      * @return Pieces moved
      */
     moveInvoiceLineEndpoint(id: string, data: MoveInvoiceLineDto, signal?: AbortSignal): Promise<string> {
@@ -9093,6 +9093,7 @@ export enum OutgoingShipmentState {
 
 export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
+    privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
     isEditable?: boolean;
 
@@ -9111,6 +9112,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                 this.invoices = [] as any;
                 for (let item of _data["invoices"])
                     this.invoices!.push(ShipmentInvoiceDto.fromJS(item));
+            }
+            if (Array.isArray(_data["privateLines"])) {
+                this.privateLines = [] as any;
+                for (let item of _data["privateLines"])
+                    this.privateLines!.push(ShipmentInvoiceLineDto.fromJS(item));
             }
             if (Array.isArray(_data["adjustments"])) {
                 this.adjustments = [] as any;
@@ -9135,6 +9141,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
             for (let item of this.invoices)
                 data["invoices"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.privateLines)) {
+            data["privateLines"] = [];
+            for (let item of this.privateLines)
+                data["privateLines"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.adjustments)) {
             data["adjustments"] = [];
             for (let item of this.adjustments)
@@ -9147,6 +9158,7 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
 
 export interface IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
+    privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
     isEditable?: boolean;
 }
@@ -10508,12 +10520,13 @@ export interface ICustomExtraShipmentDto extends IExtraShipmentDto {
 }
 
 export class MoveInvoiceLineDto implements IMoveInvoiceLineDto {
-    fromInvoiceId!: string;
+    fromInvoiceId?: string | undefined;
     sourceKind?: InvoiceLineSourceKind;
     sourceItemId!: string;
     quantity?: number;
     toInvoiceId?: string | undefined;
     toClientId?: string | undefined;
+    toPrivate?: boolean;
 
     constructor(data?: IMoveInvoiceLineDto) {
         if (data) {
@@ -10532,6 +10545,7 @@ export class MoveInvoiceLineDto implements IMoveInvoiceLineDto {
             this.quantity = _data["quantity"];
             this.toInvoiceId = _data["toInvoiceId"];
             this.toClientId = _data["toClientId"];
+            this.toPrivate = _data["toPrivate"];
         }
     }
 
@@ -10550,17 +10564,19 @@ export class MoveInvoiceLineDto implements IMoveInvoiceLineDto {
         data["quantity"] = this.quantity;
         data["toInvoiceId"] = this.toInvoiceId;
         data["toClientId"] = this.toClientId;
+        data["toPrivate"] = this.toPrivate;
         return data;
     }
 }
 
 export interface IMoveInvoiceLineDto {
-    fromInvoiceId: string;
+    fromInvoiceId?: string | undefined;
     sourceKind?: InvoiceLineSourceKind;
     sourceItemId: string;
     quantity?: number;
     toInvoiceId?: string | undefined;
     toClientId?: string | undefined;
+    toPrivate?: boolean;
 }
 
 export class DeleteOutgoingShipmentRequest implements IDeleteOutgoingShipmentRequest {

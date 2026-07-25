@@ -65,12 +65,14 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext) :
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteShipmentInvoiceRequest req, CancellationToken ct)
     {
-        var shipment = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
-        if (shipment is null)
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        if (split is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
             return;
         }
+
+        var shipment = split.Shipment;
 
         if (!ShipmentInvoiceGraph.IsEditable(shipment))
         {
@@ -99,8 +101,9 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext) :
         dbContext.OutgoingShipmentInvoiceLines.RemoveRange(invoice.Lines);
         dbContext.OutgoingShipmentInvoices.Remove(invoice);
 
-        // Reconciliation returns the pieces the invoice held to their ordering client.
-        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(shipment);
+        // Reconciliation returns the pieces the invoice held to their ordering client. Private
+        // pieces are untouched — they hang off the shipment, not off any invoice.
+        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
 
         if (reconcileResult.RemovedLines.Count > 0)
             dbContext.OutgoingShipmentInvoiceLines.RemoveRange(reconcileResult.RemovedLines);

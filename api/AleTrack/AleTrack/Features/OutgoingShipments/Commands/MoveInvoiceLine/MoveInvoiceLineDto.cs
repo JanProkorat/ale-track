@@ -3,7 +3,8 @@ using AleTrack.Common.Enums;
 namespace AleTrack.Features.OutgoingShipments.Commands.MoveInvoiceLine;
 
 /// <summary>
-/// Moves a number of pieces of one shipment item from one invoice to another.
+/// Moves a number of pieces of one shipment item between invoices, or in and out of the pieces
+/// excluded from invoicing altogether.
 /// </summary>
 /// <remarks>
 /// The item is addressed by kind + public ID rather than by invoice-line ID because the UI shows
@@ -15,9 +16,10 @@ namespace AleTrack.Features.OutgoingShipments.Commands.MoveInvoiceLine;
 public sealed record MoveInvoiceLineDto
 {
     /// <summary>
-    /// Public ID of the invoice the pieces are taken from.
+    /// Public ID of the invoice the pieces are taken from, or null to take them out of the
+    /// private pieces — the ones currently excluded from invoicing.
     /// </summary>
-    public Guid FromInvoiceId { get; set; }
+    public Guid? FromInvoiceId { get; set; }
 
     /// <summary>
     /// Which kind of shipment item is being moved.
@@ -36,13 +38,20 @@ public sealed record MoveInvoiceLineDto
     public int Quantity { get; set; }
 
     /// <summary>
-    /// Public ID of the target invoice. Mutually exclusive with <see cref="ToClientId"/>.
+    /// Public ID of the target invoice. Mutually exclusive with <see cref="ToClientId"/> and
+    /// <see cref="ToPrivate"/>.
     /// </summary>
     public Guid? ToInvoiceId { get; set; }
 
     /// <summary>
     /// Public ID of a client to open a new invoice for and move the pieces onto. Mutually
-    /// exclusive with <see cref="ToInvoiceId"/>.
+    /// exclusive with <see cref="ToInvoiceId"/> and <see cref="ToPrivate"/>.
     /// </summary>
     public Guid? ToClientId { get; set; }
+
+    /// <summary>
+    /// Marks the pieces private: still loaded and delivered, but excluded from every invoice.
+    /// Mutually exclusive with <see cref="ToInvoiceId"/> and <see cref="ToClientId"/>.
+    /// </summary>
+    public bool ToPrivate { get; set; }
 }

@@ -25,7 +25,7 @@ public sealed class ShipmentInvoiceReconcilerTests
             OrderStop(ClientA, order: 1, (itemId: 1, qty: 10), (itemId: 2, qty: 4)),
             OrderStop(ClientB, order: 2, (itemId: 3, qty: 6)));
 
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         shipment.Invoices.Should().HaveCount(2);
         shipment.Invoices.Should().OnlyContain(i => i.Sequence == 1);
@@ -39,10 +39,10 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_AlreadyBalanced_ChangesNothing()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         var lineId = InvoiceFor(shipment, ClientA).Lines.Single().PublicId;
 
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         InvoiceFor(shipment, ClientA).Lines.Single().PublicId.Should().Be(lineId, "a second pass must be a no-op");
         result.Adjustments.Should().BeEmpty();
@@ -56,7 +56,7 @@ public sealed class ShipmentInvoiceReconcilerTests
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 3)));
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         shipment.Invoices.Should().OnlyContain(i => i.PublicId != Guid.Empty);
         shipment.Invoices.SelectMany(i => i.Lines).Should().OnlyContain(l => l.PublicId != Guid.Empty);
@@ -71,7 +71,7 @@ public sealed class ShipmentInvoiceReconcilerTests
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 3)));
         shipment.Stops.Single().ClientOrder!.Client = client;
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         InvoiceFor(shipment, ClientA).Client.Should().BeSameAs(client);
     }
@@ -84,11 +84,11 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_QuantityRaised_SurplusLandsOnOrderingClientsFirstInvoice()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientA, quantity: 4, targetSequence: 2);
 
         OrderItemOf(shipment, itemId: 1).Quantity = 13;
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(9, "6 kept + 3 added");
         LineOn(shipment, ClientA, sequence: 2, itemId: 1).Quantity.Should().Be(4, "the extra invoice is untouched");
@@ -107,13 +107,13 @@ public sealed class ShipmentInvoiceReconcilerTests
     {
         // A ordered 10; 3 of them were deliberately billed to B.
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)), OrderStop(ClientB, order: 2));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientB, quantity: 3, targetSequence: 1);
         LineOn(shipment, ClientA, 1, 1).Quantity.Should().Be(7);
 
         // The order drops to 5 — five pieces have to come off somewhere.
         OrderItemOf(shipment, itemId: 1).Quantity = 5;
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should()
             .Be(5, "the ordering client keeps everything that still exists");
@@ -128,11 +128,11 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_QuantityCut_TrimsHighestSequenceOfTheOwnerBeforeTheFirst()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientA, quantity: 4, targetSequence: 2);
 
         OrderItemOf(shipment, itemId: 1).Quantity = 7;
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(6, "the first invoice is trimmed last");
         LineOn(shipment, ClientA, sequence: 2, itemId: 1).Quantity.Should().Be(1);
@@ -143,11 +143,11 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_QuantityCutBelowCrossBilledTotal_FallsThroughToTheOwnersFirstInvoice()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)), OrderStop(ClientB, order: 2));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientB, quantity: 4, targetSequence: 1);
 
         OrderItemOf(shipment, itemId: 1).Quantity = 2;
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         LinesOn(shipment, ClientB, sequence: 1).Should().BeEmpty();
         LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(2);
@@ -158,10 +158,10 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_QuantityCutToZero_DropsEveryLineForThatItem()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5), (itemId: 2, qty: 3)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         OrderItemOf(shipment, itemId: 1).Quantity = 0;
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         LinesFor(shipment, itemId: 1).Should().BeEmpty();
         LinesFor(shipment, itemId: 2).Should().ContainSingle().Which.Quantity.Should().Be(3);
@@ -177,13 +177,13 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_SourceItemRemovedFromShipment_DropsItsLinesAndReportsIt()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5), (itemId: 2, qty: 3)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         var order = shipment.Stops.Single().ClientOrder!;
         var doomed = order.OrderItems.Single(i => i.Id == 2);
         order.OrderItems.Remove(doomed);
 
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         LinesFor(shipment, itemId: 2).Should().BeEmpty();
         result.RemovedLines.Should().ContainSingle();
@@ -201,13 +201,13 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_ClientLeavesShipment_DropsTheirEmptyInvoice()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)), OrderStop(ClientB, order: 2, (itemId: 2, qty: 4)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         shipment.Invoices.Should().HaveCount(2);
 
         var stopB = shipment.Stops.Single(s => s.ClientOrder!.ClientId == ClientB);
         shipment.Stops.Remove(stopB);
 
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         shipment.Invoices.Should().ContainSingle().Which.ClientId.Should().Be(ClientA);
         result.RemovedInvoices.Should().ContainSingle();
@@ -218,14 +218,14 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_ClientLeavesShipmentButStillHoldsCrossBilledLines_KeepsTheirInvoice()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)), OrderStop(ClientB, order: 2, (itemId: 2, qty: 4)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientB, quantity: 3, targetSequence: 1);
 
         // B's own order leaves, but B is still being billed for 3 pieces of A's.
         var stopB = shipment.Stops.Single(s => s.ClientOrder!.ClientId == ClientB);
         shipment.Stops.Remove(stopB);
 
-        var result = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var result = Reconcile(shipment);
 
         InvoiceFor(shipment, ClientB).Should().NotBeNull("a deliberate cross-client decision must survive");
         LineOn(shipment, ClientB, sequence: 1, itemId: 1).Quantity.Should().Be(3);
@@ -242,13 +242,13 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_AfterInvoiceHoldingPiecesIsDeleted_ReturnsThemToTheOrderingClient()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)), OrderStop(ClientB, order: 2));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         MovePieces(shipment, itemId: 1, from: ClientA, to: ClientB, quantity: 4, targetSequence: 1);
 
         // Deleting an invoice needs no unwind logic — drop it and let reconciliation heal.
         shipment.Invoices.Remove(InvoiceFor(shipment, ClientB));
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(10, "pieces come home");
         AssertBalanced(shipment);
@@ -258,10 +258,10 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void Reconcile_AfterOwnersOnlyInvoiceIsDeleted_RecreatesIt()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 6)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
         shipment.Invoices.Clear();
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         InvoiceFor(shipment, ClientA).Lines.Single().Quantity.Should().Be(6);
         AssertBalanced(shipment);
@@ -287,7 +287,7 @@ public sealed class ShipmentInvoiceReconcilerTests
             Id = 200, PublicId = Guid.NewGuid(), Quantity = 2, Description = "Vratné basy"
         });
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         InvoiceFor(shipment, ClientA).Lines.Sum(l => l.Quantity).Should()
             .Be(5, "sourcing from stock does not add billable pieces");
@@ -305,7 +305,7 @@ public sealed class ShipmentInvoiceReconcilerTests
             Id = 300, PublicId = Guid.NewGuid(), Quantity = 12
         });
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should()
             .Be(5, "goods returning to our own stock are not billable");
@@ -324,12 +324,140 @@ public sealed class ShipmentInvoiceReconcilerTests
             Id = 400, PublicId = Guid.NewGuid(), Quantity = 3, Description = "Přiřazeno objednávkou"
         });
 
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         shipment.Invoices.SelectMany(i => i.Lines).Should()
             .ContainSingle(l => l.SourceKind == InvoiceLineSourceKind.CustomExtraItem);
         shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should().Be(8, "5 ordered + 3 custom");
         AssertBalanced(shipment);
+    }
+
+    #endregion
+
+    #region private pieces
+
+    [Fact]
+    public void Reconcile_PrivatePieces_CountAsCoveredAndAreLeftAlone()
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 4);
+
+        var result = Reconcile(split);
+
+        LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(6);
+        split.PrivateLines.Single().Quantity.Should().Be(4, "private pieces are accounted for, just not billed");
+        result.Adjustments.Should().BeEmpty("nothing drifted — the pieces are all still covered");
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_QuantityDroppedBelowTheSplit_TrimsPrivatePiecesFirst()
+    {
+        // Losing the private mark is the mildest of the three failures: it shows up on the invoice
+        // and in the drift banner, whereas silently un-billing pieces costs money nobody notices.
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 8);
+
+        OrderItemOf(shipment, 1).Quantity = 3;
+        var result = Reconcile(split);
+
+        LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(2, "the billed pieces survive untouched");
+        split.PrivateLines.Single().Quantity.Should().Be(1);
+        result.Adjustments.Should().ContainSingle(a => a.Kind == InvoiceAdjustmentKind.QuantityRemoved && a.Quantity == 7);
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_PrivatePiecesTrimmedBeforeCrossBilledOnes()
+    {
+        var shipment = Shipment(
+            OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)),
+            OrderStop(ClientB, order: 2, (itemId: 2, qty: 1)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MovePieces(shipment, itemId: 1, from: ClientA, to: ClientB, quantity: 3, targetSequence: 1);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 2);
+
+        // 5 on A's invoice, 3 cross-billed to B, 2 private. Two pieces vanish.
+        OrderItemOf(shipment, 1).Quantity = 8;
+        Reconcile(split);
+
+        split.PrivateLines.Should().BeEmpty("private goes first");
+        LineOn(shipment, ClientB, sequence: 1, itemId: 1).Quantity.Should().Be(3, "the cross-billed pieces are untouched");
+        LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(5);
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_PrivatePiecesEmptiedCompletely_DropsTheLine()
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 4);
+        var privateLine = split.PrivateLines.Single();
+
+        OrderItemOf(shipment, 1).Quantity = 6;
+        var result = Reconcile(split);
+
+        split.PrivateLines.Should().BeEmpty();
+        result.RemovedLines.Should().Contain(privateLine, "the caller has to delete it — nothing cascades it away");
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_SourceItemLeftTheShipment_DropsItsPrivateLineToo()
+    {
+        var stop = OrderStop(ClientA, order: 1, (itemId: 1, qty: 10), (itemId: 2, qty: 5));
+        var shipment = Shipment(stop);
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 2, fromClientId: ClientA, quantity: 5);
+
+        var removed = OrderItemOf(shipment, 2);
+        stop.ClientOrder!.OrderItems.Remove(removed);
+        var result = Reconcile(split);
+
+        split.PrivateLines.Should().BeEmpty("the pieces are gone, so there is nothing left to keep off an invoice");
+        result.Adjustments.Should().ContainSingle(a => a.Kind == InvoiceAdjustmentKind.SourceRemoved && a.Quantity == 5);
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_QuantityRaised_AddsToTheInvoiceNeverToThePrivatePieces()
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 10)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 4);
+
+        OrderItemOf(shipment, 1).Quantity = 14;
+        var result = Reconcile(split);
+
+        LineOn(shipment, ClientA, sequence: 1, itemId: 1).Quantity.Should().Be(10, "surplus is billed");
+        split.PrivateLines.Single().Quantity.Should().Be(4, "pieces only become private when the user says so");
+        result.Adjustments.Should().ContainSingle(a => a.Kind == InvoiceAdjustmentKind.QuantityAdded && a.Quantity == 4);
+        AssertBalanced(split);
+    }
+
+    [Fact]
+    public void Reconcile_EveryPieceOfAClientIsPrivate_KeepsTheirEmptyFirstInvoice()
+    {
+        // It is where un-marking returns the pieces to, and the UI shows it as an empty invoice.
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        Reconcile(split);
+        MarkPrivate(split, itemId: 1, fromClientId: ClientA, quantity: 5);
+
+        var result = Reconcile(split);
+
+        InvoiceFor(shipment, ClientA).Lines.Should().BeEmpty();
+        result.RemovedInvoices.Should().BeEmpty();
+        AssertBalanced(split);
     }
 
     #endregion
@@ -341,7 +469,7 @@ public sealed class ShipmentInvoiceReconcilerTests
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 0, qty: 5)));
 
-        var act = () => ShipmentInvoiceReconciler.Reconcile(shipment);
+        var act = () => Reconcile(shipment);
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*must be persisted*", "silently merging two unsaved items' splits would be far worse");
@@ -351,7 +479,7 @@ public sealed class ShipmentInvoiceReconcilerTests
     public void NextSequenceFor_CountsPerClient()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 1)), OrderStop(ClientB, order: 2, (itemId: 2, qty: 1)));
-        ShipmentInvoiceReconciler.Reconcile(shipment);
+        Reconcile(shipment);
 
         ShipmentInvoiceReconciler.NextSequenceFor(shipment, ClientA).Should().Be(2);
         ShipmentInvoiceReconciler.NextSequenceFor(shipment, ClientC).Should().Be(1, "a client with no invoice starts at 1");
@@ -361,17 +489,57 @@ public sealed class ShipmentInvoiceReconcilerTests
 
     #region helpers
 
+    /// <summary>
+    /// Reconciles a shipment that has no pieces excluded from invoicing — the vast majority of
+    /// cases. Tests that need private pieces build a split and use the overload below.
+    /// </summary>
+    private static ReconcileResult Reconcile(OutgoingShipment shipment) =>
+        ShipmentInvoiceReconciler.Reconcile(ShipmentInvoiceSplit.Of(shipment));
+
+    private static ReconcileResult Reconcile(ShipmentInvoiceSplit split) =>
+        ShipmentInvoiceReconciler.Reconcile(split);
+
     /// <summary>Total pieces billed must always equal total pieces carried.</summary>
-    private static void AssertBalanced(OutgoingShipment shipment)
+    private static void AssertBalanced(OutgoingShipment shipment) =>
+        AssertBalanced(ShipmentInvoiceSplit.Of(shipment));
+
+    /// <summary>
+    /// Total pieces billed plus pieces excluded from invoicing must equal pieces carried.
+    /// </summary>
+    private static void AssertBalanced(ShipmentInvoiceSplit split)
     {
+        var shipment = split.Shipment;
         var carried =
             shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.OrderItems).Sum(i => i.Quantity)
             + shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.CustomExtraItems).Sum(i => i.Quantity);
 
-        shipment.Invoices.SelectMany(i => i.Lines).Sum(l => l.Quantity).Should()
-            .Be(carried, "every billable piece must be covered by exactly one invoice line");
-        shipment.Invoices.SelectMany(i => i.Lines).Should().OnlyContain(l => l.Quantity > 0,
+        var lines = shipment.Invoices.SelectMany(i => i.Lines).Concat(split.PrivateLines).ToList();
+
+        lines.Sum(l => l.Quantity).Should()
+            .Be(carried, "every billable piece must be covered by exactly one line, billed or private");
+        lines.Should().OnlyContain(l => l.Quantity > 0,
             "emptied lines must be dropped, not left at zero");
+    }
+
+    /// <summary>
+    /// Mimics the move endpoint marking pieces private: they come off an invoice line and become
+    /// a line with no invoice.
+    /// </summary>
+    private static void MarkPrivate(ShipmentInvoiceSplit split, long itemId, long fromClientId, int quantity)
+    {
+        var source = LineOn(split.Shipment, fromClientId, sequence: 1, itemId: itemId);
+        source.Quantity -= quantity;
+        if (source.Quantity <= 0)
+            split.Shipment.Invoices.Single(i => i.ClientId == fromClientId && i.Sequence == 1).Lines.Remove(source);
+
+        split.PrivateLines.Add(new OutgoingShipmentInvoiceLine
+        {
+            PublicId = Guid.NewGuid(),
+            IsPrivate = true,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            OrderItemId = itemId,
+            Quantity = quantity
+        });
     }
 
     private static OutgoingShipment Shipment(params OutgoingShipmentStop[] stops)

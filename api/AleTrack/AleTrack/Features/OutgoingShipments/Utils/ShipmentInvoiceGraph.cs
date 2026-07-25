@@ -16,10 +16,12 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 public static class ShipmentInvoiceGraph
 {
     /// <summary>
-    /// Loads a shipment with everything reconciliation and invoice mapping need, tracked.
+    /// Loads a shipment with everything reconciliation and invoice mapping need, tracked, plus
+    /// the pieces excluded from invoicing. Null when the shipment does not exist.
     /// </summary>
-    public static Task<OutgoingShipment?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct) =>
-        dbContext.OutgoingShipments
+    public static async Task<ShipmentInvoiceSplit?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct)
+    {
+        var shipment = await dbContext.OutgoingShipments
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.Client)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.InventoryItem)
@@ -27,6 +29,18 @@ public static class ShipmentInvoiceGraph
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client)
             .FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
+
+        if (shipment is null)
+            return null;
+
+        // Loaded by their own query rather than through a navigation — see
+        // OutgoingShipmentInvoiceLineConfiguration for why there is none.
+        var privateLines = await dbContext.OutgoingShipmentInvoiceLines
+            .Where(l => l.OutgoingShipmentId == shipment.Id && l.IsPrivate)
+            .ToListAsync(ct);
+
+        return new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = privateLines };
+    }
 
     /// <summary>
     /// Order items of the shipment's order stops, keyed by internal ID.

@@ -10,6 +10,7 @@ using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
+using Microsoft.EntityFrameworkCore;
 using FluentAssertions;
 using Moq;
 
@@ -85,7 +86,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     {
         var scenario = Scenario.Build();
         // materialise the split, then change the order underneath it
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         scenario.OrderItemA.Quantity = 6;
 
         var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
@@ -120,7 +121,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_PartialQuantityToAnotherClient_BecomesACrossBilledLine()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var from = scenario.InvoiceOf(Scenario.ClientAId);
         var to = scenario.InvoiceOf(Scenario.ClientBId);
 
@@ -141,7 +142,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_WholeLine_RemovesItFromTheOrigin()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var from = scenario.InvoiceOf(Scenario.ClientAId);
         var to = scenario.InvoiceOf(Scenario.ClientBId);
 
@@ -162,7 +163,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_MoreThanTheSourceHolds_IsRejected()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
 
         var act = () => Move(scenario, new MoveInvoiceLineDto
         {
@@ -182,7 +183,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_CapIsPerSourceNotPerProduct()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var a = scenario.InvoiceOf(Scenario.ClientAId);
         var b = scenario.InvoiceOf(Scenario.ClientBId);
 
@@ -210,7 +211,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_ToNewInvoiceForClient_OpensItWithTheNextSequence()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
 
         await Move(scenario, new MoveInvoiceLineDto
         {
@@ -231,7 +232,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_MergesIntoAnExistingLineForTheSameSource()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var a = scenario.InvoiceOf(Scenario.ClientAId);
         var b = scenario.InvoiceOf(Scenario.ClientBId);
 
@@ -255,7 +256,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         // part of the order item that they fulfil. Billing them to someone else is done
         // by splitting that line, which is what this used to prove for a separate kind.
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
 
         await Move(scenario, new MoveInvoiceLineDto
         {
@@ -274,7 +275,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_DeliveredShipment_IsRejected()
     {
         var scenario = Scenario.Build(state: OutgoingShipmentState.Delivered);
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
 
         var act = () => Move(scenario, new MoveInvoiceLineDto
         {
@@ -292,7 +293,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_TargetInvoiceFromAnotherShipment_IsNotFound()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
 
         var act = () => Move(scenario, new MoveInvoiceLineDto
         {
@@ -310,7 +311,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task MoveInvoiceLine_SameSourceAndTarget_IsRejected()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var a = scenario.InvoiceOf(Scenario.ClientAId);
 
         var act = () => Move(scenario, new MoveInvoiceLineDto
@@ -344,11 +345,222 @@ public sealed class ShipmentInvoiceEndpointsTests
         var validator = new MoveInvoiceLineDtoValidator();
         var baseDto = new MoveInvoiceLineDto { FromInvoiceId = Guid.NewGuid(), SourceItemId = Guid.NewGuid(), Quantity = 1 };
 
-        validator.Validate(baseDto).IsValid.Should().BeFalse("neither target given");
+        validator.Validate(baseDto).IsValid.Should().BeFalse("no target given");
         validator.Validate(baseDto with { ToInvoiceId = Guid.NewGuid(), ToClientId = Guid.NewGuid() })
-            .IsValid.Should().BeFalse("both targets given");
+            .IsValid.Should().BeFalse("two targets given");
+        validator.Validate(baseDto with { ToInvoiceId = Guid.NewGuid(), ToPrivate = true })
+            .IsValid.Should().BeFalse("an invoice and no invoice at once");
         validator.Validate(baseDto with { ToInvoiceId = Guid.NewGuid() }).IsValid.Should().BeTrue();
         validator.Validate(baseDto with { ToClientId = Guid.NewGuid() }).IsValid.Should().BeTrue();
+        validator.Validate(baseDto with { ToPrivate = true }).IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MoveInvoiceLineValidator_AcceptsNoOriginInvoice_MeaningTheseArePrivatePieces()
+    {
+        var validator = new MoveInvoiceLineDtoValidator();
+
+        var result = validator.Validate(new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null, SourceItemId = Guid.NewGuid(), Quantity = 2, ToInvoiceId = Guid.NewGuid()
+        });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MoveInvoiceLineValidator_RejectsAnExplicitlyEmptyOriginInvoice()
+    {
+        var validator = new MoveInvoiceLineDtoValidator();
+
+        var result = validator.Validate(new MoveInvoiceLineDto
+        {
+            FromInvoiceId = Guid.Empty, SourceItemId = Guid.NewGuid(), Quantity = 2, ToInvoiceId = Guid.NewGuid()
+        });
+
+        result.IsValid.Should().BeFalse("null is how a caller says 'private', an empty Guid is a mistake");
+    }
+
+    #endregion
+
+    #region private pieces
+
+    [Fact]
+    public async Task MoveInvoiceLine_ToPrivate_TakesThePiecesOffTheInvoice()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        var from = scenario.InvoiceOf(Scenario.ClientAId);
+
+        var lines = await MoveTracked(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = from.PublicId,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 4,
+            ToPrivate = true
+        });
+
+        from.Lines.Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should()
+            .Be(6, "the rest stays billed");
+        lines.Verify(s => s.Add(It.Is<OutgoingShipmentInvoiceLine>(l =>
+                l.IsPrivate && l.InvoiceId == null && l.Quantity == 4 && l.OrderItemId == scenario.OrderItemA.Id)),
+            Times.Once, "the excluded pieces are stored as a line with no invoice");
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_WholeLineToPrivate_LeavesTheClientAnEmptyInvoice()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        var from = scenario.InvoiceOf(Scenario.ClientAId);
+
+        await Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = from.PublicId,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 10,
+            ToPrivate = true
+        });
+
+        from.Lines.Should().BeEmpty("it is where un-marking would return the pieces to");
+        scenario.Shipment.Invoices.Should().Contain(from);
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_OutOfPrivate_BillsThePiecesAgain()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+        var invoice = scenario.InvoiceOf(Scenario.ClientAId);
+
+        await Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 3,
+            ToInvoiceId = invoice.PublicId
+        });
+
+        invoice.Lines.Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should().Be(9);
+        scenario.PrivateLines.Single().Quantity.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_OutOfPrivateToAnotherClient_IsAllowed()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        var privateLine = scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+        var other = scenario.InvoiceOf(Scenario.ClientBId);
+
+        var lines = await MoveTracked(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 4,
+            ToInvoiceId = other.PublicId
+        });
+
+        other.Lines.Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should()
+            .Be(4, "the pieces become cross-billed, which the UI marks as such");
+        privateLine.Quantity.Should().Be(0);
+        lines.Verify(s => s.Remove(privateLine), Times.Once, "an emptied private line is deleted, not left at zero");
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_MoreThanIsPrivate_IsRejected()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+
+        var act = () => Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 5,
+            ToInvoiceId = scenario.InvoiceOf(Scenario.ClientAId).PublicId
+        });
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+        scenario.PrivateLines.Single().Quantity.Should().Be(4, "a rejected move must not touch the split");
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_ItemWithNoPrivatePieces_IsRejected()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+
+        var act = () => Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 1,
+            ToInvoiceId = scenario.InvoiceOf(Scenario.ClientAId).PublicId
+        });
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_PrivateToPrivate_IsRejected()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+
+        var act = () => Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = null,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 2,
+            ToPrivate = true
+        });
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+    }
+
+    [Fact]
+    public async Task GetInvoices_PrivatePieces_AreReportedSeparatelyFromTheInvoices()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+
+        var result = await GetInvoices(scenario);
+
+        result.Invoices.Single(i => i.ClientId == scenario.ClientA.PublicId).Lines.Sum(l => l.Quantity).Should()
+            .Be(6, "private pieces are not billed");
+        var privateLine = result.PrivateLines.Should().ContainSingle().Subject;
+        privateLine.Quantity.Should().Be(4);
+        privateLine.Name.Should().Be("Albrecht 12°");
+        privateLine.OrderingClientId.Should().Be(scenario.ClientA.PublicId,
+            "the UI files them under the client who ordered them");
+        result.Adjustments.Should().BeEmpty("keeping pieces off an invoice is not drift");
+    }
+
+    [Fact]
+    public async Task GetInvoices_PrivatePiecesOfARemovedItem_AreDroppedAndReported()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.MarkPrivate(scenario.OrderItemA, quantity: 4);
+
+        var order = scenario.Shipment.Stops.Single(s => s.ClientOrder?.ClientId == Scenario.ClientAId).ClientOrder!;
+        order.OrderItems.Remove(scenario.OrderItemA);
+        var result = await GetInvoices(scenario);
+
+        result.PrivateLines.Should().BeEmpty();
+        result.Adjustments.Should().Contain(a => a.Kind == InvoiceAdjustmentKind.SourceRemoved && a.Quantity == 4);
     }
 
     #endregion
@@ -359,7 +571,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task AddInvoice_ForAClientOnTheShipment_OpensAnEmptyOne()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var dbContext = scenario.Mock();
 
         var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>.Create(dbContext.Object);
@@ -393,7 +605,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task DeleteInvoice_HoldingPieces_ReturnsThemToTheOrderingClient()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         // give A a second invoice holding 4 pieces
         await Move(scenario, new MoveInvoiceLineDto
         {
@@ -422,7 +634,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task DeleteInvoice_FirstInvoiceOfAClient_IsRejected()
     {
         var scenario = Scenario.Build();
-        ShipmentInvoiceReconciler.Reconcile(scenario.Shipment);
+        scenario.Materialise();
         var first = scenario.InvoiceOf(Scenario.ClientAId);
 
         var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(scenario.Mock().Object);
@@ -453,10 +665,28 @@ public sealed class ShipmentInvoiceEndpointsTests
 
     #region helpers
 
-    private static async Task Move(Scenario scenario, MoveInvoiceLineDto data)
+    private static async Task Move(Scenario scenario, MoveInvoiceLineDto data) =>
+        await MoveTracked(scenario, data);
+
+    /// <summary>
+    /// Moves pieces and hands back the mocked context, so a test can check what the endpoint asked
+    /// to be persisted. Private lines hang off no navigation, so adding and deleting them is an
+    /// explicit call on the set rather than something visible in the entity graph.
+    /// </summary>
+    private static async Task<Mock<DbSet<OutgoingShipmentInvoiceLine>>> MoveTracked(Scenario scenario, MoveInvoiceLineDto data)
     {
-        var endpoint = EndpointBuilder<MoveInvoiceLineRequest, MoveInvoiceLineEndpoint>.Create(scenario.Mock().Object);
+        var dbContext = scenario.Mock();
+        var endpoint = EndpointBuilder<MoveInvoiceLineRequest, MoveInvoiceLineEndpoint>.Create(dbContext.Object);
         await endpoint.HandleAsync(new MoveInvoiceLineRequest { Id = scenario.ShipmentId, Data = data }, CancellationToken.None);
+        return Mock.Get(dbContext.Object.OutgoingShipmentInvoiceLines);
+    }
+
+    private static async Task<ShipmentInvoicesDto> GetInvoices(Scenario scenario)
+    {
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>
+            .Create(scenario.Mock().Object);
+        await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+        return endpoint.Response;
     }
 
     /// <summary>
@@ -474,14 +704,62 @@ public sealed class ShipmentInvoiceEndpointsTests
         internal required OrderItem OrderItemA { get; init; }
         internal Guid ShipmentId => Shipment.PublicId;
 
+        /// <summary>
+        /// Lines the shipment carries that belong to no invoice — the private ones. Kept here
+        /// rather than on the shipment because the entity has no navigation for them.
+        /// </summary>
+        internal List<OutgoingShipmentInvoiceLine> PrivateLines { get; } = [];
+
         internal OutgoingShipmentInvoice InvoiceOf(long clientId) =>
             Shipment.Invoices.Single(i => i.ClientId == clientId && i.Sequence == 1);
 
-        internal Mock<AleTrackDbContext> Mock() =>
-            AleTrackDbContextMockFactory.CreateMock(
+        /// <summary>
+        /// Materialises the default split, the way a first read of the shipment would.
+        /// </summary>
+        internal ReconcileResult Materialise() => ShipmentInvoiceReconciler.Reconcile(Split());
+
+        internal ShipmentInvoiceSplit Split() =>
+            new() { Shipment = Shipment, PrivateLines = PrivateLines };
+
+        /// <summary>
+        /// Marks pieces of an item private without going through the endpoint, so tests can start
+        /// from a shipment that already has some.
+        /// </summary>
+        internal OutgoingShipmentInvoiceLine MarkPrivate(OrderItem item, int quantity)
+        {
+            var invoice = Shipment.Invoices.Single(i =>
+                i.Lines.Any(l => l.OrderItemId == item.Id));
+            var line = invoice.Lines.Single(l => l.OrderItemId == item.Id);
+            line.Quantity -= quantity;
+
+            var privateLine = new OutgoingShipmentInvoiceLine
+            {
+                PublicId = Guid.NewGuid(),
+                OutgoingShipmentId = Shipment.Id,
+                IsPrivate = true,
+                SourceKind = InvoiceLineSourceKind.OrderItem,
+                OrderItemId = item.Id,
+                Quantity = quantity
+            };
+            PrivateLines.Add(privateLine);
+            return privateLine;
+        }
+
+        /// <summary>
+        /// The invoice-line rows the last <see cref="Mock"/> was built over. Lines the endpoint
+        /// adds land here, which is how a newly created private line becomes observable.
+        /// </summary>
+        internal List<OutgoingShipmentInvoiceLine> Rows { get; private set; } = [];
+
+        internal Mock<AleTrackDbContext> Mock()
+        {
+            Rows = Shipment.Invoices.SelectMany(i => i.Lines).Concat(PrivateLines).ToList();
+
+            return AleTrackDbContextMockFactory.CreateMock(
                 outgoingShipments: [Shipment],
                 outgoingShipmentInvoices: Shipment.Invoices.ToList(),
-                outgoingShipmentInvoiceLines: Shipment.Invoices.SelectMany(i => i.Lines).ToList());
+                outgoingShipmentInvoiceLines: Rows);
+        }
 
         internal static Scenario Build(OutgoingShipmentState state = OutgoingShipmentState.Created)
         {
