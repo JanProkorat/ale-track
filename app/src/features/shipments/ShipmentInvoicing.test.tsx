@@ -1,0 +1,440 @@
+// Rendering behaviour of the Fakturace section. The shaping logic is covered by
+// shipmentInvoiceModel.test.ts; this file covers what only the component decides:
+// when the per-invoice sub-header appears, the drift banner, the read-only state,
+// and the move dialog's per-origin quantity cap.
+
+// fireEvent rather than user-event: the latter is not a dependency of this project
+// and adding one for a test file is not worth it. MUI's Select opens on mouseDown.
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { ThemeProvider as MuiThemeProvider } from '@mui/material';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  InvoiceAdjustmentKind,
+  InvoiceLineSourceKind,
+  ProductKind,
+  ShipmentInvoiceDto,
+  ShipmentInvoiceLineDto,
+  ShipmentInvoicesDto,
+} from 'src/generated/api-client';
+import { theme } from 'src/theme/theme';
+
+const moveMutate = vi.fn();
+const addMutate = vi.fn();
+const deleteMutate = vi.fn();
+let invoicesResponse: ShipmentInvoicesDto;
+
+vi.mock('src/hooks/useShipmentInvoices', () => ({
+  useShipmentInvoices: () => ({ data: invoicesResponse, isLoading: false }),
+  useMoveInvoiceLine: () => ({ mutate: moveMutate, isPending: false }),
+  useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
+  useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
+}));
+
+vi.mock('src/providers/CurrencyProvider', () => ({
+  useCurrency: () => ({ formatMoney: (czk: number | null | undefined) => (czk == null ? '—' : `${czk} Kč`) }),
+}));
+
+vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
+
+const { ShipmentInvoicing } = await import('./ShipmentInvoicing');
+
+const CLIENT_A = 'client-a';
+const CLIENT_B = 'client-b';
+const ALE = 'prod-ale';
+
+function line(over: Partial<ShipmentInvoiceLineDto> = {}): ShipmentInvoiceLineDto {
+  return new ShipmentInvoiceLineDto({
+    id: `line-${Math.random().toString(36).slice(2, 8)}`,
+    sourceKind: InvoiceLineSourceKind.OrderItem,
+    sourceItemId: `item-${Math.random().toString(36).slice(2, 8)}`,
+    productId: ALE,
+    name: 'Albrecht 12°',
+    kind: ProductKind.Keg,
+    packageSize: 30,
+    priceWithVat: 100,
+    quantity: 1,
+    orderingClientId: CLIENT_A,
+    orderingClientName: 'Klient A',
+    isFromStock: false,
+    ...over,
+  });
+}
+
+function invoice(over: Partial<ShipmentInvoiceDto> = {}): ShipmentInvoiceDto {
+  return new ShipmentInvoiceDto({
+    id: `inv-${Math.random().toString(36).slice(2, 8)}`,
+    clientId: CLIENT_A,
+    clientName: 'Klient A',
+    sequence: 1,
+    stopOrder: 1,
+    lines: [],
+    ...over,
+  });
+}
+
+function renderSection(editable = true) {
+  return render(
+    <MuiThemeProvider theme={theme}>
+      <ShipmentInvoicing shipmentId="ship-1" editable={editable} />
+    </MuiThemeProvider>,
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  invoicesResponse = new ShipmentInvoicesDto({
+    isEditable: true,
+    adjustments: [],
+    invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+  });
+});
+
+describe('client bands', () => {
+  it('shows one band per client with its rollup', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, lines: [line({ quantity: 10, priceWithVat: 100 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ quantity: 4, priceWithVat: 100, orderingClientId: CLIENT_B, orderingClientName: 'Klient B' })] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+    expect(screen.getByText('Klient B')).toBeInTheDocument();
+    expect(screen.getByText('1 faktura · 10 ks · 1000 Kč')).toBeInTheDocument();
+    expect(screen.getByText('2 faktury · 2 klienti')).toBeInTheDocument();
+  });
+
+  it('omits the per-invoice sub-header when the client has only one invoice', () => {
+    renderSection();
+
+    expect(screen.queryByText('Faktura 1')).not.toBeInTheDocument();
+  });
+
+  it('labels each invoice once the client has two', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ sequence: 1, lines: [line({ quantity: 6 })] }),
+        invoice({ sequence: 2, lines: [line({ quantity: 4 })] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('Faktura 1')).toBeInTheDocument();
+    expect(screen.getByText('Faktura 2')).toBeInTheDocument();
+  });
+
+  it('shows an empty-state row for an invoice with no lines', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ sequence: 1, lines: [line({ quantity: 6 })] }), invoice({ sequence: 2, lines: [] })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/Zatím bez položek/)).toBeInTheDocument();
+  });
+
+  it('collapses a band and leaves its siblings open', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, lines: [line({ name: 'Albrecht 12°', quantity: 3 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ name: 'Lager 50', quantity: 5, orderingClientId: CLIENT_B })] }),
+      ],
+    });
+    renderSection();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+    expect(screen.getByText('Lager 50')).toBeInTheDocument();
+  });
+
+  it('offers collapse-all only when there is more than one client', () => {
+    renderSection();
+    expect(screen.queryByRole('button', { name: /Sbalit vše/ })).not.toBeInTheDocument();
+
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientId: CLIENT_A, stopOrder: 1, lines: [line({ quantity: 1 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ quantity: 1, orderingClientId: CLIENT_B })] }),
+      ],
+    });
+    const { unmount } = renderSection();
+
+    const collapseAll = screen.getByRole('button', { name: /Sbalit vše/ });
+    fireEvent.click(collapseAll);
+    expect(screen.getByRole('button', { name: /Rozbalit vše/ })).toBeInTheDocument();
+    unmount();
+  });
+});
+
+describe('provenance chips', () => {
+  it('marks a fully stock-sourced row', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 4, isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem })] })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('ze skladu')).toBeInTheDocument();
+  });
+
+  it('states how many pieces came from stock when the row mixes sources', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({
+        lines: [
+          line({ quantity: 10, sourceItemId: 'ordered' }),
+          line({ quantity: 4, sourceItemId: 'stock', isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem }),
+        ],
+      })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('4 ks ze skladu')).toBeInTheDocument();
+    expect(screen.getByText('14 ks')).toBeInTheDocument();
+  });
+
+  it('marks a cross-billed portion with its ordering client and count', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({
+        clientId: CLIENT_A,
+        lines: [
+          line({ quantity: 5, sourceItemId: 'own' }),
+          line({ quantity: 2, sourceItemId: 'foreign', orderingClientId: CLIENT_B, orderingClientName: 'Klient B' }),
+        ],
+      })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('2 ks z obj. Klient B')).toBeInTheDocument();
+    expect(screen.getByText('1 položka fakturována jinému klientovi')).toBeInTheDocument();
+    expect(screen.getByText('1× přefakturováno')).toBeInTheDocument();
+  });
+
+  it('omits the piece count on an unmerged cross-billed row', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({ clientId: CLIENT_A, lines: [line({ quantity: 3, orderingClientId: CLIENT_B, orderingClientName: 'Klient B' })] })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('z obj. Klient B')).toBeInTheDocument();
+  });
+});
+
+describe('drift banner', () => {
+  it('reports what reconciliation changed and can be dismissed', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      invoices: [invoice({ lines: [line({ quantity: 6 })] })],
+      adjustments: [
+        { kind: InvoiceAdjustmentKind.QuantityRemoved, sourceKind: InvoiceLineSourceKind.OrderItem, itemName: 'Albrecht 12°', quantity: 4 } as never,
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/rozdělení na faktury bylo upraveno/)).toBeInTheDocument();
+    expect(screen.getByText('Albrecht 12° — odebráno 4 ks (nejdřív z přefakturovaných)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skrýt hlášení' }));
+
+    expect(screen.queryByText(/rozdělení na faktury bylo upraveno/)).not.toBeInTheDocument();
+  });
+
+  it('stays hidden when nothing drifted', () => {
+    renderSection();
+
+    expect(screen.queryByText(/rozdělení na faktury bylo upraveno/)).not.toBeInTheDocument();
+  });
+
+  it('words an added quantity and a removed source distinctly', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      invoices: [invoice({ lines: [line({ quantity: 6 })] })],
+      adjustments: [
+        { kind: InvoiceAdjustmentKind.QuantityAdded, sourceKind: InvoiceLineSourceKind.OrderItem, itemName: 'Lager', quantity: 3 } as never,
+        { kind: InvoiceAdjustmentKind.SourceRemoved, sourceKind: InvoiceLineSourceKind.OrderItem, itemName: 'Stout', quantity: 2 } as never,
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('Lager — přidáno 3 ks na 1. fakturu objednavatele')).toBeInTheDocument();
+    expect(screen.getByText('Stout — odebrána z nakládky, řádky faktur zrušeny (2 ks)')).toBeInTheDocument();
+  });
+});
+
+describe('read-only state', () => {
+  it('hides every action when the shipment is no longer editable', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: false, adjustments: [],
+      invoices: [invoice({ sequence: 1, lines: [line({ quantity: 6 })] }), invoice({ sequence: 2, lines: [line({ quantity: 2 })] })],
+    });
+
+    renderSection();
+
+    expect(screen.queryByRole('button', { name: /Faktura$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Přesunout kusy na jinou fakturu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Smazat fakturu' })).not.toBeInTheDocument();
+  });
+
+  it('hides actions when the caller says the shipment is read-only even if the server allows it', () => {
+    renderSection(false);
+
+    expect(screen.queryByRole('button', { name: 'Přesunout kusy na jinou fakturu' })).not.toBeInTheDocument();
+  });
+
+  it('never offers to delete a client first invoice', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({ sequence: 1, lines: [line({ quantity: 6 })] }), invoice({ sequence: 2, lines: [line({ quantity: 2 })] })],
+    });
+
+    renderSection();
+
+    // Only the second invoice may be deleted.
+    expect(screen.getAllByRole('button', { name: 'Smazat fakturu' })).toHaveLength(1);
+  });
+});
+
+describe('move dialog', () => {
+  beforeEach(() => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          id: 'inv-a', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 1,
+          lines: [
+            line({ id: 'l-own', sourceItemId: 'own', quantity: 5 }),
+            line({ id: 'l-foreign', sourceItemId: 'foreign', quantity: 3, orderingClientId: CLIENT_B, orderingClientName: 'Klient B' }),
+          ],
+        }),
+        invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, sequence: 1, lines: [] }),
+      ],
+    });
+  });
+
+  it('caps the quantity against the chosen source, not the merged row total', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    // The row totals 8 pieces from two sources...
+    expect(within(dialog).getByText('8 ks')).toBeInTheDocument();
+    // ...but the preselected (biggest) source only contributes 5.
+    expect(within(dialog).getByText(/nejvýš 5 ks/)).toBeInTheDocument();
+  });
+
+  it('follows the cap when a different origin is picked', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Původ kusů' }));
+    fireEvent.click(screen.getByRole('option', { name: 'z obj. Klient B — 3 ks' }));
+
+    expect(within(dialog).getByText(/nejvýš 3 ks/)).toBeInTheDocument();
+  });
+
+  it('submits the chosen source, quantity and target', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    const qty = within(dialog).getByRole('spinbutton', { name: 'Počet kusů k přesunu' });
+    fireEvent.change(qty, { target: { value: '2' } });
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Faktura 1 — 0 ks' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate).toHaveBeenCalledTimes(1);
+    expect(moveMutate.mock.calls[0][0]).toEqual({
+      fromInvoiceId: 'inv-a',
+      sourceKind: InvoiceLineSourceKind.OrderItem,
+      sourceItemId: 'own',
+      quantity: 2,
+      toInvoiceId: 'inv-b',
+      toClientId: undefined,
+    });
+  });
+
+  it('refuses a quantity above the chosen source', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    const qty = within(dialog).getByRole('spinbutton', { name: 'Počet kusů k přesunu' });
+    fireEvent.change(qty, { target: { value: '99' } });
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Faktura 1 — 0 ks' }));
+
+    expect(within(dialog).getByRole('button', { name: 'Přesunout' })).toBeDisabled();
+    expect(moveMutate).not.toHaveBeenCalled();
+  });
+
+  it('cannot submit without a target', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Přesunout' })).toBeDisabled();
+  });
+
+  it('offers every other invoice plus a new one per client, ordered by route', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    fireEvent.mouseDown(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Cílová faktura' }));
+
+    const options = within(screen.getByRole('listbox')).getAllByRole('option');
+    // Group headings are rendered as disabled options; the selectable ones are the targets.
+    expect(options.filter((o) => !o.hasAttribute('aria-disabled')).map((o) => o.textContent)).toEqual([
+      '+ nová faktura 2',           // a second invoice for Klient A (the orderer)
+      'Faktura 1 — 0 ks',           // Klient B's existing invoice
+      '+ nová faktura 2',           // or a fresh one for Klient B
+    ]);
+    // The invoice being moved from is never a target.
+    expect(screen.queryByRole('option', { name: /inv-a/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('add and delete', () => {
+  it('adds an invoice for the band client', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: /Faktura$/ }));
+
+    expect(addMutate).toHaveBeenCalledWith(CLIENT_A, expect.anything());
+  });
+
+  it('warns that a populated invoice returns its pieces before deleting', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [],
+      invoices: [invoice({ sequence: 1, lines: [line({ quantity: 6 })] }), invoice({ id: 'inv-2', sequence: 2, lines: [line({ quantity: 2 })] })],
+    });
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Smazat fakturu' }));
+
+    expect(screen.getByText(/Faktura obsahuje 2 ks/)).toBeInTheDocument();
+  });
+});

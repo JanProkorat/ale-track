@@ -38,13 +38,17 @@ import {
   InvoiceAdjustmentKind,
   type InvoiceLineSourceKind,
   type ShipmentInvoiceDto,
-  type ShipmentInvoiceLineDto,
   type ShipmentInvoicesDto,
 } from 'src/generated/api-client';
 import {
   useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
+import {
+  groupLines, groupValue, invoiceQuantity, invoiceValue, moveTargetOptions,
+  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  type LineGroup,
+} from './shipmentInvoiceModel';
 import { kindLabel } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
@@ -53,104 +57,6 @@ const HEAD_SX = {
   fontSize: 11, fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase' as const,
   letterSpacing: '0.05em', whiteSpace: 'nowrap' as const,
 };
-
-/** One product on one invoice, with the exact per-source breakdown behind it. */
-interface LineGroup {
-  productKey: string;
-  name: string;
-  kind?: ShipmentInvoiceLineDto['kind'];
-  packageSize?: number;
-  priceWithVat?: number;
-  quantity: number;
-  /** Underlying lines, one per source item. A move operates on one of these. */
-  parts: ShipmentInvoiceLineDto[];
-}
-
-/** A client and all their invoices on this shipment. */
-interface ClientBand {
-  clientId: string;
-  clientName: string;
-  stopOrder?: number;
-  invoices: ShipmentInvoiceDto[];
-  quantity: number;
-  value: number;
-  crossBilled: number;
-}
-
-/** Collapse an invoice's lines to one row per product. The same product can arrive
- *  from several sources (own order, another client's order, our stock); those become
- *  chips on a single row rather than duplicate rows. `parts` keeps the breakdown,
- *  which is what a move actually operates on. */
-function groupLines(invoice: ShipmentInvoiceDto): LineGroup[] {
-  const map = new Map<string, LineGroup>();
-  const order: string[] = [];
-  for (const line of invoice.lines ?? []) {
-    // Custom extras have no product, so fall back to their name.
-    const key = line.productId ?? `name:${line.name}`;
-    let group = map.get(key);
-    if (!group) {
-      group = {
-        productKey: key, name: line.name ?? '—', kind: line.kind,
-        packageSize: line.packageSize, priceWithVat: line.priceWithVat,
-        quantity: 0, parts: [],
-      };
-      map.set(key, group);
-      order.push(key);
-    }
-    group.quantity += line.quantity ?? 0;
-    group.parts.push(line);
-  }
-  return order.map((k) => map.get(k)!);
-}
-
-function lineValue(group: LineGroup): number {
-  return (group.priceWithVat ?? 0) * group.quantity;
-}
-
-function invoiceQuantity(invoice: ShipmentInvoiceDto): number {
-  return (invoice.lines ?? []).reduce((s, l) => s + (l.quantity ?? 0), 0);
-}
-
-function invoiceValue(invoice: ShipmentInvoiceDto): number {
-  return (invoice.lines ?? []).reduce((s, l) => s + (l.priceWithVat ?? 0) * (l.quantity ?? 0), 0);
-}
-
-function isCrossBilled(invoice: ShipmentInvoiceDto, line: ShipmentInvoiceLineDto): boolean {
-  return Boolean(line.orderingClientId) && line.orderingClientId !== invoice.clientId;
-}
-
-/** Group invoices into client bands, in route order. Clients with no stop (they only
- *  hold cross-billed lines) sort last. */
-function toBands(data: ShipmentInvoicesDto): ClientBand[] {
-  const map = new Map<string, ClientBand>();
-  for (const invoice of data.invoices ?? []) {
-    const id = invoice.clientId ?? '';
-    let band = map.get(id);
-    if (!band) {
-      band = {
-        clientId: id, clientName: invoice.clientName ?? '—', stopOrder: invoice.stopOrder,
-        invoices: [], quantity: 0, value: 0, crossBilled: 0,
-      };
-      map.set(id, band);
-    }
-    band.invoices.push(invoice);
-    band.quantity += invoiceQuantity(invoice);
-    band.value += invoiceValue(invoice);
-    band.crossBilled += (invoice.lines ?? []).filter((l) => isCrossBilled(invoice, l)).length;
-  }
-  const bands = [...map.values()];
-  for (const band of bands) band.invoices.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-  return bands.sort(
-    (a, b) => (a.stopOrder ?? Number.MAX_SAFE_INTEGER) - (b.stopOrder ?? Number.MAX_SAFE_INTEGER),
-  );
-}
-
-/** Where one part's pieces came from, in the wording the move dialog uses. */
-function partOrigin(invoice: ShipmentInvoiceDto, line: ShipmentInvoiceLineDto): string {
-  if (line.isFromStock) return 'ze skladu';
-  if (isCrossBilled(invoice, line)) return `z obj. ${line.orderingClientName ?? '—'}`;
-  return 'z vlastní objednávky';
-}
 
 function Pill({ tint, color, icon, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
@@ -251,14 +157,7 @@ function GroupRow({ invoice, group, editable, onMove }: {
   const merged = group.parts.length > 1;
   const chipText = `${kindLabel(group.kind) ?? ''}${group.packageSize != null ? ` · ${fmtLiters(group.packageSize)}` : ''}`.replace(/^ · /, '');
 
-  const stockQty = group.parts.filter((p) => p.isFromStock).reduce((s, p) => s + (p.quantity ?? 0), 0);
-  // Cross-billed pieces, grouped by whoever ordered them.
-  const foreign = new Map<string, number>();
-  for (const part of group.parts) {
-    if (part.isFromStock || !isCrossBilled(invoice, part)) continue;
-    const key = part.orderingClientName ?? '—';
-    foreign.set(key, (foreign.get(key) ?? 0) + (part.quantity ?? 0));
-  }
+  const { stockQuantity, foreign } = originChips(invoice, group);
 
   return (
     <TableRow hover>
@@ -266,11 +165,11 @@ function GroupRow({ invoice, group, editable, onMove }: {
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{group.name}</Typography>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
-          {stockQty > 0 && (
-            <OriginChip kind="stock" label={stockQty === group.quantity ? 'ze skladu' : `${stockQty} ks ze skladu`} />
+          {stockQuantity > 0 && (
+            <OriginChip kind="stock" label={stockQuantity === group.quantity ? 'ze skladu' : `${stockQuantity} ks ze skladu`} />
           )}
-          {[...foreign].map(([name, qty]) => (
-            <OriginChip key={name} kind="cross" label={`${merged ? `${qty} ks ` : ''}z obj. ${name}`} />
+          {foreign.map(({ clientName, quantity }) => (
+            <OriginChip key={clientName} kind="cross" label={`${merged ? `${quantity} ks ` : ''}z obj. ${clientName}`} />
           ))}
         </Stack>
       </TableCell>
@@ -278,7 +177,7 @@ function GroupRow({ invoice, group, editable, onMove }: {
         <Typography component="span" sx={{ fontWeight: 700, fontSize: 13 }}>{group.quantity} ks</Typography>
       </TableCell>
       <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
-        {group.priceWithVat != null ? formatMoney(lineValue(group)) : '—'}
+        {group.priceWithVat != null ? formatMoney(groupValue(group)) : '—'}
       </TableCell>
       <TableCell align="right" sx={{ width: 44 }}>
         {editable && (
@@ -313,13 +212,7 @@ export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string
   // The section is read-only whenever the shipment is, and the server has the final say.
   const canEdit = editable && (data?.isEditable ?? false);
 
-  const totals = useMemo(() => ({
-    invoices: data?.invoices?.length ?? 0,
-    clients: bands.length,
-    quantity: bands.reduce((s, b) => s + b.quantity, 0),
-    value: bands.reduce((s, b) => s + b.value, 0),
-    crossBilled: bands.reduce((s, b) => s + b.crossBilled, 0),
-  }), [bands, data]);
+  const totals = useMemo(() => sectionTotals(data!, bands), [bands, data]);
 
   if (isLoading) {
     return (
@@ -580,10 +473,7 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
 }) {
   const { invoice, group } = target;
   // Biggest part first, so the default pick is the most likely one.
-  const parts = useMemo(
-    () => [...group.parts].sort((a, b) => (b.quantity ?? 0) - (a.quantity ?? 0)),
-    [group.parts],
-  );
+  const parts = useMemo(() => partsByLikelihood(group), [group]);
   const [partId, setPartId] = useState(parts[0]?.id ?? '');
   const selected = parts.find((p) => p.id === partId) ?? parts[0];
   const max = selected?.quantity ?? 0;
@@ -591,32 +481,7 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
   const [targetValue, setTargetValue] = useState('');
 
   // Targets grouped per client: their existing invoices, plus a new one.
-  const options = useMemo(() => {
-    const byClient = new Map<string, ShipmentInvoiceDto[]>();
-    for (const inv of data.invoices ?? []) {
-      const list = byClient.get(inv.clientId ?? '') ?? [];
-      list.push(inv);
-      byClient.set(inv.clientId ?? '', list);
-    }
-    const out: { value: string; label: string; group: string }[] = [];
-    for (const [clientId, invoices] of byClient) {
-      const sorted = [...invoices].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-      const clientName = sorted[0]?.clientName ?? '—';
-      const isOrderer = group.parts.some((p) => p.orderingClientId === clientId);
-      const groupLabel = `${clientName}${isOrderer ? ' — objednavatel' : ''}`;
-      for (const inv of sorted) {
-        if (inv.id === invoice.id) continue;
-        out.push({
-          value: `inv:${inv.id}`,
-          label: `Faktura ${inv.sequence} — ${invoiceQuantity(inv)} ks`,
-          group: groupLabel,
-        });
-      }
-      const nextSeq = Math.max(...sorted.map((i) => i.sequence ?? 0)) + 1;
-      out.push({ value: `new:${clientId}`, label: `+ nová faktura ${nextSeq}`, group: groupLabel });
-    }
-    return out;
-  }, [data.invoices, invoice.id, group.parts]);
+  const options = useMemo(() => moveTargetOptions(data, invoice, group), [data, invoice, group]);
 
   const qty = Number.parseInt(quantity, 10);
   const qtyError = !Number.isFinite(qty) || qty <= 0 || qty > max;
