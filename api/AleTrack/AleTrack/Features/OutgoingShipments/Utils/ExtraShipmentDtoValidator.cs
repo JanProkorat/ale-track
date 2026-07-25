@@ -18,9 +18,9 @@ public class ExtraShipmentDtoValidator : Validator<ExtraShipmentDto>
     }
 }
 
-public class InventoryExtraShipmentDtoValidator : Validator<InventoryExtraShipmentDto>
+public class StockPurchaseDtoValidator : Validator<StockPurchaseDto>
 {
-    public InventoryExtraShipmentDtoValidator()
+    public StockPurchaseDtoValidator()
     {
         RuleFor(dto => dto.ProductId)
             .NotNull()

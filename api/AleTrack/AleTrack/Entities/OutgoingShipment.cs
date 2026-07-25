@@ -53,16 +53,22 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentRoutePoint> RouteViaPoints { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in this outgoing shipment that will be stored in the inventory
+    /// Goods bought from the brewery on this run for our own warehouse ("Zboží na sklad").
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentInventoryExtraItem> InventoryExtraItems { get; set; } = [];
+    public ICollection<OutgoingShipmentStockPurchaseItem> StockPurchases { get; set; } = [];
 
     /// <summary>
     /// Invoices to be issued for this shipment — by default one per client on the route.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentInvoice> Invoices { get; set; } = [];
+
+    /// <summary>
+    /// Invoices the brewery issues to us for the goods picked up on this run.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentPurchaseInvoice> PurchaseInvoices { get; set; } = [];
 
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;

@@ -22,7 +22,7 @@ public record ExtraShipmentDto
 /// <summary>
 /// Dto wrapper for extra products to be delivered to the inventory from the brewery
 /// </summary>
-public record InventoryExtraShipmentDto : ExtraShipmentDto
+public record StockPurchaseDto : ExtraShipmentDto
 {
     /// <summary>
     /// ID of related product

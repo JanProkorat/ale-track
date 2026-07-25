@@ -52,11 +52,58 @@ public sealed record OutgoingShipmentDetailDto
     public List<RoutePointDto> RouteViaPoints { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in the shipment to be delivered to the inventory
+    /// Goods bought from the brewery on this run for our own warehouse ("Zboží na sklad")
     /// </summary>
-    public List<OutgoingShipmentInventoryExtraItemDto> InventoryExtraItems { get; set; } = [];
-    
-    
+    public List<OutgoingShipmentStockPurchaseItemDto> StockPurchases { get; set; } = [];
+
+    /// <summary>
+    /// Invoices the brewery issues to us for this run, ordered by sequence. Empty when the run
+    /// is covered by a single invoice — the normal case, which needs no split on screen.
+    /// </summary>
+    public List<OutgoingShipmentPurchaseInvoiceDto> PurchaseInvoices { get; set; } = [];
+}
+
+/// <summary>
+/// One invoice the brewery issues to us for an outgoing shipment.
+/// </summary>
+public sealed record OutgoingShipmentPurchaseInvoiceDto
+{
+    /// <summary>
+    /// Public ID of the invoice
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Position within the shipment, starting at 1. Ordering only — not an invoice number.
+    /// </summary>
+    public int Sequence { get; set; }
+
+    /// <summary>
+    /// The brewery's own invoice number, when the user typed it in
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Pieces claimed by this invoice, by product. Always empty for sequence 1: that invoice is
+    /// the remainder and holds whatever the others leave.
+    /// </summary>
+    public List<OutgoingShipmentPurchaseInvoiceLineDto> Lines { get; set; } = [];
+}
+
+/// <summary>
+/// A number of pieces of one product on a brewery invoice.
+/// </summary>
+public sealed record OutgoingShipmentPurchaseInvoiceLineDto
+{
+    /// <summary>
+    /// Public ID of the product
+    /// </summary>
+    public Guid ProductId { get; set; }
+
+    /// <summary>
+    /// Number of pieces of that product on the invoice
+    /// </summary>
+    public int Quantity { get; set; }
 }
 
 /// <summary>
@@ -221,7 +268,7 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
 /// <summary>
 /// Data transfer object representing a product item in an outgoing shipment to be delivered to the inventory
 /// </summary>
-public sealed record OutgoingShipmentInventoryExtraItemDto : OutgoingShipmentProductDto
+public sealed record OutgoingShipmentStockPurchaseItemDto : OutgoingShipmentProductDto
 {
     /// <summary>
     /// ID of the related product
