@@ -201,7 +201,7 @@ describe('provenance chips', () => {
   it('marks a fully stock-sourced row', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true, adjustments: [],
-      invoices: [invoice({ lines: [line({ quantity: 4, isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem })] })],
+      invoices: [invoice({ lines: [line({ quantity: 4, isFromStock: true, sourceKind: InvoiceLineSourceKind.OrderItem })] })],
     });
 
     renderSection();
@@ -215,7 +215,7 @@ describe('provenance chips', () => {
       invoices: [invoice({
         lines: [
           line({ quantity: 10, sourceItemId: 'ordered' }),
-          line({ quantity: 4, sourceItemId: 'stock', isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem }),
+          line({ quantity: 4, sourceItemId: 'stock', isFromStock: true, sourceKind: InvoiceLineSourceKind.OrderItem }),
         ],
       })],
     });
