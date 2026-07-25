@@ -11136,9 +11136,15 @@ export class DeleteOutgoingShipmentRequest implements IDeleteOutgoingShipmentReq
 export interface IDeleteOutgoingShipmentRequest {
 }
 
-export class AddPurchaseInvoiceRequest implements IAddPurchaseInvoiceRequest {
+export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    items?: UnassignedOrderItemDto[];
 
-    constructor(data?: IAddPurchaseInvoiceRequest) {
+    constructor(data?: IOutgoingShipmentOrderDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -11148,22 +11154,50 @@ export class AddPurchaseInvoiceRequest implements IAddPurchaseInvoiceRequest {
     }
 
     init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
+            this.clientName = _data["clientName"];
+            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
+            this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(UnassignedOrderItemDto.fromJS(item));
+            }
+        }
     }
 
-    static fromJS(data: any): AddPurchaseInvoiceRequest {
+    static fromJS(data: any): OutgoingShipmentOrderDto {
         data = typeof data === 'object' ? data : {};
-        let result = new AddPurchaseInvoiceRequest();
+        let result = new OutgoingShipmentOrderDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
+        data["clientName"] = this.clientName;
+        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
+        data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
 
-export interface IAddPurchaseInvoiceRequest {
+export interface IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    items?: UnassignedOrderItemDto[];
 }
 
 export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
@@ -11259,70 +11293,6 @@ export interface ICreateOutgoingShipmentDto {
     clientOrderShipments: ClientOrderShipmentDto[];
     customStops?: CustomStopDto[];
     routeViaPoints?: RoutePointDto[];
-}
-
-export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
-    id?: string;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
-    clientOfficialAddress?: AddressDto;
-    clientContactAddress?: AddressDto | undefined;
-    items?: UnassignedOrderItemDto[];
-
-    constructor(data?: IOutgoingShipmentOrderDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
-            this.clientName = _data["clientName"];
-            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
-            this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
-            if (Array.isArray(_data["items"])) {
-                this.items = [] as any;
-                for (let item of _data["items"])
-                    this.items!.push(UnassignedOrderItemDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): OutgoingShipmentOrderDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OutgoingShipmentOrderDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
-        data["clientName"] = this.clientName;
-        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
-        data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
-        if (Array.isArray(this.items)) {
-            data["items"] = [];
-            for (let item of this.items)
-                data["items"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IOutgoingShipmentOrderDto {
-    id?: string;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
-    clientOfficialAddress?: AddressDto;
-    clientContactAddress?: AddressDto | undefined;
-    items?: UnassignedOrderItemDto[];
 }
 
 export class AddShipmentInvoiceDto implements IAddShipmentInvoiceDto {

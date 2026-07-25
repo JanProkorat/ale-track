@@ -5,31 +5,8 @@ using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
-using FluentValidation;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.AddPurchaseInvoice;
-
-/// <summary>
-/// Request to open another brewery invoice on an outgoing shipment.
-/// </summary>
-public sealed record AddPurchaseInvoiceRequest
-{
-    /// <summary>
-    /// Public ID of the outgoing shipment.
-    /// </summary>
-    public Guid Id { get; set; }
-}
-
-/// <summary>
-/// Validator for <see cref="AddPurchaseInvoiceRequest"/>.
-/// </summary>
-public sealed class AddPurchaseInvoiceValidator : Validator<AddPurchaseInvoiceRequest>
-{
-    public AddPurchaseInvoiceValidator()
-    {
-        RuleFor(r => r.Id).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-    }
-}
 
 /// <summary>
 /// Endpoint opening another invoice the brewery issues to us for this shipment.
@@ -38,9 +15,14 @@ public sealed class AddPurchaseInvoiceValidator : Validator<AddPurchaseInvoiceRe
 /// On a shipment that has none yet this creates <em>two</em>: the remainder invoice (sequence 1,
 /// which never stores lines) and the first invoice that can hold them. One click has to produce a
 /// visible split, and a lone remainder invoice would be a column with nothing to put in it.
+///
+/// Deliberately <see cref="EndpointWithoutRequest"/> rather than a request DTO holding just the
+/// route ID: on POST, FastEndpoints binds a request DTO from the body and answers 415 when the
+/// caller sends none — which the generated client does, because a route-only DTO produces no
+/// request body in the OpenAPI document. Nothing about this call needs a body.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : Endpoint<AddPurchaseInvoiceRequest>
+public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : EndpointWithoutRequest
 {
     /// <inheritdoc />
     public override void Configure()
@@ -67,12 +49,14 @@ public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : En
     }
 
     /// <inheritdoc />
-    public override async Task HandleAsync(AddPurchaseInvoiceRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
-        var shipment = await PurchaseInvoiceSplit.LoadAsync(dbContext, req.Id, ct);
+        var shipmentId = Route<Guid>("Id");
+
+        var shipment = await PurchaseInvoiceSplit.LoadAsync(dbContext, shipmentId, ct);
         if (shipment is null)
         {
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), shipmentId);
             return;
         }
 

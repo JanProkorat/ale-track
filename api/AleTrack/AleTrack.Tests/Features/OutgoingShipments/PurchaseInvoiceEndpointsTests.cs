@@ -62,9 +62,8 @@ public sealed class PurchaseInvoiceEndpointsTests
     public async Task AddPurchaseInvoice_UnknownShipment_IsNotFound()
     {
         var scenario = Scenario.Build();
-        var endpoint = EndpointBuilder<AddPurchaseInvoiceRequest, AddPurchaseInvoiceEndpoint>.Create(scenario.Mock().Object);
 
-        var act = async () => await endpoint.HandleAsync(new AddPurchaseInvoiceRequest { Id = Guid.NewGuid() }, CancellationToken.None);
+        var act = async () => await AddById(scenario.Mock(), Guid.NewGuid());
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
@@ -265,10 +264,18 @@ public sealed class PurchaseInvoiceEndpointsTests
 
     #region helpers
 
-    private static async Task Add(Scenario scenario, Mock<AleTrackDbContext> dbContext)
+    private static Task Add(Scenario scenario, Mock<AleTrackDbContext> dbContext) =>
+        AddById(dbContext, scenario.ShipmentId);
+
+    /// <summary>
+    /// The endpoint takes no body and reads the shipment from the route — see the endpoint's
+    /// remarks for why — so the test has to put it there.
+    /// </summary>
+    private static async Task AddById(Mock<AleTrackDbContext> dbContext, Guid shipmentId)
     {
-        var endpoint = EndpointBuilder<AddPurchaseInvoiceRequest, AddPurchaseInvoiceEndpoint>.Create(dbContext.Object);
-        await endpoint.HandleAsync(new AddPurchaseInvoiceRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+        var endpoint = EndpointWithoutRequestBuilder<AddPurchaseInvoiceEndpoint>.Create(dbContext.Object);
+        endpoint.HttpContext.Request.RouteValues["Id"] = shipmentId.ToString();
+        await endpoint.HandleAsync(CancellationToken.None);
     }
 
     private static async Task SetLine(Scenario scenario, Mock<AleTrackDbContext> dbContext, Guid invoiceId, int quantity)
