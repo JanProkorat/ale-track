@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Box, Breadcrumbs, Button, ButtonBase, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
+import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
+import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -109,6 +111,9 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
   };
 }
 const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
+
+/** The two checkbox columns: only as wide as the control, since their header is an icon. */
+const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
@@ -290,8 +295,19 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, i
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
               <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
               {invoiceHeaders}
-              <TableCell align="center" sx={HEAD_SX}>Nadiktováno</TableCell>
-              <TableCell align="center" sx={HEAD_SX}>Kontrola</TableCell>
+              {/* Icons, not words: "Nadiktováno" and "Kontrola" each forced their column
+                  ~65px wider than the checkbox under it. The names live in the tooltips
+                  here and on every checkbox in the column. */}
+              <TableCell align="center" sx={CHECK_HEAD_SX}>
+                <Tooltip title="Nadiktováno (1. diktovaná nakládka)">
+                  <RecordVoiceOverOutlinedIcon sx={{ fontSize: 17, display: 'block', mx: 'auto' }} />
+                </Tooltip>
+              </TableCell>
+              <TableCell align="center" sx={CHECK_HEAD_SX}>
+                <Tooltip title="Kontrola (2. kontrolní kolo)">
+                  <DoneAllOutlinedIcon sx={{ fontSize: 17, display: 'block', mx: 'auto' }} />
+                </Tooltip>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
