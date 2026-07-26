@@ -163,11 +163,15 @@ export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | numb
 }
 
 /** Normalize an address kind (which the API sends as a string) to the numeric
- * enum value the MUI Select / write DTOs expect. */
+ * enum value the MUI Select / write DTOs expect. Must round-trip all three
+ * members — a stop loaded with `DeliveryPlace` falling through to `Official`
+ * here would silently relocate the delivery the moment the shipment is
+ * re-saved, even without the user touching the picker. */
 export function addrKindValue(k?: OutgoingShipmentStopAddressKind | string | number): OutgoingShipmentStopAddressKind {
-  return addrKindName(k) === 'Contact'
-    ? OutgoingShipmentStopAddressKind.Contact
-    : OutgoingShipmentStopAddressKind.Official;
+  const name = addrKindName(k);
+  if (name === 'Contact') return OutgoingShipmentStopAddressKind.Contact;
+  if (name === 'DeliveryPlace') return OutgoingShipmentStopAddressKind.DeliveryPlace;
+  return OutgoingShipmentStopAddressKind.Official;
 }
 
 export function addrKindLabel(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
