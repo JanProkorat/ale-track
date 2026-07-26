@@ -115,8 +115,8 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 /** The two checkbox columns: only as wide as the control, since their header is an icon. */
 const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
 
-/** Wide enough for "ze skladu − n +" on one line — the sourcing stepper must not wrap. */
-const QTY_CELL_SX = { width: 148, minWidth: 148 };
+/** Wide enough for "z toho ze skladu − n +" on one line — no breakdown row may wrap. */
+const QTY_CELL_SX = { width: 190, minWidth: 190 };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
@@ -168,6 +168,61 @@ interface AggRowState {
   checkedIndeterminate: boolean;
 }
 
+/** A line of the Množství breakdown: what this number counts. */
+function BreakdownLabel({ children, sx }: { children: ReactNode; sx?: object }) {
+  return (
+    <Typography sx={{ fontSize: 11, color: 'text.secondary', justifySelf: 'start', ...sx }}>
+      {children}
+    </Typography>
+  );
+}
+
+/** A fixed number in the breakdown — same footprint as the stepper's number, so the
+ *  editable and read-only rows line up in one column. */
+function BreakdownValue({ children, tone }: { children: ReactNode; tone?: string }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+        color: tone ?? 'text.primary', minWidth: 16, textAlign: 'center', mx: '18px',
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+/** `− n +` for a breakdown line that can be adjusted a piece at a time. */
+function CountStepper({
+  value, onAdjust, canDecrease, canIncrease, decreaseLabel, increaseLabel,
+}: {
+  value: number;
+  onAdjust: (delta: number) => void;
+  canDecrease: boolean;
+  canIncrease: boolean;
+  decreaseLabel: string;
+  increaseLabel: string;
+}) {
+  return (
+    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end">
+      <IconButton size="small" onClick={() => onAdjust(-1)} disabled={!canDecrease} aria-label={decreaseLabel} sx={{ width: 16, height: 16, color: 'info.main' }}>
+        <RemoveIcon sx={{ fontSize: 12 }} />
+      </IconButton>
+      <Typography
+        sx={{
+          fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 16,
+          textAlign: 'center', color: value > 0 ? 'info.main' : 'text.disabled',
+        }}
+      >
+        {value}
+      </Typography>
+      <IconButton size="small" onClick={() => onAdjust(1)} disabled={!canIncrease} aria-label={increaseLabel} sx={{ width: 16, height: 16, color: 'info.main' }}>
+        <AddIcon sx={{ fontSize: 12 }} />
+      </IconButton>
+    </Stack>
+  );
+}
+
 /** One aggregated product line on "Celková nakládka" — the operational loading
  * row with Naloženo/Kontrola (aggregated across its source order items, hence the
  * indeterminate state) and a removable "Zboží na sklad" badge. Invoicing is not this
@@ -192,84 +247,69 @@ function AggLoadingRow({
     <TableRow hover>
       <TableCell>
         <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{agg.name}</Typography>
+        {/* Only what the product *is* lives here; how many of it and where the pieces
+            come from is the Množství cell's job, so both steppers sit together there. */}
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
-          {agg.stockPurchaseQuantity > 0 && (
-            <Box
-              sx={{
-                display: 'inline-flex', alignItems: 'center', gap: 0.25, height: 20, borderRadius: 1,
-                px: adjustable ? 0.25 : 0.75, fontSize: 10.5, fontWeight: 700, color: 'info.main',
-                bgcolor: (t) => t.vars!.palette.brand.infoTint,
-              }}
-            >
-              {adjustable && (
-                <IconButton size="small" onClick={() => onAdjustStockPurchase!(-1)} aria-label="Ubrat kus zboží na sklad" sx={{ width: 16, height: 16, color: 'inherit' }}>
-                  <RemoveIcon sx={{ fontSize: 12 }} />
-                </IconButton>
-              )}
-              <span>na sklad {agg.stockPurchaseQuantity}</span>
-              {adjustable && (
-                <IconButton size="small" onClick={() => onAdjustStockPurchase!(1)} aria-label="Přidat kus zboží na sklad" sx={{ width: 16, height: 16, color: 'inherit' }}>
-                  <AddIcon sx={{ fontSize: 12 }} />
-                </IconButton>
-              )}
-            </Box>
-          )}
         </Stack>
       </TableCell>
-      {/* Right-aligned column, so every line in it ends on the same edge and the
-          numbers stack; nothing wraps, which is what made the sourcing stepper fall
-          apart from its own label. */}
+      {/* The total, then what it is made of — every controllable number in one place,
+          each on its own labelled line. "z toho ze skladu" is indented because it is a
+          breakdown of the ordered pieces, not a third thing added to them: 4 ks here is
+          1 ordered + 3 for the warehouse, of which 0 came off our shelf. */}
       <TableCell align="right" sx={QTY_CELL_SX}>
-        <Stack spacing={0.25} alignItems="flex-end">
-          <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13, lineHeight: 1.3 }}>
-            {agg.quantity} ks
-          </Typography>
+        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13, lineHeight: 1.4 }}>
+          {agg.quantity} ks
+        </Typography>
+        <Box
+          sx={{
+            display: 'grid', gridTemplateColumns: 'auto auto', justifyContent: 'end',
+            alignItems: 'center', columnGap: 0.75, rowGap: 0.25, mt: 0.25, whiteSpace: 'nowrap',
+          }}
+        >
+          {agg.orderQuantity > 0 && (
+            <>
+              <BreakdownLabel>objednávka</BreakdownLabel>
+              <BreakdownValue>{agg.orderQuantity}</BreakdownValue>
+            </>
+          )}
 
-          {sourceable ? (
-            <Stack direction="row" spacing={0.25} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
-              <Typography sx={{ fontSize: 11, color: 'text.secondary', mr: 0.25 }}>ze skladu</Typography>
-              <IconButton
-                size="small"
-                onClick={() => onAdjustSourcing!(-1)}
-                disabled={agg.fromInventory === 0}
-                aria-label="Ubrat kus ze skladu"
-                sx={{ width: 16, height: 16, color: 'info.main' }}
-              >
-                <RemoveIcon sx={{ fontSize: 12 }} />
-              </IconButton>
-              <Typography
-                sx={{
-                  fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 14,
-                  textAlign: 'center', color: agg.fromInventory > 0 ? 'info.main' : 'text.disabled',
-                }}
-              >
-                {agg.fromInventory}
-              </Typography>
-              <IconButton
-                size="small"
-                onClick={() => onAdjustSourcing!(1)}
-                disabled={agg.fromInventory >= agg.orderQuantity}
-                aria-label="Přidat kus ze skladu"
-                sx={{ width: 16, height: 16, color: 'info.main' }}
-              >
-                <AddIcon sx={{ fontSize: 12 }} />
-              </IconButton>
-            </Stack>
-          ) : agg.fromInventory > 0 && (
-            <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {`z toho ${agg.fromInventory} ze skladu`}
-            </Typography>
+          {(sourceable || agg.fromInventory > 0) && (
+            <>
+              <BreakdownLabel sx={{ pl: 1 }}>z toho ze skladu</BreakdownLabel>
+              {sourceable ? (
+                <CountStepper
+                  value={agg.fromInventory}
+                  onAdjust={onAdjustSourcing!}
+                  canDecrease={agg.fromInventory > 0}
+                  canIncrease={agg.fromInventory < agg.orderQuantity}
+                  decreaseLabel="Ubrat kus ze skladu"
+                  increaseLabel="Přidat kus ze skladu"
+                />
+              ) : (
+                <BreakdownValue tone="info.main">{agg.fromInventory}</BreakdownValue>
+              )}
+            </>
           )}
 
           {agg.stockPurchaseQuantity > 0 && (
-            <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {agg.orderQuantity > 0
-                ? `${agg.orderQuantity} obj. + ${agg.stockPurchaseQuantity} na sklad`
-                : `${agg.stockPurchaseQuantity} na sklad`}
-            </Typography>
+            <>
+              <BreakdownLabel>na sklad</BreakdownLabel>
+              {adjustable ? (
+                <CountStepper
+                  value={agg.stockPurchaseQuantity}
+                  onAdjust={onAdjustStockPurchase!}
+                  canDecrease
+                  canIncrease
+                  decreaseLabel="Ubrat kus zboží na sklad"
+                  increaseLabel="Přidat kus zboží na sklad"
+                />
+              ) : (
+                <BreakdownValue tone="info.main">{agg.stockPurchaseQuantity}</BreakdownValue>
+              )}
+            </>
           )}
-        </Stack>
+        </Box>
       </TableCell>
       {invoiceCells}
       <TableCell align="center" padding="checkbox">
