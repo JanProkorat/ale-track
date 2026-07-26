@@ -13,6 +13,7 @@ import {
   OutgoingShipmentPurchaseInvoiceLineDto,
   ShipmentLoadingState,
 } from 'src/generated/api-client';
+import type { LoadingStateName } from './purchaseSplitModel';
 import { theme } from 'src/theme/theme';
 import { PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells } from './PurchaseInvoiceColumns';
 import type { PurchasableRow } from './purchaseSplitModel';
@@ -36,11 +37,17 @@ function row(over: Partial<PurchasableRow> = {}): PurchasableRow {
   return { productId: LEZAK, orderQuantity: 24, fromInventory: 0, stockPurchaseQuantity: 0, ...over };
 }
 
-function state(productId: string, sequence: number, value: ShipmentLoadingState) {
+/**
+ * Built the way the API sends them: the wire carries the enum's *name*, while the
+ * generated TypeScript enum is numeric. Passing the numeric member here would test a
+ * shape the app never receives — which is exactly how the control ended up reading
+ * "undefined" once.
+ */
+function state(productId: string, sequence: number, value: LoadingStateName) {
   const dto = new OutgoingShipmentLoadingStateDto();
   dto.productId = productId;
   dto.sequence = sequence;
-  dto.state = value;
+  dto.state = value as unknown as ShipmentLoadingState;
   return dto;
 }
 
@@ -50,7 +57,7 @@ function renderRowCells(props: {
   states?: OutgoingShipmentLoadingStateDto[];
   editable?: boolean;
   onSet?: (sequence: number, quantity: number) => void;
-  onSetState?: (sequence: number, state: ShipmentLoadingState) => void;
+  onSetState?: (sequence: number, state: LoadingStateName) => void;
 }) {
   const invoices = props.invoices ?? [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
   return render(
@@ -236,22 +243,34 @@ describe('loading state control', () => {
 
     fireEvent.click(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno'));
 
-    expect(onSetState).toHaveBeenCalledWith(1, ShipmentLoadingState.Dictated);
+    expect(onSetState).toHaveBeenCalledWith(1, 'Dictated');
   });
 
   it('advances to zkontrolov\u00e1no and then wraps back to empty', () => {
     const onSetState = vi.fn();
-    renderRowCells({ states: [state(LEZAK, 1, ShipmentLoadingState.Dictated)], onSetState });
+    renderRowCells({ states: [state(LEZAK, 1, 'Dictated')], onSetState });
     fireEvent.click(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nadiktov\u00e1no'));
-    expect(onSetState).toHaveBeenLastCalledWith(1, ShipmentLoadingState.Checked);
+    expect(onSetState).toHaveBeenLastCalledWith(1, 'Checked');
 
-    renderRowCells({ states: [state(LEZAK, 1, ShipmentLoadingState.Checked)], onSetState });
+    renderRowCells({ states: [state(LEZAK, 1, 'Checked')], onSetState });
     fireEvent.click(screen.getAllByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Zkontrolov\u00e1no')[0]);
-    expect(onSetState).toHaveBeenLastCalledWith(1, ShipmentLoadingState.NotLoaded);
+    expect(onSetState).toHaveBeenLastCalledWith(1, 'NotLoaded');
+  });
+
+  it('reads a numeric state as well as the wire string', () => {
+    // Both representations exist: the API sends names, the generated enum is numeric.
+    const numeric = new OutgoingShipmentLoadingStateDto();
+    numeric.productId = LEZAK;
+    numeric.sequence = 1;
+    numeric.state = ShipmentLoadingState.Checked;
+
+    renderRowCells({ states: [numeric] });
+
+    expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Zkontrolov\u00e1no')).toBeTruthy();
   });
 
   it('tracks each column separately', () => {
-    renderRowCells({ states: [state(LEZAK, 2, ShipmentLoadingState.Checked)] });
+    renderRowCells({ states: [state(LEZAK, 2, 'Checked')] });
 
     expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno')).toBeTruthy();
     expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 2: Zkontrolov\u00e1no')).toBeTruthy();

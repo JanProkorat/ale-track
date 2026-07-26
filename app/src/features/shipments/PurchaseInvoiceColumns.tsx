@@ -13,14 +13,13 @@ import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
-import {
-  ShipmentLoadingState,
-  type OutgoingShipmentLoadingStateDto,
-  type OutgoingShipmentPurchaseInvoiceDto,
+import type {
+  OutgoingShipmentLoadingStateDto,
+  OutgoingShipmentPurchaseInvoiceDto,
 } from 'src/generated/api-client';
 import {
   capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
-  type PurchasableRow,
+  type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
 
 const CELL_SX = { width: 84, minWidth: 84 } as const;
@@ -85,7 +84,7 @@ export function PurchaseInvoiceRowCells({
   states: OutgoingShipmentLoadingStateDto[];
   editable: boolean;
   onSet: (sequence: number, quantity: number) => void;
-  onSetState: (sequence: number, state: ShipmentLoadingState) => void;
+  onSetState: (sequence: number, state: LoadingStateName) => void;
 }) {
   const columns = columnsOf(invoices);
   const total = purchasedTotal(row);
@@ -138,10 +137,10 @@ export function PurchaseInvoiceRowCells({
   );
 }
 
-const STATE_LABEL: Record<ShipmentLoadingState, string> = {
-  [ShipmentLoadingState.NotLoaded]: 'Nenaloženo',
-  [ShipmentLoadingState.Dictated]: 'Nadiktováno',
-  [ShipmentLoadingState.Checked]: 'Zkontrolováno',
+const STATE_LABEL: Record<LoadingStateName, string> = {
+  NotLoaded: 'Nenaloženo',
+  Dictated: 'Nadiktováno',
+  Checked: 'Zkontrolováno',
 };
 
 /**
@@ -154,13 +153,13 @@ const STATE_LABEL: Record<ShipmentLoadingState, string> = {
 function LoadingStateControl({
   state, editable, onChange, label,
 }: {
-  state: ShipmentLoadingState;
+  state: LoadingStateName;
   editable: boolean;
-  onChange: (next: ShipmentLoadingState) => void;
+  onChange: (next: LoadingStateName) => void;
   label: string;
 }) {
-  const done = state === ShipmentLoadingState.Checked;
-  const icon = state === ShipmentLoadingState.NotLoaded
+  const done = state === 'Checked';
+  const icon = state === 'NotLoaded'
     ? <Box sx={{ width: 13, height: 13, borderRadius: '4px', border: 2, borderColor: 'text.disabled' }} />
     : done
       ? <DoneAllOutlinedIcon sx={{ fontSize: 17 }} />
@@ -175,7 +174,7 @@ function LoadingStateControl({
           aria-label={`${label}: ${STATE_LABEL[state]}`}
           sx={{
             width: 26, height: 26, borderRadius: '50%',
-            color: done ? 'success.main' : state === ShipmentLoadingState.Dictated ? 'info.main' : 'text.disabled',
+            color: done ? 'success.main' : state === 'Dictated' ? 'info.main' : 'text.disabled',
             '&:hover': { bgcolor: 'action.hover' },
           }}
         >

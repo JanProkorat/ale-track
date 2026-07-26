@@ -13,9 +13,10 @@ import {
   OutgoingShipmentLoadingStateDto,
   SetLoadingStateDto,
   SetPurchaseInvoiceLineDto,
-  ShipmentLoadingState,
 } from 'src/generated/api-client';
-import { applyLineLocally } from 'src/features/shipments/purchaseSplitModel';
+import {
+  applyLineLocally, loadingStateValue, type LoadingStateName,
+} from 'src/features/shipments/purchaseSplitModel';
 
 function useInvalidateShipment(shipmentId: string | undefined) {
   const qc = useQueryClient();
@@ -108,7 +109,8 @@ export interface SetLoadingStateArgs {
   productId: string;
   /** Which invoice column, by position. 1 is the remainder column. */
   sequence: number;
-  state: ShipmentLoadingState;
+  /** The enum's name — the wire value is derived on the way out. */
+  state: LoadingStateName;
 }
 
 /**
@@ -126,7 +128,10 @@ export function useSetLoadingState(shipmentId: string | undefined) {
 
   return useMutation({
     mutationFn: ({ productId, sequence, state }: SetLoadingStateArgs) =>
-      ds.setLoadingStateEndpoint(shipmentId!, new SetLoadingStateDto({ productId, sequence, state })),
+      ds.setLoadingStateEndpoint(
+        shipmentId!,
+        new SetLoadingStateDto({ productId, sequence, state: loadingStateValue(state) }),
+      ),
 
     onMutate: async ({ productId, sequence, state }: SetLoadingStateArgs) => {
       if (!shipmentId) return undefined;
@@ -145,9 +150,9 @@ export function useSetLoadingState(shipmentId: string | undefined) {
         Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
         previous,
       );
-      next.loadingStates = state === ShipmentLoadingState.NotLoaded
+      next.loadingStates = state === 'NotLoaded'
         ? kept
-        : [...kept, new OutgoingShipmentLoadingStateDto({ productId, sequence, state })];
+        : [...kept, new OutgoingShipmentLoadingStateDto({ productId, sequence, state: loadingStateValue(state) })];
       qc.setQueryData(detailKey, next);
 
       return { previous };

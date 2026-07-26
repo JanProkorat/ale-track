@@ -11,6 +11,7 @@ import {
   ShipmentLoadingState,
   type OutgoingShipmentLoadingStateDto,
 } from 'src/generated/api-client';
+import { loadingStateName } from 'src/lib/labels';
 
 /** The table always offers this many invoice columns, split or not. */
 export const DEFAULT_COLUMNS = 2;
@@ -178,25 +179,40 @@ export function piecesInColumn(
   return index === 0 ? billed + row.fromInventory : billed;
 }
 
-/** How far a product has got in one column; nothing stored means nothing done. */
+/**
+ * How far a product has got in one column, as the enum's *name*.
+ *
+ * Names rather than the generated enum's numbers, because the API serialises enums
+ * as strings on the wire while the generated TypeScript enum is numeric — comparing
+ * a response value against `ShipmentLoadingState.Dictated` silently never matches.
+ * `loadingStateName` resolves either representation; the rest of this module and the
+ * components speak names only.
+ */
+export type LoadingStateName = 'NotLoaded' | 'Dictated' | 'Checked';
+
 export function loadingStateAt(
   states: OutgoingShipmentLoadingStateDto[],
   productId: string | undefined,
   sequence: number,
-): ShipmentLoadingState {
-  if (!productId) return ShipmentLoadingState.NotLoaded;
+): LoadingStateName {
+  if (!productId) return 'NotLoaded';
 
-  return states.find((s) => s.productId === productId && s.sequence === sequence)?.state
-    ?? ShipmentLoadingState.NotLoaded;
+  const found = states.find((s) => s.productId === productId && s.sequence === sequence);
+  return loadingStateName(found?.state) as LoadingStateName;
 }
 
 /** The state a click moves to: none → dictated → checked → none. */
-export function nextLoadingState(current: ShipmentLoadingState): ShipmentLoadingState {
+export function nextLoadingState(current: LoadingStateName): LoadingStateName {
   switch (current) {
-    case ShipmentLoadingState.NotLoaded: return ShipmentLoadingState.Dictated;
-    case ShipmentLoadingState.Dictated: return ShipmentLoadingState.Checked;
-    default: return ShipmentLoadingState.NotLoaded;
+    case 'NotLoaded': return 'Dictated';
+    case 'Dictated': return 'Checked';
+    default: return 'NotLoaded';
   }
+}
+
+/** The wire value for a state name — what a write sends back. */
+export function loadingStateValue(name: LoadingStateName): ShipmentLoadingState {
+  return ShipmentLoadingState[name];
 }
 
 /**
@@ -224,8 +240,8 @@ export function loadingProgress(
 
       total += 1;
       const state = loadingStateAt(states, row.productId, column.sequence);
-      if (state !== ShipmentLoadingState.NotLoaded) dictated += 1;
-      if (state === ShipmentLoadingState.Checked) checked += 1;
+      if (state !== 'NotLoaded') dictated += 1;
+      if (state === 'Checked') checked += 1;
     }
   }
 
