@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { periodRange, fmtKg, sharePct, PERIOD_LABEL } from './reportModel';
+import { ReportGranularity } from 'src/generated/api-client';
+import { periodRange, fmtKg, sharePct, fmtUnits, apiGranularity, PERIOD_LABEL } from './reportModel';
 
 describe('periodRange', () => {
   it('spans the requested number of days back from today, inclusive of today', () => {
@@ -44,6 +45,20 @@ describe('sharePct', () => {
 
   it('reads 0 rather than dividing by zero on an empty total', () => {
     expect(sharePct(0, 0)).toBe('0,0 %');
+  });
+});
+
+describe('fmtUnits', () => {
+  it('appends the "ks" suffix with no decimals', () => {
+    expect(fmtUnits(120)).toBe('120 ks');
+    expect(fmtUnits(0)).toBe('0 ks');
+  });
+});
+
+describe('apiGranularity', () => {
+  it('maps the UI granularity onto the generated enum', () => {
+    expect(apiGranularity('week')).toBe(ReportGranularity.Week);
+    expect(apiGranularity('month')).toBe(ReportGranularity.Month);
   });
 });
 

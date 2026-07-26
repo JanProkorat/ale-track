@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';
 import { theme } from 'src/theme/theme';
 import { ProductKind, ProductType } from 'src/generated/api-client';
@@ -45,7 +45,9 @@ describe('VolumeTab', () => {
     renderTab();
 
     expect(screen.getByText('Celkem dodáno')).toBeInTheDocument();
-    expect(screen.getByText('12,4 t')).toBeInTheDocument();
+    // "12,4 t" appears twice: the KPI tile and the donut's centre total (both show the
+    // same overall total, matching the prototype's chDonut(..., {center}) at line 892).
+    expect(screen.getAllByText('12,4 t').length).toBe(2);
     expect(screen.getByText('14 klientů obslouženo')).toBeInTheDocument();
     expect(screen.getByText('Sudy')).toBeInTheDocument();
     expect(screen.getByText('Lahve (basy)')).toBeInTheDocument();
@@ -66,6 +68,29 @@ describe('VolumeTab', () => {
 
     expect(screen.getByText('Světlý ležák')).toBeInTheDocument();
     expect(screen.getByText('Tmavý ležák')).toBeInTheDocument();
+  });
+
+  it('shows the donut centre total and a per-type weight next to each legend label', () => {
+    renderTab();
+
+    expect(screen.getByText('celkem')).toBeInTheDocument();
+    // 9000 kg -> "9,0 t" for Světlý ležák's legend row.
+    expect(screen.getByText('9,0 t')).toBeInTheDocument();
+    // 3400 kg -> "3,4 t" for Tmavý ležák's legend row.
+    expect(screen.getByText('3,4 t')).toBeInTheDocument();
+  });
+
+  it('fires onGranularityChange with the clicked option', () => {
+    const onGranularityChange = vi.fn();
+    render(
+      <ThemeProvider theme={theme}>
+        <VolumeTab data={data} granularity="week" onGranularityChange={onGranularityChange} />
+      </ThemeProvider>
+    );
+
+    fireEvent.click(screen.getByText('Měsíčně'));
+
+    expect(onGranularityChange).toHaveBeenCalledWith('month');
   });
 
   it('survives an all-zero window without crashing or dividing by zero', () => {

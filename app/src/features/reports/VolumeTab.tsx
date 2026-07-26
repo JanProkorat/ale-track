@@ -1,4 +1,4 @@
-import { Box, Card, Stack } from '@mui/material';
+import { Box, Card, Stack, Typography } from '@mui/material';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import SportsBarOutlinedIcon from '@mui/icons-material/SportsBarOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -57,6 +57,11 @@ export function VolumeTab({
     palette
   );
 
+  // Per-brewery colour for the horizontal bar chart's axis colour map: the brewery's own
+  // token, falling back to a palette slot when it has none.
+  const breweryNames = breweries.map((b) => b.breweryName ?? '—');
+  const breweryColors = breweries.map((b, i) => b.color ?? palette[i % palette.length]);
+
   const kindColumns: Column<KindRow>[] = [
     { key: 'kind', header: 'Obal', render: (r) => kindLabel(r.kind) ?? String(r.kind) },
     { key: 'units', header: 'Kusů', align: 'right', render: (r) => num(r.units) },
@@ -64,7 +69,7 @@ export function VolumeTab({
     { key: 'share', header: 'Podíl', align: 'right', render: (r) => sharePct(r.weightKg, total) },
   ];
 
-  if (total === 0 && kinds.length === 0 && series.length === 0) {
+  if (total === 0 && kinds.length === 0 && series.length === 0 && breweries.length === 0 && typeSlices.length === 0) {
     return (
       <>
         <KpiRow total={total} clientsServed={data.clientsServed ?? 0} kegUnits={0} bottleUnits={0} canUnits={0} />
@@ -108,10 +113,21 @@ export function VolumeTab({
               <BarChart
                 layout="horizontal"
                 series={[{ data: breweries.map((b) => b.weightKg ?? 0), valueFormatter: (v) => fmtKg(v ?? 0) }]}
-                yAxis={[{ scaleType: 'band', data: breweries.map((b) => b.breweryName ?? '—'), width: 150 }]}
+                yAxis={[
+                  {
+                    scaleType: 'band',
+                    data: breweryNames,
+                    width: 150,
+                    // Per-bar colour has to come from the axis colour map, not the chart's
+                    // `colors` prop: getSeriesWithDefaultValues.js indexes `colors` by SERIES
+                    // (colors[seriesIndex % colors.length]), so with a single series only
+                    // colors[0] is ever read. For layout="horizontal", getColor.js reads
+                    // yAxis.colorScale (built from this colorMap) per data point — the
+                    // supported way to give each bar its own brewery colour.
+                    colorMap: { type: 'ordinal', values: breweryNames, colors: breweryColors },
+                  },
+                ]}
                 xAxis={[{ valueFormatter: (v: number) => num(v) }]}
-                // Colour follows the brewery's own token, so a filter never repaints it.
-                colors={breweries.map((b, i) => b.color ?? palette[i % palette.length])}
                 margin={{ right: 16 }}
                 hideLegend
               />
@@ -119,18 +135,65 @@ export function VolumeTab({
           </ChartCard>
 
           <ChartCard icon={<LocalOfferOutlinedIcon />} title="Podle typu">
-            <Box sx={{ width: '100%', height: 240 }}>
-              <PieChart
-                series={[
-                  {
-                    innerRadius: 52,
-                    outerRadius: 92,
-                    paddingAngle: 1.5,
-                    data: typeSlices.map((s, i) => ({ id: i, value: s.value, label: s.label, color: s.color })),
-                    valueFormatter: (v) => fmtKg(v.value),
-                  },
-                ]}
-              />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Donut with the prototype's centre total (line 892: chDonut(..., {center})).
+                  MUI's PieChart has no built-in centre-text slot, so the total is an
+                  absolutely-positioned overlay inside this relatively-positioned wrapper;
+                  pointerEvents: 'none' keeps it out of the hover/tooltip hit area. */}
+              <Box sx={{ position: 'relative', width: 158, height: 158, flex: '0 0 auto' }}>
+                <PieChart
+                  series={[
+                    {
+                      innerRadius: 52,
+                      outerRadius: 92,
+                      paddingAngle: 1.5,
+                      data: typeSlices.map((s, i) => ({ id: i, value: s.value, label: s.label, color: s.color })),
+                      valueFormatter: (v) => fmtKg(v.value),
+                    },
+                  ]}
+                  width={158}
+                  height={158}
+                  margin={{ top: 0, bottom: 0, left: 0, right: 0 }}
+                  // The legend is hand-rolled below (with per-type weights, which MUI's
+                  // built-in legend does not show) — hide the chart's own to avoid a duplicate.
+                  hideLegend
+                />
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'grid',
+                    placeItems: 'center',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontWeight: 800, fontSize: 19, lineHeight: 1.2 }}>{fmtKg(total)}</Typography>
+                    <Typography
+                      sx={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'text.secondary' }}
+                    >
+                      celkem
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Hand-rolled legend (prototype's `legend()`, line 852): swatch + label + weight
+                  per slice, right-aligned. This is the required contrast relief for the amber
+                  and sky slots (see reportPalette.ts) — never drop it in favour of hideLegend
+                  alone. */}
+              <Stack spacing={1} sx={{ flex: 1, minWidth: 170 }}>
+                {typeSlices.map((s) => (
+                  <Stack key={s.label} direction="row" alignItems="center" spacing={1}>
+                    <Box sx={{ width: 10, height: 10, borderRadius: 0.75, bgcolor: s.color, flex: '0 0 auto' }} />
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>{s.label}</Typography>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.secondary' }}>
+                      {fmtKg(s.value)}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
             </Box>
           </ChartCard>
         </Box>
@@ -138,7 +201,7 @@ export function VolumeTab({
         <ChartCard icon={<Inventory2OutlinedIcon />} title="Podle obalu" padded={false}>
           <DataTable
             columns={kindColumns}
-            rows={kinds.map((k) => ({ kind: k.kind ?? L.kind.Other, units: k.units ?? 0, weightKg: k.weightKg ?? 0 }))}
+            rows={kinds.map((k) => ({ kind: k.kind ?? 'Other', units: k.units ?? 0, weightKg: k.weightKg ?? 0 }))}
             getRowKey={(r) => String(r.kind)}
             dense
           />
