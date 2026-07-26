@@ -5,7 +5,7 @@
 // resolution + the stop row's second line) and `seAddrSelect`'s value scheme
 // (`cur`/`value` — 'Official' | 'Contact' | `place:<id>`).
 
-import { type OutgoingShipmentOrderDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import { type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 import { addrKindLabel } from 'src/lib/labels';
 
@@ -60,5 +60,29 @@ export function resolveStopAddress(
     return { lat: a.latitude, lng: a.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
   }
   const a = order?.clientOfficialAddress;
+  return { lat: a?.latitude, lng: a?.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+}
+
+/** Resolves a shipment-detail stop's map point and address-line text straight
+ * off `OutgoingShipmentStopDto`'s own fields. Unlike {@link resolveStopAddress}
+ * — which looks a place up by id in an `OutgoingShipmentOrderDto`'s
+ * `clientDeliveryPlaces` for the editor's pre-save draft — the shipment
+ * detail's read model already carries the resolved `officialAddress` /
+ * `contactAddress` / `deliveryPlace` straight on the stop (populated even for
+ * a soft-deleted place, so history keeps rendering), so this reads those
+ * instead of doing a lookup. Shared by the route map (so a `DeliveryPlace`
+ * stop pins at the place, not the billing address) and the stop header's
+ * address line. */
+export function resolveDetailStopAddress(
+  stop: Pick<OutgoingShipmentStopDto, 'selectedAddressKind' | 'officialAddress' | 'contactAddress' | 'deliveryPlace'>,
+): { lat?: number; lng?: number; text: string } {
+  if (stop.selectedAddressKind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace) {
+    return { lat: stop.deliveryPlace.address?.latitude, lng: stop.deliveryPlace.address?.longitude, text: formatPlaceAddress(stop.deliveryPlace) };
+  }
+  if (stop.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && stop.contactAddress) {
+    const a = stop.contactAddress;
+    return { lat: a.latitude, lng: a.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
+  }
+  const a = stop.officialAddress;
   return { lat: a?.latitude, lng: a?.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
 }
