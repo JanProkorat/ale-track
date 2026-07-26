@@ -158,6 +158,25 @@ export function applyLineLocally(
   return next;
 }
 
+/**
+ * Rows carrying at least one piece on the invoice at `sequence` — the loading list
+ * as that one invoice sees it.
+ *
+ * An unknown sequence returns everything rather than nothing: it means the invoice
+ * was deleted while its tab was selected, and an empty table would read as "this
+ * shipment carries nothing".
+ */
+export function rowsOnInvoice<T extends PurchasableRow>(
+  rows: T[],
+  invoices: OutgoingShipmentPurchaseInvoiceDto[],
+  sequence: number,
+): T[] {
+  const index = columnsOf(invoices).findIndex((column) => column.sequence === sequence);
+  if (index < 0) return rows;
+
+  return rows.filter((row) => (rowSplit(row, invoices)[index] ?? 0) > 0);
+}
+
 /** Column totals across every row, in the same order as {@link rowSplit}. */
 export function columnTotals(
   rows: PurchasableRow[],

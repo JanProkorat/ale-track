@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OutgoingShipmentPurchaseInvoiceDto, OutgoingShipmentPurchaseInvoiceLineDto } from 'src/generated/api-client';
 import {
-  purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt, applyLineLocally,
+  purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt, applyLineLocally, rowsOnInvoice,
   type PurchasableRow,
 } from './purchaseSplitModel';
 
@@ -179,6 +179,35 @@ describe('applyLineLocally', () => {
     applyLineLocally(invoices, { sequence: 2, productId: LEZAK, quantity: 9 });
 
     expect(claimAt(invoices, 2, LEZAK)).toBe(4);
+  });
+});
+
+describe('rowsOnInvoice', () => {
+  const lezak = row({ orderQuantity: 24 });
+  const ipa = row({ productId: IPA, orderQuantity: 12 });
+  const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
+
+  it('keeps the rows the remainder invoice still carries', () => {
+    expect(rowsOnInvoice([lezak, ipa], invoices, 1)).toEqual([lezak, ipa]);
+  });
+
+  it('keeps only the rows with pieces on the chosen invoice', () => {
+    expect(rowsOnInvoice([lezak, ipa], invoices, 2)).toEqual([lezak]);
+  });
+
+  it('drops a row whose whole quantity moved to a later invoice', () => {
+    const all = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 24]])];
+    expect(rowsOnInvoice([lezak, ipa], all, 1)).toEqual([ipa]);
+  });
+
+  it('drops rows bought entirely from our own stock', () => {
+    const stockOnly = row({ orderQuantity: 6, fromInventory: 6 });
+    expect(rowsOnInvoice([lezak, stockOnly], invoices, 1)).toEqual([lezak]);
+  });
+
+  it('returns everything for an invoice that no longer exists', () => {
+    // Deleting an invoice while its tab is selected must not blank the table.
+    expect(rowsOnInvoice([lezak, ipa], invoices, 7)).toEqual([lezak, ipa]);
   });
 });
 

@@ -47,7 +47,8 @@ import { useProducts } from 'src/hooks/useProducts';
 import {
   useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
-import { columnTotals } from './purchaseSplitModel';
+import { SegControl, type SegOption } from 'src/components/common/SegControl';
+import { columnsOf, columnTotals, rowsOnInvoice } from './purchaseSplitModel';
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
 } from './PurchaseInvoiceColumns';
@@ -114,6 +115,9 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 
 /** The two checkbox columns: only as wide as the control, since their header is an icon. */
 const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
+
+/** Tab value for the unfiltered loading list; the rest are invoice sequences. */
+const ALL_INVOICES = 'all';
 
 /** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
 const QTY_CELL_SX = { width: 170, minWidth: 170 };
@@ -596,7 +600,32 @@ export function ShipmentDetail({
   // invoice behind it until a number is typed into it, which the server then
   // materialises. Anything beyond two comes from "+ Faktura pivovaru".
   const purchaseInvoices = useMemo(() => shipment.purchaseInvoices ?? [], [shipment.purchaseInvoices]);
-  const purchaseTotals = useMemo(() => columnTotals(aggRows, purchaseInvoices), [aggRows, purchaseInvoices]);
+
+  // Filter the loading list down to one brewery invoice: what to read out when the
+  // pallet is being checked against that invoice rather than against the whole run.
+  // One tab per column, so a third invoice gets a tab too.
+  const [invoiceFilter, setInvoiceFilter] = useState<string>(ALL_INVOICES);
+  useEffect(() => { setInvoiceFilter(ALL_INVOICES); }, [shipment.id]);
+
+  const invoiceColumns = useMemo(() => columnsOf(purchaseInvoices), [purchaseInvoices]);
+  const filterOptions = useMemo<SegOption<string>[]>(() => [
+    { value: ALL_INVOICES, label: 'Vše' },
+    ...invoiceColumns.map((column) => ({ value: String(column.sequence), label: `F${column.sequence}` })),
+  ], [invoiceColumns]);
+
+  // A deleted invoice must not leave the table filtered by a column that is gone.
+  const activeFilter = filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
+
+  const visibleRows = useMemo(
+    () => (activeFilter === ALL_INVOICES
+      ? aggRows
+      : rowsOnInvoice(aggRows, purchaseInvoices, Number(activeFilter))),
+    [aggRows, activeFilter, purchaseInvoices],
+  );
+
+  // Footers total what is on screen; a filtered table whose sum counts hidden rows
+  // is worse than no sum at all.
+  const purchaseTotals = useMemo(() => columnTotals(visibleRows, purchaseInvoices), [visibleRows, purchaseInvoices]);
   // Aggregated-row state derives from the per-source overrides: a product line is
   // "loaded" only when all its source order items are, and indeterminate between.
   const aggLoaded = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => isLoaded(r));
@@ -604,10 +633,14 @@ export function ShipmentDetail({
   const aggChecked = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => checkedIds.has(r.key));
   const aggCheckedIndeterminate = (a: AggRow) => a.sources.some((r) => checkedIds.has(r.key)) && !aggChecked(a);
 
+  // Progress pills report the whole run; the table's own footer reports what it shows.
   const productN = aggRows.length;
   const loadedN = aggRows.filter(aggLoaded).length;
   const checkedN = aggRows.filter(aggChecked).length;
-  const totalQty = aggRows.reduce((s, a) => s + a.quantity, 0);
+  const visibleN = visibleRows.length;
+  const visibleLoadedN = visibleRows.filter(aggLoaded).length;
+  const visibleCheckedN = visibleRows.filter(aggChecked).length;
+  const totalQty = visibleRows.reduce((s, a) => s + a.quantity, 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -881,11 +914,15 @@ export function ShipmentDetail({
               <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
                 <StatusPill tone={productN > 0 && loadedN === productN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${productN}`} />
                 <StatusPill tone={productN > 0 && checkedN === productN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${productN}`} />
+                <Box sx={{ flex: 1 }} />
+                <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
               <AggLoadingTable
-                rows={aggRows}
-                totals={{ quantity: totalQty, loaded: loadedN, checked: checkedN, count: productN }}
-                emptyText="Zatím žádné produkty k naložení."
+                rows={visibleRows}
+                totals={{ quantity: totalQty, loaded: visibleLoadedN, checked: visibleCheckedN, count: visibleN }}
+                emptyText={activeFilter === ALL_INVOICES
+                  ? 'Zatím žádné produkty k naložení.'
+                  : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
                 invoiceHeaders={(
                   <PurchaseInvoiceHeaderCells
                     invoices={purchaseInvoices}
