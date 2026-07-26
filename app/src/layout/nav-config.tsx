@@ -9,6 +9,7 @@ import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import AirportShuttleOutlinedIcon from '@mui/icons-material/AirportShuttleOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import { type ModuleKey } from 'src/auth/permissions';
 import { PATHS } from 'src/routes/paths';
 
@@ -54,6 +55,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'clients', label: 'Klienti', path: PATHS.clients, icon: icon(<StorefrontOutlinedIcon fontSize="small" />) },
       { key: 'drivers', label: 'Řidiči', path: PATHS.drivers, icon: icon(<BadgeOutlinedIcon fontSize="small" />) },
       { key: 'vehicles', label: 'Vozy', path: PATHS.vehicles, icon: icon(<AirportShuttleOutlinedIcon fontSize="small" />) },
+    ],
+  },
+  {
+    heading: 'Analýza',
+    items: [
+      { key: 'reports', label: 'Reporty', path: PATHS.reports, icon: icon(<InsightsOutlinedIcon fontSize="small" />) },
     ],
   },
   {
