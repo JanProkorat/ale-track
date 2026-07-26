@@ -245,7 +245,18 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Where(id => !existingOrderIds.Contains(id))
             .ToList();
 
-        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, clientOrderShipments, ct);
+        // Places already attached to this shipment's existing stops must stay
+        // acceptable even if they were soft-deleted since — otherwise a
+        // resave (e.g. flipping the nakládka checkboxes or advancing the
+        // shipment's state) 404s forever once the place they used is
+        // removed from the client. See ShipmentStopDeliveryPlaceResolver.
+        var alreadyReferencedPlaceIds = orderStops
+            .Where(s => s.ClientDeliveryPlaceId.HasValue)
+            .Select(s => s.ClientDeliveryPlaceId!.Value)
+            .Distinct()
+            .ToList();
+
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, clientOrderShipments, alreadyReferencedPlaceIds, ct);
 
         var stops = new List<OutgoingShipmentStop>(orderStops);
 

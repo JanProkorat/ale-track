@@ -20,6 +20,18 @@ public static class ShipmentStopDeliveryPlaceResolver
     /// this schema can go wrong, so the check is a DB lookup rather than a
     /// validator rule.
     /// </summary>
+    /// <param name="dbContext"></param>
+    /// <param name="clientOrderShipments"></param>
+    /// <param name="alreadyReferencedPlaceIds">
+    /// Entity IDs of <see cref="ClientDeliveryPlace"/> already attached to one
+    /// of the shipment's existing stops (empty on create). A soft-deleted
+    /// place in this set is still accepted — otherwise resaving a shipment
+    /// whose stop already points at a place that got deleted *after* the
+    /// stop was created would 404 forever, even though the read model
+    /// deliberately keeps rendering that place for history. Only a *new*
+    /// assignment onto a soft-deleted place is rejected.
+    /// </param>
+    /// <param name="ct"></param>
     /// <remarks>
     /// Precondition: this method does not itself verify that every
     /// <see cref="ClientOrderShipmentDto.ClientOrderId"/> refers to an
@@ -32,8 +44,11 @@ public static class ShipmentStopDeliveryPlaceResolver
     public static async Task<Dictionary<Guid, long>> ResolveAsync(
         AleTrackDbContext dbContext,
         List<ClientOrderShipmentDto> clientOrderShipments,
+        IReadOnlyCollection<long>? alreadyReferencedPlaceIds,
         CancellationToken ct)
     {
+        alreadyReferencedPlaceIds ??= [];
+
         var requestedIds = clientOrderShipments
             .Where(cos => cos.ClientDeliveryPlaceId.HasValue)
             .Select(cos => cos.ClientDeliveryPlaceId!.Value)
@@ -44,7 +59,7 @@ public static class ShipmentStopDeliveryPlaceResolver
             return [];
 
         var places = await dbContext.ClientDeliveryPlaces
-            .Where(p => requestedIds.Contains(p.PublicId) && !p.IsDeleted)
+            .Where(p => requestedIds.Contains(p.PublicId) && (!p.IsDeleted || alreadyReferencedPlaceIds.Contains(p.Id)))
             .Select(p => new { p.PublicId, p.Id, ClientPublicId = p.Client.PublicId })
             .ToListAsync(ct);
 

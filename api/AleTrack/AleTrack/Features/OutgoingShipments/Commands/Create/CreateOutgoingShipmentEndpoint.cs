@@ -53,7 +53,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
-        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, ct);
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
 
         var outgoingShipment = new OutgoingShipment
         {

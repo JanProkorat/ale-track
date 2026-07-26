@@ -310,6 +310,80 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
 
+    // Lock-out regression: a shipment stop that already points at a place
+    // gets resaved (e.g. flipping a nakládka checkbox, or advancing state)
+    // *after* that place was soft-deleted from the client. Unlike the test
+    // above — a fresh assignment onto a shipment with no stops — this stop
+    // already referenced the place before the request, so the resolver must
+    // not 404 it. See ShipmentStopDeliveryPlaceResolver's
+    // alreadyReferencedPlaceIds parameter.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_ResaveWithAlreadyReferencedSoftDeletedPlace_Succeeds()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var placeId = Guid.NewGuid();
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(publicId: placeId, client: client, isDeleted: true);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            ClientDeliveryPlace = place,
+            ClientDeliveryPlaceId = place.Id
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order],
+            clientDeliveryPlaces: [place]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Loaded,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        ClientDeliveryPlaceId = placeId
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(command, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
+    }
+
     // Missing-place 404: distinct from the soft-deleted case above — this ID
     // never existed at all.
     [Fact]
