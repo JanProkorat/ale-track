@@ -35,7 +35,6 @@ import {
   type OutgoingShipmentInventoryExtraItemDto,
   type ProductKind,
   OutgoingShipmentState,
-  OutgoingShipmentStopAddressKind,
   InventoryExtraShipmentDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
@@ -387,7 +386,12 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
             const key = stop.orderId ?? `stop-${i}`;
             // The chip carries the place name; the address line below never
             // repeats it (formatPlaceAddress only formats the address part).
-            const isPlace = stop.selectedAddressKind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace != null;
+            // `resolveDetailStopAddress` is the single place that normalizes
+            // the wire's string-enum `selectedAddressKind` — deriving `isPlace`
+            // separately here previously compared the raw field directly and
+            // was always false against real API data.
+            const detailAddress = resolveDetailStopAddress(stop);
+            const isPlace = detailAddress.isPlace && stop.deliveryPlace != null;
             return (
               <OverviewRow
                 key={key}
@@ -402,7 +406,7 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
                     sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
                   />
                 ) : undefined}
-                addressLine={resolveDetailStopAddress(stop).text}
+                addressLine={detailAddress.text}
                 rows={(stop.products ?? []).map(productRowFrom)}
                 open={expanded.has(key)}
                 onToggle={() => toggle(key)}

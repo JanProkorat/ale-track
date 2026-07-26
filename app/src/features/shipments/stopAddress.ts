@@ -7,7 +7,7 @@
 
 import { type AddressDto, type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
-import { addrKindLabel } from 'src/lib/labels';
+import { addrKindLabel, addrKindValue } from 'src/lib/labels';
 
 /** The `address · kind` tail shared by both resolvers below for the two
  * standard kinds (Contact falls back to Official when there's no contact
@@ -85,12 +85,25 @@ export function resolveStopAddress(
  * a soft-deleted place, so history keeps rendering), so this reads those
  * instead of doing a lookup. Shared by the route map (so a `DeliveryPlace`
  * stop pins at the place, not the billing address) and the stop header's
- * address line. */
+ * address line.
+ *
+ * `stop.selectedAddressKind` arrives over the wire as the enum's *string*
+ * name (the backend serializes enums as strings — see `src/lib/labels.ts`),
+ * while the generated TS enum is numeric. A direct `===` comparison against
+ * it is therefore always false for real API data — normalize once here via
+ * `addrKindValue` rather than comparing the raw field, and hand the resolved
+ * kind back as `isPlace` so callers don't re-derive it themselves. */
 export function resolveDetailStopAddress(
   stop: Pick<OutgoingShipmentStopDto, 'selectedAddressKind' | 'officialAddress' | 'contactAddress' | 'deliveryPlace'>,
-): { lat?: number; lng?: number; text: string } {
-  if (stop.selectedAddressKind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace) {
-    return { lat: stop.deliveryPlace.address?.latitude, lng: stop.deliveryPlace.address?.longitude, text: formatPlaceAddress(stop.deliveryPlace) };
+): { lat?: number; lng?: number; text: string; isPlace: boolean } {
+  const kind = addrKindValue(stop.selectedAddressKind);
+  if (kind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace) {
+    return {
+      lat: stop.deliveryPlace.address?.latitude,
+      lng: stop.deliveryPlace.address?.longitude,
+      text: formatPlaceAddress(stop.deliveryPlace),
+      isPlace: true,
+    };
   }
-  return resolveFromAddresses(stop.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, stop.officialAddress, stop.contactAddress);
+  return { ...resolveFromAddresses(kind, stop.officialAddress, stop.contactAddress), isPlace: false };
 }

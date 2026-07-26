@@ -273,6 +273,13 @@ describe('ShipmentEditor stop picker — soft-deleted place', () => {
     renderEditor();
     const listbox = openStopMenu();
 
+    // The positive case of the "Smazané" heading: ShipmentEditor.test.tsx's
+    // "listing places" describe block only asserts its *absence* when nothing
+    // is soft-deleted; this is the genuine soft-deleted-place path (the one
+    // Critical 2 of the whole-branch review lives on), so the heading must
+    // actually be there.
+    expect(within(listbox).getByText('Smazané')).toBeInTheDocument();
+
     const goneOption = within(listbox).getByText('Zrušená hospůdka (smazáno)');
     expect(goneOption).toBeInTheDocument();
     const optionEl = goneOption.closest('[role="option"]') as HTMLElement;

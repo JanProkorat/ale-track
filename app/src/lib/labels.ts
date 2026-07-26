@@ -62,7 +62,7 @@ export const L = {
   } as Record<string, string>,
   contact: { Email: 'E-mail', Phone: 'Telefon' } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
-  addrKind: { Official: 'Fakturační', Contact: 'Kontaktní' } as Record<string, string>,
+  addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
 } as const;
 
 // The generated enums are numeric, but the backend serializes enum values as

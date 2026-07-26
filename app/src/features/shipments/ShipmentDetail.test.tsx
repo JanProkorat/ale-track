@@ -58,6 +58,13 @@ function officialAddress(): AddressDto {
   return new AddressDto({ streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.897, longitude: 14.808 });
 }
 
+// The backend serializes enums as strings on the wire (JsonStringEnumConverter,
+// Program.cs), so `selectedAddressKind` really arrives as "DeliveryPlace"/
+// "Contact", not the generated client's numeric enum members. Using the string
+// form here — rather than `OutgoingShipmentStopAddressKind.DeliveryPlace` —
+// is what makes this fixture actually exercise the real API shape; a direct
+// `===` against the numeric member (the regression this whole suite guards)
+// would silently fall through to the official-address branch instead.
 function placeStop(): OutgoingShipmentStopDto {
   return new OutgoingShipmentStopDto({
     id: 'stop-1',
@@ -67,7 +74,7 @@ function placeStop(): OutgoingShipmentStopDto {
     clientName: 'Hospoda U Netopýra',
     orderId: 'order-1',
     officialAddress: officialAddress(),
-    selectedAddressKind: OutgoingShipmentStopAddressKind.DeliveryPlace,
+    selectedAddressKind: 'DeliveryPlace' as unknown as OutgoingShipmentStopAddressKind,
     deliveryPlace: new ClientDeliveryPlaceDto({
       id: 'place-a',
       name: 'Letní zahrádka',
@@ -88,6 +95,27 @@ function officialStop(): OutgoingShipmentStopDto {
     orderId: 'order-2',
     officialAddress: officialAddress(),
     selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+    products: [],
+    returns: [],
+  });
+}
+
+function contactStop(): OutgoingShipmentStopDto {
+  return new OutgoingShipmentStopDto({
+    id: 'stop-3',
+    kind: OutgoingShipmentStopKind.Order,
+    order: 1,
+    clientId: 'client-c',
+    clientName: 'Restaurace C',
+    orderId: 'order-3',
+    officialAddress: officialAddress(),
+    contactAddress: new AddressDto({ streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.88, longitude: 14.81 }),
+    // String wire form (see comment on placeStop) — this is the fixture that
+    // guards the Contact regression: the branch this review's fix replaced
+    // used `addrKindName(...) === 'Contact'` (normalized correctly); the code
+    // it replaced compared the raw enum directly, which never matched real
+    // API data and fell through to the official address instead.
+    selectedAddressKind: 'Contact' as unknown as OutgoingShipmentStopAddressKind,
     products: [],
     returns: [],
   });
@@ -121,6 +149,18 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
 
     const row = screen.getByText('Restaurace B').closest('button') as HTMLElement;
     expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
+    expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
+  });
+
+  // Regression guard: the branch this review's fix replaced compared
+  // `selectedAddressKind` directly against the numeric Contact member, which
+  // never matches the server's string wire form and fell through to the
+  // official address instead — pinning and displaying the wrong stop.
+  it('shows the contact address · kind line, and no place chip, for a Contact stop', () => {
+    renderDetail([contactStop()]);
+
+    const row = screen.getByText('Restaurace C').closest('button') as HTMLElement;
+    expect(within(row).getByText('Dvůr 2a, 02763 Žitava · Kontaktní')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
 });

@@ -43,13 +43,24 @@ describe('resolveDetailStopAddress', () => {
     expect(r.text).toBe('Náměstí 14, 02763 Žitava · Fakturační');
   });
 
-  it('uses the contact address when selected', () => {
+  it('uses the contact address when selected (numeric wire form)', () => {
     const r = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Contact, officialAddress, contactAddress } as never);
     expect(r.lat).toBe(50.88);
     expect(r.text).toBe('Dvůr 2a, 02763 Žitava · Kontaktní');
   });
 
-  it('uses the place coordinates and formatted address (without the name) when a place is selected', () => {
+  // The backend serializes enums as strings on the wire (JsonStringEnumConverter,
+  // Program.cs), so `selectedAddressKind` really arrives as "Contact", not the
+  // numeric 1. A direct `===` against the numeric enum member — the bug this
+  // test guards — silently falls through to the official-address branch here.
+  it('uses the contact address when selected (string wire form)', () => {
+    const r = resolveDetailStopAddress({ selectedAddressKind: 'Contact' as unknown as OutgoingShipmentStopAddressKind, officialAddress, contactAddress } as never);
+    expect(r.lat).toBe(50.88);
+    expect(r.text).toBe('Dvůr 2a, 02763 Žitava · Kontaktní');
+    expect(r.isPlace).toBe(false);
+  });
+
+  it('uses the place coordinates and formatted address (without the name) when a place is selected (numeric wire form)', () => {
     const r = resolveDetailStopAddress({
       selectedAddressKind: OutgoingShipmentStopAddressKind.DeliveryPlace,
       officialAddress,
@@ -58,6 +69,22 @@ describe('resolveDetailStopAddress', () => {
     expect(r.lat).toBe(50.9);
     expect(r.text).toBe('Nábřežní 3, 02763 Žitava');
     expect(r.text).not.toContain('Letní zahrádka');
+    expect(r.isPlace).toBe(true);
+  });
+
+  // Same wire-form guard as the Contact test above, for the DeliveryPlace
+  // branch — the actual bug reported by the whole-branch review: a stop
+  // saved with a delivery place showed the billing address on the detail
+  // screen because "DeliveryPlace" === 2 is false.
+  it('uses the place coordinates and formatted address when a place is selected (string wire form)', () => {
+    const r = resolveDetailStopAddress({
+      selectedAddressKind: 'DeliveryPlace' as unknown as OutgoingShipmentStopAddressKind,
+      officialAddress,
+      deliveryPlace: { name: 'Letní zahrádka', address: place.address },
+    } as never);
+    expect(r.lat).toBe(50.9);
+    expect(r.text).toBe('Nábřežní 3, 02763 Žitava');
+    expect(r.isPlace).toBe(true);
   });
 
   it('falls back to the official address when the kind is DeliveryPlace but no place is loaded', () => {
