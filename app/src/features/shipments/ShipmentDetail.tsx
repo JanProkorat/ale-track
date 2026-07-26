@@ -115,8 +115,8 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 /** The two checkbox columns: only as wide as the control, since their header is an icon. */
 const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
 
-/** Wide enough for "z toho ze skladu − n +" on one line — no breakdown row may wrap. */
-const QTY_CELL_SX = { width: 190, minWidth: 190 };
+/** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
+const QTY_CELL_SX = { width: 170, minWidth: 170 };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
@@ -244,10 +244,8 @@ function AggLoadingRow({
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
         </Stack>
       </TableCell>
-      {/* The total, then what it is made of — every controllable number in one place,
-          each on its own labelled line. "z toho ze skladu" is indented because it is a
-          breakdown of the ordered pieces, not a third thing added to them: 4 ks here is
-          1 ordered + 3 for the warehouse, of which 0 came off our shelf. */}
+      {/* What goes into the van, and where each piece comes from. The total is the sum
+          of the lines below it, every controllable number in one place. */}
       <TableCell align="right" sx={QTY_CELL_SX}>
         <Box
           sx={{
@@ -260,36 +258,40 @@ function AggLoadingRow({
             {agg.quantity} ks
           </Typography>
 
+          {/* The three lines are addends of the total, not a total and its parts: what
+              the brewery hands over, what comes off our own shelf instead, and what we
+              buy for the shelf. Sourcing a piece from the garage moves it out of the
+              brewery line, which is why that line is ordered minus sourced. */}
           {agg.orderQuantity > 0 && (
-            <BreakdownRow label="objednávka" value={agg.orderQuantity} />
+            <BreakdownRow label="Z pivovaru" value={agg.orderQuantity - agg.fromInventory} />
           )}
 
           {(sourceable || agg.fromInventory > 0) && (
             <BreakdownRow
-              label="z toho ze skladu"
+              label="Z garáže"
               value={agg.fromInventory}
               tone="info.main"
               adjust={sourceable ? {
                 onAdjust: onAdjustSourcing!,
                 canDecrease: agg.fromInventory > 0,
                 canIncrease: agg.fromInventory < agg.orderQuantity,
-                decreaseLabel: 'Ubrat kus ze skladu',
-                increaseLabel: 'Přidat kus ze skladu',
+                decreaseLabel: 'Ubrat kus z garáže',
+                increaseLabel: 'Přidat kus z garáže',
               } : undefined}
             />
           )}
 
           {agg.stockPurchaseQuantity > 0 && (
             <BreakdownRow
-              label="na sklad"
+              label="Do garáže"
               value={agg.stockPurchaseQuantity}
               tone="info.main"
               adjust={adjustable ? {
                 onAdjust: onAdjustStockPurchase!,
                 canDecrease: true,
                 canIncrease: true,
-                decreaseLabel: 'Ubrat kus zboží na sklad',
-                increaseLabel: 'Přidat kus zboží na sklad',
+                decreaseLabel: 'Ubrat kus do garáže',
+                increaseLabel: 'Přidat kus do garáže',
               } : undefined}
             />
           )}
