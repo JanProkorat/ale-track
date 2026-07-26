@@ -32,8 +32,8 @@ export function PurchaseInvoiceHeaderCells({
   return (
     <>
       {columnsOf(invoices).map((column) => (
-        <TableCell key={column.sequence} align="right" sx={{ ...HEAD_SX, ...CELL_SX }}>
-          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end">
+        <TableCell key={column.sequence} align="center" sx={{ ...HEAD_SX, ...CELL_SX }}>
+          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
             <Tooltip title={`Faktura pivovaru ${column.sequence}`}>
               <span>{`F${column.sequence}`}</span>
             </Tooltip>
@@ -70,7 +70,7 @@ export function PurchaseInvoiceRowCells({
 
   return (
     <>
-      <TableCell align="right" sx={CELL_SX}>
+      <TableCell align="center" sx={CELL_SX}>
         {total === 0 ? (
           <Tooltip title="Nekupuje se od pivovaru — celé ze skladu">
             <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
@@ -84,7 +84,7 @@ export function PurchaseInvoiceRowCells({
       {columns.slice(1).map((column) => {
         const claimed = claimAt(invoices, column.sequence, row.productId);
         return (
-          <TableCell key={column.sequence} align="right" sx={CELL_SX}>
+          <TableCell key={column.sequence} align="center" sx={CELL_SX}>
             {total === 0 ? (
               <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
             ) : editable ? (
@@ -139,7 +139,7 @@ function QuantityStepper({
   }
 
   return (
-    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end">
+    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
       <IconButton
         size="small"
         onClick={() => commit(value - 1)}
@@ -179,7 +179,7 @@ export function PurchaseInvoiceFooterCells({ totals, sx }: { totals: number[]; s
   return (
     <>
       {totals.map((total, index) => (
-        <TableCell key={index} align="right" sx={{ ...sx, ...CELL_SX }}>
+        <TableCell key={index} align="center" sx={{ ...sx, ...CELL_SX }}>
           <Box component="span" sx={{ color: index === 0 ? 'text.secondary' : 'text.primary' }}>{total} ks</Box>
         </TableCell>
       ))}
