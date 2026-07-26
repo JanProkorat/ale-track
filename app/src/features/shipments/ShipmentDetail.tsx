@@ -314,7 +314,7 @@ function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, empt
           <TableHead>
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
-              <TableCell align="right" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
+              <TableCell align="center" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
               {invoiceHeaders}
             </TableRow>
           </TableHead>
