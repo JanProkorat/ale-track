@@ -11,7 +11,7 @@ import {
   RoutePointDto,
   OrderItemInfoDto,
   ExtraItemInfoDto,
-  InventoryExtraShipmentDto,
+  StockPurchaseDto,
   OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
@@ -19,7 +19,7 @@ export interface ShipmentDraft {
   clientOrderShipments: ClientOrderShipmentDto[];
   customStops: CustomStopDto[];
   routeViaPoints: RoutePointDto[];
-  inventoryExtraShipments: InventoryExtraShipmentDto[];
+  stockPurchases: StockPurchaseDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -56,8 +56,8 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       longitude: st.longitude ?? 0,
     })),
     routeViaPoints: (shipment.routeViaPoints ?? []).map((p) => new RoutePointDto({ latitude: p.latitude ?? 0, longitude: p.longitude ?? 0 })),
-    inventoryExtraShipments: (shipment.inventoryExtraItems ?? []).map((e) => {
-      const dto = new InventoryExtraShipmentDto({
+    stockPurchases: (shipment.stockPurchases ?? []).map((e) => {
+      const dto = new StockPurchaseDto({
         id: e.id, quantity: e.quantity,
         isLoadingConfirmed: e.isShipmentLoadingConfirmed,
       });

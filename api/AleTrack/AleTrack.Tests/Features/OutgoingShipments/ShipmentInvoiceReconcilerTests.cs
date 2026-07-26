@@ -297,10 +297,10 @@ public sealed class ShipmentInvoiceReconcilerTests
     }
 
     [Fact]
-    public void Reconcile_InventoryExtras_AreNeverInvoiced()
+    public void Reconcile_StockPurchases_AreNeverInvoiced()
     {
         var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
-        shipment.InventoryExtraItems.Add(new OutgoingShipmentInventoryExtraItem
+        shipment.StockPurchases.Add(new OutgoingShipmentStockPurchaseItem
         {
             Id = 300, PublicId = Guid.NewGuid(), Quantity = 12
         });

@@ -103,6 +103,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Quantity = oi.Quantity,
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
+                                    PlatoDegree = oi.Product.PlatoDegree,
                                     Weight = oi.Product.Weight,
                                     OrderItemId = oi.PublicId,
                                     QuantityFromInventory = oi.QuantityFromInventory,
@@ -142,16 +143,40 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                     .OrderBy(v => v.Order)
                     .Select(v => new RoutePointDto { Latitude = v.Latitude, Longitude = v.Longitude })
                     .ToList(),
-                InventoryExtraItems = os.InventoryExtraItems
-                    .Select(ei => new OutgoingShipmentInventoryExtraItemDto
+                StockPurchases = os.StockPurchases
+                    .Select(ei => new OutgoingShipmentStockPurchaseItemDto
                     {
                         Id = ei.PublicId,
                         Quantity = ei.Quantity,
                         Kind = ei.Product.Kind,
                         PackageSize = ei.Product.PackageSize,
+                        PlatoDegree = ei.Product.PlatoDegree,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
                         ProductId = ei.Product.PublicId,
                         Name = ei.Product.Name
+                    })
+                    .ToList(),
+                PurchaseInvoices = os.PurchaseInvoices
+                    .OrderBy(pi => pi.Sequence)
+                    .Select(pi => new OutgoingShipmentPurchaseInvoiceDto
+                    {
+                        Id = pi.PublicId,
+                        Sequence = pi.Sequence,
+                        Lines = pi.Lines
+                            .Select(l => new OutgoingShipmentPurchaseInvoiceLineDto
+                            {
+                                ProductId = l.Product.PublicId,
+                                Quantity = l.Quantity
+                            })
+                            .ToList()
+                    })
+                    .ToList(),
+                LoadingStates = os.LoadingStates
+                    .Select(ls => new OutgoingShipmentLoadingStateDto
+                    {
+                        ProductId = ls.Product.PublicId,
+                        Sequence = ls.Sequence,
+                        State = ls.State
                     })
                     .ToList(),
             })
@@ -161,6 +186,58 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
+        ClampPurchaseInvoiceLines(outgoingShipment!);
+
         await Send.OkAsync(outgoingShipment, cancellation: ct);
+    }
+
+    /// <summary>
+    /// Brings the purchase split we hand out inside the same invariant the write path enforces:
+    /// no invoice may claim more of a product than the run buys of it.
+    /// </summary>
+    /// <remarks>
+    /// Needed because the nakládka changes through endpoints that know nothing about this split —
+    /// an order item's quantity, its sourcing, a stock purchase — so a stored line can fall out of
+    /// range without any purchase-invoice endpoint being called. Clamping here rather than writing
+    /// back keeps the GET side-effect free; the stored rows are corrected on the next write.
+    ///
+    /// Invoices are walked in sequence order, so when a total shrinks the later ones give up their
+    /// claim first. The same rule as <see cref="Utils.PurchaseInvoiceSplit.Clamp"/>, over the
+    /// projection instead of the entities.
+    /// </remarks>
+    private static void ClampPurchaseInvoiceLines(OutgoingShipmentDetailDto shipment)
+    {
+        if (shipment.PurchaseInvoices.Count == 0)
+            return;
+
+        var remaining = new Dictionary<Guid, int>();
+
+        foreach (var product in shipment.Stops.SelectMany(s => s.Products))
+        {
+            var fromBrewery = product.Quantity - product.QuantityFromInventory;
+            if (fromBrewery > 0)
+                remaining[product.Id] = remaining.GetValueOrDefault(product.Id) + fromBrewery;
+        }
+
+        foreach (var purchase in shipment.StockPurchases)
+            remaining[purchase.ProductId] = remaining.GetValueOrDefault(purchase.ProductId) + purchase.Quantity;
+
+        foreach (var invoice in shipment.PurchaseInvoices.OrderBy(i => i.Sequence))
+        {
+            foreach (var line in invoice.Lines.ToList())
+            {
+                var left = remaining.GetValueOrDefault(line.ProductId);
+                var allowed = Math.Min(line.Quantity, left);
+
+                if (allowed <= 0)
+                {
+                    invoice.Lines.Remove(line);
+                    continue;
+                }
+
+                line.Quantity = allowed;
+                remaining[line.ProductId] = left - allowed;
+            }
+        }
     }
 }

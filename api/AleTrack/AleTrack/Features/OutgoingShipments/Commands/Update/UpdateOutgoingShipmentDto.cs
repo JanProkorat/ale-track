@@ -51,7 +51,7 @@ public sealed record UpdateOutgoingShipmentDto
     /// <summary>
     /// Extra products to be delivered to the inventory from the brewery
     /// </summary>
-    public List<InventoryExtraShipmentDto> InventoryExtraShipments { get; set; } = [];
+    public List<StockPurchaseDto> StockPurchases { get; set; } = [];
     
     /// <summary>
     /// Extra products to be delivered from the inventory to the client

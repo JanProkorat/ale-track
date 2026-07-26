@@ -54,6 +54,9 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipment>? outgoingShipments = null,
         ICollection<OutgoingShipmentInvoice>? outgoingShipmentInvoices = null,
         ICollection<OutgoingShipmentInvoiceLine>? outgoingShipmentInvoiceLines = null,
+        ICollection<OutgoingShipmentPurchaseInvoice>? outgoingShipmentPurchaseInvoices = null,
+        ICollection<OutgoingShipmentPurchaseInvoiceLine>? outgoingShipmentPurchaseInvoiceLines = null,
+        ICollection<OutgoingShipmentLoadingState>? outgoingShipmentLoadingStates = null,
         ICollection<RefreshToken>? refreshTokens = null,
         ICollection<ClientDeliveryPlace>? clientDeliveryPlaces = null)
     {
@@ -76,6 +79,9 @@ public static class AleTrackDbContextMockFactory
             outgoingShipments ?? [],
             outgoingShipmentInvoices ?? [],
             outgoingShipmentInvoiceLines ?? [],
+            outgoingShipmentPurchaseInvoices ?? [],
+            outgoingShipmentPurchaseInvoiceLines ?? [],
+            outgoingShipmentLoadingStates ?? [],
             refreshTokens ?? [],
             clientDeliveryPlaces ?? []);
     }
@@ -115,6 +121,9 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipment> outgoingShipments,
         ICollection<OutgoingShipmentInvoice> outgoingShipmentInvoices,
         ICollection<OutgoingShipmentInvoiceLine> outgoingShipmentInvoiceLines,
+        ICollection<OutgoingShipmentPurchaseInvoice> outgoingShipmentPurchaseInvoices,
+        ICollection<OutgoingShipmentPurchaseInvoiceLine> outgoingShipmentPurchaseInvoiceLines,
+        ICollection<OutgoingShipmentLoadingState> outgoingShipmentLoadingStates,
         ICollection<RefreshToken> refreshTokens,
         ICollection<ClientDeliveryPlace> clientDeliveryPlaces)
     {
@@ -134,6 +143,9 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<OutgoingShipment>>(x => x.OutgoingShipments).ReturnsDbSet(outgoingShipments);
         dbContextMock.Setup<DbSet<OutgoingShipmentInvoice>>(x => x.OutgoingShipmentInvoices).ReturnsDbSet(outgoingShipmentInvoices);
         dbContextMock.Setup<DbSet<OutgoingShipmentInvoiceLine>>(x => x.OutgoingShipmentInvoiceLines).ReturnsDbSet(outgoingShipmentInvoiceLines);
+        dbContextMock.Setup<DbSet<OutgoingShipmentPurchaseInvoice>>(x => x.OutgoingShipmentPurchaseInvoices).ReturnsDbSet(outgoingShipmentPurchaseInvoices);
+        dbContextMock.Setup<DbSet<OutgoingShipmentPurchaseInvoiceLine>>(x => x.OutgoingShipmentPurchaseInvoiceLines).ReturnsDbSet(outgoingShipmentPurchaseInvoiceLines);
+        dbContextMock.Setup<DbSet<OutgoingShipmentLoadingState>>(x => x.OutgoingShipmentLoadingStates).ReturnsDbSet(outgoingShipmentLoadingStates);
         dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
         dbContextMock.Setup<DbSet<ClientDeliveryPlace>>(x => x.ClientDeliveryPlaces).ReturnsDbSet(clientDeliveryPlaces);
 
