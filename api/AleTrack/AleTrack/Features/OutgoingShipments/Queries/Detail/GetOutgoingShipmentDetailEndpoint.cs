@@ -91,6 +91,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Quantity = oi.Quantity,
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
+                                    PlatoDegree = oi.Product.PlatoDegree,
                                     Weight = oi.Product.Weight,
                                     OrderItemId = oi.PublicId,
                                     QuantityFromInventory = oi.QuantityFromInventory,
@@ -137,6 +138,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Quantity = ei.Quantity,
                         Kind = ei.Product.Kind,
                         PackageSize = ei.Product.PackageSize,
+                        PlatoDegree = ei.Product.PlatoDegree,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
                         ProductId = ei.Product.PublicId,
                         Name = ei.Product.Name

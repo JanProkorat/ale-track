@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { ProductKind } from 'src/generated/api-client';
 import { groupByKind, KIND_ORDER } from './nakladkaGrouping';
 
-const row = (name: string, kind?: ProductKind | string | number) => ({ name, kind });
+const row = (
+  name: string,
+  kind?: ProductKind | string | number,
+  platoDegree?: number,
+  packageSize?: number,
+) => ({ name, kind, platoDegree, packageSize });
 
 describe('groupByKind', () => {
   it('orders the sections the way the van is packed', () => {
@@ -17,11 +22,31 @@ describe('groupByKind', () => {
       .toEqual(['Bottle', 'Keg']);
   });
 
-  it('keeps the incoming row order inside a section', () => {
-    // The API already sorts by the brewery's display order.
-    const rows = [row('b', 'Bottle'), row('a', 'Bottle'), row('c', 'Bottle')];
+  it('sorts a section by degree, then by package size', () => {
+    const rows = [
+      row('12° velká', 'Bottle', 12, 0.5),
+      row('10° malá', 'Bottle', 10, 0.33),
+      row('12° malá', 'Bottle', 12, 0.33),
+      row('10° velká', 'Bottle', 10, 0.5),
+    ];
 
-    expect(groupByKind(rows)[0].rows.map((r) => r.name)).toEqual(['b', 'a', 'c']);
+    expect(groupByKind(rows)[0].rows.map((r) => r.name))
+      .toEqual(['10° malá', '10° velká', '12° malá', '12° velká']);
+  });
+
+  it('puts rows without a degree after the beers', () => {
+    // A missing degree is not a zero-degree beer — it is something else entirely.
+    const rows = [row('bez stupňů', 'Keg', undefined, 30), row('11°', 'Keg', 11, 50)];
+
+    expect(groupByKind(rows)[0].rows.map((r) => r.name)).toEqual(['11°', 'bez stupňů']);
+  });
+
+  it('does not reorder the caller\u2019s array', () => {
+    const rows = [row('b', 'Bottle', 12), row('a', 'Bottle', 10)];
+
+    groupByKind(rows);
+
+    expect(rows.map((r) => r.name)).toEqual(['b', 'a']);
   });
 
   it('reads the numeric enum as well as the wire string', () => {

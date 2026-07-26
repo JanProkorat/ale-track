@@ -24,14 +24,34 @@ export interface KindSection<T> {
   rows: T[];
 }
 
+/** What a row needs for the within-section order. */
+interface Sortable {
+  platoDegree?: number;
+  packageSize?: number;
+}
+
 /**
- * Splits rows into sections in {@link KIND_ORDER}, dropping the empty ones.
+ * Within a section: by degree, then smallest package first.
  *
- * Row order within a section is left alone — it already carries the brewery's
- * display order from the API. Kinds are matched by enum *name*, because the API
- * serialises them as strings while the generated enum is numeric.
+ * Anything without a degree sorts after the beers rather than in front of them —
+ * a missing value is not a zero-degree beer, it is something else entirely (kegs of
+ * cider, empties), and it belongs at the end of its section.
  */
-export function groupByKind<T extends { kind?: ProductKind | string | number }>(
+function bySortKey(a: Sortable, b: Sortable): number {
+  const plato = (a.platoDegree ?? Number.POSITIVE_INFINITY) - (b.platoDegree ?? Number.POSITIVE_INFINITY);
+  if (plato !== 0) return plato;
+
+  return (a.packageSize ?? Number.POSITIVE_INFINITY) - (b.packageSize ?? Number.POSITIVE_INFINITY);
+}
+
+/**
+ * Splits rows into sections in {@link KIND_ORDER}, dropping the empty ones, each
+ * sorted by degree and then package size.
+ *
+ * Kinds are matched by enum *name*, because the API serialises them as strings while
+ * the generated enum is numeric.
+ */
+export function groupByKind<T extends { kind?: ProductKind | string | number } & Sortable>(
   rows: T[],
 ): KindSection<T>[] {
   const buckets = new Map<string, T[]>();
@@ -49,6 +69,6 @@ export function groupByKind<T extends { kind?: ProductKind | string | number }>(
     .map((kind) => ({
       kind,
       label: kindLabel(kind) ?? kind,
-      rows: buckets.get(kind)!,
+      rows: [...buckets.get(kind)!].sort(bySortKey),
     }));
 }

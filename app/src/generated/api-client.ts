@@ -10028,6 +10028,7 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
     quantity?: number;
     kind?: ProductKind | undefined;
     packageSize?: number | undefined;
+    platoDegree?: number | undefined;
     weight?: number | undefined;
     isShipmentLoadingConfirmed?: boolean;
 
@@ -10047,6 +10048,7 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
             this.quantity = _data["quantity"];
             this.kind = _data["kind"];
             this.packageSize = _data["packageSize"];
+            this.platoDegree = _data["platoDegree"];
             this.weight = _data["weight"];
             this.isShipmentLoadingConfirmed = _data["isShipmentLoadingConfirmed"];
         }
@@ -10066,6 +10068,7 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
         data["quantity"] = this.quantity;
         data["kind"] = this.kind;
         data["packageSize"] = this.packageSize;
+        data["platoDegree"] = this.platoDegree;
         data["weight"] = this.weight;
         data["isShipmentLoadingConfirmed"] = this.isShipmentLoadingConfirmed;
         return data;
@@ -10078,6 +10081,7 @@ export interface IOutgoingShipmentProductDto {
     quantity?: number;
     kind?: ProductKind | undefined;
     packageSize?: number | undefined;
+    platoDegree?: number | undefined;
     weight?: number | undefined;
     isShipmentLoadingConfirmed?: boolean;
 }

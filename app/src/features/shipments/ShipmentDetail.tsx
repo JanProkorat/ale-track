@@ -65,6 +65,7 @@ interface NakladkaRow {
   name: string;
   kind?: ProductKind;
   packageSize?: number;
+  platoDegree?: number;
   quantity: number;
   weight: number;
   /** Of `quantity`, how many pieces come from our own stock (order rows only). */
@@ -85,6 +86,7 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     name: p.name ?? '—',
     kind: p.kind,
     packageSize: p.packageSize,
+    platoDegree: p.platoDegree,
     quantity: p.quantity ?? 0,
     weight: p.weight ?? 0,
     fromInventory: p.quantityFromInventory ?? 0,
@@ -102,6 +104,7 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     name: e.name ?? '—',
     kind: e.kind,
     packageSize: e.packageSize,
+    platoDegree: e.platoDegree,
     quantity: e.quantity ?? 0,
     weight: e.weight ?? 0,
     fromInventory: 0,
@@ -119,6 +122,19 @@ function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | u
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
 }
 
+/**
+ * Chip for a row of the loading list: degree and package size.
+ *
+ * No kind — the section heading above the row already says it. The degree is what
+ * distinguishes two otherwise identically named beers on the pallet.
+ */
+function platoSizeChipText(platoDegree: number | undefined, packageSize: number | undefined): string {
+  return [
+    platoDegree != null ? `${platoDegree}°` : '',
+    packageSize != null ? fmtLiters(packageSize) : '',
+  ].filter(Boolean).join(' · ');
+}
+
 interface AggRow {
   key: string;
   /** Product this line is of — what a brewery-invoice line is keyed by. */
@@ -126,6 +142,7 @@ interface AggRow {
   name: string;
   kind?: ProductKind;
   packageSize?: number;
+  platoDegree?: number;
   quantity: number;
   orderQuantity: number;
   stockPurchaseQuantity: number;
@@ -145,7 +162,7 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
     const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
     let agg = map.get(key);
     if (!agg) {
-      agg = { key, productId: r.productId, name: r.name, kind: r.kind, packageSize: r.packageSize, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
+      agg = { key, productId: r.productId, name: r.name, kind: r.kind, packageSize: r.packageSize, platoDegree: r.platoDegree, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
       map.set(key, agg);
       order.push(key);
     }
@@ -218,7 +235,7 @@ function AggLoadingRow({
   /** Pieces and loading state, two cells per brewery invoice. */
   invoiceCells: ReactNode;
 }) {
-  const chipText = kindSizeChipText(agg.kind, agg.packageSize);
+  const chipText = platoSizeChipText(agg.platoDegree, agg.packageSize);
   const adjustable = Boolean(onAdjustStockPurchase) && editable;
   const sourceable = Boolean(onAdjustSourcing) && editable;
   return (

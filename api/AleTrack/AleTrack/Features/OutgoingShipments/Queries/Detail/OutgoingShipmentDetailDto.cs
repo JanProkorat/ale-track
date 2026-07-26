@@ -243,7 +243,12 @@ public record OutgoingShipmentProductDto
     /// Size of the whole package
     /// </summary>
     public double? PackageSize { get; set; }
-    
+
+    /// <summary>
+    /// Degree of the beer — 10, 11, 12. Null for anything that is not brewed to one.
+    /// </summary>
+    public float? PlatoDegree { get; set; }
+
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
