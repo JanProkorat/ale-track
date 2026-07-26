@@ -1,9 +1,13 @@
 name: Wake Dev API
 
-# Render free instances spin down after 15 minutes idle and can take 30-60s to cold
-# start - longer than cron-job.org's 30s ceiling, which is why the first keepalive ping
-# of the day reports a failure even though it does trigger the wake. This job waits
-# patiently instead, so the service is already warm when that schedule starts.
+# Render free instances spin down after 15 minutes idle, and waking one takes a client
+# that sits through the boot: Render answers the request that triggers a spin-up with an
+# immediate 503. The single-shot cron-job.org keepalive (*/12 8-17 * * *) therefore can
+# never revive a sleeping service - it only keeps an already-running one warm. This job
+# is what does the waking, which is why it has to run every day. On Sunday 2026-07-26 it
+# was still scheduled Mon-Fri: nothing woke the service after it slept on Saturday
+# evening, and all 13 keepalive pings returned 503 over the following two and a half
+# hours until a request that held the connection open finally booted it.
 #
 # Note: GitHub disables scheduled workflows in repositories with no activity for 60 days.
 
@@ -11,7 +15,7 @@ on:
   schedule:
     # 05:00 UTC = 07:00 Prague in summer, 06:00 in winter - ahead of the 08:00 keepalive
     # window either way, so no DST handling is needed.
-    - cron: "0 5 * * 1-5"
+    - cron: "0 5 * * *"
   workflow_dispatch:
 
 jobs:
