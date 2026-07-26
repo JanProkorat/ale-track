@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { searchAddresses } from 'src/lib/geo';
+import { partsFromNominatim, searchAddresses } from 'src/lib/geo';
+import { Country } from 'src/generated/api-client';
 
 function mockFetch(impl: typeof fetch) {
   vi.stubGlobal('fetch', vi.fn(impl));
@@ -83,5 +84,33 @@ describe('searchAddresses', () => {
     expect(url).toContain('nominatim.openstreetmap.org/search');
     expect(url).toContain('limit=5');
     expect(url).toMatch(/[?&]q=Praha\+1/);
+  });
+});
+
+describe('partsFromNominatim', () => {
+  it('maps a Czech address', () => {
+    expect(partsFromNominatim({
+      road: 'Masarykova', house_number: '1347', city: 'Liberec', postcode: '460 01', country_code: 'cz',
+    })).toEqual({
+      streetName: 'Masarykova', streetNumber: '1347', city: 'Liberec', zip: '460 01', country: Country.Czechia,
+    });
+  });
+
+  it('falls back through town and village for the city', () => {
+    expect(partsFromNominatim({ town: 'Frýdlant' }).city).toBe('Frýdlant');
+    expect(partsFromNominatim({ village: 'Vísky' }).city).toBe('Vísky');
+  });
+
+  it('maps a German address', () => {
+    expect(partsFromNominatim({ country_code: 'de' }).country).toBe(Country.Germany);
+  });
+
+  it('defaults an unknown country to Czechia — the business only ships CZ and DE', () => {
+    expect(partsFromNominatim({ country_code: 'pl' }).country).toBe(Country.Czechia);
+    expect(partsFromNominatim({}).country).toBe(Country.Czechia);
+  });
+
+  it('omits parts Nominatim did not return rather than emitting empty strings', () => {
+    expect(partsFromNominatim({ road: 'Vísky' })).toEqual({ streetName: 'Vísky', country: Country.Czechia });
   });
 });

@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Features.ClientDeliveryPlaces;
 
 namespace AleTrack.Features.Orders.Queries.OutgoingShipmentsList;
 
@@ -29,7 +30,13 @@ public record OutgoingShipmentOrderDto
     /// Contact address of the client
     /// </summary>
     public AddressDto? ClientContactAddress { get; set; }
-    
+
+    /// <summary>
+    /// The client's saved delivery places, offered as extra destinations for
+    /// this order's stop. Soft-deleted places are excluded.
+    /// </summary>
+    public List<ClientDeliveryPlaceDto> ClientDeliveryPlaces { get; set; } = [];
+
     /// <summary>
     /// List of order items
     /// </summary>

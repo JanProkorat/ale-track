@@ -2,6 +2,8 @@
 // nearest-neighbour route optimizer. Kept out of RouteMap.tsx so that
 // component file only exports the component (react-refresh/only-export-components).
 
+import { Country } from 'src/generated/api-client';
+
 export interface LatLng {
   lat: number;
   lng: number;
@@ -81,12 +83,50 @@ export async function geocodeAddress(a: GeocodeAddress, signal?: AbortSignal): P
   }
 }
 
+/** Postal parts of a geocoding hit, as far as Nominatim could resolve them.
+ * Fields Nominatim did not return are omitted, not blanked — a place with no
+ * street is a real case (a yard gate, a field entrance). */
+export interface AddressParts {
+  streetName?: string;
+  streetNumber?: string;
+  city?: string;
+  zip?: string;
+  country?: Country;
+}
+
+/** Nominatim's `address` object, as much of it as we consume. */
+interface NominatimAddress {
+  road?: string;
+  house_number?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  postcode?: string;
+  country_code?: string;
+}
+
+/** Nominatim's parts are uneven for rural CZ addresses, so callers show the
+ * result editable rather than trusting it. Anything outside CZ/DE falls back to
+ * Czechia — the business ships to those two countries only. */
+export function partsFromNominatim(raw: NominatimAddress): AddressParts {
+  const parts: AddressParts = {};
+  if (raw.road) parts.streetName = raw.road;
+  if (raw.house_number) parts.streetNumber = raw.house_number;
+  const city = raw.city ?? raw.town ?? raw.village;
+  if (city) parts.city = city;
+  if (raw.postcode) parts.zip = raw.postcode;
+  parts.country = raw.country_code === 'de' ? Country.Germany : Country.Czechia;
+  return parts;
+}
+
 /** A geocoding candidate for interactive address search. */
 export interface AddressHit {
   /** Human-readable place name (Nominatim `display_name`). */
   label: string;
   lat: number;
   lng: number;
+  /** Structured postal parts, when Nominatim's `addressdetails` resolved them. */
+  parts?: AddressParts;
 }
 
 /** Search OpenStreetMap Nominatim for up to 5 places matching a free-form
@@ -98,17 +138,22 @@ export async function searchAddresses(query: string, signal?: AbortSignal): Prom
   const q = query.trim();
   if (!q) return [];
   const base = 'https://nominatim.openstreetmap.org/search';
-  const params = new URLSearchParams({ q, format: 'jsonv2', limit: '5' });
+  const params = new URLSearchParams({ q, format: 'jsonv2', limit: '5', addressdetails: '1' });
   try {
     const res = await fetch(`${base}?${params.toString()}`, { signal, headers: { Accept: 'application/json' } });
     if (!res.ok) return [];
-    const data = (await res.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
+    const data = (await res.json()) as Array<{ display_name?: string; lat?: string; lon?: string; address?: NominatimAddress }>;
     if (!Array.isArray(data)) return [];
     return data.reduce<AddressHit[]>((acc, hit) => {
       const lat = Number(hit.lat);
       const lng = Number(hit.lon);
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        acc.push({ label: hit.display_name ?? `${lat}, ${lng}`, lat, lng });
+        acc.push({
+          label: hit.display_name ?? `${lat}, ${lng}`,
+          lat,
+          lng,
+          parts: hit.address ? partsFromNominatim(hit.address) : undefined,
+        });
       }
       return acc;
     }, []);

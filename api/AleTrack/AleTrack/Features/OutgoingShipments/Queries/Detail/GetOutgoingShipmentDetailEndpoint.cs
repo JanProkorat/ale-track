@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
@@ -77,6 +78,17 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                             : null,
                         OrderId = s.ClientOrder != null ? s.ClientOrder.PublicId : null,
                         SelectedAddressKind = s.SelectedAddressKind,
+                        // No !IsDeleted condition — a removed place must still
+                        // render on the shipments that already used it.
+                        DeliveryPlace = s.ClientDeliveryPlace != null
+                            ? new ClientDeliveryPlaceDto
+                            {
+                                Id = s.ClientDeliveryPlace.PublicId,
+                                Name = s.ClientDeliveryPlace.Name,
+                                Note = s.ClientDeliveryPlace.Note,
+                                Address = s.ClientDeliveryPlace.Address.ToDto()
+                            }
+                            : null,
                         Label = s.Label,
                         Note = s.Note,
                         Latitude = s.Latitude,

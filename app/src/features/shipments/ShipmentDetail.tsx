@@ -19,6 +19,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
@@ -26,7 +27,7 @@ import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel, addrKindName } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
@@ -44,6 +45,7 @@ import { useInventory } from 'src/hooks/useInventory';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
+import { resolveDetailStopAddress } from './stopAddress';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 
 interface NakladkaRow {
@@ -303,10 +305,20 @@ function ProductLine({ row }: { row: NakladkaRow }) {
 }
 
 /** One expandable line in the orders overview: a collapsed header (avatar +
- * title + item count) that reveals its product list on click. */
-function OverviewRow({ avatar, title, rows, open, onToggle }: {
+ * title, optionally a place chip beside it, plus a destination address line)
+ * that reveals its product list on click. The item count that used to be the
+ * sole subtitle moved to a trailing badge — see {@link OrdersOverviewCard} —
+ * to make room for the destination address without losing it. */
+function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }: {
   avatar: ReactNode;
   title: string;
+  /** Place chip rendered beside the title — only for a stop delivering to a
+   *  client's saved place (see `OutgoingShipmentStopAddressKind.DeliveryPlace`). */
+  chip?: ReactNode;
+  /** The destination line below the title: the place's formatted address, or
+   *  the `address · kind` line for the two standard address kinds. Omitted
+   *  for the dokládka pseudo-row, which has no destination of its own. */
+  addressLine?: string;
   rows: NakladkaRow[];
   open: boolean;
   onToggle: () => void;
@@ -319,11 +331,17 @@ function OverviewRow({ avatar, title, rows, open, onToggle }: {
       >
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
-          <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-            {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
-          </Typography>
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            {chip}
+          </Stack>
+          {addressLine && (
+            <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{addressLine}</Typography>
+          )}
         </Box>
+        <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: 'text.disabled', flexShrink: 0 }}>
+          {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
+        </Typography>
         <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
       </ButtonBase>
       <Collapse in={open} unmountOnExit>
@@ -366,11 +384,29 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
         <Box>
           {stops.map((stop, i) => {
             const key = stop.orderId ?? `stop-${i}`;
+            // The chip carries the place name; the address line below never
+            // repeats it (formatPlaceAddress only formats the address part).
+            // `resolveDetailStopAddress` is the single place that normalizes
+            // the wire's string-enum `selectedAddressKind` — deriving `isPlace`
+            // separately here previously compared the raw field directly and
+            // was always false against real API data.
+            const detailAddress = resolveDetailStopAddress(stop);
+            const isPlace = detailAddress.isPlace && stop.deliveryPlace != null;
             return (
               <OverviewRow
                 key={key}
                 avatar={numberAvatar(colorForClient(stop.clientId ?? ''), i + 1)}
                 title={stop.clientName ?? '—'}
+                chip={isPlace ? (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
+                    label={stop.deliveryPlace!.name ?? '—'}
+                    sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
+                  />
+                ) : undefined}
+                addressLine={detailAddress.text}
                 rows={(stop.products ?? []).map(productRowFrom)}
                 open={expanded.has(key)}
                 onToggle={() => toggle(key)}
@@ -481,8 +517,11 @@ export function ShipmentDetail({
     if (st.orderId == null) {
       return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
     }
-    const address = addrKindName(st.selectedAddressKind) === 'Contact' && st.contactAddress ? st.contactAddress : st.officialAddress;
-    return { lat: address?.latitude, lng: address?.longitude, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
+    // Shared with the stop header below so a DeliveryPlace stop pins at the
+    // place, not the billing address (the previous inline check here only
+    // ever branched on Contact vs Official and silently ignored a place).
+    const { lat, lng } = resolveDetailStopAddress(st);
+    return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
 
   const extraRows = useMemo(() => (shipment.inventoryExtraItems ?? []).map(extraRowFrom), [shipment.inventoryExtraItems]);

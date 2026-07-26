@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,17 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                 ClientName = o.Client.Name,
                 ClientOfficialAddress = o.Client.OfficialAddress.ToDto(),
                 ClientContactAddress = o.Client.ContactAddress != null ? o.Client.ContactAddress.ToDto() : null,
+                ClientDeliveryPlaces = o.Client.DeliveryPlaces
+                    .Where(p => !p.IsDeleted)
+                    .OrderBy(p => p.Name)
+                    .Select(p => new ClientDeliveryPlaceDto
+                    {
+                        Id = p.PublicId,
+                        Name = p.Name,
+                        Note = p.Note,
+                        Address = p.Address.ToDto()
+                    })
+                    .ToList(),
                 Items = o.OrderItems
                     .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
                     .ThenBy(oi => oi.Product.Name)

@@ -476,7 +476,7 @@ const L = {
     Freiberg:'Freiberg', Goerlitz:'Zhořelec', Region:'Region', Other:'Ostatní' },
   contact:{ Email:'E-mail', Phone:'Telefon' },
   country:{ Czechia:'Česko', Germany:'Německo' },
-  addrKind:{ Official:'Fakturační', Contact:'Kontaktní' },
+  addrKind:{ Official:'Fakturační', Contact:'Kontaktní', Place:'Vlastní místo' },
 };
 const STATUS = {
   order:{ New:['s-grey','Nová'], Planning:['s-info','Plánuje se'], Delivering:['s-amber','Rozváží se'], Finished:['s-ok','Dokončeno'], Cancelled:['s-grey','Zrušeno'] },
@@ -488,6 +488,12 @@ const KIND_ORDER={Keg:1,Bottle:2,Can:3,Multipack:4,Other:5};
 
 /* ============ SEED DATA ============ */
 function addr(street,no,city,zip,country,lat,lng){ return {streetName:street,streetNumber:no,city,zip,country,latitude:lat,longitude:lng}; }
+/* A saved delivery place on a client — a third option next to the fakturační /
+   kontaktní address. Carries a full address when it came from address search,
+   or just a named point when it was picked straight off the map. */
+function dp(id,name,note,address){ return { id, name, note:note||'', address, deleted:false }; }
+/* Address of a map-picked place: coordinates only, no postal parts. */
+function pinAddr(lat,lng){ return {streetName:'',streetNumber:'',city:'',zip:'',country:'Czechia',latitude:lat,longitude:lng}; }
 // Warehouse (company depot) — Žitava
 const DEPOT = { name:'Sklad AleTrack', lat:50.897, lng:14.807 };
 const MODULES=['dashboard','breweries','clients','orders','shipments','deliveries','inventory','drivers','vehicles','users'];
@@ -535,19 +541,25 @@ const DB = {
   ],
   clients:[
     c('cl-uzsklep','Hospoda U Zeleného stromu','Restaurace Zelený strom s.r.o.','ZittauCity',
-      addr('Náměstí','14','Žitava','02763','Germany',50.897,14.808), [ct('Phone','Provoz','+420 602 145 887'),ct('Email','Objednávky','sklep@zelenystrom.cz')]),
+      addr('Náměstí','14','Žitava','02763','Germany',50.897,14.808), [ct('Phone','Provoz','+420 602 145 887'),ct('Email','Objednávky','sklep@zelenystrom.cz')],
+      null, [ dp('dp-strom-zahrada','Letní zahrádka','Vjezd zezadu, brána bývá otevřená od 8:00',
+        addr('Nábřežní','3','Žitava','02763','Germany',50.8991,14.8104)) ]),
     c('cl-pivnice','Pivnice Na Rohu','Na Rohu gastro s.r.o.','ZittauRegion',
       addr('Liberecká','88','Hrádek nad Nisou','463 34','Czechia',50.853,14.844), [ct('Phone','Vedoucí','+420 777 200 341')]),
     c('cl-hotel','Hotel Praha — restaurace','Hotel Praha Liberec a.s.','Region',
       addr('Železná','2','Liberec','460 01','Czechia',50.770,15.058),
       [ct('Phone','Recepce','+420 485 100 200'),ct('Email','F&B','fb@hotelpraha.cz')],
-      addr('Zásobování — dvůr','2a','Liberec','460 01','Czechia',50.771,15.060)),
+      addr('Zásobování — dvůr','2a','Liberec','460 01','Czechia',50.771,15.060),
+      [ dp('dp-praha-terasa','Letní terasa Lidové sady','Sezónní — jen květen až září',
+          addr('Masarykova','1347','Liberec','460 01','Czechia',50.7745,15.0672)) ]),
     c('cl-goerlitz','Gasthaus Altstadt','Altstadt Görlitz GmbH','Goerlitz',
       addr('Peterstraße','5','Görlitz','02826','Germany',51.153,14.988), [ct('Email','Bestellung','info@altstadt-gr.de')]),
     c('cl-club','Klub Zázemí','Zázemí z.s.','ZittauCity',
       addr('Mostecká','3','Žitava','02763','Germany',50.900,14.803), [ct('Phone','Bar','+420 720 660 110')]),
     c('cl-farma','Farma Vísky — výčep','Statek Vísky s.r.o.','ZittauRegion',
-      addr('Vísky','1','Chrastava','463 31','Czechia',50.822,14.968), [ct('Phone','Majitel','+420 603 998 771')]),
+      addr('Vísky','1','Chrastava','463 31','Czechia',50.822,14.968), [ct('Phone','Majitel','+420 603 998 771')],
+      null, [ dp('dp-farma-stodola','Stodola u silnice','Bez adresy — sjezd z hlavní, 300 m za mostem',
+        pinAddr(50.8171,14.9602)) ]),
   ],
   orders:[], shipments:[], deliveries:[], inventory:[], reminders:[],
   exchangeRates:[{ currencyCode:'EUR', rate:25.30, updatedDate:SEED_TODAY }],
@@ -579,8 +591,9 @@ const DB = {
 function p(breweryId,name,description,kind,type,alc,plato,pkg,vat,novat){
   return { id:'p-'+Math.random().toString(36).slice(2,8), breweryId, name, description, kind, type,
     alcoholPercentage:alc, platoDegree:plato, packageSize:pkg, priceWithVat:vat, priceWithoutVat:novat }; }
-function c(id,name,businessName,region,official,contacts,contact){
-  return { id, name, businessName, region, officialAddress:official, contactAddress:contact||null, contacts, notes:[], reminders:[] }; }
+function c(id,name,businessName,region,official,contacts,contact,places){
+  return { id, name, businessName, region, officialAddress:official, contactAddress:contact||null,
+    contacts, deliveryPlaces:places||[], notes:[], reminders:[] }; }
 function ct(type,description,value){ return {type,description,value}; }
 function av(dayOffset,fromH,fromM,toH){ const base=new Date(SEED_TODAY); base.setDate(base.getDate()+dayOffset);
   const d=base.toISOString().slice(0,10); return {from:`${d}T${String(fromH).padStart(2,'0')}:00`, until:`${d}T${String(toH).padStart(2,'0')}:00`}; }
@@ -618,14 +631,15 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
   DB.shipments=[
     { id:'s-1', number:'VYV-2026-051', name:'Rozvoz Žitava + Hrádek', state:'InTransit', deliveryDate:daysFromNow(1)+'T07:00',
       vehicleId:'v-iveco', driverIds:['dr-novak','dr-svoboda'],
-      stops:[ stop('o-1','Official',1), stop('o-5','Official',2) ],
+      // demo: first stop delivers to one of the client's saved places, not its billing address
+      stops:[ stop('o-1','Place',1,'dp-strom-zahrada'), stop('o-5','Official',2) ],
       extraCustom:[{ id:'ex-1', description:'Vratné obaly — 6× basa', quantity:6 }] },
     { id:'s-2', number:'VYV-2026-052', name:'Rozvoz Liberec / Görlitz', state:'Created', deliveryDate:daysFromNow(3)+'T08:00',
       vehicleId:null, driverIds:[], stops:[ stop('o-2','Official',1), stop('o-4','Official',2) ], extraCustom:[] },
     { id:'s-3', number:'VYV-2026-050', name:'Rozvoz čtvrtek', state:'Delivered', deliveryDate:daysFromNow(-2)+'T07:30',
       vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
   ];
-  function stop(orderId,kind,order){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, order,
+  function stop(orderId,kind,order,placeId){ const o=DB.orders.find(x=>x.id===orderId); return { orderId, clientId:o.clientId, addressKind:kind, placeId:placeId||null, order,
     items:o.items.map(it=>({ id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:0, loaded:false, checked:false, source:'order' })) }; }
   // demo: a pure dokládka (product not in the order) + a merged dokládka on an existing order line
   DB.shipments[0].stops[0].items.push({ id:'dok-seed', productId:byName('Svijany 450').id, quantity:0, dokladkaQty:4, loaded:false, checked:false, source:'dokladka' });
@@ -1327,9 +1341,24 @@ function viewClientDetail(id){
         <div class="ti-ico" style="background:var(--info-tint);color:var(--info);width:38px;height:38px;flex:0 0 auto">${icon(ct.type==='Email'?'mail':'phone',18)}</div>
         <div style="min-width:0"><div class="t-mut" style="font-size:12px">${esc(ct.description||L.contact[ct.type])}</div><div class="t-strong" style="overflow:hidden;text-overflow:ellipsis">${esc(ct.value)}</div></div></div>`).join('')}</div>`
         :`<div class="t-mut" style="font-size:13px">Žádné kontakty.${ed?' Přidejte je tlačítkem Upravit.':''}</div>`}</div></div>`;
+    const places=clientPlaces(id);
+    const placesCard=`<div class="card" style="grid-column:1/-1"><div class="card-head">${icon('pin',16)}<h3>Místa doručení</h3>
+        <span class="tag">${places.length}</span>
+        <span class="sub" style="margin-left:12px">Volitelná místa navíc k fakturační a kontaktní adrese — vybírají se u zastávky vývozu.</span>
+        ${ed?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="deliveryPlaceForm('${id}',null)">${icon('plus',14)}Přidat místo</button>`:''}</div>
+      <div class="card-pad">${places.length?`<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+        ${places.map(p=>`<div class="row gap12" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--r)">
+          <div class="ti-ico" style="background:var(--info-tint);color:var(--info);width:38px;height:38px;flex:0 0 auto">${icon('pin',18)}</div>
+          <div style="flex:1;min-width:0"><div class="t-strong" style="overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
+            <div class="t-mut" style="font-size:12px">${placeAddrText(p)}</div>
+            ${p.note?`<div class="t-mut" style="font-size:11.5px;margin-top:2px">${icon('note',11)} ${esc(p.note)}</div>`:''}</div>
+          ${ed?`<div class="row gap8" style="flex:0 0 auto"><button class="icon-btn" style="width:30px;height:30px" onclick="deliveryPlaceForm('${id}','${p.id}')">${icon('edit',13)}</button>
+            <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="dpDelete('${id}','${p.id}')">${icon('trash',13)}</button></div>`:''}</div>`).join('')}</div>`
+        :`<div class="t-mut" style="font-size:13px">Žádná vlastní místa.${ed?' Přidejte je tlačítkem výše, nebo rovnou při plánování vývozu.':''}</div>`}</div></div>`;
     body=`<div class="grid" style="grid-template-columns:1fr 1fr">
       ${addrCard('Fakturační adresa','wallet',c.officialAddress,'')}
       ${addrCard('Kontaktní adresa','pin',c.contactAddress,'Shodná s fakturační adresou.')}
+      ${placesCard}
       <div class="card"><div class="card-head"><h3>Obchodní údaje</h3></div><div class="card-pad stack" style="gap:12px">
         <div class="kv"><span class="k">Obchodní název</span><span class="v">${esc(c.businessName||'—')}</span></div>
         <div class="kv"><span class="k">Region</span><span class="v"><span class="tag">${icon('pin',11)}${L.region[c.region]||c.region}</span></span></div>
@@ -1380,7 +1409,7 @@ function clientForm(id){
     const data={ name, businessName:val('cl-biz'), region:val('cl-region'), officialAddress:readAddress('clof'),
       contactAddress:$('#cl-hascontact').checked?readAddress('clcon'):null, contacts:CONTACT_DRAFT.filter(x=>x.value) };
     if(id){ Object.assign(clientById(id),data); toast('Klient upraven'); }
-    else { data.id='cl-'+Math.random().toString(36).slice(2,7); data.notes=[]; data.reminders=[]; DB.clients.push(data); toast('Klient vytvořen'); }
+    else { data.id='cl-'+Math.random().toString(36).slice(2,7); data.notes=[]; data.reminders=[]; data.deliveryPlaces=[]; DB.clients.push(data); toast('Klient vytvořen'); }
     closeOverlay(); renderRoute(); };
   $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
 }
@@ -1676,7 +1705,20 @@ function routeMap(stopPts,{h=380,loop=true,animate=true}={}){
     </div>`:`<div style="position:absolute;inset:0;display:grid;place-items:center;pointer-events:none"><div class="t-mut" style="text-align:center"><div>${icon('map',30)}</div>Vyberte objednávky — trasa se vykreslí</div></div>`}
   </div>`;
 }
-function stopAddress(st){ const cl=clientById(st.clientId); return st.addressKind==='Contact'&&cl.contactAddress?cl.contactAddress:cl.officialAddress; }
+/* Places offered in a picker — soft-deleted ones are hidden here but still
+   resolve in stopAddress(), so historical shipments keep rendering. */
+function clientPlaces(clientId){ const cl=clientById(clientId); return (cl&&cl.deliveryPlaces||[]).filter(p=>!p.deleted); }
+function placeById(clientId,placeId){ const cl=clientById(clientId); return (cl&&cl.deliveryPlaces||[]).find(p=>p.id===placeId)||null; }
+/* A map-picked place has no street/city — show its coordinates instead. */
+function placeAddrText(p){ if(!p) return '—'; const a=p.address;
+  return (a.streetName||a.city) ? fmtAddr(a) : `${(+a.latitude).toFixed(4)}, ${(+a.longitude).toFixed(4)}`; }
+function stopAddress(st){ const cl=clientById(st.clientId);
+  if(st.addressKind==='Place'){ const p=placeById(st.clientId,st.placeId); if(p) return p.address; }
+  return st.addressKind==='Contact'&&cl.contactAddress?cl.contactAddress:cl.officialAddress; }
+/* Second line under a stop's client name — where the goods actually go. */
+function stopAddressText(st){ if(st.addressKind==='Place'){ const p=placeById(st.clientId,st.placeId);
+    if(p) return `${esc(p.name)} · ${placeAddrText(p)}`; }
+  return `${fmtAddr(stopAddress(st))} · ${L.addrKind[st.addressKind]}`; }
 /* single-point mini map (for client addresses) */
 function pointMap(lat,lng,{color='#F08C00',h=190}={}){
   if(lat==null||lng==null) return `<div style="height:${h}px;display:grid;place-items:center;border-radius:var(--r);background:var(--surface-2);border:1px dashed var(--border-2);color:var(--text-3);font-size:12.5px;gap:6px"><span>${icon('pin',20)}</span>Bez GPS souřadnic</div>`;
@@ -1696,6 +1738,125 @@ function pointMap(lat,lng,{color='#F08C00',h=190}={}){
 }
 function shipStopPoints(stops){ return stops.slice().sort((a,b)=>a.order-b.order).map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
   return { lat:a.latitude, lng:a.longitude, label:cl.name, seq:i+1, color:colorFor(cl.id) }; }); }
+
+/* ============ DELIVERY PLACES (client's own stop locations) ============ */
+/* Inverse of projP — turns a click anywhere on the picker SVG back into
+   lat/lng. The SVG uses preserveAspectRatio="xMidYMid slice", so the viewBox is
+   scaled by max() and centre-cropped; both have to be undone here. */
+function unprojP(clientX,clientY,svg,W,H,pad){
+  const r=svg.getBoundingClientRect(); const b=MAP_BOUNDS;
+  const s=Math.max(r.width/W,r.height/H);
+  const x=(clientX-r.left-(r.width-W*s)/2)/s, y=(clientY-r.top-(r.height-H*s)/2)/s;
+  return { lat: b.latMax-(y-pad)/(H-2*pad)*(b.latMax-b.latMin),
+           lng: b.lngMin+(x-pad)/(W-2*pad)*(b.lngMax-b.lngMin) };
+}
+/* Same visual language as pointMap, but click-to-place. */
+function pickMap(lat,lng,{h=210}={}){
+  const W=820,H=560,pad=64; const has=lat!=null&&lng!=null; const p=has?projP(lat,lng,W,H,pad):null;
+  const cities=[['Žitava',50.897,14.807],['Zhořelec',51.152,14.988],['Liberec',50.770,15.058],['Hrádek n.N.',50.853,14.844],['Frýdlant',50.921,15.079]];
+  const cityDots=cities.map(([n,la,lo])=>{const q=projP(la,lo,W,H,pad);return `<g opacity=".5"><circle cx="${q.x}" cy="${q.y}" r="2.5" fill="var(--text-3)"/><text x="${q.x+6}" y="${q.y+3}" font-size="11.5" fill="var(--text-3)" font-weight="600">${n}</text></g>`;}).join('');
+  return `<div style="position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);background:linear-gradient(160deg,var(--surface-2),var(--surface-3))">
+    <svg id="dp-map" viewBox="0 0 ${W} ${H}" width="100%" style="height:${h}px;display:block;cursor:crosshair" preserveAspectRatio="xMidYMid slice"
+         onclick="dpMapClick(event,${W},${H},${pad})">
+      <defs><pattern id="dpgrid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="var(--border)" stroke-width="1" opacity=".5"/></pattern></defs>
+      <rect width="${W}" height="${H}" fill="url(#dpgrid)"/>
+      <path d="M120 ${H} Q 300 ${H*0.55} 520 ${H*0.62} T ${W} ${H*0.35}" fill="none" stroke="var(--info)" stroke-width="6" opacity=".18" stroke-linecap="round"/>
+      ${cityDots}
+      ${has?`<g><circle cx="${p.x}" cy="${p.y}" r="30" fill="var(--info)" opacity=".16"/>
+        <path d="M${p.x} ${p.y-22} c-8 0 -15 7 -15 15 c0 11 15 25 15 25 s15 -14 15 -25 c0 -8 -7 -15 -15 -15 z" fill="var(--info)" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="${p.x}" cy="${p.y-7}" r="5" fill="#fff"/></g>`:''}
+    </svg>
+    ${has?'':`<div style="position:absolute;inset:0;display:grid;place-items:center;pointer-events:none">
+      <span class="tag" style="background:var(--surface);">${icon('pin',12)}Klikněte do mapy nebo najděte adresu</span></div>`}</div>`;
+}
+/* Stand-in for the Nominatim type-ahead the real app already uses for custom
+   stops — same interaction, canned results. */
+const DP_GEO=[
+  { label:'Nábřežní 3, 02763 Žitava, Německo', streetName:'Nábřežní', streetNumber:'3', city:'Žitava', zip:'02763', country:'Germany', lat:50.8991, lng:14.8104 },
+  { label:'Masarykova 1347, 460 01 Liberec, Česko', streetName:'Masarykova', streetNumber:'1347', city:'Liberec', zip:'460 01', country:'Czechia', lat:50.7745, lng:15.0672 },
+  { label:'Lidové sady 425, 460 01 Liberec, Česko', streetName:'Lidové sady', streetNumber:'425', city:'Liberec', zip:'460 01', country:'Czechia', lat:50.7761, lng:15.0704 },
+  { label:'Liberecká 88, 463 34 Hrádek nad Nisou, Česko', streetName:'Liberecká', streetNumber:'88', city:'Hrádek nad Nisou', zip:'463 34', country:'Czechia', lat:50.853, lng:14.844 },
+  { label:'Zámecká 12, 464 01 Frýdlant, Česko', streetName:'Zámecká', streetNumber:'12', city:'Frýdlant', zip:'464 01', country:'Czechia', lat:50.921, lng:15.079 },
+  { label:'Peterstraße 5, 02826 Zhořelec, Německo', streetName:'Peterstraße', streetNumber:'5', city:'Görlitz', zip:'02826', country:'Germany', lat:51.153, lng:14.988 },
+  { label:'Vísky 1, 463 31 Chrastava, Česko', streetName:'Vísky', streetNumber:'1', city:'Chrastava', zip:'463 31', country:'Czechia', lat:50.822, lng:14.968 },
+];
+let PLACE={ clientId:null, placeId:null, draft:null, hits:[], onSaved:null };
+function deliveryPlaceForm(clientId,placeId,onSaved){
+  const ex=placeId?placeById(clientId,placeId):null;
+  PLACE={ clientId, placeId:placeId||null, onSaved:onSaved||null, hits:[],
+    draft: ex ? { name:ex.name, note:ex.note, ...ex.address } : { name:'', note:'', streetName:'', streetNumber:'', city:'', zip:'', country:'Czechia', latitude:null, longitude:null } };
+  openOverlay(`<div class="drawer-head">${icon('pin',20)}<h2>${placeId?'Upravit místo doručení':'Nové místo doručení'}</h2>
+      <button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body" id="dp-body"></div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="dp-save">${icon('check',16)}Uložit místo</button></div>`);
+  dpRender();
+  $('#dp-save').onclick=dpSave;
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function dpRender(){
+  const d=PLACE.draft; const cl=clientById(PLACE.clientId);
+  const hits=PLACE.hits.length?`<div class="stack" style="gap:4px;margin-top:6px">${PLACE.hits.map((h,i)=>
+    `<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;text-align:left;height:auto;padding:7px 10px;font-weight:600" onclick="dpPickHit(${i})">
+      ${icon('pin',13)}<span style="font-size:12.5px">${esc(h.label)}</span></button>`).join('')}</div>`:'';
+  $('#dp-body').innerHTML=`
+    <div class="t-mut" style="font-size:12.5px;margin-bottom:12px">Místo se uloží ke klientovi <b>${esc(cl.name)}</b> a půjde vybrat u kterékoli jeho zastávky.</div>
+    ${field('Najít podle adresy',`<input class="input" id="dp-q" placeholder="Např. Masarykova, Liberec…" value="" oninput="dpSearch(this.value)">`,{hint:'Nebo klikněte přímo do mapy níže.'})}
+    ${hits}
+    <div style="margin:12px 0">${pickMap(d.latitude,d.longitude)}</div>
+    ${d.latitude!=null?`<div class="row gap8" style="margin-bottom:12px"><span class="tag mono">${(+d.latitude).toFixed(5)}, ${(+d.longitude).toFixed(5)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="dpClearPoint()">${icon('close',13)}Zrušit bod</button></div>`:''}
+    <div class="divider"></div>
+    <div class="form-grid">
+      ${field('Název místa',`<input class="input" id="dp-name" value="${esc(d.name)}" placeholder="Letní zahrádka" oninput="PLACE.draft.name=this.value">`,{req:true})}
+      ${field('Poznámka pro řidiče',`<input class="input" id="dp-note" value="${esc(d.note)}" placeholder="Vjezd zezadu, brána od 8:00" oninput="PLACE.draft.note=this.value">`)}
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">Adresa <span class="t-mut" style="font-weight:600;text-transform:none;letter-spacing:0">— nepovinná, místo bez adresy stačí určit bodem v mapě</span></div>
+    <div class="form-grid">
+      ${field('Ulice',`<input class="input" id="dp-street" value="${esc(d.streetName)}" placeholder="Nábřežní" oninput="PLACE.draft.streetName=this.value">`)}
+      ${field('Číslo',`<input class="input" id="dp-no" value="${esc(d.streetNumber)}" placeholder="3" oninput="PLACE.draft.streetNumber=this.value">`)}
+      ${field('Město',`<input class="input" id="dp-city" value="${esc(d.city)}" placeholder="Žitava" oninput="PLACE.draft.city=this.value">`)}
+      ${field('PSČ',`<input class="input" id="dp-zip" value="${esc(d.zip)}" placeholder="02763" oninput="PLACE.draft.zip=this.value">`)}
+      ${field('Země',sel('dp-country',[['Czechia','Česko'],['Germany','Německo']],d.country),{col2:true})}
+    </div>`;
+  const cs=$('#dp-country'); if(cs) cs.onchange=()=>{ PLACE.draft.country=cs.value; };
+}
+function dpSearch(q){ q=q.trim().toLowerCase();
+  PLACE.hits = q.length<3 ? [] : DP_GEO.filter(h=>h.label.toLowerCase().includes(q)).slice(0,5);
+  dpRenderKeepFocus(); }
+/* Re-render loses focus on the search box; put it back so typing feels normal. */
+function dpRenderKeepFocus(){ const el=$('#dp-q'); const v=el?el.value:''; const pos=el?el.selectionStart:0;
+  dpRender(); const n=$('#dp-q'); if(n){ n.value=v; n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} } }
+function dpPickHit(i){ const h=PLACE.hits[i]; if(!h) return;
+  Object.assign(PLACE.draft,{ streetName:h.streetName, streetNumber:h.streetNumber, city:h.city, zip:h.zip,
+    country:h.country, latitude:h.lat, longitude:h.lng });
+  PLACE.hits=[]; dpRender(); }
+function dpMapClick(ev,W,H,pad){ const pt=unprojP(ev.clientX,ev.clientY,$('#dp-map'),W,H,pad);
+  PLACE.draft.latitude=Math.round(pt.lat*1e5)/1e5; PLACE.draft.longitude=Math.round(pt.lng*1e5)/1e5;
+  PLACE.hits=[]; dpRender(); }
+function dpClearPoint(){ PLACE.draft.latitude=null; PLACE.draft.longitude=null; dpRender(); }
+function dpSave(){ const d=PLACE.draft;
+  if(!d.name.trim()) return toast('Zadejte název místa','warnTri');
+  if(d.latitude==null) return toast('Určete bod v mapě nebo vyberte adresu','warnTri');
+  const cl=clientById(PLACE.clientId);
+  const address={ streetName:d.streetName.trim(), streetNumber:d.streetNumber.trim(), city:d.city.trim(),
+    zip:d.zip.trim(), country:d.country, latitude:d.latitude, longitude:d.longitude };
+  let saved;
+  if(PLACE.placeId){ saved=placeById(PLACE.clientId,PLACE.placeId); Object.assign(saved,{ name:d.name.trim(), note:d.note.trim(), address }); toast('Místo upraveno'); }
+  else { saved=dp('dp-'+Math.random().toString(36).slice(2,7),d.name.trim(),d.note.trim(),address);
+    cl.deliveryPlaces.push(saved); toast('Místo přidáno ke klientovi'); }
+  const cb=PLACE.onSaved; closeOverlay(); if(cb) cb(saved.id); else renderRoute();
+}
+/* Soft delete — the place disappears from pickers, but shipments that already
+   point at it keep resolving and displaying it. */
+function dpDelete(clientId,placeId){ const p=placeById(clientId,placeId); if(!p) return;
+  const used=DB.shipments.some(s=>s.stops.some(st=>st.placeId===placeId));
+  confirmDialog('Smazat místo doručení?',
+    used?'Místo je použité na existujícím vývozu. Zmizí z nabídky, ale na starých vývozech zůstane vidět.'
+        :'Místo zmizí z nabídky u zastávek tohoto klienta.',
+    ()=>{ p.deleted=true; toast('Místo smazáno','trash'); renderRoute(); });
+}
 
 /* ============ MODULE: VÝVOZY (OUTGOING SHIPMENTS) ============ */
 function viewShipments(){
@@ -1797,7 +1958,9 @@ function shipLoadingCard(s){
     return `<div style="margin-bottom:6px">
       <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
         <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
-          <div><div class="t-strong" style="font-size:13.5px">${esc(cl.name)}</div><div class="t-mut" style="font-size:11.5px">${fmtAddr(a)} · ${L.addrKind[st.addressKind]}</div></div></div>
+          <div><div class="row gap8"><span class="t-strong" style="font-size:13.5px">${esc(cl.name)}</span>
+            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}</div>
+            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div></div></div>
         ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
       ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
         :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">Klient nemá v této nakládce žádné položky.</div>`}</div>`; }).join('');
@@ -2175,10 +2338,8 @@ function seHTML(){
       <span style="color:var(--text-3)">${icon('drag',16)}</span>
       <span class="av" style="width:28px;height:28px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
       <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(cl.name)}</div>
-        <div class="t-mut" style="font-size:11.5px">${o?o.number:''}</div></div>
-      <select class="select" style="width:130px;height:32px;flex:0 0 auto" onchange="seAddrKind('${st.orderId}',this.value)">
-        <option value="Official" ${st.addressKind==='Official'?'selected':''}>Fakturační</option>
-        ${cl.contactAddress?`<option value="Contact" ${st.addressKind==='Contact'?'selected':''}>Kontaktní</option>`:''}</select>
+        <div class="t-mut" style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o?o.number+' · ':''}${stopAddressText(st)}</div></div>
+      ${seAddrSelect(st,cl)}
       <button class="icon-btn" style="width:30px;height:30px" onclick="seMove('${st.orderId}',-1)" ${i===0?'disabled':''}>${icon('arrowU',13)}</button>
       <button class="icon-btn" style="width:30px;height:30px" onclick="seMove('${st.orderId}',1)" ${i===stopsSorted.length-1?'disabled':''}>${icon('arrowD',13)}</button>
       <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="seRemoveStop('${st.orderId}')">${icon('trash',13)}</button></div>`; }).join('');
@@ -2217,7 +2378,7 @@ function driverAvailableOn(dr,dt){ if(!dt)return true; const day=dt.slice(0,10);
 function seSyncMeta(){ if($('#se-name'))SH.draft.name=$('#se-name').value; if($('#se-veh'))SH.draft.vehicleId=$('#se-veh').value||null; }
 function seToggleOrder(orderId){ seSyncMeta(); const d=SH.draft; const ex=d.stops.find(s=>s.orderId===orderId);
   if(ex) d.stops=d.stops.filter(s=>s.orderId!==orderId);
-  else { const o=DB.orders.find(x=>x.id===orderId); d.stops.push({ orderId, clientId:o.clientId, addressKind:'Official', order:d.stops.length+1 }); }
+  else { const o=DB.orders.find(x=>x.id===orderId); d.stops.push({ orderId, clientId:o.clientId, addressKind:'Official', placeId:null, order:d.stops.length+1 }); }
   reseq(); seRerender(); }
 function reseq(){ SH.draft.stops.slice().sort((a,b)=>a.order-b.order).forEach((s,i)=>s.order=i+1); }
 function seMove(orderId,dir){ seSyncMeta(); const arr=SH.draft.stops.slice().sort((a,b)=>a.order-b.order); const i=arr.findIndex(s=>s.orderId===orderId);
@@ -2225,7 +2386,36 @@ function seMove(orderId,dir){ seSyncMeta(); const arr=SH.draft.stops.slice().sor
 function seDropOn(targetId){ const arr=SH.draft.stops.slice().sort((a,b)=>a.order-b.order); const from=arr.findIndex(s=>s.orderId===SH.drag); const to=arr.findIndex(s=>s.orderId===targetId);
   if(from<0||to<0||from===to)return; const [m]=arr.splice(from,1); arr.splice(to,0,m); arr.forEach((s,i)=>s.order=i+1); SH.drag=null; seRerender(); }
 function seRemoveStop(orderId){ seSyncMeta(); SH.draft.stops=SH.draft.stops.filter(s=>s.orderId!==orderId); reseq(); seRerender(); }
-function seAddrKind(orderId,kind){ SH.draft.stops.find(s=>s.orderId===orderId).addressKind=kind; seRerender(); }
+/* Where this stop delivers: the client's two standard addresses, any of its
+   saved places, or "+ Nové místo…" which authors one inline. The value is a
+   single string because there are now N options, not two. */
+function seAddrSelect(st,cl){
+  const places=clientPlaces(cl.id);
+  // A place selected earlier and since soft-deleted is no longer offered — keep
+  // it in the list (disabled) so re-saving can't silently move the delivery.
+  const gone=st.addressKind==='Place'&&st.placeId&&!places.some(p=>p.id===st.placeId)?placeById(cl.id,st.placeId):null;
+  const cur=st.addressKind==='Place'?'place:'+st.placeId:st.addressKind;
+  return `<select class="select" style="width:190px;height:32px;flex:0 0 auto" onchange="seAddrKind('${st.orderId}',this.value)">
+    <option value="Official" ${cur==='Official'?'selected':''}>Fakturační</option>
+    ${cl.contactAddress?`<option value="Contact" ${cur==='Contact'?'selected':''}>Kontaktní</option>`:''}
+    ${places.length?`<optgroup label="Vlastní místa">${places.map(p=>
+      `<option value="place:${p.id}" ${cur==='place:'+p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</optgroup>`:''}
+    ${gone?`<optgroup label="Smazané"><option value="place:${gone.id}" selected>${esc(gone.name)} (smazáno)</option></optgroup>`:''}
+    <option value="__new">+ Nové místo…</option></select>`;
+}
+function seAddrKind(orderId,value){
+  const st=SH.draft.stops.find(s=>s.orderId===orderId);
+  if(value==='__new'){
+    seSyncMeta();
+    // Deliberate: the place is saved onto the client straight away, even if the
+    // shipment draft is never saved. Cancelling just re-renders the old choice.
+    deliveryPlaceForm(st.clientId,null,placeId=>{ st.addressKind='Place'; st.placeId=placeId; seRerender(); });
+    seRerender(); return;
+  }
+  if(value.startsWith('place:')){ st.addressKind='Place'; st.placeId=value.slice(6); }
+  else { st.addressKind=value; st.placeId=null; }
+  seRerender();
+}
 function seToggleDriver(id){ seSyncMeta(); const a=SH.draft.driverIds; const i=a.indexOf(id); if(i>=0)a.splice(i,1); else a.push(id); seRerender(); }
 function seOptimize(){ seSyncMeta(); const arr=SH.draft.stops.slice(); if(arr.length<2){toast('Málo zastávek');return;}
   const pt=st=>{const a=stopAddress(st);return {lat:a.latitude,lng:a.longitude};};
