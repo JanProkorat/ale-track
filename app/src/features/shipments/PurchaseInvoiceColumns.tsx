@@ -22,10 +22,13 @@ import {
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
 
-const CELL_SX = { width: 84, minWidth: 84 } as const;
+// The two cells of a column group are pulled together rather than each centred in
+// its own box: the pieces end on the right of theirs, the state starts on the left
+// of its, so the pair reads as one thing under the shared header.
+const CELL_SX = { width: 72, minWidth: 72, pr: 0.5 } as const;
 
 /** The state cell of a column group — only as wide as the control in it. */
-const STATE_CELL_SX = { width: 44, minWidth: 44 } as const;
+const STATE_CELL_SX = { width: 40, minWidth: 40, pl: 0.5 } as const;
 
 const HEAD_SX = {
   fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const,
@@ -44,7 +47,7 @@ export function PurchaseInvoiceHeaderCells({
     <>
       {/* One header spanning the column's two cells: the pieces and their loading state. */}
       {columnsOf(invoices).map((column) => (
-        <TableCell key={column.sequence} align="center" colSpan={2} sx={{ ...HEAD_SX, ...CELL_SX, width: 128, minWidth: 128 }}>
+        <TableCell key={column.sequence} align="center" colSpan={2} sx={{ ...HEAD_SX, width: 112, minWidth: 112 }}>
           <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
             <Tooltip title={`Faktura pivovaru ${column.sequence}`}>
               <span>{`F${column.sequence}`}</span>
@@ -98,7 +101,7 @@ export function PurchaseInvoiceRowCells({
 
         return (
           <Fragment key={column.sequence}>
-            <TableCell align="center" sx={CELL_SX}>
+            <TableCell align="right" sx={CELL_SX}>
               {total === 0 ? (
                 <Tooltip title="Nekupuje se od pivovaru — celé ze skladu">
                   <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
@@ -118,7 +121,7 @@ export function PurchaseInvoiceRowCells({
                 <Typography sx={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{claimed}</Typography>
               )}
             </TableCell>
-            <TableCell align="center" sx={STATE_CELL_SX}>
+            <TableCell align="left" sx={STATE_CELL_SX}>
               {carries ? (
                 <LoadingStateControl
                   state={state}
@@ -268,10 +271,10 @@ export function PurchaseInvoiceFooterCells({
     <>
       {totals.map((total, index) => (
         <Fragment key={index}>
-          <TableCell align="center" sx={{ ...sx, ...CELL_SX }}>
+          <TableCell align="right" sx={{ ...sx, ...CELL_SX }}>
             <Box component="span" sx={{ color: index === 0 ? 'text.secondary' : 'text.primary' }}>{total} ks</Box>
           </TableCell>
-          <TableCell align="center" sx={{ ...sx, ...STATE_CELL_SX }}>
+          <TableCell align="left" sx={{ ...sx, ...STATE_CELL_SX }}>
             <Tooltip title={`Nadiktováno ${progress[index]?.dictated ?? 0}/${progress[index]?.total ?? 0}, zkontrolováno ${progress[index]?.checked ?? 0}/${progress[index]?.total ?? 0}`}>
               <Box
                 component="span"
