@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OutgoingShipmentPurchaseInvoiceDto, OutgoingShipmentPurchaseInvoiceLineDto } from 'src/generated/api-client';
 import {
-  purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt,
+  purchasedTotal, rowSplit, capFor, columnTotals, columnsOf, claimAt, applyLineLocally,
   type PurchasableRow,
 } from './purchaseSplitModel';
 
@@ -131,6 +131,54 @@ describe('capFor', () => {
 
   it('never goes negative', () => {
     expect(capFor(row({ orderQuantity: 2 }), invoices, 2)).toBe(0);
+  });
+});
+
+describe('applyLineLocally', () => {
+  it('sets the quantity so the remainder recomputes at once', () => {
+    const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
+
+    const next = applyLineLocally(invoices, { sequence: 2, productId: LEZAK, quantity: 9 });
+
+    expect(claimAt(next, 2, LEZAK)).toBe(9);
+    expect(rowSplit(row({ orderQuantity: 24 }), next)).toEqual([15, 9]);
+  });
+
+  it('materialises the columns it writes to, without inventing IDs', () => {
+    const next = applyLineLocally([], { sequence: 2, productId: LEZAK, quantity: 4 });
+
+    expect(next.map((i) => i.sequence)).toEqual([1, 2]);
+    expect(next.every((i) => i.id === undefined)).toBe(true);
+    expect(claimAt(next, 2, LEZAK)).toBe(4);
+  });
+
+  it('drops the line at zero rather than storing an empty claim', () => {
+    const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4], [IPA, 2]])];
+
+    const next = applyLineLocally(invoices, { sequence: 2, productId: LEZAK, quantity: 0 });
+
+    expect(next[1].lines).toHaveLength(1);
+    expect(claimAt(next, 2, IPA)).toBe(2);
+  });
+
+  it('leaves the other columns and products alone', () => {
+    const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]]), invoice(3, 'i3', [[LEZAK, 2], [IPA, 5]])];
+
+    const next = applyLineLocally(invoices, { sequence: 2, productId: LEZAK, quantity: 1 });
+
+    expect(claimAt(next, 3, LEZAK)).toBe(2);
+    expect(claimAt(next, 3, IPA)).toBe(5);
+    expect(next.map((i) => i.id)).toEqual(['i1', 'i2', 'i3']);
+  });
+
+  it('does not mutate the invoices it was given', () => {
+    // The rollback snapshot is the original array; mutating it would make the
+    // optimistic update unrecoverable.
+    const invoices = [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
+
+    applyLineLocally(invoices, { sequence: 2, productId: LEZAK, quantity: 9 });
+
+    expect(claimAt(invoices, 2, LEZAK)).toBe(4);
   });
 });
 

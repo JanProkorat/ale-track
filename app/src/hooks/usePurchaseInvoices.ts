@@ -8,7 +8,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { SetPurchaseInvoiceLineDto } from 'src/generated/api-client';
+import { OutgoingShipmentDetailDto, SetPurchaseInvoiceLineDto } from 'src/generated/api-client';
+import { applyLineLocally } from 'src/features/shipments/purchaseSplitModel';
 
 function useInvalidateShipment(shipmentId: string | undefined) {
   const qc = useQueryClient();
@@ -43,15 +44,56 @@ export interface SetPurchaseInvoiceLineArgs {
   quantity: number;
 }
 
+/**
+ * Writes one product's quantity onto a brewery invoice, updating the cache before
+ * the server answers.
+ *
+ * The optimistic step is not decoration: the edited column is local state in its
+ * stepper and moves at once, while the remainder column is derived from this cache.
+ * Waiting for the round trip would leave the row visibly not adding up in between.
+ * A failed write restores the snapshot, so the numbers go back to what the server
+ * still holds.
+ */
 export function useSetPurchaseInvoiceLine(shipmentId: string | undefined) {
   const ds = useDataSource();
+  const qc = useQueryClient();
   const invalidate = useInvalidateShipment(shipmentId);
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
   return useMutation({
     mutationFn: ({ sequence, productId, quantity }: SetPurchaseInvoiceLineArgs) =>
       ds.setPurchaseInvoiceLineEndpoint(
         shipmentId!,
         new SetPurchaseInvoiceLineDto({ sequence, productId, quantity }),
       ),
-    onSuccess: invalidate,
+
+    onMutate: async (args: SetPurchaseInvoiceLineArgs) => {
+      if (!shipmentId) return undefined;
+
+      // Otherwise a refetch already in flight can land after this patch and undo it.
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Shallow clone keeping the DTO prototype — consumers call its methods, and a
+      // plain-object copy would lose them.
+      const next = Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+      );
+      next.purchaseInvoices = applyLineLocally(previous.purchaseInvoices ?? [], args);
+      qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    // On both paths: success replaces the guess with the server's own clamping,
+    // failure resyncs after the rollback.
+    onSettled: invalidate,
   });
 }

@@ -5,7 +5,10 @@
 // nevertheless shows two columns from the start, so the model works in terms of
 // *columns* — a column may or may not have an invoice behind it yet.
 
-import type { OutgoingShipmentPurchaseInvoiceDto } from 'src/generated/api-client';
+import {
+  OutgoingShipmentPurchaseInvoiceDto,
+  OutgoingShipmentPurchaseInvoiceLineDto,
+} from 'src/generated/api-client';
 
 /** The table always offers this many invoice columns, split or not. */
 export const DEFAULT_COLUMNS = 2;
@@ -110,6 +113,49 @@ export function capFor(
     .reduce((sum, column) => sum + claimAt(invoices, column.sequence, row.productId), 0);
 
   return Math.max(0, purchasedTotal(row) - claimedElsewhere);
+}
+
+/**
+ * The invoices as they will look once a line write lands, for updating the cache
+ * before the server answers.
+ *
+ * Without this the typed column jumps immediately (its input is local state) while
+ * the remainder waits for the refetch, so the row visibly fails to add up for a
+ * moment. Mirrors what the server does, including materialising the invoices up to
+ * `sequence`; those placeholders carry no ID until the real response arrives.
+ */
+export function applyLineLocally(
+  invoices: OutgoingShipmentPurchaseInvoiceDto[],
+  { sequence, productId, quantity }: { sequence: number; productId: string; quantity: number },
+): OutgoingShipmentPurchaseInvoiceDto[] {
+  const next = columnsOf(invoices).map((column) => {
+    const stored = invoices.find((invoice) => invoice.sequence === column.sequence);
+    const copy = new OutgoingShipmentPurchaseInvoiceDto();
+    copy.id = stored?.id;
+    copy.sequence = column.sequence;
+    copy.lines = (stored?.lines ?? []).map((line) => {
+      const lineCopy = new OutgoingShipmentPurchaseInvoiceLineDto();
+      lineCopy.productId = line.productId;
+      lineCopy.quantity = line.quantity;
+      return lineCopy;
+    });
+    return copy;
+  });
+
+  // A column past the defaults can be written to only when it already exists, so
+  // there is nothing to materialise beyond what columnsOf already padded.
+  const target = next.find((invoice) => invoice.sequence === sequence);
+  if (!target) return next;
+
+  target.lines = (target.lines ?? []).filter((line) => line.productId !== productId);
+  if (quantity > 0) {
+    const line = new OutgoingShipmentPurchaseInvoiceLineDto();
+    line.productId = productId;
+    line.quantity = quantity;
+    target.lines.push(line);
+  }
+
+  return next;
 }
 
 /** Column totals across every row, in the same order as {@link rowSplit}. */
