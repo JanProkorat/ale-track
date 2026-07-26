@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { ReportGranularity } from 'src/generated/api-client';
-import { periodRange, fmtKg, sharePct, fmtUnits, apiGranularity, bucketLabel, PERIOD_LABEL } from './reportModel';
+import { ReportGranularity, type ClientVolumeRowDto } from 'src/generated/api-client';
+import {
+  periodRange,
+  fmtKg,
+  sharePct,
+  fmtUnits,
+  apiGranularity,
+  bucketLabel,
+  clientMetricValue,
+  clientMetricFormat,
+  PERIOD_LABEL,
+} from './reportModel';
 
 describe('periodRange', () => {
   it('spans the requested number of days back from today, inclusive of today', () => {
@@ -79,6 +89,25 @@ describe('bucketLabel', () => {
   it('reads "—" for a missing or invalid value', () => {
     expect(bucketLabel(undefined, 'week')).toBe('—');
     expect(bucketLabel('not-a-date', 'week')).toBe('—');
+  });
+});
+
+describe('clientMetricValue / clientMetricFormat', () => {
+  const row = { weightKg: 9000, units: 200 } as ClientVolumeRowDto;
+
+  it('reads weight for the kg metric and formats it in tonnes', () => {
+    expect(clientMetricValue(row, 'kg')).toBe(9000);
+    expect(clientMetricFormat(clientMetricValue(row, 'kg'), 'kg')).toBe('9,0 t');
+  });
+
+  it('reads the unit count for the units metric and formats it with "ks"', () => {
+    expect(clientMetricValue(row, 'units')).toBe(200);
+    expect(clientMetricFormat(clientMetricValue(row, 'units'), 'units')).toBe('200 ks');
+  });
+
+  it('defaults a missing field to 0 rather than NaN/undefined', () => {
+    expect(clientMetricValue({} as ClientVolumeRowDto, 'kg')).toBe(0);
+    expect(clientMetricValue({} as ClientVolumeRowDto, 'units')).toBe(0);
   });
 });
 

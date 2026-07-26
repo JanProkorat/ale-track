@@ -4,13 +4,17 @@
 // component imports — see app/CLAUDE.md's convention for feature-local pure
 // modules (shipmentInvoiceModel.ts).
 import { num } from 'src/lib/format';
-import { ReportGranularity } from 'src/generated/api-client';
+import { ReportGranularity, type ClientVolumeRowDto } from 'src/generated/api-client';
 
 export type ReportTab = 'volume' | 'clients' | 'operational';
 export type ReportPeriod = '30' | '90' | '180';
 
 /** The Objem tab's trend granularity — the prototype's Týdně/Měsíčně toggle. */
 export type VolumeGranularity = 'week' | 'month';
+
+/** The Klienti tab's top-clients chart metric — the prototype's Hmotnost/Kusy toggle
+ * (`REP.cMetric`, aletrack-prototype.html:916). */
+export type ClientMetric = 'kg' | 'units';
 
 export const PERIOD_LABEL: Record<ReportPeriod, string> = {
   '30': 'posledních 30 dní',
@@ -33,6 +37,11 @@ export const PERIOD_OPTIONS = [
 export const GRANULARITY_OPTIONS = [
   { value: 'week' as const, label: 'Týdně' },
   { value: 'month' as const, label: 'Měsíčně' },
+];
+
+export const METRIC_OPTIONS = [
+  { value: 'kg' as const, label: 'Hmotnost' },
+  { value: 'units' as const, label: 'Kusy' },
 ];
 
 /** Maps the UI's granularity choice onto the generated numeric enum. */
@@ -79,6 +88,21 @@ export function sharePct(part: number, total: number): string {
 /** Units in the prototype's format: a whole count with the "ks" (kusů) suffix. */
 export function fmtUnits(units: number): string {
   return `${num(units)} ks`;
+}
+
+/** The Klienti tab's top-clients metric selector, pulled out of the component so the
+ * mapping is directly unit-testable — @mui/x-charts' own rendered bar values are not
+ * observable under happy-dom (no ResizeObserver-driven layout, so the numeric axis
+ * renders no ticks at all), so a component test alone cannot prove a metric switch
+ * actually changed the plotted values. */
+export function clientMetricValue(row: ClientVolumeRowDto, metric: ClientMetric): number {
+  return metric === 'kg' ? (row.weightKg ?? 0) : (row.units ?? 0);
+}
+
+/** Formats a top-clients value per the selected metric — `fmtKg` for weight, `fmtUnits`
+ * for a raw count. Paired with `clientMetricValue`. */
+export function clientMetricFormat(value: number, metric: ClientMetric): string {
+  return metric === 'kg' ? fmtKg(value) : fmtUnits(value);
 }
 
 /** Short Czech month abbreviations, 1-indexed so `MONTH_ABBR[d.getMonth() + 1]` lines up
