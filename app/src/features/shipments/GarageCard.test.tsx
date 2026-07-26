@@ -53,9 +53,9 @@ describe('GarageCard', () => {
   });
 
   it('shows the direction’s own quantity, not the row total', () => {
-    // 12 in the van, of which 5 came off our shelf: the Naložit card is about the 5.
+    // 12 in the van, of which 5 came off our shelf: the Doložit card is about the 5.
     renderCard({
-      title: 'Naložit',
+      title: 'Doložit',
       quantityOf: (r) => r.fromInventory,
       rows: [row({ name: 'Ležák', quantity: 12, orderQuantity: 12, fromInventory: 5 })],
     });
@@ -97,7 +97,7 @@ describe('GarageCard', () => {
     expect(within(unload.container).getAllByText('9 ks').length).toBeGreaterThan(0);
     expect(within(unload.container).queryByText('2 ks')).toBeNull();
 
-    const load = renderCard({ title: 'Naložit', quantityOf: (r) => r.fromInventory, rows });
+    const load = renderCard({ title: 'Doložit', quantityOf: (r) => r.fromInventory, rows });
     expect(within(load.container).getAllByText('2 ks').length).toBeGreaterThan(0);
   });
 });

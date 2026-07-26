@@ -1096,7 +1096,7 @@ export function ShipmentDetail({
           />
 
           <GarageCard
-            title="Naložit"
+            title="Doložit"
             icon={<Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
             rows={aggRows}
             quantityOf={(row) => row.fromInventory}
