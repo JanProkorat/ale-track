@@ -20,6 +20,13 @@ describe('fmtKg', () => {
     expect(fmtKg(12400)).toBe('12,4 t');
   });
 
+  it('forces the decimal on a whole number of tonnes, as the prototype does', () => {
+    // The prototype's nf(n, 1) sets minimumFractionDigits too, so this is "2,0 t".
+    // num() alone would render "2 t".
+    expect(fmtKg(2000)).toBe('2,0 t');
+    expect(fmtKg(10000)).toBe('10,0 t');
+  });
+
   it('keeps kilograms below 1000, with no decimals', () => {
     expect(fmtKg(999)).toBe('999 kg');
     expect(fmtKg(0)).toBe('0 kg');
@@ -31,10 +38,12 @@ describe('sharePct', () => {
     expect(sharePct(25, 200)).toBe('12,5 %');
   });
 
+  it('forces the decimal on a whole percentage', () => {
+    expect(sharePct(24, 200)).toBe('12,0 %');
+  });
+
   it('reads 0 rather than dividing by zero on an empty total', () => {
-    // num() doesn't force a decimal place — Intl.NumberFormat('cs-CZ') renders
-    // the integer 0 as "0", not "0,0" (confirmed against src/lib/format.ts).
-    expect(sharePct(0, 0)).toBe('0 %');
+    expect(sharePct(0, 0)).toBe('0,0 %');
   });
 });
 

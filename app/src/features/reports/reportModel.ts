@@ -30,21 +30,34 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The window a period preset resolves to — `to` is today, `from` is N days earlier. */
+/** Exactly one decimal place, cs-CZ — the prototype's `nf(n, 1)`, which sets both the
+ * minimum and maximum fraction digits, so 2 t renders as "2,0 t" and not "2 t".
+ * `num()` from src/lib/format forces no decimals and has many other callers, so this
+ * stays local rather than changing that. */
+function num1(n: number): string {
+  return new Intl.NumberFormat('cs-CZ', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
+}
+
+/** The window a period preset resolves to — `to` is today, `from` is N days earlier.
+ *
+ * The anchor is the caller's *local* calendar day (that is what "last 30 days" means to
+ * them) mapped onto UTC midnight, so the ISO output cannot slip a day: reading local
+ * date parts while doing the arithmetic and formatting in UTC put `to` a day behind for
+ * anyone east of Greenwich between local midnight and their UTC offset. */
 export function periodRange(period: ReportPeriod, today: Date = new Date()): { from: string; to: string } {
-  const to = new Date(today);
-  const from = new Date(today);
+  const to = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - Number(period));
   return { from: isoDate(from), to: isoDate(to) };
 }
 
-/** Weight in the prototype's format: tonnes with one decimal from 1000 kg up. */
+/** Weight in the prototype's format: tonnes with one forced decimal from 1000 kg up,
+ * whole kilograms below it. Matches `fmtKg` in the prototype (line 793). */
 export function fmtKg(kg: number): string {
-  return kg >= 1000 ? `${num(Math.round((kg / 1000) * 10) / 10)} t` : `${num(Math.round(kg))} kg`;
+  return kg >= 1000 ? `${num1(kg / 1000)} t` : `${num(Math.round(kg))} kg`;
 }
 
-/** A part's share of a total, one decimal, safe on a zero total. */
+/** A part's share of a total, one forced decimal, safe on a zero total. */
 export function sharePct(part: number, total: number): string {
-  const pct = total > 0 ? (part / total) * 100 : 0;
-  return `${num(Math.round(pct * 10) / 10)} %`;
+  return `${num1(total > 0 ? (part / total) * 100 : 0)} %`;
 }
