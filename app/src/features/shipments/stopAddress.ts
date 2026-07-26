@@ -5,9 +5,27 @@
 // resolution + the stop row's second line) and `seAddrSelect`'s value scheme
 // (`cur`/`value` — 'Official' | 'Contact' | `place:<id>`).
 
-import { type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import { type AddressDto, type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
 import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 import { addrKindLabel } from 'src/lib/labels';
+
+/** The `address · kind` tail shared by both resolvers below for the two
+ * standard kinds (Contact falls back to Official when there's no contact
+ * address). Neither resolver's place branch goes through here — they
+ * legitimately differ: the editor prefixes the place's name (it has no
+ * separate chip to carry it), the detail is address-only (its chip already
+ * shows the name). Kept as one function so a wording/separator/fallback
+ * change can't land on only one of the two screens the same stop renders on. */
+function resolveFromAddresses(
+  kind: OutgoingShipmentStopAddressKind,
+  official: AddressDto | undefined,
+  contact: AddressDto | undefined,
+): { lat?: number; lng?: number; text: string } {
+  if (kind === OutgoingShipmentStopAddressKind.Contact && contact) {
+    return { lat: contact.latitude, lng: contact.longitude, text: `${formatStreetAddress(contact)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
+  }
+  return { lat: official?.latitude, lng: official?.longitude, text: `${formatStreetAddress(official)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+}
 
 /** Sentinel <Select> value for "+ Nové místo…". Every place id is encoded as
  * `place:<id>` (see {@link encodeStopChoice}) and the two standard kinds
@@ -55,12 +73,7 @@ export function resolveStopAddress(
       return { lat: place.address?.latitude, lng: place.address?.longitude, text: `${place.name ?? ''} · ${formatPlaceAddress(place)}` };
     }
   }
-  if (addressKind === OutgoingShipmentStopAddressKind.Contact && order?.clientContactAddress) {
-    const a = order.clientContactAddress;
-    return { lat: a.latitude, lng: a.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
-  }
-  const a = order?.clientOfficialAddress;
-  return { lat: a?.latitude, lng: a?.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+  return resolveFromAddresses(addressKind, order?.clientOfficialAddress, order?.clientContactAddress);
 }
 
 /** Resolves a shipment-detail stop's map point and address-line text straight
@@ -79,10 +92,5 @@ export function resolveDetailStopAddress(
   if (stop.selectedAddressKind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace) {
     return { lat: stop.deliveryPlace.address?.latitude, lng: stop.deliveryPlace.address?.longitude, text: formatPlaceAddress(stop.deliveryPlace) };
   }
-  if (stop.selectedAddressKind === OutgoingShipmentStopAddressKind.Contact && stop.contactAddress) {
-    const a = stop.contactAddress;
-    return { lat: a.latitude, lng: a.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
-  }
-  const a = stop.officialAddress;
-  return { lat: a?.latitude, lng: a?.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+  return resolveFromAddresses(stop.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official, stop.officialAddress, stop.contactAddress);
 }

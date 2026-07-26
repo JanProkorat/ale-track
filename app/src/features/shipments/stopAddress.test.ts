@@ -68,6 +68,27 @@ describe('resolveDetailStopAddress', () => {
   });
 });
 
+describe('resolveStopAddress and resolveDetailStopAddress agree on the shared tail', () => {
+  // The same stop renders on both the editor and the detail screen. Both
+  // resolvers delegate their Contact/Official branch to one private helper —
+  // this guards against a future edit landing on only one of the two call
+  // sites (wording, separator, or the Contact-falls-back-to-Official rule).
+  const officialAddress = { streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', latitude: 50.897, longitude: 14.808 };
+  const contactAddress = { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763', latitude: 50.88, longitude: 14.81 };
+
+  it('produce the identical string for the same Official stop', () => {
+    const editorText = resolveStopAddress(order, OutgoingShipmentStopAddressKind.Official).text;
+    const detailText = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Official, officialAddress } as never).text;
+    expect(editorText).toBe(detailText);
+  });
+
+  it('produce the identical string for the same Contact stop', () => {
+    const editorText = resolveStopAddress(order, OutgoingShipmentStopAddressKind.Contact).text;
+    const detailText = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Contact, officialAddress, contactAddress } as never).text;
+    expect(editorText).toBe(detailText);
+  });
+});
+
 describe('stop choice encoding', () => {
   it('round-trips the two standard kinds', () => {
     expect(decodeStopChoice(encodeStopChoice(OutgoingShipmentStopAddressKind.Official)))

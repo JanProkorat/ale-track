@@ -22,8 +22,17 @@ import { theme } from 'src/theme/theme';
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
 
 // Pulls in react-leaflet, which doesn't run under happy-dom — same stub used
-// by ShipmentEditor.test.tsx.
-vi.mock('src/components/common/RouteMap', () => ({ RouteMap: () => <div data-testid="route-map-stub" /> }));
+// by ShipmentEditor.test.tsx. Captures the `stops` prop (rather than just
+// rendering an empty div) so the route-map fix in step 2 — a DeliveryPlace
+// stop must pin at the place, not the billing address — has a test that can
+// actually catch a regression on it.
+const routeMapProps = vi.fn();
+vi.mock('src/components/common/RouteMap', () => ({
+  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[] }) => {
+    routeMapProps(props);
+    return <div data-testid="route-map-stub" />;
+  },
+}));
 
 vi.mock('src/hooks/useShipments', () => ({ useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
@@ -113,5 +122,18 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
     const row = screen.getByText('Restaurace B').closest('button') as HTMLElement;
     expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — route map point resolution', () => {
+  it('pins a DeliveryPlace stop at the place, not the client\'s official address', () => {
+    renderDetail([placeStop()]);
+
+    expect(routeMapProps).toHaveBeenCalled();
+    const { stops } = routeMapProps.mock.calls.at(-1)![0];
+    expect(stops).toHaveLength(1);
+    // The place's own coordinates (50.9, 14.8), not the official address's (50.897, 14.808).
+    expect(stops[0].lat).toBe(50.9);
+    expect(stops[0].lng).toBe(14.8);
   });
 });
