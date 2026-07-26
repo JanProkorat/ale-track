@@ -13,20 +13,7 @@ import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
 import { apiErrorMessage } from 'src/api/errors';
 import { type ClientDeliveryPlaceDto } from 'src/generated/api-client';
 import { useClientDeliveryPlaces, useDeleteDeliveryPlace } from 'src/hooks/useDeliveryPlaces';
-
-/** A place picked straight off the map has no street — show its coordinates
- * where the address line would go. Ported from the prototype's `placeAddrText`.
- * `place.address` is technically optional on the generated DTO (unlike the
- * prototype's plain object, which always has one), so this guards against
- * that in addition to the prototype's street/city check. */
-export function formatPlaceAddress(place: ClientDeliveryPlaceDto): string {
-  const a = place.address;
-  if (!a) return '—';
-  if (a.streetName || a.city) {
-    return `${[a.streetName, a.streetNumber].filter(Boolean).join(' ')}, ${a.zip ?? ''} ${a.city ?? ''}`.trim();
-  }
-  return `${Number(a.latitude).toFixed(4)}, ${Number(a.longitude).toFixed(4)}`;
-}
+import { formatPlaceAddress } from './deliveryPlaceFormat';
 
 function PlaceRow({
   place,
@@ -84,7 +71,7 @@ function PlaceRow({
  * shared `DeliveryPlaceDialog`. Mirrors NotesPanel/RemindersPanel's structure,
  * but renders its own titled-card chrome since — unlike those — this panel
  * sits inline in the info tab's grid rather than owning a whole sub-tab. */
-export function DeliveryPlacesPanel({ clientId, editable }: { clientId: string; editable: boolean }) {
+export function DeliveryPlacesPanel({ clientId, clientName, editable }: { clientId: string; clientName?: string; editable: boolean }) {
   const { enqueueSnackbar } = useSnackbar();
   const query = useClientDeliveryPlaces(clientId);
   const del = useDeleteDeliveryPlace();
@@ -147,7 +134,13 @@ export function DeliveryPlacesPanel({ clientId, editable }: { clientId: string; 
         </QueryBoundary>
       </Box>
 
-      <DeliveryPlaceDialog open={dialogOpen} clientId={clientId} place={editingPlace} onClose={() => setDialogOpen(false)} />
+      <DeliveryPlaceDialog
+        open={dialogOpen}
+        clientId={clientId}
+        clientName={clientName}
+        place={editingPlace}
+        onClose={() => setDialogOpen(false)}
+      />
 
       <ConfirmDialog
         open={confirmPlace !== null}

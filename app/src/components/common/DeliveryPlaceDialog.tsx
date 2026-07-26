@@ -37,12 +37,17 @@ const COUNTRY_OPTIONS = [
 export function DeliveryPlaceDialog({
   open,
   clientId,
+  clientName,
   place,
   onClose,
   onSaved,
 }: {
   open: boolean;
   clientId: string;
+  /** Shown bold in the helper line, matching the prototype's
+   * `${esc(cl.name)}` — optional since not every caller has it in hand
+   * (e.g. a bare clientId with no loaded client record). */
+  clientName?: string;
   place?: ClientDeliveryPlaceDto;
   onClose: () => void;
   onSaved?: (placeId: string) => void;
@@ -144,7 +149,7 @@ export function DeliveryPlaceDialog({
       </DialogTitle>
       <DialogContent>
         <Typography color="text.secondary" sx={{ fontSize: 12.5, mb: 1.5 }}>
-          Místo se uloží ke klientovi a půjde vybrat u kterékoli jeho zastávky.
+          Místo se uloží ke klientovi{clientName ? <> <Box component="b">{clientName}</Box></> : null} a půjde vybrat u kterékoli jeho zastávky.
         </Typography>
 
         <AddressMapPicker point={point} onPick={handlePick} />

@@ -203,7 +203,7 @@ export function ClientDetail({
           </TitledCard>
 
           <Box sx={{ gridColumn: '1 / -1' }}>
-            <DeliveryPlacesPanel clientId={clientId} editable={editable} />
+            <DeliveryPlacesPanel clientId={clientId} clientName={client.name} editable={editable} />
           </Box>
 
           <TitledCard title="Obchodní údaje">
