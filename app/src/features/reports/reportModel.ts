@@ -4,9 +4,13 @@
 // component imports — see app/CLAUDE.md's convention for feature-local pure
 // modules (shipmentInvoiceModel.ts).
 import { num } from 'src/lib/format';
+import { ReportGranularity } from 'src/generated/api-client';
 
 export type ReportTab = 'volume' | 'clients' | 'operational';
 export type ReportPeriod = '30' | '90' | '180';
+
+/** The Objem tab's trend granularity — the prototype's Týdně/Měsíčně toggle. */
+export type VolumeGranularity = 'week' | 'month';
 
 export const PERIOD_LABEL: Record<ReportPeriod, string> = {
   '30': 'posledních 30 dní',
@@ -25,6 +29,16 @@ export const PERIOD_OPTIONS = [
   { value: '90' as const, label: '90 dní' },
   { value: '180' as const, label: '6 měsíců' },
 ];
+
+export const GRANULARITY_OPTIONS = [
+  { value: 'week' as const, label: 'Týdně' },
+  { value: 'month' as const, label: 'Měsíčně' },
+];
+
+/** Maps the UI's granularity choice onto the generated numeric enum. */
+export function apiGranularity(g: VolumeGranularity): ReportGranularity {
+  return g === 'month' ? ReportGranularity.Month : ReportGranularity.Week;
+}
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -60,4 +74,9 @@ export function fmtKg(kg: number): string {
 /** A part's share of a total, one forced decimal, safe on a zero total. */
 export function sharePct(part: number, total: number): string {
   return `${num1(total > 0 ? (part / total) * 100 : 0)} %`;
+}
+
+/** Units in the prototype's format: a whole count with the "ks" (kusů) suffix. */
+export function fmtUnits(units: number): string {
+  return `${num(units)} ks`;
 }
