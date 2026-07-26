@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Box, Breadcrumbs, Button, ButtonBase, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog,
+  Box, Breadcrumbs, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
-import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
-import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -45,10 +43,10 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
 import {
-  useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetPurchaseInvoiceLine,
+  useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetLoadingState, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
 import { SegControl, type SegOption } from 'src/components/common/SegControl';
-import { columnsOf, columnTotals, rowsOnInvoice } from './purchaseSplitModel';
+import { columnsOf, columnTotals, loadingProgress, rowsOnInvoice } from './purchaseSplitModel';
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
 } from './PurchaseInvoiceColumns';
@@ -68,7 +66,6 @@ interface NakladkaRow {
   packageSize?: number;
   quantity: number;
   weight: number;
-  loaded: boolean;
   /** Of `quantity`, how many pieces come from our own stock (order rows only). */
   fromInventory: number;
   inventoryItemId?: string;
@@ -89,7 +86,6 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     packageSize: p.packageSize,
     quantity: p.quantity ?? 0,
     weight: p.weight ?? 0,
-    loaded: p.isShipmentLoadingConfirmed ?? false,
     fromInventory: p.quantityFromInventory ?? 0,
     inventoryItemId: p.inventoryItemId,
     inventoryItemName: p.inventoryItemName,
@@ -107,14 +103,10 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     packageSize: e.packageSize,
     quantity: e.quantity ?? 0,
     weight: e.weight ?? 0,
-    loaded: e.isShipmentLoadingConfirmed ?? false,
     fromInventory: 0,
   };
 }
 const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
-
-/** The two checkbox columns: only as wide as the control, since their header is an icon. */
-const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
 
 /** Tab value for the unfiltered loading list; the rest are invoice sequences. */
 const ALL_INVOICES = 'all';
@@ -165,13 +157,6 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
   return order.map((k) => map.get(k)!);
 }
 
-interface AggRowState {
-  loaded: boolean;
-  loadedIndeterminate: boolean;
-  checked: boolean;
-  checkedIndeterminate: boolean;
-}
-
 /**
  * One line of the Množství breakdown, laid out on the cell's shared grid:
  * label · minus · number · plus.
@@ -218,22 +203,19 @@ function BreakdownRow({
   );
 }
 
-/** One aggregated product line on "Celková nakládka" — the operational loading
- * row with Naloženo/Kontrola (aggregated across its source order items, hence the
- * indeterminate state) and a removable "Zboží na sklad" badge. Invoicing is not this
- * card's concern; it lives in the Fakturace section. */
+/** One aggregated product line on "Celková nakládka": what the product is, how many
+ * pieces and where they come from, then one group per brewery invoice carrying the
+ * pieces on it and how far they have got through loading. Invoicing the client is not
+ * this card's concern; it lives in the Fakturace section. */
 function AggLoadingRow({
-  agg, state, editable, onLoaded, onToggleChecked, onAdjustStockPurchase, onAdjustSourcing, invoiceCells,
+  agg, editable, onAdjustStockPurchase, onAdjustSourcing, invoiceCells,
 }: {
   agg: AggRow;
-  state: AggRowState;
   editable: boolean;
-  onLoaded: (loaded: boolean) => void;
-  onToggleChecked: () => void;
   onAdjustStockPurchase?: (delta: number) => void;
   onAdjustSourcing?: (delta: number) => void;
-  /** The brewery-invoice columns, when the run is split across more than one. */
-  invoiceCells?: ReactNode;
+  /** Pieces and loading state, two cells per brewery invoice. */
+  invoiceCells: ReactNode;
 }) {
   const chipText = kindSizeChipText(agg.kind, agg.packageSize);
   const adjustable = Boolean(onAdjustStockPurchase) && editable;
@@ -302,33 +284,20 @@ function AggLoadingRow({
         </Box>
       </TableCell>
       {invoiceCells}
-      <TableCell align="center" padding="checkbox">
-        <Checkbox size="small" checked={state.loaded} indeterminate={state.loadedIndeterminate} disabled={!editable} onChange={() => onLoaded(!state.loaded)} title="Naloženo (1. diktovaná nakládka)" />
-      </TableCell>
-      <TableCell align="center" padding="checkbox">
-        <Checkbox size="small" checked={state.checked} indeterminate={state.checkedIndeterminate} disabled={!editable || !state.loaded} onChange={onToggleChecked} title={state.loaded ? 'Kontrola (2. kontrolní kolo)' : 'Nejdřív naložit'} />
-      </TableCell>
     </TableRow>
   );
 }
 
-/** "Celková nakládka" — the loading list: one row per distinct product with the
- * loaded/kontrola controls and the summed quantity. */
-interface LoadingTotals {
-  quantity: number;
-  loaded: number;
-  checked: number;
-  count: number;
-}
-
-function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
+/** "Celková nakládka" — the loading list: one row per distinct product, with the
+ * loading state living inside each brewery-invoice column group. */
+function AggLoadingTable({ rows, totalQuantity, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
   rows: AggRow[];
-  totals: LoadingTotals;
+  totalQuantity: number;
   renderRow: (a: AggRow) => ReactNode;
   emptyText: string;
-  /** Brewery-invoice column headers and totals; absent when the run is on one invoice. */
-  invoiceHeaders?: ReactNode;
-  invoiceFooters?: (footSx: object) => ReactNode;
+  /** Brewery-invoice column headers and totals, two cells per invoice. */
+  invoiceHeaders: ReactNode;
+  invoiceFooters: (footSx: object) => ReactNode;
 }) {
   if (rows.length === 0) {
     return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
@@ -343,33 +312,14 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, i
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
               <TableCell align="right" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
               {invoiceHeaders}
-              {/* Icons, not words: "Nadiktováno" and "Kontrola" each forced their column
-                  ~65px wider than the checkbox under it. The names live in the tooltips
-                  here and on every checkbox in the column. */}
-              <TableCell align="center" sx={CHECK_HEAD_SX}>
-                <Tooltip title="Nadiktováno (1. diktovaná nakládka)">
-                  <RecordVoiceOverOutlinedIcon sx={{ fontSize: 17, display: 'block', mx: 'auto' }} />
-                </Tooltip>
-              </TableCell>
-              <TableCell align="center" sx={CHECK_HEAD_SX}>
-                <Tooltip title="Kontrola (2. kontrolní kolo)">
-                  <DoneAllOutlinedIcon sx={{ fontSize: 17, display: 'block', mx: 'auto' }} />
-                </Tooltip>
-              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.map(renderRow)}
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
-              <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totals.quantity} ks</TableCell>
-              {invoiceFooters?.(footSx)}
-              <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.loaded === totals.count ? 'success.main' : 'text.primary' }}>
-                {totals.loaded}/{totals.count}
-              </TableCell>
-              <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.checked === totals.count ? 'success.main' : 'text.primary' }}>
-                {totals.checked}/{totals.count}
-              </TableCell>
+              <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totalQuantity} ks</TableCell>
+              {invoiceFooters(footSx)}
             </TableRow>
           </TableBody>
         </Table>
@@ -548,16 +498,7 @@ export function ShipmentDetail({
   const addPurchaseInvoice = useAddPurchaseInvoice(shipment.id);
   const deletePurchaseInvoice = useDeletePurchaseInvoice(shipment.id);
   const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
-
-  // "Kontrola" (2nd check round) has no field on the real DTO (only a single
-  // isLoadingConfirmed flag exists) — kept as ephemeral, session-only local
-  // state, reset whenever a different shipment is opened.
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  // "Naloženo" persists via the update mutation, but that round-trips through the
-  // API; an optimistic per-row override keeps the control instant.
-  const [loadedOverride, setLoadedOverride] = useState<Map<string, boolean>>(new Map());
-  useEffect(() => { setCheckedIds(new Set()); setLoadedOverride(new Map()); }, [shipment.id]);
-  const isLoaded = (row: NakladkaRow) => loadedOverride.get(row.key) ?? row.loaded;
+  const setLoadingState = useSetLoadingState(shipment.id);
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
@@ -600,6 +541,7 @@ export function ShipmentDetail({
   // invoice behind it until a number is typed into it, which the server then
   // materialises. Anything beyond two comes from "+ Faktura pivovaru".
   const purchaseInvoices = useMemo(() => shipment.purchaseInvoices ?? [], [shipment.purchaseInvoices]);
+  const loadingStates = useMemo(() => shipment.loadingStates ?? [], [shipment.loadingStates]);
 
   // Filter the loading list down to one brewery invoice: what to read out when the
   // pallet is being checked against that invoice rather than against the whole run.
@@ -626,20 +568,18 @@ export function ShipmentDetail({
   // Footers total what is on screen; a filtered table whose sum counts hidden rows
   // is worse than no sum at all.
   const purchaseTotals = useMemo(() => columnTotals(visibleRows, purchaseInvoices), [visibleRows, purchaseInvoices]);
-  // Aggregated-row state derives from the per-source overrides: a product line is
-  // "loaded" only when all its source order items are, and indeterminate between.
-  const aggLoaded = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => isLoaded(r));
-  const aggLoadedIndeterminate = (a: AggRow) => a.sources.some((r) => isLoaded(r)) && !aggLoaded(a);
-  const aggChecked = (a: AggRow) => a.sources.length > 0 && a.sources.every((r) => checkedIds.has(r.key));
-  const aggCheckedIndeterminate = (a: AggRow) => a.sources.some((r) => checkedIds.has(r.key)) && !aggChecked(a);
-
-  // Progress pills report the whole run; the table's own footer reports what it shows.
-  const productN = aggRows.length;
-  const loadedN = aggRows.filter(aggLoaded).length;
-  const checkedN = aggRows.filter(aggChecked).length;
-  const visibleN = visibleRows.length;
-  const visibleLoadedN = visibleRows.filter(aggLoaded).length;
-  const visibleCheckedN = visibleRows.filter(aggChecked).length;
+  // Progress pills report the whole run; the table's own footers report what it shows.
+  // Counted per (row, column) pair: a product split across two invoices is loaded
+  // twice, once for each pallet read out.
+  const progress = useMemo(
+    () => loadingProgress(aggRows, purchaseInvoices, loadingStates),
+    [aggRows, purchaseInvoices, loadingStates],
+  );
+  const columnProgress = useMemo(
+    () => columnsOf(purchaseInvoices).map((column) =>
+      loadingProgress(visibleRows, purchaseInvoices, loadingStates, column.sequence)),
+    [visibleRows, purchaseInvoices, loadingStates],
+  );
   const totalQty = visibleRows.reduce((s, a) => s + a.quantity, 0);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
@@ -688,36 +628,6 @@ export function ShipmentDetail({
 
   function advance(next: OutgoingShipmentState) {
     void save(draftFromShipment(shipment), next);
-  }
-
-  // Mark a whole aggregated product (all its source order items) loaded/unloaded
-  // in one mutation. Optimistic overrides keep the checkbox instant.
-  function applyLoaded(rows: NakladkaRow[], loaded: boolean) {
-    setLoadedOverride((prev) => { const n = new Map(prev); for (const r of rows) n.set(r.key, loaded); return n; });
-    const draft = draftFromShipment(shipment);
-    for (const row of rows) {
-      if (row.orderItemId) {
-        for (const co of draft.clientOrderShipments) {
-          const oi = co.orderItems?.find((x) => x.orderItemId === row.orderItemId);
-          if (oi) oi.isLoadingConfirmed = loaded;
-        }
-      } else if (row.extraId) {
-        const e = draft.stockPurchases.find((x) => x.id === row.extraId);
-        if (e) e.isLoadingConfirmed = loaded;
-      }
-    }
-    if (!loaded) setCheckedIds((prev) => { const n = new Set(prev); for (const r of rows) n.delete(r.key); return n; });
-    void save(draft);
-  }
-
-  // Toggle "Kontrola" for a whole product: check all sources, or clear all.
-  function toggleCheckedRows(rows: NakladkaRow[]) {
-    setCheckedIds((prev) => {
-      const n = new Set(prev);
-      const all = rows.length > 0 && rows.every((r) => n.has(r.key));
-      for (const r of rows) { if (all) n.delete(r.key); else n.add(r.key); }
-      return n;
-    });
   }
 
   // Adjust the "Zboží na sklad" quantity of an aggregated product by `delta`
@@ -912,14 +822,20 @@ export function ShipmentDetail({
             </Stack>
             <Box sx={{ px: 2.5, py: 2 }}>
               <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
-                <StatusPill tone={productN > 0 && loadedN === productN ? 'ok' : 'grey'} label={`Naloženo ${loadedN}/${productN}`} />
-                <StatusPill tone={productN > 0 && checkedN === productN ? 'ok' : 'grey'} label={`Zkontrolováno ${checkedN}/${productN}`} />
+                <StatusPill
+                  tone={progress.total > 0 && progress.dictated === progress.total ? 'ok' : 'grey'}
+                  label={`Nadiktováno ${progress.dictated}/${progress.total}`}
+                />
+                <StatusPill
+                  tone={progress.total > 0 && progress.checked === progress.total ? 'ok' : 'grey'}
+                  label={`Zkontrolováno ${progress.checked}/${progress.total}`}
+                />
                 <Box sx={{ flex: 1 }} />
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
               <AggLoadingTable
                 rows={visibleRows}
-                totals={{ quantity: totalQty, loaded: visibleLoadedN, checked: visibleCheckedN, count: visibleN }}
+                totalQuantity={totalQty}
                 emptyText={activeFilter === ALL_INVOICES
                   ? 'Zatím žádné produkty k naložení.'
                   : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
@@ -932,30 +848,29 @@ export function ShipmentDetail({
                     })}
                   />
                 )}
-                invoiceFooters={(footSx) => <PurchaseInvoiceFooterCells totals={purchaseTotals} sx={footSx} />}
+                invoiceFooters={(footSx) => (
+                  <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
+                )}
                 renderRow={(agg) => (
                   <AggLoadingRow
                     key={agg.key}
                     agg={agg}
                     editable={nakladkaEditable}
-                    state={{
-                      loaded: aggLoaded(agg),
-                      loadedIndeterminate: aggLoadedIndeterminate(agg),
-                      checked: aggChecked(agg),
-                      checkedIndeterminate: aggCheckedIndeterminate(agg),
-                    }}
-                    onLoaded={(loaded) => applyLoaded(agg.sources, loaded)}
-                    onToggleChecked={() => toggleCheckedRows(agg.sources)}
                     onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                     onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
                     invoiceCells={(
                       <PurchaseInvoiceRowCells
                         row={agg}
                         invoices={purchaseInvoices}
+                        states={loadingStates}
                         editable={nakladkaEditable}
                         onSet={(sequence, quantity) => setPurchaseInvoiceLine.mutate(
                           { sequence, productId: agg.productId!, quantity },
                           { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Rozdělení se nepodařilo uložit'), { variant: 'error' }) },
+                        )}
+                        onSetState={(sequence, state) => setLoadingState.mutate(
+                          { sequence, productId: agg.productId!, state },
+                          { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Stav nakládky se nepodařilo uložit'), { variant: 'error' }) },
                         )}
                       />
                     )}

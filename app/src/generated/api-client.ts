@@ -286,6 +286,12 @@ export interface IClient {
     setPurchaseInvoiceLineEndpoint(id: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Sets how far a product has got through loading in one invoice column
+     * @return State stored
+     */
+    setLoadingStateEndpoint(id: string, data: SetLoadingStateDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Moves pieces of a shipment item to another invoice, or off invoicing
      * @return Pieces moved
      */
@@ -3437,6 +3443,78 @@ export class Client implements IClient {
         } else if (status === 400) {
             return response.text().then((_responseText) => {
             return throwException("Shipment no longer editable, or the remainder invoice was targeted", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets how far a product has got through loading in one invoice column
+     * @return State stored
+     */
+    setLoadingStateEndpoint(id: string, data: SetLoadingStateDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/loading-states";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetLoadingStateEndpoint(_response);
+        });
+    }
+
+    protected processSetLoadingStateEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment no longer editable", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -9636,6 +9714,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
+    loadingStates?: OutgoingShipmentLoadingStateDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -9677,6 +9756,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.purchaseInvoices = [] as any;
                 for (let item of _data["purchaseInvoices"])
                     this.purchaseInvoices!.push(OutgoingShipmentPurchaseInvoiceDto.fromJS(item));
+            }
+            if (Array.isArray(_data["loadingStates"])) {
+                this.loadingStates = [] as any;
+                for (let item of _data["loadingStates"])
+                    this.loadingStates!.push(OutgoingShipmentLoadingStateDto.fromJS(item));
             }
         }
     }
@@ -9720,6 +9804,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.purchaseInvoices)
                 data["purchaseInvoices"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.loadingStates)) {
+            data["loadingStates"] = [];
+            for (let item of this.loadingStates)
+                data["loadingStates"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -9735,6 +9824,7 @@ export interface IOutgoingShipmentDetailDto {
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
+    loadingStates?: OutgoingShipmentLoadingStateDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -10300,6 +10390,56 @@ export class OutgoingShipmentPurchaseInvoiceLineDto implements IOutgoingShipment
 export interface IOutgoingShipmentPurchaseInvoiceLineDto {
     productId?: string;
     quantity?: number;
+}
+
+export class OutgoingShipmentLoadingStateDto implements IOutgoingShipmentLoadingStateDto {
+    productId?: string;
+    sequence?: number;
+    state?: ShipmentLoadingState;
+
+    constructor(data?: IOutgoingShipmentLoadingStateDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.sequence = _data["sequence"];
+            this.state = _data["state"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentLoadingStateDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentLoadingStateDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["sequence"] = this.sequence;
+        data["state"] = this.state;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentLoadingStateDto {
+    productId?: string;
+    sequence?: number;
+    state?: ShipmentLoadingState;
+}
+
+export enum ShipmentLoadingState {
+    NotLoaded = 0,
+    Dictated = 1,
+    Checked = 2,
 }
 
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
@@ -10894,6 +11034,50 @@ export interface ISetPurchaseInvoiceLineDto {
     sequence?: number;
     productId?: string;
     quantity?: number;
+}
+
+export class SetLoadingStateDto implements ISetLoadingStateDto {
+    productId?: string;
+    sequence?: number;
+    state?: ShipmentLoadingState;
+
+    constructor(data?: ISetLoadingStateDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.sequence = _data["sequence"];
+            this.state = _data["state"];
+        }
+    }
+
+    static fromJS(data: any): SetLoadingStateDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetLoadingStateDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["sequence"] = this.sequence;
+        data["state"] = this.state;
+        return data;
+    }
+}
+
+export interface ISetLoadingStateDto {
+    productId?: string;
+    sequence?: number;
+    state?: ShipmentLoadingState;
 }
 
 export class MoveInvoiceLineDto implements IMoveInvoiceLineDto {

@@ -7,7 +7,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { OutgoingShipmentPurchaseInvoiceDto, OutgoingShipmentPurchaseInvoiceLineDto } from 'src/generated/api-client';
+import {
+  OutgoingShipmentLoadingStateDto,
+  OutgoingShipmentPurchaseInvoiceDto,
+  OutgoingShipmentPurchaseInvoiceLineDto,
+  ShipmentLoadingState,
+} from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 import { PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells } from './PurchaseInvoiceColumns';
 import type { PurchasableRow } from './purchaseSplitModel';
@@ -31,11 +36,21 @@ function row(over: Partial<PurchasableRow> = {}): PurchasableRow {
   return { productId: LEZAK, orderQuantity: 24, fromInventory: 0, stockPurchaseQuantity: 0, ...over };
 }
 
+function state(productId: string, sequence: number, value: ShipmentLoadingState) {
+  const dto = new OutgoingShipmentLoadingStateDto();
+  dto.productId = productId;
+  dto.sequence = sequence;
+  dto.state = value;
+  return dto;
+}
+
 function renderRowCells(props: {
   row?: PurchasableRow;
   invoices?: OutgoingShipmentPurchaseInvoiceDto[];
+  states?: OutgoingShipmentLoadingStateDto[];
   editable?: boolean;
   onSet?: (sequence: number, quantity: number) => void;
+  onSetState?: (sequence: number, state: ShipmentLoadingState) => void;
 }) {
   const invoices = props.invoices ?? [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]])];
   return render(
@@ -44,8 +59,10 @@ function renderRowCells(props: {
         <PurchaseInvoiceRowCells
           row={props.row ?? row()}
           invoices={invoices}
+          states={props.states ?? []}
           editable={props.editable ?? true}
           onSet={props.onSet ?? vi.fn()}
+          onSetState={props.onSetState ?? vi.fn()}
         />
       </tr></tbody></table>
     </MuiThemeProvider>,
@@ -209,5 +226,55 @@ describe('PurchaseInvoiceHeaderCells', () => {
     renderHeaderCells({ editable: false });
 
     expect(screen.queryByLabelText('Smazat fakturu 2')).toBeNull();
+  });
+});
+
+describe('loading state control', () => {
+  it('starts empty and advances to nadikt\u00f3v\u00e1no on click', () => {
+    const onSetState = vi.fn();
+    renderRowCells({ onSetState });
+
+    fireEvent.click(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno'));
+
+    expect(onSetState).toHaveBeenCalledWith(1, ShipmentLoadingState.Dictated);
+  });
+
+  it('advances to zkontrolov\u00e1no and then wraps back to empty', () => {
+    const onSetState = vi.fn();
+    renderRowCells({ states: [state(LEZAK, 1, ShipmentLoadingState.Dictated)], onSetState });
+    fireEvent.click(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nadiktov\u00e1no'));
+    expect(onSetState).toHaveBeenLastCalledWith(1, ShipmentLoadingState.Checked);
+
+    renderRowCells({ states: [state(LEZAK, 1, ShipmentLoadingState.Checked)], onSetState });
+    fireEvent.click(screen.getAllByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Zkontrolov\u00e1no')[0]);
+    expect(onSetState).toHaveBeenLastCalledWith(1, ShipmentLoadingState.NotLoaded);
+  });
+
+  it('tracks each column separately', () => {
+    renderRowCells({ states: [state(LEZAK, 2, ShipmentLoadingState.Checked)] });
+
+    expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno')).toBeTruthy();
+    expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 2: Zkontrolov\u00e1no')).toBeTruthy();
+  });
+
+  it('offers no control for a column carrying nothing', () => {
+    // F2 claims none of this product, so there is nothing there to load.
+    renderRowCells({ invoices: [invoice(1, 'i1'), invoice(2, 'i2')] });
+
+    expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno')).toBeTruthy();
+    expect(screen.queryByLabelText('Nakl\u00e1dka na faktu\u0159e 2: Nenalo\u017eeno')).toBeNull();
+  });
+
+  it('keeps the first column loadable when every piece came from our garage', () => {
+    // Those sit on no brewery invoice, but they are still in the van.
+    renderRowCells({ row: row({ orderQuantity: 12, fromInventory: 12 }) });
+
+    expect(screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno')).toBeTruthy();
+  });
+
+  it('cannot be clicked on a shipment that is no longer editable', () => {
+    renderRowCells({ editable: false });
+
+    expect((screen.getByLabelText('Nakl\u00e1dka na faktu\u0159e 1: Nenalo\u017eeno') as HTMLButtonElement).disabled).toBe(true);
   });
 });

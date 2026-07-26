@@ -91,6 +91,7 @@ public sealed class DeletePurchaseInvoiceEndpoint(AleTrackDbContext dbContext) :
             return;
         }
 
+        var removedSequence = invoice.Sequence;
         Remove(shipment, invoice);
 
         // One invoice left means nothing is split any more; drop the remainder too.
@@ -101,8 +102,34 @@ public sealed class DeletePurchaseInvoiceEndpoint(AleTrackDbContext dbContext) :
         foreach (var survivor in shipment.PurchaseInvoices.OrderBy(i => i.Sequence))
             survivor.Sequence = sequence++;
 
+        CompactLoadingStates(shipment, removedSequence);
+
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
+    }
+
+    /// <summary>
+    /// Moves the loading states along with the columns they describe.
+    /// </summary>
+    /// <remarks>
+    /// They are keyed by sequence, and the sequences above the deleted invoice have just shifted
+    /// down — leaving them alone would show F3's "checked" against F2's pieces. The deleted
+    /// column's own states go with it; the remainder column (1) never moves.
+    /// </remarks>
+    private void CompactLoadingStates(OutgoingShipment shipment, int removedSequence)
+    {
+        foreach (var state in shipment.LoadingStates.ToList())
+        {
+            if (state.Sequence == removedSequence)
+            {
+                shipment.LoadingStates.Remove(state);
+                dbContext.OutgoingShipmentLoadingStates.Remove(state);
+            }
+            else if (state.Sequence > removedSequence)
+            {
+                state.Sequence -= 1;
+            }
+        }
     }
 
     private void Remove(OutgoingShipment shipment, OutgoingShipmentPurchaseInvoice invoice)

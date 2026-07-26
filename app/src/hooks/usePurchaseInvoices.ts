@@ -8,7 +8,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { OutgoingShipmentDetailDto, SetPurchaseInvoiceLineDto } from 'src/generated/api-client';
+import {
+  OutgoingShipmentDetailDto,
+  OutgoingShipmentLoadingStateDto,
+  SetLoadingStateDto,
+  SetPurchaseInvoiceLineDto,
+  ShipmentLoadingState,
+} from 'src/generated/api-client';
 import { applyLineLocally } from 'src/features/shipments/purchaseSplitModel';
 
 function useInvalidateShipment(shipmentId: string | undefined) {
@@ -94,6 +100,63 @@ export function useSetPurchaseInvoiceLine(shipmentId: string | undefined) {
 
     // On both paths: success replaces the guess with the server's own clamping,
     // failure resyncs after the rollback.
+    onSettled: invalidate,
+  });
+}
+
+export interface SetLoadingStateArgs {
+  productId: string;
+  /** Which invoice column, by position. 1 is the remainder column. */
+  sequence: number;
+  state: ShipmentLoadingState;
+}
+
+/**
+ * Records how far a product has got through loading in one invoice column.
+ *
+ * Optimistic like the line write, and for the same reason: the control is clicked
+ * repeatedly while working down a pallet, and a control that only moves after the
+ * round trip invites double clicks. A failed write puts the previous state back.
+ */
+export function useSetLoadingState(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const invalidate = useInvalidateShipment(shipmentId);
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ productId, sequence, state }: SetLoadingStateArgs) =>
+      ds.setLoadingStateEndpoint(shipmentId!, new SetLoadingStateDto({ productId, sequence, state })),
+
+    onMutate: async ({ productId, sequence, state }: SetLoadingStateArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      const kept = (previous.loadingStates ?? [])
+        .filter((s) => !(s.productId === productId && s.sequence === sequence));
+
+      // Absent means "not loaded", so clearing a state removes its row rather than
+      // storing a zero — same shape the server keeps.
+      const next = Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+      );
+      next.loadingStates = state === ShipmentLoadingState.NotLoaded
+        ? kept
+        : [...kept, new OutgoingShipmentLoadingStateDto({ productId, sequence, state })];
+      qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
     onSettled: invalidate,
   });
 }

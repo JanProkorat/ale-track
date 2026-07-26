@@ -27,6 +27,7 @@ public static class PurchaseInvoiceSplit
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
             .Include(s => s.StockPurchases).ThenInclude(p => p.Product)
             .Include(s => s.PurchaseInvoices).ThenInclude(i => i.Lines)
+            .Include(s => s.LoadingStates)
             .FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
 
     /// <summary>
@@ -126,6 +127,38 @@ public static class PurchaseInvoiceSplit
         }
 
         return removed;
+    }
+
+    /// <summary>
+    /// How many pieces of a product each invoice column carries, indexed by sequence.
+    /// </summary>
+    /// <remarks>
+    /// Column 1 gets the remainder <em>plus</em> the pieces taken from our own garage: those are
+    /// on no brewery invoice, but they are in the van and have to be loaded like everything else.
+    /// The invoice columns show only what is bought, so the two figures differ on purpose — this
+    /// one answers "is there anything here to load", not "what is billed".
+    /// </remarks>
+    public static Dictionary<int, int> PiecesByColumn(OutgoingShipment shipment, long productId)
+    {
+        var columns = new Dictionary<int, int>();
+        var sequences = shipment.PurchaseInvoices.Select(i => i.Sequence).DefaultIfEmpty(1).Max();
+
+        for (var sequence = 1; sequence <= Math.Max(sequences, 1); sequence++)
+            columns[sequence] = 0;
+
+        foreach (var invoice in LineHolders(shipment))
+            columns[invoice.Sequence] = invoice.Lines.Where(l => l.ProductId == productId).Sum(l => l.Quantity);
+
+        var claimed = columns.Where(c => c.Key > 1).Sum(c => c.Value);
+        var fromGarage = shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .SelectMany(s => s.ClientOrder!.OrderItems)
+            .Where(i => i.ProductId == productId)
+            .Sum(i => i.QuantityFromInventory);
+
+        columns[1] = Math.Max(0, PurchasedByProduct(shipment).GetValueOrDefault(productId) - claimed) + fromGarage;
+
+        return columns;
     }
 
     /// <summary>

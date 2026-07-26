@@ -70,6 +70,12 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentPurchaseInvoice> PurchaseInvoices { get; set; } = [];
 
+    /// <summary>
+    /// How far each product has got through loading, per brewery-invoice column.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentLoadingState> LoadingStates { get; set; } = [];
+
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;
 

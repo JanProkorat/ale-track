@@ -157,6 +157,14 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                             .ToList()
                     })
                     .ToList(),
+                LoadingStates = os.LoadingStates
+                    .Select(ls => new OutgoingShipmentLoadingStateDto
+                    {
+                        ProductId = ls.Product.PublicId,
+                        Sequence = ls.Sequence,
+                        State = ls.State
+                    })
+                    .ToList(),
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);

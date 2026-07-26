@@ -61,6 +61,33 @@ public sealed record OutgoingShipmentDetailDto
     /// is covered by a single invoice — the normal case, which needs no split on screen.
     /// </summary>
     public List<OutgoingShipmentPurchaseInvoiceDto> PurchaseInvoices { get; set; } = [];
+
+    /// <summary>
+    /// How far each product has got through loading, per invoice column. Only states past
+    /// "not loaded" appear.
+    /// </summary>
+    public List<OutgoingShipmentLoadingStateDto> LoadingStates { get; set; } = [];
+}
+
+/// <summary>
+/// How far one product has got through loading in one invoice column.
+/// </summary>
+public sealed record OutgoingShipmentLoadingStateDto
+{
+    /// <summary>
+    /// Public ID of the product
+    /// </summary>
+    public Guid ProductId { get; set; }
+
+    /// <summary>
+    /// Which invoice column, by position within the shipment
+    /// </summary>
+    public int Sequence { get; set; }
+
+    /// <summary>
+    /// How far it has got
+    /// </summary>
+    public ShipmentLoadingState State { get; set; }
 }
 
 /// <summary>

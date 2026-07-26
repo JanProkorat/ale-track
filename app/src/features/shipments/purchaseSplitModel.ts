@@ -8,6 +8,8 @@
 import {
   OutgoingShipmentPurchaseInvoiceDto,
   OutgoingShipmentPurchaseInvoiceLineDto,
+  ShipmentLoadingState,
+  type OutgoingShipmentLoadingStateDto,
 } from 'src/generated/api-client';
 
 /** The table always offers this many invoice columns, split or not. */
@@ -156,6 +158,78 @@ export function applyLineLocally(
   }
 
   return next;
+}
+
+/**
+ * Pieces of a row physically sitting in a column, which is not the same as the pieces
+ * it bills there: the first column also carries whatever came out of our own garage,
+ * because those are on no brewery invoice yet still have to be loaded.
+ */
+export function piecesInColumn(
+  row: PurchasableRow,
+  invoices: OutgoingShipmentPurchaseInvoiceDto[],
+  sequence: number,
+): number {
+  const columns = columnsOf(invoices);
+  const index = columns.findIndex((column) => column.sequence === sequence);
+  if (index < 0) return 0;
+
+  const billed = rowSplit(row, invoices)[index] ?? 0;
+  return index === 0 ? billed + row.fromInventory : billed;
+}
+
+/** How far a product has got in one column; nothing stored means nothing done. */
+export function loadingStateAt(
+  states: OutgoingShipmentLoadingStateDto[],
+  productId: string | undefined,
+  sequence: number,
+): ShipmentLoadingState {
+  if (!productId) return ShipmentLoadingState.NotLoaded;
+
+  return states.find((s) => s.productId === productId && s.sequence === sequence)?.state
+    ?? ShipmentLoadingState.NotLoaded;
+}
+
+/** The state a click moves to: none → dictated → checked → none. */
+export function nextLoadingState(current: ShipmentLoadingState): ShipmentLoadingState {
+  switch (current) {
+    case ShipmentLoadingState.NotLoaded: return ShipmentLoadingState.Dictated;
+    case ShipmentLoadingState.Dictated: return ShipmentLoadingState.Checked;
+    default: return ShipmentLoadingState.NotLoaded;
+  }
+}
+
+/**
+ * Loading progress over the whole list: how many (row, column) pairs carrying pieces
+ * have been dictated, how many checked, and how many there are.
+ *
+ * Counted per pair rather than per product, because a product split across two
+ * invoices is loaded twice — once for each pallet the driver is read out.
+ */
+export function loadingProgress(
+  rows: PurchasableRow[],
+  invoices: OutgoingShipmentPurchaseInvoiceDto[],
+  states: OutgoingShipmentLoadingStateDto[],
+  /** Restrict to one column; omit for the whole list. */
+  onlySequence?: number,
+): { total: number; dictated: number; checked: number } {
+  let total = 0;
+  let dictated = 0;
+  let checked = 0;
+
+  for (const row of rows) {
+    for (const column of columnsOf(invoices)) {
+      if (onlySequence !== undefined && column.sequence !== onlySequence) continue;
+      if (piecesInColumn(row, invoices, column.sequence) <= 0) continue;
+
+      total += 1;
+      const state = loadingStateAt(states, row.productId, column.sequence);
+      if (state !== ShipmentLoadingState.NotLoaded) dictated += 1;
+      if (state === ShipmentLoadingState.Checked) checked += 1;
+    }
+  }
+
+  return { total, dictated, checked };
 }
 
 /**
