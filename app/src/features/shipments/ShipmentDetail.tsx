@@ -462,6 +462,63 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
   );
 }
 
+/**
+ * What the van exchanges with the garage: one card for the pieces coming off it,
+ * one for the pieces going onto it.
+ *
+ * Both are read-only views of the nakládka's own numbers ("Do garáže" and
+ * "Z garáže") — the counts are edited there. They exist as their own cards because
+ * they are worked at a different moment than the loading list: at the garage door,
+ * not at the brewery's pallet.
+ */
+export function GarageCard({
+  title, icon, rows, quantityOf, emptyText,
+}: {
+  title: string;
+  icon: ReactNode;
+  rows: AggRow[];
+  quantityOf: (row: AggRow) => number;
+  emptyText: string;
+}) {
+  const listed = rows.filter((row) => quantityOf(row) > 0);
+  const total = listed.reduce((sum, row) => sum + quantityOf(row), 0);
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        {icon}
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{title}</Typography>
+        <Box sx={{ flex: 1 }} />
+        {listed.length > 0 && (
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+            {total} ks
+          </Typography>
+        )}
+      </Stack>
+      {listed.length === 0 ? (
+        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>{emptyText}</Typography>
+      ) : (
+        <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
+          {listed.map((row) => {
+            const chipText = kindSizeChipText(row.kind, row.packageSize);
+            return (
+              <Stack key={row.key} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13.5 }} noWrap>{row.name}</Typography>
+                  {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
+                </Stack>
+                <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {quantityOf(row)} ks
+                </Typography>
+              </Stack>
+            );
+          })}
+        </Stack>
+      )}
+    </Card>
+  );
+}
+
 /** Vratky the driver collects on this route. Returns belong to the orders, not
  * to the shipment, so this is read-only and grouped per stop — two orders for
  * one client read as two groups, which is what the driver actually walks. */
@@ -1009,6 +1066,25 @@ export function ShipmentDetail({
               </Stack>
             </Card>
           </Box>
+
+          {/* Deliberately the whole loading list, not the invoice-filtered view: what
+              the garage gives and takes has nothing to do with which brewery invoice
+              the goods are billed on. */}
+          <GarageCard
+            title="Vyložit"
+            icon={<WarehouseOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+            rows={aggRows}
+            quantityOf={(row) => row.stockPurchaseQuantity}
+            emptyText="Nic se do garáže nevykládá."
+          />
+
+          <GarageCard
+            title="Naložit"
+            icon={<Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+            rows={aggRows}
+            quantityOf={(row) => row.fromInventory}
+            emptyText="Nic se z garáže nenakládá."
+          />
 
           <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
 
