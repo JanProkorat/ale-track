@@ -115,6 +115,9 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 /** The two checkbox columns: only as wide as the control, since their header is an icon. */
 const CHECK_HEAD_SX = { ...HEAD_SX, width: 44, minWidth: 44, color: 'text.secondary' };
 
+/** Wide enough for "ze skladu − n +" on one line — the sourcing stepper must not wrap. */
+const QTY_CELL_SX = { width: 148, minWidth: 148 };
+
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
 }
@@ -214,44 +217,59 @@ function AggLoadingRow({
           )}
         </Stack>
       </TableCell>
-      <TableCell align="right">
-        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{agg.quantity} ks</Typography>
-        {sourceable ? (
-          <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end" sx={{ mt: 0.25 }}>
-            <IconButton
-              size="small"
-              onClick={() => onAdjustSourcing!(-1)}
-              disabled={agg.fromInventory === 0}
-              aria-label="Ubrat kus ze skladu"
-              sx={{ width: 16, height: 16, color: 'info.main' }}
-            >
-              <RemoveIcon sx={{ fontSize: 12 }} />
-            </IconButton>
-            <Typography sx={{ fontSize: 11, color: agg.fromInventory > 0 ? 'info.main' : 'text.disabled', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-              {`${agg.fromInventory} ze skladu`}
+      {/* Right-aligned column, so every line in it ends on the same edge and the
+          numbers stack; nothing wraps, which is what made the sourcing stepper fall
+          apart from its own label. */}
+      <TableCell align="right" sx={QTY_CELL_SX}>
+        <Stack spacing={0.25} alignItems="flex-end">
+          <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13, lineHeight: 1.3 }}>
+            {agg.quantity} ks
+          </Typography>
+
+          {sourceable ? (
+            <Stack direction="row" spacing={0.25} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
+              <Typography sx={{ fontSize: 11, color: 'text.secondary', mr: 0.25 }}>ze skladu</Typography>
+              <IconButton
+                size="small"
+                onClick={() => onAdjustSourcing!(-1)}
+                disabled={agg.fromInventory === 0}
+                aria-label="Ubrat kus ze skladu"
+                sx={{ width: 16, height: 16, color: 'info.main' }}
+              >
+                <RemoveIcon sx={{ fontSize: 12 }} />
+              </IconButton>
+              <Typography
+                sx={{
+                  fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 14,
+                  textAlign: 'center', color: agg.fromInventory > 0 ? 'info.main' : 'text.disabled',
+                }}
+              >
+                {agg.fromInventory}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() => onAdjustSourcing!(1)}
+                disabled={agg.fromInventory >= agg.orderQuantity}
+                aria-label="Přidat kus ze skladu"
+                sx={{ width: 16, height: 16, color: 'info.main' }}
+              >
+                <AddIcon sx={{ fontSize: 12 }} />
+              </IconButton>
+            </Stack>
+          ) : agg.fromInventory > 0 && (
+            <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {`z toho ${agg.fromInventory} ze skladu`}
             </Typography>
-            <IconButton
-              size="small"
-              onClick={() => onAdjustSourcing!(1)}
-              disabled={agg.fromInventory >= agg.orderQuantity}
-              aria-label="Přidat kus ze skladu"
-              sx={{ width: 16, height: 16, color: 'info.main' }}
-            >
-              <AddIcon sx={{ fontSize: 12 }} />
-            </IconButton>
-          </Stack>
-        ) : agg.fromInventory > 0 && (
-          <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-            {`z toho ${agg.fromInventory} ze skladu`}
-          </Typography>
-        )}
-        {agg.stockPurchaseQuantity > 0 && (
-          <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
-            {agg.orderQuantity > 0
-              ? `${agg.orderQuantity} obj. + ${agg.stockPurchaseQuantity} na sklad`
-              : `${agg.stockPurchaseQuantity} na sklad`}
-          </Typography>
-        )}
+          )}
+
+          {agg.stockPurchaseQuantity > 0 && (
+            <Typography sx={{ fontSize: 11, color: 'text.disabled', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {agg.orderQuantity > 0
+                ? `${agg.orderQuantity} obj. + ${agg.stockPurchaseQuantity} na sklad`
+                : `${agg.stockPurchaseQuantity} na sklad`}
+            </Typography>
+          )}
+        </Stack>
       </TableCell>
       {invoiceCells}
       <TableCell align="center" padding="checkbox">
@@ -293,7 +311,7 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, i
           <TableHead>
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={HEAD_SX}>Produkt</TableCell>
-              <TableCell align="right" sx={HEAD_SX}>Množství</TableCell>
+              <TableCell align="right" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
               {invoiceHeaders}
               {/* Icons, not words: "Nadiktováno" and "Kontrola" each forced their column
                   ~65px wider than the checkbox under it. The names live in the tooltips
@@ -314,7 +332,7 @@ function AggLoadingTable({ rows, totals, renderRow, emptyText, invoiceHeaders, i
             {rows.map(renderRow)}
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
-              <TableCell align="right" sx={footSx}>{totals.quantity} ks</TableCell>
+              <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totals.quantity} ks</TableCell>
               {invoiceFooters?.(footSx)}
               <TableCell align="center" sx={{ ...footSx, color: totals.count > 0 && totals.loaded === totals.count ? 'success.main' : 'text.primary' }}>
                 {totals.loaded}/{totals.count}
