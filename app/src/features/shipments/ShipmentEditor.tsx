@@ -105,8 +105,15 @@ function SortableStopRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   const isCustom = stop.kind === 'custom';
   const places = order?.clientDeliveryPlaces ?? [];
+  // Gated on `deletedPlaceName` (not just "missing from the list"), because a
+  // place is *also* briefly missing from the list right after "+ Nové
+  // místo…" creates it — before the orders query has refetched. That case has
+  // no `deletedPlaceName` (this stop never loaded a place from the server), so
+  // it must not render as a soft-deleted "(smazáno)" entry; a genuine
+  // soft-delete always has one, since `deliveryPlaceId` and `deletedPlaceName`
+  // both come from the same loaded `stop.deliveryPlace`.
   const isGone = stop.addressKind === OutgoingShipmentStopAddressKind.DeliveryPlace
-    && stop.deliveryPlaceId != null
+    && deletedPlaceName != null
     && !places.some((p) => p.id === stop.deliveryPlaceId);
   const addressText = isCustom ? undefined : resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text;
   return (
@@ -130,6 +137,10 @@ function SortableStopRow({
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{isCustom ? (stop.label || 'Vlastní zastávka') : (order?.clientName ?? '—')}</Typography>
+        {/* Prototype's stopAddressText prefixes this with the order number
+         * (`o.number + ' · '`); OutgoingShipmentOrderDto carries no such
+         * field, so that prefix is dropped here — a data-model deviation,
+         * not a design one. */}
         <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
           {isCustom ? (stop.note || 'Vlastní zastávka') : addressText}
         </Typography>
@@ -150,11 +161,12 @@ function SortableStopRow({
               <MenuItem key={p.id} value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, p.id)}>{p.name}</MenuItem>
             )),
           ]}
-          {isGone && (
-            <MenuItem value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, stop.deliveryPlaceId)} disabled>
-              {(deletedPlaceName ?? '—') + ' (smazáno)'}
-            </MenuItem>
-          )}
+          {isGone && deletedPlaceName && [
+            <ListSubheader key="gone-header">Smazané</ListSubheader>,
+            <MenuItem key="gone-item" value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, stop.deliveryPlaceId)} disabled>
+              {deletedPlaceName + ' (smazáno)'}
+            </MenuItem>,
+          ]}
           <MenuItem value={NEW_PLACE_CHOICE}>+ Nové místo…</MenuItem>
         </Select>
       )}

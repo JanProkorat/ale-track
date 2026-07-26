@@ -5,19 +5,15 @@
 // resolution + the stop row's second line) and `seAddrSelect`'s value scheme
 // (`cur`/`value` — 'Official' | 'Contact' | `place:<id>`).
 
-import { type AddressDto, type OutgoingShipmentOrderDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
-import { formatPlaceAddress } from 'src/features/clients/deliveryPlaceFormat';
+import { type OutgoingShipmentOrderDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 import { addrKindLabel } from 'src/lib/labels';
 
-/** Sentinel <Select> value for "+ Nové místo…" — distinct from both the two
- * standard kinds and any `place:<id>` value (an id can never start with
- * "__new:" the way it could theoretically collide with 'Official'/'Contact'). */
+/** Sentinel <Select> value for "+ Nové místo…". Every place id is encoded as
+ * `place:<id>` (see {@link encodeStopChoice}) and the two standard kinds
+ * encode as their own literal names, so this bare '__new' can't collide with
+ * any of them. */
 export const NEW_PLACE_CHOICE = '__new';
-
-function fmtAddress(a: AddressDto | undefined): string {
-  if (!a) return '—';
-  return `${[a.streetName, a.streetNumber].filter(Boolean).join(' ')}, ${a.zip ?? ''} ${a.city ?? ''}`.trim();
-}
 
 /** Encodes a stop's chosen address as a <Select> value. The two standard
  * kinds encode as their enum member name; a delivery place is prefixed
@@ -61,8 +57,8 @@ export function resolveStopAddress(
   }
   if (addressKind === OutgoingShipmentStopAddressKind.Contact && order?.clientContactAddress) {
     const a = order.clientContactAddress;
-    return { lat: a.latitude, lng: a.longitude, text: `${fmtAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
+    return { lat: a.latitude, lng: a.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
   }
   const a = order?.clientOfficialAddress;
-  return { lat: a?.latitude, lng: a?.longitude, text: `${fmtAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+  return { lat: a?.latitude, lng: a?.longitude, text: `${formatStreetAddress(a)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
 }
