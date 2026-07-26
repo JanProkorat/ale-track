@@ -11,10 +11,10 @@ import { SegControl } from 'src/components/common/SegControl';
 import { DataTable, type Column } from 'src/components/common/DataTable';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { type DeliveryVolumeReportDto, type ProductKind } from 'src/generated/api-client';
-import { fmtDateShort, num } from 'src/lib/format';
-import { kindLabel, L } from 'src/lib/labels';
+import { num } from 'src/lib/format';
+import { kindLabel, kindName } from 'src/lib/labels';
 import { ChartCard } from './ChartCard';
-import { GRANULARITY_OPTIONS, fmtKg, fmtUnits, sharePct, type VolumeGranularity } from './reportModel';
+import { GRANULARITY_OPTIONS, bucketLabel, fmtKg, fmtUnits, sharePct, type VolumeGranularity } from './reportModel';
 import { foldTypes, useReportPalette } from './reportPalette';
 
 interface KindRow {
@@ -44,13 +44,14 @@ export function VolumeTab({
   const series = data.series ?? [];
 
   // Kind buckets the prototype's KPIs use; cans and multipacks share one tile. Goes
-  // through kindLabel rather than comparing the raw enum, since the wire form can be
-  // either the numeric enum (demo data) or its string name (the real API).
-  const unitsForKind = (label: string) =>
-    kinds.filter((k) => kindLabel(k.kind) === label).reduce((s, k) => s + (k.units ?? 0), 0);
-  const kegUnits = unitsForKind(L.kind.Keg);
-  const bottleUnits = unitsForKind(L.kind.Bottle);
-  const canUnits = unitsForKind(L.kind.Can) + unitsForKind(L.kind.Multipack);
+  // through kindName (the enum's member name) rather than the Czech label, so two
+  // labels can never collide — kindLabel is for display only. Also resolves either
+  // wire form: the numeric enum (demo data) or its string name (the real API).
+  const unitsForKind = (name: string) =>
+    kinds.filter((k) => kindName(k.kind) === name).reduce((s, k) => s + (k.units ?? 0), 0);
+  const kegUnits = unitsForKind('Keg');
+  const bottleUnits = unitsForKind('Bottle');
+  const canUnits = unitsForKind('Can') + unitsForKind('Multipack');
 
   const typeSlices = foldTypes(
     (data.byType ?? []).map((t) => ({ type: t.type!, weightKg: t.weightKg ?? 0, units: t.units ?? 0 })),
@@ -58,9 +59,20 @@ export function VolumeTab({
   );
 
   // Per-brewery colour for the horizontal bar chart's axis colour map: the brewery's own
-  // token, falling back to a palette slot when it has none.
-  const breweryNames = breweries.map((b) => b.breweryName ?? '—');
-  const breweryColors = breweries.map((b, i) => b.color ?? palette[i % palette.length]);
+  // token, falling back to a palette slot when it has none. `||`, not `??` — `color` is a
+  // nullable string, and `??` only catches null/undefined, letting an empty string
+  // through as an (invalid) d3 fill; same for the name fallback below.
+  const breweryNames = breweries.map((b) => b.breweryName || '—');
+  const breweryColors = breweries.map((b, i) => b.color || palette[i % palette.length]);
+  // The axis needs a unique key per row for both its band-scale positions and its colour
+  // map — @mui/x-charts keys both by value (confirmed by reading the installed package,
+  // see the report), so two breweries sharing a display name (or two null names, both
+  // rendered '—') would collapse onto the same band position and colour, silently
+  // dropping a row. breweryId is unique on the DTO; the index is only a defensive
+  // fallback for a malformed row missing it. The display name still reaches the axis via
+  // valueFormatter, so labels and tooltips are unaffected.
+  const breweryKeys = breweries.map((b, i) => b.breweryId ?? `__brewery_${i}`);
+  const breweryNameByKey = new Map(breweryKeys.map((key, i) => [key, breweryNames[i]]));
 
   const kindColumns: Column<KindRow>[] = [
     { key: 'kind', header: 'Obal', render: (r) => kindLabel(r.kind) ?? String(r.kind) },
@@ -99,7 +111,9 @@ export function VolumeTab({
           <Box sx={{ width: '100%', height: 260 }}>
             <LineChart
               series={[{ data: series.map((p) => p.weightKg ?? 0), label: 'Hmotnost', area: true, color: palette[0] }]}
-              xAxis={[{ scaleType: 'point', data: series.map((p) => fmtDateShort(p.bucketStart)), height: 28 }]}
+              xAxis={[
+                { scaleType: 'point', data: series.map((p) => bucketLabel(p.bucketStart, granularity)), height: 28 },
+              ]}
               yAxis={[{ width: 56, valueFormatter: (v: number) => num(v) }]}
               margin={{ right: 16 }}
               hideLegend
@@ -116,15 +130,21 @@ export function VolumeTab({
                 yAxis={[
                   {
                     scaleType: 'band',
-                    data: breweryNames,
+                    // Keyed on breweryId, not breweryName: BarChart's getColor.js (bar
+                    // variant) reads `yAxis.data[dataIndex]` and looks that value up in
+                    // `yAxis.colorScale`, which is a d3 scaleOrdinal built from
+                    // colorMap.values — i.e. both the band scale's positions AND the
+                    // colour scale are keyed by VALUE EQUALITY, not by index (confirmed by
+                    // reading @mui/x-charts-vendor's vendored d3-scale ordinal()/band(),
+                    // which dedupe their domain via an InternMap.set(value, ...)). Two
+                    // breweries sharing a name — or two null names, both rendered '—' —
+                    // would otherwise collapse onto the same band position and colour,
+                    // silently hiding one bar. valueFormatter below maps the id back to
+                    // the display name for the tick labels and hover tooltip.
+                    data: breweryKeys,
+                    valueFormatter: (id: string) => breweryNameByKey.get(id) ?? '—',
                     width: 150,
-                    // Per-bar colour has to come from the axis colour map, not the chart's
-                    // `colors` prop: getSeriesWithDefaultValues.js indexes `colors` by SERIES
-                    // (colors[seriesIndex % colors.length]), so with a single series only
-                    // colors[0] is ever read. For layout="horizontal", getColor.js reads
-                    // yAxis.colorScale (built from this colorMap) per data point — the
-                    // supported way to give each bar its own brewery colour.
-                    colorMap: { type: 'ordinal', values: breweryNames, colors: breweryColors },
+                    colorMap: { type: 'ordinal', values: breweryKeys, colors: breweryColors },
                   },
                 ]}
                 xAxis={[{ valueFormatter: (v: number) => num(v) }]}

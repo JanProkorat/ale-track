@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ReportGranularity } from 'src/generated/api-client';
-import { periodRange, fmtKg, sharePct, fmtUnits, apiGranularity, PERIOD_LABEL } from './reportModel';
+import { periodRange, fmtKg, sharePct, fmtUnits, apiGranularity, bucketLabel, PERIOD_LABEL } from './reportModel';
 
 describe('periodRange', () => {
   it('spans the requested number of days back from today, inclusive of today', () => {
@@ -59,6 +59,26 @@ describe('apiGranularity', () => {
   it('maps the UI granularity onto the generated enum', () => {
     expect(apiGranularity('week')).toBe(ReportGranularity.Week);
     expect(apiGranularity('month')).toBe(ReportGranularity.Month);
+  });
+});
+
+describe('bucketLabel', () => {
+  it('renders a month bucket as the short Czech abbreviation, both wire forms', () => {
+    // T12:00:00Z, matching periodRange's tests above — noon UTC stays the same
+    // calendar day in every real-world timezone, so this isn't a local-time flake.
+    expect(bucketLabel('2026-07-01T12:00:00Z', 'month')).toBe('čvc');
+    expect(bucketLabel(new Date('2026-07-01T12:00:00Z'), 'month')).toBe('čvc');
+    expect(bucketLabel('2026-01-01T12:00:00Z', 'month')).toBe('led');
+  });
+
+  it('renders a week/day bucket as "D.M." with no spaces, both wire forms', () => {
+    expect(bucketLabel('2026-07-20T12:00:00Z', 'week')).toBe('20.7.');
+    expect(bucketLabel(new Date('2026-07-20T12:00:00Z'), 'week')).toBe('20.7.');
+  });
+
+  it('reads "—" for a missing or invalid value', () => {
+    expect(bucketLabel(undefined, 'week')).toBe('—');
+    expect(bucketLabel('not-a-date', 'week')).toBe('—');
   });
 });
 

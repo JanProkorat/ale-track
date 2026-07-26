@@ -63,6 +63,29 @@ describe('VolumeTab', () => {
     expect(screen.getByText('60,0 %')).toBeInTheDocument();
   });
 
+  it('renders the Obal column as Czech kind labels, never a raw enum value', () => {
+    renderTab();
+
+    // L.kind: Keg -> "Sud", Bottle -> "Basa", Can -> "Plechovka". These are the table
+    // cells, distinct from the KPI tiles ("Sudy", "Lahve (basy)", "Plechovky / multipack"),
+    // so they cannot be satisfied by the tile text.
+    expect(screen.getByText('Sud')).toBeInTheDocument();
+    expect(screen.getByText('Basa')).toBeInTheDocument();
+    expect(screen.getByText('Plechovka')).toBeInTheDocument();
+
+    // The numeric wire form must never leak through as "1"/"2"/"3".
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+    expect(screen.queryByText('2')).not.toBeInTheDocument();
+  });
+
+  it('falls back to Ostatní when a row carries no kind', () => {
+    renderTab({
+      unitsByKind: [{ kind: undefined, units: 5, weightKg: 100 }],
+    });
+
+    expect(screen.getByText('Ostatní')).toBeInTheDocument();
+  });
+
   it('keeps the legend visible — the amber and sky slots need its labels for contrast', () => {
     renderTab();
 

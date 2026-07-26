@@ -80,3 +80,38 @@ export function sharePct(part: number, total: number): string {
 export function fmtUnits(units: number): string {
   return `${num(units)} ks`;
 }
+
+/** Short Czech month abbreviations, 1-indexed so `MONTH_ABBR[d.getMonth() + 1]` lines up
+ * directly with `Date#getMonth()` — index 0 is an unused placeholder. Matches the
+ * prototype's inline array (aletrack-prototype.html:795). Exported so Task 7's Provoz
+ * dovoz/vývoz chart can reuse the same abbreviations. */
+export const MONTH_ABBR = [
+  '',
+  'led',
+  'úno',
+  'bře',
+  'dub',
+  'kvě',
+  'čvn',
+  'čvc',
+  'srp',
+  'zář',
+  'říj',
+  'lis',
+  'pro',
+] as const;
+
+/** Trend-bucket label matching the prototype's `repBucketLabel` (aletrack-prototype.html:
+ * 794-796): month buckets render as the short Czech abbreviation, day/week buckets as
+ * `D.M.` with no spaces (e.g. "20.7."). The wire DTO's `bucketStart` is always a `Date`
+ * once parsed by the generated client, but tests construct it from a plain ISO string, so
+ * both wire forms are accepted here; which format applies is driven by the caller's
+ * chosen granularity, not by inspecting the value itself (unlike the prototype, which
+ * sniffed a `YYYY-MM` string key — our bucket is always a full date, even for month
+ * buckets, so sniffing would not work). */
+export function bucketLabel(bucketStart: string | Date | undefined, granularity: VolumeGranularity): string {
+  if (!bucketStart) return '—';
+  const d = new Date(bucketStart);
+  if (Number.isNaN(d.getTime())) return '—';
+  return granularity === 'month' ? (MONTH_ABBR[d.getMonth() + 1] ?? '—') : `${d.getDate()}.${d.getMonth() + 1}.`;
+}

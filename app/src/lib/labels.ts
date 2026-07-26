@@ -75,8 +75,15 @@ function enumName(enumObj: Record<string, string | number>, val: unknown): strin
   return String(val); // already the wire string name (real)
 }
 
+/** The ProductKind enum's member name (e.g. "Keg"), resolved from either the numeric
+ * (demo) or string (real) wire representation — used to compare/bucket kinds without
+ * going through the Czech label, the way regionName/orderStateName do for their enums. */
+export function kindName(k?: ProductKind | string | number): string | undefined {
+  return enumName(ProductKind as unknown as Record<string, string | number>, k);
+}
+
 export function kindLabel(k?: ProductKind | string | number): string | undefined {
-  const name = enumName(ProductKind as unknown as Record<string, string | number>, k);
+  const name = kindName(k);
   return name ? (L.kind[name] ?? name) : undefined;
 }
 
