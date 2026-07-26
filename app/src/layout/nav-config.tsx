@@ -49,18 +49,18 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    heading: 'Analýza',
+    items: [
+      { key: 'reports', label: 'Reporty', path: PATHS.reports, icon: icon(<InsightsOutlinedIcon fontSize="small" />) },
+    ],
+  },
+  {
     heading: 'Evidence',
     items: [
       { key: 'breweries', label: 'Pivovary', path: PATHS.breweries, icon: icon(<SportsBarOutlinedIcon fontSize="small" />) },
       { key: 'clients', label: 'Klienti', path: PATHS.clients, icon: icon(<StorefrontOutlinedIcon fontSize="small" />) },
       { key: 'drivers', label: 'Řidiči', path: PATHS.drivers, icon: icon(<BadgeOutlinedIcon fontSize="small" />) },
       { key: 'vehicles', label: 'Vozy', path: PATHS.vehicles, icon: icon(<AirportShuttleOutlinedIcon fontSize="small" />) },
-    ],
-  },
-  {
-    heading: 'Analýza',
-    items: [
-      { key: 'reports', label: 'Reporty', path: PATHS.reports, icon: icon(<InsightsOutlinedIcon fontSize="small" />) },
     ],
   },
   {
