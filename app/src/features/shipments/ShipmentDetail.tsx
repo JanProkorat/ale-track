@@ -168,58 +168,49 @@ interface AggRowState {
   checkedIndeterminate: boolean;
 }
 
-/** A line of the Množství breakdown: what this number counts. */
-function BreakdownLabel({ children, sx }: { children: ReactNode; sx?: object }) {
-  return (
-    <Typography sx={{ fontSize: 11, color: 'text.secondary', justifySelf: 'start', ...sx }}>
-      {children}
-    </Typography>
-  );
-}
-
-/** A fixed number in the breakdown — same footprint as the stepper's number, so the
- *  editable and read-only rows line up in one column. */
-function BreakdownValue({ children, tone }: { children: ReactNode; tone?: string }) {
-  return (
-    <Typography
-      sx={{
-        fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-        color: tone ?? 'text.primary', minWidth: 16, textAlign: 'center', mx: '18px',
-      }}
-    >
-      {children}
-    </Typography>
-  );
-}
-
-/** `− n +` for a breakdown line that can be adjusted a piece at a time. */
-function CountStepper({
-  value, onAdjust, canDecrease, canIncrease, decreaseLabel, increaseLabel,
+/**
+ * One line of the Množství breakdown, laid out on the cell's shared grid:
+ * label · minus · number · plus.
+ *
+ * The two button columns are reserved whether or not the line has a stepper, so the
+ * numbers of every line sit in one column — without that, a line without buttons
+ * pulls its number out of alignment with the ones that have them.
+ */
+function BreakdownRow({
+  label, value, tone, adjust,
 }: {
+  label: string;
   value: number;
-  onAdjust: (delta: number) => void;
-  canDecrease: boolean;
-  canIncrease: boolean;
-  decreaseLabel: string;
-  increaseLabel: string;
+  /** Colour of the number; the ordered count is plain, sourced ones are tinted. */
+  tone?: string;
+  adjust?: {
+    onAdjust: (delta: number) => void;
+    canDecrease: boolean;
+    canIncrease: boolean;
+    decreaseLabel: string;
+    increaseLabel: string;
+  };
 }) {
+  const numberSx = {
+    fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const,
+    textAlign: 'center' as const, color: value > 0 ? tone ?? 'text.primary' : 'text.disabled',
+  };
+
   return (
-    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="flex-end">
-      <IconButton size="small" onClick={() => onAdjust(-1)} disabled={!canDecrease} aria-label={decreaseLabel} sx={{ width: 16, height: 16, color: 'info.main' }}>
-        <RemoveIcon sx={{ fontSize: 12 }} />
-      </IconButton>
-      <Typography
-        sx={{
-          fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', minWidth: 16,
-          textAlign: 'center', color: value > 0 ? 'info.main' : 'text.disabled',
-        }}
-      >
-        {value}
-      </Typography>
-      <IconButton size="small" onClick={() => onAdjust(1)} disabled={!canIncrease} aria-label={increaseLabel} sx={{ width: 16, height: 16, color: 'info.main' }}>
-        <AddIcon sx={{ fontSize: 12 }} />
-      </IconButton>
-    </Stack>
+    <>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', justifySelf: 'end' }}>{label}</Typography>
+      {adjust ? (
+        <IconButton size="small" onClick={() => adjust.onAdjust(-1)} disabled={!adjust.canDecrease} aria-label={adjust.decreaseLabel} sx={{ width: 16, height: 16, color: 'info.main', justifySelf: 'center' }}>
+          <RemoveIcon sx={{ fontSize: 12 }} />
+        </IconButton>
+      ) : <span />}
+      <Typography sx={numberSx}>{value}</Typography>
+      {adjust ? (
+        <IconButton size="small" onClick={() => adjust.onAdjust(1)} disabled={!adjust.canIncrease} aria-label={adjust.increaseLabel} sx={{ width: 16, height: 16, color: 'info.main', justifySelf: 'center' }}>
+          <AddIcon sx={{ fontSize: 12 }} />
+        </IconButton>
+      ) : <span />}
+    </>
   );
 }
 
@@ -258,56 +249,49 @@ function AggLoadingRow({
           breakdown of the ordered pieces, not a third thing added to them: 4 ks here is
           1 ordered + 3 for the warehouse, of which 0 came off our shelf. */}
       <TableCell align="right" sx={QTY_CELL_SX}>
-        <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13, lineHeight: 1.4 }}>
-          {agg.quantity} ks
-        </Typography>
         <Box
           sx={{
-            display: 'grid', gridTemplateColumns: 'auto auto', justifyContent: 'end',
-            alignItems: 'center', columnGap: 0.75, rowGap: 0.25, mt: 0.25, whiteSpace: 'nowrap',
+            display: 'inline-grid', gridTemplateColumns: 'auto 20px 22px 20px',
+            alignItems: 'center', columnGap: 0.5, rowGap: 0.25, whiteSpace: 'nowrap', textAlign: 'right',
           }}
         >
+          {/* Spans the whole grid, so the total ends on the same edge as the + buttons. */}
+          <Typography sx={{ gridColumn: '1 / -1', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
+            {agg.quantity} ks
+          </Typography>
+
           {agg.orderQuantity > 0 && (
-            <>
-              <BreakdownLabel>objednávka</BreakdownLabel>
-              <BreakdownValue>{agg.orderQuantity}</BreakdownValue>
-            </>
+            <BreakdownRow label="objednávka" value={agg.orderQuantity} />
           )}
 
           {(sourceable || agg.fromInventory > 0) && (
-            <>
-              <BreakdownLabel sx={{ pl: 1 }}>z toho ze skladu</BreakdownLabel>
-              {sourceable ? (
-                <CountStepper
-                  value={agg.fromInventory}
-                  onAdjust={onAdjustSourcing!}
-                  canDecrease={agg.fromInventory > 0}
-                  canIncrease={agg.fromInventory < agg.orderQuantity}
-                  decreaseLabel="Ubrat kus ze skladu"
-                  increaseLabel="Přidat kus ze skladu"
-                />
-              ) : (
-                <BreakdownValue tone="info.main">{agg.fromInventory}</BreakdownValue>
-              )}
-            </>
+            <BreakdownRow
+              label="z toho ze skladu"
+              value={agg.fromInventory}
+              tone="info.main"
+              adjust={sourceable ? {
+                onAdjust: onAdjustSourcing!,
+                canDecrease: agg.fromInventory > 0,
+                canIncrease: agg.fromInventory < agg.orderQuantity,
+                decreaseLabel: 'Ubrat kus ze skladu',
+                increaseLabel: 'Přidat kus ze skladu',
+              } : undefined}
+            />
           )}
 
           {agg.stockPurchaseQuantity > 0 && (
-            <>
-              <BreakdownLabel>na sklad</BreakdownLabel>
-              {adjustable ? (
-                <CountStepper
-                  value={agg.stockPurchaseQuantity}
-                  onAdjust={onAdjustStockPurchase!}
-                  canDecrease
-                  canIncrease
-                  decreaseLabel="Ubrat kus zboží na sklad"
-                  increaseLabel="Přidat kus zboží na sklad"
-                />
-              ) : (
-                <BreakdownValue tone="info.main">{agg.stockPurchaseQuantity}</BreakdownValue>
-              )}
-            </>
+            <BreakdownRow
+              label="na sklad"
+              value={agg.stockPurchaseQuantity}
+              tone="info.main"
+              adjust={adjustable ? {
+                onAdjust: onAdjustStockPurchase!,
+                canDecrease: true,
+                canIncrease: true,
+                decreaseLabel: 'Ubrat kus zboží na sklad',
+                increaseLabel: 'Přidat kus zboží na sklad',
+              } : undefined}
+            />
           )}
         </Box>
       </TableCell>
