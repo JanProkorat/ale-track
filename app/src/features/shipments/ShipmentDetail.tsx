@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Box, Breadcrumbs, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
@@ -50,6 +50,7 @@ import { columnsOf, columnTotals, loadingProgress, rowsOnInvoice } from './purch
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
 } from './PurchaseInvoiceColumns';
+import { groupByKind, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
@@ -290,16 +291,19 @@ function AggLoadingRow({
 
 /** "Celková nakládka" — the loading list: one row per distinct product, with the
  * loading state living inside each brewery-invoice column group. */
-function AggLoadingTable({ rows, totalQuantity, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
-  rows: AggRow[];
+function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
+  /** Rows grouped by product kind, in loading order. */
+  sections: KindSection<AggRow>[];
   totalQuantity: number;
+  /** Brewery-invoice columns, for the width of a section heading. */
+  columnCount: number;
   renderRow: (a: AggRow) => ReactNode;
   emptyText: string;
   /** Brewery-invoice column headers and totals, two cells per invoice. */
   invoiceHeaders: ReactNode;
   invoiceFooters: (footSx: object) => ReactNode;
 }) {
-  if (rows.length === 0) {
+  if (sections.length === 0) {
     return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
   }
   const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
@@ -315,7 +319,28 @@ function AggLoadingTable({ rows, totalQuantity, renderRow, emptyText, invoiceHea
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map(renderRow)}
+            {/* Sections rather than one flat list: the van is packed by kind, so the
+                list is read out that way — crates first, kegs last. */}
+            {sections.map((section) => (
+              <Fragment key={section.kind}>
+                <TableRow>
+                  <TableCell
+                    colSpan={2 + columnCount * 2}
+                    sx={{
+                      py: 0.5, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                      textTransform: 'uppercase', color: 'text.secondary',
+                      bgcolor: (t) => t.vars!.palette.brand.surface3,
+                    }}
+                  >
+                    {section.label}
+                    <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
+                      {section.rows.length} {plural(section.rows.length, 'položka', 'položky', 'položek')}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+                {section.rows.map(renderRow)}
+              </Fragment>
+            ))}
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
               <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
               <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totalQuantity} ks</TableCell>
@@ -581,6 +606,7 @@ export function ShipmentDetail({
     [visibleRows, purchaseInvoices, loadingStates],
   );
   const totalQty = visibleRows.reduce((s, a) => s + a.quantity, 0);
+  const sections = useMemo(() => groupByKind(visibleRows), [visibleRows]);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;
@@ -834,8 +860,9 @@ export function ShipmentDetail({
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
               <AggLoadingTable
-                rows={visibleRows}
+                sections={sections}
                 totalQuantity={totalQty}
+                columnCount={invoiceColumns.length}
                 emptyText={activeFilter === ALL_INVOICES
                   ? 'Zatím žádné produkty k naložení.'
                   : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}

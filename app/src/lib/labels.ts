@@ -158,6 +158,11 @@ export function deliveryStateName(s?: ProductDeliveryState | string | number): s
 
 /** The stop's chosen address kind ("Official"/"Contact"), resolved from
  * either wire representation, and its Czech label via `L.addrKind`. */
+/** The ProductKind enum's member name (e.g. "Bottle"), from either representation. */
+export function kindName(k?: ProductKind | string | number): string | undefined {
+  return enumName(ProductKind as unknown as Record<string, string | number>, k);
+}
+
 /** Name of a loading state ("NotLoaded" / "Dictated" / "Checked"), from either representation. */
 export function loadingStateName(s?: ShipmentLoadingState | string | number): string {
   return enumName(ShipmentLoadingState as unknown as Record<string, string | number>, s) ?? 'NotLoaded';
