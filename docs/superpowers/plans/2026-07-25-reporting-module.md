@@ -66,6 +66,19 @@ route `#/reports`.
 - **`@mui/x-charts` version: `^8.29.0`** (`latest-v8`). Do **not** install `latest`
   (9.x) — it peer-requires `@mui/material` `^7.3.0 || ^9.0.0` while this repo is on
   `^7.1.0`, and 8.x matches the installed `@mui/x-date-pickers` `^8.4.0` cadence.
+- **NSwag serializes the reports' `DateOnly` query params as full ISO instants, which the
+  backend cannot bind.** The generated methods type `from`/`to` as `Date` and emit
+  `From=` + `from.toISOString()` → `2026-07-25T00:00:00.000Z`. `DateOnly.TryParse` rejects
+  that (verified: it returns `false`), so all three report endpoints would fail to bind.
+  Fix it in `app/src/api/apiClient.ts`'s fetch layer — the same documented seam that already
+  repairs NSwag's dictionary-query-param defect — by trimming those values to the calendar
+  day. `From`/`To` appear **only** on the three report endpoints, so the rewrite is scoped.
+  Never hand-edit the generated client.
+- **The generated signatures are not what this plan originally guessed.** The real ones are
+  `getDeliveryVolumeEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?)`
+  — **granularity first** — plus `getClientVolumeEndpoint(from: Date, to: Date, signal?)` and
+  `getOperationsEndpoint(from: Date, to: Date, signal?)`. `ReportGranularity` is a numeric
+  enum (`Day = 0, Week = 1, Month = 2`) and `ModuleType.Reports = 9`.
 - **Use `theme.vars.palette.*`, never `theme.palette.*`, inside `sx` callbacks** —
   under `cssVariables` the latter freezes to the light value.
 - **Chart palette is fixed and validated — do not invent hues.** Categorical series
