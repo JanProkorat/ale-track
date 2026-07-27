@@ -25,7 +25,6 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
-import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
@@ -62,6 +61,11 @@ const HEAD_SX = {
   fontSize: 11, fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase' as const,
   letterSpacing: '0.05em', whiteSpace: 'nowrap' as const,
 };
+
+/** One line-height for all three lines of a band header, so the block has an
+ *  even rhythm and the stop pin can be centred on the first line by arithmetic
+ *  rather than by eye. 13.5px × 1.55 ≈ 21px. */
+const LINE = 1.55;
 
 function Pill({ tint, color, icon, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
@@ -103,19 +107,28 @@ function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string })
 }
 
 /** Where this client's goods actually go, under their name in the band header.
- *  Renders nothing when the address can't be resolved — see `bandAddress`. */
+ *  Renders nothing when the address can't be resolved — see `bandAddress`.
+ *
+ *  No location glyph on purpose: the band's own coloured stop pin sits two
+ *  columns to the left and already marks this as a place. A second icon here
+ *  only indents this line past the client name and the counts above it, which
+ *  is precisely the ragged left edge this row is trying to avoid — all three
+ *  lines share one left rule. */
 function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
   const address = bandAddress(band, stops);
   if (!address) return null;
 
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0 }}>
-      <PlaceOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
-      <Typography sx={{ fontSize: 11.5, color: 'text.secondary', minWidth: 0 }} noWrap>
+    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0, lineHeight: LINE }}>
+      <Typography sx={{ fontSize: 11.5, lineHeight: LINE, color: 'text.secondary', minWidth: 0 }} noWrap>
         {address.text}
       </Typography>
       {address.placeName && (
-        <Chip size="small" label={address.placeName} sx={{ height: 17, fontSize: 10.5, fontWeight: 700 }} />
+        <Chip
+          size="small"
+          label={address.placeName}
+          sx={{ height: 16, fontSize: 10, fontWeight: 700, flexShrink: 0, '& .MuiChip-label': { px: 0.75 } }}
+        />
       )}
     </Stack>
   );
@@ -394,20 +407,29 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                 key={band.clientId}
                 sx={{ py: 1.5, ...(index > 0 ? { borderTop: 1, borderColor: 'divider' } : null) }}
               >
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                {/* Top-aligned, not centred: the block is three lines tall and
+                    the pin labels the client, so it belongs beside the name
+                    rather than floating down against the counts. The actions
+                    opt back into centring — they act on the whole band. */}
+                <Stack direction="row" spacing={1} alignItems="flex-start" flexWrap="wrap" useFlexGap>
                   <Box
                     sx={{
                       width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
                       bgcolor: colorForClient(band.clientId), color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 12, fontWeight: 700,
+                      // Centres the 26px pin on the first 21px line rather than
+                      // on the block: (21 - 26) / 2.
+                      mt: '-2.5px',
                     }}
                   >
                     {band.stopOrder ?? '?'}
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
-                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13.5, lineHeight: LINE }}>
+                      {band.clientName}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11.5, lineHeight: LINE, color: 'text.secondary' }}>
                       {band.invoices.length} {plural(band.invoices.length, 'faktura', 'faktury', 'faktur')}
                       {` · ${num(band.quantity)} ks · ${formatMoney(band.value)}`}
                       {band.privateQuantity > 0 && ` · ${num(band.privateQuantity)} ks soukromě`}
@@ -418,11 +440,14 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                     <BandAddressLine band={band} stops={stops} />
                   </Box>
                   {band.crossBilled > 0 && (
-                    <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
+                    <Box sx={{ alignSelf: 'center', flexShrink: 0 }}>
+                      <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
+                    </Box>
                   )}
                   {canEdit && (
                     <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
-                      onClick={() => handleAdd(band.clientId)}>
+                      onClick={() => handleAdd(band.clientId)}
+                      sx={{ alignSelf: 'center', flexShrink: 0 }}>
                       Faktura
                     </Button>
                   )}
@@ -431,7 +456,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                     onClick={() => toggleBand(band.clientId)}
                     aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
                     sx={{
-                      width: 28, height: 28,
+                      width: 28, height: 28, alignSelf: 'center', flexShrink: 0,
                       transition: (t) => t.transitions.create('transform', {
                         duration: t.transitions.duration.shortest,
                       }),
