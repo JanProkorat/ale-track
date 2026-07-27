@@ -288,6 +288,34 @@ describe('ShipmentEditor stop picker — soft-deleted place', () => {
   });
 });
 
+describe('ShipmentEditor — new stop inherits the order\'s address', () => {
+  it('pre-fills a newly added stop from the order rather than the billing address', () => {
+    // A second, not-yet-assigned order whose own choice is a delivery place —
+    // wire-format string ('DeliveryPlace'), matching what the real backend
+    // sends and what addrKindValue must normalize. Adding it via the
+    // "Objednávky k rozvozu" list must select that place on the new stop's
+    // row, not default to Fakturační like a custom stop would.
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-2',
+        clientName: 'U Zlatého sklepa',
+        clientOfficialAddress: officialAddress(),
+        deliveryAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
+        clientDeliveryPlaceId: 'p1',
+        clientDeliveryPlaces: [place({ id: 'p1', name: 'Letní zahrádka' })],
+        items: [],
+      }),
+    ];
+    renderEditor();
+
+    fireEvent.click(screen.getByText('U Zlatého sklepa'));
+
+    // order-1's loaded stop is row 0; the freshly added order-2 stop is row 1.
+    expect(stopSelects()[1]).toHaveTextContent('Letní zahrádka');
+  });
+});
+
 describe('ShipmentEditor — non-happy query states', () => {
   it('does not crash while the available-orders query is still loading, falling back to a placeholder client name', () => {
     // orderById is built purely from useAvailableOrders' data — while it's

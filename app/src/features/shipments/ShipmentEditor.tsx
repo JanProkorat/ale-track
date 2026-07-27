@@ -353,7 +353,19 @@ export function ShipmentEditor({
       if (prev.some((s) => s.kind === 'order' && s.orderId === orderId)) {
         return prev.filter((s) => !(s.kind === 'order' && s.orderId === orderId)).map((s, i) => ({ ...s, order: i + 1 }));
       }
-      return [...prev, { key: orderId, kind: 'order' as const, orderId, addressKind: DeliveryAddressKind.Official, order: prev.length + 1 }];
+      // Inherit the order's own delivery-address choice rather than defaulting
+      // to Fakturační — `addrKindValue` is mandatory here: the API sends enum
+      // names as strings while the generated TS enum is numeric, so the raw
+      // field never `===` a member.
+      const order = orderById.get(orderId);
+      return [...prev, {
+        key: orderId,
+        kind: 'order' as const,
+        orderId,
+        addressKind: addrKindValue(order?.deliveryAddressKind),
+        deliveryPlaceId: order?.clientDeliveryPlaceId ?? undefined,
+        order: prev.length + 1,
+      }];
     });
   }
   function addCustomStop(stop: { label: string; note?: string; lat: number; lng: number }) {
