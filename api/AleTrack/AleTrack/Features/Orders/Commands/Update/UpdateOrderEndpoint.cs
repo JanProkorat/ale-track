@@ -86,8 +86,11 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
         order.State = req.Data.State;
 
-        await OrderDeliveryAddressWriter.ApplyAsync(
+        var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
             dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
+
+        if (addressChanged)
+            await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
 
         order.OrderItems.Clear();
         

@@ -3,6 +3,7 @@ using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Features.Orders.Utils;
 
@@ -44,5 +45,45 @@ public static class OrderDeliveryAddressWriter
         order.ClientDeliveryPlaceId = placeId;
 
         return changed;
+    }
+
+    /// <summary>
+    /// Pushes an order's newly changed delivery address onto the stop it is
+    /// planned into, if any. An order has at most one stop, so this is a
+    /// single-row update. Call it only when
+    /// <see cref="ApplyAsync"/> reported an actual change.
+    /// </summary>
+    /// <remarks>
+    /// A stop the planner overrode keeps its own address but is stamped all
+    /// the same: the shipment then shows "the order disagrees with this stop",
+    /// which is the more valuable of the two warnings. Stops on delivered or
+    /// cancelled shipments are left alone entirely — their address is history.
+    /// </remarks>
+    public static async Task PropagateToStopAsync(
+        AleTrackDbContext dbContext,
+        Order order,
+        DateTime now,
+        CancellationToken ct)
+    {
+        // AleTrackDbContext has no direct DbSet<OutgoingShipmentStop>; reach the
+        // stop through the shipments it belongs to instead.
+        var stop = await dbContext.OutgoingShipments
+            .Include(s => s.Stops)
+            .SelectMany(s => s.Stops)
+            .FirstOrDefaultAsync(s => s.ClientOrder != null && s.ClientOrder.PublicId == order.PublicId, ct);
+
+        if (stop is null)
+            return;
+
+        if (stop.OutgoingShipment.State is OutgoingShipmentState.Delivered or OutgoingShipmentState.Cancelled)
+            return;
+
+        if (!stop.IsAddressOverridden)
+        {
+            stop.SelectedAddressKind = order.DeliveryAddressKind;
+            stop.ClientDeliveryPlaceId = order.ClientDeliveryPlaceId;
+        }
+
+        stop.AddressChangedAt = now;
     }
 }
