@@ -48,7 +48,8 @@ import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
 import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
 import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
-import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice, resolveStopAddress } from './stopAddress';
+import { resolveStopAddress } from './stopAddress';
+import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated

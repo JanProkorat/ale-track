@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeStopChoice, encodeStopChoice, resolveDetailStopAddress, resolveStopAddress } from 'src/features/shipments/stopAddress';
+import { resolveDetailStopAddress, resolveStopAddress } from 'src/features/shipments/stopAddress';
 import { DeliveryAddressKind } from 'src/generated/api-client';
 
 const place = { id: 'p1', name: 'Letní zahrádka', note: undefined,
@@ -113,23 +113,5 @@ describe('resolveStopAddress and resolveDetailStopAddress agree on the shared ta
     const editorText = resolveStopAddress(order, DeliveryAddressKind.Contact).text;
     const detailText = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.Contact, officialAddress, contactAddress } as never).text;
     expect(editorText).toBe(detailText);
-  });
-});
-
-describe('stop choice encoding', () => {
-  it('round-trips the two standard kinds', () => {
-    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.Official)))
-      .toEqual({ addressKind: DeliveryAddressKind.Official, deliveryPlaceId: undefined });
-    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.Contact)))
-      .toEqual({ addressKind: DeliveryAddressKind.Contact, deliveryPlaceId: undefined });
-  });
-
-  it('round-trips a place', () => {
-    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.DeliveryPlace, 'p1')))
-      .toEqual({ addressKind: DeliveryAddressKind.DeliveryPlace, deliveryPlaceId: 'p1' });
-  });
-
-  it('prefixes place IDs so they cannot collide with the standard values', () => {
-    expect(encodeStopChoice(DeliveryAddressKind.DeliveryPlace, 'Official')).toBe('place:Official');
   });
 });
