@@ -685,7 +685,17 @@ export function OrderEditor({
           </Box>
         </Card>
 
-        <Stack spacing={2} sx={{ position: { lg: 'sticky' }, top: { lg: TOPBAR_H + 16 } }}>
+        {/* Deliberately NOT position: sticky. This column stacks the client, the
+            cart, Vratky, Položky navíc and Poznámky; on a populated order — one
+            already in planning, say — that runs taller than the viewport. A
+            sticky element taller than the screen pins in place and its bottom
+            becomes unreachable, so Vratky and everything under it rendered but
+            could never be scrolled to. Letting the column scroll with the
+            document costs the cart staying in view while browsing the catalog,
+            and buys back the three cards below it. A max-height with its own
+            overflow would keep the stickiness, but nested scroll containers are
+            their own trap here — see app/CLAUDE.md. */}
+        <Stack spacing={2}>
           <Card sx={{ p: 2.5 }}>
             <Stack spacing={2}>
               <Box>
