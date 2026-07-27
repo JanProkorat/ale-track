@@ -12,7 +12,13 @@ function resource(root: string) {
 }
 
 export const qk = {
+  // `reports` stays a flat array: useModuleCounts keys off it directly. The report
+  // screens get sibling factories nested under the same root so invalidating
+  // ['reports'] still clears them.
   reports: ['reports'] as const,
+  reportVolume: (params: Params = {}) => ['reports', 'volume', params] as const,
+  reportClients: (params: Params = {}) => ['reports', 'clients', params] as const,
+  reportOperations: (params: Params = {}) => ['reports', 'operations', params] as const,
   exchangeRates: ['exchangeRates'] as const,
   countries: ['countries'] as const,
 

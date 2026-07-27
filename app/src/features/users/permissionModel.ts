@@ -19,6 +19,7 @@ import {
 export const PERM_MODULES = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.key !== 'dashboard');
 
 const KEY_TO_MODULE: Record<string, ModuleType> = {
+  reports: ModuleType.Reports,
   orders: ModuleType.Orders,
   shipments: ModuleType.Shipments,
   deliveries: ModuleType.Deliveries,

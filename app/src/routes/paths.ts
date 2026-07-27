@@ -2,6 +2,7 @@ import { type ModuleKey } from 'src/auth/permissions';
 
 export const PATHS: Record<ModuleKey, string> = {
   dashboard: '/',
+  reports: '/reports',
   orders: '/orders',
   shipments: '/shipments',
   deliveries: '/deliveries',

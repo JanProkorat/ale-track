@@ -31,5 +31,8 @@ public enum ModuleType
     Vehicles,
 
     /// <summary>Uživatelé (user administration).</summary>
-    Users
+    Users,
+
+    /// <summary>Reporty (read-only analytics).</summary>
+    Reports
 }

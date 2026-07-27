@@ -42,6 +42,15 @@ function fixParamsUrl(u: string): string {
   return u;
 }
 
+// ---- DateOnly query-param fix -------------------------------------------------
+// NSwag types the reports' `DateOnly` query params as `Date` and serializes them with
+// `toISOString()`, producing a full instant (`2026-07-25T00:00:00.000Z`). `DateOnly.TryParse`
+// rejects that, so the report endpoints would fail to bind. Trim them to the calendar day.
+// `From`/`To` are emitted only by the three report endpoints, so this rewrite is scoped.
+export function fixDateOnlyParams(u: string): string {
+  return u.replace(/([?&](?:From|To)=)(\d{4}-\d{2}-\d{2})T[^&]*/g, '$1$2');
+}
+
 // ---- silent refresh (deduped) ------------------------------------------------
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -72,7 +81,7 @@ function refreshAccessToken(): Promise<boolean> {
 
 // ---- authorized fetch --------------------------------------------------------
 async function authorizedFetch(url: RequestInfo, init?: RequestInit): Promise<Response> {
-  const target = fixParamsUrl(typeof url === 'string' ? url : (url as Request).url);
+  const target = fixDateOnlyParams(fixParamsUrl(typeof url === 'string' ? url : (url as Request).url));
 
   const doFetch = () => {
     const headers = new Headers(init?.headers);
