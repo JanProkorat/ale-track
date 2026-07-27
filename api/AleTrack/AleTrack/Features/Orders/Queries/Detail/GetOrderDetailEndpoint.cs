@@ -69,6 +69,19 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                     Id = o.Client.PublicId,
                     Name = o.Client.Name
                 },
+                DeliveryAddress = new OrderDeliveryAddressDto
+                {
+                    Kind = o.DeliveryAddressKind,
+                    PlaceId = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.PublicId : null,
+                    PlaceName = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.Name : null,
+                    PlaceNote = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.Note : null,
+                    Address =
+                        o.DeliveryAddressKind == DeliveryAddressKind.DeliveryPlace && o.ClientDeliveryPlace != null
+                            ? o.ClientDeliveryPlace.Address.ToDto()
+                            : o.DeliveryAddressKind == DeliveryAddressKind.Contact && o.Client.ContactAddress != null
+                                ? o.Client.ContactAddress.ToDto()
+                                : o.Client.OfficialAddress.ToDto()
+                },
                 OrderItems = o.OrderItems
                     .OrderBy(i => i.Product.Brewery.DisplayOrder)
                     .Select(i => new OrderItemDto

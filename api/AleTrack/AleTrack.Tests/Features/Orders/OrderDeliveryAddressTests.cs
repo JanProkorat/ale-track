@@ -4,6 +4,7 @@ using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Commands.Create;
 using AleTrack.Features.Orders.Commands.Update;
+using AleTrack.Features.Orders.Queries.Detail;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -236,5 +237,49 @@ public sealed class OrderDeliveryAddressTests
         var act = () => endpoint.HandleAsync(new CreateOrderRequest { Data = dto }, CancellationToken.None);
 
         await act.Should().ThrowAsync<Exception>();
+    }
+
+    [Fact]
+    public async Task OrderDetail_OfficialKind_ReturnsTheOfficialAddress()
+    {
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity(city: "Liberec"));
+        var order = OrderBuilder.BuildEntity(client: client);
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetOrderDetailRequest { Id = order.PublicId }, CancellationToken.None);
+
+        var result = endpoint.Response;
+        result.DeliveryAddress.Kind.Should().Be(DeliveryAddressKind.Official);
+        result.DeliveryAddress.Address!.City.Should().Be("Liberec");
+        result.DeliveryAddress.PlaceName.Should().BeNull();
+    }
+
+    // The place is projected without the !IsDeleted filter on purpose: an order
+    // pointing at a since-removed place must keep showing where it went.
+    [Fact]
+    public async Task OrderDetail_SoftDeletedPlace_StillResolves()
+    {
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(
+            client: client, name: "Letní zahrádka", note: "Vjezd zezadu", isDeleted: true);
+        place.Id = 11;
+        var order = OrderBuilder.BuildEntity(client: client);
+        order.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        order.ClientDeliveryPlaceId = 11;
+        order.ClientDeliveryPlace = place;
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], orders: [order], clientDeliveryPlaces: [place]);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetOrderDetailRequest { Id = order.PublicId }, CancellationToken.None);
+
+        var addr = endpoint.Response.DeliveryAddress;
+        addr.Kind.Should().Be(DeliveryAddressKind.DeliveryPlace);
+        addr.PlaceName.Should().Be("Letní zahrádka");
+        addr.PlaceNote.Should().Be("Vjezd zezadu");
+        addr.Address.Should().NotBeNull();
     }
 }

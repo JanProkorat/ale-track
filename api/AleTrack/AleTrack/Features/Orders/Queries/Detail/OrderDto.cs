@@ -18,7 +18,12 @@ public sealed record OrderDto
     /// Info about related client
     /// </summary>
     public ClientInfoDto Client { get; set; } = null!;
-    
+
+    /// <summary>
+    /// Where this order is delivered, resolved
+    /// </summary>
+    public OrderDeliveryAddressDto DeliveryAddress { get; set; } = null!;
+
     /// <summary>
     /// State of the order
     /// </summary>
