@@ -162,6 +162,13 @@ Three traps that have each cost real time:
    sidebar killed page scroll once, and nested scroll containers inside a screen
    have caused the same class of bug. Let long content grow the document.
 
+Chart colours for the Reporty module come from `src/features/reports/reportPalette.ts`,
+whose light and dark arrays are validated for colour-vision deficiency and contrast
+against the real card surfaces. Assign them by entity identity — never cycle with `%`
+and never assign after sorting by value, or changing a filter repaints every series.
+Status colours (shipment state, the on-time gauge) come from the theme's status tokens,
+never from that palette.
+
 Dialogs are styled centrally (`MuiDialog`, `MuiDialogTitle`, `MuiDialogContent`,
 `MuiDialogActions`) to match the prototype's modal — flat surface, divider under
 the head and above the foot. Do not re-add local padding or border `sx` to a

@@ -5,6 +5,7 @@
 
 export const MODULE_KEYS = [
   'dashboard',
+  'reports',
   'orders',
   'shipments',
   'deliveries',

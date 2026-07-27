@@ -36,6 +36,7 @@ export function SegControl<T extends string>({
           <ButtonBase
             key={o.value}
             onClick={() => onChange(o.value)}
+            aria-pressed={on}
             sx={{
               px: 1.6,
               py: 0.75,

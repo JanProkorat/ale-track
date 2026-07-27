@@ -82,6 +82,24 @@ export interface IClient {
     getNumberOfRecordsInEachModuleEndpoint(signal?: AbortSignal): Promise<NumberOfRecordsInEachModuleDto>;
 
     /**
+     * Gets operational figures over a date window
+     * @return Shipment states, punctuality, returns and driver throughput
+     */
+    getOperationsEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<OperationsReportDto>;
+
+    /**
+     * Gets delivered volume aggregated over a date window
+     * @return Delivered volume totals, breakdowns and trend series
+     */
+    getDeliveryVolumeEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?: AbortSignal): Promise<DeliveryVolumeReportDto>;
+
+    /**
+     * Gets delivered volume per client over a date window
+     * @return Per-client and per-region delivered volume
+     */
+    getClientVolumeEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<ClientVolumeReportDto>;
+
+    /**
      * Gets all upcoming reminders for all breweries and clients
      * @return List of reminders
      */
@@ -1282,6 +1300,193 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<NumberOfRecordsInEachModuleDto>(null as any);
+    }
+
+    /**
+     * Gets operational figures over a date window
+     * @return Shipment states, punctuality, returns and driver throughput
+     */
+    getOperationsEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<OperationsReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/operations?";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetOperationsEndpoint(_response);
+        });
+    }
+
+    protected processGetOperationsEndpoint(response: Response): Promise<OperationsReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = OperationsReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<OperationsReportDto>(null as any);
+    }
+
+    /**
+     * Gets delivered volume aggregated over a date window
+     * @return Delivered volume totals, breakdowns and trend series
+     */
+    getDeliveryVolumeEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?: AbortSignal): Promise<DeliveryVolumeReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/delivery-volume?";
+        if (granularity === undefined || granularity === null)
+            throw new globalThis.Error("The parameter 'granularity' must be defined and cannot be null.");
+        else
+            url_ += "Granularity=" + encodeURIComponent("" + granularity) + "&";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetDeliveryVolumeEndpoint(_response);
+        });
+    }
+
+    protected processGetDeliveryVolumeEndpoint(response: Response): Promise<DeliveryVolumeReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = DeliveryVolumeReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<DeliveryVolumeReportDto>(null as any);
+    }
+
+    /**
+     * Gets delivered volume per client over a date window
+     * @return Per-client and per-region delivered volume
+     */
+    getClientVolumeEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<ClientVolumeReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/client-volume?";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientVolumeEndpoint(_response);
+        });
+    }
+
+    protected processGetClientVolumeEndpoint(response: Response): Promise<ClientVolumeReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = ClientVolumeReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientVolumeReportDto>(null as any);
     }
 
     /**
@@ -6931,6 +7136,7 @@ export enum ModuleType {
     Drivers = 6,
     Vehicles = 7,
     Users = 8,
+    Reports = 9,
 }
 
 export enum PermissionLevel {
@@ -7293,6 +7499,840 @@ export interface ICreateUserDto {
     password: string;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+}
+
+export class OperationsReportDto implements IOperationsReportDto {
+    shipmentsByState?: ShipmentStateCountDto[];
+    totalShipments?: number;
+    totalStops?: number;
+    onTimePercentage?: number;
+    returnableUnits?: number;
+    activeDrivers?: number;
+    incomingVsOutgoing?: IncomingVsOutgoingDto[];
+    byDriver?: DriverShipmentsDto[];
+
+    constructor(data?: IOperationsReportDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["shipmentsByState"])) {
+                this.shipmentsByState = [] as any;
+                for (let item of _data["shipmentsByState"])
+                    this.shipmentsByState!.push(ShipmentStateCountDto.fromJS(item));
+            }
+            this.totalShipments = _data["totalShipments"];
+            this.totalStops = _data["totalStops"];
+            this.onTimePercentage = _data["onTimePercentage"];
+            this.returnableUnits = _data["returnableUnits"];
+            this.activeDrivers = _data["activeDrivers"];
+            if (Array.isArray(_data["incomingVsOutgoing"])) {
+                this.incomingVsOutgoing = [] as any;
+                for (let item of _data["incomingVsOutgoing"])
+                    this.incomingVsOutgoing!.push(IncomingVsOutgoingDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byDriver"])) {
+                this.byDriver = [] as any;
+                for (let item of _data["byDriver"])
+                    this.byDriver!.push(DriverShipmentsDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): OperationsReportDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OperationsReportDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.shipmentsByState)) {
+            data["shipmentsByState"] = [];
+            for (let item of this.shipmentsByState)
+                data["shipmentsByState"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["totalShipments"] = this.totalShipments;
+        data["totalStops"] = this.totalStops;
+        data["onTimePercentage"] = this.onTimePercentage;
+        data["returnableUnits"] = this.returnableUnits;
+        data["activeDrivers"] = this.activeDrivers;
+        if (Array.isArray(this.incomingVsOutgoing)) {
+            data["incomingVsOutgoing"] = [];
+            for (let item of this.incomingVsOutgoing)
+                data["incomingVsOutgoing"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byDriver)) {
+            data["byDriver"] = [];
+            for (let item of this.byDriver)
+                data["byDriver"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IOperationsReportDto {
+    shipmentsByState?: ShipmentStateCountDto[];
+    totalShipments?: number;
+    totalStops?: number;
+    onTimePercentage?: number;
+    returnableUnits?: number;
+    activeDrivers?: number;
+    incomingVsOutgoing?: IncomingVsOutgoingDto[];
+    byDriver?: DriverShipmentsDto[];
+}
+
+export class ShipmentStateCountDto implements IShipmentStateCountDto {
+    state?: OutgoingShipmentState;
+    count?: number;
+
+    constructor(data?: IShipmentStateCountDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.state = _data["state"];
+            this.count = _data["count"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentStateCountDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentStateCountDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["state"] = this.state;
+        data["count"] = this.count;
+        return data;
+    }
+}
+
+export interface IShipmentStateCountDto {
+    state?: OutgoingShipmentState;
+    count?: number;
+}
+
+export enum OutgoingShipmentState {
+    Created = 0,
+    Loaded = 1,
+    InTransit = 2,
+    Delivered = 3,
+    Cancelled = 4,
+}
+
+export class IncomingVsOutgoingDto implements IIncomingVsOutgoingDto {
+    month?: Date;
+    incomingWeightKg?: number;
+    outgoingWeightKg?: number;
+
+    constructor(data?: IIncomingVsOutgoingDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.month = _data["month"] ? new Date(_data["month"].toString()) : undefined as any;
+            this.incomingWeightKg = _data["incomingWeightKg"];
+            this.outgoingWeightKg = _data["outgoingWeightKg"];
+        }
+    }
+
+    static fromJS(data: any): IncomingVsOutgoingDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new IncomingVsOutgoingDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["month"] = this.month ? formatDate(this.month) : undefined as any;
+        data["incomingWeightKg"] = this.incomingWeightKg;
+        data["outgoingWeightKg"] = this.outgoingWeightKg;
+        return data;
+    }
+}
+
+export interface IIncomingVsOutgoingDto {
+    month?: Date;
+    incomingWeightKg?: number;
+    outgoingWeightKg?: number;
+}
+
+export class DriverShipmentsDto implements IDriverShipmentsDto {
+    driverId?: string;
+    driverName?: string;
+    color?: string | undefined;
+    deliveredShipments?: number;
+
+    constructor(data?: IDriverShipmentsDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.driverId = _data["driverId"];
+            this.driverName = _data["driverName"];
+            this.color = _data["color"];
+            this.deliveredShipments = _data["deliveredShipments"];
+        }
+    }
+
+    static fromJS(data: any): DriverShipmentsDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new DriverShipmentsDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["driverId"] = this.driverId;
+        data["driverName"] = this.driverName;
+        data["color"] = this.color;
+        data["deliveredShipments"] = this.deliveredShipments;
+        return data;
+    }
+}
+
+export interface IDriverShipmentsDto {
+    driverId?: string;
+    driverName?: string;
+    color?: string | undefined;
+    deliveredShipments?: number;
+}
+
+export abstract class ReportWindowRequest implements IReportWindowRequest {
+
+    constructor(data?: IReportWindowRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): ReportWindowRequest {
+        data = typeof data === 'object' ? data : {};
+        throw new Error("The abstract class 'ReportWindowRequest' cannot be instantiated.");
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IReportWindowRequest {
+}
+
+export class GetOperationsRequest extends ReportWindowRequest implements IGetOperationsRequest {
+
+    constructor(data?: IGetOperationsRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetOperationsRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetOperationsRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetOperationsRequest extends IReportWindowRequest {
+}
+
+export class DeliveryVolumeReportDto implements IDeliveryVolumeReportDto {
+    totalWeightKg?: number;
+    totalUnits?: number;
+    clientsServed?: number;
+    unitsByKind?: VolumeByKindDto[];
+    byBrewery?: VolumeByBreweryDto[];
+    byType?: VolumeByTypeDto[];
+    series?: ReportSeriesPointDto[];
+
+    constructor(data?: IDeliveryVolumeReportDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.totalWeightKg = _data["totalWeightKg"];
+            this.totalUnits = _data["totalUnits"];
+            this.clientsServed = _data["clientsServed"];
+            if (Array.isArray(_data["unitsByKind"])) {
+                this.unitsByKind = [] as any;
+                for (let item of _data["unitsByKind"])
+                    this.unitsByKind!.push(VolumeByKindDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byBrewery"])) {
+                this.byBrewery = [] as any;
+                for (let item of _data["byBrewery"])
+                    this.byBrewery!.push(VolumeByBreweryDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byType"])) {
+                this.byType = [] as any;
+                for (let item of _data["byType"])
+                    this.byType!.push(VolumeByTypeDto.fromJS(item));
+            }
+            if (Array.isArray(_data["series"])) {
+                this.series = [] as any;
+                for (let item of _data["series"])
+                    this.series!.push(ReportSeriesPointDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): DeliveryVolumeReportDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeliveryVolumeReportDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["totalWeightKg"] = this.totalWeightKg;
+        data["totalUnits"] = this.totalUnits;
+        data["clientsServed"] = this.clientsServed;
+        if (Array.isArray(this.unitsByKind)) {
+            data["unitsByKind"] = [];
+            for (let item of this.unitsByKind)
+                data["unitsByKind"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byBrewery)) {
+            data["byBrewery"] = [];
+            for (let item of this.byBrewery)
+                data["byBrewery"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byType)) {
+            data["byType"] = [];
+            for (let item of this.byType)
+                data["byType"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.series)) {
+            data["series"] = [];
+            for (let item of this.series)
+                data["series"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IDeliveryVolumeReportDto {
+    totalWeightKg?: number;
+    totalUnits?: number;
+    clientsServed?: number;
+    unitsByKind?: VolumeByKindDto[];
+    byBrewery?: VolumeByBreweryDto[];
+    byType?: VolumeByTypeDto[];
+    series?: ReportSeriesPointDto[];
+}
+
+export class VolumeByKindDto implements IVolumeByKindDto {
+    kind?: ProductKind;
+    units?: number;
+    weightKg?: number;
+
+    constructor(data?: IVolumeByKindDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.units = _data["units"];
+            this.weightKg = _data["weightKg"];
+        }
+    }
+
+    static fromJS(data: any): VolumeByKindDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new VolumeByKindDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["units"] = this.units;
+        data["weightKg"] = this.weightKg;
+        return data;
+    }
+}
+
+export interface IVolumeByKindDto {
+    kind?: ProductKind;
+    units?: number;
+    weightKg?: number;
+}
+
+export enum ProductKind {
+    Keg = 1,
+    Bottle = 2,
+    Can = 3,
+    Multipack = 4,
+    Other = 5,
+}
+
+export class VolumeByBreweryDto implements IVolumeByBreweryDto {
+    breweryId?: string;
+    breweryName?: string;
+    color?: string | undefined;
+    units?: number;
+    weightKg?: number;
+
+    constructor(data?: IVolumeByBreweryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.breweryId = _data["breweryId"];
+            this.breweryName = _data["breweryName"];
+            this.color = _data["color"];
+            this.units = _data["units"];
+            this.weightKg = _data["weightKg"];
+        }
+    }
+
+    static fromJS(data: any): VolumeByBreweryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new VolumeByBreweryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["breweryId"] = this.breweryId;
+        data["breweryName"] = this.breweryName;
+        data["color"] = this.color;
+        data["units"] = this.units;
+        data["weightKg"] = this.weightKg;
+        return data;
+    }
+}
+
+export interface IVolumeByBreweryDto {
+    breweryId?: string;
+    breweryName?: string;
+    color?: string | undefined;
+    units?: number;
+    weightKg?: number;
+}
+
+export class VolumeByTypeDto implements IVolumeByTypeDto {
+    type?: ProductType;
+    units?: number;
+    weightKg?: number;
+
+    constructor(data?: IVolumeByTypeDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.units = _data["units"];
+            this.weightKg = _data["weightKg"];
+        }
+    }
+
+    static fromJS(data: any): VolumeByTypeDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new VolumeByTypeDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["units"] = this.units;
+        data["weightKg"] = this.weightKg;
+        return data;
+    }
+}
+
+export interface IVolumeByTypeDto {
+    type?: ProductType;
+    units?: number;
+    weightKg?: number;
+}
+
+export enum ProductType {
+    PaleDraftBeer = 1,
+    PaleLager = 2,
+    AmberLager = 3,
+    DarkLager = 4,
+    SpecialBeer = 5,
+    StrongBeerPale = 6,
+    NonAlcoholicBeer = 7,
+    Radler = 8,
+    MixedBeer = 9,
+    WheatBeer = 10,
+    FlavoredBeer = 11,
+    Lemonade = 12,
+    Merchandise = 13,
+    PaleLagerPremium = 14,
+    PaleStrong = 15,
+    DarkStrong = 16,
+    YeastLager = 17,
+    UnfilteredBlendedLager = 18,
+    FestiveLager = 19,
+    MixedLager = 20,
+    Mix = 21,
+    NonAlcoholicFlavourBeer = 22,
+    OriginalCraftLager = 23,
+    Other = 24,
+}
+
+export class ReportSeriesPointDto implements IReportSeriesPointDto {
+    bucketStart?: Date;
+    weightKg?: number;
+    units?: number;
+
+    constructor(data?: IReportSeriesPointDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.bucketStart = _data["bucketStart"] ? new Date(_data["bucketStart"].toString()) : undefined as any;
+            this.weightKg = _data["weightKg"];
+            this.units = _data["units"];
+        }
+    }
+
+    static fromJS(data: any): ReportSeriesPointDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ReportSeriesPointDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["bucketStart"] = this.bucketStart ? formatDate(this.bucketStart) : undefined as any;
+        data["weightKg"] = this.weightKg;
+        data["units"] = this.units;
+        return data;
+    }
+}
+
+export interface IReportSeriesPointDto {
+    bucketStart?: Date;
+    weightKg?: number;
+    units?: number;
+}
+
+export class GetDeliveryVolumeRequest extends ReportWindowRequest implements IGetDeliveryVolumeRequest {
+
+    constructor(data?: IGetDeliveryVolumeRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetDeliveryVolumeRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetDeliveryVolumeRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetDeliveryVolumeRequest extends IReportWindowRequest {
+}
+
+export enum ReportGranularity {
+    Day = 0,
+    Week = 1,
+    Month = 2,
+}
+
+export class ClientVolumeReportDto implements IClientVolumeReportDto {
+    clientsServed?: number;
+    totalDeliveries?: number;
+    totalWeightKg?: number;
+    topClients?: ClientVolumeRowDto[];
+    byRegion?: VolumeByRegionDto[];
+
+    constructor(data?: IClientVolumeReportDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientsServed = _data["clientsServed"];
+            this.totalDeliveries = _data["totalDeliveries"];
+            this.totalWeightKg = _data["totalWeightKg"];
+            if (Array.isArray(_data["topClients"])) {
+                this.topClients = [] as any;
+                for (let item of _data["topClients"])
+                    this.topClients!.push(ClientVolumeRowDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byRegion"])) {
+                this.byRegion = [] as any;
+                for (let item of _data["byRegion"])
+                    this.byRegion!.push(VolumeByRegionDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): ClientVolumeReportDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientVolumeReportDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientsServed"] = this.clientsServed;
+        data["totalDeliveries"] = this.totalDeliveries;
+        data["totalWeightKg"] = this.totalWeightKg;
+        if (Array.isArray(this.topClients)) {
+            data["topClients"] = [];
+            for (let item of this.topClients)
+                data["topClients"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byRegion)) {
+            data["byRegion"] = [];
+            for (let item of this.byRegion)
+                data["byRegion"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IClientVolumeReportDto {
+    clientsServed?: number;
+    totalDeliveries?: number;
+    totalWeightKg?: number;
+    topClients?: ClientVolumeRowDto[];
+    byRegion?: VolumeByRegionDto[];
+}
+
+export class ClientVolumeRowDto implements IClientVolumeRowDto {
+    clientId?: string;
+    clientName?: string;
+    region?: Region;
+    deliveries?: number;
+    units?: number;
+    weightKg?: number;
+
+    constructor(data?: IClientVolumeRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.region = _data["region"];
+            this.deliveries = _data["deliveries"];
+            this.units = _data["units"];
+            this.weightKg = _data["weightKg"];
+        }
+    }
+
+    static fromJS(data: any): ClientVolumeRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientVolumeRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["region"] = this.region;
+        data["deliveries"] = this.deliveries;
+        data["units"] = this.units;
+        data["weightKg"] = this.weightKg;
+        return data;
+    }
+}
+
+export interface IClientVolumeRowDto {
+    clientId?: string;
+    clientName?: string;
+    region?: Region;
+    deliveries?: number;
+    units?: number;
+    weightKg?: number;
+}
+
+export enum Region {
+    ZittauCity = 0,
+    ZittauRegion = 1,
+    Chemnitz = 2,
+    Leipzig = 3,
+    Berlin = 4,
+    Freiberg = 5,
+    Goerlitz = 6,
+    Region = 7,
+    Other = 8,
+}
+
+export class VolumeByRegionDto implements IVolumeByRegionDto {
+    region?: Region;
+    units?: number;
+    weightKg?: number;
+
+    constructor(data?: IVolumeByRegionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.region = _data["region"];
+            this.units = _data["units"];
+            this.weightKg = _data["weightKg"];
+        }
+    }
+
+    static fromJS(data: any): VolumeByRegionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new VolumeByRegionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["region"] = this.region;
+        data["units"] = this.units;
+        data["weightKg"] = this.weightKg;
+        return data;
+    }
+}
+
+export interface IVolumeByRegionDto {
+    region?: Region;
+    units?: number;
+    weightKg?: number;
+}
+
+export class GetClientVolumeRequest extends ReportWindowRequest implements IGetClientVolumeRequest {
+
+    constructor(data?: IGetClientVolumeRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetClientVolumeRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientVolumeRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetClientVolumeRequest extends IReportWindowRequest {
 }
 
 export class ReminderSectionDto implements IReminderSectionDto {
@@ -8199,41 +9239,6 @@ export interface ICreateReminderDto {
     daysOfWeek?: DayOfWeek[] | undefined;
     daysOfMonth?: number[] | undefined;
     activeUntil?: Date | undefined;
-}
-
-export enum ProductKind {
-    Keg = 1,
-    Bottle = 2,
-    Can = 3,
-    Multipack = 4,
-    Other = 5,
-}
-
-export enum ProductType {
-    PaleDraftBeer = 1,
-    PaleLager = 2,
-    AmberLager = 3,
-    DarkLager = 4,
-    SpecialBeer = 5,
-    StrongBeerPale = 6,
-    NonAlcoholicBeer = 7,
-    Radler = 8,
-    MixedBeer = 9,
-    WheatBeer = 10,
-    FlavoredBeer = 11,
-    Lemonade = 12,
-    Merchandise = 13,
-    PaleLagerPremium = 14,
-    PaleStrong = 15,
-    DarkStrong = 16,
-    YeastLager = 17,
-    UnfilteredBlendedLager = 18,
-    FestiveLager = 19,
-    MixedLager = 20,
-    Mix = 21,
-    NonAlcoholicFlavourBeer = 22,
-    OriginalCraftLager = 23,
-    Other = 24,
 }
 
 export class ProductDto implements IProductDto {
@@ -9675,14 +10680,6 @@ export interface ICreateProductDeliveryItemDto {
     productId?: string;
     quantity?: number;
     note?: string | undefined;
-}
-
-export enum OutgoingShipmentState {
-    Created = 0,
-    Loaded = 1,
-    InTransit = 2,
-    Delivered = 3,
-    Cancelled = 4,
 }
 
 export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
@@ -13599,18 +14596,6 @@ export class CreateDriverAvailabilityDto implements ICreateDriverAvailabilityDto
 export interface ICreateDriverAvailabilityDto {
     from?: Date;
     until?: Date;
-}
-
-export enum Region {
-    ZittauCity = 0,
-    ZittauRegion = 1,
-    Chemnitz = 2,
-    Leipzig = 3,
-    Berlin = 4,
-    Freiberg = 5,
-    Goerlitz = 6,
-    Region = 7,
-    Other = 8,
 }
 
 export class ClientDto implements IClientDto {

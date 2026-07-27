@@ -4,5 +4,8 @@
 # Local Claude Code settings (personal, per-machine)
 .claude/settings.local.json
 
+# Superpowers brainstorming scratch (visual companion mockups)
+.superpowers/
+
 # Claude Code worktrees
 .claude/worktrees/
