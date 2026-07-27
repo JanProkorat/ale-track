@@ -1,11 +1,23 @@
 import { Alert, AlertTitle, Box, Button, Typography } from '@mui/material';
 import { type OutgoingShipmentStopDto } from 'src/generated/api-client';
 import { useAcknowledgeAddressChanges } from 'src/hooks/useShipments';
+import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
 
 // Raised when an order edit changed a delivery address under this shipment.
 // Two messages, because an inherited stop has already been corrected while an
 // overridden one has deliberately *not* been — and the second is the case
 // nobody would otherwise notice.
+
+/** For the overridden case, names what the order now wants rather than
+ * merely asserting a difference — `stop.orderDeliveryAddress` is projected by
+ * the backend precisely so this line doesn't have to guess. Mirrors
+ * `resolveStopAddress`'s `name · address` shape for a saved place. */
+function orderAddressLine(s: OutgoingShipmentStopDto): string {
+  const addr = s.orderDeliveryAddress;
+  if (!addr) return '';
+  const formatted = formatAddressOrCoords(addr.address);
+  return addr.placeName ? `${addr.placeName} · ${formatted}` : formatted;
+}
 
 export function AddressChangedBanner({
   shipmentId,
@@ -39,7 +51,7 @@ export function AddressChangedBanner({
           <Box component="span" sx={{ fontWeight: 700 }}>{s.clientName ?? '—'}</Box>
           {': '}
           {s.isAddressOverridden
-            ? 'objednávka má jinou adresu doručení než tato zastávka.'
+            ? `objednávka má jinou adresu doručení než tato zastávka (${orderAddressLine(s)}).`
             : 'adresa doručení byla aktualizována podle objednávky.'}
         </Typography>
       ))}

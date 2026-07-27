@@ -84,9 +84,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
                         // Derived, never sent: a stale client-supplied flag would silently
                         // disable propagation from the order.
-                        stop.IsAddressOverridden =
-                            stop.SelectedAddressKind != order.DeliveryAddressKind
-                            || stop.ClientDeliveryPlaceId != order.ClientDeliveryPlaceId;
+                        stop.DeriveAddressOverride(order);
 
                         return stop;
                     }),

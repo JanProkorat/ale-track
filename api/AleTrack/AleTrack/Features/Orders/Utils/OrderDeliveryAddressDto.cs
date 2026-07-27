@@ -34,8 +34,14 @@ public sealed record OrderDeliveryAddressDto
     public string? PlaceNote { get; set; }
 
     /// <summary>
-    /// The resolved destination. Null only if the client has no address of the
-    /// selected kind at all.
+    /// The resolved destination: the place's address for
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>, the client's contact
+    /// address for <see cref="DeliveryAddressKind.Contact"/>, otherwise the
+    /// client's official address. Never null in practice — both projections
+    /// fall back to the (non-nullable) official address when the selected
+    /// kind's own address is unavailable (e.g. a <c>Contact</c> order whose
+    /// client has since lost its contact address), so this silently renders
+    /// the billing address rather than surfacing the mismatch.
     /// </summary>
     public AddressDto? Address { get; set; }
 }

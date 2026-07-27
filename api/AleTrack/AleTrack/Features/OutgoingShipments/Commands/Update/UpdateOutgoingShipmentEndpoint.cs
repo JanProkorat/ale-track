@@ -301,9 +301,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
                     // Derived, never sent: a stale client-supplied flag would silently
                     // disable propagation from the order.
-                    stop.IsAddressOverridden =
-                        stop.SelectedAddressKind != o.order.DeliveryAddressKind
-                        || stop.ClientDeliveryPlaceId != o.order.ClientDeliveryPlaceId;
+                    stop.DeriveAddressOverride(o.order);
 
                     return stop;
                 }));
@@ -327,9 +325,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
             // Derived, never sent: a stale client-supplied flag would silently
             // disable propagation from the order.
-            stop.IsAddressOverridden =
-                stop.SelectedAddressKind != stop.ClientOrder.DeliveryAddressKind
-                || stop.ClientDeliveryPlaceId != stop.ClientOrder.ClientDeliveryPlaceId;
+            stop.DeriveAddressOverride(stop.ClientOrder!);
         }
 
         // The planner has just been looking at this shipment; whatever the

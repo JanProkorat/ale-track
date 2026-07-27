@@ -88,6 +88,14 @@ public static class OrderDeliveryAddressWriter
             stop.ClientDeliveryPlaceId = order.ClientDeliveryPlaceId;
         }
 
+        // Re-derive rather than trust the pre-edit flag: on the inherit branch
+        // it now always matches (false); on the override branch the operator
+        // may just have edited the order onto the exact address the planner
+        // already chose, which should clear the flag too. Otherwise this
+        // fourth writer of the (kind, placeId, overridden) invariant would
+        // leave it stale-true until the whole shipment is re-saved.
+        stop.DeriveAddressOverride(order);
+
         stop.AddressChangedAt = now;
     }
 }

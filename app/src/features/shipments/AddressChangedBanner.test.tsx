@@ -23,11 +23,36 @@ describe('AddressChangedBanner', () => {
     expect(screen.getByText(/aktualizována/i)).toBeInTheDocument();
   });
 
-  it('says the order disagrees for an overridden stop', () => {
+  it('says the order disagrees for an overridden stop and names the street address it now wants', () => {
     render(<AddressChangedBanner shipmentId="s1" stops={[
-      { id: 'st1', clientName: 'A', addressChangedAt: stamped, isAddressOverridden: true } as unknown as OutgoingShipmentStopDto,
+      {
+        id: 'st1',
+        clientName: 'A',
+        addressChangedAt: stamped,
+        isAddressOverridden: true,
+        orderDeliveryAddress: {
+          address: { streetName: 'Nábřežní', streetNumber: '3', zip: '02763', city: 'Žitava' },
+        },
+      } as unknown as OutgoingShipmentStopDto,
     ]} />);
     expect(screen.getByText(/jinou adresu/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nábřežní 3, 02763 Žitava/)).toBeInTheDocument();
+  });
+
+  it('names the saved place alongside its address when the order\'s own choice is a delivery place', () => {
+    render(<AddressChangedBanner shipmentId="s1" stops={[
+      {
+        id: 'st1',
+        clientName: 'A',
+        addressChangedAt: stamped,
+        isAddressOverridden: true,
+        orderDeliveryAddress: {
+          placeName: 'Sklad Liberec',
+          address: { streetName: 'Skladová', streetNumber: '1', zip: '46001', city: 'Liberec' },
+        },
+      } as unknown as OutgoingShipmentStopDto,
+    ]} />);
+    expect(screen.getByText(/Sklad Liberec · Skladová 1, 46001 Liberec/)).toBeInTheDocument();
   });
 
   it('acknowledges on Rozumím', () => {

@@ -334,6 +334,12 @@ export function OrderEditor({
   const [deliveryAddress, setDeliveryAddress] = useState<{ kind: DeliveryAddressKind; placeId?: string }>(
     { kind: DeliveryAddressKind.Official },
   );
+  // Name of the order's chosen place as loaded from the server — kept only to
+  // label the delivery-address field's "(smazáno)" entry with the real name
+  // when that place has since been soft-deleted off the client (and so no
+  // longer appears in the client's own delivery-places list). Undefined in
+  // create mode, where there is nothing loaded to remember.
+  const [loadedPlaceName, setLoadedPlaceName] = useState<string | undefined>(undefined);
   const [requiredDate, setRequiredDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(3, 'day') : null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [returns, setReturns] = useState<DraftReturn[]>([]);
@@ -370,6 +376,7 @@ export function OrderEditor({
     };
     setClientId(loadedClientId);
     setDeliveryAddress(loadedDeliveryAddress);
+    setLoadedPlaceName(o.deliveryAddress?.placeName ?? undefined);
     setRequiredDate(loadedDate);
     const loadedReturns: DraftReturn[] = (o.returns ?? []).map((r) => ({ id: r.id, name: r.name ?? '', quantity: r.quantity ?? 1, note: r.note ?? '' }));
     const loadedNotes: DraftNote[] = (o.notes ?? []).map((n) => ({ id: n.id, text: n.text ?? '' }));
@@ -709,6 +716,7 @@ export function OrderEditor({
                 clientId={clientId}
                 value={deliveryAddress}
                 onChange={setDeliveryAddress}
+                deletedPlaceName={loadedPlaceName}
               />
 
               <DatePicker

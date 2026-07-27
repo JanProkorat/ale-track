@@ -359,12 +359,23 @@ export function ShipmentEditor({
       // names as strings while the generated TS enum is numeric, so the raw
       // field never `===` a member.
       const order = orderById.get(orderId);
+      const inheritedKind = addrKindValue(order?.deliveryAddressKind);
+      // The order's place list is filtered to non-deleted places (it backs the
+      // picker), so a place the order chose before it was soft-deleted won't
+      // be in it. Inheriting that id anyway would produce a stop the picker
+      // can't render and the resolver 404s on save — fall back to Official
+      // with no place instead, same as a brand-new stop would. Official/Contact
+      // are unaffected: they carry no place id, so this only ever overrides
+      // the DeliveryPlace case.
+      const placeMissing = inheritedKind === DeliveryAddressKind.DeliveryPlace
+        && order?.clientDeliveryPlaceId != null
+        && !(order.clientDeliveryPlaces ?? []).some((p) => p.id === order.clientDeliveryPlaceId);
       return [...prev, {
         key: orderId,
         kind: 'order' as const,
         orderId,
-        addressKind: addrKindValue(order?.deliveryAddressKind),
-        deliveryPlaceId: order?.clientDeliveryPlaceId ?? undefined,
+        addressKind: placeMissing ? DeliveryAddressKind.Official : inheritedKind,
+        deliveryPlaceId: placeMissing ? undefined : (order?.clientDeliveryPlaceId ?? undefined),
         order: prev.length + 1,
       }];
     });

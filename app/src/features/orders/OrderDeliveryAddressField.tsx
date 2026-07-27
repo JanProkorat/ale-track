@@ -16,11 +16,18 @@ export function OrderDeliveryAddressField({
   value,
   onChange,
   disabled,
+  deletedPlaceName,
 }: {
   clientId: string | null;
   value: { kind: DeliveryAddressKind; placeId?: string };
   onChange: (v: { kind: DeliveryAddressKind; placeId?: string }) => void;
   disabled?: boolean;
+  /** Name of the order's chosen place as it was when the order was loaded —
+   *  `OrderDto.deliveryAddress.placeName`, which the backend sets even when
+   *  the place has since been soft-deleted. Labels the "(smazáno)" entry with
+   *  the real name instead of a generic placeholder. Undefined for a
+   *  freshly-created order (there is nothing loaded to remember). */
+  deletedPlaceName?: string;
 }) {
   const clientQuery = useClient(clientId ?? undefined);
   const placesQuery = useClientDeliveryPlaces(clientId ?? undefined);
@@ -34,7 +41,13 @@ export function OrderDeliveryAddressField({
   // A place soft-deleted since this order chose it is absent from `places`.
   // Without a disabled entry carrying it, the Select's value matches no option
   // and re-saving would silently relocate the delivery to the billing address.
-  const isGone = value.kind === DeliveryAddressKind.DeliveryPlace
+  //
+  // Gated on the places query not being in-flight: while it's still loading,
+  // `places` is coerced to `[]` and a perfectly valid place would otherwise
+  // flash as "gone" — the field briefly shows a disabled "Smazané místo" entry
+  // and the caption briefly falls back to the billing address.
+  const isGone = !placesQuery.isLoading
+    && value.kind === DeliveryAddressKind.DeliveryPlace
     && value.placeId != null
     && !places.some((p) => p.id === value.placeId);
 
@@ -65,7 +78,7 @@ export function OrderDeliveryAddressField({
         {isGone && [
           <ListSubheader key="gone-header">Smazané</ListSubheader>,
           <MenuItem key="gone-item" value={encodeStopChoice(DeliveryAddressKind.DeliveryPlace, value.placeId)} disabled>
-            {'Smazané místo (smazáno)'}
+            {(deletedPlaceName ?? 'Smazané místo') + ' (smazáno)'}
           </MenuItem>,
         ]}
         <MenuItem value={NEW_PLACE_CHOICE}>+ Nové místo…</MenuItem>

@@ -191,3 +191,29 @@ describe('ShipmentDetail — route map point resolution', () => {
     expect(stops[0].lng).toBe(14.8);
   });
 });
+
+describe('ShipmentDetail — address-changed banner position', () => {
+  // Regression guard: the banner used to sit at the bottom of the right
+  // column, four cards below the map (Vůz/Řidiči, then two GarageCards) —
+  // a warning nobody would scroll down to see. It must now render directly
+  // under the map, before any of those cards, matching ShipmentEditor.tsx.
+  it('renders directly under the map rather than below the vehicle/garage cards', () => {
+    const stop = officialStop();
+    stop.addressChangedAt = new Date('2026-07-27T09:00:00Z');
+    stop.isAddressOverridden = false;
+    renderDetail([stop]);
+
+    const mapStub = screen.getByTestId('route-map-stub');
+    const banner = screen.getByText('Změna adresy doručení');
+    const vehicleHeading = screen.getByText('Vůz');
+
+    // DOCUMENT_POSITION_FOLLOWING (4): the second node comes after the first.
+    expect(mapStub.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.compareDocumentPosition(vehicleHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('adds no stray gap under the map when there is nothing to announce', () => {
+    renderDetail([officialStop()]);
+    expect(screen.queryByText('Změna adresy doručení')).not.toBeInTheDocument();
+  });
+});

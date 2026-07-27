@@ -64,6 +64,41 @@ public sealed class OrderDeliveryAddressPropagationTests
         stop.AddressChangedAt.Should().Be(Now);
     }
 
+    // Regression for the flag going stale-true: an operator can edit an order
+    // onto exactly the address the planner already overrode the stop to. The
+    // stop and order now agree, so the flag must clear even though the
+    // override branch (deliberately) left the stop's own address untouched.
+    [Fact]
+    public async Task Propagate_OverriddenStopEditedToMatch_ClearsTheFlag()
+    {
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(client: client);
+        order.DeliveryAddressKind = DeliveryAddressKind.Official;
+
+        var shipment = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var stop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            Order = 1,
+            ClientOrder = order,
+            OutgoingShipment = shipment,
+            SelectedAddressKind = DeliveryAddressKind.Official,
+            ClientDeliveryPlaceId = order.ClientDeliveryPlaceId,
+            // Stale: the planner overrode this stop earlier, before the order
+            // was edited onto the very same address.
+            IsAddressOverridden = true
+        };
+        shipment.Stops.Add(stop);
+        order.OutgoingShipmentStop = stop;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(orders: [order], outgoingShipments: [shipment]);
+
+        await OrderDeliveryAddressWriter.PropagateToStopAsync(db.Object, order, Now, CancellationToken.None);
+
+        stop.IsAddressOverridden.Should().BeFalse();
+        stop.AddressChangedAt.Should().Be(Now);
+    }
+
     [Theory]
     [InlineData(OutgoingShipmentState.Delivered)]
     [InlineData(OutgoingShipmentState.Cancelled)]
