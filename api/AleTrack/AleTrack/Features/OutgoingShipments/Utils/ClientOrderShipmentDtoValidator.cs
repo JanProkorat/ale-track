@@ -38,11 +38,11 @@ public sealed class ClientOrderShipmentDtoValidator : Validator<ClientOrderShipm
         RuleFor(dto => dto.ClientDeliveryPlaceId)
             .NotNull()
             .WithErrorCode(ErrorCodes.ValidationNotNullError)
-            .When(dto => dto.SelectedAddressKind == OutgoingShipmentStopAddressKind.DeliveryPlace);
+            .When(dto => dto.SelectedAddressKind == DeliveryAddressKind.DeliveryPlace);
 
         RuleFor(dto => dto.ClientDeliveryPlaceId)
             .Null()
             .WithErrorCode(ErrorCodes.ValidationError)
-            .When(dto => dto.SelectedAddressKind != OutgoingShipmentStopAddressKind.DeliveryPlace);
+            .When(dto => dto.SelectedAddressKind != DeliveryAddressKind.DeliveryPlace);
     }
 }

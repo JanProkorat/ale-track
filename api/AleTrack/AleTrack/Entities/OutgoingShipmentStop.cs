@@ -42,12 +42,12 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     [Column("selected_address_kind")]
-    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    public DeliveryAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
     /// The client's saved delivery place this stop delivers to. Set only when
     /// <see cref="SelectedAddressKind"/> is
-    /// <see cref="OutgoingShipmentStopAddressKind.DeliveryPlace"/>.
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>.
     /// </summary>
     [Column("client_delivery_place_id")]
     public long? ClientDeliveryPlaceId { get; set; }

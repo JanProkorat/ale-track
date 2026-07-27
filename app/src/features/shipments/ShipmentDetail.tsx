@@ -394,7 +394,7 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
-   *  client's saved place (see `OutgoingShipmentStopAddressKind.DeliveryPlace`). */
+   *  client's saved place (see `DeliveryAddressKind.DeliveryPlace`). */
   chip?: ReactNode;
   /** The destination line below the title: the place's formatted address, or
    *  the `address · kind` line for the two standard address kinds. Omitted

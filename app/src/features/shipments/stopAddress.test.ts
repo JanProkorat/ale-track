@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeStopChoice, encodeStopChoice, resolveDetailStopAddress, resolveStopAddress } from 'src/features/shipments/stopAddress';
-import { OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import { DeliveryAddressKind } from 'src/generated/api-client';
 
 const place = { id: 'p1', name: 'Letní zahrádka', note: undefined,
   address: { streetName: 'Nábřežní', streetNumber: '3', city: 'Žitava', zip: '02763', latitude: 50.9, longitude: 14.8 } };
@@ -12,15 +12,15 @@ const order = {
 
 describe('resolveStopAddress', () => {
   it('uses the official address by default', () => {
-    expect(resolveStopAddress(order, OutgoingShipmentStopAddressKind.Official).lat).toBe(50.897);
+    expect(resolveStopAddress(order, DeliveryAddressKind.Official).lat).toBe(50.897);
   });
 
   it('uses the contact address when selected', () => {
-    expect(resolveStopAddress(order, OutgoingShipmentStopAddressKind.Contact).lat).toBe(50.88);
+    expect(resolveStopAddress(order, DeliveryAddressKind.Contact).lat).toBe(50.88);
   });
 
   it('uses the place coordinates when one is selected', () => {
-    const r = resolveStopAddress(order, OutgoingShipmentStopAddressKind.DeliveryPlace, 'p1');
+    const r = resolveStopAddress(order, DeliveryAddressKind.DeliveryPlace, 'p1');
     expect(r.lat).toBe(50.9);
     expect(r.text).toContain('Letní zahrádka');
   });
@@ -29,7 +29,7 @@ describe('resolveStopAddress', () => {
     // A soft-deleted place is absent from clientDeliveryPlaces. Falling back
     // silently would relocate the delivery, so the caller must keep the stale
     // selection visible — this only guards the pure resolver.
-    expect(resolveStopAddress(order, OutgoingShipmentStopAddressKind.DeliveryPlace, 'gone').lat).toBe(50.897);
+    expect(resolveStopAddress(order, DeliveryAddressKind.DeliveryPlace, 'gone').lat).toBe(50.897);
   });
 });
 
@@ -38,13 +38,13 @@ describe('resolveDetailStopAddress', () => {
   const contactAddress = { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763', latitude: 50.88, longitude: 14.81 };
 
   it('uses the official address by default', () => {
-    const r = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Official, officialAddress } as never);
+    const r = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.Official, officialAddress } as never);
     expect(r.lat).toBe(50.897);
     expect(r.text).toBe('Náměstí 14, 02763 Žitava · Fakturační');
   });
 
   it('uses the contact address when selected (numeric wire form)', () => {
-    const r = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Contact, officialAddress, contactAddress } as never);
+    const r = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.Contact, officialAddress, contactAddress } as never);
     expect(r.lat).toBe(50.88);
     expect(r.text).toBe('Dvůr 2a, 02763 Žitava · Kontaktní');
   });
@@ -54,7 +54,7 @@ describe('resolveDetailStopAddress', () => {
   // numeric 1. A direct `===` against the numeric enum member — the bug this
   // test guards — silently falls through to the official-address branch here.
   it('uses the contact address when selected (string wire form)', () => {
-    const r = resolveDetailStopAddress({ selectedAddressKind: 'Contact' as unknown as OutgoingShipmentStopAddressKind, officialAddress, contactAddress } as never);
+    const r = resolveDetailStopAddress({ selectedAddressKind: 'Contact' as unknown as DeliveryAddressKind, officialAddress, contactAddress } as never);
     expect(r.lat).toBe(50.88);
     expect(r.text).toBe('Dvůr 2a, 02763 Žitava · Kontaktní');
     expect(r.isPlace).toBe(false);
@@ -62,7 +62,7 @@ describe('resolveDetailStopAddress', () => {
 
   it('uses the place coordinates and formatted address (without the name) when a place is selected (numeric wire form)', () => {
     const r = resolveDetailStopAddress({
-      selectedAddressKind: OutgoingShipmentStopAddressKind.DeliveryPlace,
+      selectedAddressKind: DeliveryAddressKind.DeliveryPlace,
       officialAddress,
       deliveryPlace: { name: 'Letní zahrádka', address: place.address },
     } as never);
@@ -78,7 +78,7 @@ describe('resolveDetailStopAddress', () => {
   // screen because "DeliveryPlace" === 2 is false.
   it('uses the place coordinates and formatted address when a place is selected (string wire form)', () => {
     const r = resolveDetailStopAddress({
-      selectedAddressKind: 'DeliveryPlace' as unknown as OutgoingShipmentStopAddressKind,
+      selectedAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
       officialAddress,
       deliveryPlace: { name: 'Letní zahrádka', address: place.address },
     } as never);
@@ -90,7 +90,7 @@ describe('resolveDetailStopAddress', () => {
   it('falls back to the official address when the kind is DeliveryPlace but no place is loaded', () => {
     // Mirrors resolveStopAddress's fallback: a save must never silently point
     // at nothing even if the caller forgot to load the place.
-    const r = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.DeliveryPlace, officialAddress } as never);
+    const r = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.DeliveryPlace, officialAddress } as never);
     expect(r.lat).toBe(50.897);
   });
 });
@@ -104,32 +104,32 @@ describe('resolveStopAddress and resolveDetailStopAddress agree on the shared ta
   const contactAddress = { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763', latitude: 50.88, longitude: 14.81 };
 
   it('produce the identical string for the same Official stop', () => {
-    const editorText = resolveStopAddress(order, OutgoingShipmentStopAddressKind.Official).text;
-    const detailText = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Official, officialAddress } as never).text;
+    const editorText = resolveStopAddress(order, DeliveryAddressKind.Official).text;
+    const detailText = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.Official, officialAddress } as never).text;
     expect(editorText).toBe(detailText);
   });
 
   it('produce the identical string for the same Contact stop', () => {
-    const editorText = resolveStopAddress(order, OutgoingShipmentStopAddressKind.Contact).text;
-    const detailText = resolveDetailStopAddress({ selectedAddressKind: OutgoingShipmentStopAddressKind.Contact, officialAddress, contactAddress } as never).text;
+    const editorText = resolveStopAddress(order, DeliveryAddressKind.Contact).text;
+    const detailText = resolveDetailStopAddress({ selectedAddressKind: DeliveryAddressKind.Contact, officialAddress, contactAddress } as never).text;
     expect(editorText).toBe(detailText);
   });
 });
 
 describe('stop choice encoding', () => {
   it('round-trips the two standard kinds', () => {
-    expect(decodeStopChoice(encodeStopChoice(OutgoingShipmentStopAddressKind.Official)))
-      .toEqual({ addressKind: OutgoingShipmentStopAddressKind.Official, deliveryPlaceId: undefined });
-    expect(decodeStopChoice(encodeStopChoice(OutgoingShipmentStopAddressKind.Contact)))
-      .toEqual({ addressKind: OutgoingShipmentStopAddressKind.Contact, deliveryPlaceId: undefined });
+    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.Official)))
+      .toEqual({ addressKind: DeliveryAddressKind.Official, deliveryPlaceId: undefined });
+    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.Contact)))
+      .toEqual({ addressKind: DeliveryAddressKind.Contact, deliveryPlaceId: undefined });
   });
 
   it('round-trips a place', () => {
-    expect(decodeStopChoice(encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, 'p1')))
-      .toEqual({ addressKind: OutgoingShipmentStopAddressKind.DeliveryPlace, deliveryPlaceId: 'p1' });
+    expect(decodeStopChoice(encodeStopChoice(DeliveryAddressKind.DeliveryPlace, 'p1')))
+      .toEqual({ addressKind: DeliveryAddressKind.DeliveryPlace, deliveryPlaceId: 'p1' });
   });
 
   it('prefixes place IDs so they cannot collide with the standard values', () => {
-    expect(encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, 'Official')).toBe('place:Official');
+    expect(encodeStopChoice(DeliveryAddressKind.DeliveryPlace, 'Official')).toBe('place:Official');
   });
 });

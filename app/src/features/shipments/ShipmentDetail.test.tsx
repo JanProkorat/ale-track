@@ -13,7 +13,7 @@ import {
   Country,
   OutgoingShipmentDetailDto,
   OutgoingShipmentState,
-  OutgoingShipmentStopAddressKind,
+  DeliveryAddressKind,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
@@ -72,7 +72,7 @@ function officialAddress(): AddressDto {
 // The backend serializes enums as strings on the wire (JsonStringEnumConverter,
 // Program.cs), so `selectedAddressKind` really arrives as "DeliveryPlace"/
 // "Contact", not the generated client's numeric enum members. Using the string
-// form here — rather than `OutgoingShipmentStopAddressKind.DeliveryPlace` —
+// form here — rather than `DeliveryAddressKind.DeliveryPlace` —
 // is what makes this fixture actually exercise the real API shape; a direct
 // `===` against the numeric member (the regression this whole suite guards)
 // would silently fall through to the official-address branch instead.
@@ -85,7 +85,7 @@ function placeStop(): OutgoingShipmentStopDto {
     clientName: 'Hospoda U Netopýra',
     orderId: 'order-1',
     officialAddress: officialAddress(),
-    selectedAddressKind: 'DeliveryPlace' as unknown as OutgoingShipmentStopAddressKind,
+    selectedAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
     deliveryPlace: new ClientDeliveryPlaceDto({
       id: 'place-a',
       name: 'Letní zahrádka',
@@ -105,7 +105,7 @@ function officialStop(): OutgoingShipmentStopDto {
     clientName: 'Restaurace B',
     orderId: 'order-2',
     officialAddress: officialAddress(),
-    selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+    selectedAddressKind: DeliveryAddressKind.Official,
     products: [],
     returns: [],
   });
@@ -126,7 +126,7 @@ function contactStop(): OutgoingShipmentStopDto {
     // used `addrKindName(...) === 'Contact'` (normalized correctly); the code
     // it replaced compared the raw enum directly, which never matched real
     // API data and fell through to the official address instead.
-    selectedAddressKind: 'Contact' as unknown as OutgoingShipmentStopAddressKind,
+    selectedAddressKind: 'Contact' as unknown as DeliveryAddressKind,
     products: [],
     returns: [],
   });

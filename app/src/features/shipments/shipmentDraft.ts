@@ -12,7 +12,7 @@ import {
   OrderItemInfoDto,
   ExtraItemInfoDto,
   StockPurchaseDto,
-  OutgoingShipmentStopAddressKind,
+  DeliveryAddressKind,
 } from 'src/generated/api-client';
 
 export interface ShipmentDraft {
@@ -29,7 +29,7 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
     clientOrderShipments: stops.filter((st) => st.orderId != null).map((st) => new ClientOrderShipmentDto({
       clientOrderId: st.orderId ?? '',
       order: st.order ?? 0,
-      selectedAddressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official,
+      selectedAddressKind: st.selectedAddressKind ?? DeliveryAddressKind.Official,
       // Round-tripped so a resave triggered by something unrelated (e.g. a
       // nakládka checkbox on the detail screen) can't silently drop the
       // stop's chosen delivery place back to the billing address.

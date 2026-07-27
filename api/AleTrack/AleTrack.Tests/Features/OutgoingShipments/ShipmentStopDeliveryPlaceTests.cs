@@ -15,7 +15,7 @@ namespace AleTrack.Tests.Features.OutgoingShipments;
 
 public sealed class ShipmentStopDeliveryPlaceTests
 {
-    private static ClientOrderShipmentDto Dto(OutgoingShipmentStopAddressKind kind, Guid? placeId) => new()
+    private static ClientOrderShipmentDto Dto(DeliveryAddressKind kind, Guid? placeId) => new()
     {
         ClientOrderId = Guid.NewGuid(),
         Order = 1,
@@ -29,7 +29,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var validator = new ClientOrderShipmentDtoValidator();
 
         var result = await validator.ValidateAsync(
-            Dto(OutgoingShipmentStopAddressKind.DeliveryPlace, null));
+            Dto(DeliveryAddressKind.DeliveryPlace, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
@@ -43,15 +43,15 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var validator = new ClientOrderShipmentDtoValidator();
 
         var result = await validator.ValidateAsync(
-            Dto(OutgoingShipmentStopAddressKind.DeliveryPlace, Guid.NewGuid()));
+            Dto(DeliveryAddressKind.DeliveryPlace, Guid.NewGuid()));
 
         result.IsValid.Should().BeTrue();
     }
 
     [Theory]
-    [InlineData(OutgoingShipmentStopAddressKind.Official)]
-    [InlineData(OutgoingShipmentStopAddressKind.Contact)]
-    public async Task Validator_StandardKindWithPlaceId_Fails(OutgoingShipmentStopAddressKind kind)
+    [InlineData(DeliveryAddressKind.Official)]
+    [InlineData(DeliveryAddressKind.Contact)]
+    public async Task Validator_StandardKindWithPlaceId_Fails(DeliveryAddressKind kind)
     {
         var validator = new ClientOrderShipmentDtoValidator();
 
@@ -64,9 +64,9 @@ public sealed class ShipmentStopDeliveryPlaceTests
     }
 
     [Theory]
-    [InlineData(OutgoingShipmentStopAddressKind.Official)]
-    [InlineData(OutgoingShipmentStopAddressKind.Contact)]
-    public async Task Validator_StandardKindWithoutPlaceId_Passes(OutgoingShipmentStopAddressKind kind)
+    [InlineData(DeliveryAddressKind.Official)]
+    [InlineData(DeliveryAddressKind.Contact)]
+    public async Task Validator_StandardKindWithoutPlaceId_Passes(DeliveryAddressKind kind)
     {
         var validator = new ClientOrderShipmentDtoValidator();
 
@@ -91,7 +91,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.Official
+            SelectedAddressKind = DeliveryAddressKind.Official
         };
 
         var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
@@ -121,7 +121,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.Contact
+                        SelectedAddressKind = DeliveryAddressKind.Contact
                     }
                 ]
             }
@@ -132,7 +132,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.Contact);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.Contact);
     }
 
     // Happy path for ShipmentStopDeliveryPlaceResolver: an existing stop that
@@ -154,7 +154,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.Official
+            SelectedAddressKind = DeliveryAddressKind.Official
         };
 
         var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
@@ -185,7 +185,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -197,7 +197,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.DeliveryPlace);
         updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
     }
 
@@ -242,7 +242,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -296,7 +296,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -333,7 +333,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
             ClientDeliveryPlace = place,
             ClientDeliveryPlaceId = place.Id
         };
@@ -366,7 +366,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -380,7 +380,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await act.Should().NotThrowAsync();
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.DeliveryPlace);
         updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
     }
 
@@ -419,7 +419,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = Guid.NewGuid()
                     }
                 ]
@@ -451,7 +451,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
             ClientDeliveryPlace = place
         };
 

@@ -181,7 +181,7 @@ internal static class OperationalDataBuilder
                 PublicId = Guid.NewGuid(),
                 Order = i + 1,
                 ClientOrder = o,
-                SelectedAddressKind = OutgoingShipmentStopAddressKind.Official,
+                SelectedAddressKind = DeliveryAddressKind.Official,
             })
             .ToList();
 

@@ -177,7 +177,7 @@ public sealed record OutgoingShipmentStopDto
     /// <summary>
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
-    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    public DeliveryAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
     /// The delivery place this stop delivers to, when

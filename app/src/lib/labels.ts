@@ -3,7 +3,7 @@
 
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
-  OutgoingShipmentState, OutgoingShipmentStopAddressKind, ProductDeliveryState, ShipmentLoadingState,
+  OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
 } from 'src/generated/api-client';
 
 export const L = {
@@ -168,8 +168,8 @@ export function loadingStateName(s?: ShipmentLoadingState | string | number): st
   return enumName(ShipmentLoadingState as unknown as Record<string, string | number>, s) ?? 'NotLoaded';
 }
 
-export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
-  return enumName(OutgoingShipmentStopAddressKind as unknown as Record<string, string | number>, k);
+export function addrKindName(k?: DeliveryAddressKind | string | number): string | undefined {
+  return enumName(DeliveryAddressKind as unknown as Record<string, string | number>, k);
 }
 
 /** Normalize an address kind (which the API sends as a string) to the numeric
@@ -177,14 +177,14 @@ export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | numb
  * members — a stop loaded with `DeliveryPlace` falling through to `Official`
  * here would silently relocate the delivery the moment the shipment is
  * re-saved, even without the user touching the picker. */
-export function addrKindValue(k?: OutgoingShipmentStopAddressKind | string | number): OutgoingShipmentStopAddressKind {
+export function addrKindValue(k?: DeliveryAddressKind | string | number): DeliveryAddressKind {
   const name = addrKindName(k);
-  if (name === 'Contact') return OutgoingShipmentStopAddressKind.Contact;
-  if (name === 'DeliveryPlace') return OutgoingShipmentStopAddressKind.DeliveryPlace;
-  return OutgoingShipmentStopAddressKind.Official;
+  if (name === 'Contact') return DeliveryAddressKind.Contact;
+  if (name === 'DeliveryPlace') return DeliveryAddressKind.DeliveryPlace;
+  return DeliveryAddressKind.Official;
 }
 
-export function addrKindLabel(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
+export function addrKindLabel(k?: DeliveryAddressKind | string | number): string | undefined {
   const name = addrKindName(k);
   return name ? (L.addrKind[name] ?? name) : undefined;
 }

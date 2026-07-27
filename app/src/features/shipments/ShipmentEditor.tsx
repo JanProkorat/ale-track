@@ -32,7 +32,7 @@ import {
   type OutgoingShipmentOrderDto,
   type Region,
   OutgoingShipmentState,
-  OutgoingShipmentStopAddressKind,
+  DeliveryAddressKind,
   ClientOrderShipmentDto,
   CustomStopDto,
   RoutePointDto,
@@ -56,7 +56,7 @@ interface DraftStop {
   key: string;
   kind: 'order' | 'custom';
   order: number;
-  addressKind: OutgoingShipmentStopAddressKind;
+  addressKind: DeliveryAddressKind;
   // order stops
   orderId?: string;
   /** Set only when addressKind is DeliveryPlace. Undefined for a freshly
@@ -112,7 +112,7 @@ function SortableStopRow({
   // it must not render as a soft-deleted "(smazáno)" entry; a genuine
   // soft-delete always has one, since `deliveryPlaceId` and `deletedPlaceName`
   // both come from the same loaded `stop.deliveryPlace`.
-  const isGone = stop.addressKind === OutgoingShipmentStopAddressKind.DeliveryPlace
+  const isGone = stop.addressKind === DeliveryAddressKind.DeliveryPlace
     && deletedPlaceName != null
     && !places.some((p) => p.id === stop.deliveryPlaceId);
   const addressText = isCustom ? undefined : resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text;
@@ -158,12 +158,12 @@ function SortableStopRow({
           {places.length > 0 && [
             <ListSubheader key="places-header">Vlastní místa</ListSubheader>,
             ...places.map((p) => (
-              <MenuItem key={p.id} value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, p.id)}>{p.name}</MenuItem>
+              <MenuItem key={p.id} value={encodeStopChoice(DeliveryAddressKind.DeliveryPlace, p.id)}>{p.name}</MenuItem>
             )),
           ]}
           {isGone && deletedPlaceName && [
             <ListSubheader key="gone-header">Smazané</ListSubheader>,
-            <MenuItem key="gone-item" value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, stop.deliveryPlaceId)} disabled>
+            <MenuItem key="gone-item" value={encodeStopChoice(DeliveryAddressKind.DeliveryPlace, stop.deliveryPlaceId)} disabled>
               {deletedPlaceName + ' (smazáno)'}
             </MenuItem>,
           ]}
@@ -256,7 +256,7 @@ export function ShipmentEditor({
             note: st.note,
             lat: st.latitude,
             lng: st.longitude,
-            addressKind: OutgoingShipmentStopAddressKind.Official,
+            addressKind: DeliveryAddressKind.Official,
             order: i + 1,
           });
     const loadedVias = (s.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }));
@@ -352,7 +352,7 @@ export function ShipmentEditor({
       if (prev.some((s) => s.kind === 'order' && s.orderId === orderId)) {
         return prev.filter((s) => !(s.kind === 'order' && s.orderId === orderId)).map((s, i) => ({ ...s, order: i + 1 }));
       }
-      return [...prev, { key: orderId, kind: 'order' as const, orderId, addressKind: OutgoingShipmentStopAddressKind.Official, order: prev.length + 1 }];
+      return [...prev, { key: orderId, kind: 'order' as const, orderId, addressKind: DeliveryAddressKind.Official, order: prev.length + 1 }];
     });
   }
   function addCustomStop(stop: { label: string; note?: string; lat: number; lng: number }) {
@@ -363,7 +363,7 @@ export function ShipmentEditor({
       note: stop.note,
       lat: stop.lat,
       lng: stop.lng,
-      addressKind: OutgoingShipmentStopAddressKind.Official,
+      addressKind: DeliveryAddressKind.Official,
       order: prev.length + 1,
     }]);
   }
@@ -716,7 +716,7 @@ export function ShipmentEditor({
           onClose={() => setNewPlaceTarget(null)}
           onSaved={(placeId) => {
             setStops((prev) => prev.map((s) => (s.key === newPlaceTarget.stopKey
-              ? { ...s, addressKind: OutgoingShipmentStopAddressKind.DeliveryPlace, deliveryPlaceId: placeId }
+              ? { ...s, addressKind: DeliveryAddressKind.DeliveryPlace, deliveryPlaceId: placeId }
               : s)));
             setNewPlaceTarget(null);
           }}

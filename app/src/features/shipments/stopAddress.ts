@@ -5,7 +5,7 @@
 // resolution + the stop row's second line) and `seAddrSelect`'s value scheme
 // (`cur`/`value` — 'Official' | 'Contact' | `place:<id>`).
 
-import { type AddressDto, type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, OutgoingShipmentStopAddressKind } from 'src/generated/api-client';
+import { type AddressDto, type OutgoingShipmentOrderDto, type OutgoingShipmentStopDto, DeliveryAddressKind } from 'src/generated/api-client';
 import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 import { addrKindLabel, addrKindValue } from 'src/lib/labels';
 
@@ -17,14 +17,14 @@ import { addrKindLabel, addrKindValue } from 'src/lib/labels';
  * shows the name). Kept as one function so a wording/separator/fallback
  * change can't land on only one of the two screens the same stop renders on. */
 function resolveFromAddresses(
-  kind: OutgoingShipmentStopAddressKind,
+  kind: DeliveryAddressKind,
   official: AddressDto | undefined,
   contact: AddressDto | undefined,
 ): { lat?: number; lng?: number; text: string } {
-  if (kind === OutgoingShipmentStopAddressKind.Contact && contact) {
-    return { lat: contact.latitude, lng: contact.longitude, text: `${formatStreetAddress(contact)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Contact)}` };
+  if (kind === DeliveryAddressKind.Contact && contact) {
+    return { lat: contact.latitude, lng: contact.longitude, text: `${formatStreetAddress(contact)} · ${addrKindLabel(DeliveryAddressKind.Contact)}` };
   }
-  return { lat: official?.latitude, lng: official?.longitude, text: `${formatStreetAddress(official)} · ${addrKindLabel(OutgoingShipmentStopAddressKind.Official)}` };
+  return { lat: official?.latitude, lng: official?.longitude, text: `${formatStreetAddress(official)} · ${addrKindLabel(DeliveryAddressKind.Official)}` };
 }
 
 /** Sentinel <Select> value for "+ Nové místo…". Every place id is encoded as
@@ -37,18 +37,18 @@ export const NEW_PLACE_CHOICE = '__new';
  * kinds encode as their enum member name; a delivery place is prefixed
  * (`place:<id>`) so a place id can never collide with those two literals —
  * e.g. a place literally named/id'd "Official" still round-trips correctly. */
-export function encodeStopChoice(kind: OutgoingShipmentStopAddressKind, deliveryPlaceId?: string): string {
-  if (kind === OutgoingShipmentStopAddressKind.DeliveryPlace) return `place:${deliveryPlaceId ?? ''}`;
-  return kind === OutgoingShipmentStopAddressKind.Contact ? 'Contact' : 'Official';
+export function encodeStopChoice(kind: DeliveryAddressKind, deliveryPlaceId?: string): string {
+  if (kind === DeliveryAddressKind.DeliveryPlace) return `place:${deliveryPlaceId ?? ''}`;
+  return kind === DeliveryAddressKind.Contact ? 'Contact' : 'Official';
 }
 
 /** Inverse of {@link encodeStopChoice}. */
-export function decodeStopChoice(value: string): { addressKind: OutgoingShipmentStopAddressKind; deliveryPlaceId?: string } {
+export function decodeStopChoice(value: string): { addressKind: DeliveryAddressKind; deliveryPlaceId?: string } {
   if (value.startsWith('place:')) {
-    return { addressKind: OutgoingShipmentStopAddressKind.DeliveryPlace, deliveryPlaceId: value.slice('place:'.length) };
+    return { addressKind: DeliveryAddressKind.DeliveryPlace, deliveryPlaceId: value.slice('place:'.length) };
   }
-  if (value === 'Contact') return { addressKind: OutgoingShipmentStopAddressKind.Contact, deliveryPlaceId: undefined };
-  return { addressKind: OutgoingShipmentStopAddressKind.Official, deliveryPlaceId: undefined };
+  if (value === 'Contact') return { addressKind: DeliveryAddressKind.Contact, deliveryPlaceId: undefined };
+  return { addressKind: DeliveryAddressKind.Official, deliveryPlaceId: undefined };
 }
 
 /** Resolves a stop's actual destination: coordinates plus the display text
@@ -64,10 +64,10 @@ export function decodeStopChoice(value: string): { addressKind: OutgoingShipment
  * points at nothing. */
 export function resolveStopAddress(
   order: OutgoingShipmentOrderDto | undefined,
-  addressKind: OutgoingShipmentStopAddressKind,
+  addressKind: DeliveryAddressKind,
   deliveryPlaceId?: string,
 ): { lat?: number; lng?: number; text: string } {
-  if (addressKind === OutgoingShipmentStopAddressKind.DeliveryPlace && deliveryPlaceId) {
+  if (addressKind === DeliveryAddressKind.DeliveryPlace && deliveryPlaceId) {
     const place = order?.clientDeliveryPlaces?.find((p) => p.id === deliveryPlaceId);
     if (place) {
       return { lat: place.address?.latitude, lng: place.address?.longitude, text: `${place.name ?? ''} · ${formatPlaceAddress(place)}` };
@@ -97,7 +97,7 @@ export function resolveDetailStopAddress(
   stop: Pick<OutgoingShipmentStopDto, 'selectedAddressKind' | 'officialAddress' | 'contactAddress' | 'deliveryPlace'>,
 ): { lat?: number; lng?: number; text: string; isPlace: boolean } {
   const kind = addrKindValue(stop.selectedAddressKind);
-  if (kind === OutgoingShipmentStopAddressKind.DeliveryPlace && stop.deliveryPlace) {
+  if (kind === DeliveryAddressKind.DeliveryPlace && stop.deliveryPlace) {
     return {
       lat: stop.deliveryPlace.address?.latitude,
       lng: stop.deliveryPlace.address?.longitude,

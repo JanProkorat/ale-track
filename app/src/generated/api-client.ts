@@ -10123,7 +10123,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
-    selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     label?: string | undefined;
     note?: string | undefined;
@@ -10227,7 +10227,7 @@ export interface IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
-    selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     label?: string | undefined;
     note?: string | undefined;
@@ -10308,7 +10308,7 @@ export enum Country {
     Germany = 2,
 }
 
-export enum OutgoingShipmentStopAddressKind {
+export enum DeliveryAddressKind {
     Official = 0,
     Contact = 1,
     DeliveryPlace = 2,
@@ -10984,7 +10984,7 @@ export interface IUpdateOutgoingShipmentDto {
 export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
     clientOrderId!: string;
     order!: number;
-    selectedAddressKind!: OutgoingShipmentStopAddressKind;
+    selectedAddressKind!: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     orderItems?: OrderItemInfoDto[];
     customExtraItems?: ExtraItemInfoDto[];
@@ -11047,7 +11047,7 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
 export interface IClientOrderShipmentDto {
     clientOrderId: string;
     order: number;
-    selectedAddressKind: OutgoingShipmentStopAddressKind;
+    selectedAddressKind: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     orderItems?: OrderItemInfoDto[];
     customExtraItems?: ExtraItemInfoDto[];
