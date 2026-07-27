@@ -29,6 +29,7 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMoreOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -49,7 +50,7 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandNotes, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
   type ClientBand,
@@ -158,6 +159,46 @@ function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentS
           {/* Notes are free text and often multi-line — keep the operator's breaks. */}
           <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE, whiteSpace: 'pre-wrap', minWidth: 0 }}>
             {note.text}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/** The vratky this client hands back against the order behind the band.
+ *
+ *  Read-only, like the shipment's own Vratky card — returns are owned by the
+ *  order. Rendered in the same idiom as that card (name, note beneath,
+ *  quantity right-aligned) so a vratka looks the same wherever it appears. */
+function BandReturns({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const returns = bandReturns(band, stops);
+  if (returns.length === 0) return null;
+
+  return (
+    <Stack
+      spacing={0.75}
+      data-testid="band-returns"
+      sx={{
+        mt: 1.25, p: 1.25, borderRadius: 1.5, border: 1, borderColor: 'divider',
+        bgcolor: (t) => t.vars!.palette.brand.greyTint,
+      }}
+    >
+      {returns.map((r, i) => (
+        <Stack key={r.id ?? i} direction="row" spacing={0.875} alignItems="flex-start">
+          <Box sx={{ height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <UndoIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE }}>{r.name}</Typography>
+            {r.note && (
+              <Typography sx={{ fontSize: 11.5, lineHeight: NOTE_LINE }} color="text.secondary">
+                {r.note}
+              </Typography>
+            )}
+          </Box>
+          <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE, fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+            {r.quantity}×
           </Typography>
         </Stack>
       ))}
@@ -486,6 +527,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
                   <BandNotes band={band} stops={stops} />
+                  <BandReturns band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">

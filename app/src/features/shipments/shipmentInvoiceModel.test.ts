@@ -8,7 +8,7 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  bandAddress, bandNotes, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
 } from './shipmentInvoiceModel';
@@ -504,5 +504,50 @@ describe('bandNotes', () => {
   it('is empty for an order with no notes, and when no stop matches', () => {
     expect(bandNotes(band(), [stop()])).toEqual([]);
     expect(bandNotes(band({ stopOrder: 7 }), [stop()])).toEqual([]);
+  });
+});
+
+describe('bandReturns', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+  });
+
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A, returns: [],
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  const ret = (name: string, quantity = 1, note?: string) => ({ id: name, name, quantity, note });
+
+  it("returns the matched stop's vratky", () => {
+    const result = bandReturns(band(), [stop({ returns: [ret('Sud 50 l', 4, 'Vadný ventil'), ret('Přepravka', 2)] })]);
+
+    expect(result.map((r) => [r.name, r.quantity, r.note])).toEqual([
+      ['Sud 50 l', 4, 'Vadný ventil'],
+      ['Přepravka', 2, undefined],
+    ]);
+  });
+
+  // Same stopForBand rule as the address and the notes.
+  it('matches on stop order, not client id, when a client has two stops', () => {
+    const result = bandReturns(band({ stopOrder: 2 }), [
+      stop({ id: 'st1', order: 1, returns: [ret('První')] }),
+      stop({ id: 'st2', order: 2, returns: [ret('Druhá')] }),
+    ]);
+
+    expect(result.map((r) => r.name)).toEqual(['Druhá']);
+  });
+
+  it('falls back to client id when the band carries no stop order', () => {
+    expect(bandReturns(band({ stopOrder: undefined }), [stop({ returns: [ret('Sud')] })]).map((r) => r.name))
+      .toEqual(['Sud']);
+  });
+
+  it('is empty for an order with no vratky, and when no stop matches', () => {
+    expect(bandReturns(band(), [stop()])).toEqual([]);
+    expect(bandReturns(band({ stopOrder: 7 }), [stop()])).toEqual([]);
   });
 });

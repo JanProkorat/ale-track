@@ -671,3 +671,37 @@ describe('order notes', () => {
     await waitForElementToBeRemoved(() => screen.queryByText('Dovézt dopoledne'));
   });
 });
+
+describe('vratky', () => {
+  const stopWithReturns = (returns: { name: string; quantity: number; note?: string }[]) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    returns: returns.map((r) => ({ id: r.name, ...r })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  it("shows the order's vratky in the expanded band", () => {
+    renderSection(true, [stopWithReturns([
+      { name: 'Sud 50 l', quantity: 4, note: 'Vadný ventil' },
+      { name: 'Přepravka', quantity: 2 },
+    ])]);
+
+    const card = screen.getByTestId('band-returns');
+    expect(within(card).getByText('Sud 50 l')).toBeInTheDocument();
+    expect(within(card).getByText('4×')).toBeInTheDocument();
+    expect(within(card).getByText('Vadný ventil')).toBeInTheDocument();
+    expect(within(card).getByText('Přepravka')).toBeInTheDocument();
+  });
+
+  it('renders no vratky block when the order has none', () => {
+    renderSection(true, [stopWithReturns([])]);
+    expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();
+  });
+
+  it('hides the vratky with the band when it is collapsed', async () => {
+    renderSection(true, [stopWithReturns([{ name: 'Sud 50 l', quantity: 4 }])]);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitForElementToBeRemoved(() => screen.queryByTestId('band-returns'));
+  });
+});

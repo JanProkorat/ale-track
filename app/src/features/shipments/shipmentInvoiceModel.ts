@@ -6,6 +6,7 @@
 
 import type {
   OrderNoteDto,
+  OrderReturnDto,
   OutgoingShipmentStopDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
@@ -314,6 +315,17 @@ export function bandNotes(
   stops: OutgoingShipmentStopDto[],
 ): OrderNoteDto[] {
   return stopForBand(band, stops)?.notes ?? [];
+}
+
+/** The vratky the client hands back against the order behind a band.
+ *
+ * Same emptiness rules as {@link bandNotes}. Returns are owned by the order and
+ * only displayed here, exactly as on the shipment's own Vratky card. */
+export function bandReturns(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): OrderReturnDto[] {
+  return stopForBand(band, stops)?.returns ?? [];
 }
 
 /** Totals for the section header. */
