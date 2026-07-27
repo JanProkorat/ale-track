@@ -27,10 +27,19 @@ vi.mock('src/hooks/useOrders', () => ({
 
 vi.mock('src/hooks/useClients', () => ({
   useClients: () => ({ data: [{ id: 'client-a', name: 'Hospoda A' }], isLoading: false }),
+  // Read by OrderDeliveryAddressField, rendered in the client card for
+  // every client selection this file exercises.
+  useClient: () => ({ data: { officialAddress: undefined, contactAddress: undefined, name: 'Hospoda A' }, isLoading: false }),
 }));
 
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweries: () => ({ data: [], isLoading: false }),
+}));
+
+vi.mock('src/hooks/useDeliveryPlaces', () => ({
+  useClientDeliveryPlaces: () => ({ data: [], isLoading: false }),
+  useCreateDeliveryPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateDeliveryPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/providers/CurrencyProvider', () => ({
