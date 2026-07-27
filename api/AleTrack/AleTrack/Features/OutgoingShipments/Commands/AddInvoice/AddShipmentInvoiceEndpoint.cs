@@ -88,12 +88,14 @@ public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : En
     /// <inheritdoc />
     public override async Task HandleAsync(AddShipmentInvoiceRequest req, CancellationToken ct)
     {
-        var shipment = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
-        if (shipment is null)
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        if (split is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
             return;
         }
+
+        var shipment = split.Shipment;
 
         if (!ShipmentInvoiceGraph.IsEditable(shipment))
         {
@@ -103,8 +105,6 @@ public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : En
 
         var client = shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!.Client)
             .Concat(shipment.Invoices.Select(i => i.Client))
-            .Concat(shipment.ClientExtraItems.Select(e => e.Client))
-            .Concat(shipment.CustomExtraItems.Select(e => e.Client))
             .FirstOrDefault(c => c is not null && c.PublicId == req.Data.ClientId);
 
         // Only clients taking part in this shipment can be invoiced for it.

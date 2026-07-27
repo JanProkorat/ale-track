@@ -3,7 +3,7 @@
 
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
-  OutgoingShipmentState, OutgoingShipmentStopAddressKind, ProductDeliveryState,
+  OutgoingShipmentState, OutgoingShipmentStopAddressKind, ProductDeliveryState, ShipmentLoadingState,
 } from 'src/generated/api-client';
 
 export const L = {
@@ -62,7 +62,7 @@ export const L = {
   } as Record<string, string>,
   contact: { Email: 'E-mail', Phone: 'Telefon' } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
-  addrKind: { Official: 'Fakturační', Contact: 'Kontaktní' } as Record<string, string>,
+  addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
 } as const;
 
 // The generated enums are numeric, but the backend serializes enum values as
@@ -163,6 +163,11 @@ export function deliveryStateName(s?: ProductDeliveryState | string | number): s
   return enumName(ProductDeliveryState as unknown as Record<string, string | number>, s);
 }
 
+/** Name of a loading state ("NotLoaded" / "Dictated" / "Checked"), from either representation. */
+export function loadingStateName(s?: ShipmentLoadingState | string | number): string {
+  return enumName(ShipmentLoadingState as unknown as Record<string, string | number>, s) ?? 'NotLoaded';
+}
+
 /** The stop's chosen address kind ("Official"/"Contact"), resolved from
  * either wire representation, and its Czech label via `L.addrKind`. */
 export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {
@@ -170,11 +175,15 @@ export function addrKindName(k?: OutgoingShipmentStopAddressKind | string | numb
 }
 
 /** Normalize an address kind (which the API sends as a string) to the numeric
- * enum value the MUI Select / write DTOs expect. */
+ * enum value the MUI Select / write DTOs expect. Must round-trip all three
+ * members — a stop loaded with `DeliveryPlace` falling through to `Official`
+ * here would silently relocate the delivery the moment the shipment is
+ * re-saved, even without the user touching the picker. */
 export function addrKindValue(k?: OutgoingShipmentStopAddressKind | string | number): OutgoingShipmentStopAddressKind {
-  return addrKindName(k) === 'Contact'
-    ? OutgoingShipmentStopAddressKind.Contact
-    : OutgoingShipmentStopAddressKind.Official;
+  const name = addrKindName(k);
+  if (name === 'Contact') return OutgoingShipmentStopAddressKind.Contact;
+  if (name === 'DeliveryPlace') return OutgoingShipmentStopAddressKind.DeliveryPlace;
+  return OutgoingShipmentStopAddressKind.Official;
 }
 
 export function addrKindLabel(k?: OutgoingShipmentStopAddressKind | string | number): string | undefined {

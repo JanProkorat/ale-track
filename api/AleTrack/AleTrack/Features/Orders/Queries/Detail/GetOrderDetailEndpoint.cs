@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -54,6 +55,15 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                 ActualDeliveryDate = o.ActualDeliveryDate,
                 State = o.State,
                 CreatedDate = o.CreatedDate,
+                Notes = o.Notes
+                    .OrderBy(n => n.DateCreated)
+                    .Select(n => new OrderNoteDto
+                    {
+                        Id = n.PublicId,
+                        Text = n.Text,
+                        DateCreated = n.DateCreated
+                    })
+                    .ToList(),
                 Client = new ClientInfoDto
                 {
                     Id = o.Client.PublicId,
@@ -71,6 +81,24 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         ReminderState = i.ReminderState,
                         BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
                         DisplayOrder = i.Product.DisplayOrder
+                    })
+                    .ToList(),
+                Returns = o.Returns
+                    .Select(r => new OrderReturnDto
+                    {
+                        Id = r.PublicId,
+                        Name = r.Name,
+                        Quantity = r.Quantity,
+                        Note = r.Note
+                    })
+                    .ToList(),
+                CustomExtraItems = o.CustomExtraItems
+                    .Select(e => new OrderCustomExtraItemDto
+                    {
+                        Id = e.PublicId,
+                        Description = e.Description,
+                        Quantity = e.Quantity,
+                        IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                     })
                     .ToList()
             })

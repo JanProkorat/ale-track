@@ -55,7 +55,12 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
                 s.State,
                 DeliveryDate = s.DeliveryDate!.Value,
                 OrderStopCount = s.Stops.Count(st => st.Kind == OutgoingShipmentStopKind.Order),
-                ReturnedUnits = s.Returns.Sum(r => (int?)r.Quantity) ?? 0,
+                // Returns moved from the shipment onto the order they belong to, so they are
+                // now reached through the run's order stops rather than off the shipment.
+                ReturnedUnits = s.Stops
+                    .Where(st => st.ClientOrder != null)
+                    .SelectMany(st => st.ClientOrder!.Returns)
+                    .Sum(r => (int?)r.Quantity) ?? 0,
                 Drivers = s.Drivers.Select(d => new
                 {
                     d.Driver.PublicId,

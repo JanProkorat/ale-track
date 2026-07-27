@@ -6,3 +6,6 @@
 
 # Superpowers brainstorming scratch (visual companion mockups)
 .superpowers/
+
+# Claude Code worktrees
+.claude/worktrees/

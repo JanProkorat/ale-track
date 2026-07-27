@@ -53,6 +53,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
 
         var outgoingShipment = new OutgoingShipment
         {
@@ -72,7 +73,10 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                         Kind = OutgoingShipmentStopKind.Order,
                         ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
                         Order = cos.Order,
-                        SelectedAddressKind = cos.SelectedAddressKind
+                        SelectedAddressKind = cos.SelectedAddressKind,
+                        ClientDeliveryPlaceId = cos.ClientDeliveryPlaceId.HasValue
+                            ? placeIds[cos.ClientDeliveryPlaceId.Value]
+                            : null
                     }),
                 .. req.Data.CustomStops
                     .Select(cs => new OutgoingShipmentStop
@@ -86,9 +90,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     })
             ],
             RouteViaPoints = [.. req.Data.RouteViaPoints
-                .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })],
-            Returns = [.. req.Data.Returns
-                .Select(r => new OutgoingShipmentReturn { Name = r.Name, Quantity = r.Quantity })]
+                .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })]
         };
 
         // Orders added to a shipment move into planning.

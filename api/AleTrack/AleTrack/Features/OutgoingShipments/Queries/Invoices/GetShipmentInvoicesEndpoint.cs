@@ -62,11 +62,11 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetShipmentInvoicesRequest req, CancellationToken ct)
     {
-        var shipment = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
-        if (shipment is null)
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        if (split is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
-        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(shipment!);
+        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split!);
 
         if (reconcileResult.RemovedLines.Count > 0)
             dbContext.OutgoingShipmentInvoiceLines.RemoveRange(reconcileResult.RemovedLines);
@@ -76,6 +76,6 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext)
 
         await dbContext.SaveChangesAsync(ct);
 
-        await Send.OkAsync(ShipmentInvoiceMapper.ToDto(shipment!, reconcileResult), cancellation: ct);
+        await Send.OkAsync(ShipmentInvoiceMapper.ToDto(split!, reconcileResult), cancellation: ct);
     }
 }

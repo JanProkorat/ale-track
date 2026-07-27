@@ -53,6 +53,11 @@ public sealed class Client : PublicSoftlyDeletableEntity
     public List<ClientContact> Contacts { get; set; } = [];
 
     /// <summary>
+    /// Named delivery locations saved on this client
+    /// </summary>
+    public List<ClientDeliveryPlace> DeliveryPlaces { get; set; } = [];
+
+    /// <summary>
     /// Collection of notes associated with the client
     /// </summary>
     public List<ClientNote> Notes { get; set; } = [];

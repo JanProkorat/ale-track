@@ -90,9 +90,9 @@ internal static class OperationalDataBuilder
             State = OutgoingShipmentState.Created,
             Drivers = drivers.Select(d => new OutgoingShipmentDriver { Driver = d }).ToList(),
             Stops = BuildStops(orders),
-            InventoryExtraItems =
+            StockPurchases =
             [
-                new OutgoingShipmentInventoryExtraItem
+                new OutgoingShipmentStockPurchaseItem
                 {
                     PublicId = Guid.NewGuid(),
                     Product = dokladkaProduct,

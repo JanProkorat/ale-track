@@ -201,7 +201,7 @@ describe('provenance chips', () => {
   it('marks a fully stock-sourced row', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true, adjustments: [],
-      invoices: [invoice({ lines: [line({ quantity: 4, isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem })] })],
+      invoices: [invoice({ lines: [line({ quantity: 4, isFromStock: true, sourceKind: InvoiceLineSourceKind.OrderItem })] })],
     });
 
     renderSection();
@@ -215,7 +215,7 @@ describe('provenance chips', () => {
       invoices: [invoice({
         lines: [
           line({ quantity: 10, sourceItemId: 'ordered' }),
-          line({ quantity: 4, sourceItemId: 'stock', isFromStock: true, sourceKind: InvoiceLineSourceKind.ClientExtraItem }),
+          line({ quantity: 4, sourceItemId: 'stock', isFromStock: true, sourceKind: InvoiceLineSourceKind.OrderItem }),
         ],
       })],
     });
@@ -270,7 +270,7 @@ describe('drift banner', () => {
     renderSection();
 
     expect(screen.getByText(/rozdělení na faktury bylo upraveno/)).toBeInTheDocument();
-    expect(screen.getByText('Albrecht 12° — odebráno 4 ks (nejdřív z přefakturovaných)')).toBeInTheDocument();
+    expect(screen.getByText('Albrecht 12° — odebráno 4 ks (nejdřív ze soukromých, pak z přefakturovaných)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Skrýt hlášení' }));
 
@@ -447,9 +447,94 @@ describe('move dialog', () => {
       '+ nová faktura 2',           // a second invoice for Klient A (the orderer)
       'Faktura 1 — 0 ks',           // Klient B's existing invoice
       '+ nová faktura 2',           // or a fresh one for Klient B
+      'Soukromé (nefakturovat)',    // or no invoice at all
     ]);
     // The invoice being moved from is never a target.
     expect(screen.queryByRole('option', { name: /inv-a/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('private pieces', () => {
+  beforeEach(() => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ id: 'inv-a', lines: [line({ quantity: 6, priceWithVat: 100 })] })],
+      privateLines: [line({ id: 'line-priv', sourceItemId: 'item-1', quantity: 4, priceWithVat: 100 })],
+    });
+  });
+
+  it('labels the excluded pieces and bills them to nobody', () => {
+    renderSection();
+
+    // One label for the block, not one per row — the rows sit directly under it.
+    expect(screen.getByText('Soukromé · nefakturováno')).toBeInTheDocument();
+    expect(screen.queryByText('soukromé')).not.toBeInTheDocument();
+    // 6 of 10 pieces are billed; the private ones carry no value.
+    expect(screen.getByText('fakturováno · 6 ks')).toBeInTheDocument();
+    expect(screen.getByText('4 ks soukromě')).toBeInTheDocument();
+    expect(screen.getByText('1 faktura · 6 ks · 600 Kč · 4 ks soukromě')).toBeInTheDocument();
+  });
+
+  it('says everything is split when nothing is private', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true, adjustments: [], invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('vše rozděleno · 10 ks')).toBeInTheDocument();
+    expect(screen.queryByText('Soukromé · nefakturováno')).not.toBeInTheDocument();
+  });
+
+  it('marks pieces private through the move dialog', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Soukromé (nefakturovat)' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: 'inv-a',
+      toPrivate: true,
+      toInvoiceId: undefined,
+      toClientId: undefined,
+      quantity: 6,
+    });
+  });
+
+  it('takes pieces back out of private with no origin invoice', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Vrátit kusy na fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('ze soukromých kusů')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: undefined,
+      toInvoiceId: 'inv-a',
+      toPrivate: undefined,
+      quantity: 4,
+    });
+  });
+
+  it('does not offer keeping them private when they already are', () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Vrátit kusy na fakturu' }));
+
+    fireEvent.mouseDown(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Cílová faktura' }));
+
+    expect(screen.queryByRole('option', { name: 'Soukromé (nefakturovat)' })).not.toBeInTheDocument();
+  });
+
+  it('offers no move buttons at all when the split is read-only', () => {
+    renderSection(false);
+
+    expect(screen.getByText('Soukromé · nefakturováno')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vrátit kusy na fakturu' })).not.toBeInTheDocument();
   });
 });
 

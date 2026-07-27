@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Breadcrumbs, Button, Card, Checkbox, Chip, IconButton, Link, MenuItem,
+  Box, Breadcrumbs, Button, Card, Checkbox, Chip, IconButton, Link, ListSubheader, MenuItem,
   Select, Stack, TextField, Typography,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpwardOutlined';
@@ -14,7 +14,6 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -39,7 +38,6 @@ import {
   RoutePointDto,
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
-  ShipmentReturnDto,
 } from 'src/generated/api-client';
 import { useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
@@ -49,6 +47,8 @@ import { useClients } from 'src/hooks/useClients';
 import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
 import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
+import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
+import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice, resolveStopAddress } from './stopAddress';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
@@ -59,6 +59,9 @@ interface DraftStop {
   addressKind: OutgoingShipmentStopAddressKind;
   // order stops
   orderId?: string;
+  /** Set only when addressKind is DeliveryPlace. Undefined for a freshly
+   *  toggled order or when Official/Contact is chosen. */
+  deliveryPlaceId?: string;
   // custom stops
   customId?: string; // existing custom stop's PublicId (undefined when new)
   label?: string;
@@ -67,41 +70,52 @@ interface DraftStop {
   lng?: number;
 }
 
-interface DraftReturn { id?: string; name: string; quantity: number }
-
 /** Serialized snapshot of the savable state, for unsaved-change detection. */
-function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[], returns: DraftReturn[]): string {
+function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[]): string {
   return JSON.stringify({
     name: name.trim(),
     date: date ? date.toISOString() : null,
     vehicleId,
     driverIds: [...driverIds].sort(),
-    stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind })),
+    stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind, deliveryPlaceId: s.deliveryPlaceId ?? null })),
     vias: viaPoints.map((v) => ({ lat: v.lat, lng: v.lng })),
-    returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity })),
   });
 }
 
-function stopPoint(order: OutgoingShipmentOrderDto | undefined, addressKind: OutgoingShipmentStopAddressKind) {
-  const address = addressKind === OutgoingShipmentStopAddressKind.Contact && order?.clientContactAddress ? order.clientContactAddress : order?.clientOfficialAddress;
-  return { lat: address?.latitude, lng: address?.longitude };
-}
-
 function SortableStopRow({
-  stop, index, order, total, locked, onMove, onRemove, onAddrKind,
+  stop, index, order, total, locked, deletedPlaceName, onMove, onRemove, onAddrChoice,
 }: {
   stop: DraftStop;
   index: number;
   order?: OutgoingShipmentOrderDto;
   total: number;
   locked?: boolean;
+  /** Name of the stop's chosen delivery place as it was when the shipment
+   *  was loaded, used only when that place no longer appears in
+   *  `order.clientDeliveryPlaces` (soft-deleted since). */
+  deletedPlaceName?: string;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
-  onAddrKind: (kind: OutgoingShipmentStopAddressKind) => void;
+  /** Raw <Select> value — 'Official' | 'Contact' | `place:<id>` | the
+   *  '+ Nové místo…' sentinel. Decoding (and the sentinel) is the parent's
+   *  job since opening the dialog needs the client id, not just the stop. */
+  onAddrChoice: (value: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.key, disabled: locked });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   const isCustom = stop.kind === 'custom';
+  const places = order?.clientDeliveryPlaces ?? [];
+  // Gated on `deletedPlaceName` (not just "missing from the list"), because a
+  // place is *also* briefly missing from the list right after "+ Nové
+  // místo…" creates it — before the orders query has refetched. That case has
+  // no `deletedPlaceName` (this stop never loaded a place from the server), so
+  // it must not render as a soft-deleted "(smazáno)" entry; a genuine
+  // soft-delete always has one, since `deliveryPlaceId` and `deletedPlaceName`
+  // both come from the same loaded `stop.deliveryPlace`.
+  const isGone = stop.addressKind === OutgoingShipmentStopAddressKind.DeliveryPlace
+    && deletedPlaceName != null
+    && !places.some((p) => p.id === stop.deliveryPlaceId);
+  const addressText = isCustom ? undefined : resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text;
   return (
     <Box
       ref={setNodeRef}
@@ -123,22 +137,37 @@ function SortableStopRow({
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{isCustom ? (stop.label || 'Vlastní zastávka') : (order?.clientName ?? '—')}</Typography>
+        {/* Prototype's stopAddressText prefixes this with the order number
+         * (`o.number + ' · '`); OutgoingShipmentOrderDto carries no such
+         * field, so that prefix is dropped here — a data-model deviation,
+         * not a design one. */}
         <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
-          {isCustom
-            ? (stop.note || 'Vlastní zastávka')
-            : (order?.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : 'bez termínu')}
+          {isCustom ? (stop.note || 'Vlastní zastávka') : addressText}
         </Typography>
       </Box>
       {!isCustom && (
         <Select
           size="small"
-          value={stop.addressKind}
+          value={encodeStopChoice(stop.addressKind, stop.deliveryPlaceId)}
           disabled={locked}
-          onChange={(e) => onAddrKind(Number(e.target.value) as OutgoingShipmentStopAddressKind)}
-          sx={{ width: 140, flexShrink: 0 }}
+          onChange={(e) => onAddrChoice(e.target.value)}
+          sx={{ width: 190, flexShrink: 0 }}
         >
-          <MenuItem value={OutgoingShipmentStopAddressKind.Official}>Fakturační</MenuItem>
-          {order?.clientContactAddress && <MenuItem value={OutgoingShipmentStopAddressKind.Contact}>Kontaktní</MenuItem>}
+          <MenuItem value="Official">Fakturační</MenuItem>
+          {order?.clientContactAddress && <MenuItem value="Contact">Kontaktní</MenuItem>}
+          {places.length > 0 && [
+            <ListSubheader key="places-header">Vlastní místa</ListSubheader>,
+            ...places.map((p) => (
+              <MenuItem key={p.id} value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, p.id)}>{p.name}</MenuItem>
+            )),
+          ]}
+          {isGone && deletedPlaceName && [
+            <ListSubheader key="gone-header">Smazané</ListSubheader>,
+            <MenuItem key="gone-item" value={encodeStopChoice(OutgoingShipmentStopAddressKind.DeliveryPlace, stop.deliveryPlaceId)} disabled>
+              {deletedPlaceName + ' (smazáno)'}
+            </MenuItem>,
+          ]}
+          <MenuItem value={NEW_PLACE_CHOICE}>+ Nové místo…</MenuItem>
         </Select>
       )}
       {!locked && (
@@ -190,12 +219,16 @@ export function ShipmentEditor({
   const [regionFilter, setRegionFilter] = useState<string>('all');
   const [customStopOpen, setCustomStopOpen] = useState(false);
   const [viaPoints, setViaPoints] = useState<{ lat: number; lng: number }[]>([]);
-  const [returns, setReturns] = useState<DraftReturn[]>([]);
+  // The stop currently getting a brand-new delivery place via "+ Nové
+  // místo…" — the place is written straight to the client on save (an
+  // already-approved design choice, not deferred to the shipment draft), so
+  // this only needs to remember which stop to apply the result to.
+  const [newPlaceTarget, setNewPlaceTarget] = useState<{ stopKey: string; clientId: string; clientName?: string } | null>(null);
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, returns);
+    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -211,7 +244,10 @@ export function ShipmentEditor({
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st, i): DraftStop => st.orderId != null
-        ? { key: st.orderId, kind: 'order', orderId: st.orderId, addressKind: addrKindValue(st.selectedAddressKind), order: i + 1 }
+        ? {
+            key: st.orderId, kind: 'order', orderId: st.orderId, addressKind: addrKindValue(st.selectedAddressKind), order: i + 1,
+            deliveryPlaceId: st.deliveryPlace?.id,
+          }
         : {
             key: st.id ?? `custom-${i}`,
             kind: 'custom',
@@ -224,15 +260,13 @@ export function ShipmentEditor({
             order: i + 1,
           });
     const loadedVias = (s.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }));
-    const loadedReturns: DraftReturn[] = (s.returns ?? []).map((r) => ({ id: r.id, name: r.name ?? '', quantity: r.quantity ?? 0 }));
     setName(loadedName);
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
     setDriverIds(loadedDrivers);
     setStops(loadedStops);
     setViaPoints(loadedVias);
-    setReturns(loadedReturns);
-    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias, loadedReturns);
+    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias);
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -254,6 +288,28 @@ export function ShipmentEditor({
     return m;
   }, [clientsQuery.data]);
 
+  // Same best-effort name join, needed here to hand a clientId to
+  // <DeliveryPlaceDialog> when "+ Nové místo…" is picked — the available-order
+  // DTO carries clientName but no clientId.
+  const clientIdByClientName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of clientsQuery.data ?? []) if (c.name && c.id) m.set(c.name, c.id);
+    return m;
+  }, [clientsQuery.data]);
+
+  // Name of each order stop's delivery place as loaded from the shipment —
+  // kept only to label the "(smazáno)" MenuItem for a place that has since
+  // been soft-deleted off the client (and so no longer appears in
+  // order.clientDeliveryPlaces). Derived straight from the read model rather
+  // than carried on DraftStop, since it's display-only and never resaved.
+  const loadedPlaceNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const st of shipmentQuery.data?.stops ?? []) {
+      if (st.orderId && st.deliveryPlace?.name) m.set(st.orderId, st.deliveryPlace.name);
+    }
+    return m;
+  }, [shipmentQuery.data]);
+
   const usedOrderIds = useMemo(() => new Set(stops.filter((s) => s.kind === 'order').map((s) => s.orderId)), [stops]);
   const ordersWithRegion = useMemo(
     () => availableOrders.map((o) => ({ order: o, region: regionByClientName.get(o.clientName ?? '') })),
@@ -273,7 +329,7 @@ export function ShipmentEditor({
       return { lat: st.lat, lng: st.lng, label: st.label || 'Vlastní zastávka', color: '#1A2B4C', kind: 'custom' };
     }
     const order = orderById.get(st.orderId ?? '');
-    const pt = stopPoint(order, st.addressKind);
+    const pt = resolveStopAddress(order, st.addressKind, st.deliveryPlaceId);
     return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.key), kind: 'order' };
   }), [stopsSorted, orderById]);
 
@@ -324,8 +380,22 @@ export function ShipmentEditor({
   function removeStop(key: string) {
     setStops((prev) => prev.filter((s) => s.key !== key).map((s, i) => ({ ...s, order: i + 1 })));
   }
-  function setAddrKind(key: string, kind: OutgoingShipmentStopAddressKind) {
-    setStops((prev) => prev.map((s) => (s.key === key ? { ...s, addressKind: kind } : s)));
+  /** Handles the stop picker's raw <Select> value: either a decodable
+   *  Official/Contact/place:<id> choice, or the '+ Nové místo…' sentinel,
+   *  which opens the dialog instead of touching the stop directly. Because
+   *  the Select's value is always derived from the stop's own state, not
+   *  touching that state here is what makes a cancelled dialog "revert" —
+   *  there's nothing to revert, the sentinel was never actually stored. */
+  function handleAddrChoice(key: string, orderId: string | undefined, value: string) {
+    if (value === NEW_PLACE_CHOICE) {
+      const order = orderById.get(orderId ?? '');
+      const clientId = clientIdByClientName.get(order?.clientName ?? '');
+      if (!clientId) { enqueueSnackbar('Nelze určit klienta pro nové místo.', { variant: 'error' }); return; }
+      setNewPlaceTarget({ stopKey: key, clientId, clientName: order?.clientName });
+      return;
+    }
+    const { addressKind, deliveryPlaceId } = decodeStopChoice(value);
+    setStops((prev) => prev.map((s) => (s.key === key ? { ...s, addressKind, deliveryPlaceId } : s)));
   }
   function toggleDriver(id: string) {
     setDriverIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -346,7 +416,7 @@ export function ShipmentEditor({
 
   const stopCoords = (s: DraftStop) => {
     if (s.kind === 'custom') return { lat: s.lat ?? DEPOT.lat, lng: s.lng ?? DEPOT.lng };
-    const pt = stopPoint(orderById.get(s.orderId ?? ''), s.addressKind);
+    const pt = resolveStopAddress(orderById.get(s.orderId ?? ''), s.addressKind, s.deliveryPlaceId);
     return { lat: pt.lat ?? DEPOT.lat, lng: pt.lng ?? DEPOT.lng };
   };
 
@@ -372,7 +442,7 @@ export function ShipmentEditor({
 
   const busy = createShipment.isPending || updateShipment.isPending;
 
-  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, returns);
+  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -387,6 +457,7 @@ export function ShipmentEditor({
         clientOrderId: st.orderId ?? '',
         order: st.order,
         selectedAddressKind: st.addressKind,
+        clientDeliveryPlaceId: st.deliveryPlaceId,
         // No per-item invoice/loading data here — the editor only reorders
         // stops; the mock/backend preserves each item's existing nakládka
         // state when this field is left undefined.
@@ -401,10 +472,6 @@ export function ShipmentEditor({
       });
 
     const routeViaPoints = viaPoints.map((v) => new RoutePointDto({ latitude: v.lat, longitude: v.lng }));
-
-    const returnsPayload = returns
-      .filter((r) => r.name.trim())
-      .map((r) => new ShipmentReturnDto({ id: r.id, name: r.name.trim(), quantity: r.quantity }));
 
     try {
       let savedId: string;
@@ -421,10 +488,7 @@ export function ShipmentEditor({
             clientOrderShipments,
             customStops,
             routeViaPoints,
-            inventoryExtraShipments: existingDraft?.inventoryExtraShipments ?? [],
-            clientExtraShipments: existingDraft?.clientExtraShipments ?? [],
-            customExtraShipments: existingDraft?.customExtraShipments ?? [],
-            returns: returnsPayload,
+            stockPurchases: existingDraft?.stockPurchases ?? [],
           }),
         });
         savedId = shipmentId;
@@ -438,7 +502,6 @@ export function ShipmentEditor({
           clientOrderShipments,
           customStops,
           routeViaPoints,
-          returns: returnsPayload,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
       }
@@ -525,9 +588,10 @@ export function ShipmentEditor({
                           total={stopsSorted.length}
                           locked={structureLocked}
                           order={st.orderId ? orderById.get(st.orderId) : undefined}
+                          deletedPlaceName={st.orderId ? loadedPlaceNames.get(st.orderId) : undefined}
                           onMove={(dir) => moveStop(st.key, dir)}
                           onRemove={() => removeStop(st.key)}
-                          onAddrKind={(kind) => setAddrKind(st.key, kind)}
+                          onAddrChoice={(value) => handleAddrChoice(st.key, st.orderId, value)}
                         />
                       ))}
                     </Stack>
@@ -640,49 +704,24 @@ export function ShipmentEditor({
               })}
             </Stack>
           </Card>
-
-          {/* Vratky — empty kegs/bottles the client hands back on delivery.
-              Editable in any state (returns come back at delivery time, even
-              when the route composition is already locked). */}
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
-              <Button size="small" startIcon={<AddOutlinedIcon fontSize="small" />} onClick={() => setReturns((rs) => [...rs, { name: '', quantity: 1 }])}>
-                Přidat
-              </Button>
-            </Stack>
-            <Stack spacing={1} sx={{ p: 2 }}>
-              {returns.length === 0 ? (
-                <Typography sx={{ fontSize: 13 }} color="text.secondary">
-                  Žádné vratky. Přidejte položky, které klient vrací (prázdné sudy, lahve…).
-                </Typography>
-              ) : returns.map((r, i) => (
-                <Stack key={i} direction="row" spacing={1} alignItems="center">
-                  <TextField
-                    size="small"
-                    placeholder="Např. prázdné sudy 50 l"
-                    value={r.name}
-                    onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    size="small"
-                    type="number"
-                    value={r.quantity}
-                    onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, quantity: Math.max(0, Number(e.target.value) || 0) } : x)))}
-                    slotProps={{ htmlInput: { min: 0, style: { width: 56, textAlign: 'right' } } }}
-                  />
-                  <IconButton size="small" onClick={() => setReturns((rs) => rs.filter((_, j) => j !== i))} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-                    <DeleteOutlineOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              ))}
-            </Stack>
-          </Card>
         </Stack>
       </Box>
 
       <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
+      {newPlaceTarget && (
+        <DeliveryPlaceDialog
+          open
+          clientId={newPlaceTarget.clientId}
+          clientName={newPlaceTarget.clientName}
+          onClose={() => setNewPlaceTarget(null)}
+          onSaved={(placeId) => {
+            setStops((prev) => prev.map((s) => (s.key === newPlaceTarget.stopKey
+              ? { ...s, addressKind: OutgoingShipmentStopAddressKind.DeliveryPlace, deliveryPlaceId: placeId }
+              : s)));
+            setNewPlaceTarget(null);
+          }}
+        />
+      )}
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
   );

@@ -10,10 +10,8 @@ import {
   CustomStopDto,
   RoutePointDto,
   OrderItemInfoDto,
-  InventoryExtraShipmentDto,
-  ClientExtraShipmentDto,
-  CustomExtraShipmentDto,
-  ShipmentReturnDto,
+  ExtraItemInfoDto,
+  StockPurchaseDto,
   OutgoingShipmentStopAddressKind,
 } from 'src/generated/api-client';
 
@@ -21,10 +19,7 @@ export interface ShipmentDraft {
   clientOrderShipments: ClientOrderShipmentDto[];
   customStops: CustomStopDto[];
   routeViaPoints: RoutePointDto[];
-  inventoryExtraShipments: InventoryExtraShipmentDto[];
-  clientExtraShipments: ClientExtraShipmentDto[];
-  customExtraShipments: CustomExtraShipmentDto[];
-  returns: ShipmentReturnDto[];
+  stockPurchases: StockPurchaseDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -35,9 +30,21 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       clientOrderId: st.orderId ?? '',
       order: st.order ?? 0,
       selectedAddressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official,
+      // Round-tripped so a resave triggered by something unrelated (e.g. a
+      // nakládka checkbox on the detail screen) can't silently drop the
+      // stop's chosen delivery place back to the billing address.
+      clientDeliveryPlaceId: st.deliveryPlace?.id,
       orderItems: (st.products ?? []).map((p) => new OrderItemInfoDto({
         orderItemId: p.orderItemId,
         isLoadingConfirmed: p.isShipmentLoadingConfirmed,
+        // How many of the ordered pieces come out of our stock rather than the
+        // brewery. Round-tripped so an unrelated save never silently drops it.
+        quantityFromInventory: p.quantityFromInventory ?? 0,
+        inventoryItemId: p.inventoryItemId,
+      })),
+      customExtraItems: (st.customExtraItems ?? []).map((e) => new ExtraItemInfoDto({
+        id: e.id,
+        isLoadingConfirmed: e.isLoadingConfirmed,
       })),
     })),
     customStops: stops.filter((st) => st.orderId == null).map((st) => new CustomStopDto({
@@ -49,8 +56,8 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       longitude: st.longitude ?? 0,
     })),
     routeViaPoints: (shipment.routeViaPoints ?? []).map((p) => new RoutePointDto({ latitude: p.latitude ?? 0, longitude: p.longitude ?? 0 })),
-    inventoryExtraShipments: (shipment.inventoryExtraItems ?? []).map((e) => {
-      const dto = new InventoryExtraShipmentDto({
+    stockPurchases: (shipment.stockPurchases ?? []).map((e) => {
+      const dto = new StockPurchaseDto({
         id: e.id, quantity: e.quantity,
         isLoadingConfirmed: e.isShipmentLoadingConfirmed,
       });
@@ -60,24 +67,5 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       dto.productId = e.productId;
       return dto;
     }),
-    // Client extra has no prototype UI (flagged in the P7 report) — carried
-    // through unchanged so an existing value is never silently dropped.
-    clientExtraShipments: (shipment.clientExtraItems ?? []).map((e) => {
-      const dto = new ClientExtraShipmentDto({
-        id: e.id, quantity: e.quantity,
-        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      });
-      dto.inventoryItemId = e.inventoryItemId;
-      return dto;
-    }),
-    customExtraShipments: (shipment.customExtraItems ?? []).map((e) => {
-      const dto = new CustomExtraShipmentDto({
-        id: e.id, quantity: e.quantity,
-        isLoadingConfirmed: e.isShipmentLoadingConfirmed,
-      });
-      dto.description = e.name;
-      return dto;
-    }),
-    returns: (shipment.returns ?? []).map((r) => new ShipmentReturnDto({ id: r.id, name: r.name, quantity: r.quantity })),
   };
 }

@@ -96,6 +96,11 @@ public class AleTrackDbContext : DbContext
     public virtual DbSet<ClientNote> ClientNotes => Set<ClientNote>();
 
     /// <summary>
+    /// DbSet of <see cref="ClientDeliveryPlace"/>
+    /// </summary>
+    public virtual DbSet<ClientDeliveryPlace> ClientDeliveryPlaces => Set<ClientDeliveryPlace>();
+
+    /// <summary>
     /// DbSet of <see cref="BreweryNote"/>
     /// </summary>
     public virtual DbSet<BreweryNote> BreweryNotes => Set<BreweryNote>();
@@ -119,6 +124,21 @@ public class AleTrackDbContext : DbContext
     /// DbSet of <see cref="OutgoingShipmentInvoiceLine"/>
     /// </summary>
     public virtual DbSet<OutgoingShipmentInvoiceLine> OutgoingShipmentInvoiceLines => Set<OutgoingShipmentInvoiceLine>();
+
+    /// <summary>
+    /// DbSet of <see cref="OutgoingShipmentPurchaseInvoice"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipmentPurchaseInvoice> OutgoingShipmentPurchaseInvoices => Set<OutgoingShipmentPurchaseInvoice>();
+
+    /// <summary>
+    /// DbSet of <see cref="OutgoingShipmentPurchaseInvoiceLine"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipmentPurchaseInvoiceLine> OutgoingShipmentPurchaseInvoiceLines => Set<OutgoingShipmentPurchaseInvoiceLine>();
+
+    /// <summary>
+    /// DbSet of <see cref="OutgoingShipmentLoadingState"/>
+    /// </summary>
+    public virtual DbSet<OutgoingShipmentLoadingState> OutgoingShipmentLoadingStates => Set<OutgoingShipmentLoadingState>();
 
     /// <summary>
     /// DbSet of <see cref="RefreshToken"/>

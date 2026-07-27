@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Breadcrumbs, Button, Card, Chip, CircularProgress, IconButton, Link, Stack,
-  ToggleButton, ToggleButtonGroup, Typography,
+  TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -12,6 +12,9 @@ import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -29,6 +32,9 @@ import {
   CreateOrderItemDto,
   UpdateOrderDto,
   UpdateOrderItemDto,
+  OrderReturnDto,
+  OrderNoteDto,
+  OrderCustomExtraItemDto,
   type ProductListItemDto,
   type BreweryGroupDto,
   type KindGroupDto,
@@ -48,9 +54,25 @@ interface CartLine {
   reminderState?: OrderItemReminderState;
 }
 
+/** A vratka row being edited. `id` is present only for rows already persisted. */
+interface DraftReturn { id?: string; name: string; quantity: number; note: string }
+
+/** An order note being edited. `id` is present only for notes already persisted. */
+interface DraftNote { id?: string; text: string }
+
+/** A custom extra being edited — something no brewery supplies. */
+interface DraftExtra { id?: string; description: string; quantity: number }
+
 /** Serialized snapshot of the savable form state, for unsaved-change detection. */
-function serializeForm(clientId: string | null, date: Dayjs | null, cart: CartLine[]): string {
-  return JSON.stringify({ clientId, date: date ? date.toISOString() : null, cart });
+function serializeForm(clientId: string | null, date: Dayjs | null, cart: CartLine[], returns: DraftReturn[], notes: DraftNote[], extras: DraftExtra[]): string {
+  return JSON.stringify({
+    clientId,
+    date: date ? date.toISOString() : null,
+    cart,
+    returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity, note: r.note.trim() })),
+    notes: notes.map((n) => n.text.trim()),
+    extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity })),
+  });
 }
 interface NameGroup {
   name: string;
@@ -300,6 +322,9 @@ export function OrderEditor({
   const [clientId, setClientId] = useState<string | null>(null);
   const [requiredDate, setRequiredDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(3, 'day') : null);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [returns, setReturns] = useState<DraftReturn[]>([]);
+  const [notes, setNotes] = useState<DraftNote[]>([]);
+  const [extras, setExtras] = useState<DraftExtra[]>([]);
   const [fallbackNames, setFallbackNames] = useState<Record<string, string>>({});
   const [catalogTab, setCatalogTab] = useState<'history' | 'browse'>('history');
   const [search, setSearch] = useState('');
@@ -313,7 +338,7 @@ export function OrderEditor({
   // Create mode has a stable initial baseline right away; edit mode sets it once
   // the order loads (below).
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart);
+    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart, returns, notes, extras);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -327,10 +352,16 @@ export function OrderEditor({
     const loadedCart: CartLine[] = (o.orderItems ?? []).map((it) => ({ productId: it.productId ?? '', quantity: it.quantity ?? 1, reminderState: it.reminderState }));
     setClientId(loadedClientId);
     setRequiredDate(loadedDate);
+    const loadedReturns: DraftReturn[] = (o.returns ?? []).map((r) => ({ id: r.id, name: r.name ?? '', quantity: r.quantity ?? 1, note: r.note ?? '' }));
+    const loadedNotes: DraftNote[] = (o.notes ?? []).map((n) => ({ id: n.id, text: n.text ?? '' }));
     setCart(loadedCart);
+    setReturns(loadedReturns);
+    const loadedExtras: DraftExtra[] = (o.customExtraItems ?? []).map((e) => ({ id: e.id, description: e.description ?? '', quantity: e.quantity ?? 1 }));
+    setNotes(loadedNotes);
+    setExtras(loadedExtras);
     setFallbackNames(Object.fromEntries((o.orderItems ?? []).map((it) => [it.productId ?? '', it.productName ?? '—'])));
     autoTabClientRef.current = loadedClientId;
-    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart);
+    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart, loadedReturns, loadedNotes, loadedExtras);
   }, [mode, orderQuery.data]);
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
@@ -414,7 +445,7 @@ export function OrderEditor({
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
-  const snapshot = serializeForm(clientId, requiredDate, cart);
+  const snapshot = serializeForm(clientId, requiredDate, cart, returns, notes, extras);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -422,6 +453,20 @@ export function OrderEditor({
   const persist = async (): Promise<string | null> => {
     if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
     if (cart.length === 0) { enqueueSnackbar('Přidejte alespoň jeden produkt', { variant: 'warning' }); return null; }
+    // Blank-name rows are scratch rows the user never filled in — drop them
+    // rather than fail validation on save.
+    const returnsPayload = returns
+      .filter((r) => r.name.trim())
+      .map((r) => new OrderReturnDto({ id: r.id, name: r.name.trim(), quantity: r.quantity, note: r.note.trim() || undefined }));
+
+    const notesPayload = notes
+      .filter((n) => n.text.trim())
+      .map((n) => new OrderNoteDto({ id: n.id, text: n.text.trim() }));
+
+    const extrasPayload = extras
+      .filter((e) => e.description.trim())
+      .map((e) => new OrderCustomExtraItemDto({ id: e.id, description: e.description.trim(), quantity: e.quantity }));
+
     try {
       let savedId: string;
       if (mode === 'edit' && orderId) {
@@ -431,6 +476,9 @@ export function OrderEditor({
             clientId,
             requiredDeliveryDate: requiredDate ? requiredDate.toDate() : undefined,
             orderItems: cart.map((c) => new UpdateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
+            returns: returnsPayload,
+            notes: notesPayload,
+            customExtraItems: extrasPayload,
           }),
         });
         savedId = orderId;
@@ -440,6 +488,9 @@ export function OrderEditor({
           clientId,
           requiredDeliveryDate: requiredDate ? requiredDate.toDate() : undefined,
           orderItems: cart.map((c) => new CreateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
+          returns: returnsPayload,
+          notes: notesPayload,
+          customExtraItems: extrasPayload,
         }));
         enqueueSnackbar('Objednávka vytvořena.', { variant: 'success' });
       }
@@ -677,6 +728,149 @@ export function OrderEditor({
                 </Stack>
               </>
             )}
+          </Card>
+
+          {/* Vratky — empty kegs/bottles the client hands back against this
+              order. Planned here with the order; the vývoz only displays them. */}
+          <Card sx={{ overflow: 'hidden' }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+              <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
+              <Button
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={() => setReturns((rs) => [...rs, { name: '', quantity: 1, note: '' }])}
+              >
+                Přidat
+              </Button>
+            </Stack>
+            <Stack spacing={1.25} sx={{ p: 2 }}>
+              {returns.length === 0 ? (
+                <Typography sx={{ fontSize: 13 }} color="text.secondary">
+                  Žádné vratky. Přidejte položky, které klient vrací (prázdné sudy, lahve…).
+                </Typography>
+              ) : returns.map((r, i) => (
+                // Two lines per row, boxed so a row doesn't visually merge with the next.
+                <Stack key={i} spacing={1} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <TextField
+                      size="small"
+                      placeholder="Např. prázdné sudy 50 l"
+                      value={r.name}
+                      onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                      sx={{ flex: 1 }}
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={r.quantity}
+                      onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, quantity: Math.max(1, Number(e.target.value) || 1) } : x)))}
+                      slotProps={{ htmlInput: { min: 1, style: { width: 56, textAlign: 'right' }, 'aria-label': 'Počet' } }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => setReturns((rs) => rs.filter((_, j) => j !== i))}
+                      sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
+                      aria-label="Odebrat vratku"
+                    >
+                      <DeleteIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Stack>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Poznámka (nepovinné)"
+                    value={r.note}
+                    onChange={(e) => setReturns((rs) => rs.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))}
+                  />
+                </Stack>
+              ))}
+            </Stack>
+          </Card>
+
+          {/* Položky navíc — things the client wants that no brewery supplies. */}
+          <Card sx={{ overflow: 'hidden' }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+              <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky navíc</Typography>
+              <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setExtras((es) => [...es, { description: '', quantity: 1 }])}>
+                Přidat
+              </Button>
+            </Stack>
+            <Stack spacing={1.25} sx={{ p: 2 }}>
+              {extras.length === 0 ? (
+                <Typography sx={{ fontSize: 13 }} color="text.secondary">
+                  Žádné položky navíc. Přidejte, co klient chce a pivovar nedodává (tácky, sklo…).
+                </Typography>
+              ) : extras.map((e, i) => (
+                <Stack key={i} direction="row" spacing={1} alignItems="center">
+                  <TextField
+                    size="small"
+                    placeholder="Např. tácky"
+                    value={e.description}
+                    onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))}
+                    sx={{ flex: 1 }}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    value={e.quantity}
+                    onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, quantity: Math.max(1, Number(ev.target.value) || 1) } : x)))}
+                    slotProps={{ htmlInput: { min: 1, style: { width: 56, textAlign: 'right' }, 'aria-label': 'Počet' } }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => setExtras((es) => es.filter((_, j) => j !== i))}
+                    sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
+                    aria-label="Odebrat položku navíc"
+                  >
+                    <DeleteIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Card>
+
+          {/* Poznámky — any number of free-form notes on the order. */}
+          <Card sx={{ overflow: 'hidden' }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+              <StickyNote2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Poznámky</Typography>
+              <Button
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={() => setNotes((ns) => [...ns, { text: '' }])}
+              >
+                Přidat
+              </Button>
+            </Stack>
+            <Stack spacing={1.25} sx={{ p: 2 }}>
+              {notes.length === 0 ? (
+                <Typography sx={{ fontSize: 13 }} color="text.secondary">
+                  Žádné poznámky. Přidejte pokyny k objednávce (např. dovézt dopoledne…).
+                </Typography>
+              ) : notes.map((n, i) => (
+                <Stack key={i} direction="row" spacing={1} alignItems="flex-start">
+                  <TextField
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="Např. dovézt dopoledne…"
+                    value={n.text}
+                    onChange={(e) => setNotes((ns) => ns.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => setNotes((ns) => ns.filter((_, j) => j !== i))}
+                    sx={{ mt: 0.5, border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main', flexShrink: 0 }}
+                    aria-label="Odebrat poznámku"
+                  >
+                    <DeleteIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
           </Card>
         </Stack>
       </Box>

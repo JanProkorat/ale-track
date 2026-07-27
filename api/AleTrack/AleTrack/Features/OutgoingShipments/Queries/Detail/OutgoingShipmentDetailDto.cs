@@ -1,5 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Features.ClientDeliveryPlaces;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Utils;
 
@@ -51,24 +53,80 @@ public sealed record OutgoingShipmentDetailDto
     public List<RoutePointDto> RouteViaPoints { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in the shipment to be delivered to the inventory
+    /// Goods bought from the brewery on this run for our own warehouse ("Zboží na sklad")
     /// </summary>
-    public List<OutgoingShipmentInventoryExtraItemDto> InventoryExtraItems { get; set; } = [];
-    
-    /// <summary>
-    /// List of extra product items included in the shipment to be delivered to the client taken from the inventory
-    /// </summary>
-    public List<OutgoingShipmentClientExtraItemDto> ClientExtraItems { get; set; } = [];
-    
-    /// <summary>
-    /// List of custom extra product items included in the shipment
-    /// </summary>
-    public List<OutgoingShipmentCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+    public List<OutgoingShipmentStockPurchaseItemDto> StockPurchases { get; set; } = [];
 
     /// <summary>
-    /// Returnable items the client hands back (empty kegs, bottles…)
+    /// Invoices the brewery issues to us for this run, ordered by sequence. Empty when the run
+    /// is covered by a single invoice — the normal case, which needs no split on screen.
     /// </summary>
-    public List<ShipmentReturnDto> Returns { get; set; } = [];
+    public List<OutgoingShipmentPurchaseInvoiceDto> PurchaseInvoices { get; set; } = [];
+
+    /// <summary>
+    /// How far each product has got through loading, per invoice column. Only states past
+    /// "not loaded" appear.
+    /// </summary>
+    public List<OutgoingShipmentLoadingStateDto> LoadingStates { get; set; } = [];
+}
+
+/// <summary>
+/// How far one product has got through loading in one invoice column.
+/// </summary>
+public sealed record OutgoingShipmentLoadingStateDto
+{
+    /// <summary>
+    /// Public ID of the product
+    /// </summary>
+    public Guid ProductId { get; set; }
+
+    /// <summary>
+    /// Which invoice column, by position within the shipment
+    /// </summary>
+    public int Sequence { get; set; }
+
+    /// <summary>
+    /// How far it has got
+    /// </summary>
+    public ShipmentLoadingState State { get; set; }
+}
+
+/// <summary>
+/// One invoice the brewery issues to us for an outgoing shipment.
+/// </summary>
+public sealed record OutgoingShipmentPurchaseInvoiceDto
+{
+    /// <summary>
+    /// Public ID of the invoice
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Position within the shipment, starting at 1. Ordering only — not an invoice number.
+    /// </summary>
+    public int Sequence { get; set; }
+
+    /// <summary>
+    /// Pieces claimed by this invoice, by product. Always empty for sequence 1: that invoice is
+    /// the remainder and holds whatever the others leave.
+    /// </summary>
+    public List<OutgoingShipmentPurchaseInvoiceLineDto> Lines { get; set; } = [];
+}
+
+/// <summary>
+/// A number of pieces of one product on a brewery invoice.
+/// </summary>
+public sealed record OutgoingShipmentPurchaseInvoiceLineDto
+{
+    /// <summary>
+    /// Public ID of the product
+    /// </summary>
+    public Guid ProductId { get; set; }
+
+    /// <summary>
+    /// Number of pieces of that product on the invoice
+    /// </summary>
+    public int Quantity { get; set; }
 }
 
 /// <summary>
@@ -122,6 +180,13 @@ public sealed record OutgoingShipmentStopDto
     public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
+    /// The delivery place this stop delivers to, when
+    /// <see cref="SelectedAddressKind"/> is DeliveryPlace. Deliberately still
+    /// populated for soft-deleted places so historical shipments render.
+    /// </summary>
+    public ClientDeliveryPlaceDto? DeliveryPlace { get; set; }
+
+    /// <summary>
     /// Label of a custom stop.
     /// </summary>
     public string? Label { get; set; }
@@ -145,6 +210,19 @@ public sealed record OutgoingShipmentStopDto
     /// Products to be delivered at this stop (order stops only)
     /// </summary>
     public List<OutgoingShipmentOrderItemDto> Products { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this stop's order (order
+    /// stops only — always empty for custom stops). Read-only here; returns are
+    /// owned and edited by the order.
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies (order stops only; always empty
+    /// for a custom stop). Read-only here — they are owned and edited by the order.
+    /// </summary>
+    public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 }
 
 public record OutgoingShipmentProductDto
@@ -173,7 +251,12 @@ public record OutgoingShipmentProductDto
     /// Size of the whole package
     /// </summary>
     public double? PackageSize { get; set; }
-    
+
+    /// <summary>
+    /// Degree of the beer — 10, 11, 12. Null for anything that is not brewed to one.
+    /// </summary>
+    public float? PlatoDegree { get; set; }
+
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
@@ -193,13 +276,34 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     /// <summary>
     /// ID of the related order item
     /// </summary>
-    public Guid OrderItemId { get; set; }    
+    public Guid OrderItemId { get; set; }
+
+    /// <summary>
+    /// How many of <see cref="OutgoingShipmentProductDto.Quantity"/> pieces come from our
+    /// own stock rather than the brewery. Zero when the brewery supplied all of them.
+    /// </summary>
+    public int QuantityFromInventory { get; set; }
+
+    /// <summary>
+    /// Stock entry the sourced pieces come from. Null when nothing is sourced.
+    /// </summary>
+    public Guid? InventoryItemId { get; set; }
+
+    /// <summary>
+    /// Display name of that stock entry, so the nakládka can name the source.
+    /// </summary>
+    public string? InventoryItemName { get; set; }
+
+    /// <summary>
+    /// Pieces currently on hand in that stock entry, for the over-draw warning.
+    /// </summary>
+    public int? InventoryItemAvailable { get; set; }
 }
 
 /// <summary>
 /// Data transfer object representing a product item in an outgoing shipment to be delivered to the inventory
 /// </summary>
-public sealed record OutgoingShipmentInventoryExtraItemDto : OutgoingShipmentProductDto
+public sealed record OutgoingShipmentStockPurchaseItemDto : OutgoingShipmentProductDto
 {
     /// <summary>
     /// ID of the related product
@@ -207,27 +311,4 @@ public sealed record OutgoingShipmentInventoryExtraItemDto : OutgoingShipmentPro
     public Guid ProductId { get; set; }
 }
 
-/// <summary>
-/// Data transfer object representing an extra product item in an outgoing shipment taken from the inventory
-/// and to be delivered to the client.
-/// </summary>
-public record OutgoingShipmentClientExtraItemDto : OutgoingShipmentProductDto
-{
-    /// <summary>
-    /// ID of the inventory item this extra product is taken from.
-    /// Null if its taken from clients order and not from inventory.
-    /// </summary>
-    public Guid InventoryItemId { get; set; }
-    
-    /// <summary>
-    /// ID of the related product.
-    /// </summary>
-    public Guid? ProductId { get; set; }   
-}
 
-/// <summary>
-/// Data transfer object representing a custom extra product item in an outgoing shipment.
-/// </summary>
-public record OutgoingShipmentCustomExtraItemDto : OutgoingShipmentProductDto
-{
-}

@@ -51,7 +51,7 @@ public sealed record UpdateOutgoingShipmentDto
     /// <summary>
     /// Extra products to be delivered to the inventory from the brewery
     /// </summary>
-    public List<InventoryExtraShipmentDto> InventoryExtraShipments { get; set; } = [];
+    public List<StockPurchaseDto> StockPurchases { get; set; } = [];
     
     /// <summary>
     /// Extra products to be delivered from the inventory to the client
@@ -62,9 +62,4 @@ public sealed record UpdateOutgoingShipmentDto
     /// Custom extra products to be delivered to the client
     /// </summary>
     public List<CustomExtraShipmentDto> CustomExtraShipments { get; set; } = [];
-
-    /// <summary>
-    /// Returnable items the client hands back (empty kegs, bottles…).
-    /// </summary>
-    public List<ShipmentReturnDto> Returns { get; set; } = [];
 }

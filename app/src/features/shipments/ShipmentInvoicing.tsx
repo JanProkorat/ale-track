@@ -25,6 +25,7 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMoreOutlined';
@@ -45,8 +46,8 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  groupLines, groupValue, invoiceQuantity, invoiceValue, moveTargetOptions,
-  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, moveTargetOptions,
+  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands, PRIVATE_TARGET,
   type LineGroup,
 } from './shipmentInvoiceModel';
 import { kindLabel } from 'src/lib/labels';
@@ -112,7 +113,7 @@ function DriftBanner({ data, onDismiss }: { data: ShipmentInvoicesDto; onDismiss
     if (kind === InvoiceAdjustmentKind.QuantityAdded) {
       return `${label} — přidáno ${qty} ks na 1. fakturu objednavatele`;
     }
-    return `${label} — odebráno ${qty} ks (nejdřív z přefakturovaných)`;
+    return `${label} — odebráno ${qty} ks (nejdřív ze soukromých, pak z přefakturovaných)`;
   };
 
   return (
@@ -146,14 +147,18 @@ function DriftBanner({ data, onDismiss }: { data: ShipmentInvoicesDto; onDismiss
   );
 }
 
-/** One product row: name, provenance chips, quantity, value, move action. */
+/** One product row: name, provenance chips, quantity, value, move action.
+ *  A null `invoice` is the private block — the pieces are on no invoice, so the row shows
+ *  no value. It carries no "soukromé" chip of its own: the block header directly above
+ *  already says so, and repeating it on every row is noise. */
 function GroupRow({ invoice, group, editable, onMove }: {
-  invoice: ShipmentInvoiceDto;
+  invoice: ShipmentInvoiceDto | null;
   group: LineGroup;
   editable: boolean;
   onMove: () => void;
 }) {
   const { formatMoney } = useCurrency();
+  const isPrivate = invoice === null;
   const merged = group.parts.length > 1;
   const chipText = `${kindLabel(group.kind) ?? ''}${group.packageSize != null ? ` · ${fmtLiters(group.packageSize)}` : ''}`.replace(/^ · /, '');
 
@@ -176,12 +181,17 @@ function GroupRow({ invoice, group, editable, onMove }: {
       <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
         <Typography component="span" sx={{ fontWeight: 700, fontSize: 13 }}>{group.quantity} ks</Typography>
       </TableCell>
-      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
-        {group.priceWithVat != null ? formatMoney(groupValue(group)) : '—'}
+      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: 13, color: isPrivate ? 'text.disabled' : undefined }}>
+        {isPrivate || group.priceWithVat == null ? '—' : formatMoney(groupValue(group))}
       </TableCell>
       <TableCell align="right" sx={{ width: 44 }}>
         {editable && (
-          <IconButton size="small" onClick={onMove} title="Přesunout kusy na jinou fakturu" sx={{ width: 26, height: 26 }}>
+          <IconButton
+            size="small"
+            onClick={onMove}
+            title={isPrivate ? 'Vrátit kusy na fakturu' : 'Přesunout kusy na jinou fakturu'}
+            sx={{ width: 26, height: 26 }}
+          >
             <EastIcon sx={{ fontSize: 15 }} />
           </IconButton>
         )}
@@ -191,7 +201,8 @@ function GroupRow({ invoice, group, editable, onMove }: {
 }
 
 interface MoveTarget {
-  invoice: ShipmentInvoiceDto;
+  /** Null when the pieces being moved are the private ones. */
+  invoice: ShipmentInvoiceDto | null;
   group: LineGroup;
 }
 
@@ -303,8 +314,13 @@ function InvoicingContent({ shipmentId, editable, data }: {
                 {totals.clients} {plural(totals.clients, 'klient', 'klienti', 'klientů')}
               </Pill>
               <Pill tint="okTint" color="success.main">
-                vše rozděleno · {num(totals.quantity)} ks
+                {totals.privateQuantity > 0 ? 'fakturováno' : 'vše rozděleno'} · {num(totals.quantity)} ks
               </Pill>
+              {totals.privateQuantity > 0 && (
+                <Pill tint="greyTint" color="text.secondary" icon={<LockOutlinedIcon sx={{ fontSize: 12 }} />}>
+                  {num(totals.privateQuantity)} ks soukromě
+                </Pill>
+              )}
               {totals.crossBilled > 0 && (
                 <Pill tint="amberTint" color="warning.dark">
                   {totals.crossBilled}{' '}
@@ -359,6 +375,7 @@ function InvoicingContent({ shipmentId, editable, data }: {
                     <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
                       {band.invoices.length} {plural(band.invoices.length, 'faktura', 'faktury', 'faktur')}
                       {` · ${num(band.quantity)} ks · ${formatMoney(band.value)}`}
+                      {band.privateQuantity > 0 && ` · ${num(band.privateQuantity)} ks soukromě`}
                     </Typography>
                   </Box>
                   {band.crossBilled > 0 && (
@@ -446,6 +463,33 @@ function InvoicingContent({ shipmentId, editable, data }: {
                             }
                             return rows;
                           })}
+
+                          {/* Pieces this client ordered that go on no invoice at all. Its own
+                              block below the client's invoices, never mixed into one. */}
+                          {band.privateLines.length > 0 && [
+                            <TableRow key="private-head" sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+                              <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>
+                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                  <LockOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                  <span>Soukromé · nefakturováno</span>
+                                </Stack>
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                {num(band.privateQuantity)} ks
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, color: 'text.disabled' }}>—</TableCell>
+                              <TableCell />
+                            </TableRow>,
+                            ...groupLineList(band.privateLines).map((group) => (
+                              <GroupRow
+                                key={`private-${group.productKey}`}
+                                invoice={null}
+                                group={group}
+                                editable={canEdit}
+                                onMove={() => setMoveTarget({ invoice: null, group })}
+                              />
+                            )),
+                          ]}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -467,7 +511,9 @@ function InvoicingContent({ shipmentId, editable, data }: {
             move.mutate(args, {
               onSuccess: () => {
                 setMoveTarget(null);
-                enqueueSnackbar('Kusy přesunuty', { variant: 'success' });
+                enqueueSnackbar(args.toPrivate ? 'Kusy označeny jako soukromé' : 'Kusy přesunuty', {
+                  variant: 'success',
+                });
               },
               onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
             });
@@ -491,7 +537,9 @@ function InvoicingContent({ shipmentId, editable, data }: {
   );
 }
 
-/** Moves a partial quantity to another invoice — including one of a different client.
+/** Moves a partial quantity to another invoice — including one of a different client, or
+ *  off invoicing altogether. Opened from the private block it works the other way round:
+ *  the pieces come off the private ones and go back onto an invoice.
  *  When the row merges several sources, the origin has to be picked explicitly and the
  *  quantity cap follows that choice, not the row total. */
 function MoveDialog({ data, target, pending, onClose, onSubmit }: {
@@ -500,8 +548,8 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
   pending: boolean;
   onClose: () => void;
   onSubmit: (args: {
-    fromInvoiceId: string; sourceKind: InvoiceLineSourceKind; sourceItemId: string;
-    quantity: number; toInvoiceId?: string; toClientId?: string;
+    fromInvoiceId?: string; sourceKind: InvoiceLineSourceKind; sourceItemId: string;
+    quantity: number; toInvoiceId?: string; toClientId?: string; toPrivate?: boolean;
   }) => void;
 }) {
   const { invoice, group } = target;
@@ -526,12 +574,14 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
     if (qtyError || !targetValue || !selected) return;
     const [kind, id] = targetValue.split(':');
     onSubmit({
-      fromInvoiceId: invoice.id!,
+      // Omitted when the pieces come off the private ones — there is no origin invoice.
+      fromInvoiceId: invoice?.id,
       sourceKind: selected.sourceKind!,
       sourceItemId: selected.sourceItemId!,
       quantity: qty,
       toInvoiceId: kind === 'inv' ? id : undefined,
       toClientId: kind === 'new' ? id : undefined,
+      toPrivate: targetValue === PRIVATE_TARGET ? true : undefined,
     });
   };
 
@@ -539,7 +589,9 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <EastIcon sx={{ fontSize: 20 }} />
-        <Box component="span" sx={{ flex: 1 }}>Přesunout na jinou fakturu</Box>
+        <Box component="span" sx={{ flex: 1 }}>
+          {invoice ? 'Přesunout na jinou fakturu' : 'Vrátit soukromé kusy na fakturu'}
+        </Box>
         <IconButton onClick={onClose} aria-label="Zavřít" size="small">
           <CloseIcon sx={{ fontSize: 18 }} />
         </IconButton>
@@ -550,7 +602,7 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{group.name}</Typography>
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-              z {invoice.clientName} · Faktura {invoice.sequence}
+              {invoice ? `z ${invoice.clientName} · Faktura ${invoice.sequence}` : 'ze soukromých kusů'}
               {parts.length > 1 && ` · ${parts.length} zdroje`}
             </Typography>
           </Box>
@@ -568,7 +620,9 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
                 const next = parts.find((p) => p.id === e.target.value);
                 setQuantity(String(next?.quantity ?? 0));
               }}
-              helperText="Tento produkt je na faktuře z více zdrojů. Přesouvá se vždy z jednoho z nich."
+              helperText={invoice
+                ? 'Tento produkt je na faktuře z více zdrojů. Přesouvá se vždy z jednoho z nich.'
+                : 'Tyto kusy pocházejí z více zdrojů. Přesouvá se vždy z jednoho z nich.'}
               fullWidth
             >
               {parts.map((p) => (
@@ -595,7 +649,9 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
             label="Cílová faktura"
             value={targetValue}
             onChange={(e) => setTargetValue(e.target.value)}
-            helperText="Můžete zvolit i fakturu jiného klienta — položka se označí jako přefakturovaná."
+            helperText={invoice
+              ? 'Můžete zvolit i fakturu jiného klienta — položka se označí jako přefakturovaná. Volbou „Soukromé“ kusy z fakturace vyřadíte.'
+              : 'Kusy se vrátí na zvolenou fakturu a budou se opět fakturovat.'}
             fullWidth
           >
             {options.map((o, i) => {

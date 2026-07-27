@@ -37,7 +37,7 @@ public static class DeliveredShipmentBuilder
         OrderState orderState = OrderState.Finished,
         DateOnly? requiredDeliveryDate = null,
         DateOnly? actualDeliveryDate = null,
-        List<OutgoingShipmentReturn>? returns = null,
+        List<OrderReturn>? returns = null,
         OutgoingShipmentStopKind stopKind = OutgoingShipmentStopKind.Order)
     {
         var brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau", color: "#E69F00");
@@ -58,12 +58,13 @@ public static class DeliveredShipmentBuilder
             State = orderState,
             CreatedDate = deliveryDate.AddDays(-7),
             RequiredDeliveryDate = requiredDeliveryDate,
-            ActualDeliveryDate = actualDeliveryDate
+            ActualDeliveryDate = actualDeliveryDate,
+            // Returns hang off the order now, and the run reaches them through its stops.
+            Returns = returns ?? []
         };
 
         var shipment = OutgoingShipmentBuilder.BuildEntity(deliveryDate: deliveryDate, state: state);
         shipment.Id = 1;
-        shipment.Returns = returns ?? [];
         shipment.Drivers = [new OutgoingShipmentDriver { DriverId = driver.Id, Driver = driver, OutgoingShipmentId = shipment.Id, OutgoingShipment = shipment }];
 
         var stop = new OutgoingShipmentStop
@@ -250,7 +251,7 @@ public static class DeliveredShipmentBuilder
         DateTime deliveryDate,
         OutgoingShipmentState state,
         List<LineSpec> lines,
-        List<OutgoingShipmentReturn>? returns = null)
+        List<OrderReturn>? returns = null)
     {
         // A high, fixed id band keeps this second shipment's ids clear of anything the other
         // Add* helpers derive from fixture.Shipment.Stops.Count / fixture.OrderItems.Count.
@@ -259,7 +260,6 @@ public static class DeliveredShipmentBuilder
 
         var secondShipment = OutgoingShipmentBuilder.BuildEntity(deliveryDate: deliveryDate, state: state);
         secondShipment.Id = secondShipmentId;
-        secondShipment.Returns = returns ?? [];
         secondShipment.Drivers = [];
 
         var order = new Order
@@ -269,7 +269,8 @@ public static class DeliveredShipmentBuilder
             Client = fixture.Client,
             ClientId = fixture.Client.Id,
             State = OrderState.Finished,
-            CreatedDate = deliveryDate.AddDays(-7)
+            CreatedDate = deliveryDate.AddDays(-7),
+            Returns = returns ?? []
         };
 
         var stop = new OutgoingShipmentStop

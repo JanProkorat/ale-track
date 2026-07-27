@@ -16,18 +16,31 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 public static class ShipmentInvoiceGraph
 {
     /// <summary>
-    /// Loads a shipment with everything reconciliation and invoice mapping need, tracked.
+    /// Loads a shipment with everything reconciliation and invoice mapping need, tracked, plus
+    /// the pieces excluded from invoicing. Null when the shipment does not exist.
     /// </summary>
-    public static Task<OutgoingShipment?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct) =>
-        dbContext.OutgoingShipments
+    public static async Task<ShipmentInvoiceSplit?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct)
+    {
+        var shipment = await dbContext.OutgoingShipments
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.Client)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
-            .Include(s => s.ClientExtraItems).ThenInclude(e => e.InventoryItem).ThenInclude(i => i.Product)
-            .Include(s => s.ClientExtraItems).ThenInclude(e => e.Client)
-            .Include(s => s.CustomExtraItems).ThenInclude(e => e.Client)
+            .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.InventoryItem)
+            .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.CustomExtraItems)
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client)
             .FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
+
+        if (shipment is null)
+            return null;
+
+        // Loaded by their own query rather than through a navigation — see
+        // OutgoingShipmentInvoiceLineConfiguration for why there is none.
+        var privateLines = await dbContext.OutgoingShipmentInvoiceLines
+            .Where(l => l.OutgoingShipmentId == shipment.Id && l.IsPrivate)
+            .ToListAsync(ct);
+
+        return new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = privateLines };
+    }
 
     /// <summary>
     /// Order items of the shipment's order stops, keyed by internal ID.
@@ -60,16 +73,20 @@ public static class ShipmentInvoiceGraph
     /// Internal ID of the shipment item a request refers to by public ID, or null when the
     /// shipment does not carry it.
     /// </summary>
+    /// <summary>Order-owned custom extras reachable from this shipment, with their order.</summary>
+    public static IEnumerable<(OrderCustomExtraItem Extra, Order Order)> CustomExtrasOf(OutgoingShipment shipment) =>
+        shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .SelectMany(s => s.ClientOrder!.CustomExtraItems.Select(e => (e, s.ClientOrder!)));
+
     public static long? ResolveSourceItemId(OutgoingShipment shipment, InvoiceLineSourceKind kind, Guid publicId) => kind switch
     {
         InvoiceLineSourceKind.OrderItem => shipment.Stops
             .Where(s => s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.OrderItems)
             .FirstOrDefault(i => i.PublicId == publicId)?.Id,
-        InvoiceLineSourceKind.ClientExtraItem => shipment.ClientExtraItems
-            .FirstOrDefault(e => e.PublicId == publicId)?.Id,
-        InvoiceLineSourceKind.CustomExtraItem => shipment.CustomExtraItems
-            .FirstOrDefault(e => e.PublicId == publicId)?.Id,
+        InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(shipment)
+            .Select(x => x.Extra).FirstOrDefault(e => e.PublicId == publicId)?.Id,
         _ => null
     };
 
@@ -79,7 +96,6 @@ public static class ShipmentInvoiceGraph
     public static long SourceItemIdOf(OutgoingShipmentInvoiceLine line) => line.SourceKind switch
     {
         InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
-        InvoiceLineSourceKind.ClientExtraItem => line.ClientExtraItemId ?? 0,
         InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
         _ => 0
     };
@@ -94,9 +110,6 @@ public static class ShipmentInvoiceGraph
         {
             case InvoiceLineSourceKind.OrderItem:
                 line.OrderItemId = itemId;
-                break;
-            case InvoiceLineSourceKind.ClientExtraItem:
-                line.ClientExtraItemId = itemId;
                 break;
             case InvoiceLineSourceKind.CustomExtraItem:
                 line.CustomExtraItemId = itemId;
@@ -118,11 +131,8 @@ public static class ShipmentInvoiceGraph
             .Select(s => s.ClientOrder!.ClientId)
             .ToHashSet();
 
-        foreach (var clientId in shipment.ClientExtraItems.Where(e => e.ClientId is not null).Select(e => e.ClientId!.Value))
-            ids.Add(clientId);
-
-        foreach (var clientId in shipment.CustomExtraItems.Where(e => e.ClientId is not null).Select(e => e.ClientId!.Value))
-            ids.Add(clientId);
+        // Extras need no pass of their own: each hangs off a stop's order, whose client
+        // is already in the set above.
 
         foreach (var invoice in shipment.Invoices)
             ids.Add(invoice.ClientId);

@@ -145,8 +145,8 @@ public sealed class GetOperationsEndpointTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 4)],
             returns:
             [
-                new OutgoingShipmentReturn { Name = "Sud 50 l — prázdný", Quantity = 3 },
-                new OutgoingShipmentReturn { Name = "Basa", Quantity = 2 }
+                new OrderReturn { Name = "Sud 50 l — prázdný", Quantity = 3 },
+                new OrderReturn { Name = "Basa", Quantity = 2 }
             ]);
 
         // A second shipment, still InTransit, with its own returns. Because `delivered.Sum(...)`
@@ -158,7 +158,7 @@ public sealed class GetOperationsEndpointTests
             deliveryDate: new DateTime(2026, 7, 22, 0, 0, 0, DateTimeKind.Utc),
             state: OutgoingShipmentState.InTransit,
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)],
-            returns: [new OutgoingShipmentReturn { Name = "Sud 30 l — prázdný", Quantity = 10 }]);
+            returns: [new OrderReturn { Name = "Sud 30 l — prázdný", Quantity = 10 }]);
 
         var endpoint = Endpoint(withSecondShipment);
 

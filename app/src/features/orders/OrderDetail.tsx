@@ -4,11 +4,13 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
-import LocalMallOutlinedIcon from '@mui/icons-material/LocalMallOutlined';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutlined';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOffOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
@@ -61,6 +63,9 @@ export function OrderDetail({
   const { enqueueSnackbar } = useSnackbar();
   const setReminderState = useSetOrderItemReminderState();
   const items = order.orderItems ?? [];
+  const returns = order.returns ?? [];
+  const notes = order.notes ?? [];
+  const extras = order.customExtraItems ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
@@ -89,6 +94,18 @@ export function OrderDetail({
 
   const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
+  // Both sidebar cards hide when empty, so the whole column can be absent.
+  const hasSidebar = returns.length > 0 || extras.length > 0 || notes.length > 0;
+
+  // Once it has arrived the deadline is history — show when it actually landed.
+  // Before that the deadline is the number people work to; the creation date is
+  // only a last resort for an order with no term yet.
+  const headerDate = order.actualDeliveryDate
+    ? { label: 'Doručeno:', value: fmtDate(order.actualDeliveryDate) }
+    : order.requiredDeliveryDate
+      ? { label: 'Doručit nejpozději:', value: fmtDate(order.requiredDeliveryDate) }
+      : { label: 'Vytvořeno:', value: fmtDate(order.createdDate) };
+
   return (
     <Box>
       <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
@@ -103,10 +120,15 @@ export function OrderDetail({
           <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
             Objednávka
           </Typography>
-          <Typography variant="h1" sx={{ fontSize: 26, fontFamily: 'monospace' }}>{orderNumber(order.id)}</Typography>
+          <Stack direction="row" alignItems="baseline" spacing={1.5} flexWrap="wrap" sx={{ rowGap: 0 }}>
+            <Typography variant="h1" sx={{ fontSize: 26, fontFamily: 'monospace' }}>{orderNumber(order.id)}</Typography>
+            <Typography sx={{ fontSize: 18, fontWeight: 700, color: 'primary.dark', minWidth: 0 }} noWrap>
+              {order.client?.name ?? '—'}
+            </Typography>
+          </Stack>
           <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
-            <Box component="span" sx={{ color: 'primary.dark', fontWeight: 700 }}>{order.client?.name ?? '—'}</Box>
-            {' · vytvořeno '}{fmtDate(order.createdDate)}
+            {headerDate.label}{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{headerDate.value}</Box>
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
@@ -131,7 +153,10 @@ export function OrderDetail({
 
       {stateName !== 'Cancelled' && <StatusFlow stateName={stateName} />}
 
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start' }}>
+      {/* Two columns on md+ (items | sidebar), stacked in DOM order below that.
+          With nothing to put in the sidebar the second column is dropped
+          entirely rather than left as dead space beside the items. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: hasSidebar ? '1.5fr 1fr' : '1fr' }, alignItems: 'start' }}>
         <Card sx={{ overflow: 'hidden' }}>
           <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
             <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky</Typography>
@@ -174,35 +199,75 @@ export function OrderDetail({
           </Box>
         </Card>
 
+        {hasSidebar && (
         <Stack spacing={2}>
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Doručení</Typography>
-            </Stack>
-            <Stack spacing={1.5} sx={{ p: 2.5 }}>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography color="text.secondary">Požadovaný termín</Typography>
-                <Typography sx={{ fontWeight: 600 }}>{order.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : '—'}</Typography>
+          {returns.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {returns.length}
+                </Box>
               </Stack>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography color="text.secondary">Skutečné doručení</Typography>
-                <Typography sx={{ fontWeight: 600 }}>{order.actualDeliveryDate ? fmtDate(order.actualDeliveryDate) : '—'}</Typography>
-              </Stack>
-            </Stack>
-          </Card>
-
-          <Card sx={{ overflow: 'hidden' }}>
-            <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Klient</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 2.5 }}>
-              <Box sx={{ width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: (t) => t.vars!.palette.brand.infoTint, color: 'info.main' }}>
-                <LocalMallOutlinedIcon fontSize="small" />
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {returns.map((r) => (
+                  <Box key={r.id}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
+                      {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
+                    </Box>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
+                  </Box>
+                ))}
               </Box>
-              <Typography sx={{ fontWeight: 700 }}>{order.client?.name ?? '—'}</Typography>
-            </Stack>
-          </Card>
+            </Card>
+          )}
+
+          {extras.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky navíc</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {extras.length}
+                </Box>
+              </Stack>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {extras.map((e) => (
+                  <Box key={e.id}>
+                    <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{e.description}</Typography>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.quantity} ks</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Card>
+          )}
+
+          {notes.length > 0 && (
+            <Card sx={{ overflow: 'hidden' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                <StickyNote2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Poznámky</Typography>
+                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
+                  {notes.length}
+                </Box>
+              </Stack>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+                {notes.map((n) => (
+                  <Box key={n.id}>
+                    {/* Notes are free text and often multi-line — keep the breaks. */}
+                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>{n.text}</Typography>
+                    {n.dateCreated && (
+                      <Typography variant="caption" color="text.secondary">{fmtDate(n.dateCreated)}</Typography>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            </Card>
+          )}
         </Stack>
+        )}
       </Box>
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>

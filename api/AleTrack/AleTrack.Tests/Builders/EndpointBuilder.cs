@@ -32,6 +32,26 @@ public static class EndpointBuilder<TRequest, TEndpoint> where TEndpoint : Endpo
 }
 
 /// <summary>
+/// Provides functionality to construct instances of an endpoint that takes no request body,
+/// reading its parameters from the route instead.
+/// </summary>
+/// <typeparam name="TEndpoint">The type of the endpoint that will process the call.</typeparam>
+public static class EndpointWithoutRequestBuilder<TEndpoint> where TEndpoint : EndpointWithoutRequest
+{
+    /// <summary>
+    /// Creates an instance of the specified endpoint type and configures it with the required
+    /// dependencies. Route values are set by the caller on <c>HttpContext.Request.RouteValues</c>.
+    /// </summary>
+    public static TEndpoint Create(params object?[] dependencies)
+    {
+        return Factory.Create<TEndpoint>(context =>
+        {
+            context.AddTestServices(s => s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator()));
+        }, dependencies);
+    }
+}
+
+/// <summary>
 /// Provides functionality to construct instances of an endpoint with response for testing purposes
 /// while setting up the necessary dependencies.
 /// </summary>

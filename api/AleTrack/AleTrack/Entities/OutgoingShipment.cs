@@ -53,34 +53,28 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentRoutePoint> RouteViaPoints { get; set; } = [];
 
     /// <summary>
-    /// List of extra product items included in this outgoing shipment that will be stored in the inventory
+    /// Goods bought from the brewery on this run for our own warehouse ("Zboží na sklad").
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentInventoryExtraItem> InventoryExtraItems { get; set; } = [];
-
-    /// <summary>
-    /// List of extra product items included in this outgoing shipment that will be taken from the inventory and shiped to the client
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentClientExtraItem> ClientExtraItems { get; set; } = [];
-    
-    /// <summary>
-    /// List of custom extra product items included in this outgoing shipment
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentCustomExtraItem> CustomExtraItems { get; set; } = [];
-
-    /// <summary>
-    /// Returnable items the client hands back (empty kegs, bottles…)
-    /// </summary>
-    [DeleteBehavior(DeleteBehavior.Cascade)]
-    public ICollection<OutgoingShipmentReturn> Returns { get; set; } = [];
+    public ICollection<OutgoingShipmentStockPurchaseItem> StockPurchases { get; set; } = [];
 
     /// <summary>
     /// Invoices to be issued for this shipment — by default one per client on the route.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentInvoice> Invoices { get; set; } = [];
+
+    /// <summary>
+    /// Invoices the brewery issues to us for the goods picked up on this run.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentPurchaseInvoice> PurchaseInvoices { get; set; } = [];
+
+    /// <summary>
+    /// How far each product has got through loading, per brewery-invoice column.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentLoadingState> LoadingStates { get; set; } = [];
 
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;

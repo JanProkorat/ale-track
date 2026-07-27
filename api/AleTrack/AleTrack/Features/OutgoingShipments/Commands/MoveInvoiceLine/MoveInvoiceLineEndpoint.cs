@@ -28,8 +28,13 @@ public sealed record MoveInvoiceLineRequest
 
 /// <summary>
 /// Endpoint moving pieces of one shipment item from one invoice to another — including an
-/// invoice belonging to a different client.
+/// invoice belonging to a different client, or off invoicing altogether.
 /// </summary>
+/// <remarks>
+/// Pieces marked private are still loaded and delivered; they simply appear on no invoice. They
+/// are held as ordinary lines with no invoice, so the same cap, merge and cleanup rules apply in
+/// both directions.
+/// </remarks>
 /// <param name="dbContext"></param>
 public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpoint<MoveInvoiceLineRequest>
 {
@@ -49,7 +54,7 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
 
         Summary(s =>
             {
-                s.Summary = "Moves pieces of a shipment item to another invoice";
+                s.Summary = "Moves pieces of a shipment item to another invoice, or off invoicing";
                 s.Responses[StatusCodes.Status204NoContent] = "Pieces moved";
                 s.Responses[StatusCodes.Status400BadRequest] = "Shipment no longer editable, or the move does not fit";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment, invoice, item or client not found";
@@ -60,12 +65,14 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
     /// <inheritdoc />
     public override async Task HandleAsync(MoveInvoiceLineRequest req, CancellationToken ct)
     {
-        var shipment = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
-        if (shipment is null)
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        if (split is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
             return;
         }
+
+        var shipment = split.Shipment;
 
         if (!ShipmentInvoiceGraph.IsEditable(shipment))
         {
@@ -74,14 +81,19 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
         }
 
         // Reconcile first so the move operates on a split that matches what is actually loaded.
-        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(shipment);
+        var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
         RemoveDetached(reconcileResult);
 
-        var from = shipment.Invoices.FirstOrDefault(i => i.PublicId == req.Data.FromInvoiceId);
-        if (from is null)
+        // A null FromInvoiceId means the pieces are being taken back out of the private ones.
+        OutgoingShipmentInvoice? from = null;
+        if (req.Data.FromInvoiceId is not null)
         {
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipmentInvoice), req.Data.FromInvoiceId);
-            return;
+            from = shipment.Invoices.FirstOrDefault(i => i.PublicId == req.Data.FromInvoiceId.Value);
+            if (from is null)
+            {
+                ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipmentInvoice), req.Data.FromInvoiceId.Value);
+                return;
+            }
         }
 
         var sourceItemId = ShipmentInvoiceGraph.ResolveSourceItemId(shipment, req.Data.SourceKind, req.Data.SourceItemId);
@@ -91,12 +103,14 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
             return;
         }
 
-        var sourceLine = from.Lines.FirstOrDefault(l =>
-            l.SourceKind == req.Data.SourceKind && ShipmentInvoiceGraph.SourceItemIdOf(l) == sourceItemId.Value);
+        var origin = from is null ? split.PrivateLines : (ICollection<OutgoingShipmentInvoiceLine>)from.Lines;
+        var sourceLine = LineOf(origin, req.Data.SourceKind, sourceItemId.Value);
 
         if (sourceLine is null)
         {
-            ThrowHelper.BadRequest("The item is not billed on the invoice the pieces should come off.");
+            ThrowHelper.BadRequest(from is null
+                ? "The item has no pieces excluded from invoicing to take back."
+                : "The item is not billed on the invoice the pieces should come off.");
             return;
         }
 
@@ -108,18 +122,27 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
             return;
         }
 
-        var target = ResolveTarget(shipment, req.Data);
-        if (target is null)
-            return;
-
-        if (target == from)
+        OutgoingShipmentInvoice? targetInvoice = null;
+        if (!req.Data.ToPrivate)
         {
-            ThrowHelper.BadRequest("Source and target invoice are the same.");
+            targetInvoice = ResolveTarget(shipment, req.Data);
+            if (targetInvoice is null)
+                return;
+        }
+
+        if (targetInvoice == from)
+        {
+            ThrowHelper.BadRequest(from is null
+                ? "These pieces are already excluded from invoicing."
+                : "Source and target invoice are the same.");
             return;
         }
 
-        var existing = target.Lines.FirstOrDefault(l =>
-            l.SourceKind == req.Data.SourceKind && ShipmentInvoiceGraph.SourceItemIdOf(l) == sourceItemId.Value);
+        var target = targetInvoice is null
+            ? split.PrivateLines
+            : (ICollection<OutgoingShipmentInvoiceLine>)targetInvoice.Lines;
+
+        var existing = LineOf(target, req.Data.SourceKind, sourceItemId.Value);
 
         if (existing is not null)
         {
@@ -130,22 +153,36 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
             var line = new OutgoingShipmentInvoiceLine
             {
                 PublicId = Guid.NewGuid(),
+                OutgoingShipmentId = shipment.Id,
+                IsPrivate = targetInvoice is null,
                 Quantity = req.Data.Quantity
             };
             ShipmentInvoiceGraph.AssignSource(line, req.Data.SourceKind, sourceItemId.Value);
-            target.Lines.Add(line);
+            target.Add(line);
+
+            // A private line hangs off no navigation EF walks, so it has to be added explicitly.
+            if (targetInvoice is null)
+                dbContext.OutgoingShipmentInvoiceLines.Add(line);
         }
 
         sourceLine.Quantity -= req.Data.Quantity;
         if (sourceLine.Quantity <= 0)
         {
-            from.Lines.Remove(sourceLine);
+            origin.Remove(sourceLine);
             dbContext.OutgoingShipmentInvoiceLines.Remove(sourceLine);
         }
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
     }
+
+    /// <summary>
+    /// The line billing a given source item within one bucket — an invoice's lines, or the
+    /// shipment's private lines.
+    /// </summary>
+    private static OutgoingShipmentInvoiceLine? LineOf(
+        IEnumerable<OutgoingShipmentInvoiceLine> lines, InvoiceLineSourceKind kind, long sourceItemId) =>
+        lines.FirstOrDefault(l => l.SourceKind == kind && ShipmentInvoiceGraph.SourceItemIdOf(l) == sourceItemId);
 
     /// <summary>
     /// The invoice the pieces land on: an existing one, or a fresh one for the requested client.
@@ -164,8 +201,6 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
 
         var client = shipment.Invoices.Select(i => i.Client)
             .Concat(shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!.Client))
-            .Concat(shipment.ClientExtraItems.Select(e => e.Client))
-            .Concat(shipment.CustomExtraItems.Select(e => e.Client))
             .FirstOrDefault(c => c is not null && c.PublicId == data.ToClientId!.Value);
 
         // Only clients that already take part in this shipment may be billed on it.

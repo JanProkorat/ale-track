@@ -35,6 +35,7 @@ public static class AleTrackDbContextMockFactory
     /// <param name="outgoingShipmentInvoices">The collection of OutgoingShipmentInvoice entities to include in the mocked DbContext.</param>
     /// <param name="outgoingShipmentInvoiceLines">The collection of OutgoingShipmentInvoiceLine entities to include in the mocked DbContext.</param>
     /// <param name="refreshTokens">The collection of RefreshToken entities to include in the mocked DbContext.</param>
+    /// <param name="clientDeliveryPlaces">The collection of ClientDeliveryPlace entities to include in the mocked DbContext.</param>
     /// <returns>A mock of the AleTrackDbContext configured with the provided entity data.</returns>
     public static Mock<AleTrackDbContext> CreateMock(
         ICollection<Client>? clients = null,
@@ -53,7 +54,11 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipment>? outgoingShipments = null,
         ICollection<OutgoingShipmentInvoice>? outgoingShipmentInvoices = null,
         ICollection<OutgoingShipmentInvoiceLine>? outgoingShipmentInvoiceLines = null,
-        ICollection<RefreshToken>? refreshTokens = null)
+        ICollection<OutgoingShipmentPurchaseInvoice>? outgoingShipmentPurchaseInvoices = null,
+        ICollection<OutgoingShipmentPurchaseInvoiceLine>? outgoingShipmentPurchaseInvoiceLines = null,
+        ICollection<OutgoingShipmentLoadingState>? outgoingShipmentLoadingStates = null,
+        ICollection<RefreshToken>? refreshTokens = null,
+        ICollection<ClientDeliveryPlace>? clientDeliveryPlaces = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -74,7 +79,11 @@ public static class AleTrackDbContextMockFactory
             outgoingShipments ?? [],
             outgoingShipmentInvoices ?? [],
             outgoingShipmentInvoiceLines ?? [],
-            refreshTokens ?? []);
+            outgoingShipmentPurchaseInvoices ?? [],
+            outgoingShipmentPurchaseInvoiceLines ?? [],
+            outgoingShipmentLoadingStates ?? [],
+            refreshTokens ?? [],
+            clientDeliveryPlaces ?? []);
     }
 
     /// <summary>
@@ -112,7 +121,11 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipment> outgoingShipments,
         ICollection<OutgoingShipmentInvoice> outgoingShipmentInvoices,
         ICollection<OutgoingShipmentInvoiceLine> outgoingShipmentInvoiceLines,
-        ICollection<RefreshToken> refreshTokens)
+        ICollection<OutgoingShipmentPurchaseInvoice> outgoingShipmentPurchaseInvoices,
+        ICollection<OutgoingShipmentPurchaseInvoiceLine> outgoingShipmentPurchaseInvoiceLines,
+        ICollection<OutgoingShipmentLoadingState> outgoingShipmentLoadingStates,
+        ICollection<RefreshToken> refreshTokens,
+        ICollection<ClientDeliveryPlace> clientDeliveryPlaces)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -130,8 +143,12 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<OutgoingShipment>>(x => x.OutgoingShipments).ReturnsDbSet(outgoingShipments);
         dbContextMock.Setup<DbSet<OutgoingShipmentInvoice>>(x => x.OutgoingShipmentInvoices).ReturnsDbSet(outgoingShipmentInvoices);
         dbContextMock.Setup<DbSet<OutgoingShipmentInvoiceLine>>(x => x.OutgoingShipmentInvoiceLines).ReturnsDbSet(outgoingShipmentInvoiceLines);
+        dbContextMock.Setup<DbSet<OutgoingShipmentPurchaseInvoice>>(x => x.OutgoingShipmentPurchaseInvoices).ReturnsDbSet(outgoingShipmentPurchaseInvoices);
+        dbContextMock.Setup<DbSet<OutgoingShipmentPurchaseInvoiceLine>>(x => x.OutgoingShipmentPurchaseInvoiceLines).ReturnsDbSet(outgoingShipmentPurchaseInvoiceLines);
+        dbContextMock.Setup<DbSet<OutgoingShipmentLoadingState>>(x => x.OutgoingShipmentLoadingStates).ReturnsDbSet(outgoingShipmentLoadingStates);
         dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
-                
+        dbContextMock.Setup<DbSet<ClientDeliveryPlace>>(x => x.ClientDeliveryPlaces).ReturnsDbSet(clientDeliveryPlaces);
+
         return dbContextMock;
     }
 }

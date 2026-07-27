@@ -1,6 +1,7 @@
 using System.Data;
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Create;
 using FastEndpoints;
 using FluentValidation;
@@ -42,11 +43,24 @@ public sealed class CreateOrderDtoValidator : Validator<CreateOrderDto>
         RuleFor(r => r.RequiredDeliveryDate)
             .GreaterThan(DateOnly.FromDateTime(DateTime.Today))
             .When(d => d.RequiredDeliveryDate != null)
-            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+            .WithErrorCode(ErrorCodes.DeliveryDateInPast)
+            .WithMessage("Required delivery date must be in the future.");
+
+        RuleFor(r => r.Notes)
+            .ForEach(n => n.SetValidator(new OrderNoteDtoValidator()))
+            .When(r => r.Notes.Count > 0);
 
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new CreateOrderItemDtoValidator()))
             .When(i => i.OrderItems.Count > 0);
+
+        RuleFor(r => r.Returns)
+            .ForEach(i => i.SetValidator(new OrderReturnDtoValidator()))
+            .When(i => i.Returns.Count > 0);
+
+        RuleFor(r => r.CustomExtraItems)
+            .ForEach(e => e.SetValidator(new OrderCustomExtraItemDtoValidator()))
+            .When(r => r.CustomExtraItems.Count > 0);
     }
 }
 

@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Features.Orders.Utils;
 
 namespace AleTrack.Features.Orders.Queries.Detail;
 
@@ -41,9 +42,24 @@ public sealed record OrderDto
     public DateTime CreatedDate { get; set; }
 
     /// <summary>
+    /// Free-form notes about the order, oldest first
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
+
+    /// <summary>
     /// Collection of items associated with the order.
     /// </summary>
     public List<OrderItemDto> OrderItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…)
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies
+    /// </summary>
+    public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 }
 
 /// <summary>
