@@ -168,4 +168,73 @@ public sealed class OrderDeliveryAddressTests
             e.PropertyName == nameof(UpdateOrderDto.ClientDeliveryPlaceId)
             && e.ErrorCode == ErrorCodes.ValidationError);
     }
+
+    [Fact]
+    public async Task CreateOrder_WithDeliveryPlace_PersistsKindAndPlace()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(client: client);
+        place.Id = 7;
+        var product = ProductBuilder.BuildEntity();
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [product], clientDeliveryPlaces: [place]);
+
+        var dto = OrderBuilder.BuildCreateDto(
+            clientId: clientId,
+            orderItems: [new CreateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
+        dto.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        dto.ClientDeliveryPlaceId = place.PublicId;
+
+        var endpoint = EndpointBuilder<CreateOrderRequest, CreateOrderEndpoint>.Create(db.Object);
+        await endpoint.HandleAsync(new CreateOrderRequest { Data = dto }, CancellationToken.None);
+
+        var saved = client.Orders.Single();
+        saved.DeliveryAddressKind.Should().Be(DeliveryAddressKind.DeliveryPlace);
+        saved.ClientDeliveryPlaceId.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task CreateOrder_ContactKindWithoutContactAddress_Throws()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(
+            publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        client.ContactAddress = null;
+        var product = ProductBuilder.BuildEntity();
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], products: [product]);
+
+        var dto = OrderBuilder.BuildCreateDto(
+            clientId: clientId,
+            orderItems: [new CreateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
+        dto.DeliveryAddressKind = DeliveryAddressKind.Contact;
+
+        var endpoint = EndpointBuilder<CreateOrderRequest, CreateOrderEndpoint>.Create(db.Object);
+        var act = () => endpoint.HandleAsync(new CreateOrderRequest { Data = dto }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<Exception>();
+    }
+
+    [Fact]
+    public async Task CreateOrder_PlaceOfAnotherClient_Throws()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        var stranger = ClientBuilder.BuildEntity();
+        var place = ClientDeliveryPlaceBuilder.BuildEntity(client: stranger);
+        var product = ProductBuilder.BuildEntity();
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client, stranger], products: [product], clientDeliveryPlaces: [place]);
+
+        var dto = OrderBuilder.BuildCreateDto(
+            clientId: clientId,
+            orderItems: [new CreateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
+        dto.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        dto.ClientDeliveryPlaceId = place.PublicId;
+
+        var endpoint = EndpointBuilder<CreateOrderRequest, CreateOrderEndpoint>.Create(db.Object);
+        var act = () => endpoint.HandleAsync(new CreateOrderRequest { Data = dto }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<Exception>();
+    }
 }
