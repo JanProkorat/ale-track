@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Queries.OutgoingShipmentsList;
+using AleTrack.Features.OutgoingShipments.Commands.AcknowledgeAddressChanges;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -687,5 +688,40 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var returnedOrder = endpoint.Response.Single();
         returnedOrder.ClientDeliveryPlaces.Should().ContainSingle()
             .Which.Name.Should().Be("Aktivní místo");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcknowledgeAddressChanges_ClearsEveryStopOfThatShipmentOnly()
+    {
+        var target = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var other = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var stamped = new DateTime(2026, 7, 27, 9, 0, 0, DateTimeKind.Utc);
+
+        target.Stops.Add(new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+        target.Stops.Add(new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+        other.Stops.Add(new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+
+        var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [target, other]);
+
+        var endpoint = EndpointBuilder<AcknowledgeAddressChangesRequest, AcknowledgeAddressChangesEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new AcknowledgeAddressChangesRequest { Id = target.PublicId }, CancellationToken.None);
+
+        target.Stops.Should().OnlyContain(s => s.AddressChangedAt == null);
+        other.Stops.Should().OnlyContain(s => s.AddressChangedAt == stamped);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcknowledgeAddressChanges_UnknownShipment_Throws()
+    {
+        var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: []);
+
+        var endpoint = EndpointBuilder<AcknowledgeAddressChangesRequest, AcknowledgeAddressChangesEndpoint>
+            .Create(db.Object);
+        var act = () => endpoint.HandleAsync(
+            new AcknowledgeAddressChangesRequest { Id = Guid.NewGuid() }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<Exception>();
     }
 }
