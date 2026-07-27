@@ -11202,6 +11202,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     products?: OutgoingShipmentOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    notes?: OrderNoteDto[];
 
     constructor(data?: IOutgoingShipmentStopDto) {
         if (data) {
@@ -11245,6 +11246,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["notes"])) {
+                this.notes = [] as any;
+                for (let item of _data["notes"])
+                    this.notes!.push(OrderNoteDto.fromJS(item));
             }
         }
     }
@@ -11290,6 +11296,11 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.notes)) {
+            data["notes"] = [];
+            for (let item of this.notes)
+                data["notes"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11315,6 +11326,7 @@ export interface IOutgoingShipmentStopDto {
     products?: OutgoingShipmentOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    notes?: OrderNoteDto[];
 }
 
 export enum OutgoingShipmentStopKind {
@@ -11700,6 +11712,50 @@ export interface IOrderCustomExtraItemDto {
     description?: string;
     quantity?: number;
     isLoadingConfirmed?: boolean;
+}
+
+export class OrderNoteDto implements IOrderNoteDto {
+    id?: string | undefined;
+    text?: string;
+    dateCreated?: Date | undefined;
+
+    constructor(data?: IOrderNoteDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.text = _data["text"];
+            this.dateCreated = _data["dateCreated"] ? new Date(_data["dateCreated"].toString()) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): OrderNoteDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderNoteDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["text"] = this.text;
+        data["dateCreated"] = this.dateCreated ? this.dateCreated.toISOString() : undefined as any;
+        return data;
+    }
+}
+
+export interface IOrderNoteDto {
+    id?: string | undefined;
+    text?: string;
+    dateCreated?: Date | undefined;
 }
 
 export class RoutePointDto implements IRoutePointDto {
@@ -13215,50 +13271,6 @@ export class ClientInfoDto implements IClientInfoDto {
 export interface IClientInfoDto {
     id?: string;
     name?: string;
-}
-
-export class OrderNoteDto implements IOrderNoteDto {
-    id?: string | undefined;
-    text?: string;
-    dateCreated?: Date | undefined;
-
-    constructor(data?: IOrderNoteDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.text = _data["text"];
-            this.dateCreated = _data["dateCreated"] ? new Date(_data["dateCreated"].toString()) : undefined as any;
-        }
-    }
-
-    static fromJS(data: any): OrderNoteDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OrderNoteDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["text"] = this.text;
-        data["dateCreated"] = this.dateCreated ? this.dateCreated.toISOString() : undefined as any;
-        return data;
-    }
-}
-
-export interface IOrderNoteDto {
-    id?: string | undefined;
-    text?: string;
-    dateCreated?: Date | undefined;
 }
 
 export class OrderItemDto implements IOrderItemDto {

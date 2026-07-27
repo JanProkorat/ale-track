@@ -153,7 +153,20 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                                 })
                                 .ToList()
-                            : new List<OrderCustomExtraItemDto>()
+                            : new List<OrderCustomExtraItemDto>(),
+                        // Oldest first, matching the order detail's own ordering
+                        // so a note reads the same on both screens.
+                        Notes = s.ClientOrder != null
+                            ? s.ClientOrder.Notes
+                                .OrderBy(n => n.DateCreated)
+                                .Select(n => new OrderNoteDto
+                                {
+                                    Id = n.PublicId,
+                                    Text = n.Text,
+                                    DateCreated = n.DateCreated
+                                })
+                                .ToList()
+                            : new List<OrderNoteDto>()
                     })
                     .ToList(),
                 RouteViaPoints = os.RouteViaPoints

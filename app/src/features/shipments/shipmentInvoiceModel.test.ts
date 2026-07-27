@@ -8,7 +8,7 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  bandAddress, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  bandAddress, bandNotes, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
 } from './shipmentInvoiceModel';
@@ -461,5 +461,48 @@ describe('bandAddress', () => {
   // briefly disagree — no address beats a confidently wrong one.
   it('returns nothing when no stop matches', () => {
     expect(bandAddress(band({ stopOrder: 7 }), [stop()])).toBeUndefined();
+  });
+});
+
+describe('bandNotes', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+  });
+
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A, notes: [],
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  const note = (text: string) => ({ id: text, text, dateCreated: new Date() });
+
+  it("returns the matched stop's notes in the order the backend sent them", () => {
+    const result = bandNotes(band(), [stop({ notes: [note('Dovézt dopoledne'), note('Faktura na provozovnu')] })]);
+
+    expect(result.map((n) => n.text)).toEqual(['Dovézt dopoledne', 'Faktura na provozovnu']);
+  });
+
+  // Same match rule as bandAddress — both go through stopForBand, so a client
+  // with two stops must not pick up the other stop's notes.
+  it('matches on stop order, not client id, when a client has two stops', () => {
+    const result = bandNotes(band({ stopOrder: 2 }), [
+      stop({ id: 'st1', order: 1, notes: [note('První zastávka')] }),
+      stop({ id: 'st2', order: 2, notes: [note('Druhá zastávka')] }),
+    ]);
+
+    expect(result.map((n) => n.text)).toEqual(['Druhá zastávka']);
+  });
+
+  it('falls back to client id when the band carries no stop order', () => {
+    const result = bandNotes(band({ stopOrder: undefined }), [stop({ notes: [note('Poznámka')] })]);
+    expect(result.map((n) => n.text)).toEqual(['Poznámka']);
+  });
+
+  it('is empty for an order with no notes, and when no stop matches', () => {
+    expect(bandNotes(band(), [stop()])).toEqual([]);
+    expect(bandNotes(band({ stopOrder: 7 }), [stop()])).toEqual([]);
   });
 });

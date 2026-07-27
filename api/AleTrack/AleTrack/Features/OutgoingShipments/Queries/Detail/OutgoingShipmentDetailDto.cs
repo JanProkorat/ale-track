@@ -241,6 +241,13 @@ public sealed record OutgoingShipmentStopDto
     /// for a custom stop). Read-only here — they are owned and edited by the order.
     /// </summary>
     public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// Free-form notes on the stop's order, oldest first (order stops only; always
+    /// empty for a custom stop, which has its own single <see cref="Note"/>).
+    /// Read-only here — they are owned and edited by the order.
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
 }
 
 public record OutgoingShipmentProductDto

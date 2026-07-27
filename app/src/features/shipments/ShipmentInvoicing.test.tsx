@@ -633,3 +633,41 @@ describe('delivery address', () => {
     expect(screen.queryByText(/Hlavní 1/)).not.toBeInTheDocument();
   });
 });
+
+describe('order notes', () => {
+  const stopWithNotes = (texts: string[]) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    notes: texts.map((t) => ({ id: t, text: t, dateCreated: new Date() })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  it("shows the order's notes in the expanded band", () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne', 'Faktura na jméno provozovny'])]);
+
+    expect(screen.getByTestId('band-notes')).toBeInTheDocument();
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getByText('Faktura na jméno provozovny')).toBeInTheDocument();
+  });
+
+  // An empty container would read as "no instructions" — a claim the section
+  // has no business making.
+  it('renders no note block when the order has none', () => {
+    renderSection(true, [stopWithNotes([])]);
+    expect(screen.queryByTestId('band-notes')).not.toBeInTheDocument();
+  });
+
+  it("keeps the operator's line breaks", () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne,\nzavolat 30 min předem'])]);
+
+    const note = screen.getByText(/zavolat 30 min předem/);
+    expect(note).toHaveStyle({ whiteSpace: 'pre-wrap' });
+  });
+
+  it('hides the notes with the band when it is collapsed', async () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne'])]);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitForElementToBeRemoved(() => screen.queryByText('Dovézt dopoledne'));
+  });
+});

@@ -28,6 +28,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMoreOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -48,7 +49,7 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  bandAddress, bandNotes, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
   type ClientBand,
@@ -117,6 +118,38 @@ function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShi
       {address.placeName && (
         <Chip size="small" label={address.placeName} sx={{ height: 17, fontSize: 10.5, fontWeight: 700 }} />
       )}
+    </Stack>
+  );
+}
+
+/** The notes on the order behind this band, above its invoice table.
+ *
+ *  Inside the Collapse rather than in the header: a note is free text and can
+ *  run long, and the header is deliberately two lines. Renders nothing at all
+ *  when the order has none — an empty box would read as "no instructions",
+ *  which is a claim this component has no business making. */
+function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const notes = bandNotes(band, stops);
+  if (notes.length === 0) return null;
+
+  return (
+    <Stack
+      spacing={0.75}
+      data-testid="band-notes"
+      sx={{
+        mt: 1.25, p: 1.25, borderRadius: 1.5, border: 1, borderColor: 'divider',
+        bgcolor: (t) => t.vars!.palette.brand.greyTint,
+      }}
+    >
+      {notes.map((note, i) => (
+        <Stack key={note.id ?? i} direction="row" spacing={0.875} alignItems="flex-start">
+          <StickyNote2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', mt: '2px', flexShrink: 0 }} />
+          {/* Notes are free text and often multi-line — keep the operator's breaks. */}
+          <Typography sx={{ fontSize: 12.5, whiteSpace: 'pre-wrap', minWidth: 0 }}>
+            {note.text}
+          </Typography>
+        </Stack>
+      ))}
     </Stack>
   );
 }
@@ -441,6 +474,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                 </Stack>
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
+                  <BandNotes band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
