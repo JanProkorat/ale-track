@@ -12679,9 +12679,18 @@ export class DeleteOutgoingShipmentRequest implements IDeleteOutgoingShipmentReq
 export interface IDeleteOutgoingShipmentRequest {
 }
 
-export class AcknowledgeAddressChangesRequest implements IAcknowledgeAddressChangesRequest {
+export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
+    deliveryAddressKind?: DeliveryAddressKind;
+    clientDeliveryPlaceId?: string | undefined;
+    items?: UnassignedOrderItemDto[];
 
-    constructor(data?: IAcknowledgeAddressChangesRequest) {
+    constructor(data?: IOutgoingShipmentOrderDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -12691,22 +12700,67 @@ export class AcknowledgeAddressChangesRequest implements IAcknowledgeAddressChan
     }
 
     init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
+            this.clientName = _data["clientName"];
+            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
+            this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
+            if (Array.isArray(_data["clientDeliveryPlaces"])) {
+                this.clientDeliveryPlaces = [] as any;
+                for (let item of _data["clientDeliveryPlaces"])
+                    this.clientDeliveryPlaces!.push(ClientDeliveryPlaceDto.fromJS(item));
+            }
+            this.deliveryAddressKind = _data["deliveryAddressKind"];
+            this.clientDeliveryPlaceId = _data["clientDeliveryPlaceId"];
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(UnassignedOrderItemDto.fromJS(item));
+            }
+        }
     }
 
-    static fromJS(data: any): AcknowledgeAddressChangesRequest {
+    static fromJS(data: any): OutgoingShipmentOrderDto {
         data = typeof data === 'object' ? data : {};
-        let result = new AcknowledgeAddressChangesRequest();
+        let result = new OutgoingShipmentOrderDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
+        data["clientName"] = this.clientName;
+        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
+        data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.clientDeliveryPlaces)) {
+            data["clientDeliveryPlaces"] = [];
+            for (let item of this.clientDeliveryPlaces)
+                data["clientDeliveryPlaces"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["deliveryAddressKind"] = this.deliveryAddressKind;
+        data["clientDeliveryPlaceId"] = this.clientDeliveryPlaceId;
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
 
-export interface IAcknowledgeAddressChangesRequest {
+export interface IOutgoingShipmentOrderDto {
+    id?: string;
+    requiredDeliveryDate?: Date | undefined;
+    clientName?: string;
+    clientOfficialAddress?: AddressDto;
+    clientContactAddress?: AddressDto | undefined;
+    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
+    deliveryAddressKind?: DeliveryAddressKind;
+    clientDeliveryPlaceId?: string | undefined;
+    items?: UnassignedOrderItemDto[];
 }
 
 export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
@@ -12838,90 +12892,6 @@ export class AddShipmentInvoiceDto implements IAddShipmentInvoiceDto {
 
 export interface IAddShipmentInvoiceDto {
     clientId?: string;
-}
-
-export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
-    id?: string;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
-    clientOfficialAddress?: AddressDto;
-    clientContactAddress?: AddressDto | undefined;
-    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
-    deliveryAddressKind?: DeliveryAddressKind;
-    clientDeliveryPlaceId?: string | undefined;
-    items?: UnassignedOrderItemDto[];
-
-    constructor(data?: IOutgoingShipmentOrderDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
-            this.clientName = _data["clientName"];
-            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
-            this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
-            if (Array.isArray(_data["clientDeliveryPlaces"])) {
-                this.clientDeliveryPlaces = [] as any;
-                for (let item of _data["clientDeliveryPlaces"])
-                    this.clientDeliveryPlaces!.push(ClientDeliveryPlaceDto.fromJS(item));
-            }
-            this.deliveryAddressKind = _data["deliveryAddressKind"];
-            this.clientDeliveryPlaceId = _data["clientDeliveryPlaceId"];
-            if (Array.isArray(_data["items"])) {
-                this.items = [] as any;
-                for (let item of _data["items"])
-                    this.items!.push(UnassignedOrderItemDto.fromJS(item));
-            }
-        }
-    }
-
-    static fromJS(data: any): OutgoingShipmentOrderDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new OutgoingShipmentOrderDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
-        data["clientName"] = this.clientName;
-        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
-        data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
-        if (Array.isArray(this.clientDeliveryPlaces)) {
-            data["clientDeliveryPlaces"] = [];
-            for (let item of this.clientDeliveryPlaces)
-                data["clientDeliveryPlaces"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["deliveryAddressKind"] = this.deliveryAddressKind;
-        data["clientDeliveryPlaceId"] = this.clientDeliveryPlaceId;
-        if (Array.isArray(this.items)) {
-            data["items"] = [];
-            for (let item of this.items)
-                data["items"].push(item ? item.toJSON() : undefined as any);
-        }
-        return data;
-    }
-}
-
-export interface IOutgoingShipmentOrderDto {
-    id?: string;
-    requiredDeliveryDate?: Date | undefined;
-    clientName?: string;
-    clientOfficialAddress?: AddressDto;
-    clientContactAddress?: AddressDto | undefined;
-    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
-    deliveryAddressKind?: DeliveryAddressKind;
-    clientDeliveryPlaceId?: string | undefined;
-    items?: UnassignedOrderItemDto[];
 }
 
 export class UnassignedOrderItemDto implements IUnassignedOrderItemDto {

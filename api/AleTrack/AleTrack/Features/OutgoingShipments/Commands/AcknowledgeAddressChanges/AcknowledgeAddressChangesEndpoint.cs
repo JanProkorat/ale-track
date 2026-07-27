@@ -9,24 +9,22 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.OutgoingShipments.Commands.AcknowledgeAddressChanges;
 
 /// <summary>
-/// Request to dismiss the delivery-address-change notice on a shipment
-/// </summary>
-public sealed record AcknowledgeAddressChangesRequest
-{
-    /// <summary>
-    /// Public ID of the outgoing shipment
-    /// </summary>
-    public Guid Id { get; set; }
-}
-
-/// <summary>
 /// Clears the pending delivery-address-change stamp on every stop of a
 /// shipment — the "Rozumím" action behind the banner. Separate from the
 /// shipment update because the read-only detail screen must be able to dismiss
 /// the notice without saving the whole shipment.
 /// </summary>
+/// <remarks>
+/// Deliberately <see cref="EndpointWithoutRequest"/> rather than a request DTO
+/// holding just the route ID: on POST, FastEndpoints binds a request DTO from
+/// the body and answers 415 when the caller sends none — which the generated
+/// client does, because a route-only DTO produces no request body in the
+/// OpenAPI document. Nothing about this call needs a body. Same reasoning as
+/// <c>AddPurchaseInvoiceEndpoint</c>, which hit this first.
+/// </remarks>
+/// <param name="dbContext"></param>
 public sealed class AcknowledgeAddressChangesEndpoint(AleTrackDbContext dbContext)
-    : Endpoint<AcknowledgeAddressChangesRequest>
+    : EndpointWithoutRequest
 {
     /// <inheritdoc />
     public override void Configure()
@@ -50,14 +48,16 @@ public sealed class AcknowledgeAddressChangesEndpoint(AleTrackDbContext dbContex
     }
 
     /// <inheritdoc />
-    public override async Task HandleAsync(AcknowledgeAddressChangesRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
+        var shipmentId = Route<Guid>("Id");
+
         var shipment = await dbContext.OutgoingShipments
             .Include(s => s.Stops)
-            .FirstOrDefaultAsync(s => s.PublicId == req.Id, ct);
+            .FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
 
         if (shipment is null)
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), shipmentId);
 
         foreach (var stop in shipment!.Stops)
             stop.AddressChangedAt = null;

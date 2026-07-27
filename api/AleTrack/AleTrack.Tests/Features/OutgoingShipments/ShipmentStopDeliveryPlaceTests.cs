@@ -703,9 +703,11 @@ public sealed class ShipmentStopDeliveryPlaceTests
 
         var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [target, other]);
 
-        var endpoint = EndpointBuilder<AcknowledgeAddressChangesRequest, AcknowledgeAddressChangesEndpoint>
-            .Create(db.Object);
-        await endpoint.HandleAsync(new AcknowledgeAddressChangesRequest { Id = target.PublicId }, CancellationToken.None);
+        // Takes no body and reads the shipment from the route — see the
+        // endpoint's remarks for why — so the test has to put it there.
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        endpoint.HttpContext.Request.RouteValues["Id"] = target.PublicId.ToString();
+        await endpoint.HandleAsync(CancellationToken.None);
 
         target.Stops.Should().OnlyContain(s => s.AddressChangedAt == null);
         other.Stops.Should().OnlyContain(s => s.AddressChangedAt == stamped);
@@ -717,10 +719,9 @@ public sealed class ShipmentStopDeliveryPlaceTests
     {
         var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: []);
 
-        var endpoint = EndpointBuilder<AcknowledgeAddressChangesRequest, AcknowledgeAddressChangesEndpoint>
-            .Create(db.Object);
-        var act = () => endpoint.HandleAsync(
-            new AcknowledgeAddressChangesRequest { Id = Guid.NewGuid() }, CancellationToken.None);
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        endpoint.HttpContext.Request.RouteValues["Id"] = Guid.NewGuid().ToString();
+        var act = () => endpoint.HandleAsync(CancellationToken.None);
 
         await act.Should().ThrowAsync<Exception>();
     }
