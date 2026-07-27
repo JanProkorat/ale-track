@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260725215508_StockPurchasesAndPurchaseInvoices")]
+    partial class StockPurchasesAndPurchaseInvoices
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -240,48 +243,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasIndex("ClientId");
 
                     b.ToTable("client_contacts");
-                });
-
-            modelBuilder.Entity("AleTrack.Entities.ClientDeliveryPlace", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("ClientId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("client_id");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("note");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClientId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("client_delivery_places");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.ClientNote", b =>
@@ -1020,48 +981,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentLoadingState", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("OutgoingShipmentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("outgoing_shipment_id");
-
-                    b.Property<long>("ProductId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("product_id");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("public_id");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer")
-                        .HasColumnName("sequence");
-
-                    b.Property<int>("State")
-                        .HasColumnType("integer")
-                        .HasColumnName("state");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("OutgoingShipmentId", "ProductId", "Sequence")
-                        .IsUnique();
-
-                    b.ToTable("outgoing_shipment_loading_states");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentPurchaseInvoice", b =>
                 {
                     b.Property<long>("Id")
@@ -1070,6 +989,11 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("label");
 
                     b.Property<long>("OutgoingShipmentId")
                         .HasColumnType("bigint")
@@ -1214,10 +1138,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<long?>("ClientDeliveryPlaceId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("client_delivery_place_id");
-
                     b.Property<long?>("ClientOrderId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_order_id");
@@ -1261,8 +1181,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnName("selected_address_kind");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ClientDeliveryPlaceId");
 
                     b.HasIndex("OutgoingShipmentId");
 
@@ -1834,67 +1752,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Client");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.ClientDeliveryPlace", b =>
-                {
-                    b.HasOne("AleTrack.Entities.Client", "Client")
-                        .WithMany("DeliveryPlaces")
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.OwnsOne("AleTrack.Entities.Address", "Address", b1 =>
-                        {
-                            b1.Property<long>("ClientDeliveryPlaceId")
-                                .HasColumnType("bigint");
-
-                            b1.Property<string>("City")
-                                .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
-                                .HasColumnName("city");
-
-                            b1.Property<int>("Country")
-                                .ValueGeneratedOnAdd()
-                                .HasColumnType("integer")
-                                .HasDefaultValue(1)
-                                .HasColumnName("country");
-
-                            b1.Property<decimal>("Latitude")
-                                .HasColumnType("numeric")
-                                .HasColumnName("latitude");
-
-                            b1.Property<decimal>("Longitude")
-                                .HasColumnType("numeric")
-                                .HasColumnName("longitude");
-
-                            b1.Property<string>("StreetName")
-                                .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
-                                .HasColumnName("street_name");
-
-                            b1.Property<string>("StreetNumber")
-                                .HasMaxLength(50)
-                                .HasColumnType("character varying(50)")
-                                .HasColumnName("street_number");
-
-                            b1.Property<string>("Zip")
-                                .HasMaxLength(10)
-                                .HasColumnType("character varying(10)")
-                                .HasColumnName("zip");
-
-                            b1.HasKey("ClientDeliveryPlaceId");
-
-                            b1.ToTable("client_delivery_places");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ClientDeliveryPlaceId");
-                        });
-
-                    b.Navigation("Address")
-                        .IsRequired();
-
-                    b.Navigation("Client");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.ClientNote", b =>
                 {
                     b.HasOne("AleTrack.Entities.Client", "Client")
@@ -2130,25 +1987,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("OrderItem");
                 });
 
-            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentLoadingState", b =>
-                {
-                    b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
-                        .WithMany("LoadingStates")
-                        .HasForeignKey("OutgoingShipmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("AleTrack.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("OutgoingShipment");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentPurchaseInvoice", b =>
                 {
                     b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
@@ -2211,18 +2049,11 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStop", b =>
                 {
-                    b.HasOne("AleTrack.Entities.ClientDeliveryPlace", "ClientDeliveryPlace")
-                        .WithMany()
-                        .HasForeignKey("ClientDeliveryPlaceId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AleTrack.Entities.OutgoingShipment", "OutgoingShipment")
                         .WithMany("Stops")
                         .HasForeignKey("OutgoingShipmentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ClientDeliveryPlace");
 
                     b.Navigation("OutgoingShipment");
                 });
@@ -2311,8 +2142,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Contacts");
 
-                    b.Navigation("DeliveryPlaces");
-
                     b.Navigation("Notes");
 
                     b.Navigation("Orders");
@@ -2348,8 +2177,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Drivers");
 
                     b.Navigation("Invoices");
-
-                    b.Navigation("LoadingStates");
 
                     b.Navigation("PurchaseInvoices");
 

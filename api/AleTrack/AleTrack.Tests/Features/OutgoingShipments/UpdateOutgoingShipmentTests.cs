@@ -152,7 +152,7 @@ public sealed class UpdateOutgoingShipmentTests
     }
 
     [Fact]
-    public async Task ProcessAsync_UpdateOutgoingShipment_ExistingInventoryExtraItemWithoutProductId_Success()
+    public async Task ProcessAsync_UpdateOutgoingShipment_ExistingStockPurchaseWithoutProductId_Success()
     {
         // Regression: re-sending an existing dokládka whose ProductId is not
         // round-tripped (empty) must update it in place, not trigger a Product
@@ -161,7 +161,7 @@ public sealed class UpdateOutgoingShipmentTests
         var extraId = Guid.NewGuid();
         var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
 
-        var existingExtra = new OutgoingShipmentInventoryExtraItem
+        var existingExtra = new OutgoingShipmentStockPurchaseItem
         {
             PublicId = extraId,
             Product = product,
@@ -173,7 +173,7 @@ public sealed class UpdateOutgoingShipmentTests
             publicId: shipmentId,
             state: OutgoingShipmentState.Created
         );
-        outgoingShipment.InventoryExtraItems = [existingExtra];
+        outgoingShipment.StockPurchases = [existingExtra];
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             outgoingShipments: [outgoingShipment],
@@ -191,9 +191,9 @@ public sealed class UpdateOutgoingShipmentTests
                 DriverIds = [],
                 ClientOrderShipments = [],
                 State = OutgoingShipmentState.Created,
-                InventoryExtraShipments =
+                StockPurchases =
                 [
-                    new InventoryExtraShipmentDto
+                    new StockPurchaseDto
                     {
                         Id = extraId,
                         ProductId = Guid.Empty,
@@ -208,7 +208,7 @@ public sealed class UpdateOutgoingShipmentTests
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
-        outgoingShipment.InventoryExtraItems.Should().ContainSingle();
+        outgoingShipment.StockPurchases.Should().ContainSingle();
         existingExtra.Quantity.Should().Be(7);
         existingExtra.IsShipmentLoadingConfirmed.Should().BeTrue();
         existingExtra.Product.Should().Be(product);

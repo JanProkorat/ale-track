@@ -38,6 +38,17 @@ vi.mock('src/hooks/useShipments', () => ({ useUpdateShipment: () => ({ mutateAsy
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLoading: false }) }));
+// The nakládka's brewery-invoice columns: the product catalogue feeds the
+// "Zboží na sklad" picker, and the split/loading writes are mutations the
+// screen only calls on click. Mocked for the same reason as the rest — this
+// file is about stop headers and route points, not about a QueryClient.
+vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [], isLoading: false }) }));
+vi.mock('src/hooks/usePurchaseInvoices', () => ({
+  useAddPurchaseInvoice: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeletePurchaseInvoice: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetPurchaseInvoiceLine: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetLoadingState: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 
 // ShipmentInvoicing renders unconditionally at the bottom of the detail
 // screen; give it just enough to not crash without pulling in a QueryClient
