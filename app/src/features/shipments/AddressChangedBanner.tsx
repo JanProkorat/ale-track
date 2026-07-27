@@ -1,5 +1,7 @@
 import { Alert, AlertTitle, Box, Button, Typography } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { type OutgoingShipmentStopDto } from 'src/generated/api-client';
+import { apiErrorMessage } from 'src/api/errors';
 import { useAcknowledgeAddressChanges } from 'src/hooks/useShipments';
 import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
 
@@ -27,8 +29,20 @@ export function AddressChangedBanner({
   stops: OutgoingShipmentStopDto[];
 }) {
   const acknowledge = useAcknowledgeAddressChanges();
+  const { enqueueSnackbar } = useSnackbar();
   const changed = stops.filter((s) => s.addressChangedAt);
   if (changed.length === 0) return null;
+
+  // The optimistic update in useAcknowledgeAddressChanges hides the banner
+  // immediately and rolls back if the call fails, so a silent rejection would
+  // look exactly like the notice reappearing for no reason. Say what happened.
+  const dismiss = async () => {
+    try {
+      await acknowledge.mutateAsync(shipmentId);
+    } catch (e) {
+      enqueueSnackbar(apiErrorMessage(e, 'Upozornění se nepodařilo skrýt'), { variant: 'error' });
+    }
+  };
 
   return (
     <Alert
@@ -39,7 +53,7 @@ export function AddressChangedBanner({
           size="small"
           color="inherit"
           disabled={acknowledge.isPending}
-          onClick={() => { void acknowledge.mutateAsync(shipmentId); }}
+          onClick={() => { void dismiss(); }}
         >
           Rozumím
         </Button>
