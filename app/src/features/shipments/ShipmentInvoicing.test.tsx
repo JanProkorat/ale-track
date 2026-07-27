@@ -96,7 +96,7 @@ beforeEach(() => {
 });
 
 describe('client bands', () => {
-  it('shows one band per client with its rollup', () => {
+  it('shows one band per client, with the counts left to the section total', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -110,8 +110,12 @@ describe('client bands', () => {
 
     expect(screen.getByText('Klient A')).toBeInTheDocument();
     expect(screen.getByText('Klient B')).toBeInTheDocument();
-    expect(screen.getByText('1 faktura · 10 ks · 1000 Kč')).toBeInTheDocument();
     expect(screen.getByText('2 faktury · 2 klienti')).toBeInTheDocument();
+
+    // The per-band rollup was removed deliberately: it repeats on every invoice
+    // sub-header and in the section total above. Guarded so it does not creep
+    // back in.
+    expect(screen.queryByText(/1 faktura · 10 ks/)).not.toBeInTheDocument();
   });
 
   it('omits the per-invoice sub-header when the client has only one invoice', () => {
@@ -473,8 +477,9 @@ describe('private pieces', () => {
     expect(screen.queryByText('soukromé')).not.toBeInTheDocument();
     // 6 of 10 pieces are billed; the private ones carry no value.
     expect(screen.getByText('fakturováno · 6 ks')).toBeInTheDocument();
+    // Still called out inside the band. The band header no longer repeats it —
+    // the header carries the client and the destination, nothing else.
     expect(screen.getByText('4 ks soukromě')).toBeInTheDocument();
-    expect(screen.getByText('1 faktura · 6 ks · 600 Kč · 4 ks soukromě')).toBeInTheDocument();
   });
 
   it('says everything is split when nothing is private', () => {
