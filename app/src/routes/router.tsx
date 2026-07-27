@@ -6,6 +6,7 @@ import { DashboardPage } from 'src/pages/DashboardPage';
 import { VehiclesPage } from 'src/features/vehicles/VehiclesPage';
 import { UsersPage } from 'src/features/users/UsersPage';
 import { InventoryPage } from 'src/features/inventory/InventoryPage';
+import { ReportsPage } from 'src/features/reports/ReportsPage';
 import { DriversPage } from 'src/features/drivers/DriversPage';
 import { BreweriesPage } from 'src/features/breweries/BreweriesPage';
 import { ClientsPage } from 'src/features/clients/ClientsPage';
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: PATHS.drivers, element: <DriversPage /> },
           { path: PATHS.vehicles, element: <VehiclesPage /> },
           { path: PATHS.users, element: <UsersPage /> },
+          { path: PATHS.reports, element: <ReportsPage /> },
         ],
       },
     ],
