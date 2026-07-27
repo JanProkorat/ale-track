@@ -69,6 +69,10 @@ const HEAD_SX = {
  *  the two line up by construction. 12.5px text at the theme's 1.5 ratio. */
 const NOTE_LINE = '19px';
 
+/** Indent that lines a vratka row up with the "Vrací" header's text: the 14px
+ *  icon plus the 7px (0.875) gap that follows it. */
+const RETURN_INDENT = '21px';
+
 function Pill({ tint, color, icon, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
   color: string;
@@ -166,7 +170,7 @@ function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentS
   );
 }
 
-/** The vratky this client hands back against the order behind the band.
+/** The vratky this client hands back, under the band's invoice table.
  *
  *  Read-only, like the shipment's own Vratky card — returns are owned by the
  *  order. Rendered in the same idiom as that card (name, note beneath,
@@ -184,11 +188,18 @@ function BandReturns({ band, stops }: { band: ClientBand; stops: OutgoingShipmen
         bgcolor: (t) => t.vars!.palette.brand.greyTint,
       }}
     >
+      {/* Headed, unlike the notes block: notes are self-evidently notes, but a
+          bare list of goods sitting under the invoice table would read as more
+          things being billed. The header is what says these travel the other
+          way. */}
+      <Stack direction="row" spacing={0.875} alignItems="center">
+        <Box sx={{ width: 14, height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <UndoIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+        </Box>
+        <Typography sx={{ ...HEAD_SX, lineHeight: NOTE_LINE }}>Vrací</Typography>
+      </Stack>
       {returns.map((r, i) => (
-        <Stack key={r.id ?? i} direction="row" spacing={0.875} alignItems="flex-start">
-          <Box sx={{ height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <UndoIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-          </Box>
+        <Stack key={r.id ?? i} direction="row" spacing={0.875} alignItems="flex-start" sx={{ pl: RETURN_INDENT }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE }}>{r.name}</Typography>
             {r.note && (
@@ -527,7 +538,6 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
                   <BandNotes band={band} stops={stops} />
-                  <BandReturns band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
@@ -618,6 +628,9 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                       </Table>
                     </TableContainer>
                   </Card>
+                  {/* Below the products, not above: what the client hands back
+                      reads after what they are being billed for. */}
+                  <BandReturns band={band} stops={stops} />
                 </Collapse>
               </Box>
             ))

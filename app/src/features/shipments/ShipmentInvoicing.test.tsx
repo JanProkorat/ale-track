@@ -687,10 +687,23 @@ describe('vratky', () => {
     ])]);
 
     const card = screen.getByTestId('band-returns');
+    // Headed, so a list of goods under the invoice table cannot be misread as
+    // more things being billed.
+    expect(within(card).getByText('Vrací')).toBeInTheDocument();
     expect(within(card).getByText('Sud 50 l')).toBeInTheDocument();
     expect(within(card).getByText('4×')).toBeInTheDocument();
     expect(within(card).getByText('Vadný ventil')).toBeInTheDocument();
     expect(within(card).getByText('Přepravka')).toBeInTheDocument();
+  });
+
+  it('sits below the products table, not above it', () => {
+    renderSection(true, [stopWithReturns([{ name: 'Sud 50 l', quantity: 4 }])]);
+
+    const products = screen.getByText('Produkt');
+    const returns = screen.getByTestId('band-returns');
+
+    // DOCUMENT_POSITION_FOLLOWING: the returns block comes after the table head.
+    expect(products.compareDocumentPosition(returns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('renders no vratky block when the order has none', () => {
