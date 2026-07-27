@@ -18,7 +18,30 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
     /// </summary>
     [Column("client_id")]
     public long ClientId { get; set; }
-    
+
+    /// <summary>
+    /// Where this order is delivered. The order is the source of truth; the
+    /// outgoing-shipment stop inherits this and may override it.
+    /// </summary>
+    [Column("delivery_address_kind")]
+    public DeliveryAddressKind DeliveryAddressKind { get; set; }
+
+    /// <summary>
+    /// The client's saved delivery place this order goes to. Set only when
+    /// <see cref="DeliveryAddressKind"/> is
+    /// <see cref="Common.Enums.DeliveryAddressKind.DeliveryPlace"/>.
+    /// </summary>
+    [Column("client_delivery_place_id")]
+    public long? ClientDeliveryPlaceId { get; set; }
+
+    /// <summary>
+    /// Delivery place this order goes to. Deliberately resolvable even when
+    /// soft-deleted, so an order pointing at a since-removed place keeps
+    /// rendering its address.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
+    public ClientDeliveryPlace? ClientDeliveryPlace { get; set; }
+
     /// <summary>
     /// Date when the order was created
     /// </summary>
