@@ -72,7 +72,7 @@ each loads independently and its DTO stays focused:
 ### 1. `GET reports/delivery-volume?from={date}&to={date}&granularity={day|week|month}`
 
 `DeliveryVolumeReportDto`:
-- `totalWeightKg` (decimal), `totalUnits` (int)
+- `totalWeightKg` (decimal), `totalUnits` (int), `clientsServed` (int)
 - `unitsByKind`: `[{ kind, units, weightKg }]`
 - `byBrewery`: `[{ breweryId, breweryName, color, weightKg, units }]`
 - `byType`: `[{ type, weightKg, units }]`
@@ -89,17 +89,24 @@ the dataset is small. Document this in the handler.
 - `clientsServed` (int), `totalDeliveries` (int — distinct shipment-stop count),
   `totalWeightKg`
 - `topClients` (all clients with volume, FE slices top 10):
-  `[{ clientId, clientName, region, deliveries, units, weightKg }]`
+  `[{ clientId, clientName, region, deliveries, units, weightKg }]` — `deliveries`
+  counts **distinct shipment stops**, not distinct delivery days. The prototype
+  derived it client-side as `new Set(dates).size`; two runs to the same client on
+  one day are two deliveries here and were one there.
 - `byRegion`: `[{ region, weightKg, units }]`
 
 ### 3. `GET reports/operations?from={date}&to={date}`
 
 `OperationsReportDto`:
+- `totalShipments` (int), `totalStops` (int), `activeDrivers` (int)
 - `shipmentsByState`: `[{ state, count }]` (outgoing shipments in window by
   `DeliveryDate`)
 - `onTimePercentage` (decimal, see definition above)
-- `returnableUnits` (int — Σ `OutgoingShipmentReturn.Quantity` on delivered
-  shipments)
+- `returnableUnits` (int — Σ return quantity on delivered shipments). Returns no
+  longer hang off the shipment: `feat/order-returns` moved them onto the order, so
+  the handler reaches them through the run's order stops
+  (`Stops → ClientOrder → Returns`). Git merged that change silently — only the
+  build caught it.
 - `incomingVsOutgoing`: `[{ month, incomingWeightKg, outgoingWeightKg }]`
   (incoming = `ProductDelivery` → `DeliveryStop` → `DeliveryItems` weight;
   outgoing = delivered order-item weight)
@@ -126,18 +133,40 @@ New `reports` module wired into the existing conventions:
    Sub-components: `VolumeTab.tsx`, `ClientsTab.tsx`, `OperationalTab.tsx`.
 5. **Hooks** — extend `app/src/hooks/useReports.ts` with `useDeliveryVolume`,
    `useClientVolume`, `useOperationsReport`, each a `useQuery` keyed on
-   `qk.reports.*(params)` (add report keys to `app/src/api/queryKeys.ts`), calling
+   `qk.reportVolume` / `qk.reportClients` / `qk.reportOperations` in
+   `app/src/api/queryKeys.ts` — flat keys, not a `qk.reports.*` resource — calling
    the regenerated client methods. Wrap tab bodies in `QueryBoundary`.
 6. **KPIs** reuse `StatCard`; tables reuse `DataTable<T>`; status chips reuse
    `StatusPill`. Clients table rows navigate to the client detail.
 
 ### Charting library
 
-**None is installed today.** Add **`@mui/x-charts`** — same vendor as the
+**Built with `@mui/x-charts` v8.** Same vendor as the
 already-present `@mui/x-date-pickers`, so it inherits the MUI theme (light/dark
 `cssVars`) with no extra styling layer. Used for the line/area trend, bar
 breakdowns, pie/donut by-type, and the on-time gauge. (Alternative considered:
 recharts — rejected to avoid a second theming system.)
+
+**Categorical colour does not come from the prototype's `TYPE_PALETTE`.** That set
+fails colour-vision-deficiency checks, cycles once it runs out, and assigns hues by
+position after sorting — so changing a filter repaints every series and two charts
+disagree about what a colour means. `src/features/reports/reportPalette.ts` holds a
+validated seven-slot Okabe-Ito-derived palette instead, with separate light and dark
+arrays checked for contrast against the real card surfaces, and slots assigned by
+**entity identity** rather than rank.
+
+Status colour is reserved: shipment state and the on-time gauge take the theme's
+status tokens — the same ones `StatusPill` uses — never the categorical palette.
+Every donut slice also carries a legend label, so state is never conveyed by colour
+alone.
+
+### Backend constraint: `Product.Weight` is unmapped
+
+`Product.Weight` is a computed C# property with no column, so it cannot appear in a
+SQL projection. Report handlers therefore materialise the delivered lines and
+aggregate weight in memory. The mocked-DbContext tests run LINQ-to-objects and would
+happily evaluate a translation EF Core rejects at runtime, so **they cannot catch a
+violation of this** — it has to be checked against a real database.
 
 ## The frontend ↔ backend contract
 
