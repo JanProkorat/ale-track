@@ -2,6 +2,8 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
+using AleTrack.Features.Orders.Commands.Create;
+using AleTrack.Features.Orders.Commands.Update;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -91,5 +93,79 @@ public sealed class OrderDeliveryAddressTests
             db.Object, Guid.NewGuid(), null, null, CancellationToken.None);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateValidator_DeliveryPlaceKindWithoutId_Fails()
+    {
+        var dto = OrderBuilder.BuildCreateDto();
+        dto.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        dto.ClientDeliveryPlaceId = null;
+
+        var result = await new CreateOrderDtoValidator().ValidateAsync(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(CreateOrderDto.ClientDeliveryPlaceId)
+            && e.ErrorCode == ErrorCodes.ValidationNotNullError);
+    }
+
+    [Theory]
+    [InlineData(DeliveryAddressKind.Official)]
+    [InlineData(DeliveryAddressKind.Contact)]
+    public async Task CreateValidator_StandardKindWithPlaceId_Fails(DeliveryAddressKind kind)
+    {
+        var dto = OrderBuilder.BuildCreateDto();
+        dto.DeliveryAddressKind = kind;
+        dto.ClientDeliveryPlaceId = Guid.NewGuid();
+
+        var result = await new CreateOrderDtoValidator().ValidateAsync(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(CreateOrderDto.ClientDeliveryPlaceId)
+            && e.ErrorCode == ErrorCodes.ValidationError);
+    }
+
+    [Fact]
+    public async Task CreateValidator_DeliveryPlaceKindWithId_Passes()
+    {
+        var dto = OrderBuilder.BuildCreateDto();
+        dto.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        dto.ClientDeliveryPlaceId = Guid.NewGuid();
+
+        var result = await new CreateOrderDtoValidator().ValidateAsync(dto);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateValidator_DeliveryPlaceKindWithoutId_Fails()
+    {
+        var dto = OrderBuilder.BuildUpdateDto();
+        dto.DeliveryAddressKind = DeliveryAddressKind.DeliveryPlace;
+        dto.ClientDeliveryPlaceId = null;
+
+        var result = await new UpdateOrderDtoValidator().ValidateAsync(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(UpdateOrderDto.ClientDeliveryPlaceId)
+            && e.ErrorCode == ErrorCodes.ValidationNotNullError);
+    }
+
+    [Fact]
+    public async Task UpdateValidator_StandardKindWithPlaceId_Fails()
+    {
+        var dto = OrderBuilder.BuildUpdateDto();
+        dto.DeliveryAddressKind = DeliveryAddressKind.Official;
+        dto.ClientDeliveryPlaceId = Guid.NewGuid();
+
+        var result = await new UpdateOrderDtoValidator().ValidateAsync(dto);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e =>
+            e.PropertyName == nameof(UpdateOrderDto.ClientDeliveryPlaceId)
+            && e.ErrorCode == ErrorCodes.ValidationError);
     }
 }

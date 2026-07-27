@@ -15,7 +15,21 @@ public sealed record CreateOrderDto
     /// ID of related <see cref="Client"/>
     /// </summary>
     public Guid ClientId { get; set; }
-    
+
+    /// <summary>
+    /// Where this order is delivered. Defaults to
+    /// <see cref="DeliveryAddressKind.Official"/>.
+    /// </summary>
+    public DeliveryAddressKind DeliveryAddressKind { get; set; }
+
+    /// <summary>
+    /// The client's saved delivery place. Required when
+    /// <see cref="DeliveryAddressKind"/> is
+    /// <see cref="Common.Enums.DeliveryAddressKind.DeliveryPlace"/>, and must
+    /// be null otherwise.
+    /// </summary>
+    public Guid? ClientDeliveryPlaceId { get; set; }
+
     /// <summary>
     /// Latest date when order needs to be delivered to the client
     /// </summary>
