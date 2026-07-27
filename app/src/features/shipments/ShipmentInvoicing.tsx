@@ -25,6 +25,7 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
@@ -40,14 +41,17 @@ import {
   type InvoiceLineSourceKind,
   type ShipmentInvoiceDto,
   type ShipmentInvoicesDto,
+  type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
   useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, moveTargetOptions,
-  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands, PRIVATE_TARGET,
+  bandAddress, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  PRIVATE_TARGET,
+  type ClientBand,
   type LineGroup,
 } from './shipmentInvoiceModel';
 import { kindLabel } from 'src/lib/labels';
@@ -95,6 +99,25 @@ function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string })
       {isStock ? <WarehouseOutlinedIcon sx={{ fontSize: 11 }} /> : <WarningAmberIcon sx={{ fontSize: 11 }} />}
       {label}
     </Box>
+  );
+}
+
+/** Where this client's goods actually go, under their name in the band header.
+ *  Renders nothing when the address can't be resolved — see `bandAddress`. */
+function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const address = bandAddress(band, stops);
+  if (!address) return null;
+
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0 }}>
+      <PlaceOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
+      <Typography sx={{ fontSize: 11.5, color: 'text.secondary', minWidth: 0 }} noWrap>
+        {address.text}
+      </Typography>
+      {address.placeName && (
+        <Chip size="small" label={address.placeName} sx={{ height: 17, fontSize: 10.5, fontWeight: 700 }} />
+      )}
+    </Stack>
   );
 }
 
@@ -211,7 +234,18 @@ interface MoveTarget {
  *  and no hook can run before the data exists. An earlier version computed totals in a
  *  useMemo above the `if (!data)` guard and crashed whenever the query had no data;
  *  the `data!` assertion needed to compile that is exactly what hid the mistake. */
-export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string; editable: boolean }) {
+export function ShipmentInvoicing({
+  shipmentId,
+  editable,
+  stops = [],
+}: {
+  shipmentId: string;
+  editable: boolean;
+  /** The shipment's own stops, purely so each band can show where its goods
+   * actually go — the invoice-split endpoint knows the client but not the
+   * destination. Defaults to none so the section still renders without them. */
+  stops?: OutgoingShipmentStopDto[];
+}) {
   const { data, isLoading, isError, error } = useShipmentInvoices(shipmentId);
 
   if (isLoading) {
@@ -241,13 +275,14 @@ export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string
     );
   }
 
-  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} />;
+  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} stops={stops} />;
 }
 
-function InvoicingContent({ shipmentId, editable, data }: {
+function InvoicingContent({ shipmentId, editable, data, stops }: {
   shipmentId: string;
   editable: boolean;
   data: ShipmentInvoicesDto;
+  stops: OutgoingShipmentStopDto[];
 }) {
   const { formatMoney } = useCurrency();
   const { enqueueSnackbar } = useSnackbar();
@@ -377,6 +412,10 @@ function InvoicingContent({ shipmentId, editable, data }: {
                       {` · ${num(band.quantity)} ks · ${formatMoney(band.value)}`}
                       {band.privateQuantity > 0 && ` · ${num(band.privateQuantity)} ks soukromě`}
                     </Typography>
+                    {/* Outside the Collapse on purpose: the collapsed header is
+                        what the office scans down, and where the goods went is
+                        part of that scan. */}
+                    <BandAddressLine band={band} stops={stops} />
                   </Box>
                   {band.crossBilled > 0 && (
                     <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>

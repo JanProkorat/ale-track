@@ -5,11 +5,13 @@
 // ordering client bands — can be tested without a rendering harness.
 
 import type {
+  OutgoingShipmentStopDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
   ProductKind,
 } from 'src/generated/api-client';
+import { resolveDetailStopAddress } from './stopAddress';
 
 /** One product on one invoice, with the exact per-source breakdown behind it. */
 export interface LineGroup {
@@ -257,6 +259,40 @@ export function moveTargetOptions(
     });
   }
   return out;
+}
+
+/** Where a band's goods are actually delivered, for the Fakturace header.
+ *
+ * The invoice split comes from its own endpoint, which knows the client but not
+ * the destination, so the address is matched back to the shipment's own stops.
+ * `stopOrder` is the match key rather than `clientId`: one client can hold two
+ * stops on a route, and picking the wrong one would state a destination the
+ * goods never went to. `clientId` is only a fallback for a band whose invoices
+ * carry no stop order.
+ *
+ * Returns undefined when no stop matches. The two datasets are separate queries
+ * and can briefly disagree — after a stop is removed but before the invoice
+ * query refetches, say — and on an invoicing screen no address is safer than a
+ * confidently wrong one.
+ *
+ * The driver's note is deliberately not returned: it routes a van through a
+ * gate, and means nothing to the office doing the billing.
+ */
+export function bandAddress(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): { text: string; placeName?: string } | undefined {
+  const stop = band.stopOrder != null
+    ? stops.find((s) => s.order === band.stopOrder)
+    : stops.find((s) => s.clientId === band.clientId);
+
+  if (!stop) return undefined;
+
+  const resolved = resolveDetailStopAddress(stop);
+  return {
+    text: resolved.text,
+    placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
+  };
 }
 
 /** Totals for the section header. */

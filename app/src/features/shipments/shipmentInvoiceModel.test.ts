@@ -5,10 +5,12 @@ import {
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
+  type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  bandAddress, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  type ClientBand,
 } from './shipmentInvoiceModel';
 
 const CLIENT_A = 'client-a';
@@ -403,5 +405,61 @@ describe('private pieces', () => {
     expect(isCrossBilled(null, foreign)).toBe(false);
     expect(partOrigin(null, foreign)).toBe('z vlastní objednávky');
     expect(partOrigin(null, line({ isFromStock: true }))).toBe('ze skladu');
+  });
+});
+
+describe('bandAddress', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+  });
+
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  it('resolves the official address for an Official stop', () => {
+    const result = bandAddress(band(), [stop()]);
+    expect(result?.text).toContain('Hlavní 1');
+    expect(result?.placeName).toBeUndefined();
+  });
+
+  it('names the place when the stop delivers to a saved one', () => {
+    const result = bandAddress(band(), [stop({
+      selectedAddressKind: 'DeliveryPlace',
+      deliveryPlace: { id: 'p1', name: 'Letní zahrádka', address: { latitude: 50.7, longitude: 15.05 } },
+    })]);
+
+    expect(result?.placeName).toBe('Letní zahrádka');
+    expect(result?.text).toContain('50.7000');
+  });
+
+  // A client can hold two stops on one route; matching on clientId alone would
+  // pick whichever came first and could state a destination the goods never
+  // went to.
+  it('matches on stop order, not client id, when a client has two stops', () => {
+    const result = bandAddress(band({ stopOrder: 2 }), [
+      stop({ id: 'st1', order: 1 }),
+      stop({
+        id: 'st2', order: 2,
+        officialAddress: { streetName: 'Vedlejší', streetNumber: '9', city: 'Jablonec', zip: '46601' },
+      }),
+    ]);
+
+    expect(result?.text).toContain('Vedlejší 9');
+  });
+
+  it('falls back to client id when the band carries no stop order', () => {
+    const result = bandAddress(band({ stopOrder: undefined }), [stop()]);
+    expect(result?.text).toContain('Hlavní 1');
+  });
+
+  // The invoice split and the shipment detail are separate queries and can
+  // briefly disagree — no address beats a confidently wrong one.
+  it('returns nothing when no stop matches', () => {
+    expect(bandAddress(band({ stopOrder: 7 }), [stop()])).toBeUndefined();
   });
 });

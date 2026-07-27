@@ -15,6 +15,7 @@ import {
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
+  type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -76,10 +77,10 @@ function invoice(over: Partial<ShipmentInvoiceDto> = {}): ShipmentInvoiceDto {
   });
 }
 
-function renderSection(editable = true) {
+function renderSection(editable = true, stops: OutgoingShipmentStopDto[] = []) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentInvoicing shipmentId="ship-1" editable={editable} />
+      <ShipmentInvoicing shipmentId="ship-1" editable={editable} stops={stops} />
     </MuiThemeProvider>,
   );
 }
@@ -589,5 +590,41 @@ describe('query states', () => {
     // An invisible section would read as "nothing to invoice", which is a different claim.
     expect(screen.getByText('Fakturace')).toBeInTheDocument();
     expect(screen.queryByText(/vše rozděleno/)).not.toBeInTheDocument();
+  });
+});
+
+describe('delivery address', () => {
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  it('shows where the band delivers, and keeps it visible when the band is collapsed', async () => {
+    renderSection(true, [stop()]);
+
+    expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument();
+
+    // The collapsed header is what the office scans, so the address has to
+    // survive the collapse — it sits outside the Collapse for this reason.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitFor(() => expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument());
+  });
+
+  it('names the delivery place beside the address', () => {
+    renderSection(true, [stop({
+      selectedAddressKind: 'DeliveryPlace',
+      deliveryPlace: { id: 'p1', name: 'Letní zahrádka', address: { latitude: 50.7, longitude: 15.05 } },
+    })]);
+
+    expect(screen.getByText('Letní zahrádka')).toBeInTheDocument();
+  });
+
+  // Two separate queries back this screen; they can briefly disagree.
+  it('shows no address rather than a wrong one when no stop matches', () => {
+    renderSection(true, [stop({ order: 99, clientId: 'someone-else' })]);
+
+    expect(screen.queryByText(/Hlavní 1/)).not.toBeInTheDocument();
   });
 });

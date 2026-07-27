@@ -1165,7 +1165,7 @@ export function ShipmentDetail({
       {/* Full width below the grid: the split needs the whole row, and its audience
           (the office doing the billing) is not the nakládka's. */}
       <Box sx={{ mt: 2.5 }}>
-        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} />
+        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
       </Box>
 
       <Dialog open={stockPurchaseOpen} onClose={() => setStockPurchaseOpen(false)} maxWidth="xs" fullWidth>
