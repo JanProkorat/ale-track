@@ -66,10 +66,14 @@ public static class OrderDeliveryAddressWriter
         CancellationToken ct)
     {
         // AleTrackDbContext has no direct DbSet<OutgoingShipmentStop>; reach the
-        // stop through the shipments it belongs to instead.
+        // stop through the shipments it belongs to instead. The Include must
+        // come AFTER SelectMany and target the stop's own OutgoingShipment
+        // navigation — an Include(s => s.Stops) placed before SelectMany gets
+        // silently dropped once the query is reshaped from OutgoingShipment to
+        // OutgoingShipmentStop, leaving the back-navigation null.
         var stop = await dbContext.OutgoingShipments
-            .Include(s => s.Stops)
             .SelectMany(s => s.Stops)
+            .Include(s => s.OutgoingShipment)
             .FirstOrDefaultAsync(s => s.ClientOrder != null && s.ClientOrder.PublicId == order.PublicId, ct);
 
         if (stop is null)
