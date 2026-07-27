@@ -64,6 +64,10 @@ const HEAD_SX = {
   letterSpacing: '0.05em', whiteSpace: 'nowrap' as const,
 };
 
+/** Line height of a note's text, shared with the box its icon is centred in so
+ *  the two line up by construction. 12.5px text at the theme's 1.5 ratio. */
+const NOTE_LINE = '19px';
+
 function Pill({ tint, color, icon, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
   color: string;
@@ -143,9 +147,16 @@ function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentS
     >
       {notes.map((note, i) => (
         <Stack key={note.id ?? i} direction="row" spacing={0.875} alignItems="flex-start">
-          <StickyNote2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', mt: '2px', flexShrink: 0 }} />
+          {/* The icon is centred inside a box exactly one text line tall, rather
+              than nudged down by a hand-picked margin. That makes the alignment
+              arithmetic instead of eyeballed, and keeps the icon on the *first*
+              line when a note wraps — centring it against the whole Stack would
+              float it into the middle of a three-line note. */}
+          <Box sx={{ height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <StickyNote2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+          </Box>
           {/* Notes are free text and often multi-line — keep the operator's breaks. */}
-          <Typography sx={{ fontSize: 12.5, whiteSpace: 'pre-wrap', minWidth: 0 }}>
+          <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE, whiteSpace: 'pre-wrap', minWidth: 0 }}>
             {note.text}
           </Typography>
         </Stack>
