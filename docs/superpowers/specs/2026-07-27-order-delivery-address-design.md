@@ -168,6 +168,7 @@ so the detail screen needs no extra round trip and no client-side lookup:
 public sealed record OrderDeliveryAddressDto
 {
     public DeliveryAddressKind Kind { get; set; }
+    public Guid? PlaceId { get; set; }       // so the editor can re-select the choice
     public string? PlaceName { get; set; }   // set only for Kind == DeliveryPlace
     public string? PlaceNote { get; set; }   // the driver instruction
     public AddressDto? Address { get; set; } // the resolved destination
@@ -245,8 +246,9 @@ answer, not an absence:
 
 ### Shared code moves
 
-Three call sites now need the same logic, so it stops living under
-`features/shipments/`:
+`DeliveryPlaceDialog` and `AddressMapPicker` already live in
+`components/common/` and are reusable as they stand. Only the pure choice
+encoding has to move:
 
 - `encodeStopChoice` / `decodeStopChoice` / `NEW_PLACE_CHOICE` and the
   `resolveFromAddresses` core move from `shipments/stopAddress.ts` to a new
@@ -254,9 +256,6 @@ Three call sites now need the same logic, so it stops living under
   `stopAddress.ts` keeps only the two stop-specific resolvers
   (`resolveStopAddress`, `resolveDetailStopAddress`) and imports the rest.
   `stopAddress.test.ts` splits along the same line.
-- `DeliveryPlaceDialog.tsx` (and its test) move from `features/shipments/` to
-  `features/clients/`. `AddressMapPicker` stays where it is — it is already
-  under `components/common/`.
 - A new pure `resolveOrderDeliveryAddress(client, places, kind, placeId)` in
   `clients/deliveryAddress.ts` backs the editor's preview line.
 
