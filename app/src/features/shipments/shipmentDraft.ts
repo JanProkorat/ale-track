@@ -30,6 +30,10 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       clientOrderId: st.orderId ?? '',
       order: st.order ?? 0,
       selectedAddressKind: st.selectedAddressKind ?? OutgoingShipmentStopAddressKind.Official,
+      // Round-tripped so a resave triggered by something unrelated (e.g. a
+      // nakládka checkbox on the detail screen) can't silently drop the
+      // stop's chosen delivery place back to the billing address.
+      clientDeliveryPlaceId: st.deliveryPlace?.id,
       orderItems: (st.products ?? []).map((p) => new OrderItemInfoDto({
         orderItemId: p.orderItemId,
         isLoadingConfirmed: p.isShipmentLoadingConfirmed,

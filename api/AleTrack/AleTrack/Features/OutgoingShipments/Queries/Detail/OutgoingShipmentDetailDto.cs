@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -177,6 +178,13 @@ public sealed record OutgoingShipmentStopDto
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+
+    /// <summary>
+    /// The delivery place this stop delivers to, when
+    /// <see cref="SelectedAddressKind"/> is DeliveryPlace. Deliberately still
+    /// populated for soft-deleted places so historical shipments render.
+    /// </summary>
+    public ClientDeliveryPlaceDto? DeliveryPlace { get; set; }
 
     /// <summary>
     /// Label of a custom stop.

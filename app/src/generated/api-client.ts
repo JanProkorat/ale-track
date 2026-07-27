@@ -507,6 +507,30 @@ export interface IClient {
     deleteClientEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets a client's delivery places
+     * @return List of delivery places
+     */
+    getClientDeliveryPlacesEndpoint(id: string, signal?: AbortSignal): Promise<ClientDeliveryPlaceDto[]>;
+
+    /**
+     * Creates a client delivery place
+     * @return Delivery place created
+     */
+    createClientDeliveryPlaceEndpoint(id: string, data: SaveClientDeliveryPlaceDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Updates a client delivery place
+     * @return Delivery place updated
+     */
+    updateClientDeliveryPlaceEndpoint(id: string, data: SaveClientDeliveryPlaceDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a client delivery place
+     * @return Delivery place deleted
+     */
+    deleteClientDeliveryPlaceEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Gets filtered breweries list
      * @return List of breweries
      */
@@ -5820,6 +5844,269 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets a client's delivery places
+     * @return List of delivery places
+     */
+    getClientDeliveryPlacesEndpoint(id: string, signal?: AbortSignal): Promise<ClientDeliveryPlaceDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/delivery-places";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientDeliveryPlacesEndpoint(_response);
+        });
+    }
+
+    protected processGetClientDeliveryPlacesEndpoint(response: Response): Promise<ClientDeliveryPlaceDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ClientDeliveryPlaceDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientDeliveryPlaceDto[]>(null as any);
+    }
+
+    /**
+     * Creates a client delivery place
+     * @return Delivery place created
+     */
+    createClientDeliveryPlaceEndpoint(id: string, data: SaveClientDeliveryPlaceDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/delivery-places";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateClientDeliveryPlaceEndpoint(_response);
+        });
+    }
+
+    protected processCreateClientDeliveryPlaceEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : null as any;
+    
+            return result201;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Updates a client delivery place
+     * @return Delivery place updated
+     */
+    updateClientDeliveryPlaceEndpoint(id: string, data: SaveClientDeliveryPlaceDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/delivery-places/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateClientDeliveryPlaceEndpoint(_response);
+        });
+    }
+
+    protected processUpdateClientDeliveryPlaceEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Delivery place not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a client delivery place
+     * @return Delivery place deleted
+     */
+    deleteClientDeliveryPlaceEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/delivery-places/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientDeliveryPlaceEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientDeliveryPlaceEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : null as any;
+    
+            return result202;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Delivery place not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Gets filtered breweries list
      * @return List of breweries
      */
@@ -9837,6 +10124,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     label?: string | undefined;
     note?: string | undefined;
     latitude?: number | undefined;
@@ -9865,6 +10153,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
             this.orderId = _data["orderId"];
             this.selectedAddressKind = _data["selectedAddressKind"];
+            this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.label = _data["label"];
             this.note = _data["note"];
             this.latitude = _data["latitude"];
@@ -9905,6 +10194,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
         data["orderId"] = this.orderId;
         data["selectedAddressKind"] = this.selectedAddressKind;
+        data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["label"] = this.label;
         data["note"] = this.note;
         data["latitude"] = this.latitude;
@@ -9938,6 +10228,7 @@ export interface IOutgoingShipmentStopDto {
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
     selectedAddressKind?: OutgoingShipmentStopAddressKind;
+    deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     label?: string | undefined;
     note?: string | undefined;
     latitude?: number | undefined;
@@ -10020,6 +10311,55 @@ export enum Country {
 export enum OutgoingShipmentStopAddressKind {
     Official = 0,
     Contact = 1,
+    DeliveryPlace = 2,
+}
+
+export class ClientDeliveryPlaceDto implements IClientDeliveryPlaceDto {
+    id?: string;
+    name?: string;
+    note?: string | undefined;
+    address?: AddressDto;
+
+    constructor(data?: IClientDeliveryPlaceDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.note = _data["note"];
+            this.address = _data["address"] ? AddressDto.fromJS(_data["address"]) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): ClientDeliveryPlaceDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientDeliveryPlaceDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["note"] = this.note;
+        data["address"] = this.address ? this.address.toJSON() : undefined as any;
+        return data;
+    }
+}
+
+export interface IClientDeliveryPlaceDto {
+    id?: string;
+    name?: string;
+    note?: string | undefined;
+    address?: AddressDto;
 }
 
 export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
@@ -10645,6 +10985,7 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
     clientOrderId!: string;
     order!: number;
     selectedAddressKind!: OutgoingShipmentStopAddressKind;
+    clientDeliveryPlaceId?: string | undefined;
     orderItems?: OrderItemInfoDto[];
     customExtraItems?: ExtraItemInfoDto[];
 
@@ -10662,6 +11003,7 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
             this.clientOrderId = _data["clientOrderId"];
             this.order = _data["order"];
             this.selectedAddressKind = _data["selectedAddressKind"];
+            this.clientDeliveryPlaceId = _data["clientDeliveryPlaceId"];
             if (Array.isArray(_data["orderItems"])) {
                 this.orderItems = [] as any;
                 for (let item of _data["orderItems"])
@@ -10687,6 +11029,7 @@ export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
         data["clientOrderId"] = this.clientOrderId;
         data["order"] = this.order;
         data["selectedAddressKind"] = this.selectedAddressKind;
+        data["clientDeliveryPlaceId"] = this.clientDeliveryPlaceId;
         if (Array.isArray(this.orderItems)) {
             data["orderItems"] = [];
             for (let item of this.orderItems)
@@ -10705,6 +11048,7 @@ export interface IClientOrderShipmentDto {
     clientOrderId: string;
     order: number;
     selectedAddressKind: OutgoingShipmentStopAddressKind;
+    clientDeliveryPlaceId?: string | undefined;
     orderItems?: OrderItemInfoDto[];
     customExtraItems?: ExtraItemInfoDto[];
 }
@@ -11210,6 +11554,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     clientName?: string;
     clientOfficialAddress?: AddressDto;
     clientContactAddress?: AddressDto | undefined;
+    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     items?: UnassignedOrderItemDto[];
 
     constructor(data?: IOutgoingShipmentOrderDto) {
@@ -11228,6 +11573,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
             this.clientName = _data["clientName"];
             this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
             this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
+            if (Array.isArray(_data["clientDeliveryPlaces"])) {
+                this.clientDeliveryPlaces = [] as any;
+                for (let item of _data["clientDeliveryPlaces"])
+                    this.clientDeliveryPlaces!.push(ClientDeliveryPlaceDto.fromJS(item));
+            }
             if (Array.isArray(_data["items"])) {
                 this.items = [] as any;
                 for (let item of _data["items"])
@@ -11250,6 +11600,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
         data["clientName"] = this.clientName;
         data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
         data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.clientDeliveryPlaces)) {
+            data["clientDeliveryPlaces"] = [];
+            for (let item of this.clientDeliveryPlaces)
+                data["clientDeliveryPlaces"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.items)) {
             data["items"] = [];
             for (let item of this.items)
@@ -11265,6 +11620,7 @@ export interface IOutgoingShipmentOrderDto {
     clientName?: string;
     clientOfficialAddress?: AddressDto;
     clientContactAddress?: AddressDto | undefined;
+    clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     items?: UnassignedOrderItemDto[];
 }
 
@@ -13542,22 +13898,9 @@ export interface IUpdateClientContactDto {
     value?: string;
 }
 
-export class BreweryProductListItemDto implements IBreweryProductListItemDto {
-    id?: string;
-    name?: string;
-    description?: string | undefined;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    priceWithVat?: number;
-    priceForUnitWithVat?: number | undefined;
-    priceForUnitWithoutVat?: number | undefined;
-    weight?: number | undefined;
-    displayOrder?: number;
+export class GetClientDeliveryPlacesRequest implements IGetClientDeliveryPlacesRequest {
 
-    constructor(data?: IBreweryProductListItemDto) {
+    constructor(data?: IGetClientDeliveryPlacesRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -13567,63 +13910,22 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
     }
 
     init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-            this.name = _data["name"];
-            this.description = _data["description"];
-            this.kind = _data["kind"];
-            this.type = _data["type"];
-            this.alcoholPercentage = _data["alcoholPercentage"];
-            this.platoDegree = _data["platoDegree"];
-            this.packageSize = _data["packageSize"];
-            this.priceWithVat = _data["priceWithVat"];
-            this.priceForUnitWithVat = _data["priceForUnitWithVat"];
-            this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
-            this.weight = _data["weight"];
-            this.displayOrder = _data["displayOrder"];
-        }
     }
 
-    static fromJS(data: any): BreweryProductListItemDto {
+    static fromJS(data: any): GetClientDeliveryPlacesRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new BreweryProductListItemDto();
+        let result = new GetClientDeliveryPlacesRequest();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["name"] = this.name;
-        data["description"] = this.description;
-        data["kind"] = this.kind;
-        data["type"] = this.type;
-        data["alcoholPercentage"] = this.alcoholPercentage;
-        data["platoDegree"] = this.platoDegree;
-        data["packageSize"] = this.packageSize;
-        data["priceWithVat"] = this.priceWithVat;
-        data["priceForUnitWithVat"] = this.priceForUnitWithVat;
-        data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
-        data["weight"] = this.weight;
-        data["displayOrder"] = this.displayOrder;
         return data;
     }
 }
 
-export interface IBreweryProductListItemDto {
-    id?: string;
-    name?: string;
-    description?: string | undefined;
-    kind?: ProductKind;
-    type?: ProductType;
-    alcoholPercentage?: number | undefined;
-    platoDegree?: number | undefined;
-    packageSize?: number | undefined;
-    priceWithVat?: number;
-    priceForUnitWithVat?: number | undefined;
-    priceForUnitWithoutVat?: number | undefined;
-    weight?: number | undefined;
-    displayOrder?: number;
+export interface IGetClientDeliveryPlacesRequest {
 }
 
 export class CreateClientDto implements ICreateClientDto {
@@ -13732,6 +14034,176 @@ export interface ICreateClientContactDto {
     type?: ContactType;
     description?: string | undefined;
     value?: string;
+}
+
+export class DeleteClientDeliveryPlaceRequest implements IDeleteClientDeliveryPlaceRequest {
+
+    constructor(data?: IDeleteClientDeliveryPlaceRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientDeliveryPlaceRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientDeliveryPlaceRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientDeliveryPlaceRequest {
+}
+
+export class SaveClientDeliveryPlaceDto implements ISaveClientDeliveryPlaceDto {
+    name?: string;
+    note?: string | undefined;
+    address?: AddressDto;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+    country?: Country | undefined;
+
+    constructor(data?: ISaveClientDeliveryPlaceDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.note = _data["note"];
+            this.address = _data["address"] ? AddressDto.fromJS(_data["address"]) : undefined as any;
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
+            this.country = _data["country"];
+        }
+    }
+
+    static fromJS(data: any): SaveClientDeliveryPlaceDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaveClientDeliveryPlaceDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["note"] = this.note;
+        data["address"] = this.address ? this.address.toJSON() : undefined as any;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
+        data["country"] = this.country;
+        return data;
+    }
+}
+
+export interface ISaveClientDeliveryPlaceDto {
+    name?: string;
+    note?: string | undefined;
+    address?: AddressDto;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+    country?: Country | undefined;
+}
+
+export class BreweryProductListItemDto implements IBreweryProductListItemDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    priceWithVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
+    weight?: number | undefined;
+    displayOrder?: number;
+
+    constructor(data?: IBreweryProductListItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.description = _data["description"];
+            this.kind = _data["kind"];
+            this.type = _data["type"];
+            this.alcoholPercentage = _data["alcoholPercentage"];
+            this.platoDegree = _data["platoDegree"];
+            this.packageSize = _data["packageSize"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.priceForUnitWithVat = _data["priceForUnitWithVat"];
+            this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.weight = _data["weight"];
+            this.displayOrder = _data["displayOrder"];
+        }
+    }
+
+    static fromJS(data: any): BreweryProductListItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new BreweryProductListItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["description"] = this.description;
+        data["kind"] = this.kind;
+        data["type"] = this.type;
+        data["alcoholPercentage"] = this.alcoholPercentage;
+        data["platoDegree"] = this.platoDegree;
+        data["packageSize"] = this.packageSize;
+        data["priceWithVat"] = this.priceWithVat;
+        data["priceForUnitWithVat"] = this.priceForUnitWithVat;
+        data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["weight"] = this.weight;
+        data["displayOrder"] = this.displayOrder;
+        return data;
+    }
+}
+
+export interface IBreweryProductListItemDto {
+    id?: string;
+    name?: string;
+    description?: string | undefined;
+    kind?: ProductKind;
+    type?: ProductType;
+    alcoholPercentage?: number | undefined;
+    platoDegree?: number | undefined;
+    packageSize?: number | undefined;
+    priceWithVat?: number;
+    priceForUnitWithVat?: number | undefined;
+    priceForUnitWithoutVat?: number | undefined;
+    weight?: number | undefined;
+    displayOrder?: number;
 }
 
 export class GetProductsListRequest extends FilterableRequest implements IGetProductsListRequest {

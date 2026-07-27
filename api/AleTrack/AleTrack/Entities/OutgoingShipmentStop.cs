@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
@@ -44,6 +45,14 @@ public sealed class OutgoingShipmentStop : PublicEntity
     public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
+    /// The client's saved delivery place this stop delivers to. Set only when
+    /// <see cref="SelectedAddressKind"/> is
+    /// <see cref="OutgoingShipmentStopAddressKind.DeliveryPlace"/>.
+    /// </summary>
+    [Column("client_delivery_place_id")]
+    public long? ClientDeliveryPlaceId { get; set; }
+
+    /// <summary>
     /// Label of a custom stop (null for order stops).
     /// </summary>
     [Column("label")]
@@ -79,4 +88,11 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// Order associated with this stop. Null for custom stops.
     /// </summary>
     public Order? ClientOrder { get; set; }
+
+    /// <summary>
+    /// Delivery place associated with this stop. Deliberately resolvable even
+    /// when soft-deleted, so historical shipments keep rendering.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
+    public ClientDeliveryPlace? ClientDeliveryPlace { get; set; }
 }
