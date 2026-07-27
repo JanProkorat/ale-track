@@ -55,6 +55,21 @@ export function useDeleteShipment() {
   });
 }
 
+/** Clears the `addressChangedAt` stamp on every stop of this shipment once the
+ * planner has seen the AddressChangedBanner's notice — see the banner in
+ * src/features/shipments/AddressChangedBanner.tsx. */
+export function useAcknowledgeAddressChanges() {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shipmentId: string) => ds.acknowledgeAddressChangesEndpoint(shipmentId),
+    onSuccess: (_res, shipmentId) => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId) });
+    },
+  });
+}
+
 /** Orders eligible to become a stop on this shipment (or already on it, when
  * editing) — excludes orders already assigned to a *different* shipment. Pass
  * `undefined` when creating a brand-new shipment. */

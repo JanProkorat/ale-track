@@ -68,6 +68,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useAvailableOrders: () => ({ data: availableOrders, isLoading: availableOrdersLoading, isError: availableOrdersError }),
   useCreateShipment: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateShipment: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
+  useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));

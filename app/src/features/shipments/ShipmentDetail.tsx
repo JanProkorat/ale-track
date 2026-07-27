@@ -57,6 +57,7 @@ import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
+import { AddressChangedBanner } from './AddressChangedBanner';
 
 interface NakladkaRow {
   key: string;
@@ -1141,6 +1142,8 @@ export function ShipmentDetail({
             quantityOf={(row) => row.fromInventory}
             emptyText="Nic se z garáže nenakládá."
           />
+
+          <AddressChangedBanner shipmentId={shipment.id ?? ''} stops={stopsSorted} />
 
           <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
 

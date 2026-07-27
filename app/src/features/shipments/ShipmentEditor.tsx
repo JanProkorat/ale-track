@@ -48,6 +48,7 @@ import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
 import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
 import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
+import { AddressChangedBanner } from './AddressChangedBanner';
 import { resolveStopAddress } from './stopAddress';
 import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
 
@@ -568,6 +569,11 @@ export function ShipmentEditor({
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' }, alignItems: 'start' }}>
         <Stack spacing={2}>
           <RouteMap stops={routeStops} viaPoints={viaPoints} editable={!structureLocked} onViasChange={setViaPoints} height={320} />
+
+          {/* Fed from the loaded server shipment (shipmentQuery.data), not the local
+              `stops` draft — the draft is client-side and carries no `addressChangedAt`,
+              so passing it here would silently never render anything. */}
+          <AddressChangedBanner shipmentId={shipmentId ?? ''} stops={shipmentQuery.data?.stops ?? []} />
 
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>

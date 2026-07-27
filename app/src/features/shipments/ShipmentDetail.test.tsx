@@ -34,7 +34,10 @@ vi.mock('src/components/common/RouteMap', () => ({
   },
 }));
 
-vi.mock('src/hooks/useShipments', () => ({ useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
+vi.mock('src/hooks/useShipments', () => ({
+  useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLoading: false }) }));
