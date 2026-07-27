@@ -1,5 +1,6 @@
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,17 +56,11 @@ public static class ShipmentStopDeliveryPlaceResolver
             .Distinct()
             .ToList();
 
-        if (requestedIds.Count == 0)
+        var places = await ClientDeliveryPlaceResolver.ResolveManyAsync(
+            dbContext, requestedIds, alreadyReferencedPlaceIds, ct);
+
+        if (places.Count == 0)
             return [];
-
-        var places = await dbContext.ClientDeliveryPlaces
-            .Where(p => requestedIds.Contains(p.PublicId) && (!p.IsDeleted || alreadyReferencedPlaceIds.Contains(p.Id)))
-            .Select(p => new { p.PublicId, p.Id, ClientPublicId = p.Client.PublicId })
-            .ToListAsync(ct);
-
-        var missing = requestedIds.Where(id => places.All(p => p.PublicId != id)).ToList();
-        if (missing.Count > 0)
-            ThrowHelper.PublicEntitiesNotFound(nameof(ClientDeliveryPlace), missing);
 
         var orderClients = await dbContext.Orders
             .Where(o => clientOrderShipments.Select(cos => cos.ClientOrderId).Contains(o.PublicId))
