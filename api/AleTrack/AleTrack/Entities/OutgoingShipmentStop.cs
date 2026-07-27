@@ -42,15 +42,33 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     [Column("selected_address_kind")]
-    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    public DeliveryAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
     /// The client's saved delivery place this stop delivers to. Set only when
     /// <see cref="SelectedAddressKind"/> is
-    /// <see cref="OutgoingShipmentStopAddressKind.DeliveryPlace"/>.
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>.
     /// </summary>
     [Column("client_delivery_place_id")]
     public long? ClientDeliveryPlaceId { get; set; }
+
+    /// <summary>
+    /// True when the planner chose an address other than the one the stop's
+    /// order says. This is what suppresses propagation: an order edit rewrites
+    /// an inherited stop's address, never an overridden one. Derived at write
+    /// time by comparing the requested choice against the order's — never sent
+    /// by the client.
+    /// </summary>
+    [Column("is_address_overridden")]
+    public bool IsAddressOverridden { get; set; }
+
+    /// <summary>
+    /// Stamped when an order edit changed the delivery address under this
+    /// active shipment — whether or not the change propagated here. Drives the
+    /// shipment banner; cleared by acknowledging it or by saving the shipment.
+    /// </summary>
+    [Column("address_changed_at")]
+    public DateTime? AddressChangedAt { get; set; }
 
     /// <summary>
     /// Label of a custom stop (null for order stops).

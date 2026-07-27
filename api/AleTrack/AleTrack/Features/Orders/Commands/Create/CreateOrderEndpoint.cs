@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +100,9 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
                 Quantity = extra.Quantity
             });
         }
+
+        await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext, order, client!, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
 
         client!.Orders.Add(order);
 

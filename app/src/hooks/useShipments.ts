@@ -5,7 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { type CreateOutgoingShipmentDto, type UpdateOutgoingShipmentDto } from 'src/generated/api-client';
+import { type CreateOutgoingShipmentDto, type OutgoingShipmentDetailDto, type UpdateOutgoingShipmentDto } from 'src/generated/api-client';
 
 export function useShipments(params: Record<string, string> = {}) {
   const ds = useDataSource();
@@ -52,6 +52,49 @@ export function useDeleteShipment() {
   return useMutation({
     mutationFn: (id: string) => ds.deleteOutgoingShipmentEndpoint(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipments.all }),
+  });
+}
+
+/** Clears the `addressChangedAt` stamp on every stop of this shipment once the
+ * planner has seen the AddressChangedBanner's notice — see the banner in
+ * src/features/shipments/AddressChangedBanner.tsx. */
+export function useAcknowledgeAddressChanges() {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shipmentId: string) => ds.acknowledgeAddressChangesEndpoint(shipmentId),
+
+    // Dismissing a notice is the one thing that should never feel like it is
+    // thinking about it, so clear the stamps in the cache up front: the banner
+    // reads `addressChangedAt` off this query on both the detail and the
+    // editor, so it disappears on click rather than after a server round trip.
+    // Returns the previous shipment for rollback — without it a rejected call
+    // (a 403, a dropped connection) would leave the banner gone while the
+    // server still holds the stamp, and it would silently reappear on the next
+    // refetch.
+    onMutate: async (shipmentId: string) => {
+      const key = qk.shipments.detail(shipmentId);
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(key);
+      if (previous) {
+        qc.setQueryData<OutgoingShipmentDetailDto>(key, {
+          ...previous,
+          stops: (previous.stops ?? []).map((s) => ({ ...s, addressChangedAt: undefined })),
+        } as OutgoingShipmentDetailDto);
+      }
+      return { previous, key };
+    },
+
+    onError: (_err, _shipmentId, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+    },
+
+    // Reconcile with the server either way: on success to pick up anything that
+    // changed alongside, on failure to undo a rollback that guessed wrong.
+    onSettled: (_res, _err, shipmentId) => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId) });
+    },
   });
 }
 

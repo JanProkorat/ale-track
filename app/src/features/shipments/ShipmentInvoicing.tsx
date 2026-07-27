@@ -25,8 +25,11 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import UndoIcon from '@mui/icons-material/UndoOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLessOutlined';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMoreOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -40,14 +43,17 @@ import {
   type InvoiceLineSourceKind,
   type ShipmentInvoiceDto,
   type ShipmentInvoicesDto,
+  type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
   useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, moveTargetOptions,
-  originChips, partOrigin, partsByLikelihood, sectionTotals, toBands, PRIVATE_TARGET,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
+  PRIVATE_TARGET,
+  type ClientBand,
   type LineGroup,
 } from './shipmentInvoiceModel';
 import { kindLabel } from 'src/lib/labels';
@@ -58,6 +64,14 @@ const HEAD_SX = {
   fontSize: 11, fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase' as const,
   letterSpacing: '0.05em', whiteSpace: 'nowrap' as const,
 };
+
+/** Line height of a note's text, shared with the box its icon is centred in so
+ *  the two line up by construction. 12.5px text at the theme's 1.5 ratio. */
+const NOTE_LINE = '19px';
+
+/** Indent that lines a vratka row up with the "Vrací" header's text: the 14px
+ *  icon plus the 7px (0.875) gap that follows it. */
+const RETURN_INDENT = '21px';
 
 function Pill({ tint, color, icon, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
@@ -95,6 +109,111 @@ function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string })
       {isStock ? <WarehouseOutlinedIcon sx={{ fontSize: 11 }} /> : <WarningAmberIcon sx={{ fontSize: 11 }} />}
       {label}
     </Box>
+  );
+}
+
+/** Where this client's goods actually go, under their name in the band header.
+ *  Renders nothing when the address can't be resolved — see `bandAddress`. */
+function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const address = bandAddress(band, stops);
+  if (!address) return null;
+
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0 }}>
+      <PlaceOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
+      <Typography sx={{ fontSize: 11.5, color: 'text.secondary', minWidth: 0 }} noWrap>
+        {address.text}
+      </Typography>
+      {address.placeName && (
+        <Chip size="small" label={address.placeName} sx={{ height: 17, fontSize: 10.5, fontWeight: 700 }} />
+      )}
+    </Stack>
+  );
+}
+
+/** The notes on the order behind this band, above its invoice table.
+ *
+ *  Inside the Collapse rather than in the header: a note is free text and can
+ *  run long, and the header is deliberately two lines. Renders nothing at all
+ *  when the order has none — an empty box would read as "no instructions",
+ *  which is a claim this component has no business making. */
+function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const notes = bandNotes(band, stops);
+  if (notes.length === 0) return null;
+
+  return (
+    <Stack
+      spacing={0.75}
+      data-testid="band-notes"
+      sx={{
+        mt: 1.25, p: 1.25, borderRadius: 1.5, border: 1, borderColor: 'divider',
+        bgcolor: (t) => t.vars!.palette.brand.greyTint,
+      }}
+    >
+      {notes.map((note, i) => (
+        <Stack key={note.id ?? i} direction="row" spacing={0.875} alignItems="flex-start">
+          {/* The icon is centred inside a box exactly one text line tall, rather
+              than nudged down by a hand-picked margin. That makes the alignment
+              arithmetic instead of eyeballed, and keeps the icon on the *first*
+              line when a note wraps — centring it against the whole Stack would
+              float it into the middle of a three-line note. */}
+          <Box sx={{ height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <StickyNote2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+          </Box>
+          {/* Notes are free text and often multi-line — keep the operator's breaks. */}
+          <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE, whiteSpace: 'pre-wrap', minWidth: 0 }}>
+            {note.text}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/** The vratky this client hands back, under the band's invoice table.
+ *
+ *  Read-only, like the shipment's own Vratky card — returns are owned by the
+ *  order. Rendered in the same idiom as that card (name, note beneath,
+ *  quantity right-aligned) so a vratka looks the same wherever it appears. */
+function BandReturns({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
+  const returns = bandReturns(band, stops);
+  if (returns.length === 0) return null;
+
+  return (
+    <Stack
+      spacing={0.75}
+      data-testid="band-returns"
+      sx={{
+        mt: 1.25, p: 1.25, borderRadius: 1.5, border: 1, borderColor: 'divider',
+        bgcolor: (t) => t.vars!.palette.brand.greyTint,
+      }}
+    >
+      {/* Headed, unlike the notes block: notes are self-evidently notes, but a
+          bare list of goods sitting under the invoice table would read as more
+          things being billed. The header is what says these travel the other
+          way. */}
+      <Stack direction="row" spacing={0.875} alignItems="center">
+        <Box sx={{ width: 14, height: NOTE_LINE, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <UndoIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+        </Box>
+        <Typography sx={{ ...HEAD_SX, lineHeight: NOTE_LINE }}>Vrací</Typography>
+      </Stack>
+      {returns.map((r, i) => (
+        <Stack key={r.id ?? i} direction="row" spacing={0.875} alignItems="flex-start" sx={{ pl: RETURN_INDENT }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE }}>{r.name}</Typography>
+            {r.note && (
+              <Typography sx={{ fontSize: 11.5, lineHeight: NOTE_LINE }} color="text.secondary">
+                {r.note}
+              </Typography>
+            )}
+          </Box>
+          <Typography sx={{ fontSize: 12.5, lineHeight: NOTE_LINE, fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+            {r.quantity}×
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
   );
 }
 
@@ -211,7 +330,18 @@ interface MoveTarget {
  *  and no hook can run before the data exists. An earlier version computed totals in a
  *  useMemo above the `if (!data)` guard and crashed whenever the query had no data;
  *  the `data!` assertion needed to compile that is exactly what hid the mistake. */
-export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string; editable: boolean }) {
+export function ShipmentInvoicing({
+  shipmentId,
+  editable,
+  stops = [],
+}: {
+  shipmentId: string;
+  editable: boolean;
+  /** The shipment's own stops, purely so each band can show where its goods
+   * actually go — the invoice-split endpoint knows the client but not the
+   * destination. Defaults to none so the section still renders without them. */
+  stops?: OutgoingShipmentStopDto[];
+}) {
   const { data, isLoading, isError, error } = useShipmentInvoices(shipmentId);
 
   if (isLoading) {
@@ -241,13 +371,14 @@ export function ShipmentInvoicing({ shipmentId, editable }: { shipmentId: string
     );
   }
 
-  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} />;
+  return <InvoicingContent shipmentId={shipmentId} editable={editable} data={data} stops={stops} />;
 }
 
-function InvoicingContent({ shipmentId, editable, data }: {
+function InvoicingContent({ shipmentId, editable, data, stops }: {
   shipmentId: string;
   editable: boolean;
   data: ShipmentInvoicesDto;
+  stops: OutgoingShipmentStopDto[];
 }) {
   const { formatMoney } = useCurrency();
   const { enqueueSnackbar } = useSnackbar();
@@ -372,11 +503,13 @@ function InvoicingContent({ shipmentId, editable, data }: {
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
-                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-                      {band.invoices.length} {plural(band.invoices.length, 'faktura', 'faktury', 'faktur')}
-                      {` · ${num(band.quantity)} ks · ${formatMoney(band.value)}`}
-                      {band.privateQuantity > 0 && ` · ${num(band.privateQuantity)} ks soukromě`}
-                    </Typography>
+                    {/* The client's rollup used to sit here. It is deliberately
+                        gone: the counts repeat on every invoice sub-header and
+                        in the section total, while the destination appears
+                        nowhere else on this screen. Outside the Collapse on
+                        purpose — the collapsed header is what the office scans
+                        down, and where the goods went is part of that scan. */}
+                    <BandAddressLine band={band} stops={stops} />
                   </Box>
                   {band.crossBilled > 0 && (
                     <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
@@ -404,6 +537,7 @@ function InvoicingContent({ shipmentId, editable, data }: {
                 </Stack>
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
+                  <BandNotes band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
@@ -494,6 +628,9 @@ function InvoicingContent({ shipmentId, editable, data }: {
                       </Table>
                     </TableContainer>
                   </Card>
+                  {/* Below the products, not above: what the client hands back
+                      reads after what they are being billed for. */}
+                  <BandReturns band={band} stops={stops} />
                 </Collapse>
               </Box>
             ))

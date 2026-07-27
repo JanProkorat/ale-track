@@ -45,7 +45,17 @@ public sealed class GetClientDeliveryPlacesEndpoint(AleTrackDbContext dbContext)
     {
         // Explicit !IsDeleted — the entity deliberately has no global query
         // filter so historical shipments can still resolve removed places.
+        //
+        // AsNoTracking is mandatory, not an optimization: Address is an owned
+        // entity, and `ToDto()` is untranslatable so EF client-evaluates it,
+        // which materializes that owned Address. A tracking query cannot track
+        // an owned entity whose owner is absent from the result — the
+        // projection returns DTOs, not ClientDeliveryPlace — so it throws
+        // "owned entities cannot be tracked without their owner". Every sibling
+        // endpoint projecting an address via ToDto() is AsNoTracking for this
+        // same reason.
         var places = await dbContext.ClientDeliveryPlaces
+            .AsNoTracking()
             .Where(p => p.Client.PublicId == req.Id && !p.IsDeleted && !p.Client.IsDeleted)
             .OrderBy(p => p.Name)
             .Select(p => new ClientDeliveryPlaceDto

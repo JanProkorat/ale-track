@@ -109,6 +109,64 @@ public sealed class UpdateOrderTests
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
 
+    // Spec: "Changing an order's client implies changing its address ... so it
+    // takes the same path." Kind/placeId are left at Official/null on both
+    // sides here, so ApplyAsync alone would report changed = false; the
+    // client swap must still drive propagation onto the order's stop.
+    [Fact]
+    public async Task ProcessAsync_UpdateOrder_ClientChanged_PropagatesEvenWhenAddressKindUnchanged()
+    {
+        var orderId = Guid.NewGuid();
+        var oldClient = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var newClientId = Guid.NewGuid();
+        var newClient = ClientBuilder.BuildEntity(
+            publicId: newClientId,
+            officialAddress: AddressBuilder.BuildEntity()
+        );
+
+        var order = OrderBuilder.BuildEntity(
+            publicId: orderId,
+            client: oldClient,
+            state: OrderState.New
+        );
+
+        var shipment = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var stop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            Order = 1,
+            ClientOrder = order,
+            OutgoingShipment = shipment,
+            SelectedAddressKind = DeliveryAddressKind.Official,
+            IsAddressOverridden = false
+        };
+        shipment.Stops.Add(stop);
+        order.OutgoingShipmentStop = stop;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [oldClient, newClient],
+            orders: [order],
+            outgoingShipments: [shipment]
+        );
+
+        var command = new UpdateOrderRequest
+        {
+            Id = orderId,
+            Data = OrderBuilder.BuildUpdateDto(
+                clientId: newClientId,
+                deliveryAddressKind: DeliveryAddressKind.Official,
+                clientDeliveryPlaceId: null,
+                orderItems: []
+            )
+        };
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        order.Client.Should().Be(newClient);
+        stop.AddressChangedAt.Should().NotBeNull();
+    }
+
     [Fact]
     public async Task ProcessAsync_UpdateOrder_ClientNotFound()
     {

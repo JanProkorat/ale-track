@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Queries.OutgoingShipmentsList;
+using AleTrack.Features.OutgoingShipments.Commands.AcknowledgeAddressChanges;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -15,7 +16,7 @@ namespace AleTrack.Tests.Features.OutgoingShipments;
 
 public sealed class ShipmentStopDeliveryPlaceTests
 {
-    private static ClientOrderShipmentDto Dto(OutgoingShipmentStopAddressKind kind, Guid? placeId) => new()
+    private static ClientOrderShipmentDto Dto(DeliveryAddressKind kind, Guid? placeId) => new()
     {
         ClientOrderId = Guid.NewGuid(),
         Order = 1,
@@ -29,7 +30,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var validator = new ClientOrderShipmentDtoValidator();
 
         var result = await validator.ValidateAsync(
-            Dto(OutgoingShipmentStopAddressKind.DeliveryPlace, null));
+            Dto(DeliveryAddressKind.DeliveryPlace, null));
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e =>
@@ -43,15 +44,15 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var validator = new ClientOrderShipmentDtoValidator();
 
         var result = await validator.ValidateAsync(
-            Dto(OutgoingShipmentStopAddressKind.DeliveryPlace, Guid.NewGuid()));
+            Dto(DeliveryAddressKind.DeliveryPlace, Guid.NewGuid()));
 
         result.IsValid.Should().BeTrue();
     }
 
     [Theory]
-    [InlineData(OutgoingShipmentStopAddressKind.Official)]
-    [InlineData(OutgoingShipmentStopAddressKind.Contact)]
-    public async Task Validator_StandardKindWithPlaceId_Fails(OutgoingShipmentStopAddressKind kind)
+    [InlineData(DeliveryAddressKind.Official)]
+    [InlineData(DeliveryAddressKind.Contact)]
+    public async Task Validator_StandardKindWithPlaceId_Fails(DeliveryAddressKind kind)
     {
         var validator = new ClientOrderShipmentDtoValidator();
 
@@ -64,9 +65,9 @@ public sealed class ShipmentStopDeliveryPlaceTests
     }
 
     [Theory]
-    [InlineData(OutgoingShipmentStopAddressKind.Official)]
-    [InlineData(OutgoingShipmentStopAddressKind.Contact)]
-    public async Task Validator_StandardKindWithoutPlaceId_Passes(OutgoingShipmentStopAddressKind kind)
+    [InlineData(DeliveryAddressKind.Official)]
+    [InlineData(DeliveryAddressKind.Contact)]
+    public async Task Validator_StandardKindWithoutPlaceId_Passes(DeliveryAddressKind kind)
     {
         var validator = new ClientOrderShipmentDtoValidator();
 
@@ -91,7 +92,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.Official
+            SelectedAddressKind = DeliveryAddressKind.Official
         };
 
         var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
@@ -121,7 +122,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.Contact
+                        SelectedAddressKind = DeliveryAddressKind.Contact
                     }
                 ]
             }
@@ -132,7 +133,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.Contact);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.Contact);
     }
 
     // Happy path for ShipmentStopDeliveryPlaceResolver: an existing stop that
@@ -154,7 +155,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.Official
+            SelectedAddressKind = DeliveryAddressKind.Official
         };
 
         var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
@@ -185,7 +186,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -197,7 +198,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.DeliveryPlace);
         updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
     }
 
@@ -242,7 +243,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -296,7 +297,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -333,7 +334,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
             ClientDeliveryPlace = place,
             ClientDeliveryPlaceId = place.Id
         };
@@ -366,7 +367,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = placeId
                     }
                 ]
@@ -380,7 +381,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
         await act.Should().NotThrowAsync();
 
         var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
-        updatedStop.SelectedAddressKind.Should().Be(OutgoingShipmentStopAddressKind.DeliveryPlace);
+        updatedStop.SelectedAddressKind.Should().Be(DeliveryAddressKind.DeliveryPlace);
         updatedStop.ClientDeliveryPlaceId.Should().Be(place.Id);
     }
 
@@ -419,7 +420,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                     {
                         ClientOrderId = orderId,
                         Order = 1,
-                        SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+                        SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
                         ClientDeliveryPlaceId = Guid.NewGuid()
                     }
                 ]
@@ -451,7 +452,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             Kind = OutgoingShipmentStopKind.Order,
             ClientOrder = order,
             Order = 1,
-            SelectedAddressKind = OutgoingShipmentStopAddressKind.DeliveryPlace,
+            SelectedAddressKind = DeliveryAddressKind.DeliveryPlace,
             ClientDeliveryPlace = place
         };
 
@@ -477,6 +478,187 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var returnedStop = endpoint.Response.Stops.Single();
         returnedStop.DeliveryPlace.Should().NotBeNull("a soft-deleted place must still render on shipments that already used it");
         returnedStop.DeliveryPlace!.Name.Should().Be("Zrušená hospoda");
+    }
+
+    // IsAddressOverridden is derived, never accepted from the request: a stop
+    // whose requested kind and place match the order's own choice is not an
+    // override.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_StopMatchingTheOrderIsNotOverridden()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity(), contactAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client, deliveryAddressKind: DeliveryAddressKind.Contact);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.IsAddressOverridden.Should().BeFalse();
+    }
+
+    // Mirror case: a stop asking for something other than what the order asks
+    // for is an override, so an order edit will not silently rewrite it.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_StopDifferingFromTheOrderIsOverridden()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity(), contactAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client, deliveryAddressKind: DeliveryAddressKind.Official);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.IsAddressOverridden.Should().BeTrue();
+    }
+
+    // The planner has just been looking at the banner while editing, so
+    // whatever it was announcing is considered acknowledged: any pending
+    // AddressChangedAt stamp on the shipment's stops is cleared on update,
+    // regardless of which stop was actually re-assigned.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_ClearsPendingAddressChangeStamp()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official,
+            AddressChangedAt = DateTime.UtcNow
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.AddressChangedAt.Should().BeNull();
     }
 
     // The mirror-image assertion: the orders-list projection (which feeds the
@@ -506,5 +688,41 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var returnedOrder = endpoint.Response.Single();
         returnedOrder.ClientDeliveryPlaces.Should().ContainSingle()
             .Which.Name.Should().Be("Aktivní místo");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcknowledgeAddressChanges_ClearsEveryStopOfThatShipmentOnly()
+    {
+        var target = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var other = new OutgoingShipment { PublicId = Guid.NewGuid(), State = OutgoingShipmentState.Created };
+        var stamped = new DateTime(2026, 7, 27, 9, 0, 0, DateTimeKind.Utc);
+
+        target.Stops.Add(new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+        target.Stops.Add(new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+        other.Stops.Add(new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, AddressChangedAt = stamped });
+
+        var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [target, other]);
+
+        // Takes no body and reads the shipment from the route — see the
+        // endpoint's remarks for why — so the test has to put it there.
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        endpoint.HttpContext.Request.RouteValues["Id"] = target.PublicId.ToString();
+        await endpoint.HandleAsync(CancellationToken.None);
+
+        target.Stops.Should().OnlyContain(s => s.AddressChangedAt == null);
+        other.Stops.Should().OnlyContain(s => s.AddressChangedAt == stamped);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AcknowledgeAddressChanges_UnknownShipment_Throws()
+    {
+        var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: []);
+
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        endpoint.HttpContext.Request.RouteValues["Id"] = Guid.NewGuid().ToString();
+        var act = () => endpoint.HandleAsync(CancellationToken.None);
+
+        await act.Should().ThrowAsync<Exception>();
     }
 }

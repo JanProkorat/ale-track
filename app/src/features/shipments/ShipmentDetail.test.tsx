@@ -13,7 +13,7 @@ import {
   Country,
   OutgoingShipmentDetailDto,
   OutgoingShipmentState,
-  OutgoingShipmentStopAddressKind,
+  DeliveryAddressKind,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
@@ -34,7 +34,10 @@ vi.mock('src/components/common/RouteMap', () => ({
   },
 }));
 
-vi.mock('src/hooks/useShipments', () => ({ useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
+vi.mock('src/hooks/useShipments', () => ({
+  useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLoading: false }) }));
@@ -72,7 +75,7 @@ function officialAddress(): AddressDto {
 // The backend serializes enums as strings on the wire (JsonStringEnumConverter,
 // Program.cs), so `selectedAddressKind` really arrives as "DeliveryPlace"/
 // "Contact", not the generated client's numeric enum members. Using the string
-// form here — rather than `OutgoingShipmentStopAddressKind.DeliveryPlace` —
+// form here — rather than `DeliveryAddressKind.DeliveryPlace` —
 // is what makes this fixture actually exercise the real API shape; a direct
 // `===` against the numeric member (the regression this whole suite guards)
 // would silently fall through to the official-address branch instead.
@@ -85,7 +88,7 @@ function placeStop(): OutgoingShipmentStopDto {
     clientName: 'Hospoda U Netopýra',
     orderId: 'order-1',
     officialAddress: officialAddress(),
-    selectedAddressKind: 'DeliveryPlace' as unknown as OutgoingShipmentStopAddressKind,
+    selectedAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
     deliveryPlace: new ClientDeliveryPlaceDto({
       id: 'place-a',
       name: 'Letní zahrádka',
@@ -105,7 +108,7 @@ function officialStop(): OutgoingShipmentStopDto {
     clientName: 'Restaurace B',
     orderId: 'order-2',
     officialAddress: officialAddress(),
-    selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+    selectedAddressKind: DeliveryAddressKind.Official,
     products: [],
     returns: [],
   });
@@ -126,7 +129,7 @@ function contactStop(): OutgoingShipmentStopDto {
     // used `addrKindName(...) === 'Contact'` (normalized correctly); the code
     // it replaced compared the raw enum directly, which never matched real
     // API data and fell through to the official address instead.
-    selectedAddressKind: 'Contact' as unknown as OutgoingShipmentStopAddressKind,
+    selectedAddressKind: 'Contact' as unknown as DeliveryAddressKind,
     products: [],
     returns: [],
   });
@@ -186,5 +189,31 @@ describe('ShipmentDetail — route map point resolution', () => {
     // The place's own coordinates (50.9, 14.8), not the official address's (50.897, 14.808).
     expect(stops[0].lat).toBe(50.9);
     expect(stops[0].lng).toBe(14.8);
+  });
+});
+
+describe('ShipmentDetail — address-changed banner position', () => {
+  // Regression guard: the banner used to sit at the bottom of the right
+  // column, four cards below the map (Vůz/Řidiči, then two GarageCards) —
+  // a warning nobody would scroll down to see. It must now render directly
+  // under the map, before any of those cards, matching ShipmentEditor.tsx.
+  it('renders directly under the map rather than below the vehicle/garage cards', () => {
+    const stop = officialStop();
+    stop.addressChangedAt = new Date('2026-07-27T09:00:00Z');
+    stop.isAddressOverridden = false;
+    renderDetail([stop]);
+
+    const mapStub = screen.getByTestId('route-map-stub');
+    const banner = screen.getByText('Změna adresy doručení');
+    const vehicleHeading = screen.getByText('Vůz');
+
+    // DOCUMENT_POSITION_FOLLOWING (4): the second node comes after the first.
+    expect(mapStub.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.compareDocumentPosition(vehicleHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('adds no stray gap under the map when there is nothing to announce', () => {
+    renderDetail([officialStop()]);
+    expect(screen.queryByText('Změna adresy doručení')).not.toBeInTheDocument();
   });
 });

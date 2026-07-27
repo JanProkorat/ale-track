@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Breadcrumbs, Button, Card, IconButton, Link, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Breadcrumbs, Button, Card, Chip, IconButton, Link, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
@@ -11,6 +11,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircleOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
@@ -18,6 +19,7 @@ import { fmtDate, orderNumber } from 'src/lib/format';
 import { ORDER_STATUS, orderStateName, reminderStateName, reminderStateValue } from 'src/lib/labels';
 import { OrderItemReminderState, type OrderDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
+import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
 
@@ -130,6 +132,20 @@ export function OrderDetail({
             {headerDate.label}{' '}
             <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{headerDate.value}</Box>
           </Typography>
+          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.4, minWidth: 0 }}>
+            <PlaceOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+            <Typography color="text.secondary" sx={{ fontSize: 14, minWidth: 0 }} noWrap>
+              {formatAddressOrCoords(order.deliveryAddress?.address)}
+            </Typography>
+            {order.deliveryAddress?.placeName && (
+              <Chip size="small" label={order.deliveryAddress.placeName} sx={{ fontWeight: 700, height: 20 }} />
+            )}
+          </Stack>
+          {order.deliveryAddress?.placeNote && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2 }}>
+              {order.deliveryAddress.placeNote}
+            </Typography>
+          )}
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
           <StatusPill tone={status.tone} label={status.label} />

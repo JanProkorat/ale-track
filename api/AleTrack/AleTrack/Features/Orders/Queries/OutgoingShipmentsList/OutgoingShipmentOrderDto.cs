@@ -38,6 +38,18 @@ public record OutgoingShipmentOrderDto
     public List<ClientDeliveryPlaceDto> ClientDeliveryPlaces { get; set; } = [];
 
     /// <summary>
+    /// The delivery address the order itself asks for. A stop added for this
+    /// order inherits it rather than defaulting to the billing address.
+    /// </summary>
+    public DeliveryAddressKind DeliveryAddressKind { get; set; }
+
+    /// <summary>
+    /// The order's chosen delivery place, when its kind is
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>
+    /// </summary>
+    public Guid? ClientDeliveryPlaceId { get; set; }
+
+    /// <summary>
     /// List of order items
     /// </summary>
     public List<UnassignedOrderItemDto> Items { get; set; } = [];

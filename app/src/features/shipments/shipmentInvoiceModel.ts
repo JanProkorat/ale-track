@@ -5,11 +5,15 @@
 // ordering client bands — can be tested without a rendering harness.
 
 import type {
+  OrderNoteDto,
+  OrderReturnDto,
+  OutgoingShipmentStopDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
   ProductKind,
 } from 'src/generated/api-client';
+import { resolveDetailStopAddress } from './stopAddress';
 
 /** One product on one invoice, with the exact per-source breakdown behind it. */
 export interface LineGroup {
@@ -257,6 +261,71 @@ export function moveTargetOptions(
     });
   }
   return out;
+}
+
+/** The shipment stop a Fakturace band belongs to.
+ *
+ * The invoice split comes from its own endpoint, which knows the client but
+ * nothing about the route, so anything stop-shaped has to be matched back to
+ * the shipment's own stops. `stopOrder` is the match key rather than
+ * `clientId`: one client can hold two stops on a route, and picking the wrong
+ * one would attribute a destination or a note to the wrong delivery.
+ * `clientId` is only a fallback for a band whose invoices carry no stop order.
+ *
+ * Returns undefined when nothing matches. The two datasets are separate
+ * queries and can briefly disagree — after a stop is removed but before the
+ * invoice query refetches, say — and on an invoicing screen showing nothing
+ * beats showing something confidently wrong.
+ */
+function stopForBand(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): OutgoingShipmentStopDto | undefined {
+  return band.stopOrder != null
+    ? stops.find((s) => s.order === band.stopOrder)
+    : stops.find((s) => s.clientId === band.clientId);
+}
+
+/** Where a band's goods are actually delivered, for the Fakturace header.
+ *
+ * The driver's note on a delivery place is deliberately not returned: it routes
+ * a van through a gate, and means nothing to the office doing the billing. The
+ * order's own notes are a different thing — see {@link bandNotes}.
+ */
+export function bandAddress(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): { text: string; placeName?: string } | undefined {
+  const stop = stopForBand(band, stops);
+  if (!stop) return undefined;
+
+  const resolved = resolveDetailStopAddress(stop);
+  return {
+    text: resolved.text,
+    placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
+  };
+}
+
+/** The notes on the order behind a band, oldest first as the backend sends them.
+ *
+ * Empty for a custom stop, for an order with no notes, and for a band with no
+ * matching stop — all three render nothing rather than an empty container. */
+export function bandNotes(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): OrderNoteDto[] {
+  return stopForBand(band, stops)?.notes ?? [];
+}
+
+/** The vratky the client hands back against the order behind a band.
+ *
+ * Same emptiness rules as {@link bandNotes}. Returns are owned by the order and
+ * only displayed here, exactly as on the shipment's own Vratky card. */
+export function bandReturns(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): OrderReturnDto[] {
+  return stopForBand(band, stops)?.returns ?? [];
 }
 
 /** Totals for the section header. */

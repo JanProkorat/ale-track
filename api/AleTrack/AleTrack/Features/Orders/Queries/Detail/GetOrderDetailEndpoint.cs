@@ -46,7 +46,17 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
     /// <inheritdoc />
     public override async Task HandleAsync(GetOrderDetailRequest req, CancellationToken ct)
     {
+        // AsNoTracking is mandatory, not an optimization: DeliveryAddress
+        // projects an owned Address via the untranslatable `ToDto()`, which EF
+        // client-evaluates and therefore materializes. A tracking query cannot
+        // track an owned entity whose owner is absent from the result — this
+        // projection returns OrderDto, not Order — so it throws "owned entities
+        // cannot be tracked without their owner". The mocked test suite runs
+        // LINQ-to-Objects and has no tracking semantics, so it cannot catch a
+        // regression here; every sibling endpoint projecting an address is
+        // AsNoTracking for the same reason.
         var order = await dbContext.Orders
+            .AsNoTracking()
             .Where(o => o.PublicId == req.Id)
             .Select(o => new OrderDto
             {
@@ -68,6 +78,19 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                 {
                     Id = o.Client.PublicId,
                     Name = o.Client.Name
+                },
+                DeliveryAddress = new OrderDeliveryAddressDto
+                {
+                    Kind = o.DeliveryAddressKind,
+                    PlaceId = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.PublicId : null,
+                    PlaceName = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.Name : null,
+                    PlaceNote = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.Note : null,
+                    Address =
+                        o.DeliveryAddressKind == DeliveryAddressKind.DeliveryPlace && o.ClientDeliveryPlace != null
+                            ? o.ClientDeliveryPlace.Address.ToDto()
+                            : o.DeliveryAddressKind == DeliveryAddressKind.Contact && o.Client.ContactAddress != null
+                                ? o.Client.ContactAddress.ToDto()
+                                : o.Client.OfficialAddress.ToDto()
                 },
                 OrderItems = o.OrderItems
                     .OrderBy(i => i.Product.Brewery.DisplayOrder)

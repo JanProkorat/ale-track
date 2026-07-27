@@ -15,6 +15,7 @@ import {
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
+  type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -76,10 +77,10 @@ function invoice(over: Partial<ShipmentInvoiceDto> = {}): ShipmentInvoiceDto {
   });
 }
 
-function renderSection(editable = true) {
+function renderSection(editable = true, stops: OutgoingShipmentStopDto[] = []) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentInvoicing shipmentId="ship-1" editable={editable} />
+      <ShipmentInvoicing shipmentId="ship-1" editable={editable} stops={stops} />
     </MuiThemeProvider>,
   );
 }
@@ -95,7 +96,7 @@ beforeEach(() => {
 });
 
 describe('client bands', () => {
-  it('shows one band per client with its rollup', () => {
+  it('shows one band per client, with the counts left to the section total', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -109,8 +110,12 @@ describe('client bands', () => {
 
     expect(screen.getByText('Klient A')).toBeInTheDocument();
     expect(screen.getByText('Klient B')).toBeInTheDocument();
-    expect(screen.getByText('1 faktura · 10 ks · 1000 Kč')).toBeInTheDocument();
     expect(screen.getByText('2 faktury · 2 klienti')).toBeInTheDocument();
+
+    // The per-band rollup was removed deliberately: it repeats on every invoice
+    // sub-header and in the section total above. Guarded so it does not creep
+    // back in.
+    expect(screen.queryByText(/1 faktura · 10 ks/)).not.toBeInTheDocument();
   });
 
   it('omits the per-invoice sub-header when the client has only one invoice', () => {
@@ -472,8 +477,9 @@ describe('private pieces', () => {
     expect(screen.queryByText('soukromé')).not.toBeInTheDocument();
     // 6 of 10 pieces are billed; the private ones carry no value.
     expect(screen.getByText('fakturováno · 6 ks')).toBeInTheDocument();
+    // Still called out inside the band. The band header no longer repeats it —
+    // the header carries the client and the destination, nothing else.
     expect(screen.getByText('4 ks soukromě')).toBeInTheDocument();
-    expect(screen.getByText('1 faktura · 6 ks · 600 Kč · 4 ks soukromě')).toBeInTheDocument();
   });
 
   it('says everything is split when nothing is private', () => {
@@ -589,5 +595,126 @@ describe('query states', () => {
     // An invisible section would read as "nothing to invoice", which is a different claim.
     expect(screen.getByText('Fakturace')).toBeInTheDocument();
     expect(screen.queryByText(/vše rozděleno/)).not.toBeInTheDocument();
+  });
+});
+
+describe('delivery address', () => {
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  it('shows where the band delivers, and keeps it visible when the band is collapsed', async () => {
+    renderSection(true, [stop()]);
+
+    expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument();
+
+    // The collapsed header is what the office scans, so the address has to
+    // survive the collapse — it sits outside the Collapse for this reason.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitFor(() => expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument());
+  });
+
+  it('names the delivery place beside the address', () => {
+    renderSection(true, [stop({
+      selectedAddressKind: 'DeliveryPlace',
+      deliveryPlace: { id: 'p1', name: 'Letní zahrádka', address: { latitude: 50.7, longitude: 15.05 } },
+    })]);
+
+    expect(screen.getByText('Letní zahrádka')).toBeInTheDocument();
+  });
+
+  // Two separate queries back this screen; they can briefly disagree.
+  it('shows no address rather than a wrong one when no stop matches', () => {
+    renderSection(true, [stop({ order: 99, clientId: 'someone-else' })]);
+
+    expect(screen.queryByText(/Hlavní 1/)).not.toBeInTheDocument();
+  });
+});
+
+describe('order notes', () => {
+  const stopWithNotes = (texts: string[]) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    notes: texts.map((t) => ({ id: t, text: t, dateCreated: new Date() })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  it("shows the order's notes in the expanded band", () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne', 'Faktura na jméno provozovny'])]);
+
+    expect(screen.getByTestId('band-notes')).toBeInTheDocument();
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getByText('Faktura na jméno provozovny')).toBeInTheDocument();
+  });
+
+  // An empty container would read as "no instructions" — a claim the section
+  // has no business making.
+  it('renders no note block when the order has none', () => {
+    renderSection(true, [stopWithNotes([])]);
+    expect(screen.queryByTestId('band-notes')).not.toBeInTheDocument();
+  });
+
+  it("keeps the operator's line breaks", () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne,\nzavolat 30 min předem'])]);
+
+    const note = screen.getByText(/zavolat 30 min předem/);
+    expect(note).toHaveStyle({ whiteSpace: 'pre-wrap' });
+  });
+
+  it('hides the notes with the band when it is collapsed', async () => {
+    renderSection(true, [stopWithNotes(['Dovézt dopoledne'])]);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitForElementToBeRemoved(() => screen.queryByText('Dovézt dopoledne'));
+  });
+});
+
+describe('vratky', () => {
+  const stopWithReturns = (returns: { name: string; quantity: number; note?: string }[]) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    returns: returns.map((r) => ({ id: r.name, ...r })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  it("shows the order's vratky in the expanded band", () => {
+    renderSection(true, [stopWithReturns([
+      { name: 'Sud 50 l', quantity: 4, note: 'Vadný ventil' },
+      { name: 'Přepravka', quantity: 2 },
+    ])]);
+
+    const card = screen.getByTestId('band-returns');
+    // Headed, so a list of goods under the invoice table cannot be misread as
+    // more things being billed.
+    expect(within(card).getByText('Vrací')).toBeInTheDocument();
+    expect(within(card).getByText('Sud 50 l')).toBeInTheDocument();
+    expect(within(card).getByText('4×')).toBeInTheDocument();
+    expect(within(card).getByText('Vadný ventil')).toBeInTheDocument();
+    expect(within(card).getByText('Přepravka')).toBeInTheDocument();
+  });
+
+  it('sits below the products table, not above it', () => {
+    renderSection(true, [stopWithReturns([{ name: 'Sud 50 l', quantity: 4 }])]);
+
+    const products = screen.getByText('Produkt');
+    const returns = screen.getByTestId('band-returns');
+
+    // DOCUMENT_POSITION_FOLLOWING: the returns block comes after the table head.
+    expect(products.compareDocumentPosition(returns) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('renders no vratky block when the order has none', () => {
+    renderSection(true, [stopWithReturns([])]);
+    expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();
+  });
+
+  it('hides the vratky with the band when it is collapsed', async () => {
+    renderSection(true, [stopWithReturns([{ name: 'Sud 50 l', quantity: 4 }])]);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
+    await waitForElementToBeRemoved(() => screen.queryByTestId('band-returns'));
   });
 });

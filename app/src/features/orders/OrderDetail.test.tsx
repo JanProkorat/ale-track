@@ -4,7 +4,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderCustomExtraItemDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
+import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -174,5 +174,28 @@ describe('OrderDetail', () => {
 
     expect(grid(container).children).toHaveLength(2);
     expect(gridCss(container)).toContain('1.5fr 1fr');
+  });
+
+  it('shows the billing address for the Official kind', () => {
+    renderDetail(order({
+      deliveryAddress: {
+        kind: 'Official',
+        address: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+      } as unknown as OrderDeliveryAddressDto,
+    }));
+    expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument();
+  });
+
+  it('shows the place name and driver note for a delivery place', () => {
+    renderDetail(order({
+      deliveryAddress: {
+        kind: 'DeliveryPlace',
+        placeName: 'Letní zahrádka',
+        placeNote: 'Vjezd zezadu',
+        address: { latitude: 50.7, longitude: 15.05 },
+      } as unknown as OrderDeliveryAddressDto,
+    }));
+    expect(screen.getByText('Letní zahrádka')).toBeInTheDocument();
+    expect(screen.getByText('Vjezd zezadu')).toBeInTheDocument();
   });
 });

@@ -71,21 +71,33 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
-        if (req.Data.ClientId != order!.Client.PublicId)
+        // Captured before the possible reassignment below: changing the
+        // client implies changing the address (the old place belongs to the
+        // old client), so it must feed into the propagation decision even
+        // when the (kind, placeId) pair itself is left untouched.
+        var clientChanged = req.Data.ClientId != order!.Client.PublicId;
+
+        if (clientChanged)
         {
             var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.Data.ClientId, ct);
             if (client == null)
                 ThrowHelper.PublicEntityNotFound(nameof(Client), req.Data.ClientId);
-            
+
             order.Client = client!;
         }
-        
+
         var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
 
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
         order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
         order.State = req.Data.State;
-        
+
+        var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
+
+        if (addressChanged || clientChanged)
+            await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
+
         order.OrderItems.Clear();
         
         foreach (var orderItem in req.Data.OrderItems)

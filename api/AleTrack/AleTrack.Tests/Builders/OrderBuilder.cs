@@ -17,7 +17,9 @@ public static class OrderBuilder
         DateOnly? actualDeliveryDate = null,
         List<OrderItem>? orderItems = null,
         List<OrderReturn>? returns = null,
-        List<OrderNote>? notes = null)
+        List<OrderNote>? notes = null,
+        DeliveryAddressKind deliveryAddressKind = DeliveryAddressKind.Official,
+        long? clientDeliveryPlaceId = null)
     {
         return new Order
         {
@@ -29,7 +31,9 @@ public static class OrderBuilder
             ActualDeliveryDate = actualDeliveryDate,
             OrderItems = orderItems ?? [],
             Returns = returns ?? [],
-            Notes = notes ?? []
+            Notes = notes ?? [],
+            DeliveryAddressKind = deliveryAddressKind,
+            ClientDeliveryPlaceId = clientDeliveryPlaceId
         };
     }
 
@@ -38,7 +42,9 @@ public static class OrderBuilder
         DateOnly? requiredDeliveryDate = null,
         List<CreateOrderItemDto>? orderItems = null,
         List<OrderReturnDto>? returns = null,
-        List<OrderNoteDto>? notes = null)
+        List<OrderNoteDto>? notes = null,
+        DeliveryAddressKind deliveryAddressKind = DeliveryAddressKind.Official,
+        Guid? clientDeliveryPlaceId = null)
     {
         return new CreateOrderDto
         {
@@ -54,7 +60,9 @@ public static class OrderBuilder
                 }
             ],
             Returns = returns ?? [],
-            Notes = notes ?? []
+            Notes = notes ?? [],
+            DeliveryAddressKind = deliveryAddressKind,
+            ClientDeliveryPlaceId = clientDeliveryPlaceId
         };
     }
 
@@ -65,7 +73,9 @@ public static class OrderBuilder
         OrderState state = OrderState.Planning,
         List<UpdateOrderItemDto>? orderItems = null,
         List<OrderReturnDto>? returns = null,
-        List<OrderNoteDto>? notes = null)
+        List<OrderNoteDto>? notes = null,
+        DeliveryAddressKind deliveryAddressKind = DeliveryAddressKind.Official,
+        Guid? clientDeliveryPlaceId = null)
     {
         return new UpdateOrderDto
         {
@@ -83,7 +93,9 @@ public static class OrderBuilder
                 }
             ],
             Returns = returns ?? [],
-            Notes = notes ?? []
+            Notes = notes ?? [],
+            DeliveryAddressKind = deliveryAddressKind,
+            ClientDeliveryPlaceId = clientDeliveryPlaceId
         };
     }
 }

@@ -177,7 +177,7 @@ public sealed record OutgoingShipmentStopDto
     /// <summary>
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
-    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    public DeliveryAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
     /// The delivery place this stop delivers to, when
@@ -185,6 +185,24 @@ public sealed record OutgoingShipmentStopDto
     /// populated for soft-deleted places so historical shipments render.
     /// </summary>
     public ClientDeliveryPlaceDto? DeliveryPlace { get; set; }
+
+    /// <summary>
+    /// True when the planner routed this stop somewhere other than what its
+    /// order asks for. An order edit will not rewrite such a stop.
+    /// </summary>
+    public bool IsAddressOverridden { get; set; }
+
+    /// <summary>
+    /// Set when an order edit changed the delivery address under this shipment
+    /// and nobody has acknowledged it yet. Drives the banner.
+    /// </summary>
+    public DateTime? AddressChangedAt { get; set; }
+
+    /// <summary>
+    /// What the order currently asks for, so the banner can name the
+    /// difference rather than merely assert one
+    /// </summary>
+    public OrderDeliveryAddressDto? OrderDeliveryAddress { get; set; }
 
     /// <summary>
     /// Label of a custom stop.
@@ -223,6 +241,13 @@ public sealed record OutgoingShipmentStopDto
     /// for a custom stop). Read-only here — they are owned and edited by the order.
     /// </summary>
     public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// Free-form notes on the stop's order, oldest first (order stops only; always
+    /// empty for a custom stop, which has its own single <see cref="Note"/>).
+    /// Read-only here — they are owned and edited by the order.
+    /// </summary>
+    public List<OrderNoteDto> Notes { get; set; } = [];
 }
 
 public record OutgoingShipmentProductDto

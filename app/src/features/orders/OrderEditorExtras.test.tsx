@@ -11,7 +11,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
+import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
@@ -27,10 +27,19 @@ vi.mock('src/hooks/useOrders', () => ({
 
 vi.mock('src/hooks/useClients', () => ({
   useClients: () => ({ data: [{ id: 'client-a', name: 'Hospoda A' }], isLoading: false }),
+  // Read by OrderDeliveryAddressField, rendered in the client card for
+  // every client selection this file exercises.
+  useClient: () => ({ data: { officialAddress: undefined, contactAddress: undefined, name: 'Hospoda A' }, isLoading: false }),
 }));
 
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweries: () => ({ data: [], isLoading: false }),
+}));
+
+vi.mock('src/hooks/useDeliveryPlaces', () => ({
+  useClientDeliveryPlaces: () => ({ data: [], isLoading: false }),
+  useCreateDeliveryPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateDeliveryPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/providers/CurrencyProvider', () => ({
@@ -289,5 +298,27 @@ describe('OrderEditor — vratky a poznámky', () => {
     fireEvent.change(nameInputs()[0], { target: { value: 'Sud 30 l' } });
 
     expect(save).not.toBeDisabled();
+  });
+});
+
+// Reported: editing an order that is already in planning shows no Vratky card.
+describe('order state', () => {
+  it('offers Vratky on a Planning order that has none yet', () => {
+    orderResponse = new OrderDto({
+      id: 'order-1',
+      state: OrderState.Planning,
+      client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
+      orderItems: [
+        new OrderItemDto({ id: 'item-1', orderId: 'order-1', productId: 'prod-1', productName: 'Albrecht 12°', quantity: 2 }),
+      ],
+      returns: [],
+      notes: [],
+      customExtraItems: [],
+    });
+
+    renderEditor('edit');
+
+    expect(screen.getByText('Vratky')).toBeInTheDocument();
+    expect(within(returnsCard()).getByRole('button', { name: 'Přidat' })).toBeInTheDocument();
   });
 });

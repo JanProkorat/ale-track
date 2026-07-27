@@ -286,15 +286,24 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     order = o,
                     requestOrder = clientOrderShipments.First(cos => cos.ClientOrderId == o.PublicId)
                 })
-                .Select(o => new OutgoingShipmentStop
+                .Select(o =>
                 {
-                    Kind = OutgoingShipmentStopKind.Order,
-                    ClientOrder = o.order,
-                    Order = o.requestOrder.Order,
-                    SelectedAddressKind = o.requestOrder.SelectedAddressKind,
-                    ClientDeliveryPlaceId = o.requestOrder.ClientDeliveryPlaceId.HasValue
-                        ? placeIds[o.requestOrder.ClientDeliveryPlaceId.Value]
-                        : null
+                    var stop = new OutgoingShipmentStop
+                    {
+                        Kind = OutgoingShipmentStopKind.Order,
+                        ClientOrder = o.order,
+                        Order = o.requestOrder.Order,
+                        SelectedAddressKind = o.requestOrder.SelectedAddressKind,
+                        ClientDeliveryPlaceId = o.requestOrder.ClientDeliveryPlaceId.HasValue
+                            ? placeIds[o.requestOrder.ClientDeliveryPlaceId.Value]
+                            : null
+                    };
+
+                    // Derived, never sent: a stale client-supplied flag would silently
+                    // disable propagation from the order.
+                    stop.DeriveAddressOverride(o.order);
+
+                    return stop;
                 }));
         }
 
@@ -313,7 +322,17 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             stop.ClientDeliveryPlaceId = matchingDto.ClientDeliveryPlaceId.HasValue
                 ? placeIds[matchingDto.ClientDeliveryPlaceId.Value]
                 : null;
+
+            // Derived, never sent: a stale client-supplied flag would silently
+            // disable propagation from the order.
+            stop.DeriveAddressOverride(stop.ClientOrder!);
         }
+
+        // The planner has just been looking at this shipment; whatever the
+        // banner was announcing has been seen. Cleared for every stop, not
+        // only the re-assigned ones.
+        foreach (var stop in outgoingShipment.Stops)
+            stop.AddressChangedAt = null;
 
         return stops;
     }

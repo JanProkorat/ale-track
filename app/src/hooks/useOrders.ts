@@ -42,6 +42,12 @@ export function useUpdateOrder() {
     onSuccess: (_res, { id }) => {
       qc.invalidateQueries({ queryKey: qk.orders.all });
       qc.invalidateQueries({ queryKey: qk.orders.detail(id) });
+      // The write can also propagate the address onto (and stamp) the
+      // order's shipment stop server-side. With staleTime 30s and no
+      // refetch-on-focus, an editor → shipment-detail navigation inside that
+      // window would otherwise show the pre-propagation address and no
+      // banner — so shipment queries need invalidating too, not just orders'.
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
     },
   });
 }

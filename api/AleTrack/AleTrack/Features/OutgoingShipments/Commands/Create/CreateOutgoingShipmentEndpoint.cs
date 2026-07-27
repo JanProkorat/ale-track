@@ -68,15 +68,25 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 })],
             Stops = [
                 .. req.Data.ClientOrderShipments
-                    .Select(cos => new OutgoingShipmentStop
+                    .Select(cos =>
                     {
-                        Kind = OutgoingShipmentStopKind.Order,
-                        ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
-                        Order = cos.Order,
-                        SelectedAddressKind = cos.SelectedAddressKind,
-                        ClientDeliveryPlaceId = cos.ClientDeliveryPlaceId.HasValue
-                            ? placeIds[cos.ClientDeliveryPlaceId.Value]
-                            : null
+                        var order = orders.First(o => o.PublicId == cos.ClientOrderId);
+                        var stop = new OutgoingShipmentStop
+                        {
+                            Kind = OutgoingShipmentStopKind.Order,
+                            ClientOrder = order,
+                            Order = cos.Order,
+                            SelectedAddressKind = cos.SelectedAddressKind,
+                            ClientDeliveryPlaceId = cos.ClientDeliveryPlaceId.HasValue
+                                ? placeIds[cos.ClientDeliveryPlaceId.Value]
+                                : null
+                        };
+
+                        // Derived, never sent: a stale client-supplied flag would silently
+                        // disable propagation from the order.
+                        stop.DeriveAddressOverride(order);
+
+                        return stop;
                     }),
                 .. req.Data.CustomStops
                     .Select(cs => new OutgoingShipmentStop

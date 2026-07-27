@@ -25,9 +25,10 @@ import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { initials, plural, fmtLiters, orderNumber } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, addrKindValue } from 'src/lib/labels';
 import {
   ProductKind,
+  DeliveryAddressKind,
   CreateOrderDto,
   CreateOrderItemDto,
   UpdateOrderDto,
@@ -45,6 +46,7 @@ import { useBreweries } from 'src/hooks/useBreweries';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
+import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
 
 const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
 
@@ -64,7 +66,15 @@ interface DraftNote { id?: string; text: string }
 interface DraftExtra { id?: string; description: string; quantity: number }
 
 /** Serialized snapshot of the savable form state, for unsaved-change detection. */
-function serializeForm(clientId: string | null, date: Dayjs | null, cart: CartLine[], returns: DraftReturn[], notes: DraftNote[], extras: DraftExtra[]): string {
+function serializeForm(
+  clientId: string | null,
+  date: Dayjs | null,
+  cart: CartLine[],
+  returns: DraftReturn[],
+  notes: DraftNote[],
+  extras: DraftExtra[],
+  deliveryAddress: { kind: DeliveryAddressKind; placeId?: string },
+): string {
   return JSON.stringify({
     clientId,
     date: date ? date.toISOString() : null,
@@ -72,6 +82,7 @@ function serializeForm(clientId: string | null, date: Dayjs | null, cart: CartLi
     returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity, note: r.note.trim() })),
     notes: notes.map((n) => n.text.trim()),
     extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity })),
+    deliveryAddress: { kind: deliveryAddress.kind, placeId: deliveryAddress.placeId ?? null },
   });
 }
 interface NameGroup {
@@ -320,6 +331,15 @@ export function OrderEditor({
   const updateOrder = useUpdateOrder();
 
   const [clientId, setClientId] = useState<string | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState<{ kind: DeliveryAddressKind; placeId?: string }>(
+    { kind: DeliveryAddressKind.Official },
+  );
+  // Name of the order's chosen place as loaded from the server — kept only to
+  // label the delivery-address field's "(smazáno)" entry with the real name
+  // when that place has since been soft-deleted off the client (and so no
+  // longer appears in the client's own delivery-places list). Undefined in
+  // create mode, where there is nothing loaded to remember.
+  const [loadedPlaceName, setLoadedPlaceName] = useState<string | undefined>(undefined);
   const [requiredDate, setRequiredDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(3, 'day') : null);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [returns, setReturns] = useState<DraftReturn[]>([]);
@@ -338,7 +358,7 @@ export function OrderEditor({
   // Create mode has a stable initial baseline right away; edit mode sets it once
   // the order loads (below).
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart, returns, notes, extras);
+    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -350,7 +370,13 @@ export function OrderEditor({
     const loadedClientId = o.client?.id ?? null;
     const loadedDate = o.requiredDeliveryDate ? dayjs(o.requiredDeliveryDate) : null;
     const loadedCart: CartLine[] = (o.orderItems ?? []).map((it) => ({ productId: it.productId ?? '', quantity: it.quantity ?? 1, reminderState: it.reminderState }));
+    const loadedDeliveryAddress = {
+      kind: addrKindValue(o.deliveryAddress?.kind),
+      placeId: o.deliveryAddress?.placeId ?? undefined,
+    };
     setClientId(loadedClientId);
+    setDeliveryAddress(loadedDeliveryAddress);
+    setLoadedPlaceName(o.deliveryAddress?.placeName ?? undefined);
     setRequiredDate(loadedDate);
     const loadedReturns: DraftReturn[] = (o.returns ?? []).map((r) => ({ id: r.id, name: r.name ?? '', quantity: r.quantity ?? 1, note: r.note ?? '' }));
     const loadedNotes: DraftNote[] = (o.notes ?? []).map((n) => ({ id: n.id, text: n.text ?? '' }));
@@ -361,7 +387,7 @@ export function OrderEditor({
     setExtras(loadedExtras);
     setFallbackNames(Object.fromEntries((o.orderItems ?? []).map((it) => [it.productId ?? '', it.productName ?? '—'])));
     autoTabClientRef.current = loadedClientId;
-    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart, loadedReturns, loadedNotes, loadedExtras);
+    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart, loadedReturns, loadedNotes, loadedExtras, loadedDeliveryAddress);
   }, [mode, orderQuery.data]);
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
@@ -406,6 +432,14 @@ export function OrderEditor({
   const clientOptions: ComboOption[] = clients.map((c) => ({ value: c.id ?? '', label: c.name ?? '' }));
   const selectedClient = clients.find((c) => c.id === clientId);
 
+  // The old delivery-address choice belongs to the old client — a saved
+  // place id or a contact address doesn't carry over, and the backend would
+  // reject a place that isn't the new client's.
+  const changeClient = (next: string | null) => {
+    setClientId(next);
+    setDeliveryAddress({ kind: DeliveryAddressKind.Official });
+  };
+
   const addProduct = (productId: string) => {
     if (!productId) return;
     setCart((prev) => {
@@ -445,7 +479,7 @@ export function OrderEditor({
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
-  const snapshot = serializeForm(clientId, requiredDate, cart, returns, notes, extras);
+  const snapshot = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -479,6 +513,8 @@ export function OrderEditor({
             returns: returnsPayload,
             notes: notesPayload,
             customExtraItems: extrasPayload,
+            deliveryAddressKind: deliveryAddress.kind,
+            clientDeliveryPlaceId: deliveryAddress.placeId,
           }),
         });
         savedId = orderId;
@@ -491,6 +527,8 @@ export function OrderEditor({
           returns: returnsPayload,
           notes: notesPayload,
           customExtraItems: extrasPayload,
+          deliveryAddressKind: deliveryAddress.kind,
+          clientDeliveryPlaceId: deliveryAddress.placeId,
         }));
         enqueueSnackbar('Objednávka vytvořena.', { variant: 'success' });
       }
@@ -647,7 +685,17 @@ export function OrderEditor({
           </Box>
         </Card>
 
-        <Stack spacing={2} sx={{ position: { lg: 'sticky' }, top: { lg: TOPBAR_H + 16 } }}>
+        {/* Deliberately NOT position: sticky. This column stacks the client, the
+            cart, Vratky, Položky navíc and Poznámky; on a populated order — one
+            already in planning, say — that runs taller than the viewport. A
+            sticky element taller than the screen pins in place and its bottom
+            becomes unreachable, so Vratky and everything under it rendered but
+            could never be scrolled to. Letting the column scroll with the
+            document costs the cart staying in view while browsing the catalog,
+            and buys back the three cards below it. A max-height with its own
+            overflow would keep the stickiness, but nested scroll containers are
+            their own trap here — see app/CLAUDE.md. */}
+        <Stack spacing={2}>
           <Card sx={{ p: 2.5 }}>
             <Stack spacing={2}>
               <Box>
@@ -666,13 +714,20 @@ export function OrderEditor({
                     </Box>
                     <Typography sx={{ fontWeight: 700, fontSize: 13.5, flex: 1, minWidth: 0 }} noWrap>{selectedClient.name}</Typography>
                     {mode === 'create' && (
-                      <Button size="small" onClick={() => setClientId(null)}>Změnit</Button>
+                      <Button size="small" onClick={() => changeClient(null)}>Změnit</Button>
                     )}
                   </Stack>
                 ) : (
-                  <Combobox value={clientId} onChange={setClientId} options={clientOptions} placeholder="Vyberte klienta…" fullWidth />
+                  <Combobox value={clientId} onChange={changeClient} options={clientOptions} placeholder="Vyberte klienta…" fullWidth />
                 )}
               </Box>
+
+              <OrderDeliveryAddressField
+                clientId={clientId}
+                value={deliveryAddress}
+                onChange={setDeliveryAddress}
+                deletedPlaceName={loadedPlaceName}
+              />
 
               <DatePicker
                 label="Požadovaný termín dodání"

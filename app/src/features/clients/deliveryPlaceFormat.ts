@@ -11,6 +11,18 @@ export function formatStreetAddress(a: AddressDto | undefined): string {
 
 /** A place picked straight off the map has no street — show its coordinates
  * where the address line would go. Ported from the prototype's `placeAddrText`.
+ * Split out into its own function (rather than inlined in `formatPlaceAddress`)
+ * so any `AddressDto`-shaped address can use the same fallback rule — the
+ * order detail's `deliveryAddress.address` is one, but isn't wrapped in a
+ * `ClientDeliveryPlaceDto`. */
+export function formatAddressOrCoords(a: AddressDto | undefined): string {
+  if (!a) return '—';
+  if (a.streetName || a.city) return formatStreetAddress(a);
+  return `${Number(a.latitude).toFixed(4)}, ${Number(a.longitude).toFixed(4)}`;
+}
+
+/** A place picked straight off the map has no street — show its coordinates
+ * where the address line would go. Ported from the prototype's `placeAddrText`.
  * Split out of `DeliveryPlacesPanel.tsx` into its own module (rather than
  * exported alongside the component) so the panel file only exports a
  * component, keeping `react-refresh/only-export-components` quiet — Tasks 8
@@ -18,10 +30,8 @@ export function formatStreetAddress(a: AddressDto | undefined): string {
  *
  * `place.address` is technically optional on the generated DTO (unlike the
  * prototype's plain object, which always has one), so this guards against
- * that in addition to the prototype's street/city check. */
+ * that in addition to the prototype's street/city check. Delegates to
+ * `formatAddressOrCoords` so there is one implementation of the fallback rule. */
 export function formatPlaceAddress(place: ClientDeliveryPlaceDto): string {
-  const a = place.address;
-  if (!a) return '—';
-  if (a.streetName || a.city) return formatStreetAddress(a);
-  return `${Number(a.latitude).toFixed(4)}, ${Number(a.longitude).toFixed(4)}`;
+  return formatAddressOrCoords(place.address);
 }

@@ -57,6 +57,7 @@ import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
+import { AddressChangedBanner } from './AddressChangedBanner';
 
 interface NakladkaRow {
   key: string;
@@ -394,7 +395,7 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
-   *  client's saved place (see `OutgoingShipmentStopAddressKind.DeliveryPlace`). */
+   *  client's saved place (see `DeliveryAddressKind.DeliveryPlace`). */
   chip?: ReactNode;
   /** The destination line below the title: the place's formatted address, or
    *  the `address · kind` line for the two standard address kinds. Omitted
@@ -646,6 +647,11 @@ export function ShipmentDetail({
     () => (shipment.stops ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [shipment.stops],
   );
+  // Mirrors AddressChangedBanner's own "anything to show" check, so the
+  // wrapper placing it directly under the map can skip its top margin when
+  // the banner will render nothing (it returns null with no addressChangedAt
+  // stops) rather than leave a stray gap.
+  const hasAddressChanges = stopsSorted.some((s) => s.addressChangedAt);
   const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
     if (st.orderId == null) {
       return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
@@ -935,6 +941,14 @@ export function ShipmentDetail({
 
       <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} />
 
+      {/* Directly under the map, matching ShipmentEditor.tsx — a warning four
+          cards down (its previous spot, at the bottom of the right column)
+          is one nobody reads. `mt` only applied when the banner actually has
+          something to show, so an empty wrapper never adds a stray gap. */}
+      <Box sx={{ mt: hasAddressChanges ? 2.5 : 0 }}>
+        <AddressChangedBanner shipmentId={shipment.id ?? ''} stops={stopsSorted} />
+      </Box>
+
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start', mt: 2.5 }}>
         <Stack spacing={2}>
           <Card sx={{ overflow: 'hidden' }}>
@@ -1151,7 +1165,7 @@ export function ShipmentDetail({
       {/* Full width below the grid: the split needs the whole row, and its audience
           (the office doing the billing) is not the nakládka's. */}
       <Box sx={{ mt: 2.5 }}>
-        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} />
+        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
       </Box>
 
       <Dialog open={stockPurchaseOpen} onClose={() => setStockPurchaseOpen(false)} maxWidth="xs" fullWidth>

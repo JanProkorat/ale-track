@@ -64,6 +64,8 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                         Address = p.Address.ToDto()
                     })
                     .ToList(),
+                DeliveryAddressKind = o.DeliveryAddressKind,
+                ClientDeliveryPlaceId = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.PublicId : null,
                 Items = o.OrderItems
                     .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
                     .ThenBy(oi => oi.Product.Name)

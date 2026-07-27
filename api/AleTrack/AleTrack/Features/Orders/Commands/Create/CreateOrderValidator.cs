@@ -39,12 +39,29 @@ public sealed class CreateOrderDtoValidator : Validator<CreateOrderDto>
     public CreateOrderDtoValidator()
     {
         RuleFor(r => r.ClientId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        
+
         RuleFor(r => r.RequiredDeliveryDate)
             .GreaterThan(DateOnly.FromDateTime(DateTime.Today))
             .When(d => d.RequiredDeliveryDate != null)
             .WithErrorCode(ErrorCodes.DeliveryDateInPast)
             .WithMessage("Required delivery date must be in the future.");
+
+        RuleFor(r => r.DeliveryAddressKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        // The enum and the FK can disagree; the schema cannot express the
+        // pairing, so it is enforced here — mirroring
+        // ClientOrderShipmentDtoValidator so the two surfaces stay identical.
+        RuleFor(r => r.ClientDeliveryPlaceId)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError)
+            .When(r => r.DeliveryAddressKind == DeliveryAddressKind.DeliveryPlace);
+
+        RuleFor(r => r.ClientDeliveryPlaceId)
+            .Null()
+            .WithErrorCode(ErrorCodes.ValidationError)
+            .When(r => r.DeliveryAddressKind != DeliveryAddressKind.DeliveryPlace);
 
         RuleFor(r => r.Notes)
             .ForEach(n => n.SetValidator(new OrderNoteDtoValidator()))

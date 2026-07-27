@@ -20,12 +20,12 @@ public sealed record ClientOrderShipmentDto
     /// <summary>
     /// Kind of the selected address for the shipment
     /// </summary>
-    public OutgoingShipmentStopAddressKind SelectedAddressKind { get; set; }
+    public DeliveryAddressKind SelectedAddressKind { get; set; }
 
     /// <summary>
     /// The client's saved delivery place this stop delivers to. Required when
     /// <see cref="SelectedAddressKind"/> is
-    /// <see cref="OutgoingShipmentStopAddressKind.DeliveryPlace"/>, and must be
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>, and must be
     /// null otherwise.
     /// </summary>
     public Guid? ClientDeliveryPlaceId { get; set; }

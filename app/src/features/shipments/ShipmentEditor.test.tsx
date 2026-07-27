@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
-  OutgoingShipmentState, OutgoingShipmentStopAddressKind, OutgoingShipmentStopDto,
+  OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -68,6 +68,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useAvailableOrders: () => ({ data: availableOrders, isLoading: availableOrdersLoading, isError: availableOrdersError }),
   useCreateShipment: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateShipment: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
+  useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));
@@ -153,7 +154,7 @@ beforeEach(() => {
     stops: [
       new OutgoingShipmentStopDto({
         id: 'stop-1', order: 1, orderId: 'order-1',
-        selectedAddressKind: OutgoingShipmentStopAddressKind.Official,
+        selectedAddressKind: DeliveryAddressKind.Official,
       }),
     ],
   });
@@ -264,7 +265,7 @@ describe('ShipmentEditor stop picker — soft-deleted place', () => {
       stops: [
         new OutgoingShipmentStopDto({
           id: 'stop-1', order: 1, orderId: 'order-1',
-          selectedAddressKind: OutgoingShipmentStopAddressKind.DeliveryPlace,
+          selectedAddressKind: DeliveryAddressKind.DeliveryPlace,
           deliveryPlace: place({ id: 'gone-place', name: 'Zrušená hospůdka' }),
         }),
       ],
@@ -285,6 +286,60 @@ describe('ShipmentEditor stop picker — soft-deleted place', () => {
     const optionEl = goneOption.closest('[role="option"]') as HTMLElement;
     expect(optionEl.getAttribute('aria-selected')).toBe('true');
     expect(optionEl.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe('ShipmentEditor — new stop inherits the order\'s address', () => {
+  it('pre-fills a newly added stop from the order rather than the billing address', () => {
+    // A second, not-yet-assigned order whose own choice is a delivery place —
+    // wire-format string ('DeliveryPlace'), matching what the real backend
+    // sends and what addrKindValue must normalize. Adding it via the
+    // "Objednávky k rozvozu" list must select that place on the new stop's
+    // row, not default to Fakturační like a custom stop would.
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-2',
+        clientName: 'U Zlatého sklepa',
+        clientOfficialAddress: officialAddress(),
+        deliveryAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
+        clientDeliveryPlaceId: 'p1',
+        clientDeliveryPlaces: [place({ id: 'p1', name: 'Letní zahrádka' })],
+        items: [],
+      }),
+    ];
+    renderEditor();
+
+    fireEvent.click(screen.getByText('U Zlatého sklepa'));
+
+    // order-1's loaded stop is row 0; the freshly added order-2 stop is row 1.
+    expect(stopSelects()[1]).toHaveTextContent('Letní zahrádka');
+  });
+
+  it('falls back to Fakturační when the order\'s chosen place has since been soft-deleted off the client', () => {
+    // GetOrdersListForOutgoingShipmentsEndpoint filters clientDeliveryPlaces to
+    // !IsDeleted, so an order that chose a place before it was removed reports
+    // a clientDeliveryPlaceId absent from its own clientDeliveryPlaces. Blindly
+    // inheriting that id would produce a stop the picker can't render (blank
+    // <Select>) and the resolver 404s on save. Must fall back to Official
+    // instead, exactly as a brand-new stop would.
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-3',
+        clientName: 'Pivnice Na Rohu',
+        clientOfficialAddress: officialAddress(),
+        deliveryAddressKind: 'DeliveryPlace' as unknown as DeliveryAddressKind,
+        clientDeliveryPlaceId: 'gone-place-id',
+        clientDeliveryPlaces: [place({ id: 'p1', name: 'Letní zahrádka' })],
+        items: [],
+      }),
+    ];
+    renderEditor();
+
+    fireEvent.click(screen.getByText('Pivnice Na Rohu'));
+
+    expect(stopSelects()[1]).toHaveTextContent('Fakturační');
   });
 });
 
