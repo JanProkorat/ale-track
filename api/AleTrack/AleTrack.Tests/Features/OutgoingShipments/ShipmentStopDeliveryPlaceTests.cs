@@ -479,6 +479,187 @@ public sealed class ShipmentStopDeliveryPlaceTests
         returnedStop.DeliveryPlace!.Name.Should().Be("Zrušená hospoda");
     }
 
+    // IsAddressOverridden is derived, never accepted from the request: a stop
+    // whose requested kind and place match the order's own choice is not an
+    // override.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_StopMatchingTheOrderIsNotOverridden()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity(), contactAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client, deliveryAddressKind: DeliveryAddressKind.Contact);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.IsAddressOverridden.Should().BeFalse();
+    }
+
+    // Mirror case: a stop asking for something other than what the order asks
+    // for is an override, so an order edit will not silently rewrite it.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_StopDifferingFromTheOrderIsOverridden()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity(), contactAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client, deliveryAddressKind: DeliveryAddressKind.Official);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.IsAddressOverridden.Should().BeTrue();
+    }
+
+    // The planner has just been looking at the banner while editing, so
+    // whatever it was announcing is considered acknowledged: any pending
+    // AddressChangedAt stamp on the shipment's stops is cleared on update,
+    // regardless of which stop was actually re-assigned.
+    [Fact]
+    public async Task ProcessAsync_UpdateShipment_ClearsPendingAddressChangeStamp()
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var existingStop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official,
+            AddressChangedAt = DateTime.UtcNow
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [existingStop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [outgoingShipment],
+            orders: [order]
+        );
+        dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var command = new UpdateOutgoingShipmentRequest
+        {
+            Id = shipmentId,
+            Data = new UpdateOutgoingShipmentDto
+            {
+                Name = "vyvoz",
+                DeliveryDate = DateTime.UtcNow.AddDays(1),
+                DriverIds = [],
+                State = OutgoingShipmentState.Created,
+                ClientOrderShipments =
+                [
+                    new ClientOrderShipmentDto
+                    {
+                        ClientOrderId = orderId,
+                        Order = 1,
+                        SelectedAddressKind = DeliveryAddressKind.Contact
+                    }
+                ]
+            }
+        };
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        var updatedStop = outgoingShipment.Stops.Single(s => s.ClientOrder!.PublicId == orderId);
+        updatedStop.AddressChangedAt.Should().BeNull();
+    }
+
     // The mirror-image assertion: the orders-list projection (which feeds the
     // shipment editor's picker) must exclude soft-deleted places, since a
     // removed place should no longer be offered as a destination.

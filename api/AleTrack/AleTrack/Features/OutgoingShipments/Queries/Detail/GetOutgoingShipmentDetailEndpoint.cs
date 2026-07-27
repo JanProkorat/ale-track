@@ -89,6 +89,23 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                 Address = s.ClientDeliveryPlace.Address.ToDto()
                             }
                             : null,
+                        IsAddressOverridden = s.IsAddressOverridden,
+                        AddressChangedAt = s.AddressChangedAt,
+                        OrderDeliveryAddress = s.ClientOrder != null
+                            ? new OrderDeliveryAddressDto
+                            {
+                                Kind = s.ClientOrder.DeliveryAddressKind,
+                                PlaceId = s.ClientOrder.ClientDeliveryPlace != null ? s.ClientOrder.ClientDeliveryPlace.PublicId : null,
+                                PlaceName = s.ClientOrder.ClientDeliveryPlace != null ? s.ClientOrder.ClientDeliveryPlace.Name : null,
+                                PlaceNote = s.ClientOrder.ClientDeliveryPlace != null ? s.ClientOrder.ClientDeliveryPlace.Note : null,
+                                Address =
+                                    s.ClientOrder.DeliveryAddressKind == DeliveryAddressKind.DeliveryPlace && s.ClientOrder.ClientDeliveryPlace != null
+                                        ? s.ClientOrder.ClientDeliveryPlace.Address.ToDto()
+                                        : s.ClientOrder.DeliveryAddressKind == DeliveryAddressKind.Contact && s.ClientOrder.Client.ContactAddress != null
+                                            ? s.ClientOrder.Client.ContactAddress.ToDto()
+                                            : s.ClientOrder.Client.OfficialAddress.ToDto()
+                            }
+                            : null,
                         Label = s.Label,
                         Note = s.Note,
                         Latitude = s.Latitude,

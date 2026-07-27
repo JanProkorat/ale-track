@@ -187,6 +187,24 @@ public sealed record OutgoingShipmentStopDto
     public ClientDeliveryPlaceDto? DeliveryPlace { get; set; }
 
     /// <summary>
+    /// True when the planner routed this stop somewhere other than what its
+    /// order asks for. An order edit will not rewrite such a stop.
+    /// </summary>
+    public bool IsAddressOverridden { get; set; }
+
+    /// <summary>
+    /// Set when an order edit changed the delivery address under this shipment
+    /// and nobody has acknowledged it yet. Drives the banner.
+    /// </summary>
+    public DateTime? AddressChangedAt { get; set; }
+
+    /// <summary>
+    /// What the order currently asks for, so the banner can name the
+    /// difference rather than merely assert one
+    /// </summary>
+    public OrderDeliveryAddressDto? OrderDeliveryAddress { get; set; }
+
+    /// <summary>
     /// Label of a custom stop.
     /// </summary>
     public string? Label { get; set; }
