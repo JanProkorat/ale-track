@@ -40,7 +40,7 @@ import {
   StockPurchaseDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
-import { useUpdateShipment } from 'src/hooks/useShipments';
+import { useUpdateShipment, useSetPreparationStep } from 'src/hooks/useShipments';
 import { useVehicle } from 'src/hooks/useVehicles';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
@@ -60,6 +60,7 @@ import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
+import { PreparationStepsCard } from './PreparationStepsCard';
 
 interface NakladkaRow {
   key: string;
@@ -642,6 +643,7 @@ export function ShipmentDetail({
   const deletePurchaseInvoice = useDeletePurchaseInvoice(shipment.id);
   const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
   const setLoadingState = useSetLoadingState(shipment.id);
+  const setPreparationStep = useSetPreparationStep(shipment.id);
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
@@ -957,7 +959,13 @@ export function ShipmentDetail({
         <AddressChangedBanner shipmentId={shipment.id ?? ''} stops={stopsSorted} />
       </Box>
 
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start', mt: 2.5 }}>
+      {/* `minmax(0, …)` rather than a bare `1.5fr 1fr`: a grid item defaults to
+          `min-width: auto`, so the nakládka table's intrinsic width — which grows with
+          every brewery-invoice column pair — becomes the left track's floor and it
+          never scrolls. On a 1194px tablet that resolved to 630/234 instead of 518/346
+          and squeezed the right column into an unusable strip. Zeroing the minimum lets
+          the fr shares hold and the table scroll inside its own TableContainer. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.5fr) minmax(0, 1fr)' }, alignItems: 'start', mt: 2.5 }}>
         <Stack spacing={2}>
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
@@ -1089,8 +1097,14 @@ export function ShipmentDetail({
 
         <Stack spacing={2}>
           {/* Both are short, sparse cards — side by side they read as one "kdo a čím" block
-              instead of two mostly-empty rows. */}
-          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, alignItems: 'stretch' }}>
+              instead of two mostly-empty rows.
+
+              `auto-fit` and not an `sm` breakpoint: breakpoints measure the viewport, but
+              what decides whether two cards fit here is this column's width. An `sm: '1fr 1fr'`
+              still said "two columns" inside a 234px column on a tablet, giving two 109px
+              cards whose nowrap lines ("Nosnost 7 000 kg", the driver phone) spilled out.
+              auto-fit stacks them whenever the container is under ~400px, wherever it sits. */}
+          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', alignItems: 'stretch' }}>
             <Card sx={{ overflow: 'hidden', height: '100%' }}>
               <Stack direction="row" alignItems="center" sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
                 <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Vůz</Typography>
@@ -1167,6 +1181,16 @@ export function ShipmentDetail({
           <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
 
           <ReturnsCard stops={stopsSorted} />
+
+          <PreparationStepsCard
+            steps={shipment.preparationSteps ?? []}
+            editable={nakladkaEditable}
+            onToggle={(stepId, isDone) => {
+              setPreparationStep.mutate({ stepId, isDone }, {
+                onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+              });
+            }}
+          />
         </Stack>
       </Box>
 

@@ -227,6 +227,16 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         State = ls.State
                     })
                     .ToList(),
+                PreparationSteps = os.PreparationSteps
+                    .OrderBy(ps => ps.Order)
+                    .Select(ps => new OutgoingShipmentPreparationStepDto
+                    {
+                        Id = ps.PublicId,
+                        Order = ps.Order,
+                        Label = ps.Label,
+                        IsDone = ps.IsDone
+                    })
+                    .ToList(),
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);

@@ -68,6 +68,37 @@ public sealed record OutgoingShipmentDetailDto
     /// "not loaded" appear.
     /// </summary>
     public List<OutgoingShipmentLoadingStateDto> LoadingStates { get; set; } = [];
+
+    /// <summary>
+    /// Checklist of what has to be done while preparing this run, in display order.
+    /// </summary>
+    public List<OutgoingShipmentPreparationStepDto> PreparationSteps { get; set; } = [];
+}
+
+/// <summary>
+/// One step of a shipment's preparation checklist.
+/// </summary>
+public sealed record OutgoingShipmentPreparationStepDto
+{
+    /// <summary>
+    /// Public ID of the step
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Position of the step within the list
+    /// </summary>
+    public int Order { get; set; }
+
+    /// <summary>
+    /// What has to be done
+    /// </summary>
+    public string Label { get; set; } = null!;
+
+    /// <summary>
+    /// Whether it has been done
+    /// </summary>
+    public bool IsDone { get; set; }
 }
 
 /// <summary>

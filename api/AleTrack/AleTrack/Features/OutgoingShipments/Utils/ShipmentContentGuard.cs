@@ -47,6 +47,33 @@ public static class ShipmentContentGuard
     }
 
     /// <summary>
+    /// Whether the request would change the preparation checklist — which steps exist, their text
+    /// and their order.
+    /// </summary>
+    /// <remarks>
+    /// Not part of <see cref="ChangedFrozenFields"/>: the checklist is worked through while the run
+    /// is Loaded and InTransit, so it freezes only once the shipment becomes a historical record.
+    /// The caller pairs this with that later rule.
+    ///
+    /// <c>IsDone</c> is not compared because the DTO does not carry it — ticks travel through the
+    /// dedicated set-step endpoint.
+    /// </remarks>
+    public static bool PreparationStepsChanged(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
+    {
+        var storedSteps = stored.PreparationSteps
+            .Select(s => (Id: (Guid?)s.PublicId, s.Order, Label: (string?)s.Label))
+            .OrderBy(s => s.Id)
+            .ToList();
+
+        var incomingSteps = incoming.PreparationSteps
+            .Select(s => (s.Id, s.Order, Label: (string?)s.Label))
+            .OrderBy(s => s.Id)
+            .ToList();
+
+        return !storedSteps.SequenceEqual(incomingSteps);
+    }
+
+    /// <summary>
     /// Composition only: which orders are on the run, in what sequence, delivering to which
     /// address.
     /// </summary>

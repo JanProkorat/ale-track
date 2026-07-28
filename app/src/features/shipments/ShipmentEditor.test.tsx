@@ -19,6 +19,7 @@ import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
   OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
+  OutgoingShipmentPreparationStepDto,
 } from 'src/generated/api-client';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -91,14 +92,19 @@ function officialAddress(): AddressDto {
   return new AddressDto({ streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.897, longitude: 14.808 });
 }
 
-function renderEditor() {
+function renderEditor(mode: 'edit' | 'create' = 'edit') {
   const router = createMemoryRouter([
     {
       path: '/',
       element: (
         <MuiThemeProvider theme={theme}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <ShipmentEditor mode="edit" shipmentId="ship-1" onDone={vi.fn()} onCancel={vi.fn()} />
+            <ShipmentEditor
+              mode={mode}
+              shipmentId={mode === 'edit' ? 'ship-1' : undefined}
+              onDone={vi.fn()}
+              onCancel={vi.fn()}
+            />
           </LocalizationProvider>
         </MuiThemeProvider>
       ),
@@ -374,5 +380,29 @@ describe('ShipmentEditor — non-happy query states', () => {
     // (It appears twice: the breadcrumb and the page heading.)
     expect(screen.getAllByText('Úprava vývozu').length).toBeGreaterThan(0);
     expect(screen.getByText('Zatím žádné zastávky')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentEditor — checklist', () => {
+  it('prefills the standard pre-departure list on a new shipment', () => {
+    // The list is the same before every departure, so a new vývoz arrives with it filled in —
+    // and every row stays editable from there.
+    renderEditor('create');
+
+    expect((screen.getByLabelText('Položka 1') as HTMLInputElement).value).toBe('Rudlík');
+    expect((screen.getByLabelText('Položka 10') as HTMLInputElement).value).toBe('Věci z předchozího vývozu');
+  });
+
+  it('leaves an existing shipment its own checklist, not the default one', () => {
+    // Prefilling on edit would resurrect rows the planner deliberately deleted.
+    shipmentResponse = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz', state: OutgoingShipmentState.Created, stops: [],
+      preparationSteps: [new OutgoingShipmentPreparationStepDto({ id: 'step-1', order: 1, label: 'Jen tohle' })],
+    });
+
+    renderEditor();
+
+    expect((screen.getByLabelText('Položka 1') as HTMLInputElement).value).toBe('Jen tohle');
+    expect(screen.queryByLabelText('Položka 2')).not.toBeInTheDocument();
   });
 });

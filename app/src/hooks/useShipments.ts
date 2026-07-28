@@ -5,7 +5,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { type CreateOutgoingShipmentDto, type OutgoingShipmentDetailDto, type UpdateOutgoingShipmentDto } from 'src/generated/api-client';
+import {
+  SetPreparationStepDto,
+  type CreateOutgoingShipmentDto,
+  type OutgoingShipmentDetailDto,
+  type UpdateOutgoingShipmentDto,
+} from 'src/generated/api-client';
 
 export function useShipments(params: Record<string, string> = {}) {
   const ds = useDataSource();
@@ -94,6 +99,64 @@ export function useAcknowledgeAddressChanges() {
     onSettled: (_res, _err, shipmentId) => {
       qc.invalidateQueries({ queryKey: qk.shipments.all });
       qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId) });
+    },
+  });
+}
+
+export interface SetPreparationStepArgs {
+  stepId: string;
+  isDone: boolean;
+}
+
+/**
+ * Ticks one step of the shipment's preparation checklist.
+ *
+ * Its own endpoint rather than a field on the full shipment PUT, so ticking a box never
+ * rewrites the rest of the run. Optimistic for the same reason the nakládka toggles are: the
+ * boxes are worked through one after another, and a checkbox that only moves after the round
+ * trip invites a second click.
+ */
+export function useSetPreparationStep(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ stepId, isDone }: SetPreparationStepArgs) =>
+      ds.setPreparationStepEndpoint(shipmentId!, stepId, new SetPreparationStepDto({ isDone })),
+
+    onMutate: async ({ stepId, isDone }: SetPreparationStepArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype so the patched value stays an
+      // OutgoingShipmentDetailDto — a plain spread would lose its methods.
+      const next = Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+      );
+      next.preparationSteps = (previous.preparationSteps ?? []).map((s) => {
+        if (s.id !== stepId) return s;
+        const patched = Object.assign(Object.create(Object.getPrototypeOf(s)), s);
+        patched.isDone = isDone;
+        return patched;
+      });
+      qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
     },
   });
 }

@@ -12,6 +12,7 @@ import {
   OrderItemInfoDto,
   ExtraItemInfoDto,
   StockPurchaseDto,
+  PreparationStepDto,
   DeliveryAddressKind,
 } from 'src/generated/api-client';
 
@@ -20,6 +21,7 @@ export interface ShipmentDraft {
   customStops: CustomStopDto[];
   routeViaPoints: RoutePointDto[];
   stockPurchases: StockPurchaseDto[];
+  preparationSteps: PreparationStepDto[];
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -67,5 +69,12 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
       dto.productId = e.productId;
       return dto;
     }),
+    // Round-tripped by ID, and with good reason: an omitted step is a deleted step to the
+    // server, so a save triggered by something else entirely (a nakládka checkbox, advancing
+    // the state) would otherwise wipe the whole preparation checklist. Ticks are not sent —
+    // they travel through the dedicated set-step endpoint and are kept server-side.
+    preparationSteps: (shipment.preparationSteps ?? []).map((s) => new PreparationStepDto({
+      id: s.id, order: s.order ?? 0, label: s.label ?? '',
+    })),
   };
 }
