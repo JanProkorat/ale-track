@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Commands.Update;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -250,5 +251,206 @@ public sealed class UpdateOrderTests
 
         // Assert
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Content freeze.
+    //
+    // An order's items freeze once it is closed, or once the shipment carrying it has been
+    // packed. This endpoint replaces the item rows on every save, and
+    // outgoing_shipment_invoice_lines.order_item_id is Cascade — so an unguarded save on a
+    // delivered order deleted that order's invoice lines outright.
+    // ---------------------------------------------------------------------------------
+
+    private sealed record FreezeFixture(Order Order, Client Client, Product Product, OrderItem Item);
+
+    private static FreezeFixture BuildFreezeFixture(
+        OrderState orderState,
+        OutgoingShipmentState? shipmentState)
+    {
+        var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
+        product.Id = 41;
+
+        var item = new OrderItem
+        {
+            Id = 51,
+            PublicId = Guid.NewGuid(),
+            Product = product,
+            ProductId = product.Id,
+            Quantity = 15,
+            ReminderState = OrderItemReminderState.Added
+        };
+
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: orderState, orderItems: [item]);
+
+        if (shipmentState is not null)
+        {
+            order.OutgoingShipmentStop = new OutgoingShipmentStop
+            {
+                PublicId = Guid.NewGuid(),
+                Kind = OutgoingShipmentStopKind.Order,
+                Order = 1,
+                OutgoingShipment = OutgoingShipmentBuilder.BuildEntity(state: shipmentState.Value)
+            };
+        }
+
+        return new FreezeFixture(order, client, product, item);
+    }
+
+    /// <summary>
+    /// The order's current content, as the order screen re-sends it on every save.
+    /// </summary>
+    private static UpdateOrderDto EchoDto(FreezeFixture f) => OrderBuilder.BuildUpdateDto(
+        clientId: f.Client.PublicId,
+        state: f.Order.State,
+        actualDeliveryDate: f.Order.ActualDeliveryDate,
+        orderItems:
+        [
+            new UpdateOrderItemDto
+            {
+                ProductId = f.Product.PublicId,
+                Quantity = f.Item.Quantity,
+                ReminderState = f.Item.ReminderState
+            }
+        ]);
+
+    private static Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> MockForFreeze(FreezeFixture f)
+    {
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            clients: [f.Client],
+            products: [f.Product],
+            orders: [f.Order]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        return db;
+    }
+
+    [Fact]
+    public async Task ProcessAsync_UpdateItemsOfFinishedOrder_Fails()
+    {
+        var f = BuildFreezeFixture(OrderState.Finished, shipmentState: null);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.OrderItems[0].Quantity = 99;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_UpdateItemsOfOrderOnLoadedShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Loaded);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.OrderItems.Clear();
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ReopenFinishedOrder_Fails()
+    {
+        var f = BuildFreezeFixture(OrderState.Finished, OutgoingShipmentState.Delivered);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.State = OrderState.Planning;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+
+        f.Order.State.Should().Be(OrderState.Finished);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Notes and returns are written at and after delivery, so they stay editable — and the
+    /// item rows must survive untouched, since recreating them cascades the invoice lines away.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_UpdateNotesOfFinishedOrder_SucceedsAndKeepsItemRows()
+    {
+        var f = BuildFreezeFixture(OrderState.Finished, OutgoingShipmentState.Delivered);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.Notes = [new OrderNoteDto { Text = "Klient si stěžoval na teplotu." }];
+        data.RequiredDeliveryDate = new DateOnly(2026, 8, 1);
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.Notes.Should().HaveCount(1);
+        f.Order.RequiredDeliveryDate.Should().Be(new DateOnly(2026, 8, 1));
+        f.Order.OrderItems.Should().ContainSingle()
+            .Which.Should().BeSameAs(f.Item, "the row must not be recreated — its invoice lines cascade off it");
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Cancelling a run frees its orders for reuse but the stop link survives, so a freed
+    /// order must still be editable.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_UpdateItemsOfOrderFreedFromCancelledShipment_Success()
+    {
+        var f = BuildFreezeFixture(OrderState.New, OutgoingShipmentState.Cancelled);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.State = OrderState.New;
+        data.OrderItems[0].Quantity = 7;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.OrderItems.Should().ContainSingle().Which.Quantity.Should().Be(7);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_UpdateItemsOfOrderOnCreatedShipment_Success()
+    {
+        var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Created);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.OrderItems[0].Quantity = 3;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.OrderItems.Should().ContainSingle().Which.Quantity.Should().Be(3);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }
