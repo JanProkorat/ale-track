@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Products.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +63,9 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
         product.Type = req.Data.Type;
         product.Kind = req.Data.Kind;
         product.PackageSize = req.Data.PackageSize;
+        // Re-derived on every update: kind, size or name may all have moved.
+        product.UnitsPerPackage = ProductUnitsResolver.Resolve(
+            req.Data.Kind, req.Data.PackageSize, req.Data.Name);
         product.PriceForUnitWithoutVat = req.Data.PriceForUnitWithoutVat;
         product.PriceForUnitWithVat = req.Data.PriceForUnitWithVat;
         product.PriceWithVat = req.Data.PriceWithVat;

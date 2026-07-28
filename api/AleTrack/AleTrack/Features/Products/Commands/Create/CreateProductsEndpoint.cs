@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Products.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -66,6 +67,9 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
                 Type = product.Type,
                 Kind = product.Kind,
                 PackageSize = product.PackageSize,
+                // Derived from the product's own details, never supplied by the caller.
+                UnitsPerPackage = ProductUnitsResolver.Resolve(
+                    product.Kind, product.PackageSize, product.Name),
                 PriceForUnitWithoutVat = product.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = product.PriceForUnitWithVat,
                 PriceWithVat = product.PriceWithVat,
