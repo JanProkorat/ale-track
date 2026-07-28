@@ -48,10 +48,25 @@ var services = scope.ServiceProvider;
 
 try
 {
-    Log.Information("Seeding started");
     var seeder = services.GetRequiredService<SeedingService>();
-    await seeder.InsertDataAsync();
-    Log.Information("Seeding finished");
+
+    // `dotnet run -- history [days]` tops up an already-seeded database with generated
+    // history only, leaving its current-state fixtures alone. Anything else seeds from scratch.
+    if (args.Length > 0 && args[0].Equals("history", StringComparison.OrdinalIgnoreCase))
+    {
+        var days = args.Length > 1 && int.TryParse(args[1], out var parsed) ? parsed : 208;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        Log.Information("History top-up started ({Days} days)", days);
+        await seeder.InsertHistoryAsync(today.AddDays(-days), today.AddDays(-1));
+        Log.Information("History top-up finished");
+    }
+    else
+    {
+        Log.Information("Seeding started");
+        await seeder.InsertDataAsync();
+        Log.Information("Seeding finished");
+    }
 }
 catch (Exception ex)
 {

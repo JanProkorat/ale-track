@@ -26,6 +26,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\AleTrack\AleTrack.csproj" />
+      <ProjectReference Include="..\AleTrack.Seeding\AleTrack.Seeding.csproj" />
     </ItemGroup>
 
 </Project>

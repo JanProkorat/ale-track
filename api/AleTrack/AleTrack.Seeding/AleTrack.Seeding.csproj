@@ -36,6 +36,11 @@
     </ItemGroup>
 
     <ItemGroup>
+      <!-- The builders are internal to this tool; the test project asserts on HistoryBuilder. -->
+      <InternalsVisibleTo Include="AleTrack.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <None Update="Properties\launchSettings.json">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
         <CopyToPublishDirectory>Never</CopyToPublishDirectory>
