@@ -127,6 +127,34 @@ where a document shape genuinely fits.
 
 The work is a schema change, not a database change.
 
+## Freezing content without freezing state
+
+The immutability guard from surface 4 is what makes the rest of this work, so it
+needs spelling out. `UpdateOutgoingShipmentDto` carries eleven fields and the guard
+has to split them rather than reject the whole request:
+
+| Field | From `Loaded` onward |
+|---|---|
+| `State` | **mutable** — forward only; `Delivered` and `Cancelled` terminal |
+| `Name` | mutable (a label, carries no content) |
+| `DeliveryDate` | frozen |
+| `VehicleId`, `DriverIds` | frozen |
+| `ClientOrderShipments` | frozen |
+| `CustomStops`, `RouteViaPoints` | frozen |
+| `StockPurchases` | frozen |
+| `ClientExtraShipments`, `CustomExtraShipments` | frozen |
+
+A blanket "reject any update to a non-`Created` shipment" is the obvious
+implementation and it is wrong — nothing could ever be marked delivered. Guarding
+only `State` transitions is equally wrong, because content is what the snapshot has
+to match.
+
+To decide during planning: reject a request that changes a frozen field (strict, and
+the frontend must stop sending unchanged content), or ignore frozen fields and apply
+only the state change (lenient, tolerates the current full-object PUT). The frontend
+sends the whole object today, so the lenient option is the smaller change, but it
+discards edits silently and would want the form disabled in the UI to match.
+
 ## Proposed direction
 
 ### Shipments own their content
