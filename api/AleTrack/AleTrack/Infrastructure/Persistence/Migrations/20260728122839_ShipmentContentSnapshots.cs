@@ -128,6 +128,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                 WHERE s.kind = 0 AND sh.state IN (1, 2, 3, 4);
                 """);
 
+            // The shipment-state filter is an EXISTS rather than a join: the row being
+            // updated is not part of the FROM join tree in Postgres, so a
+            // `JOIN outgoing_shipments sh ON sh.id = s.outgoing_shipment_id` cannot see
+            // `s` and the statement fails to parse (42P01).
             migrationBuilder.Sql("""
                 UPDATE outgoing_shipment_stops s
                 SET client_public_id = c.public_id,
@@ -135,10 +139,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     client_region = c.region
                 FROM orders o
                 JOIN clients c ON c.id = o.client_id
-                JOIN outgoing_shipments sh ON sh.id = s.outgoing_shipment_id
                 WHERE o.outgoing_shipment_stop_id = s.id
                   AND s.kind = 0
-                  AND sh.state IN (1, 2, 3, 4);
+                  AND EXISTS (
+                      SELECT 1
+                      FROM outgoing_shipments sh
+                      WHERE sh.id = s.outgoing_shipment_id
+                        AND sh.state IN (1, 2, 3, 4)
+                  );
                 """);
         }
 
