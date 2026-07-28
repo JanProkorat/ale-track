@@ -102,11 +102,14 @@ public static class ShipmentInvoiceMapper
             Id = line.PublicId,
             SourceKind = line.SourceKind,
             SourceItemId = item.PublicId,
+            // Provenance link the UI navigates by, not a displayed fact.
             ProductId = item.Product?.PublicId,
-            Name = item.Product?.Name ?? string.Empty,
-            Kind = item.Product?.Kind,
-            PackageSize = item.Product?.PackageSize,
-            PriceWithVat = item.Product?.PriceWithVat,
+            // Displayed facts come from the line's own snapshot: repricing or renaming a product
+            // must not restate an invoice that was already issued.
+            Name = line.ProductName,
+            Kind = line.Kind,
+            PackageSize = line.PackageSize,
+            PriceWithVat = line.UnitPriceWithVat,
             Quantity = line.Quantity,
             OrderingClientId = order.Client?.PublicId ?? Guid.Empty,
             OrderingClientName = order.Client?.Name ?? string.Empty,
@@ -115,11 +118,14 @@ public static class ShipmentInvoiceMapper
             IsFromStock = item.QuantityFromInventory > 0
         };
 
+        // Type and the degree are sort keys only, never rendered on an invoice line, so they stay
+        // live — ordering is presentation, like the brewery colour in the volume reports. The
+        // package size comes off the line so the value sorted on is the value shown.
         return new SortedLine(
             dto,
             item.Product?.Type ?? ProductType.Other,
             item.Product?.PlatoDegree,
-            item.Product?.PackageSize);
+            line.PackageSize);
     }
 
 
@@ -140,7 +146,8 @@ public static class ShipmentInvoiceMapper
             SourceKind = line.SourceKind,
             SourceItemId = extra.PublicId,
             ProductId = null,
-            Name = extra.Description,
+            // The description travels on the line now, like every other displayed fact.
+            Name = line.ProductName,
             Kind = null,
             PackageSize = null,
             PriceWithVat = null,
