@@ -353,6 +353,7 @@ public static class RohozecProductsBuilder
                 Type = ProductType.NonAlcoholicBeer,
                 AlcoholPercentage = AlcoholPercentage.ZeroPointFive,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 226.45m,
                 PriceWithVat = 274.00m,
                 PriceForUnitWithVat = 13.70m
@@ -367,6 +368,7 @@ public static class RohozecProductsBuilder
                 Type = ProductType.FlavoredBeer,
                 AlcoholPercentage = AlcoholPercentage.TwoPointTwo,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 322.31m,
                 PriceWithVat = 390.00m,
                 PriceForUnitWithVat = 19.50m
@@ -381,6 +383,7 @@ public static class RohozecProductsBuilder
                 Type = ProductType.PaleDraftBeer,
                 AlcoholPercentage = AlcoholPercentage.ThreePointTwo,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 199.17m,
                 PriceWithVat = 241.00m,
                 PriceForUnitWithVat = 12.05m
@@ -396,6 +399,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointTwo,
                 PlatoDegree = PlatoDegree.Ten,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 233.06m,
                 PriceWithVat = 282.00m,
                 PriceForUnitWithVat = 14.10m
@@ -411,6 +415,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointFour,
                 PlatoDegree = PlatoDegree.Ten,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 257.02m,
                 PriceWithVat = 311.00m,
                 PriceForUnitWithVat = 15.55m
@@ -426,6 +431,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 267.77m,
                 PriceWithVat = 324.00m,
                 PriceForUnitWithVat = 16.20m
@@ -441,6 +447,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointThree,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 284.30m,
                 PriceWithVat = 344.00m,
                 PriceForUnitWithVat = 17.20m
@@ -456,6 +463,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Six,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 298.35m,
                 PriceWithVat = 361.00m,
                 PriceForUnitWithVat = 18.05m
@@ -471,6 +479,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 267.77m,
                 PriceWithVat = 324.00m,
                 PriceForUnitWithVat = 16.20m
@@ -486,6 +495,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointFour,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 264.46m,
                 PriceWithVat = 320.00m,
                 PriceForUnitWithVat = 16.00m
@@ -501,6 +511,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointNine,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 308.26m,
                 PriceWithVat = 373.00m,
                 PriceForUnitWithVat = 18.65m
@@ -515,6 +526,7 @@ public static class RohozecProductsBuilder
                 Type = ProductType.FlavoredBeer,
                 AlcoholPercentage = AlcoholPercentage.ThreePointNine,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PlatoDegree = PlatoDegree.Ten,
                 PriceWithoutVat = 383.47m,
                 PriceWithVat = 464.00m,
@@ -531,6 +543,7 @@ public static class RohozecProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 417.36m,
                 PriceWithVat = 505.00m,
                 PriceForUnitWithVat = 25.25m
@@ -545,6 +558,7 @@ public static class RohozecProductsBuilder
                 Type = ProductType.Lemonade,
                 AlcoholPercentage = AlcoholPercentage.Zero,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 305.79m,
                 PriceWithVat = 370.00m,
                 PriceForUnitWithVat = 18.50m

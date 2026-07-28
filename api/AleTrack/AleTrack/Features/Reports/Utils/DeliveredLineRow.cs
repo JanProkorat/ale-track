@@ -34,8 +34,12 @@ public sealed record DeliveredLineRow
     public int Quantity { get; init; }
     public double? PackageSize { get; init; }
 
+    /// <summary>Containers per sellable unit — 20 for a 0.5 l crate, 8 for an eight-pack.</summary>
+    public int UnitsPerPackage { get; init; } = 1;
+
     /// <summary>Line weight in kg, or 0 when the product has no derivable unit weight.</summary>
-    public decimal WeightKg => ProductWeightCalculator.ComputeLineWeightKg(Kind, PackageSize, Quantity);
+    public decimal WeightKg =>
+        ProductWeightCalculator.ComputeLineWeightKg(Kind, PackageSize, Quantity, UnitsPerPackage);
 }
 
 /// <summary>
@@ -84,7 +88,8 @@ public static class DeliveredLineQuery
                 Kind = oi.Product.Kind,
                 Type = oi.Product.Type,
                 Quantity = oi.Quantity,
-                PackageSize = oi.Product.PackageSize
+                PackageSize = oi.Product.PackageSize,
+                UnitsPerPackage = oi.Product.UnitsPerPackage
             });
     }
 }

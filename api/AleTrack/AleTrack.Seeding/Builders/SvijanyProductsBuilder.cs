@@ -26,6 +26,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Four,
                 PlatoDegree = PlatoDegree.Ten,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 12.23m,
                 PriceForUnitWithVat = 14.80m,
                 PriceWithoutVat = 244.63m,
@@ -41,6 +42,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 14.05m,
                 PriceForUnitWithVat = 17.00m,
                 PriceWithoutVat = 280.99m,
@@ -56,6 +58,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 15.70m,
                 PriceForUnitWithVat = 19.00m,
                 PriceWithoutVat = 314.05m,
@@ -71,6 +74,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSix,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 16.12m,
                 PriceForUnitWithVat = 19.50m,
                 PriceWithoutVat = 322.31m,
@@ -86,6 +90,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 14.55m,
                 PriceForUnitWithVat = 17.60m,
                 PriceWithoutVat = 290.91m,
@@ -101,6 +106,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointSix,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 16.53m,
                 PriceForUnitWithVat = 20.00m,
                 PriceWithoutVat = 330.58m,
@@ -116,6 +122,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointTwo,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 16.53m,
                 PriceForUnitWithVat = 20.00m,
                 PriceWithoutVat = 330.58m,
@@ -131,6 +138,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.SixPointFive,
                 PlatoDegree = PlatoDegree.Fifteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 16.94m,
                 PriceForUnitWithVat = 20.50m,
                 PriceWithoutVat = 338.84m,
@@ -145,6 +153,7 @@ internal static class SvijanyProductsBuilder
                 Type = ProductType.NonAlcoholicBeer,
                 AlcoholPercentage = AlcoholPercentage.ZeroPointFive,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceForUnitWithoutVat = 11.49m,
                 PriceForUnitWithVat = 13.90m,
                 PriceWithoutVat = 229.75m,
@@ -966,6 +975,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceForUnitWithoutVat = 138.02m,
                 PriceWithVat = 167.00m
             },
@@ -979,6 +989,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSix,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceForUnitWithoutVat = 156.20m,
                 PriceWithVat = 189.00m
             },
@@ -992,6 +1003,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceForUnitWithoutVat = 145.45m,
                 PriceWithVat = 176.00m
             },
@@ -1005,6 +1017,7 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointSix,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceForUnitWithoutVat = 159.50m,
                 PriceWithVat = 193.00m
             },
@@ -1016,6 +1029,7 @@ internal static class SvijanyProductsBuilder
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 7,
                 PriceForUnitWithoutVat = 146.28m,
                 PriceWithVat = 177.00m
             },
@@ -1027,6 +1041,7 @@ internal static class SvijanyProductsBuilder
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 6,
                 PriceForUnitWithoutVat = 167.36m,
                 PriceWithVat = 202.50m
             }
@@ -1198,6 +1213,7 @@ internal static class SvijanyProductsBuilder
                 Kind = ProductKind.Can,
                 Type = ProductType.Mix,
                 PackageSize = CanSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 6,
                 PriceForUnitWithoutVat = 120.58m,
                 PriceForUnitWithVat = 145.90m,
                 PriceWithVat = 583.60m
@@ -1538,6 +1554,9 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSix,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.OneLiter,
+                // Duo pack: two 1 l bottles. The count was only ever implied by this builder's
+                // name and the Description text.
+                UnitsPerPackage = 2,
                 PriceForUnitWithoutVat = 76.78m,
                 PriceWithVat = 92.90m
             },
@@ -1552,6 +1571,9 @@ internal static class SvijanyProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointSix,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.OneLiter,
+                // Duo pack: two 1 l bottles. The count was only ever implied by this builder's
+                // name and the Description text.
+                UnitsPerPackage = 2,
                 PriceForUnitWithoutVat = 76.78m,
                 PriceWithVat = 92.90m
             },

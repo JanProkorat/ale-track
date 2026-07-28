@@ -107,6 +107,7 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
                 di.DeliveryStop.Delivery.Date,
                 di.Product.Kind,
                 di.Product.PackageSize,
+                di.Product.UnitsPerPackage,
                 di.Quantity
             })
             .ToListAsync(ct);
@@ -115,7 +116,8 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
             .GroupBy(r => ReportBucketing.BucketStart(r.Date, ReportGranularity.Month))
             .ToDictionary(
                 g => g.Key,
-                g => g.Sum(r => ProductWeightCalculator.ComputeLineWeightKg(r.Kind, r.PackageSize, r.Quantity)));
+                g => g.Sum(r => ProductWeightCalculator.ComputeLineWeightKg(
+                    r.Kind, r.PackageSize, r.Quantity, r.UnitsPerPackage)));
 
         var result = new OperationsReportDto
         {

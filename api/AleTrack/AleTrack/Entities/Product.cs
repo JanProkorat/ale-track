@@ -59,10 +59,23 @@ public sealed class Product : PublicEntity
     public float? PlatoDegree { get; set; }
     
     /// <summary>
-    /// Size of the whole package
+    /// Volume of a single container inside the package, in litres — the bottle, can or keg, not
+    /// the package total. Combine with <see cref="UnitsPerPackage"/> for the package as a whole.
     /// </summary>
     [Column("package_size")]
     public double? PackageSize { get; set; }
+
+    /// <summary>
+    /// How many individual containers make up one sellable unit: 20 for a 0.5 l crate, 24 for a
+    /// 0.33 l crate, 8 for an eight-pack, 1 for a keg or a single bottle.
+    /// </summary>
+    /// <remarks>
+    /// Needed because the count is not derivable from anything else. It used to live only in the
+    /// product name ("Prim. Premium 8x", "Svijany 6 piv + sklenička"), which is why multipacks had
+    /// no computable weight at all, and crate sizes had to be inferred from a price ratio.
+    /// </remarks>
+    [Column("units_per_package")]
+    public int UnitsPerPackage { get; set; } = 1;
     
     /// <summary>
     /// Price with VAT
@@ -102,7 +115,7 @@ public sealed class Product : PublicEntity
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public double? Weight => ProductWeightCalculator.Compute(Kind, PackageSize);
+    public double? Weight => ProductWeightCalculator.Compute(Kind, PackageSize, UnitsPerPackage);
     
     /// <summary>
     /// Display order based on the Product kind

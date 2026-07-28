@@ -1,29 +1,45 @@
 namespace AleTrack.Features.Products.Utils;
 
 /// <summary>
-/// Gross weight in kilograms of one sellable package, container included — not the weight of the
-/// liquid alone. For <see cref="AleTrack.Common.Enums.ProductKind.Bottle"/> the package is a crate
-/// ("basa"), so the figure covers the bottles plus the crate itself.
+/// Gross weight in kilograms of one filled container — the bottle, can or keg itself, contents and
+/// vessel together. A package holding several containers is
+/// <c>UnitsPerPackage × container + outer tare</c>; see <see cref="ProductWeightCalculator"/>.
 /// </summary>
 public static class PackageWeight
 {
-    public const double ZeroPointThree = 0.33;
-    public const double ZeroPointFive = 0.5;
-    public const double OneKilo = 1;
-    public const double TwoKilos = 2;
+    // --- Bottles: glass plus contents. A 0.5 l returnable weighs ~380 g empty. ---
 
-    /// <summary>
-    /// A 5 l party keg: ~5 kg beer plus its container. Was 2, which contradicted the name and
-    /// under-reported every 5 l keg.
-    /// </summary>
-    public const double FiveKilos = 5;
+    /// <summary>0.33 l bottle: ~0.29 kg glass + 0.33 kg contents.</summary>
+    public const double BottleZeroPointThreeThree = 0.62;
 
-    /// <summary>A 24 × 0.33 l crate: 24 × (~0.29 kg glass + 0.33 kg beer) + ~1.9 kg crate.</summary>
-    public const double SeventeenKilos = 17;
+    /// <summary>0.5 l bottle: 0.38 kg glass + ~0.5 kg contents.</summary>
+    public const double BottleZeroPointFive = 0.885;
 
-    /// <summary>A 20 × 0.5 l crate: 20 × (0.38 kg glass + ~0.5 kg beer) + ~2 kg crate.</summary>
-    public const double TwentyKilos = 20;
+    /// <summary>1 l bottle: ~0.6 kg glass + 1 kg contents.</summary>
+    public const double BottleOneLiter = 1.6;
 
-    public const double FortyTwoKilos = 42;
-    public const double SixtyTwoKilos = 62;
+    /// <summary>2 l bottle: ~0.8 kg glass + 2 kg contents.</summary>
+    public const double BottleTwoLiters = 2.8;
+
+    // --- Cans: the aluminium is a rounding error against the contents. ---
+
+    public const double CanZeroPointThreeThree = 0.33;
+    public const double CanZeroPointFive = 0.5;
+    public const double CanTwoLiters = 2.0;
+
+    // --- Kegs: contents plus the vessel, which is the bulk of the tare on small sizes. ---
+
+    public const double KegFiveLiters = 5;
+    public const double KegFifteenLiters = 20;
+    public const double KegTwentyLiters = 20;
+    public const double KegThirtyLiters = 42;
+    public const double KegFiftyLiters = 62;
+
+    // --- Outer packaging, counted once per package rather than per container. ---
+
+    /// <summary>A standard plastic bottle crate ("basa").</summary>
+    public const double CrateTare = 2.0;
+
+    /// <summary>A multipack's carrier, carton or shrink wrap.</summary>
+    public const double MultipackTare = 0.15;
 }
