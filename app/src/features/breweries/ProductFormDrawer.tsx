@@ -181,6 +181,15 @@ export function ProductFormDrawer({
       <Controller control={control} name="description" render={({ field }) => (
         <TextField {...field} label="Popis" multiline minRows={2} fullWidth />
       )} />
+      {/* Editing a product no longer restates history — invoices and report lines carry what was
+          true at the time. Said plainly, because the old behaviour was silent and the new one is
+          just as invisible without it. */}
+      {editing && (
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+          Změna se nepromítne do vystavených faktur ani do historie reportů — ty nesou údaje
+          platné v době vývozu.
+        </Typography>
+      )}
       {editing && onRequestDelete && (
         <Button color="error" startIcon={<DeleteIcon />} onClick={onRequestDelete} sx={{ alignSelf: 'flex-start' }}>
           Smazat produkt
