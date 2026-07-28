@@ -34,6 +34,7 @@ import {
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
+  type ProductType,
   type ProductListItemDto,
   OutgoingShipmentState,
   StockPurchaseDto,
@@ -68,6 +69,8 @@ interface NakladkaRow {
   stockPurchase: boolean;
   name: string;
   kind?: ProductKind;
+  /** Drives the app-wide product order — limonády read out last. */
+  type?: ProductType;
   packageSize?: number;
   platoDegree?: number;
   quantity: number;
@@ -89,6 +92,7 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     stockPurchase: false,
     name: p.name ?? '—',
     kind: p.kind,
+    type: p.type,
     packageSize: p.packageSize,
     platoDegree: p.platoDegree,
     quantity: p.quantity ?? 0,
@@ -107,6 +111,7 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     stockPurchase: true,
     name: e.name ?? '—',
     kind: e.kind,
+    type: e.type,
     packageSize: e.packageSize,
     platoDegree: e.platoDegree,
     quantity: e.quantity ?? 0,
@@ -145,6 +150,7 @@ interface AggRow {
   productId?: string;
   name: string;
   kind?: ProductKind;
+  type?: ProductType;
   packageSize?: number;
   platoDegree?: number;
   quantity: number;
@@ -166,7 +172,7 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
     const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
     let agg = map.get(key);
     if (!agg) {
-      agg = { key, productId: r.productId, name: r.name, kind: r.kind, packageSize: r.packageSize, platoDegree: r.platoDegree, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
+      agg = { key, productId: r.productId, name: r.name, kind: r.kind, type: r.type, packageSize: r.packageSize, platoDegree: r.platoDegree, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
       map.set(key, agg);
       order.push(key);
     }

@@ -1,8 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Box, Button, Card, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Card, Chip, Collapse, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
-import RemoveIcon from '@mui/icons-material/RemoveOutlined';
-import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -11,63 +10,18 @@ import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { ViewToggle, type ViewMode } from 'src/components/common/ViewToggle';
-import { DataTable, type Column } from 'src/components/common/DataTable';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
-import { StatusPill } from 'src/components/common/StatusPill';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { useAuth } from 'src/auth/AuthProvider';
-import { useCurrency } from 'src/providers/CurrencyProvider';
 import { apiErrorMessage } from 'src/api/errors';
-import { num, fmtLiters } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { num, plural } from 'src/lib/format';
 import { UpdateInventoryItemDto, type InventoryItemListItemDto } from 'src/generated/api-client';
 import { useInventory, useDeleteInventoryItem, useUpdateInventoryItem } from 'src/hooks/useInventory';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { InventoryItemFormDrawer } from './InventoryItemFormDrawer';
-
-/** An item is "low stock" only when it's linked to a catalog product — free/manual
- * entries never carry the warning (matches the prototype's `i.productId && qty<=3`). */
-function isLow(item: InventoryItemListItemDto): boolean {
-  return Boolean(item.productId) && (item.quantity ?? 0) <= 3;
-}
-
-/** Kind + package size as a secondary line under the item name (no beer type,
- * matching the prototype). */
-function itemSubtitle(item: InventoryItemListItemDto): string {
-  return [kindLabel(item.kind), fmtLiters(item.packageSize)].filter(Boolean).join(' · ');
-}
-
-/** − / + quantity stepper (matches the prototype's inline stock adjust). */
-function QtyStepper({
-  item,
-  editable,
-  onAdjust,
-}: {
-  item: InventoryItemListItemDto;
-  editable: boolean;
-  onAdjust: (item: InventoryItemListItemDto, delta: number) => void;
-}) {
-  const low = isLow(item);
-  const btnSx = { border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 } as const;
-  return (
-    <Stack direction="row" spacing={0.75} alignItems="center" justifyContent="flex-end">
-      {editable && (
-        <IconButton size="small" onClick={() => onAdjust(item, -1)} sx={btnSx} aria-label="Ubrat">
-          <RemoveIcon fontSize="small" />
-        </IconButton>
-      )}
-      <Typography sx={{ minWidth: 34, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums', ...(low && { color: 'error.main' }) }}>
-        {num(item.quantity ?? 0)}
-      </Typography>
-      {editable && (
-        <IconButton size="small" onClick={() => onAdjust(item, 1)} sx={btnSx} aria-label="Přidat">
-          <AddIcon fontSize="small" />
-        </IconButton>
-      )}
-    </Stack>
-  );
-}
+import { groupInventoryItems, isLow, type InventoryGroup } from './inventoryModel';
+import { InventoryProductCard, InventoryProductPanel } from './InventoryProductPanel';
 
 /** Section shape after client-side filtering — a plain object (spread off the
  * generated `InventorySectionDto` class instance), not the class itself. */
@@ -77,23 +31,86 @@ interface FilteredSection {
   items: InventoryItemListItemDto[];
 }
 
-function SectionHeading({ section, color }: { section: FilteredSection; color?: string }) {
-  const count = section.items?.length ?? 0;
+/** A filtered section with its products folded together and its colour resolved. */
+interface GroupedSection extends FilteredSection {
+  color?: string;
+  groups: InventoryGroup[];
+}
+
+/** One brewery's stock: a card whose head folds the whole section away. Same
+ * affordance as the delivery editor's brewery stops, so a long sklad can be
+ * narrowed to the brewery being counted. */
+function BrewerySection({
+  section,
+  color,
+  editable,
+  onAdjust,
+  onDelete,
+}: {
+  section: GroupedSection;
+  color?: string;
+  editable: boolean;
+  onAdjust: (item: InventoryItemListItemDto, delta: number) => void;
+  onDelete: (item: InventoryItemListItemDto) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const count = section.items.length;
   const label = section.name || 'Ostatní (ručně evidované)';
+  const toggle = () => setCollapsed((v) => !v);
+
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-      {section.name ? (
-        <Box sx={{ width: 12, height: 12, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-      ) : (
-        <Inventory2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-      )}
-      <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 12, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {count} položek
-      </Typography>
-    </Stack>
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        }}
+        sx={{
+          px: 2, py: 1.5, cursor: 'pointer',
+          borderBottom: collapsed ? 0 : 1, borderColor: 'divider',
+          '&:hover': { bgcolor: 'action.hover' },
+        }}
+      >
+        <ExpandMoreIcon
+          fontSize="small"
+          sx={{ color: 'text.secondary', flexShrink: 0, transition: 'transform .15s', transform: collapsed ? 'rotate(-90deg)' : 'none' }}
+        />
+        {section.name ? (
+          <Box sx={{ width: 12, height: 12, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
+        ) : (
+          <Inventory2OutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+        )}
+        <Typography sx={{ fontSize: 12.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1, minWidth: 0 }} noWrap>
+          {label}
+        </Typography>
+        <Chip
+          size="small"
+          label={`${count} ${plural(count, 'položka', 'položky', 'položek')}`}
+          sx={{ height: 22, fontSize: 11.5, fontWeight: 600 }}
+        />
+      </Stack>
+
+      <Collapse in={!collapsed} unmountOnExit>
+        <Stack spacing={1.25} sx={{ p: 2 }}>
+          {section.groups.map((group) => (
+            <InventoryProductPanel
+              key={group.key}
+              group={group}
+              color={color}
+              editable={editable}
+              onAdjust={onAdjust}
+              onDelete={onDelete}
+            />
+          ))}
+        </Stack>
+      </Collapse>
+    </Card>
   );
 }
 
@@ -152,55 +169,10 @@ function StatCell({
   );
 }
 
-function ItemCard({
-  item,
-  editable,
-  color,
-  onAdjust,
-  onDelete,
-}: {
-  item: InventoryItemListItemDto;
-  editable: boolean;
-  color?: string;
-  onAdjust: (item: InventoryItemListItemDto, delta: number) => void;
-  onDelete: () => void;
-}) {
-  const low = isLow(item);
-  return (
-    <Card variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Stack direction="row" spacing={1} alignItems="flex-start">
-        <Box sx={{ width: 12, height: 12, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0, mt: 0.5 }} />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 700 }} noWrap>{item.name}</Typography>
-          <Typography variant="caption" color="text.secondary">{itemSubtitle(item)}</Typography>
-        </Box>
-        {item.productId && <StatusPill tone={low ? 'crit' : 'ok'} label={low ? 'nízká' : 'skladem'} />}
-      </Stack>
-      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5 }} />
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <QtyStepper item={item} editable={editable} onAdjust={onAdjust} />
-        {editable && (
-          <Tooltip title="Vyskladnit">
-            <IconButton size="small" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Stack>
-      {item.note && (
-        <Typography variant="caption" color="text.secondary">
-          {item.note}
-        </Typography>
-      )}
-    </Card>
-  );
-}
-
 export function InventoryPage() {
   const { canEdit } = useAuth();
   const editable = canEdit('inventory');
   const { enqueueSnackbar } = useSnackbar();
-  const { formatMoney } = useCurrency();
 
   const query = useInventory();
   const del = useDeleteInventoryItem();
@@ -274,6 +246,20 @@ export function InventoryPage() {
 
   const filteredCount = filteredSections.reduce((n, s) => n + s.items.length, 0);
 
+  // Both views render products, not rows: a beer stocked in three keg sizes is
+  // one panel/tile with three lines. The brewery colour is resolved here so the
+  // grid, which flattens the sections away, keeps it.
+  const groupedSections = useMemo<GroupedSection[]>(
+    () => filteredSections.map((s) => ({
+      id: s.id,
+      name: s.name,
+      items: s.items,
+      color: s.name ? colorByName.get(s.name) : undefined,
+      groups: groupInventoryItems(s.items),
+    })),
+    [filteredSections, colorByName],
+  );
+
   const openCreate = () => {
     setEditing(undefined);
     setFormOpen(true);
@@ -290,64 +276,6 @@ export function InventoryPage() {
     }
   };
 
-  const columns: Column<InventoryItemListItemDto>[] = [
-    {
-      key: 'name',
-      header: 'Produkt',
-      render: (i) => (
-        <Box>
-          <Typography sx={{ fontWeight: 600 }}>{i.name}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {itemSubtitle(i)}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      key: 'price',
-      header: 'Cena/ks',
-      align: 'right',
-      width: 120,
-      render: (i) => formatMoney(i.priceForUnitWithVat),
-    },
-    {
-      key: 'quantity',
-      header: 'Skladem',
-      align: 'right',
-      width: 150,
-      render: (i) => <QtyStepper item={i} editable={editable} onAdjust={adjustQty} />,
-    },
-    {
-      key: 'status',
-      header: 'Stav',
-      width: 140,
-      render: (i) => (i.productId ? <StatusPill tone={isLow(i) ? 'crit' : 'ok'} label={isLow(i) ? 'nízká zásoba' : 'skladem'} /> : null),
-    },
-    {
-      key: 'note',
-      header: 'Pozn.',
-      render: (i) => <Typography color="text.secondary">{i.note ?? ''}</Typography>,
-    },
-    ...(editable
-      ? [
-          {
-            key: 'actions',
-            header: '',
-            align: 'right' as const,
-            width: 96,
-            render: (i: InventoryItemListItemDto) => (
-              <Stack direction="row" justifyContent="flex-end">
-                <Tooltip title="Vyskladnit">
-                  <IconButton size="small" onClick={() => setConfirm(i)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Stack>
-            ),
-          },
-        ]
-      : []),
-  ];
 
   return (
     <PageContainer>
@@ -440,26 +368,39 @@ export function InventoryPage() {
 
           // Grid view is a single flat tile grid across all matching sections;
           // list view stays grouped per brewery — matching the prototype exactly.
+          // Either way a product's sizes travel together (groupInventoryItems).
           if (viewMode === 'grid') {
-            const allItems = filteredSections.flatMap((s) =>
-              s.items.map((i) => ({ item: i, color: s.name ? colorByName.get(s.name) : undefined }))
+            const allGroups = groupedSections.flatMap((s) =>
+              s.groups.map((group) => ({ group, color: s.color }))
             );
             return (
               <Box
                 sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
-                  gap: 2,
+                  // Masonry by CSS columns, not grid. A grid keeps row tracks,
+                  // so one tall tile (a product with several sizes) sets the
+                  // height of its whole row and leaves gaps under every short
+                  // neighbour. Columns have no rows to align, so tiles stack
+                  // flush. The trade is reading order: down each column, not
+                  // across — which keeps a brewery's run contiguous anyway.
+                  columnWidth: '290px',
+                  // Spacing units, not pixels: sx multiplies gap values by 8,
+                  // so a literal 16 here would be a 128px gutter.
+                  columnGap: 2,
+                  '& > *': {
+                    breakInside: 'avoid',
+                    WebkitColumnBreakInside: 'avoid',
+                    mb: 2,
+                  },
                 }}
               >
-                {allItems.map(({ item, color }) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
+                {allGroups.map(({ group, color }) => (
+                  <InventoryProductCard
+                    key={group.key}
+                    group={group}
                     color={color}
                     editable={editable}
                     onAdjust={adjustQty}
-                    onDelete={() => setConfirm(item)}
+                    onDelete={setConfirm}
                   />
                 ))}
               </Box>
@@ -467,14 +408,16 @@ export function InventoryPage() {
           }
 
           return (
-            <Stack spacing={3}>
-              {filteredSections.map((s) => (
-                <Box key={s.id ?? s.name ?? 'free'}>
-                  <SectionHeading section={s} color={s.name ? colorByName.get(s.name) : undefined} />
-                  <Card variant="outlined">
-                    <DataTable columns={columns} rows={s.items} getRowKey={(i) => i.id ?? ''} />
-                  </Card>
-                </Box>
+            <Stack spacing={2}>
+              {groupedSections.map((s) => (
+                <BrewerySection
+                  key={s.id ?? s.name ?? 'free'}
+                  section={s}
+                  color={s.color}
+                  editable={editable}
+                  onAdjust={adjustQty}
+                  onDelete={setConfirm}
+                />
               ))}
             </Stack>
           );

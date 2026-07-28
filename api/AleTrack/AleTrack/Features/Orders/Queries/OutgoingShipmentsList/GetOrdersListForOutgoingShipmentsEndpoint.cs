@@ -66,8 +66,14 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                     .ToList(),
                 DeliveryAddressKind = o.DeliveryAddressKind,
                 ClientDeliveryPlaceId = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.PublicId : null,
+                // Product order per ProductOrdering.
                 Items = o.OrderItems
-                    .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
+                    .OrderBy(oi => oi.Product.Brewery.DisplayOrder)                    .ThenBy(oi => oi.Product.Type == ProductType.Lemonade
+                         || oi.Product.Type == ProductType.Merchandise
+                         || oi.Product.Type == ProductType.Other ? 1 : 0)
+                    .ThenBy(oi => oi.Product.PlatoDegree == null)
+                    .ThenBy(oi => oi.Product.PlatoDegree)
+                    .ThenBy(oi => oi.Product.PackageSize)
                     .ThenBy(oi => oi.Product.Name)
                     .Select(oi => new UnassignedOrderItemDto
                     {

@@ -56,6 +56,7 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
     {
         var data = await dbContext.Products
             .Where(p => p.Brewery.PublicId == req.Id && !p.IsDeleted)
+            .OrderForDisplayWithinBrewery()
             .Select(c => new BreweryProductListItemDto
             {
                 Id = c.PublicId,

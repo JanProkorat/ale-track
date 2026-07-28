@@ -92,8 +92,16 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                                 ? o.Client.ContactAddress.ToDto()
                                 : o.Client.OfficialAddress.ToDto()
                 },
+                // Product order per ProductOrdering; spelled out because EF cannot
+                // translate a helper call inside a projection.
                 OrderItems = o.OrderItems
-                    .OrderBy(i => i.Product.Brewery.DisplayOrder)
+                    .OrderBy(i => i.Product.Brewery.DisplayOrder)                    .ThenBy(i => i.Product.Type == ProductType.Lemonade
+                         || i.Product.Type == ProductType.Merchandise
+                         || i.Product.Type == ProductType.Other ? 1 : 0)
+                    .ThenBy(i => i.Product.PlatoDegree == null)
+                    .ThenBy(i => i.Product.PlatoDegree)
+                    .ThenBy(i => i.Product.PackageSize)
+                    .ThenBy(i => i.Product.Name)
                     .Select(i => new OrderItemDto
                     {
                         Id = i.PublicId,

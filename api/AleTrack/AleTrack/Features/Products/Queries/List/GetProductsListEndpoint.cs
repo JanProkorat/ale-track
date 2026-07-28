@@ -41,7 +41,7 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         var data = await dbContext.Products
             .Where(p => !p.IsDeleted)
-            .OrderBy(c => c.Brewery.DisplayOrder)
+            .OrderForDisplay()
             .Select(c => new ProductListItemDto
             {
                 Id = c.PublicId,
