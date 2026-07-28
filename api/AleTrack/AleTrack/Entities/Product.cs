@@ -11,7 +11,7 @@ namespace AleTrack.Entities;
 /// Entity representing a product sold by a brewery
 /// </summary>
 [Table("products")]
-public sealed class Product : PublicEntity
+public sealed class Product : PublicSoftlyDeletableEntity
 {
     /// <summary>
     /// ID of related <see cref="Brewery"/>
