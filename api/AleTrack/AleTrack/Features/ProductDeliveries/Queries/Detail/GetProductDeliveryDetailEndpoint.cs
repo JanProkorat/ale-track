@@ -70,7 +70,15 @@ internal sealed class GetProductDeliveryDetailEndpoint(AleTrackDbContext dbConte
                         Label = s.Label,
                         Latitude = s.Latitude,
                         Longitude = s.Longitude,
+                        // Product order per ProductOrdering.
                         Products = s.Items
+                            .OrderBy(i => i.Product.Type == ProductType.Lemonade
+                                       || i.Product.Type == ProductType.Merchandise
+                                       || i.Product.Type == ProductType.Other ? 1 : 0)
+                            .ThenBy(i => i.Product.PlatoDegree == null)
+                            .ThenBy(i => i.Product.PlatoDegree)
+                            .ThenBy(i => i.Product.PackageSize)
+                            .ThenBy(i => i.Product.Name)
                             .Select(i => new ProductDeliveryItemDto(i.Product.PublicId, i.Product.Name, i.Quantity, i.Note))
                             .ToList()
                     })

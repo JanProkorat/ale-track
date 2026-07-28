@@ -110,9 +110,17 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Note = s.Note,
                         Latitude = s.Latitude,
                         Longitude = s.Longitude,
+                        // Product order per ProductOrdering.
                         Products = s.ClientOrder != null
                             ? s.ClientOrder.OrderItems
                                 .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
+                                .ThenBy(oi => oi.Product.Type == ProductType.Lemonade
+                                           || oi.Product.Type == ProductType.Merchandise
+                                           || oi.Product.Type == ProductType.Other ? 1 : 0)
+                                .ThenBy(oi => oi.Product.PlatoDegree == null)
+                                .ThenBy(oi => oi.Product.PlatoDegree)
+                                .ThenBy(oi => oi.Product.PackageSize)
+                                .ThenBy(oi => oi.Product.Name)
                                 .Select(oi => new OutgoingShipmentOrderItemDto
                                 {
                                     Id = oi.Product.PublicId,
@@ -121,6 +129,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
                                     PlatoDegree = oi.Product.PlatoDegree,
+                                    Type = oi.Product.Type,
                                     Weight = oi.Product.Weight,
                                     OrderItemId = oi.PublicId,
                                     QuantityFromInventory = oi.QuantityFromInventory,
@@ -173,7 +182,15 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                     .OrderBy(v => v.Order)
                     .Select(v => new RoutePointDto { Latitude = v.Latitude, Longitude = v.Longitude })
                     .ToList(),
+                // Product order per ProductOrdering.
                 StockPurchases = os.StockPurchases
+                    .OrderBy(ei => ei.Product.Type == ProductType.Lemonade
+                                || ei.Product.Type == ProductType.Merchandise
+                                || ei.Product.Type == ProductType.Other ? 1 : 0)
+                    .ThenBy(ei => ei.Product.PlatoDegree == null)
+                    .ThenBy(ei => ei.Product.PlatoDegree)
+                    .ThenBy(ei => ei.Product.PackageSize)
+                    .ThenBy(ei => ei.Product.Name)
                     .Select(ei => new OutgoingShipmentStockPurchaseItemDto
                     {
                         Id = ei.PublicId,
@@ -181,6 +198,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                         Kind = ei.Product.Kind,
                         PackageSize = ei.Product.PackageSize,
                         PlatoDegree = ei.Product.PlatoDegree,
+                        Type = ei.Product.Type,
                         IsShipmentLoadingConfirmed = ei.IsShipmentLoadingConfirmed,
                         ProductId = ei.Product.PublicId,
                         Name = ei.Product.Name
