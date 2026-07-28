@@ -197,8 +197,10 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Select(i => i.ProductId)
             .ToList();
 
+        // Retired products are excluded, so adding one reports it as not found. Only
+        // reached on an editable order — a frozen order never rebuilds its items.
         return await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(ct);
     }
 }

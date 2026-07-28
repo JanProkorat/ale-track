@@ -69,7 +69,7 @@ public sealed class UpdateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
         if (productId is null)
             return null;
         
-        var product = await dbContext.Products.FirstOrDefaultAsync(r => r.PublicId == productId, cancellationToken);
+        var product = await dbContext.Products.FirstOrDefaultAsync(r => r.PublicId == productId && !r.IsDeleted, cancellationToken);
         if (product is null)
             ThrowHelper.PublicEntityNotFound(nameof(Product), productId.Value);
 

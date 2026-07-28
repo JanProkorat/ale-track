@@ -125,6 +125,8 @@ public sealed class SetLoadingStateEndpoint(AleTrackDbContext dbContext) : Endpo
             return;
         }
 
+        // No !IsDeleted filter, deliberately: this resolves a product the shipment
+        // already carries. Retiring a product must not break loading a run containing it.
         var product = await dbContext.Products.FirstOrDefaultAsync(p => p.PublicId == req.Data.ProductId, ct);
         if (product is null)
         {

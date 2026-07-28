@@ -526,7 +526,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (newProductIds.Count > 0)
         {
             var fetchedProducts = await dbContext.Products
-                .Where(p => newProductIds.Contains(p.PublicId))
+                .Where(p => newProductIds.Contains(p.PublicId) && !p.IsDeleted)
                 .ToListAsync(ct);
 
             if (fetchedProducts.Count != newProductIds.Count)

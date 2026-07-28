@@ -116,8 +116,10 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Select(i => i.ProductId)
             .ToList();
 
+        // Retired products are excluded, so ordering one reports it as not found — a
+        // product taken off the price list must not enter a new order.
         return await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(ct);
     }
 }

@@ -48,7 +48,7 @@ public sealed class DeleteProductEndpoint(AleTrackDbContext dbContext) : Endpoin
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteProductRequest req, CancellationToken ct)
     {
-        var product = await dbContext.Products.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+        var product = await dbContext.Products.FirstOrDefaultAsync(o => o.PublicId == req.Id && !o.IsDeleted, ct);
         if (product == null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 

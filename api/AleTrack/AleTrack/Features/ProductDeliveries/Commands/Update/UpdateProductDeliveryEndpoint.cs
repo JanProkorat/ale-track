@@ -197,7 +197,7 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
             .ToList();
         
         var existingProducts = await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(cancellationToken);
 
         if (existingProducts.Count == productIds.Count)

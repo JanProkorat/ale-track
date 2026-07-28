@@ -128,7 +128,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
     private async Task<List<Product>> GetProductsAsync(List<Guid> productIds, CancellationToken cancellationToken)
     {
         var existingProducts = await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(cancellationToken);
 
         if (existingProducts.Count == productIds.Count)
@@ -202,7 +202,7 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
             .ToList();
 
         var existingProducts = await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(cancellationToken);
 
         if (existingProducts.Count < productIds.Count)

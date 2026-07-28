@@ -31,6 +31,27 @@ public sealed class DeleteProductTests
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
     
+    /// <summary>
+    /// Deleting an already-retired product is a 404: the flag is the delete, so a second
+    /// one has nothing to act on.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_DeleteAlreadyRetiredProduct_NotFound()
+    {
+        var productId = Guid.NewGuid();
+        var product = ProductBuilder.BuildEntity(publicId: productId);
+        product.IsDeleted = true;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(products: [product]);
+
+        var endpoint = EndpointBuilder<DeleteProductRequest, DeleteProductEndpoint>.Create(dbContext.Object);
+
+        var act = async () => await endpoint.HandleAsync(new DeleteProductRequest { Id = productId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+        dbContext.Verify(e => e.Products.Remove(It.IsAny<Product>()), Times.Never);
+    }
+
     [Fact]
     public async Task ProcessAsync_DeleteProduct_NotFound()
     {

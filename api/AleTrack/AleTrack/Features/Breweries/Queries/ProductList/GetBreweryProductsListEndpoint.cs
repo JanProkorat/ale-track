@@ -55,7 +55,7 @@ public sealed class GetBreweryProductsListEndpoint(AleTrackDbContext dbContext) 
     public override async Task HandleAsync(GetProductsListRequest req, CancellationToken ct)
     {
         var data = await dbContext.Products
-            .Where(p => p.Brewery.PublicId == req.Id)
+            .Where(p => p.Brewery.PublicId == req.Id && !p.IsDeleted)
             .Select(c => new BreweryProductListItemDto
             {
                 Id = c.PublicId,

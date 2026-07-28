@@ -58,6 +58,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
 
         // Project products to DTOs in a single server-side query
         var productsQuery = dbContext.Products
+            .Where(p => !p.IsDeleted)
             .OrderBy(p => p.Brewery.DisplayOrder)
             .Select(p => new ProductListItemDto
             {
@@ -86,6 +87,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
         // so we assume that OrderItem.ProductId points to the same entity as Product.Id used in the aggregation above.
         // We need to load Product.Id with PublicId mapping to correctly map counts to DTOs.
         var productIdByPublicId = await dbContext.Products
+            .Where(p => !p.IsDeleted)
             .Select(p => new { p.Id, p.PublicId })
             .ToDictionaryAsync(x => x.PublicId, x => x.Id, ct);
 
