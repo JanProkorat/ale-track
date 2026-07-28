@@ -202,7 +202,7 @@ public static class PrimatorProductsBuilder
                 PriceWithoutVat = 572.73m,
                 PriceWithVat = 693.00m,
                 PriceForUnitWithoutVat = 19.09m,
-                PriceForUnitWithVat = 23.70m
+                PriceForUnitWithVat = 23.10m
             },
 
             // Dark
@@ -538,6 +538,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
                 AlcoholPercentage = AlcoholPercentage.FourPointSeven,
+                PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = KegSize.FifteenLiters,
                 PriceWithoutVat = 652.07m,
                 PriceWithVat = 789.00m,
@@ -692,11 +693,11 @@ public static class PrimatorProductsBuilder
                 PriceForUnitWithVat = 21.80m
             },
 
-            // CHIPPER Grep
+            // Chipper Grep
             new()
             {
                 PublicId = Guid.Parse("26574c46-192a-44f6-9c76-a2061b98d4b5"),
-                Name ="Prim. CHIPPER Grep",
+                Name ="Prim. Chipper Grep",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Radler,
                 AlcoholPercentage = AlcoholPercentage.Two,
@@ -1066,7 +1067,7 @@ public static class PrimatorProductsBuilder
             new()
             {
                 PublicId = Guid.Parse("da8a9414-80af-4511-9370-4e0c8538f722"),
-                Name ="Prim. Chipper Grap",
+                Name ="Prim. Chipper Grep",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Radler,
                 AlcoholPercentage = AlcoholPercentage.Two,

@@ -46,6 +46,36 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
     }
 
     /// <summary>
+    /// Adds only generated history to an already-seeded database, leaving the current-state
+    /// fixtures (the Created and InTransit runs, the open orders) untouched. This is the path used
+    /// to give an existing environment something for the Reporty module to draw.
+    /// </summary>
+    public async Task InsertHistoryAsync(DateOnly from, DateOnly to)
+    {
+        var breweries = await dbContext.Breweries.Include(b => b.Products).ToListAsync();
+        var clients = await dbContext.Clients.ToListAsync();
+        var vehicles = await dbContext.Vehicles.ToListAsync();
+        var drivers = await dbContext.Drivers.ToListAsync();
+        var products = breweries.SelectMany(b => b.Products).ToList();
+
+        var history = HistoryBuilder.CreateHistory(
+            clients, products, vehicles, drivers, breweries, from, to);
+
+        dbContext.Orders.AddRange(history.Orders);
+        dbContext.OutgoingShipments.AddRange(history.Shipments);
+        dbContext.ProductDeliveries.AddRange(history.Deliveries);
+
+        await dbContext.SaveChangesAsync();
+
+        Console.WriteLine(
+            $"History {from:yyyy-MM-dd}..{to:yyyy-MM-dd}: "
+            + $"{history.Shipments.Count} shipments, {history.Orders.Count} orders, "
+            + $"{history.Orders.Sum(o => o.OrderItems.Count)} order lines, "
+            + $"{history.Orders.Sum(o => o.Returns.Count)} returns, "
+            + $"{history.Deliveries.Count} incoming deliveries.");
+    }
+
+    /// <summary>
     /// Seeds demo operational data (clients, vehicles, drivers, inventory, orders,
     /// outgoing shipments and incoming deliveries) referencing the freshly-built
     /// breweries/products, so every module has representative data to work with.
@@ -86,12 +116,35 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
 
         var deliveries = OperationalDataBuilder.CreateDeliveries(breweries, products, vehicles, drivers);
         dbContext.ProductDeliveries.AddRange(deliveries);
+
+        // Generated history alongside the current-state fixtures above, so a fresh database has
+        // something for the Reporty module to draw. Reuses the same client/vehicle/driver instances
+        // rather than rebuilding them, or EF would insert a second copy of each. The window covers
+        // the module's widest (180-day) period with headroom; see the historical-seed-data spec.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var history = HistoryBuilder.CreateHistory(
+            clients, products, vehicles, drivers, breweries, today.AddDays(-208), today.AddDays(-1));
+
+        dbContext.Orders.AddRange(history.Orders);
+        dbContext.OutgoingShipments.AddRange(history.Shipments);
+        dbContext.ProductDeliveries.AddRange(history.Deliveries);
     }
 
+    /// <summary>
+    /// Re-attaches the full Svijany product range to an already-seeded brewery, without
+    /// rebuilding the rest of the database.
+    /// </summary>
+    /// <remarks>
+    /// Must call every builder <see cref="InsertDataAsync"/> does. It previously skipped
+    /// the bottled and keg ranges, which left the dev database with lemonade kegs and no
+    /// 15 l size at all — keep this list in sync when a builder is added.
+    /// </remarks>
     public async Task InsertProductsToSvijany()
     {
         var svijany = await dbContext.Breweries.FirstAsync(b => b.Name == "Svijany");
-        
+
+        svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleBottledProducts());
+        svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleKegProducts());
         svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleLimoKegProducts());
         svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleMultipackProducts());
         svijany.Products.AddRange(SvijanyProductsBuilder.GetSampleCanZeroPointFiveProducts());
