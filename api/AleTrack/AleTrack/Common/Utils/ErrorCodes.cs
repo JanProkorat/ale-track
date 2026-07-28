@@ -90,4 +90,24 @@ public static class ErrorCodes
     /// Error code for case when an outgoing shipment is already cancelled
     /// </summary>
     public const string ShipmentAlreadyCancelled = "SHIPMENT_ALREADY_CANCELLED";
+
+    /// <summary>
+    /// Error code for case when a brewery still owns products and cannot be deleted
+    /// </summary>
+    public const string BreweryHasProducts = "BREWERY_HAS_PRODUCTS";
+
+    /// <summary>
+    /// Error code for case when an outgoing shipment state transition is not allowed
+    /// </summary>
+    public const string ShipmentTransitionNotAllowed = "SHIPMENT_TRANSITION_NOT_ALLOWED";
+
+    /// <summary>
+    /// Error code for case when content frozen at loading time would be changed
+    /// </summary>
+    public const string ShipmentContentFrozen = "SHIPMENT_CONTENT_FROZEN";
+
+    /// <summary>
+    /// Error code for case when the content of a closed or loaded order would be changed
+    /// </summary>
+    public const string OrderContentFrozen = "ORDER_CONTENT_FROZEN";
 }

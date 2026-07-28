@@ -283,6 +283,13 @@ public record OutgoingShipmentProductDto
     public float? PlatoDegree { get; set; }
 
     /// <summary>
+    /// Type of the product. Carried because the nakládka re-groups the rows by kind
+    /// and has to order inside those groups itself: without the type it cannot tell a
+    /// limonáda (which belongs last) from a beer with no degree recorded.
+    /// </summary>
+    public ProductType? Type { get; set; }
+
+    /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
     public double? Weight { get; set; }

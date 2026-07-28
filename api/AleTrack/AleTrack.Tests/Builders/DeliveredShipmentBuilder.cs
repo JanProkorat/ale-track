@@ -1,5 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
+using AleTrack.Features.ProductDeliveries.Utils;
 using AleTrack.Infrastructure.Persistence;
 using AleTrack.Tests.Mocks;
 using Moq;
@@ -21,7 +23,8 @@ public sealed record DeliveredShipmentFixture(
     Client Client,
     Brewery Brewery,
     Driver Driver,
-    List<OrderItem> OrderItems);
+    List<OrderItem> OrderItems,
+    List<OutgoingShipmentStopItem> StopItems);
 
 /// <summary>
 /// Builds a single-client, single-brewery delivered shipment wired end to end
@@ -75,7 +78,6 @@ public static class DeliveredShipmentBuilder
             Order = 1,
             OutgoingShipmentId = shipment.Id,
             OutgoingShipment = shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -86,6 +88,8 @@ public static class DeliveredShipmentBuilder
         var (products, orderItems) = BuildLines(order, brewery, startId: 1, lines);
         order.OrderItems = orderItems;
 
+        var stopItems = SnapshotAll(shipment);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client],
             breweries: [brewery],
@@ -93,9 +97,10 @@ public static class DeliveredShipmentBuilder
             orders: [order],
             orderItems: orderItems,
             drivers: [driver],
-            outgoingShipments: [shipment]);
+            outgoingShipments: [shipment],
+            outgoingShipmentStopItems: stopItems);
 
-        return new DeliveredShipmentFixture(dbContext, shipment, order, client, brewery, driver, orderItems);
+        return new DeliveredShipmentFixture(dbContext, shipment, order, client, brewery, driver, orderItems, stopItems);
     }
 
     /// <summary>
@@ -141,7 +146,6 @@ public static class DeliveredShipmentBuilder
             Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -156,6 +160,8 @@ public static class DeliveredShipmentBuilder
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
         var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
 
+        var stopItems = SnapshotAll(fixture.Shipment);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [fixture.Client, client],
             breweries: [fixture.Brewery],
@@ -163,9 +169,10 @@ public static class DeliveredShipmentBuilder
             orders: [fixture.Order, order],
             orderItems: allOrderItems,
             drivers: [fixture.Driver],
-            outgoingShipments: [fixture.Shipment]);
+            outgoingShipments: [fixture.Shipment],
+            outgoingShipmentStopItems: stopItems);
 
-        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems, StopItems = stopItems };
     }
 
     /// <summary>
@@ -208,7 +215,6 @@ public static class DeliveredShipmentBuilder
             Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -223,6 +229,8 @@ public static class DeliveredShipmentBuilder
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
         var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
 
+        var stopItems = SnapshotAll(fixture.Shipment);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [fixture.Client],
             breweries: [fixture.Brewery],
@@ -230,9 +238,10 @@ public static class DeliveredShipmentBuilder
             orders: [fixture.Order, order],
             orderItems: allOrderItems,
             drivers: [fixture.Driver],
-            outgoingShipments: [fixture.Shipment]);
+            outgoingShipments: [fixture.Shipment],
+            outgoingShipmentStopItems: stopItems);
 
-        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems, StopItems = stopItems };
     }
 
     /// <summary>
@@ -281,7 +290,6 @@ public static class DeliveredShipmentBuilder
             Order = 1,
             OutgoingShipmentId = secondShipment.Id,
             OutgoingShipment = secondShipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -296,6 +304,8 @@ public static class DeliveredShipmentBuilder
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Concat(products).ToList();
         var allOrderItems = fixture.OrderItems.Concat(orderItems).ToList();
 
+        var stopItems = SnapshotAll(fixture.Shipment, secondShipment);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [fixture.Client],
             breweries: [fixture.Brewery],
@@ -303,9 +313,10 @@ public static class DeliveredShipmentBuilder
             orders: [fixture.Order, order],
             orderItems: allOrderItems,
             drivers: [fixture.Driver],
-            outgoingShipments: [fixture.Shipment, secondShipment]);
+            outgoingShipments: [fixture.Shipment, secondShipment],
+            outgoingShipmentStopItems: stopItems);
 
-        return fixture with { DbContext = dbContext, OrderItems = allOrderItems };
+        return fixture with { DbContext = dbContext, OrderItems = allOrderItems, StopItems = stopItems };
     }
 
     /// <summary>
@@ -358,6 +369,9 @@ public static class DeliveredShipmentBuilder
             Quantity = quantity
         };
 
+        // Booking a line in records the product's weight inputs; the report reads nothing else.
+        DeliveryItemSnapshot.Apply(item, product);
+
         stop.Items = [item];
         delivery.Stops = [stop];
 
@@ -372,9 +386,44 @@ public static class DeliveredShipmentBuilder
             drivers: [fixture.Driver],
             productDeliveries: [delivery],
             deliveryItems: [item],
-            outgoingShipments: [fixture.Shipment]);
+            outgoingShipments: [fixture.Shipment],
+            // The outgoing side must stay visible: this re-mocks the whole context.
+            outgoingShipmentStopItems: fixture.StopItems);
 
         return fixture with { DbContext = dbContext };
+    }
+
+    /// <summary>
+    /// Populates snapshotted content on every stop of every given shipment, the same way
+    /// production does, by running the real writer. Using the writer rather than hand-built rows
+    /// keeps the fixture from drifting away from what a loaded run actually stores.
+    /// </summary>
+    /// <remarks>
+    /// Takes every shipment and returns every row, because <c>Apply</c> rebuilds a whole
+    /// shipment's stops rather than appending to one: calling it after a second stop has been
+    /// added re-snapshots the first as well. Accumulating the return value across calls would
+    /// therefore double-count, so callers pass the result straight to <c>CreateMock</c>.
+    /// </remarks>
+    private static List<OutgoingShipmentStopItem> SnapshotAll(params OutgoingShipment[] shipments)
+    {
+        var items = new List<OutgoingShipmentStopItem>();
+
+        foreach (var shipment in shipments)
+        {
+            ShipmentContentSnapshotWriter.Apply(shipment);
+            items.AddRange(shipment.Stops.SelectMany(s => s.Items));
+        }
+
+        // The report projection navigates si.Stop and groups by si.StopId, so both need to be
+        // real on a mocked DbSet.
+        var nextId = 1000L;
+        foreach (var item in items)
+        {
+            item.Id = nextId++;
+            item.StopId = item.Stop.Id;
+        }
+
+        return items;
     }
 
     /// <summary>

@@ -94,6 +94,11 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
             .ToDictionary(g => g.Key, g => g.Sum(r => r.WeightKg));
 
         // Incoming weight per month — raw columns only, weight computed below.
+        //
+        // Reads the line's own recorded weight inputs rather than the product's current ones,
+        // matching the outgoing half above: DeliveredLineQuery reads the run's snapshot. Leaving
+        // this side live left one series moving under a product edit while the other stayed put.
+        // The formula stays live on both sides, so correcting it still reaches history.
         var incomingRows = await dbContext.DeliveryItems
             // Finished only, mirroring the outgoing side's delivered-only rule. The spec's
             // "delivered = actuals, not plans" principle applies to both sides of this chart:
@@ -105,9 +110,9 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
             .Select(di => new
             {
                 di.DeliveryStop.Delivery.Date,
-                di.Product.Kind,
-                di.Product.PackageSize,
-                di.Product.UnitsPerPackage,
+                di.Kind,
+                di.PackageSize,
+                di.UnitsPerPackage,
                 di.Quantity
             })
             .ToListAsync(ct);

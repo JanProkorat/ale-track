@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,6 +29,31 @@ public sealed class DeliveryItem : BaseEntity
     /// </summary>
     [Column("quantity")]
     public int Quantity { get; set; }
+
+    /// <summary>Product kind as it was when this line was booked in. Weight input.</summary>
+    /// <remarks>
+    /// The Operations report's incoming-versus-outgoing chart derives a weight from these three,
+    /// and the outgoing half reads the run's snapshot. Leaving this side live would have left one
+    /// series moving under a product edit while the other stayed put.
+    ///
+    /// As everywhere else in this work, the inputs are stored and the formula stays live, so
+    /// correcting <c>ProductWeightCalculator</c> still reaches history while correcting the
+    /// product data it consumes no longer does.
+    /// </remarks>
+    [Column("kind")]
+    public ProductKind Kind { get; set; }
+
+    /// <summary>
+    /// Container volume in litres as it was when this line was booked in. Weight input.
+    /// </summary>
+    [Column("package_size")]
+    public double? PackageSize { get; set; }
+
+    /// <summary>
+    /// Containers per sellable unit as it was when this line was booked in. Weight input.
+    /// </summary>
+    [Column("units_per_package")]
+    public int UnitsPerPackage { get; set; } = 1;
     
     /// <summary>
     /// Description of the product to be delivered

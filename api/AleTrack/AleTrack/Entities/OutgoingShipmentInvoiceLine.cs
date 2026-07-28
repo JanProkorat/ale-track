@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
@@ -66,6 +67,51 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     /// </summary>
     [Column("quantity")]
     public int Quantity { get; set; }
+
+    /// <summary>
+    /// Name of what was billed, as it was when the line was drawn up. For a
+    /// <see cref="InvoiceLineSourceKind.CustomExtraItem"/> line this is the extra's description.
+    /// </summary>
+    /// <remarks>
+    /// The line does not simply point at the run's stop item, because it is its own historical
+    /// record: it bills a fraction of an item to a particular client, which is why
+    /// <see cref="Quantity"/> is already snapshotted here rather than read from the source.
+    /// Repricing a product used to restate every invoice that ever contained it.
+    /// </remarks>
+    [MaxLength(100)]
+    [Column("product_name")]
+    public string ProductName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Product kind as it was when the line was drawn up. Null for a custom extra, which has no
+    /// product at all.
+    /// </summary>
+    [Column("kind")]
+    public ProductKind? Kind { get; set; }
+
+    /// <summary>
+    /// Container volume in litres as it was when the line was drawn up. Null for a custom extra.
+    /// </summary>
+    [Column("package_size")]
+    public double? PackageSize { get; set; }
+
+    /// <summary>
+    /// Unit price with VAT actually applied to this line. Null for a custom extra, which carries
+    /// no price today.
+    /// </summary>
+    /// <remarks>
+    /// The <em>applied</em> price, deliberately separate from the product's current one: when
+    /// client-specific price overrides arrive, the rule stays live and relational while the
+    /// resolved price freezes here, on the line it was charged on.
+    /// </remarks>
+    [Column("unit_price_with_vat")]
+    public decimal? UnitPriceWithVat { get; set; }
+
+    /// <summary>
+    /// Unit price without VAT actually applied to this line. Null for a custom extra.
+    /// </summary>
+    [Column("unit_price_without_vat")]
+    public decimal? UnitPriceWithoutVat { get; set; }
 
     /// <summary>
     /// ID of the billed <see cref="OrderItem"/>. Set only when

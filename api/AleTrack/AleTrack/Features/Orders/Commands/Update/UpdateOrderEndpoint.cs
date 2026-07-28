@@ -52,6 +52,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             {
                 s.Summary = "Updates order for delivery";
                 s.Responses[StatusCodes.Status204NoContent] = "Order updated";
+                s.Responses[StatusCodes.Status400BadRequest] = "Order is closed or already loaded; its content is frozen";
             }
         );
     }
@@ -62,14 +63,25 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         var order = await dbContext.Orders
             .Where(o => o.PublicId == req.Id)
             .Include(o => o.Client)
+            .Include(o => o.ClientDeliveryPlace)
             .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
             .Include(o => o.Returns)
             .Include(o => o.Notes)
             .Include(o => o.CustomExtraItems)
+            // The freeze follows the shipment carrying the order, not only the order's own
+            // state — order items are the shipment's content.
+            .Include(o => o.OutgoingShipmentStop)
+                .ThenInclude(s => s!.OutgoingShipment)
             .FirstOrDefaultAsync(ct);
-        
+
         if (order is null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
+
+        var contentEditable = OrderMutability.IsContentEditable(order!);
+
+        if (!contentEditable && RequestChangesFrozenContent(order!, req.Data))
+            ThrowHelper.OrderContentFrozen(req.Id);
 
         // Captured before the possible reassignment below: changing the
         // client implies changing the address (the old place belongs to the
@@ -77,49 +89,92 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         // when the (kind, placeId) pair itself is left untouched.
         var clientChanged = req.Data.ClientId != order!.Client.PublicId;
 
-        if (clientChanged)
-        {
-            var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.Data.ClientId, ct);
-            if (client == null)
-                ThrowHelper.PublicEntityNotFound(nameof(Client), req.Data.ClientId);
-
-            order.Client = client!;
-        }
-
-        var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
-
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
-        order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
-        order.State = req.Data.State;
 
-        var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
-            dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
-
-        if (addressChanged || clientChanged)
-            await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
-
-        order.OrderItems.Clear();
-        
-        foreach (var orderItem in req.Data.OrderItems)
+        if (contentEditable)
         {
-            var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
-            if (relatedProduct is null)
-                ThrowHelper.PublicEntityNotFound(nameof(Product), orderItem.ProductId);
-
-            order.OrderItems.Add(new OrderItem
+            if (clientChanged)
             {
-                Product = relatedProduct!,
-                Quantity = orderItem.Quantity,
-                ReminderState = orderItem.ReminderState
-            });
+                var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.Data.ClientId, ct);
+                if (client == null)
+                    ThrowHelper.PublicEntityNotFound(nameof(Client), req.Data.ClientId);
+
+                order.Client = client!;
+            }
+
+            // Only needed by the rebuild below. Kept inside the branch because it filters out
+            // retired products, which would otherwise reject a notes-only save of an order
+            // containing a since-retired one.
+            var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
+
+            order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
+            order.State = req.Data.State;
+
+            var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
+                dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
+
+            if (addressChanged || clientChanged)
+                await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
+
+            // Destructive by design: the items are replaced, not merged, so every save hands
+            // out fresh row IDs. outgoing_shipment_invoice_lines.order_item_id is Cascade, so
+            // running this on a closed order deleted that order's invoice lines outright.
+            // Skipping the rebuild — rather than rebuilding and then comparing — is what keeps
+            // the rows, and the invoice lines hanging off them, alive.
+            order.OrderItems.Clear();
+
+            foreach (var orderItem in req.Data.OrderItems)
+            {
+                var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
+                if (relatedProduct is null)
+                    ThrowHelper.PublicEntityNotFound(nameof(Product), orderItem.ProductId);
+
+                order.OrderItems.Add(new OrderItem
+                {
+                    Product = relatedProduct!,
+                    Quantity = orderItem.Quantity,
+                    ReminderState = orderItem.ReminderState
+                });
+            }
         }
-        
+
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
         order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
+    }
+
+    /// <summary>
+    /// Whether the request would actually change content that is frozen.
+    /// </summary>
+    /// <remarks>
+    /// Comparing rather than blanket-rejecting keeps the full-object PUT working: the order
+    /// screen re-sends everything, so a notes-only save on a delivered order still succeeds.
+    /// </remarks>
+    private static bool RequestChangesFrozenContent(Order order, UpdateOrderDto data)
+    {
+        if (data.ClientId != order.Client.PublicId
+            || data.State != order.State
+            || data.ActualDeliveryDate != order.ActualDeliveryDate
+            || data.DeliveryAddressKind != order.DeliveryAddressKind
+            || data.ClientDeliveryPlaceId != order.ClientDeliveryPlace?.PublicId)
+            return true;
+
+        var storedItems = order.OrderItems
+            .Select(i => (i.Product.PublicId, i.Quantity, i.ReminderState))
+            .OrderBy(i => i.PublicId)
+            .ThenBy(i => i.Quantity)
+            .ToList();
+
+        var incomingItems = data.OrderItems
+            .Select(i => (PublicId: i.ProductId, i.Quantity, i.ReminderState))
+            .OrderBy(i => i.PublicId)
+            .ThenBy(i => i.Quantity)
+            .ToList();
+
+        return !storedItems.SequenceEqual(incomingItems);
     }
 
     /// <summary>
@@ -197,8 +252,10 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Select(i => i.ProductId)
             .ToList();
 
+        // Retired products are excluded, so adding one reports it as not found. Only
+        // reached on an editable order — a frozen order never rebuilds its items.
         return await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
             .ToListAsync(ct);
     }
 }

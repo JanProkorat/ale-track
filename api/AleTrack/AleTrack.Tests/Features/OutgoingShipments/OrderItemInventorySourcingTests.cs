@@ -54,11 +54,27 @@ public sealed class OrderItemInventorySourcingTests
             new() { PublicId = Guid.NewGuid(), Kind = OutgoingShipmentStopKind.Order, Order = 1, ClientOrder = order }
         };
         if (withCustomStop)
-            stops.Add(new OutgoingShipmentStop { PublicId = Guid.NewGuid(), Kind = OutgoingShipmentStopKind.Custom, Order = 2, Label = "Čerpací stanice" });
+            // Coordinates are not decoration: a real custom stop always has them (they come
+            // from a map pick or an address hit), and the content diff compares them.
+            stops.Add(new OutgoingShipmentStop
+            {
+                PublicId = Guid.NewGuid(),
+                Kind = OutgoingShipmentStopKind.Custom,
+                Order = 2,
+                Label = "Čerpací stanice",
+                Latitude = 49.2m,
+                Longitude = 16.6m
+            });
 
         return new Fixture(OutgoingShipmentBuilder.BuildEntity(state: state, stops: stops), order, item, customExtra, stock, client);
     }
 
+    /// <summary>
+    /// Mirrors what the UI sends: the shipment's whole current content with only the state
+    /// and the loading fields varied. Echoing the custom stops back matters — content is
+    /// frozen from Loaded onward, so a request that silently dropped them would be rejected
+    /// as a content change rather than testing what it means to test.
+    /// </summary>
     private static UpdateOutgoingShipmentRequest Request(
         Fixture f, OutgoingShipmentState state, int fromInventory = 0, Guid? inventoryId = null, bool confirmExtra = false) => new()
     {
@@ -68,6 +84,17 @@ public sealed class OrderItemInventorySourcingTests
             Name = "vyvoz",
             DeliveryDate = DateTime.UtcNow.AddDays(1),
             State = state,
+            CustomStops = [.. f.Shipment.Stops
+                .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
+                .Select(s => new CustomStopDto
+                {
+                    Id = s.PublicId,
+                    Order = s.Order,
+                    Label = s.Label!,
+                    Note = s.Note,
+                    Latitude = s.Latitude!.Value,
+                    Longitude = s.Longitude!.Value
+                })],
             ClientOrderShipments =
             [
                 new ClientOrderShipmentDto

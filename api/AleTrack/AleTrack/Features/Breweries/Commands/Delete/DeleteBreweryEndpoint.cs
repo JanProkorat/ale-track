@@ -39,6 +39,7 @@ public sealed class DeleteBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
             {
                 s.Summary = "Deletes Brewery";
                 s.Responses[StatusCodes.Status204NoContent] = "Brewery deleted";
+                s.Responses[StatusCodes.Status400BadRequest] = "Brewery still owns products";
             }
         );
     }
@@ -49,6 +50,13 @@ public sealed class DeleteBreweryEndpoint(AleTrackDbContext dbContext) : Endpoin
         var brewery = await dbContext.Breweries.FirstOrDefaultAsync(c => c.PublicId == req.Id, ct);
         if (brewery == null)
             ThrowHelper.PublicEntityNotFound(nameof(brewery), req.Id);
+
+        // Brewery -> Product is Cascade and order_items.product_id is Restrict, so deleting
+        // a brewery that still owns products either destroys history (before the Restrict
+        // change) or fails deep in the provider. Refuse it here with something readable.
+        var productCount = await dbContext.Products.CountAsync(p => p.BreweryId == brewery!.Id, ct);
+        if (productCount > 0)
+            ThrowHelper.BreweryHasProducts(req.Id, productCount);
 
         dbContext.Breweries.Remove(brewery!);
         

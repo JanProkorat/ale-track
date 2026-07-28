@@ -404,10 +404,18 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("delivery_stop_id");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
                     b.Property<string>("Note")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("note");
+
+                    b.Property<double?>("PackageSize")
+                        .HasColumnType("double precision")
+                        .HasColumnName("package_size");
 
                     b.Property<long>("ProductId")
                         .HasColumnType("bigint")
@@ -416,6 +424,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
+
+                    b.Property<int>("UnitsPerPackage")
+                        .HasColumnType("integer")
+                        .HasColumnName("units_per_package");
 
                     b.HasKey("Id");
 
@@ -991,6 +1003,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_private");
 
+                    b.Property<int?>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
                     b.Property<long?>("OrderItemId")
                         .HasColumnType("bigint")
                         .HasColumnName("order_item_id");
@@ -998,6 +1014,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<long>("OutgoingShipmentId")
                         .HasColumnType("bigint")
                         .HasColumnName("outgoing_shipment_id");
+
+                    b.Property<double?>("PackageSize")
+                        .HasColumnType("double precision")
+                        .HasColumnName("package_size");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("product_name");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
@@ -1010,6 +1036,14 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<int>("SourceKind")
                         .HasColumnType("integer")
                         .HasColumnName("source_kind");
+
+                    b.Property<decimal?>("UnitPriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("unit_price_with_vat");
+
+                    b.Property<decimal?>("UnitPriceWithoutVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("unit_price_without_vat");
 
                     b.HasKey("Id");
 
@@ -1232,9 +1266,18 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("client_delivery_place_id");
 
-                    b.Property<long?>("ClientOrderId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("client_order_id");
+                    b.Property<string>("ClientName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("client_name");
+
+                    b.Property<Guid?>("ClientPublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_public_id");
+
+                    b.Property<int?>("ClientRegion")
+                        .HasColumnType("integer")
+                        .HasColumnName("client_region");
 
                     b.Property<bool>("IsAddressOverridden")
                         .HasColumnType("boolean")
@@ -1290,6 +1333,89 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("outgoing_shipment_stops");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStopItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BreweryName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("brewery_name");
+
+                    b.Property<Guid>("BreweryPublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("brewery_public_id");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<long?>("OrderItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<double?>("PackageSize")
+                        .HasColumnType("double precision")
+                        .HasColumnName("package_size");
+
+                    b.Property<long?>("ProductId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("product_name");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<long>("StopId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stop_id");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasColumnName("type");
+
+                    b.Property<decimal>("UnitPriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("unit_price_with_vat");
+
+                    b.Property<decimal?>("UnitPriceWithoutVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("unit_price_without_vat");
+
+                    b.Property<int>("UnitsPerPackage")
+                        .HasColumnType("integer")
+                        .HasColumnName("units_per_package");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("StopId");
+
+                    b.ToTable("outgoing_shipment_stop_items");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.Product", b =>
                 {
                     b.Property<long>("Id")
@@ -1311,6 +1437,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("description");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<int>("Kind")
                         .HasColumnType("integer")
@@ -2049,7 +2179,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasOne("AleTrack.Entities.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("InventoryItem");
@@ -2256,6 +2386,31 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("OutgoingShipment");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStopItem", b =>
+                {
+                    b.HasOne("AleTrack.Entities.OrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AleTrack.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AleTrack.Entities.OutgoingShipmentStop", "Stop")
+                        .WithMany("Items")
+                        .HasForeignKey("StopId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OrderItem");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Stop");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.Product", b =>
                 {
                     b.HasOne("AleTrack.Entities.Brewery", "Brewery")
@@ -2402,6 +2557,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStop", b =>
                 {
                     b.Navigation("ClientOrder");
+
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Product", b =>

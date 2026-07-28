@@ -132,6 +132,9 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
             return;
         }
 
+        // No !IsDeleted filter, deliberately: this resolves a product the shipment
+        // already carries. Retiring a product must not break splitting a run's
+        // purchase invoices.
         var product = await dbContext.Products
             .FirstOrDefaultAsync(p => p.PublicId == req.Data.ProductId, ct);
 

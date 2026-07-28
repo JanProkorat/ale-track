@@ -79,5 +79,12 @@ public sealed class OrderItem : PublicEntity
     /// <summary>
     /// Instance of related <see cref="Product"/> entity
     /// </summary>
+    /// <remarks>
+    /// Restrict, not the EF default Cascade: deleting a product used to cascade into
+    /// order_items and on into outgoing_shipment_invoice_lines, wiping the history of
+    /// everything ever sold. The incoming side (delivery_items.product_id) was already
+    /// Restrict, which is what showed the cascade had never been a deliberate choice.
+    /// </remarks>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
     public Product Product { get; set; } = null!;
 }

@@ -4,8 +4,9 @@
 // last, so the list is read out in that order. Kept out of ShipmentDetail so the
 // ordering can be checked without a rendering harness.
 
-import type { ProductKind } from 'src/generated/api-client';
+import type { ProductKind, ProductType } from 'src/generated/api-client';
 import { kindLabel, kindName } from 'src/lib/labels';
+import { compareProductsForDisplay } from 'src/lib/productSort';
 
 /**
  * Section order, as the van is loaded: bottles, cans, multipacks, everything else,
@@ -26,22 +27,24 @@ export interface KindSection<T> {
 
 /** What a row needs for the within-section order. */
 interface Sortable {
+  type?: ProductType;
   platoDegree?: number;
   packageSize?: number;
+  name?: string;
 }
 
 /**
- * Within a section: by degree, then smallest package first.
+ * Within a section: the app-wide product order — by degree, smallest package
+ * first, soft drinks at the end.
  *
- * Anything without a degree sorts after the beers rather than in front of them —
- * a missing value is not a zero-degree beer, it is something else entirely (kegs of
- * cider, empties), and it belongs at the end of its section.
+ * The section is already one kind, so this only decides the order inside it. A
+ * row with no degree sorts after the beers rather than in front of them: a
+ * missing value is not a zero-degree beer, it is something else (cider kegs,
+ * empties). {@link compareProductsForDisplay} also drops the limonády below
+ * those, which is what the customer asked for.
  */
 function bySortKey(a: Sortable, b: Sortable): number {
-  const plato = (a.platoDegree ?? Number.POSITIVE_INFINITY) - (b.platoDegree ?? Number.POSITIVE_INFINITY);
-  if (plato !== 0) return plato;
-
-  return (a.packageSize ?? Number.POSITIVE_INFINITY) - (b.packageSize ?? Number.POSITIVE_INFINITY);
+  return compareProductsForDisplay(a, b);
 }
 
 /**

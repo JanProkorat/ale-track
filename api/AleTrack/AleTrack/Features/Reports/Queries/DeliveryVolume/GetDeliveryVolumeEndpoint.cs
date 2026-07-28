@@ -52,7 +52,7 @@ public sealed class GetDeliveryVolumeEndpoint(AleTrackDbContext dbContext)
         {
             TotalWeightKg = rows.Sum(r => r.WeightKg),
             TotalUnits = rows.Sum(r => r.Quantity),
-            ClientsServed = rows.Select(r => r.ClientId).Distinct().Count(),
+            ClientsServed = rows.Select(r => r.ClientPublicId).Distinct().Count(),
 
             UnitsByKind = rows
                 .GroupBy(r => r.Kind)

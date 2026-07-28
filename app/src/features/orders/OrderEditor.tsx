@@ -20,6 +20,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { PageHeader } from 'src/components/common/PageHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
+import { compareProductsForDisplay } from 'src/lib/productSort';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
@@ -105,6 +106,15 @@ function groupByName(products: ProductListItemDto[]): NameGroup[] {
 }
 function flattenKind(k: KindGroupDto): ProductListItemDto[] {
   return (k.packageSizes ?? []).flatMap((pkg) => pkg.items ?? []);
+}
+
+/**
+ * The history endpoint nests its products brewery → kind → package size, so
+ * flattening it would order the catalog by kind and lose the degree order the
+ * server sent. Re-sorting the flat list restores it.
+ */
+function inDisplayOrder(products: ProductListItemDto[]): ProductListItemDto[] {
+  return products.slice().sort(compareProductsForDisplay);
 }
 function clientInitials(name?: string): string {
   const [a, b] = (name ?? '').trim().split(/\s+/);
@@ -658,10 +668,10 @@ export function OrderEditor({
                   const panels = breweries
                     .map((b) => ({
                       brewery: b,
-                      items: (b.kinds ?? [])
+                      items: inDisplayOrder((b.kinds ?? [])
                         .filter((k) => kindFilter === 'all' || k.kind === kindFilter)
                         .flatMap(flattenKind)
-                        .filter(matchesSearch),
+                        .filter(matchesSearch)),
                     }))
                     .filter((p) => p.items.length > 0);
                   if (panels.length === 0) return <EmptyState title="Žádné produkty v této kategorii" dense />;

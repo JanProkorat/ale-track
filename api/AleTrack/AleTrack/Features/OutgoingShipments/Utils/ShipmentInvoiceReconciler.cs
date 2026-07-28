@@ -79,7 +79,19 @@ public static class ShipmentInvoiceReconciler
         public required long ItemId { get; init; }
         public required long OrderingClientId { get; init; }
         public required int Quantity { get; init; }
-        public string? Name { get; init; }
+
+        /// <summary>
+        /// What a line billing this source records: its name and, for an order item, the product
+        /// facts and applied prices.
+        /// </summary>
+        /// <remarks>
+        /// Resolved once in <see cref="CollectSources"/> rather than at line-build time, because
+        /// the correct source depends on the run's state — the live product while it is
+        /// <see cref="OutgoingShipmentState.Created"/>, the run's own stop item from
+        /// <see cref="OutgoingShipmentState.Loaded"/> onward — and that is the only place with
+        /// both in scope.
+        /// </remarks>
+        public LineSnapshot Snapshot { get; init; } = LineSnapshot.Empty;
 
         /// <summary>
         /// The ordering client entity, when the graph had it loaded. Carried so a freshly created
@@ -89,6 +101,19 @@ public static class ShipmentInvoiceReconciler
         public Client? OrderingClient { get; init; }
 
         public (InvoiceLineSourceKind, long) Key => (Kind, ItemId);
+    }
+
+    /// <summary>
+    /// The product facts an invoice line records about what it bills.
+    /// </summary>
+    private sealed record LineSnapshot(
+        string ProductName,
+        ProductKind? Kind,
+        double? PackageSize,
+        decimal? UnitPriceWithVat,
+        decimal? UnitPriceWithoutVat)
+    {
+        public static readonly LineSnapshot Empty = new(string.Empty, null, null, null, null);
     }
 
     /// <summary>
@@ -176,6 +201,12 @@ public static class ShipmentInvoiceReconciler
                 .Concat(privateLines.Select(l => (Invoice: (OutgoingShipmentInvoice?)null, Line: l)))
                 .Where(x => KeyOf(x.Line) == source.Key)
                 .ToList();
+
+            // A planned run's invoices should follow a price or name correction; an issued one must
+            // not. The boundary is the same one that freezes the shipment's content.
+            if (ShipmentMutability.IsContentEditable(shipment.State))
+                foreach (var placement in placements)
+                    Refresh(placement.Line, source.Snapshot);
 
             var assigned = placements.Sum(x => x.Line.Quantity);
             var diff = source.Quantity - assigned;
@@ -277,7 +308,7 @@ public static class ShipmentInvoiceReconciler
                     OrderingClientId = stop.ClientOrder.ClientId,
                     OrderingClient = stop.ClientOrder.Client,
                     Quantity = item.Quantity,
-                    Name = item.Product?.Name
+                    Snapshot = SnapshotFor(shipment, stop, item)
                 });
             }
         }
@@ -293,11 +324,64 @@ public static class ShipmentInvoiceReconciler
                 OrderingClientId = order.ClientId,
                 OrderingClient = order.Client,
                 Quantity = item.Quantity,
-                Name = item.Description
+                // A custom extra has no product, so it carries a description and no prices —
+                // which is what the invoice already showed for these lines.
+                Snapshot = new LineSnapshot(Truncate(item.Description), null, null, null, null)
             });
         }
 
         return sources;
+    }
+
+    /// <summary>
+    /// Where an order line's recorded facts come from, which depends on the run's state.
+    /// </summary>
+    /// <remarks>
+    /// While the run is still being planned the live product <em>is</em> the current truth, and no
+    /// stop items exist yet. From <see cref="OutgoingShipmentState.Loaded"/> onward the run's own
+    /// snapshot is what a line must agree with — the product may have moved on since, and an
+    /// invoice must not follow it.
+    /// </remarks>
+    private static LineSnapshot SnapshotFor(OutgoingShipment shipment, OutgoingShipmentStop stop, OrderItem item)
+    {
+        if (!ShipmentMutability.IsContentEditable(shipment.State))
+        {
+            var stopItem = stop.Items.FirstOrDefault(si => si.OrderItemId == item.Id);
+            if (stopItem is not null)
+                return new LineSnapshot(
+                    Truncate(stopItem.ProductName),
+                    stopItem.Kind,
+                    stopItem.PackageSize,
+                    stopItem.UnitPriceWithVat,
+                    stopItem.UnitPriceWithoutVat);
+        }
+
+        return new LineSnapshot(
+            Truncate(item.Product?.Name),
+            item.Product?.Kind,
+            item.Product?.PackageSize,
+            item.Product?.PriceWithVat,
+            item.Product?.PriceWithoutVat);
+    }
+
+    /// <summary>
+    /// Fits a name into the snapshot column. A custom extra's description may run to 200
+    /// characters where the column holds 100; truncating beats failing the save.
+    /// </summary>
+    private static string Truncate(string? name) =>
+        name is null ? string.Empty : name.Length <= 100 ? name : name[..100];
+
+    /// <summary>
+    /// Brings an existing line's recorded facts back in step with its source. Only ever called
+    /// while the run is still editable — an issued invoice must not follow a price correction.
+    /// </summary>
+    private static void Refresh(OutgoingShipmentInvoiceLine line, LineSnapshot snapshot)
+    {
+        line.ProductName = snapshot.ProductName;
+        line.Kind = snapshot.Kind;
+        line.PackageSize = snapshot.PackageSize;
+        line.UnitPriceWithVat = snapshot.UnitPriceWithVat;
+        line.UnitPriceWithoutVat = snapshot.UnitPriceWithoutVat;
     }
 
     /// <summary>
@@ -363,7 +447,12 @@ public static class ShipmentInvoiceReconciler
             PublicId = Guid.NewGuid(),
             OutgoingShipmentId = shipment.Id,
             SourceKind = source.Kind,
-            Quantity = quantity
+            Quantity = quantity,
+            ProductName = source.Snapshot.ProductName,
+            Kind = source.Snapshot.Kind,
+            PackageSize = source.Snapshot.PackageSize,
+            UnitPriceWithVat = source.Snapshot.UnitPriceWithVat,
+            UnitPriceWithoutVat = source.Snapshot.UnitPriceWithoutVat
         };
 
         switch (source.Kind)
@@ -393,21 +482,22 @@ public static class ShipmentInvoiceReconciler
         });
 
     /// <summary>
-    /// Best-effort display name for a line whose source has already left the shipment.
+    /// Display name for a line whose source has already left the shipment.
     /// </summary>
-    private static string? NameOf(OutgoingShipmentInvoiceLine line) => line.SourceKind switch
-    {
-        InvoiceLineSourceKind.OrderItem => line.OrderItem?.Product?.Name,
-        InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItem?.Description,
-        _ => null
-    };
+    /// <remarks>
+    /// Reads the line's own recorded name, which is exactly the case it exists for: the source is
+    /// gone, so reaching through to <c>OrderItem.Product</c> was best-effort and returned null as
+    /// often as not.
+    /// </remarks>
+    private static string? NameOf(OutgoingShipmentInvoiceLine line) =>
+        string.IsNullOrEmpty(line.ProductName) ? null : line.ProductName;
 
     private static InvoiceAdjustment Adjustment(InvoiceAdjustmentKind kind, BillableSource source, int quantity) =>
         new()
         {
             Kind = kind,
             SourceKind = source.Kind,
-            ItemName = source.Name,
+            ItemName = source.Snapshot.ProductName,
             Quantity = quantity
         };
 

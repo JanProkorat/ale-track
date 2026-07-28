@@ -51,7 +51,18 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
             {
                 Id = g.Key.Id,
                 Name = g.Key.Name,
-                Items = g.Select(i => new InventoryItemListItemDto
+                // Product order per ProductOrdering. Manual rows have no product at
+                // all, so they rank with the non-beers and fall to the end.
+                Items = g
+                    .OrderBy(i => i.Product == null
+                               || i.Product.Type == ProductType.Lemonade
+                               || i.Product.Type == ProductType.Merchandise
+                               || i.Product.Type == ProductType.Other ? 1 : 0)
+                    .ThenBy(i => i.Product == null || i.Product.PlatoDegree == null)
+                    .ThenBy(i => i.Product != null ? i.Product.PlatoDegree : null)
+                    .ThenBy(i => i.Product != null ? i.Product.PackageSize : null)
+                    .ThenBy(i => i.Product != null ? i.Product.Name : i.Name)
+                    .Select(i => new InventoryItemListItemDto
                 {
                     Id = i.PublicId,
                     ProductId = i.Product != null ? i.Product.PublicId : null,

@@ -156,4 +156,80 @@ public static class ThrowHelper
             {
                 { nameof(shipmentId), shipmentId }
             });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a brewery still owns products and so
+    /// cannot be deleted.
+    /// </summary>
+    /// <param name="breweryId">ID of the brewery</param>
+    /// <param name="productCount">How many products still belong to it</param>
+    /// <remarks>
+    /// order_items.product_id is Restrict, so letting the delete through would surface as a
+    /// raw DbUpdateException. Refusing on any product at all — rather than only products
+    /// with history — keeps the outcome predictable and avoids a partial cascade that
+    /// removes the unused products and then fails on the used ones.
+    /// </remarks>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void BreweryHasProducts(Guid breweryId, int productCount)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.BreweryHasProducts,
+            new Dictionary<string, object>
+            {
+                { nameof(breweryId), breweryId },
+                { nameof(productCount), productCount }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a shipment state transition is not
+    /// permitted from the shipment's current state.
+    /// </summary>
+    /// <param name="from">The shipment's current state</param>
+    /// <param name="to">The requested state</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void ShipmentTransitionNotAllowed(OutgoingShipmentState from, OutgoingShipmentState to)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentTransitionNotAllowed,
+            new Dictionary<string, object>
+            {
+                { nameof(from), from },
+                { nameof(to), to }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an update would change content that
+    /// froze when the shipment left <see cref="OutgoingShipmentState.Created"/>.
+    /// </summary>
+    /// <param name="state">The shipment's current state</param>
+    /// <param name="fields">Names of the frozen fields the request would have changed</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void ShipmentContentFrozen(OutgoingShipmentState state, IReadOnlyCollection<string> fields)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentContentFrozen,
+            new Dictionary<string, object>
+            {
+                { nameof(state), state },
+                { nameof(fields), fields }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an update would change the content of
+    /// an order that is closed, or already loaded onto a shipment.
+    /// </summary>
+    /// <param name="orderId">ID of the order</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void OrderContentFrozen(Guid orderId)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.OrderContentFrozen,
+            new Dictionary<string, object>
+            {
+                { nameof(orderId), orderId }
+            });
 }

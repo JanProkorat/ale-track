@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 
@@ -31,12 +32,7 @@ public static class ShipmentInvoiceMapper
                 ClientName = invoice.Client?.Name ?? string.Empty,
                 Sequence = invoice.Sequence,
                 StopOrder = stopOrders.TryGetValue(invoice.ClientId, out var order) ? order : null,
-                Lines = invoice.Lines
-                    .Select(line => ToLineDto(shipment, line))
-                    .Where(line => line is not null)
-                    .Select(line => line!)
-                    .OrderBy(line => line.Name)
-                    .ToList()
+                Lines = OrderForDisplay(invoice.Lines.Select(line => ToLine(shipment, line)))
             })
             .OrderBy(i => i.StopOrder ?? int.MaxValue)
             .ThenBy(i => i.Sequence)
@@ -47,12 +43,7 @@ public static class ShipmentInvoiceMapper
             Invoices = invoices,
             // Flat, not grouped: the client who ordered the pieces is on every line already, and
             // the UI needs them under that client's band rather than under an invoice.
-            PrivateLines = split.PrivateLines
-                .Select(line => ToLineDto(shipment, line))
-                .Where(line => line is not null)
-                .Select(line => line!)
-                .OrderBy(line => line.Name)
-                .ToList(),
+            PrivateLines = OrderForDisplay(split.PrivateLines.Select(line => ToLine(shipment, line))),
             IsEditable = ShipmentInvoiceGraph.IsEditable(shipment),
             Adjustments = reconcileResult.Adjustments
                 .Select(a => new InvoiceAdjustmentDto
@@ -67,10 +58,31 @@ public static class ShipmentInvoiceMapper
     }
 
     /// <summary>
+    /// A mapped line together with the product facts it is ordered by. The degree and
+    /// the type are not on the DTO — the invoice UI has no use for them — so they ride
+    /// alongside just long enough to sort.
+    /// </summary>
+    private sealed record SortedLine(ShipmentInvoiceLineDto Dto, ProductType Type, float? PlatoDegree, double? PackageSize);
+
+    /// <summary>
+    /// Puts the lines of one invoice in the app-wide product order (see
+    /// <see cref="ProductOrdering"/>), dropping the ones whose source item is gone.
+    /// </summary>
+    private static List<ShipmentInvoiceLineDto> OrderForDisplay(IEnumerable<SortedLine?> lines) =>
+        lines
+            .Where(line => line is not null)
+            .Select(line => line!)
+            .Order(Comparer<SortedLine>.Create((a, b) => ProductOrdering.Compare(
+                (a.Type, a.PlatoDegree, a.PackageSize, a.Dto.Name),
+                (b.Type, b.PlatoDegree, b.PackageSize, b.Dto.Name))))
+            .Select(line => line.Dto)
+            .ToList();
+
+    /// <summary>
     /// Maps one line, or null when its source item cannot be found in the graph — which should
     /// not happen after reconciliation, so the line is skipped rather than shown half-filled.
     /// </summary>
-    private static ShipmentInvoiceLineDto? ToLineDto(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
+    private static SortedLine? ToLine(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
         line.SourceKind switch
         {
             InvoiceLineSourceKind.OrderItem => FromOrderItem(shipment, line),
@@ -78,23 +90,26 @@ public static class ShipmentInvoiceMapper
             _ => null
         };
 
-    private static ShipmentInvoiceLineDto? FromOrderItem(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
+    private static SortedLine? FromOrderItem(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
     {
         var order = ShipmentInvoiceGraph.OrderOf(shipment, line.OrderItemId ?? 0);
         var item = order?.OrderItems.FirstOrDefault(i => i.Id == line.OrderItemId);
         if (order is null || item is null)
             return null;
 
-        return new ShipmentInvoiceLineDto
+        var dto = new ShipmentInvoiceLineDto
         {
             Id = line.PublicId,
             SourceKind = line.SourceKind,
             SourceItemId = item.PublicId,
+            // Provenance link the UI navigates by, not a displayed fact.
             ProductId = item.Product?.PublicId,
-            Name = item.Product?.Name ?? string.Empty,
-            Kind = item.Product?.Kind,
-            PackageSize = item.Product?.PackageSize,
-            PriceWithVat = item.Product?.PriceWithVat,
+            // Displayed facts come from the line's own snapshot: repricing or renaming a product
+            // must not restate an invoice that was already issued.
+            Name = line.ProductName,
+            Kind = line.Kind,
+            PackageSize = line.PackageSize,
+            PriceWithVat = line.UnitPriceWithVat,
             Quantity = line.Quantity,
             OrderingClientId = order.Client?.PublicId ?? Guid.Empty,
             OrderingClientName = order.Client?.Name ?? string.Empty,
@@ -102,10 +117,19 @@ public static class ShipmentInvoiceMapper
             // true when any of this item's pieces came out of our own stock.
             IsFromStock = item.QuantityFromInventory > 0
         };
+
+        // Type and the degree are sort keys only, never rendered on an invoice line, so they stay
+        // live — ordering is presentation, like the brewery colour in the volume reports. The
+        // package size comes off the line so the value sorted on is the value shown.
+        return new SortedLine(
+            dto,
+            item.Product?.Type ?? ProductType.Other,
+            item.Product?.PlatoDegree,
+            line.PackageSize);
     }
 
 
-    private static ShipmentInvoiceLineDto? FromCustomExtra(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
+    private static SortedLine? FromCustomExtra(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
     {
         var match = ShipmentInvoiceGraph.CustomExtrasOf(shipment)
             .FirstOrDefault(x => x.Extra.Id == line.CustomExtraItemId);
@@ -114,13 +138,16 @@ public static class ShipmentInvoiceMapper
 
         var (extra, owningOrder) = match;
 
-        return new ShipmentInvoiceLineDto
+        // A custom extra has no product at all, so it ranks with the non-beers and
+        // lands after them — it is not a beer of unknown degree.
+        var dto = new ShipmentInvoiceLineDto
         {
             Id = line.PublicId,
             SourceKind = line.SourceKind,
             SourceItemId = extra.PublicId,
             ProductId = null,
-            Name = extra.Description,
+            // The description travels on the line now, like every other displayed fact.
+            Name = line.ProductName,
             Kind = null,
             PackageSize = null,
             PriceWithVat = null,
@@ -129,5 +156,7 @@ public static class ShipmentInvoiceMapper
             OrderingClientName = owningOrder.Client?.Name ?? string.Empty,
             IsFromStock = false
         };
+
+        return new SortedLine(dto, ProductType.Other, null, null);
     }
 }

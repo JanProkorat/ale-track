@@ -70,6 +70,53 @@ public sealed class ShipmentInvoiceEndpointsTests
         line.SourceItemId.Should().NotBeEmpty("a move request addresses the item by this ID");
     }
 
+    /// <summary>
+    /// The billing correctness bug from #25. Correcting the Svijany seed data on 2026-07-28 moved
+    /// Svijanský Vozka from 12.09 to 11.49, and every historical invoice containing it changed with
+    /// it. Nothing flagged that.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_RepricingTheProduct_DoesNotRestateAnIssuedInvoice()
+    {
+        // The real sequence: the split is drawn up while the run is still being planned, the run
+        // is then delivered, and only afterwards is the product repriced.
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.Shipment.State = OutgoingShipmentState.Delivered;
+        scenario.Product.PriceWithVat = 99m;
+        scenario.Product.Name = "Přejmenováno";
+
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+
+        var lines = endpoint.Response.Invoices.SelectMany(i => i.Lines)
+            .Where(l => l.SourceKind == InvoiceLineSourceKind.OrderItem)
+            .ToList();
+
+        lines.Should().NotBeEmpty();
+        lines.Should().OnlyContain(l => l.PriceWithVat == 1290m, "the invoice was issued at this price");
+        lines.Should().OnlyContain(l => l.Name == "Albrecht 12°");
+    }
+
+    /// <summary>
+    /// A planned run is a different matter: nothing has been issued, so its split should follow a
+    /// price correction rather than quietly bill the old one.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_RepricingWhileStillPlanned_DoesFollowTheProduct()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.Product.PriceWithVat = 99m;
+
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+
+        endpoint.Response.Invoices.SelectMany(i => i.Lines)
+            .Where(l => l.SourceKind == InvoiceLineSourceKind.OrderItem)
+            .Should().OnlyContain(l => l.PriceWithVat == 99m);
+    }
+
     [Fact]
     public async Task GetInvoices_DeliveredShipment_IsNotEditable()
     {
@@ -702,6 +749,9 @@ public sealed class ShipmentInvoiceEndpointsTests
         internal required Client ClientA { get; init; }
         internal required Client ClientB { get; init; }
         internal required OrderItem OrderItemA { get; init; }
+
+        /// <summary>The product every order line in the scenario is of.</summary>
+        internal required Product Product { get; init; }
         internal Guid ShipmentId => Shipment.PublicId;
 
         /// <summary>
@@ -809,7 +859,7 @@ public sealed class ShipmentInvoiceEndpointsTests
             return new Scenario
             {
                 Shipment = shipment, ClientA = clientA, ClientB = clientB,
-                OrderItemA = itemA
+                OrderItemA = itemA, Product = product
             };
         }
     }

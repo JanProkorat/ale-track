@@ -376,4 +376,368 @@ public sealed class UpdateOutgoingShipmentTests
         // Assert
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
+
+    // ---------------------------------------------------------------------------------
+    // Content freeze and transition rules.
+    //
+    // A shipment's content is editable only in Created. From Loaded onward the state may
+    // still advance — otherwise nothing could be delivered — and drivers, name and date
+    // stay changeable, but what is on the truck is fixed.
+    // ---------------------------------------------------------------------------------
+
+    private sealed record FreezeFixture(
+        OutgoingShipment Shipment, Order Order, Vehicle Vehicle, Driver Driver, Driver SpareDriver);
+
+    /// <summary>
+    /// A shipment that already satisfies <c>HasFilledData</c> — vehicle, driver, date and a
+    /// stop — so the pre-existing "not prepared" check does not mask the guards under test.
+    /// </summary>
+    private static FreezeFixture BuildFreezeFixture(OutgoingShipmentState state)
+    {
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: OrderState.Planning);
+
+        var vehicle = VehicleBuilder.BuildEntity(publicId: Guid.NewGuid());
+        vehicle.Id = 21;
+
+        var driver = DriverBuilder.BuildEntity(publicId: Guid.NewGuid());
+        var spareDriver = DriverBuilder.BuildEntity(publicId: Guid.NewGuid());
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: Guid.NewGuid(),
+            deliveryDate: DateTime.UtcNow.AddDays(1),
+            state: state,
+            vehicle: vehicle,
+            drivers: [new OutgoingShipmentDriver { Driver = driver }],
+            stops:
+            [
+                new OutgoingShipmentStop
+                {
+                    PublicId = Guid.NewGuid(),
+                    Kind = OutgoingShipmentStopKind.Order,
+                    Order = 1,
+                    ClientOrder = order
+                }
+            ]);
+        shipment.VehicleId = vehicle.Id;
+
+        return new FreezeFixture(shipment, order, vehicle, driver, spareDriver);
+    }
+
+    /// <summary>
+    /// The whole current content, as the UI re-sends it on every save.
+    /// </summary>
+    private static UpdateOutgoingShipmentDto EchoDto(FreezeFixture f, OutgoingShipmentState state) => new()
+    {
+        Name = "vyvoz",
+        DeliveryDate = f.Shipment.DeliveryDate,
+        VehicleId = f.Vehicle.PublicId,
+        DriverIds = [f.Driver.PublicId],
+        State = state,
+        ClientOrderShipments =
+        [
+            new ClientOrderShipmentDto { ClientOrderId = f.Order.PublicId, Order = 1 }
+        ]
+    };
+
+    private static Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> MockForFreeze(FreezeFixture f)
+    {
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [f.Shipment],
+            orders: [f.Order],
+            vehicles: [f.Vehicle],
+            drivers: [f.Driver, f.SpareDriver]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        return db;
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ChangeContentOfLoadedShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f, OutgoingShipmentState.Loaded);
+        data.ClientOrderShipments.Clear(); // drop the order off a packed truck
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentContentFrozen);
+
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        f.Shipment.Stops.Should().HaveCount(1, "the rejected request must not have touched the entity");
+    }
+
+    /// <summary>
+    /// The advance() path — unchanged content, state stepped forward. This is what makes the
+    /// freeze usable at all, so it is the case most worth guarding.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AdvanceLoadedShipmentWithUnchangedContent_Success()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var db = MockForFreeze(f);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.InTransit)
+        }, CancellationToken.None);
+
+        f.Shipment.State.Should().Be(OutgoingShipmentState.InTransit);
+        f.Order.State.Should().Be(OrderState.Delivering);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Reverting out of Delivered re-ran the order transitions and freed already-delivered
+    /// orders back to New, silently unwinding an invoiced, reported run.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RevertDeliveredShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Delivered);
+        f.Order.State = OrderState.Finished;
+        var db = MockForFreeze(f);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.InTransit)
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentTransitionNotAllowed);
+
+        f.Shipment.State.Should().Be(OutgoingShipmentState.Delivered);
+        f.Order.State.Should().Be(OrderState.Finished, "the delivered order must not be freed");
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_CancelDeliveredShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Delivered);
+        f.Order.State = OrderState.Finished;
+        var db = MockForFreeze(f);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Cancelled)
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentTransitionNotAllowed);
+
+        f.Order.State.Should().Be(OrderState.Finished);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_SkipFromCreatedStraightToDelivered_Fails()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Created);
+        var db = MockForFreeze(f);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Delivered)
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentTransitionNotAllowed);
+
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// A cancelled run can be restored — the shipped affordance — and only to Created.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RestoreCancelledShipment_Success()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Cancelled);
+        var db = MockForFreeze(f);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Created)
+        }, CancellationToken.None);
+
+        f.Shipment.State.Should().Be(OutgoingShipmentState.Created);
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Drivers, name and delivery date carry no content, so they stay editable — a driver can
+    /// be swapped and a date can slip on a packed truck.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ChangeDriversNameAndDateOfLoadedShipment_Success()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var db = MockForFreeze(f);
+
+        var newDate = DateTime.UtcNow.AddDays(4);
+        var data = EchoDto(f, OutgoingShipmentState.Loaded);
+        data.Name = "Přeplánovaný vývoz";
+        data.DeliveryDate = newDate;
+        data.DriverIds = [f.Driver.PublicId, f.SpareDriver.PublicId];
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);
+
+        f.Shipment.Name.Should().Be("Přeplánovaný vývoz");
+        f.Shipment.DeliveryDate.Should().Be(newDate);
+        f.Shipment.Drivers.Should().HaveCount(2, "a driver can still be added to a packed truck");
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// The snapshot is written at the same boundary that freezes content, which is what keeps the
+    /// two from ever diverging.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TransitionToLoaded_WritesTheContentSnapshot()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Created);
+
+        var product = ProductBuilder.BuildEntity(name: "Albrecht 12°", priceWithVat: 11.49m);
+        product.Id = 41;
+        product.Brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau");
+        f.Order.OrderItems =
+        [
+            new OrderItem { Id = 51, PublicId = Guid.NewGuid(), Product = product, ProductId = product.Id, Quantity = 6 }
+        ];
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Loaded)
+        }, CancellationToken.None);
+
+        var stop = f.Shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Order);
+        var item = stop.Items.Should().ContainSingle().Subject;
+        item.ProductName.Should().Be("Albrecht 12°");
+        item.UnitPriceWithVat.Should().Be(11.49m);
+        item.Quantity.Should().Be(6);
+        item.BreweryName.Should().Be("Pivovar Zittau");
+        stop.ClientName.Should().Be(f.Order.Client.Name);
+    }
+
+    /// <summary>
+    /// Reverting reopens the content for editing, so the snapshot must go rather than go stale.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RevertToCreated_DiscardsTheContentSnapshot()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var stop = f.Shipment.Stops.Single();
+        stop.Items =
+        [
+            new OutgoingShipmentStopItem
+            {
+                PublicId = Guid.NewGuid(),
+                ProductName = "Albrecht 12°",
+                Quantity = 6,
+                BreweryName = "Pivovar Zittau"
+            }
+        ];
+        stop.ClientPublicId = Guid.NewGuid();
+        stop.ClientName = "Hospoda U Kotvy";
+        stop.ClientRegion = Region.ZittauCity;
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Created)
+        }, CancellationToken.None);
+
+        stop.Items.Should().BeEmpty();
+        stop.ClientName.Should().BeNull();
+        stop.ClientPublicId.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Advancing past Loaded must not re-snapshot. The source items are frozen by then, so
+    /// re-running the writer would hand out new rows and new IDs for no reason.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AdvanceLoadedToInTransit_LeavesTheSnapshotAlone()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var stop = f.Shipment.Stops.Single();
+        var existing = new OutgoingShipmentStopItem
+        {
+            PublicId = Guid.NewGuid(),
+            ProductName = "Albrecht 12°",
+            Quantity = 6,
+            BreweryName = "Pivovar Zittau"
+        };
+        stop.Items = [existing];
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.InTransit)
+        }, CancellationToken.None);
+
+        stop.Items.Should().ContainSingle().Which.Should().BeSameAs(existing);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ChangeVehicleOfLoadedShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var otherVehicle = VehicleBuilder.BuildEntity(publicId: Guid.NewGuid());
+        otherVehicle.Id = 22;
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [f.Shipment],
+            orders: [f.Order],
+            drivers: [f.Driver, f.SpareDriver],
+            vehicles: [f.Vehicle, otherVehicle]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var data = EchoDto(f, OutgoingShipmentState.Loaded);
+        data.VehicleId = otherVehicle.PublicId;
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentContentFrozen);
+
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
 }
