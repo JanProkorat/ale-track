@@ -62,7 +62,35 @@ numbers.
 an order in `Finished` from having its items or quantities changed. Combined with
 (2), editing a delivered order silently restates report history.
 
-### 4. Deleting a product destroys history — data loss
+### 4. Shipments stay editable in every state — a precondition for the fix
+
+`OutgoingShipments/Commands/Update/UpdateOutgoingShipmentEndpoint.cs` has no guard
+on the shipment's *current* state. It checks only the target state: `Loaded`
+requires stops, and `Delivered` / `InTransit` require complete data.
+`UpdateOutgoingShipmentValidator` adds nothing beyond "non-null valid enum". There
+are no transition rules.
+
+A `Delivered` shipment can therefore have its stops, orders, drivers, vehicle and
+delivery date rewritten, and can be reverted to an earlier state — which re-runs the
+order transitions and frees already-delivered orders back to `New`. A delivered,
+invoiced, reported run can be silently unwound.
+
+`DeleteOutgoingShipmentEndpoint` (lines 64-69) does refuse to delete a `Delivered`
+or `Cancelled` shipment. Delete is guarded and update is not, which suggests the
+immutability intent exists and update simply missed it.
+
+Intended rule: a shipment is editable only in `Created`. From `Loaded` onward its
+**content** is frozen, only forward state transitions remain allowed, and
+`Cancelled` is terminal. The content-versus-state distinction is the crux — freezing
+the state field too would make delivery impossible, so the guard must let state
+advance while rejecting changes to stops, orders, drivers, vehicle, delivery date
+and stock purchases.
+
+This is a precondition rather than an adjacent bug: snapshotting content at the
+`Loaded` transition achieves nothing if the shipment can be edited afterwards, since
+the snapshot and the shipment would just diverge.
+
+### 5. Deleting a product destroys history — data loss
 
 ```
 products --ON DELETE CASCADE--> order_items
