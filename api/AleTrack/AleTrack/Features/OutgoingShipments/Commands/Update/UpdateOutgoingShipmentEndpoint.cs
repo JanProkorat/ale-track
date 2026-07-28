@@ -55,6 +55,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             {
                 s.Summary = "Updates an existing outgoing shipment";
                 s.Responses[StatusCodes.Status204NoContent] = "Outgoing shipment updated";
+                s.Responses[StatusCodes.Status400BadRequest] = "Illegal state transition, or frozen content changed";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment, vehicle, drivers or orders not found";
             }
         );
@@ -81,10 +82,27 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .ThenInclude(s => s.ClientOrder!)
                 .ThenInclude(o => o.CustomExtraItems)
         .Include(os => os.RouteViaPoints)
+        // Needed by ShipmentContentGuard, which compares the stop's delivery place by
+        // public ID — without this the diff would read every place as removed.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientDeliveryPlace)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+
+        // Both guards run before anything touches the entity: GetOrderStopsAsync below
+        // mutates existing stops in place, which would make the stored side of the content
+        // diff reflect the request instead of the database.
+        if (!ShipmentMutability.IsTransitionAllowed(outgoingShipment!.State, req.Data.State))
+            ThrowHelper.ShipmentTransitionNotAllowed(outgoingShipment.State, req.Data.State);
+
+        if (!ShipmentMutability.IsContentEditable(outgoingShipment.State))
+        {
+            var frozenChanges = ShipmentContentGuard.ChangedFrozenFields(outgoingShipment, req.Data);
+            if (frozenChanges.Count > 0)
+                ThrowHelper.ShipmentContentFrozen(outgoingShipment.State, frozenChanges);
+        }
 
         // Snapshot the orders currently on the shipment so we can free any that get removed.
         var previousStopOrders = outgoingShipment!.Stops
