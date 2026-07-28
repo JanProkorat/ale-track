@@ -73,7 +73,7 @@ For each week in range it emits ~5 runs on weekdays:
 | Element | Shape | Report surface it feeds |
 |---|---|---|
 | Shipment | `Delivered`, `DeliveryDate` set (UTC), 1–2 drivers, one vehicle | Volume trend, driver chart, active drivers |
-| ~6% of runs | `Cancelled`, `DeliveryDate` still set | State donut — `GetOperationsEndpoint` counts any state with a delivery date, so a single-slice donut would otherwise be the only outcome |
+| ~6% of runs | `Cancelled`, `DeliveryDate` still set, **no order stops** | State donut — `GetOperationsEndpoint` counts any state with a delivery date, so a single-slice donut would otherwise be the only outcome |
 | Stops | 2–4 stops, all `OutgoingShipmentStopKind.Order` | Total stops |
 | Orders | `Finished`, both `RequiredDeliveryDate` and `ActualDeliveryDate` | On-time % |
 | ~12% of orders | actual > required | Lands on-time near 88% instead of an implausible 100% |
@@ -81,9 +81,39 @@ For each week in range it emits ~5 runs on weekdays:
 | ~35% of orders | 1–2 `OrderReturn` rows (empty kegs) | Returnable units |
 | Incoming | ~2 `ProductDelivery`/week, `Finished`, dated in range | Incoming-vs-outgoing chart |
 
-Orders on a cancelled run are themselves `Cancelled`. They are naturally excluded
-from volume — `DeliveredLineQuery` filters on shipment state — but they must not be
-left `Finished`, or the on-time ratio would count deliveries that never happened.
+### Why cancelled runs carry no order stops
+
+Cancelling a shipment does **not** cancel its orders. They are freed back to `New`
+so another run can pick them up — `UpdateOutgoingShipmentEndpoint.cs:196`,
+"Cancelled or removed → back to New (freed for reuse)".
+
+That rules out the obvious modelling. Seeding a cancelled run with orders attached
+would leave orders sitting in `New`, dated months in the past, permanently
+unassigned — exactly the stale working-set pollution the "add alongside" decision
+exists to avoid.
+
+Following the real lifecycle instead: a freed order gets re-planned onto a later
+run and delivered. Re-planning moves `orders.outgoing_shipment_stop_id` to the new
+stop, which leaves the cancelled run's original stop orphaned — a row pointing at
+nothing, whose rendering in the shipment detail is untested.
+
+So cancelled runs are seeded with no order stops at all: a run created and then
+cancelled before anything was planned onto it. This is an ordinary real-world
+occurrence, reaches the same end state as the re-plan path, and avoids seeding
+orphan rows. Their sole purpose here is to give the state donut a second slice.
+
+### Linking an order to its stop
+
+The `Order` ⇄ `OutgoingShipmentStop` relationship is one-to-one with **`Order` as
+the dependent**, keyed on `orders.outgoing_shipment_stop_id`
+(`AleTrackDbContextModelSnapshot.cs:2009`). `OutgoingShipmentStop.ClientOrder` is
+the inverse navigation, so assigning `stop.ClientOrder = order` sets the FK
+correctly — the pattern `OperationalDataBuilder.BuildStops` already uses.
+
+Note that `outgoing_shipment_stops.client_order_id` is a mapped scalar that is
+*not* the foreign key and that EF never populates; existing rows hold `0` or
+`NULL`. It is dead weight, but dropping it needs its own migration and is out of
+scope here. Do not try to set it.
 
 Two deliberate distortions, so the charts have shape rather than noise:
 
@@ -106,6 +136,9 @@ and ~180 items — roughly 3,400 rows in total.
 
 ### Prerequisite: the seeder cannot currently be pointed at another database
 
+**Done** — implemented ahead of the plan, since the top-up run depends on it.
+
+
 `Program.cs` builds config with `Host.CreateDefaultBuilder(args)` and then calls
 `AddJsonFile`. Those JSON sources land *after* the env-var source the default
 builder installs, so they win, and `ConnectionStrings__AleTrack` is silently
@@ -123,7 +156,8 @@ there is no way to run the top-up against dev short of editing a config file.
 - A fixed seed produces stable counts (guards accidental generator changes).
 - Every `Delivered` shipment has a non-null `DeliveryDate`.
 - Every `Finished` order has both `RequiredDeliveryDate` and `ActualDeliveryDate`.
-- Orders on cancelled runs are `Cancelled`, never `Finished`.
+- Cancelled runs carry no order stops, and no generated order is left in `New` —
+  history must not add to the open working set.
 - The on-time ratio falls in an expected band.
 - No order is attached to more than one stop.
 - All generated dates fall inside the requested window.

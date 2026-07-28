@@ -19,8 +19,13 @@ var host = Host.CreateDefaultBuilder(args)
     {
         config
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true);
-
+            .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development"}.json", optional: true)
+            // Re-added last so it outranks the JSON above. CreateDefaultBuilder already
+            // installs an env-var source, but ConfigureAppConfiguration appends to that
+            // list, so without this the JSON silently wins and
+            // ConnectionStrings__AleTrack is ignored — leaving no way to point the
+            // seeder at anything but its own appsettings.
+            .AddEnvironmentVariables();
     })
     .ConfigureServices((context, services) =>
     {
