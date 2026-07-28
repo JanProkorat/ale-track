@@ -337,9 +337,9 @@ export function DashboardPage() {
           <Button
             component={RouterLink}
             to={PATHS.drivers}
+            variant="contained"
             size="small"
             startIcon={<CalendarMonthOutlinedIcon />}
-            sx={{ color: 'text.primary', borderColor: 'divider', border: 1, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
           >
             Celý kalendář
           </Button>

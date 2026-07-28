@@ -40,7 +40,7 @@ export function LoginPage() {
   const { resolved, toggle } = useThemeMode();
 
   const from = (location.state as { from?: string } | null)?.from ?? PATHS.dashboard;
-  const [userName, setUserName] = useState('admin');
+  const [userName, setUserName] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
