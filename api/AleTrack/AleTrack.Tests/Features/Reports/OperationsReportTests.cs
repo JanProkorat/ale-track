@@ -194,6 +194,44 @@ public sealed class GetOperationsEndpointTests
         response.IncomingVsOutgoing[0].OutgoingWeightKg.Should().Be(124m);
     }
 
+    /// <summary>
+    /// The incoming half of the chart must hold as still as the outgoing half, or one series moves
+    /// under a product edit while the other stays put — which is exactly the inconsistency this
+    /// snapshot closes.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_IncomingWeights_DoNotFollowLaterProductEdits()
+    {
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
+
+        var withIncoming = DeliveredShipmentBuilder.WithIncomingDelivery(
+            fixture,
+            date: new DateOnly(2026, 7, 15),
+            kind: ProductKind.Keg,
+            packageSize: KegSize.ThirtyLiters,
+            quantity: 5);
+
+        var before = Endpoint(withIncoming);
+        await before.HandleAsync(Window(), CancellationToken.None);
+        var incomingBefore = before.Response.IncomingVsOutgoing[0].IncomingWeightKg;
+
+        // Restate the booked-in product the way a data correction would. Reached through the
+        // mocked DbSet because the incoming product is internal to WithIncomingDelivery.
+        var incomingProduct = withIncoming.DbContext.Object.DeliveryItems.Single().Product;
+        incomingProduct.PackageSize = 5;
+        incomingProduct.UnitsPerPackage = 1;
+        incomingProduct.Kind = ProductKind.Bottle;
+
+        var after = Endpoint(withIncoming);
+        await after.HandleAsync(Window(), CancellationToken.None);
+
+        after.Response.IncomingVsOutgoing[0].IncomingWeightKg.Should().Be(incomingBefore);
+        incomingBefore.Should().Be(210m, "5 kegs of 30 l is 5 x 42 kg");
+    }
+
     [Fact]
     public async Task HandleAsync_ExcludesNonFinishedIncomingDeliveriesFromIncomingWeight()
     {

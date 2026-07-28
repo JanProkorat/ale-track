@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
+using AleTrack.Features.ProductDeliveries.Utils;
 using AleTrack.Infrastructure.Persistence;
 using AleTrack.Tests.Mocks;
 using Moq;
@@ -367,6 +368,9 @@ public static class DeliveredShipmentBuilder
             Product = product,
             Quantity = quantity
         };
+
+        // Booking a line in records the product's weight inputs; the report reads nothing else.
+        DeliveryItemSnapshot.Apply(item, product);
 
         stop.Items = [item];
         delivery.Stops = [stop];
