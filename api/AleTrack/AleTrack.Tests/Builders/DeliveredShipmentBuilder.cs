@@ -75,7 +75,6 @@ public static class DeliveredShipmentBuilder
             Order = 1,
             OutgoingShipmentId = shipment.Id,
             OutgoingShipment = shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -141,7 +140,6 @@ public static class DeliveredShipmentBuilder
             Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -208,7 +206,6 @@ public static class DeliveredShipmentBuilder
             Order = nextStopId,
             OutgoingShipmentId = fixture.Shipment.Id,
             OutgoingShipment = fixture.Shipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 
@@ -281,7 +278,6 @@ public static class DeliveredShipmentBuilder
             Order = 1,
             OutgoingShipmentId = secondShipment.Id,
             OutgoingShipment = secondShipment,
-            ClientOrderId = order.Id,
             ClientOrder = order
         };
 

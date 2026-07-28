@@ -33,12 +33,6 @@ public sealed class OutgoingShipmentStop : PublicEntity
     public OutgoingShipmentStopKind Kind { get; set; }
 
     /// <summary>
-    /// ID of the order associated with this stop. Null for custom stops.
-    /// </summary>
-    [Column("client_order_id")]
-    public long? ClientOrderId { get; set; }
-
-    /// <summary>
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     [Column("selected_address_kind")]
@@ -69,6 +63,28 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// </summary>
     [Column("address_changed_at")]
     public DateTime? AddressChangedAt { get; set; }
+
+    /// <summary>
+    /// Public ID of the client this stop delivered to, snapshotted when the run was loaded. Null
+    /// for custom stops and for stops on runs that never left
+    /// <see cref="OutgoingShipmentState.Created"/>.
+    /// </summary>
+    /// <remarks>
+    /// The stop already snapshots the delivery address; client attribution completes that
+    /// pattern. The volume reports group by client and region, so renaming a client or moving it
+    /// between regions used to rewrite past reports.
+    /// </remarks>
+    [Column("client_public_id")]
+    public Guid? ClientPublicId { get; set; }
+
+    /// <summary>Client name as it was when the run was loaded.</summary>
+    [MaxLength(100)]
+    [Column("client_name")]
+    public string? ClientName { get; set; }
+
+    /// <summary>Client region as it was when the run was loaded.</summary>
+    [Column("client_region")]
+    public Region? ClientRegion { get; set; }
 
     /// <summary>
     /// Label of a custom stop (null for order stops).
@@ -113,4 +129,10 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Restrict)]
     public ClientDeliveryPlace? ClientDeliveryPlace { get; set; }
+
+    /// <summary>
+    /// What this stop carried, snapshotted at loading time. Empty while the run is still in
+    /// <see cref="OutgoingShipmentState.Created"/>.
+    /// </summary>
+    public ICollection<OutgoingShipmentStopItem> Items { get; set; } = [];
 }

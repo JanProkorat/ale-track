@@ -143,9 +143,11 @@ public sealed class HistoryBuilderTests
         var stops = Build().Shipments.SelectMany(s => s.Stops).ToList();
 
         stops.Should().OnlyContain(st => st.Kind == OutgoingShipmentStopKind.Order);
-        // client_order_id is a mapped scalar EF does not use as the key — setting it is a no-op
-        // that only muddies the data.
-        stops.Should().OnlyContain(st => st.ClientOrderId == null);
+        // The relationship is keyed on orders.outgoing_shipment_stop_id with Order as the
+        // dependent, so assigning ClientOrder is what links the two — EF fills the back-reference
+        // and the foreign key on save. The dead client_order_id scalar this used to guard against
+        // setting no longer exists.
+        stops.Should().OnlyContain(st => st.ClientOrder != null);
     }
 
     [Fact]
