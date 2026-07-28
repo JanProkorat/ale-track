@@ -150,6 +150,27 @@ public sealed class HistoryBuilderTests
         stops.Should().OnlyContain(st => st.ClientOrder != null);
     }
 
+    /// <summary>
+    /// Every generated run is Delivered, and DeliveredLineQuery reads only the snapshot — so
+    /// without these rows the seeded demo database renders every volume report empty.
+    /// </summary>
+    [Fact]
+    public void OrderStops_CarryTheContentSnapshot()
+    {
+        var stops = Build().Shipments.SelectMany(s => s.Stops).ToList();
+
+        stops.Should().OnlyContain(st => st.Items.Count > 0);
+        stops.Should().OnlyContain(st => st.ClientPublicId != null);
+
+        var items = stops.SelectMany(st => st.Items).ToList();
+        items.Should().OnlyContain(i => i.ProductName != string.Empty);
+        // A blank brewery name means the writer could not resolve product.Brewery, which would
+        // silently group every historical line under one empty brewery in the report.
+        items.Should().OnlyContain(i => i.BreweryName != string.Empty);
+        items.Should().OnlyContain(i => i.BreweryPublicId != Guid.Empty);
+        items.Should().OnlyContain(i => i.Quantity > 0);
+    }
+
     [Fact]
     public void AllDates_FallInsideTheRequestedWindow()
     {

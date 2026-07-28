@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Seeding.Builders;
 
@@ -52,6 +53,22 @@ internal static class HistoryBuilder
             throw new ArgumentException("History needs at least one client, product, vehicle and driver.");
 
         var rng = new Random(RandomSeed);
+
+        // The snapshot writer reads product.Brewery, and the seeding path builds products by
+        // adding them to brewery.Products — which sets only the inverse navigation. Relying on
+        // EF's fixup here would work by accident and fail silently if it ever did not: an
+        // unresolved brewery snapshots as an empty name, which groups every historical line
+        // under one blank brewery in the volume report. Resolve it by reference instead.
+        var breweryByProduct = breweries
+            .SelectMany(b => b.Products.Select(p => (Product: p, Brewery: b)))
+            .ToDictionary(x => x.Product, x => x.Brewery, ReferenceEqualityComparer.Instance);
+
+        foreach (var product in products.Where(p => p.Brewery is null))
+        {
+            if (breweryByProduct.TryGetValue(product, out var owner))
+                product.Brewery = owner;
+        }
+
         var orderPool = ProductPool(products);
         var clientWeights = WeightClients(clients);
         var bundle = new HistoryBundle();
@@ -103,7 +120,8 @@ internal static class HistoryBuilder
                 }
 
                 bundle.Orders.AddRange(orders);
-                bundle.Shipments.Add(new OutgoingShipment
+
+                var shipment = new OutgoingShipment
                 {
                     PublicId = Guid.NewGuid(),
                     Name = $"Vývoz {day:dd.MM.yyyy}",
@@ -112,7 +130,14 @@ internal static class HistoryBuilder
                     Vehicle = vehicles[runIndex % vehicles.Count],
                     Drivers = PickDrivers(drivers, rng),
                     Stops = BuildOrderStops(orders),
-                });
+                };
+
+                // Every generated run is Delivered, so it must carry the snapshot a real run gets
+                // on its transition into Loaded. The volume reports read nothing else, so without
+                // this the seeded history renders as empty.
+                ShipmentContentSnapshotWriter.Apply(shipment);
+
+                bundle.Shipments.Add(shipment);
             }
 
             for (var d = 0; d < DeliveriesPerWeek; d++)
@@ -230,8 +255,8 @@ internal static class HistoryBuilder
 
     /// <summary>
     /// Assigning <c>ClientOrder</c> sets the real foreign key: the relationship is one-to-one with
-    /// Order as the dependent, keyed on <c>orders.outgoing_shipment_stop_id</c>. Never set
-    /// <c>ClientOrderId</c> — that column is a mapped scalar EF does not use as the key.
+    /// Order as the dependent, keyed on <c>orders.outgoing_shipment_stop_id</c>. The dead
+    /// <c>client_order_id</c> scalar this used to warn against setting no longer exists.
     /// </summary>
     private static List<OutgoingShipmentStop> BuildOrderStops(IReadOnlyList<Order> orders) =>
         orders
