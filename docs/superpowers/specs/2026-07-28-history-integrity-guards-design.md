@@ -64,8 +64,19 @@ is surface 5 one hop up and is not in #25 at all.
 ### A1. `Product` becomes softly deletable
 
 `Product : PublicEntity` becomes `Product : PublicSoftlyDeletableEntity`, adding
-the `is_deleted` column. `DeleteProductEndpoint` sets the flag instead of calling
-`dbContext.Products.Remove`; the response stays 202.
+the `is_deleted` column.
+
+`DeleteProductEndpoint` needs **no change**. `AleTrackDbContext.SaveChanges`
+already runs `SoftlyDeleteBySettingFlag` (`AleTrackDbContext.cs:187-202`), which
+rewrites any `EntityState.Deleted` entry on an `ISoftlyDeletable` entity into a
+flag update. The existing `dbContext.Products.Remove(product)` call therefore
+becomes a soft delete the moment the base class changes — the same mechanism
+`Client` already relies on. The response stays 202.
+
+A consequence worth stating: because the delete never reaches the database, the
+`ON DELETE CASCADE` chain never fires for the API path, so A1 alone closes the
+reported data loss. A2 is defence in depth for the paths that bypass the
+endpoint — raw SQL, the seeder, and the brewery cascade.
 
 **No global query filter.** A new `ProductConfiguration` records the decision,
 mirroring the reasoning already written in `ClientDeliveryPlaceConfiguration`: a
