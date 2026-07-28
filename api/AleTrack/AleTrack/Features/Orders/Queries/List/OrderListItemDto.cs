@@ -17,6 +17,11 @@ public sealed record OrderListItemDto
     /// State of the order
     /// </summary>
     public OrderState State { get; set; }
+
+    /// <summary>
+    /// Date the order was created — the list's default newest-first ordering key
+    /// </summary>
+    public DateTime CreatedDate { get; set; }
     
     /// <summary>
     /// Latest date when order needs to be delivered to the client
