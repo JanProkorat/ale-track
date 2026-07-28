@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
@@ -9,6 +10,19 @@ export function useBreweries(params: Record<string, string> = {}) {
     queryKey: qk.breweries.list(params),
     queryFn: ({ signal }) => ds.getBreweriesListEndpoint(params, signal),
   });
+}
+
+/** The brewery's own colour by id, for the square that marks a brewery across
+ * the catalog surfaces. Rides on the cached brewery list, so a screen that
+ * already loads breweries pays nothing extra. */
+export function useBreweryColors(): (breweryId?: string) => string | undefined {
+  const query = useBreweries();
+  const byId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of query.data ?? []) if (b.id && b.color) m.set(b.id, b.color);
+    return m;
+  }, [query.data]);
+  return useCallback((breweryId?: string) => (breweryId ? byId.get(breweryId) : undefined), [byId]);
 }
 
 export function useBrewery(id: string | undefined) {

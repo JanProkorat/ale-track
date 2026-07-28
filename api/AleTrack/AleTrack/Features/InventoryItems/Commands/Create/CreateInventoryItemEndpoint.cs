@@ -61,7 +61,9 @@ public sealed class CreateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
         InventoryItem? inventoryItem;
         if (product is not null)
         {
-            inventoryItem = await dbContext.InventoryItems.FirstOrDefaultAsync(i => i.ProductId != product.Id, ct);        
+            // One row per product — a second helping of the same goods raises the
+            // existing item's quantity instead of adding another line.
+            inventoryItem = await dbContext.InventoryItems.FirstOrDefaultAsync(i => i.ProductId == product.Id, ct);
             if (inventoryItem is not null)
                 ThrowHelper.EntityAlreadyExists(nameof(InventoryItem), inventoryItem.PublicId);
         }

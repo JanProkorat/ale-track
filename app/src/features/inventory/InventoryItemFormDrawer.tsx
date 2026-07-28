@@ -1,18 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { TextField } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
-import { Combobox, type ComboOption } from 'src/components/common/Combobox';
+import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
   type InventoryItemListItemDto,
 } from 'src/generated/api-client';
-import { useCreateInventoryItem, useUpdateInventoryItem } from 'src/hooks/useInventory';
+import { useCreateInventoryItem, useInventory, useUpdateInventoryItem } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
 
 /** Schema depends on mode: create requires a product, edit keeps the product
@@ -56,7 +56,22 @@ export function InventoryItemFormDrawer({
   const create = useCreateInventoryItem();
   const update = useUpdateInventoryItem();
   const productsQuery = useProducts();
+  const inventoryQuery = useInventory();
   const editing = Boolean(item);
+
+  // The API keeps one row per product, so offering a product that is already
+  // stocked can only end in "položka již existuje" — raise its quantity on the
+  // existing row instead. Manual (name-only) items carry no productId and
+  // therefore hide nothing.
+  const stockable = useMemo(() => {
+    const stocked = new Set(
+      (inventoryQuery.data ?? [])
+        .flatMap((section) => section.items ?? [])
+        .map((i) => i.productId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return (productsQuery.data ?? []).filter((p) => p.id && !stocked.has(p.id));
+  }, [productsQuery.data, inventoryQuery.data]);
 
   const {
     control,
@@ -68,12 +83,6 @@ export function InventoryItemFormDrawer({
   useEffect(() => {
     if (open) reset(item ? toForm(item) : empty);
   }, [open, item, reset]);
-
-  const productOptions: ComboOption[] = (productsQuery.data ?? []).map((p) => ({
-    value: p.id ?? '',
-    label: `${p.name ?? '—'} — ${p.breweryName ?? ''}`,
-    group: p.breweryName,
-  }));
 
   const submit = handleSubmit(async (values) => {
     const quantity = Number(values.quantity);
@@ -90,11 +99,12 @@ export function InventoryItemFormDrawer({
         });
         enqueueSnackbar('Změny uloženy.', { variant: 'success' });
       } else {
-        const product = (productsQuery.data ?? []).find((p) => p.id === values.productId);
+        // ProductId and Name are mutually exclusive in the API: an item backed
+        // by a product takes its name from the catalogue, and sending both is
+        // rejected outright (CreateInventoryItemDtoValidator).
         await create.mutateAsync(
           new CreateInventoryItemDto({
-            productId: values.productId || undefined,
-            name: product?.name,
+            productId: values.productId,
             quantity,
             note: values.note || undefined,
           })
@@ -124,11 +134,12 @@ export function InventoryItemFormDrawer({
           control={control}
           name="productId"
           render={({ field }) => (
-            <Combobox
+            <ProductCombobox
               label="Produkt"
               value={field.value || null}
               onChange={(v) => field.onChange(v ?? '')}
-              options={productOptions}
+              products={stockable}
+              loading={productsQuery.isLoading || inventoryQuery.isLoading}
               placeholder="Vyberte produkt"
               required
               clearable={false}
