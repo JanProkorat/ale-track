@@ -98,6 +98,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 .ThenInclude(o => o.Client)
         .Include(os => os.Stops)
             .ThenInclude(s => s.Items)
+        .Include(os => os.PreparationSteps)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -114,6 +115,17 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             var frozenChanges = ShipmentContentGuard.ChangedFrozenFields(outgoingShipment, req.Data);
             if (frozenChanges.Count > 0)
                 ThrowHelper.ShipmentContentFrozen(outgoingShipment.State, frozenChanges);
+        }
+
+        // Checked separately from the block above because the checklist freezes later than the
+        // truck's content does: preparing a run goes on while it is Loaded and InTransit, so the
+        // list stays editable until the shipment is a historical record.
+        if (!PurchaseInvoiceSplit.IsEditable(outgoingShipment)
+            && ShipmentContentGuard.PreparationStepsChanged(outgoingShipment, req.Data))
+        {
+            ThrowHelper.ShipmentContentFrozen(
+                outgoingShipment.State,
+                [nameof(req.Data.PreparationSteps)]);
         }
 
         // Snapshot the orders currently on the shipment so we can free any that get removed.
@@ -136,6 +148,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
         outgoingShipment.StockPurchases = stockPurchases;
+        outgoingShipment.PreparationSteps = BuildPreparationSteps(req.Data.PreparationSteps, outgoingShipment);
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -408,6 +421,45 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     Note = dto.Note,
                     Latitude = dto.Latitude,
                     Longitude = dto.Longitude
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reconciles the preparation checklist against what is stored.
+    /// </summary>
+    /// <remarks>
+    /// Existing steps are matched by public ID and keep their <c>IsDone</c>: the editor writes the
+    /// list, the detail screen writes the ticks, and a save from either must not undo the other.
+    /// Steps absent from the request are dropped — the collection is cascade-deleted, so severing
+    /// them here removes the rows.
+    /// </remarks>
+    private static List<OutgoingShipmentPreparationStep> BuildPreparationSteps(
+        List<PreparationStepDto> steps,
+        OutgoingShipment outgoingShipment)
+    {
+        var existingById = outgoingShipment.PreparationSteps.ToDictionary(s => s.PublicId);
+
+        var result = new List<OutgoingShipmentPreparationStep>();
+        foreach (var dto in steps)
+        {
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                existing.Order = dto.Order;
+                existing.Label = dto.Label;
+                result.Add(existing);
+            }
+            else
+            {
+                result.Add(new OutgoingShipmentPreparationStep
+                {
+                    PublicId = Guid.NewGuid(),
+                    Order = dto.Order,
+                    Label = dto.Label,
+                    IsDone = false
                 });
             }
         }

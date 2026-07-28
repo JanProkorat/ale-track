@@ -62,4 +62,10 @@ public sealed record UpdateOutgoingShipmentDto
     /// Custom extra products to be delivered to the client
     /// </summary>
     public List<CustomExtraShipmentDto> CustomExtraShipments { get; set; } = [];
+
+    /// <summary>
+    /// Checklist of what has to be done while preparing the run. Steps already stored keep the
+    /// tick they have; steps missing from this list are removed.
+    /// </summary>
+    public List<PreparationStepDto> PreparationSteps { get; set; } = [];
 }

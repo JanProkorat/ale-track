@@ -38,6 +38,7 @@ import {
   RoutePointDto,
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
+  PreparationStepDto,
 } from 'src/generated/api-client';
 import { useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
@@ -49,6 +50,8 @@ import { draftFromShipment } from './shipmentDraft';
 import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
 import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
 import { AddressChangedBanner } from './AddressChangedBanner';
+import { PreparationStepsEditor } from './PreparationStepsEditor';
+import { defaultChecklistSteps, type DraftStep } from './preparationStepModel';
 import { resolveStopAddress } from './stopAddress';
 import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
 
@@ -73,7 +76,7 @@ interface DraftStop {
 }
 
 /** Serialized snapshot of the savable state, for unsaved-change detection. */
-function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[]): string {
+function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[], steps: DraftStep[]): string {
   return JSON.stringify({
     name: name.trim(),
     date: date ? date.toISOString() : null,
@@ -81,6 +84,9 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     driverIds: [...driverIds].sort(),
     stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind, deliveryPlaceId: s.deliveryPlaceId ?? null })),
     vias: viaPoints.map((v) => ({ lat: v.lat, lng: v.lng })),
+    // Position matters (it is the order the steps are worked in), so this is the array order,
+    // not a sorted copy. The local `key` is left out — it changes per session.
+    steps: steps.map((s) => ({ id: s.id ?? null, label: s.label.trim() })),
   });
 }
 
@@ -226,11 +232,15 @@ export function ShipmentEditor({
   // already-approved design choice, not deferred to the shipment draft), so
   // this only needs to remember which stop to apply the result to.
   const [newPlaceTarget, setNewPlaceTarget] = useState<{ stopKey: string; clientId: string; clientName?: string } | null>(null);
+  // A new shipment starts with the standard pre-departure checklist already filled in — it is the
+  // same list every time, and it stays editable, so this is a starting point rather than a rule.
+  // Edit mode starts empty and the load effect below fills it from the server.
+  const [steps, setSteps] = useState<DraftStep[]>(() => (mode === 'create' ? defaultChecklistSteps() : []));
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
+    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -262,13 +272,18 @@ export function ShipmentEditor({
             order: i + 1,
           });
     const loadedVias = (s.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }));
+    const loadedSteps: DraftStep[] = (s.preparationSteps ?? [])
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((st) => ({ key: st.id ?? `step-${st.order ?? 0}`, id: st.id, label: st.label ?? '' }));
     setName(loadedName);
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
     setDriverIds(loadedDrivers);
     setStops(loadedStops);
     setViaPoints(loadedVias);
-    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias);
+    setSteps(loadedSteps);
+    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias, loadedSteps);
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -276,6 +291,9 @@ export function ShipmentEditor({
   // (State arrives as a string from the API; normalize before comparing.)
   const lockedStateName = shipStateName(shipmentQuery.data?.state);
   const structureLocked = mode === 'edit' && lockedStateName != null && lockedStateName !== 'Created';
+  // The preparation checklist follows the loading rule instead: it is still being worked through
+  // while the run is Loaded and InTransit, and only a delivered or cancelled run freezes it.
+  const stepsLocked = mode === 'edit' && ['Delivered', 'Cancelled'].includes(lockedStateName ?? '');
 
   const availableOrders = useMemo(() => availableQuery.data ?? [], [availableQuery.data]);
   const orderById = useMemo(() => new Map(availableOrders.map((o) => [o.id ?? '', o])), [availableOrders]);
@@ -467,7 +485,7 @@ export function ShipmentEditor({
 
   const busy = createShipment.isPending || updateShipment.isPending;
 
-  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints);
+  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -498,6 +516,13 @@ export function ShipmentEditor({
 
     const routeViaPoints = viaPoints.map((v) => new RoutePointDto({ latitude: v.lat, longitude: v.lng }));
 
+    // Blank rows are dropped rather than rejected: an empty input the planner never filled in is
+    // not an error, and the server would refuse the whole save over it. Order is the position in
+    // the list, and `id` is what makes the server keep an existing step's tick.
+    const preparationSteps = steps
+      .filter((s) => s.label.trim() !== '')
+      .map((s, i) => new PreparationStepDto({ id: s.id, order: i + 1, label: s.label.trim() }));
+
     try {
       let savedId: string;
       if (mode === 'edit' && shipmentId) {
@@ -514,6 +539,7 @@ export function ShipmentEditor({
             customStops,
             routeViaPoints,
             stockPurchases: existingDraft?.stockPurchases ?? [],
+            preparationSteps,
           }),
         });
         savedId = shipmentId;
@@ -527,6 +553,7 @@ export function ShipmentEditor({
           clientOrderShipments,
           customStops,
           routeViaPoints,
+          preparationSteps,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
       }
@@ -577,7 +604,11 @@ export function ShipmentEditor({
         </Stack>
       )}
 
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' }, alignItems: 'start' }}>
+      {/* `minmax(0, …)` for the same reason as ShipmentDetail's layout grid: without it a
+          grid item's `min-width: auto` floors each track at its content's intrinsic width —
+          here the stop rows' fixed-width address Select and the orders card's filter row —
+          so the tracks stop honouring their fr shares and the columns spill sideways. */}
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.4fr) minmax(0, 1fr)' }, alignItems: 'start' }}>
         <Stack spacing={2}>
           <RouteMap stops={routeStops} viaPoints={viaPoints} editable={!structureLocked} onViasChange={setViaPoints} height={320} />
 
@@ -734,6 +765,11 @@ export function ShipmentEditor({
               })}
             </Stack>
           </Card>
+
+          {/* Not gated on `structureLocked`: the checklist is worked through while the run is
+              already Loaded and InTransit, so unlike the route it stays editable then — it
+              closes only once the shipment is a finished record. */}
+          <PreparationStepsEditor steps={steps} onChange={setSteps} disabled={stepsLocked} />
         </Stack>
       </Box>
 

@@ -44,5 +44,8 @@ public sealed class CreateOutgoingShipmentDtoValidator : AbstractValidator<Creat
         
         RuleForEach(dto => dto.ClientOrderShipments)
             .SetValidator(new ClientOrderShipmentDtoValidator());
+
+        RuleForEach(dto => dto.PreparationSteps)
+            .SetValidator(new PreparationStepDtoValidator());
     }
 }

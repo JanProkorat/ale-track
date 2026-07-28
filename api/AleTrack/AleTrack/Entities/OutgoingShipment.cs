@@ -76,6 +76,12 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentLoadingState> LoadingStates { get; set; } = [];
 
+    /// <summary>
+    /// Checklist of what has to be done while preparing this run.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentPreparationStep> PreparationSteps { get; set; } = [];
+
     /// <inheritdoc/>
     protected override OutgoingShipmentState CancelledStatus => OutgoingShipmentState.Cancelled;
 

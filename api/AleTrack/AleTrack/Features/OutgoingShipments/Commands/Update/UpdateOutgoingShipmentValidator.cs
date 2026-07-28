@@ -56,5 +56,8 @@ public sealed class UpdateOutgoingShipmentDtoValidator : AbstractValidator<Updat
         
         RuleForEach(dto => dto.StockPurchases)
             .SetValidator(new ExtraShipmentDtoValidator());
+
+        RuleForEach(dto => dto.PreparationSteps)
+            .SetValidator(new PreparationStepDtoValidator());
     }
 }

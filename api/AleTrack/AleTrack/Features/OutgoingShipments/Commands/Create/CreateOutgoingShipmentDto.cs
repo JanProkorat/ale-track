@@ -38,4 +38,10 @@ public sealed record CreateOutgoingShipmentDto
     /// Via points that shape the road route (not visited stops).
     /// </summary>
     public List<RoutePointDto> RouteViaPoints { get; set; } = [];
+
+    /// <summary>
+    /// Checklist of what has to be done while preparing the run. Every step starts unticked, so
+    /// the DTO's <c>Id</c> is ignored here.
+    /// </summary>
+    public List<PreparationStepDto> PreparationSteps { get; set; } = [];
 }

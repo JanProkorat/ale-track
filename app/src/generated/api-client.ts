@@ -304,6 +304,12 @@ export interface IClient {
     setPurchaseInvoiceLineEndpoint(id: string, data: SetPurchaseInvoiceLineDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Ticks or unticks one preparation step of an outgoing shipment
+     * @return Step stored
+     */
+    setPreparationStepEndpoint(id: string, stepId: string, data: SetPreparationStepDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets how far a product has got through loading in one invoice column
      * @return State stored
      */
@@ -3699,6 +3705,81 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Ticks or unticks one preparation step of an outgoing shipment
+     * @return Step stored
+     */
+    setPreparationStepEndpoint(id: string, stepId: string, data: SetPreparationStepDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/preparation-steps/{StepId}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (stepId === undefined || stepId === null)
+            throw new globalThis.Error("The parameter 'stepId' must be defined.");
+        url_ = url_.replace("{StepId}", encodeURIComponent("" + stepId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetPreparationStepEndpoint(_response);
+        });
+    }
+
+    protected processSetPreparationStepEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment preparation can no longer be changed", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or step not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -11069,6 +11150,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
+    preparationSteps?: OutgoingShipmentPreparationStepDto[];
 
     constructor(data?: IOutgoingShipmentDetailDto) {
         if (data) {
@@ -11115,6 +11197,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.loadingStates = [] as any;
                 for (let item of _data["loadingStates"])
                     this.loadingStates!.push(OutgoingShipmentLoadingStateDto.fromJS(item));
+            }
+            if (Array.isArray(_data["preparationSteps"])) {
+                this.preparationSteps = [] as any;
+                for (let item of _data["preparationSteps"])
+                    this.preparationSteps!.push(OutgoingShipmentPreparationStepDto.fromJS(item));
             }
         }
     }
@@ -11163,6 +11250,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.loadingStates)
                 data["loadingStates"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.preparationSteps)) {
+            data["preparationSteps"] = [];
+            for (let item of this.preparationSteps)
+                data["preparationSteps"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -11179,6 +11271,7 @@ export interface IOutgoingShipmentDetailDto {
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
+    preparationSteps?: OutgoingShipmentPreparationStepDto[];
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -11977,6 +12070,54 @@ export enum ShipmentLoadingState {
     Checked = 2,
 }
 
+export class OutgoingShipmentPreparationStepDto implements IOutgoingShipmentPreparationStepDto {
+    id?: string;
+    order?: number;
+    label?: string;
+    isDone?: boolean;
+
+    constructor(data?: IOutgoingShipmentPreparationStepDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.order = _data["order"];
+            this.label = _data["label"];
+            this.isDone = _data["isDone"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentPreparationStepDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentPreparationStepDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["order"] = this.order;
+        data["label"] = this.label;
+        data["isDone"] = this.isDone;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentPreparationStepDto {
+    id?: string;
+    order?: number;
+    label?: string;
+    isDone?: boolean;
+}
+
 export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDetailRequest {
 
     constructor(data?: IGetOutgoingShipmentDetailRequest) {
@@ -12049,6 +12190,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     stockPurchases?: StockPurchaseDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
     customExtraShipments?: CustomExtraShipmentDto[];
+    preparationSteps?: PreparationStepDto[];
 
     constructor(data?: IUpdateOutgoingShipmentDto) {
         if (data) {
@@ -12103,6 +12245,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
                 for (let item of _data["customExtraShipments"])
                     this.customExtraShipments!.push(CustomExtraShipmentDto.fromJS(item));
             }
+            if (Array.isArray(_data["preparationSteps"])) {
+                this.preparationSteps = [] as any;
+                for (let item of _data["preparationSteps"])
+                    this.preparationSteps!.push(PreparationStepDto.fromJS(item));
+            }
         }
     }
 
@@ -12154,6 +12301,11 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
             for (let item of this.customExtraShipments)
                 data["customExtraShipments"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.preparationSteps)) {
+            data["preparationSteps"] = [];
+            for (let item of this.preparationSteps)
+                data["preparationSteps"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -12170,6 +12322,7 @@ export interface IUpdateOutgoingShipmentDto {
     stockPurchases?: StockPurchaseDto[];
     clientExtraShipments?: ClientExtraShipmentDto[];
     customExtraShipments?: CustomExtraShipmentDto[];
+    preparationSteps?: PreparationStepDto[];
 }
 
 export class ClientOrderShipmentDto implements IClientOrderShipmentDto {
@@ -12531,6 +12684,50 @@ export interface ICustomExtraShipmentDto extends IExtraShipmentDto {
     description?: string;
 }
 
+export class PreparationStepDto implements IPreparationStepDto {
+    id?: string | undefined;
+    order?: number;
+    label!: string;
+
+    constructor(data?: IPreparationStepDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.order = _data["order"];
+            this.label = _data["label"];
+        }
+    }
+
+    static fromJS(data: any): PreparationStepDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new PreparationStepDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["order"] = this.order;
+        data["label"] = this.label;
+        return data;
+    }
+}
+
+export interface IPreparationStepDto {
+    id?: string | undefined;
+    order?: number;
+    label: string;
+}
+
 export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
     sequence?: number;
     productId?: string;
@@ -12573,6 +12770,42 @@ export interface ISetPurchaseInvoiceLineDto {
     sequence?: number;
     productId?: string;
     quantity?: number;
+}
+
+export class SetPreparationStepDto implements ISetPreparationStepDto {
+    isDone?: boolean;
+
+    constructor(data?: ISetPreparationStepDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.isDone = _data["isDone"];
+        }
+    }
+
+    static fromJS(data: any): SetPreparationStepDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetPreparationStepDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["isDone"] = this.isDone;
+        return data;
+    }
+}
+
+export interface ISetPreparationStepDto {
+    isDone?: boolean;
 }
 
 export class SetLoadingStateDto implements ISetLoadingStateDto {
@@ -12831,6 +13064,7 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
     clientOrderShipments!: ClientOrderShipmentDto[];
     customStops?: CustomStopDto[];
     routeViaPoints?: RoutePointDto[];
+    preparationSteps?: PreparationStepDto[];
 
     constructor(data?: ICreateOutgoingShipmentDto) {
         if (data) {
@@ -12869,6 +13103,11 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
                 for (let item of _data["routeViaPoints"])
                     this.routeViaPoints!.push(RoutePointDto.fromJS(item));
             }
+            if (Array.isArray(_data["preparationSteps"])) {
+                this.preparationSteps = [] as any;
+                for (let item of _data["preparationSteps"])
+                    this.preparationSteps!.push(PreparationStepDto.fromJS(item));
+            }
         }
     }
 
@@ -12904,6 +13143,11 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
             for (let item of this.routeViaPoints)
                 data["routeViaPoints"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.preparationSteps)) {
+            data["preparationSteps"] = [];
+            for (let item of this.preparationSteps)
+                data["preparationSteps"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -12916,6 +13160,7 @@ export interface ICreateOutgoingShipmentDto {
     clientOrderShipments: ClientOrderShipmentDto[];
     customStops?: CustomStopDto[];
     routeViaPoints?: RoutePointDto[];
+    preparationSteps?: PreparationStepDto[];
 }
 
 export class AddShipmentInvoiceDto implements IAddShipmentInvoiceDto {
