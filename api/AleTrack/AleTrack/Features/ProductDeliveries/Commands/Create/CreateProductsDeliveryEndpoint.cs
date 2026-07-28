@@ -4,6 +4,7 @@ using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using AleTrack.Features.ProductDeliveries.Utils;
 
 namespace AleTrack.Features.ProductDeliveries.Commands.Create;
 
@@ -112,11 +113,17 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
                 Note = requestStop.Note,
                 Brewery = breweries.First(b => b.PublicId == requestStop.BreweryId),
                 Items = requestStop.Products
-                    .Select(p => new DeliveryItem
+                    .Select(p =>
                     {
-                        Product = relatedProducts.First(rp => rp.PublicId == p.ProductId),
-                        Quantity = p.Quantity,
-                        Note = p.Note
+                        var product = relatedProducts.First(rp => rp.PublicId == p.ProductId);
+                        var item = new DeliveryItem
+                        {
+                            Product = product,
+                            Quantity = p.Quantity,
+                            Note = p.Note
+                        };
+                        DeliveryItemSnapshot.Apply(item, product);
+                        return item;
                     })
                     .ToList()
             });
@@ -218,12 +225,14 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
         {
             var relatedProduct = existingProducts.First(p => p.PublicId == requestProduct.ProductId);
             
-            deliveryItems.Add(new DeliveryItem
+            var item = new DeliveryItem
             {
                 Product = relatedProduct,
                 Quantity = requestProduct.Quantity,
                 Note = requestProduct.Note
-            });
+            };
+            DeliveryItemSnapshot.Apply(item, relatedProduct);
+            deliveryItems.Add(item);
         }
         
         return deliveryItems;

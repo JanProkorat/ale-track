@@ -179,11 +179,17 @@ public sealed class UpdateProductDeliveryEndpoint(AleTrackDbContext dbContext) :
         stop.Longitude = null;
         stop.Items.Clear();
         stop.Items = request.Products
-            .Select(p => new DeliveryItem
+            .Select(p =>
             {
-                Product = products.First(pr => pr.PublicId == p.ProductId),
-                Quantity = p.Quantity,
-                Note = p.Note
+                var product = products.First(pr => pr.PublicId == p.ProductId);
+                var item = new DeliveryItem
+                {
+                    Product = product,
+                    Quantity = p.Quantity,
+                    Note = p.Note
+                };
+                DeliveryItemSnapshot.Apply(item, product);
+                return item;
             })
             .ToList();
     }
