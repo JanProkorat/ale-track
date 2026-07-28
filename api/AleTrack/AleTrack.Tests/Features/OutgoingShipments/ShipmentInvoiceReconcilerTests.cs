@@ -643,4 +643,155 @@ public sealed class ShipmentInvoiceReconcilerTests
         shipment.Invoices.SelectMany(i => i.Lines).Where(l => l.OrderItemId == itemId).ToList();
 
     #endregion
+
+    #region what a line records about what it bills
+
+    /// <summary>
+    /// While the run is still being planned the live product is the current truth, so that is what
+    /// a new line records.
+    /// </summary>
+    [Fact]
+    public void Reconcile_CreatedShipment_RecordsTheLiveProduct()
+    {
+        var shipment = PricedShipment(OutgoingShipmentState.Created, livePrice: 11.49m, snapshotPrice: null);
+
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines.Single();
+        line.ProductName.Should().Be("Albrecht 12°");
+        line.Kind.Should().Be(ProductKind.Bottle);
+        line.PackageSize.Should().Be(0.5);
+        line.UnitPriceWithVat.Should().Be(11.49m);
+    }
+
+    /// <summary>
+    /// From Loaded onward the run's own snapshot is the truth, and the product may already have
+    /// moved on.
+    /// </summary>
+    [Fact]
+    public void Reconcile_LoadedShipment_RecordsTheStopItemNotTheLiveProduct()
+    {
+        var shipment = PricedShipment(OutgoingShipmentState.Loaded, livePrice: 99m, snapshotPrice: 11.49m);
+
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines.Single();
+        line.UnitPriceWithVat.Should().Be(11.49m, "the run recorded this price when it was packed");
+        line.ProductName.Should().Be("Albrecht 12°");
+    }
+
+    /// <summary>
+    /// A planned run's invoices should follow a price correction — nothing has been issued yet.
+    /// </summary>
+    [Fact]
+    public void Reconcile_CreatedShipment_RefreshesAnExistingLine()
+    {
+        var shipment = PricedShipment(OutgoingShipmentState.Created, livePrice: 11.49m, snapshotPrice: null);
+        Reconcile(shipment);
+
+        ProductOf(shipment).PriceWithVat = 99m;
+        ProductOf(shipment).Name = "Přejmenováno";
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines.Single();
+        line.UnitPriceWithVat.Should().Be(99m);
+        line.ProductName.Should().Be("Přejmenováno");
+    }
+
+    /// <summary>
+    /// The billing correctness bug from #25: an issued invoice must not follow the product.
+    /// </summary>
+    [Fact]
+    public void Reconcile_LoadedShipment_DoesNotRefreshAnExistingLine()
+    {
+        var shipment = PricedShipment(OutgoingShipmentState.Loaded, livePrice: 11.49m, snapshotPrice: 11.49m);
+        Reconcile(shipment);
+
+        // As if the product had been repriced and the run's snapshot rebuilt around it.
+        ProductOf(shipment).PriceWithVat = 99m;
+        StopItemOf(shipment).UnitPriceWithVat = 99m;
+        StopItemOf(shipment).ProductName = "Přejmenováno";
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines.Single();
+        line.UnitPriceWithVat.Should().Be(11.49m, "an issued line is frozen");
+        line.ProductName.Should().Be("Albrecht 12°");
+    }
+
+    [Fact]
+    public void Reconcile_CustomExtraLine_RecordsTheDescriptionAndNoPrice()
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1));
+        var order = shipment.Stops.Single().ClientOrder!;
+        order.CustomExtraItems.Add(new OrderCustomExtraItem
+        {
+            Id = 900,
+            PublicId = Guid.NewGuid(),
+            Description = "Tácky",
+            Quantity = 100
+        });
+
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.CustomExtraItem);
+        line.ProductName.Should().Be("Tácky");
+        line.Kind.Should().BeNull();
+        line.UnitPriceWithVat.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A run in <paramref name="state"/> carrying one bottle line for client A. When
+    /// <paramref name="snapshotPrice"/> is given the stop also carries the snapshot a loaded run
+    /// would have written, so the two sources can be told apart.
+    /// </summary>
+    private static OutgoingShipment PricedShipment(
+        OutgoingShipmentState state, decimal livePrice, decimal? snapshotPrice)
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 6)));
+        shipment.State = state;
+
+        var stop = shipment.Stops.Single();
+        var item = stop.ClientOrder!.OrderItems.Single();
+
+        item.Product = new Product
+        {
+            Id = 41,
+            PublicId = Guid.NewGuid(),
+            Name = "Albrecht 12°",
+            Kind = ProductKind.Bottle,
+            Type = ProductType.PaleLager,
+            PackageSize = 0.5,
+            UnitsPerPackage = 20,
+            PriceWithVat = livePrice
+        };
+        item.ProductId = item.Product.Id;
+
+        if (snapshotPrice is not null)
+            stop.Items.Add(new OutgoingShipmentStopItem
+            {
+                PublicId = Guid.NewGuid(),
+                OrderItemId = item.Id,
+                ProductId = item.Product.Id,
+                ProductName = "Albrecht 12°",
+                Kind = ProductKind.Bottle,
+                Type = ProductType.PaleLager,
+                PackageSize = 0.5,
+                UnitsPerPackage = 20,
+                Quantity = item.Quantity,
+                UnitPriceWithVat = snapshotPrice.Value,
+                BreweryName = "Pivovar Zittau",
+                BreweryPublicId = Guid.NewGuid()
+            });
+
+        return shipment;
+    }
+
+    private static Product ProductOf(OutgoingShipment shipment) =>
+        shipment.Stops.Single().ClientOrder!.OrderItems.Single().Product!;
+
+    private static OutgoingShipmentStopItem StopItemOf(OutgoingShipment shipment) =>
+        shipment.Stops.Single().Items.Single();
+
+    #endregion
 }
