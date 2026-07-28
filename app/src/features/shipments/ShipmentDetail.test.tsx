@@ -146,6 +146,34 @@ function renderDetail(stops: OutgoingShipmentStopDto[]) {
   );
 }
 
+function renderEditableDetail(state: OutgoingShipmentState) {
+  const shipment = new OutgoingShipmentDetailDto({
+    id: 'ship-1', name: 'Rozvoz Žitava', state, driverIds: [], stops: [officialStop()],
+  });
+  return render(
+    <MuiThemeProvider theme={theme}>
+      <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+    </MuiThemeProvider>,
+  );
+}
+
+describe('ShipmentDetail — lifecycle affordances', () => {
+  // Delivered is terminal server-side: reverting out of it re-ran the order transitions
+  // and freed already-delivered orders back to New, unwinding an invoiced, reported run.
+  // Offering the button would only produce a 400.
+  it('offers no revert on a delivered shipment', () => {
+    renderEditableDetail(OutgoingShipmentState.Delivered);
+
+    expect(screen.queryByRole('button', { name: 'Vrátit' })).not.toBeInTheDocument();
+  });
+
+  it('still offers a revert on a shipment in transit', () => {
+    renderEditableDetail(OutgoingShipmentState.InTransit);
+
+    expect(screen.getByRole('button', { name: 'Vrátit' })).toBeInTheDocument();
+  });
+});
+
 describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('shows the place chip and its formatted address for a DeliveryPlace stop', () => {
     renderDetail([placeStop()]);

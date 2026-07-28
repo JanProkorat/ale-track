@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Box, Breadcrumbs, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
@@ -24,7 +24,7 @@ import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
-import { Combobox, type ComboOption } from 'src/components/common/Combobox';
+import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
@@ -34,6 +34,7 @@ import {
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
+  type ProductListItemDto,
   OutgoingShipmentState,
   StockPurchaseDto,
   UpdateOutgoingShipmentDto,
@@ -745,10 +746,13 @@ export function ShipmentDetail({
     Loaded: { to: S.InTransit, label: 'Vyrazit', icon: <LocalShippingOutlinedIcon />, primary: false },
     InTransit: { to: S.Delivered, label: 'Doručit', icon: <CheckIcon />, primary: true },
   } as Record<string, { to: OutgoingShipmentState; label: string; icon: ReactNode; primary: boolean }>)[stateName ?? ''];
+  // Delivered is deliberately absent: it is terminal. Reverting out of it re-ran the
+  // order transitions and freed already-delivered orders back to New, silently
+  // unwinding an invoiced, reported run. The API rejects the transition, so offering
+  // the button would only produce a 400.
   const revertTo = ({
     Loaded: S.Created,
     InTransit: S.Loaded,
-    Delivered: S.InTransit,
   } as Record<string, OutgoingShipmentState>)[stateName ?? ''];
   const ghostBtnSx = { color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } } as const;
 
@@ -844,23 +848,21 @@ export function ShipmentDetail({
   // The brewery's catalogue, not our stock: this buys goods we do not have yet.
   // The on-hand figure rides along as a hint, because knowing we already hold 40
   // is what decides whether to buy more.
-  const purchaseOptions: ComboOption[] = useMemo(() => {
-    const onHandByProduct = new Map<string, number>();
+  const purchasableProducts = useMemo(
+    () => (productsQuery.data ?? []).filter((p) => p.id),
+    [productsQuery.data],
+  );
+  const onHandByProduct = useMemo(() => {
+    const m = new Map<string, number>();
     for (const item of (inventoryQuery.data ?? []).flatMap((s) => s.items ?? [])) {
-      if (item.productId) onHandByProduct.set(item.productId, (onHandByProduct.get(item.productId) ?? 0) + (item.quantity ?? 0));
+      if (item.productId) m.set(item.productId, (m.get(item.productId) ?? 0) + (item.quantity ?? 0));
     }
-
-    return (productsQuery.data ?? [])
-      .filter((p) => p.id)
-      .map((p) => {
-        const onHand = onHandByProduct.get(p.id!) ?? 0;
-        return {
-          value: p.id!,
-          label: `${p.name}${p.packageSize != null ? ` (${fmtLiters(p.packageSize)})` : ''}`
-            + (onHand > 0 ? ` — skladem ${onHand} ks` : ''),
-        };
-      });
-  }, [productsQuery.data, inventoryQuery.data]);
+    return m;
+  }, [inventoryQuery.data]);
+  const onHandHint = useCallback((p: ProductListItemDto) => {
+    const onHand = p.id ? onHandByProduct.get(p.id) ?? 0 : 0;
+    return onHand > 0 ? `skladem ${onHand} ks` : undefined;
+  }, [onHandByProduct]);
 
   function openStockPurchase() {
     setStockPurchaseProductId(null);
@@ -1175,11 +1177,13 @@ export function ShipmentDetail({
             Nákup od pivovaru nad rámec objednávek — zboží se veze s vývozem a při doručení se naskladní.
           </Typography>
           <Stack spacing={2}>
-            <Combobox
+            <ProductCombobox
               label="Produkt"
               value={stockPurchaseProductId}
               onChange={setStockPurchaseProductId}
-              options={purchaseOptions}
+              products={purchasableProducts}
+              trailing={onHandHint}
+              loading={productsQuery.isLoading}
               placeholder="Vyberte produkt…"
               fullWidth
             />
