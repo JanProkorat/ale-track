@@ -612,6 +612,107 @@ public sealed class UpdateOutgoingShipmentTests
         db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    /// <summary>
+    /// The snapshot is written at the same boundary that freezes content, which is what keeps the
+    /// two from ever diverging.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TransitionToLoaded_WritesTheContentSnapshot()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Created);
+
+        var product = ProductBuilder.BuildEntity(name: "Albrecht 12°", priceWithVat: 11.49m);
+        product.Id = 41;
+        product.Brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau");
+        f.Order.OrderItems =
+        [
+            new OrderItem { Id = 51, PublicId = Guid.NewGuid(), Product = product, ProductId = product.Id, Quantity = 6 }
+        ];
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Loaded)
+        }, CancellationToken.None);
+
+        var stop = f.Shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Order);
+        var item = stop.Items.Should().ContainSingle().Subject;
+        item.ProductName.Should().Be("Albrecht 12°");
+        item.UnitPriceWithVat.Should().Be(11.49m);
+        item.Quantity.Should().Be(6);
+        item.BreweryName.Should().Be("Pivovar Zittau");
+        stop.ClientName.Should().Be(f.Order.Client.Name);
+    }
+
+    /// <summary>
+    /// Reverting reopens the content for editing, so the snapshot must go rather than go stale.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_RevertToCreated_DiscardsTheContentSnapshot()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var stop = f.Shipment.Stops.Single();
+        stop.Items =
+        [
+            new OutgoingShipmentStopItem
+            {
+                PublicId = Guid.NewGuid(),
+                ProductName = "Albrecht 12°",
+                Quantity = 6,
+                BreweryName = "Pivovar Zittau"
+            }
+        ];
+        stop.ClientPublicId = Guid.NewGuid();
+        stop.ClientName = "Hospoda U Kotvy";
+        stop.ClientRegion = Region.ZittauCity;
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Created)
+        }, CancellationToken.None);
+
+        stop.Items.Should().BeEmpty();
+        stop.ClientName.Should().BeNull();
+        stop.ClientPublicId.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Advancing past Loaded must not re-snapshot. The source items are frozen by then, so
+    /// re-running the writer would hand out new rows and new IDs for no reason.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_AdvanceLoadedToInTransit_LeavesTheSnapshotAlone()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        var stop = f.Shipment.Stops.Single();
+        var existing = new OutgoingShipmentStopItem
+        {
+            PublicId = Guid.NewGuid(),
+            ProductName = "Albrecht 12°",
+            Quantity = 6,
+            BreweryName = "Pivovar Zittau"
+        };
+        stop.Items = [existing];
+
+        var db = MockForFreeze(f);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.InTransit)
+        }, CancellationToken.None);
+
+        stop.Items.Should().ContainSingle().Which.Should().BeSameAs(existing);
+    }
+
     [Fact]
     public async Task ProcessAsync_ChangeVehicleOfLoadedShipment_Fails()
     {

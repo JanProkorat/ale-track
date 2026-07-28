@@ -86,6 +86,18 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         // public ID — without this the diff would read every place as removed.
         .Include(os => os.Stops)
             .ThenInclude(s => s.ClientDeliveryPlace)
+        // The three below are what ShipmentContentSnapshotWriter reads and writes: the brewery
+        // and client it snapshots, and the existing rows a revert has to orphan.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p.Brewery)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.Client)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.Items)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -139,6 +151,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
                                       && req.Data.State == OutgoingShipmentState.Loaded;
+
+        var isRevertingToCreated = outgoingShipment.State != OutgoingShipmentState.Created
+                                   && req.Data.State == OutgoingShipmentState.Created;
 
         outgoingShipment.State = req.Data.State;
 
@@ -236,6 +251,16 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
 
         if (isTransitioningToLoaded)
             SubtractFromInventory(outgoingShipment);
+
+        // Snapshot at the same boundary that freezes content, so the two cannot diverge. The
+        // reports read nothing else from here on.
+        if (isTransitioningToLoaded)
+            ShipmentContentSnapshotWriter.Apply(outgoingShipment);
+
+        // Reverting reopens the content for editing, so a kept snapshot would go stale. It is
+        // rebuilt on the next transition into Loaded.
+        if (isRevertingToCreated)
+            ShipmentContentSnapshotWriter.Clear(outgoingShipment);
 
         if (isTransitioningToDelivered && outgoingShipment.StockPurchases.Count > 0)
             await AddStockPurchasesToInventoryAsync(outgoingShipment.StockPurchases, ct);
