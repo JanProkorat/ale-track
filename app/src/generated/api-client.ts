@@ -3548,7 +3548,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Bad Request", status, _responseText, _headers);
+            return throwException("Illegal state transition, or frozen content changed", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -4423,7 +4423,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Bad Request", status, _responseText, _headers);
+            return throwException("Order is closed or already loaded; its content is frozen", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -6672,7 +6672,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Bad Request", status, _responseText, _headers);
+            return throwException("Brewery still owns products", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -13068,6 +13068,7 @@ export interface IGetOrdersListForOutgoingShipmentsRequest extends IFilterableRe
 export class OrderListItemDto implements IOrderListItemDto {
     id?: string;
     state?: OrderState;
+    createdDate?: Date;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     clientName?: string;
@@ -13086,6 +13087,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.state = _data["state"];
+            this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : undefined as any;
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
             this.clientName = _data["clientName"];
@@ -13104,6 +13106,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["state"] = this.state;
+        data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : undefined as any;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
         data["clientName"] = this.clientName;
@@ -13115,6 +13118,7 @@ export class OrderListItemDto implements IOrderListItemDto {
 export interface IOrderListItemDto {
     id?: string;
     state?: OrderState;
+    createdDate?: Date;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
     clientName?: string;

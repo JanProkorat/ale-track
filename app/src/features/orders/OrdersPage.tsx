@@ -22,6 +22,7 @@ import { useOrders, useOrder, useDeleteOrder } from 'src/hooks/useOrders';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
 import { OrderDetail } from './OrderDetail';
+import { sortOrdersNewestFirst } from './orderSort';
 import { OrderEditor } from './OrderEditor';
 
 // Hash-based avatar tint per client name (OrderListItemDto has no client id,
@@ -77,12 +78,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
     const q = clientSearch.trim().toLowerCase();
     const rows = orders.filter((o) => (filter === 'all' || orderStateName(o.state) === filter)
       && (!q || (o.clientName ?? '').toLowerCase().includes(q)));
-    // Sort by requested delivery date, soonest first; orders without a date go last.
-    return [...rows].sort((a, b) => {
-      const ta = a.requiredDeliveryDate ? new Date(a.requiredDeliveryDate).getTime() : Infinity;
-      const tb = b.requiredDeliveryDate ? new Date(b.requiredDeliveryDate).getTime() : Infinity;
-      return ta - tb;
-    });
+    return sortOrdersNewestFirst(rows);
   }, [orders, filter, clientSearch]);
 
   const openCreate = () => navigate(`${PATHS.orders}/new`);
