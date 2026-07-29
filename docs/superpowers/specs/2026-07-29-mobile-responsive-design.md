@@ -155,3 +155,23 @@ heights) and the 200×200 donut.
 
 A mocked `matchMedia` cannot catch a 400px-wide element quietly overflowing the
 body, which is why the real-browser sweep is the primary gate here.
+
+### Result (2026-07-29)
+
+`yarn build` and `yarn lint` clean; `yarn test:run` 431/431. The browser sweep
+ran 28 probes — login, all ten module lists, reports, the nav overlay and a
+shipment detail, at 390×844 and 360×800 against the dev backend — with **zero
+horizontal overflow** and the nav overlay opening at both viewports.
+
+Two findings left unfixed, both outside the agreed scope:
+
+1. **Stat-tile grids are one-per-row on a phone**, making the dashboard and
+   Reports very tall. Cause is `repeat(auto-fill, minmax(210px, 1fr))`
+   (`DashboardPage.tsx:206`) and `minmax(190px, 1fr)` in the three report tabs
+   and `ShipmentDetail.tsx:1107`. Lowering the `minmax` would add columns on
+   desktop too, so a fix needs an explicit
+   `{ xs: 'repeat(2, minmax(0, 1fr))', compact: <original> }` — and at ~165px a
+   label like "PLECHOVKY / MULTIPACK" wraps to three lines. That is a per-screen
+   density decision, not an overflow fix.
+2. **The sidebar account avatar renders `?`** because the seeded admin has no
+   first or last name for `initials()`. Pre-existing and not viewport-related.
