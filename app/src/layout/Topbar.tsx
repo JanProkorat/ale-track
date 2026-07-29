@@ -42,41 +42,53 @@ export function Topbar({
         borderColor: 'divider',
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
-        px: 2.5,
+        gap: { xs: 0.75, compact: 1.5 },
+        px: { xs: 1.5, mobile: 2.5 },
         position: 'sticky',
         top: 0,
         zIndex: 30,
       }}
     >
-      <IconButton onClick={onToggleSidebar} size="small" aria-label="Sbalit menu">
+      {/* Opens the nav overlay below the mobile breakpoint, collapses the desktop
+          column above it — hence the neutral label. */}
+      <IconButton onClick={onToggleSidebar} size="small" aria-label="Menu">
         <MenuIcon />
       </IconButton>
 
+      {/* Prototype line 334: below 720px the pill becomes a 40px icon-only circle.
+          Dropping its minWidth:190 is what stops the topbar row overflowing on a
+          phone, and the ⌘K hint is meaningless on touch anyway. */}
       <ButtonBase
         onClick={onOpenPalette}
+        aria-label="Hledat"
         sx={{
           display: 'flex',
           alignItems: 'center',
           gap: 1,
           height: 40,
-          px: 1.75,
-          flex: '0 1 340px',
-          minWidth: 190,
-          maxWidth: 360,
+          flex: { xs: '0 0 auto', compact: '0 1 340px' },
+          width: { xs: 40, compact: 'auto' },
+          minWidth: { xs: 0, compact: 190 },
+          maxWidth: { xs: 40, compact: 360 },
+          px: { xs: 0, compact: 1.75 },
+          justifyContent: { xs: 'center', compact: 'flex-start' },
           borderRadius: 999,
           bgcolor: 'background.default',
           border: 1,
           borderColor: 'divider',
           color: 'text.secondary',
-          justifyContent: 'flex-start',
         }}
       >
         <SearchIcon fontSize="small" />
-        <Typography sx={{ flex: 1, textAlign: 'left', fontSize: 13.5 }}>Hledat…</Typography>
+        <Typography
+          sx={{ flex: 1, textAlign: 'left', fontSize: 13.5, display: { xs: 'none', compact: 'block' } }}
+        >
+          Hledat…
+        </Typography>
         <Box
           component="kbd"
           sx={{
+            display: { xs: 'none', compact: 'block' },
             fontSize: 11,
             fontWeight: 700,
             px: 0.75,

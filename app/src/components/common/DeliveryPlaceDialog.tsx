@@ -165,7 +165,10 @@ export function DeliveryPlaceDialog({
 
         <Divider sx={{ my: 2 }} />
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+        {/* Prototype `.form-grid` collapses to one column, but at a 1080px viewport —
+            a query that can't describe a ≤640px dialog, whose width barely tracks the
+            viewport. Keyed to the dialog's own usable width instead. */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
           <TextField
             label="Název místa"
             required
@@ -194,7 +197,7 @@ export function DeliveryPlaceDialog({
           </Box>
         </Typography>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
           <TextField label="Ulice" fullWidth size="small" value={streetName} onChange={(e) => setStreetName(e.target.value)} placeholder="Nábřežní" />
           <TextField label="Číslo" fullWidth size="small" value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} placeholder="3" />
           <TextField label="Město" fullWidth size="small" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Žitava" />

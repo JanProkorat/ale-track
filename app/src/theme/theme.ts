@@ -19,10 +19,27 @@ declare module '@mui/material/styles' {
   }
 }
 
+// The prototype's responsive breakpoints don't line up with MUI's defaults, and
+// prototype fidelity wins. Declaring them as extra named keys keeps every
+// existing xs/sm/md/lg value in the app meaning exactly what it means today.
+// Without this augmentation `sx={{ display: { mobile: 'flex' } }}` won't compile.
+declare module '@mui/system' {
+  interface BreakpointOverrides {
+    compact: true;
+    mobile: true;
+  }
+}
+
 const radius = 11;
 
 export const theme = createTheme({
   cssVariables: { colorSchemeSelector: 'data-theme' },
+  // compact/mobile come from the prototype's @media blocks: 720px collapses the
+  // search pill to an icon, 860px turns the sidebar into a slide-in drawer.
+  // Declaration order is free — createBreakpoints sorts values ascending itself.
+  breakpoints: {
+    values: { xs: 0, sm: 600, compact: 720, mobile: 860, md: 900, lg: 1200, xl: 1536 },
+  },
   colorSchemes: {
     light: {
       palette: {
@@ -84,7 +101,21 @@ export const theme = createTheme({
         // MUI tints dark-mode Paper by elevation, and a Dialog sits at 24 — enough to
         // wash background.paper out well away from the prototype's --surface. Same
         // reason MuiCard already clears it.
-        paper: { backgroundImage: 'none' },
+        paper: ({ theme: t }) => ({
+          backgroundImage: 'none',
+          // MUI already caps a maxWidth="sm" paper at calc(100% - 64px) on narrow
+          // screens, which leaves a 326px dialog on a 390px phone. Go full-bleed
+          // instead. Height stays content-driven so a small ConfirmDialog doesn't
+          // become a full-screen sheet — hence this rather than the fullScreen
+          // prop, which is a boolean and so can't be made responsive here.
+          [t.breakpoints.down('compact')]: {
+            margin: 0,
+            width: '100%',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            borderRadius: 0,
+          },
+        }),
       },
     },
     MuiDialogTitle: {
@@ -139,6 +170,16 @@ export const theme = createTheme({
       },
     },
     MuiChip: { styleOverrides: { root: { fontWeight: 600 } } },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          // A size="small" IconButton is a 30px target; touch needs 44px. Keyed on
+          // pointer rather than viewport width so a desktop mouse keeps the
+          // prototype's tighter chrome even in a narrow window.
+          '@media (pointer: coarse)': { minWidth: 44, minHeight: 44 },
+        },
+      },
+    },
     // Sub-tabs (Info/Ceník/…) — match the prototype's .tabs button (13.5px/700).
     MuiTab: {
       styleOverrides: {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Box, Stack, Typography, ButtonBase, Avatar } from '@mui/material';
+import { Box, Drawer, Stack, Typography, ButtonBase, Avatar } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { NAV_GROUPS } from './nav-config';
 import { AccountMenu } from './AccountMenu';
@@ -27,7 +27,19 @@ const COUNT_FIELD: Partial<Record<ModuleKey, string>> = {
   users: 'usersCount',
 };
 
-export function Sidebar({ collapsed }: { collapsed: boolean }) {
+export function Sidebar({
+  collapsed,
+  mobile = false,
+  open = false,
+  onClose,
+}: {
+  collapsed: boolean;
+  /** Below the `mobile` breakpoint the sidebar is a slide-in overlay, not a column. */
+  mobile?: boolean;
+  /** Overlay visibility. Ignored when `mobile` is false. */
+  open?: boolean;
+  onClose?: () => void;
+}) {
   const { user, canSee } = useAuth();
   const { pathname } = useLocation();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -36,26 +48,17 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const isActive = (path: string) =>
     path === PATHS.dashboard ? pathname === path : pathname.startsWith(path);
 
-  return (
-    <Box
-      component="aside"
-      sx={{
-        width: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W,
-        flex: `0 0 ${collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W}px`,
-        bgcolor: 'brand.navy',
-        color: '#C6D0DC',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-        transition: 'width .22s cubic-bezier(.4,0,.2,1), flex-basis .22s cubic-bezier(.4,0,.2,1)',
-      }}
-    >
+  // The overlay always shows the full-width sidebar: the prototype resets
+  // `.sidebar.collapsed` back to the full width below 860px, so the desktop
+  // collapse state is deliberately ignored on mobile.
+  const expanded = mobile || !collapsed;
+
+  const content = (
+    <>
       {/* Brand */}
       <Stack direction="row" alignItems="center" spacing={1.4} sx={{ px: 2.25, height: 62, flex: '0 0 auto' }}>
         <Logo size={34} />
-        {!collapsed && (
+        {expanded && (
           <Typography sx={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
             Ale<Box component="span" sx={{ color: 'primary.main' }}>Track</Box>
           </Typography>
@@ -69,7 +72,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
           if (!items.length) return null;
           return (
             <Box key={gi}>
-              {group.heading && !collapsed && (
+              {group.heading && expanded && (
                 <Typography
                   sx={{
                     fontSize: 10.5,
@@ -96,9 +99,12 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                     key={it.key}
                     component={NavLink}
                     to={it.path}
+                    // AppShell closes the overlay on a pathname change, which misses a
+                    // tap on the route you're already on — close here too.
+                    onClick={mobile ? onClose : undefined}
                     sx={{
                       width: '100%',
-                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      justifyContent: expanded ? 'flex-start' : 'center',
                       gap: 1.5,
                       px: 1.5,
                       py: 1.1,
@@ -130,15 +136,14 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                     <Box sx={{ display: 'grid', placeItems: 'center', flex: '0 0 20px', opacity: 0.92 }}>
                       {it.icon}
                     </Box>
-                    {!collapsed && <span>{it.label}</span>}
-                    {showBadge && (collapsed ? (
+                    {expanded && <span>{it.label}</span>}
+                    {showBadge && (expanded ? (
                       <Box
                         component="span"
                         sx={{
-                          position: 'absolute', top: 3, right: 4,
-                          bgcolor: 'primary.main', color: '#3a2402',
-                          fontSize: 9, fontWeight: 800, lineHeight: 1.4,
-                          minWidth: 14, px: 0.5, borderRadius: 99, textAlign: 'center',
+                          ml: 'auto', bgcolor: 'primary.main', color: '#3a2402',
+                          fontSize: 11, fontWeight: 800, lineHeight: 1.5,
+                          minWidth: 20, px: 0.9, py: '1px', borderRadius: 99, textAlign: 'center',
                         }}
                       >
                         {count}
@@ -147,9 +152,10 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                       <Box
                         component="span"
                         sx={{
-                          ml: 'auto', bgcolor: 'primary.main', color: '#3a2402',
-                          fontSize: 11, fontWeight: 800, lineHeight: 1.5,
-                          minWidth: 20, px: 0.9, py: '1px', borderRadius: 99, textAlign: 'center',
+                          position: 'absolute', top: 3, right: 4,
+                          bgcolor: 'primary.main', color: '#3a2402',
+                          fontSize: 9, fontWeight: 800, lineHeight: 1.4,
+                          minWidth: 14, px: 0.5, borderRadius: 99, textAlign: 'center',
                         }}
                       >
                         {count}
@@ -173,7 +179,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
           display: 'flex',
           alignItems: 'center',
           gap: 1.25,
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          justifyContent: expanded ? 'flex-start' : 'center',
           textAlign: 'left',
           '&:hover': { bgcolor: 'rgba(255,255,255,.06)' },
         }}
@@ -181,7 +187,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         <Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 13, fontWeight: 800 }}>
           {initials(user?.firstName, user?.lastName)}
         </Avatar>
-        {!collapsed && (
+        {expanded && (
           <>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: 13 }} noWrap>
@@ -196,6 +202,55 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         )}
       </ButtonBase>
       <AccountMenu anchorEl={anchor} onClose={() => setAnchor(null)} />
+    </>
+  );
+
+  // Deviation from the prototype: it slides the panel in with only a shadow,
+  // MUI's temporary Drawer adds a scrim. Keeping the scrim — it gives a
+  // tap-to-close target and matches what FormDrawer already does in this app.
+  if (mobile) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={open}
+        onClose={onClose}
+        slotProps={{
+          paper: {
+            sx: {
+              width: SIDEBAR_W,
+              bgcolor: 'brand.navy',
+              color: '#C6D0DC',
+              backgroundImage: 'none',
+              borderRight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          },
+        }}
+      >
+        {content}
+      </Drawer>
+    );
+  }
+
+  return (
+    <Box
+      component="aside"
+      sx={{
+        width: collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W,
+        flex: `0 0 ${collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W}px`,
+        bgcolor: 'brand.navy',
+        color: '#C6D0DC',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'sticky',
+        top: 0,
+        // dvh, not vh: mobile browser chrome makes 100vh overshoot the visible area.
+        height: '100dvh',
+        transition: 'width .22s cubic-bezier(.4,0,.2,1), flex-basis .22s cubic-bezier(.4,0,.2,1)',
+      }}
+    >
+      {content}
     </Box>
   );
 }

@@ -11,7 +11,8 @@ body,
 #root {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  /* dvh, not vh: mobile browser chrome makes 100vh overshoot the visible area. */
+  min-height: 100dvh;
 }
 
 body {

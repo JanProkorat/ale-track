@@ -61,7 +61,7 @@ export function LoginPage() {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100dvh' }}>
       {/* Brand panel */}
       <Box
         sx={{

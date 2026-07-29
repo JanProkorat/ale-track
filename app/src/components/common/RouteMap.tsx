@@ -79,6 +79,10 @@ export function RouteMap({
 }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
+  // Callers pass 280–360px, which eats most of a phone screen. Cap on mobile
+  // rather than taking a responsive prop, so every call site benefits as-is.
+  const mapHeight = { xs: Math.min(height, 260), mobile: height };
+
   // Base round-trip: depot -> each located stop (in order) -> depot.
   const base = useMemo<LatLng[]>(
     () => [
@@ -152,7 +156,7 @@ export function RouteMap({
     return (
       <Box
         sx={{
-          height,
+          height: mapHeight,
           borderRadius: 2,
           border: '1px dashed',
           borderColor: 'divider',
@@ -194,7 +198,7 @@ export function RouteMap({
         '&:fullscreen': { borderRadius: 0, width: '100%', height: '100%' },
       }}
     >
-      <Box sx={{ height: isFull ? '100%' : height }}>
+      <Box sx={{ height: isFull ? '100%' : mapHeight }}>
         <MapContainer ref={mapRef} bounds={bounds} boundsOptions={{ padding: [40, 40] }} zoomControl={false} scrollWheelZoom={false} attributionControl={false} style={{ height: '100%', width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {/* Alternative routes (behind the primary), clickable to adopt. */}

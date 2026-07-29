@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
@@ -23,9 +23,19 @@ function moduleForPath(pathname: string): ModuleKey | null {
 export function AppShell() {
   const { canSee } = useAuth();
   const { pathname } = useLocation();
+  const theme = useTheme();
+  // 860px — the prototype's sidebar breakpoint.
+  const isMobile = useMediaQuery(theme.breakpoints.down('mobile'));
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [currencyAnchor, setCurrencyAnchor] = useState<HTMLElement | null>(null);
+
+  // Navigating dismisses the overlay, as in the prototype. Covers the command
+  // palette and programmatic navigation; Sidebar handles a tap on the active route.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,11 +56,18 @@ export function AppShell() {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Sidebar collapsed={collapsed} />
+    <Box sx={{ display: 'flex', minHeight: '100dvh', bgcolor: 'background.default' }}>
+      <Sidebar
+        collapsed={collapsed}
+        mobile={isMobile}
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Topbar
-          onToggleSidebar={() => setCollapsed((v) => !v)}
+          // One hamburger, two jobs: it opens the overlay on mobile and toggles
+          // the desktop column's collapsed width above the breakpoint.
+          onToggleSidebar={() => (isMobile ? setMobileNavOpen((v) => !v) : setCollapsed((v) => !v))}
           onOpenPalette={() => setPaletteOpen(true)}
           onOpenCurrency={(el) => setCurrencyAnchor(el)}
         />
