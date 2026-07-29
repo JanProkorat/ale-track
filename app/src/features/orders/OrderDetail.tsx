@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Box, Breadcrumbs, Button, Card, Chip, IconButton, Link, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Card, Chip, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActiveOutlined';
@@ -14,6 +13,8 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { DetailHeader } from 'src/components/common/DetailHeader';
+import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, orderNumber } from 'src/lib/format';
 import { ORDER_STATUS, orderStateName, reminderStateName, reminderStateValue } from 'src/lib/labels';
@@ -102,70 +103,58 @@ export function OrderDetail({
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
   // only a last resort for an order with no term yet.
+  // No colon: the label reads as prose inside the header's dot-separated meta line.
   const headerDate = order.actualDeliveryDate
-    ? { label: 'Doručeno:', value: fmtDate(order.actualDeliveryDate) }
+    ? { label: 'Doručeno', value: fmtDate(order.actualDeliveryDate) }
     : order.requiredDeliveryDate
-      ? { label: 'Doručit nejpozději:', value: fmtDate(order.requiredDeliveryDate) }
-      : { label: 'Vytvořeno:', value: fmtDate(order.createdDate) };
+      ? { label: 'Doručit nejpozději', value: fmtDate(order.requiredDeliveryDate) }
+      : { label: 'Vytvořeno', value: fmtDate(order.createdDate) };
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onBack} sx={{ fontSize: 13 }}>
-          Objednávky
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{orderNumber(order.id)}</Typography>
-      </Breadcrumbs>
-
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" spacing={2} sx={{ mb: 3 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
-            Objednávka
-          </Typography>
-          <Stack direction="row" alignItems="baseline" spacing={1.5} flexWrap="wrap" sx={{ rowGap: 0 }}>
-            <Typography variant="h1" sx={{ fontSize: 26, fontFamily: 'monospace' }}>{orderNumber(order.id)}</Typography>
-            <Typography sx={{ fontSize: 18, fontWeight: 700, color: 'primary.dark', minWidth: 0 }} noWrap>
-              {order.client?.name ?? '—'}
-            </Typography>
-          </Stack>
-          <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
+      <DetailHeader
+        onBack={onBack}
+        backLabel="Zpět na objednávky"
+        title={orderNumber(order.id)}
+        titleMono
+        lead={order.client?.name ?? '—'}
+        status={<StatusPill tone={status.tone} label={status.label} />}
+        meta={[
+          <>
             {headerDate.label}{' '}
             <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>{headerDate.value}</Box>
-          </Typography>
-          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.4, minWidth: 0 }}>
-            <PlaceOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
-            <Typography color="text.secondary" sx={{ fontSize: 14, minWidth: 0 }} noWrap>
+          </>,
+          <>
+            <PlaceOutlinedIcon sx={{ fontSize: 16, flexShrink: 0 }} />
+            <Box component="span" sx={{ minWidth: 0 }}>
               {formatAddressOrCoords(order.deliveryAddress?.address)}
-            </Typography>
-            {order.deliveryAddress?.placeName && (
-              <Chip size="small" label={order.deliveryAddress.placeName} sx={{ fontWeight: 700, height: 20 }} />
+            </Box>
+          </>,
+          order.deliveryAddress?.placeName && (
+            <Chip size="small" label={order.deliveryAddress.placeName} sx={{ fontWeight: 700, height: 20 }} />
+          ),
+          order.deliveryAddress?.placeNote,
+        ]}
+        actions={(
+          <>
+            {editable && canEditOrder && (
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={onEdit}
+                sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+              >
+                Upravit
+              </Button>
             )}
-          </Stack>
-          {order.deliveryAddress?.placeNote && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2 }}>
-              {order.deliveryAddress.placeNote}
-            </Typography>
-          )}
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
-          <StatusPill tone={status.tone} label={status.label} />
-          {editable && canEditOrder && (
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={onEdit}
-              sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
-            >
-              Upravit
-            </Button>
-          )}
-          {editable && (
-            <IconButton color="error" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }} aria-label="Zrušit objednávku">
-              <DeleteIcon />
-            </IconButton>
-          )}
-        </Stack>
-      </Stack>
+            {editable && (
+              <IconButton color="error" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }} aria-label="Zrušit objednávku">
+                <DeleteIcon />
+              </IconButton>
+            )}
+          </>
+        )}
+      />
 
       {stateName !== 'Cancelled' && <StatusFlow stateName={stateName} />}
 
@@ -173,13 +162,7 @@ export function OrderDetail({
           With nothing to put in the sidebar the second column is dropped
           entirely rather than left as dead space beside the items. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: hasSidebar ? '1.5fr 1fr' : '1fr' }, alignItems: 'start' }}>
-        <Card sx={{ overflow: 'hidden' }}>
-          <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-            <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky</Typography>
-            <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
-              {items.length}
-            </Box>
-          </Stack>
+        <CollapsibleCard title="Položky" count={items.length}>
           <Box sx={{ px: 2.5, py: 1 }}>
             {items.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Objednávka nemá žádné položky.</Typography>
@@ -213,19 +196,16 @@ export function OrderDetail({
               </Box>
             )}
           </Box>
-        </Card>
+        </CollapsibleCard>
 
         {hasSidebar && (
         <Stack spacing={2}>
           {returns.length > 0 && (
-            <Card sx={{ overflow: 'hidden' }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                <UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Vratky</Typography>
-                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
-                  {returns.length}
-                </Box>
-              </Stack>
+            <CollapsibleCard
+              title="Vratky"
+              count={returns.length}
+              icon={<UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+            >
               <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {returns.map((r) => (
                   <Box key={r.id}>
@@ -237,18 +217,15 @@ export function OrderDetail({
                   </Box>
                 ))}
               </Box>
-            </Card>
+            </CollapsibleCard>
           )}
 
           {extras.length > 0 && (
-            <Card sx={{ overflow: 'hidden' }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky navíc</Typography>
-                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
-                  {extras.length}
-                </Box>
-              </Stack>
+            <CollapsibleCard
+              title="Položky navíc"
+              count={extras.length}
+              icon={<Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+            >
               <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {extras.map((e) => (
                   <Box key={e.id}>
@@ -257,18 +234,15 @@ export function OrderDetail({
                   </Box>
                 ))}
               </Box>
-            </Card>
+            </CollapsibleCard>
           )}
 
           {notes.length > 0 && (
-            <Card sx={{ overflow: 'hidden' }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                <StickyNote2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Poznámky</Typography>
-                <Box sx={{ px: 1, py: 0.25, borderRadius: 999, bgcolor: 'action.selected', fontSize: 12, fontWeight: 700 }}>
-                  {notes.length}
-                </Box>
-              </Stack>
+            <CollapsibleCard
+              title="Poznámky"
+              count={notes.length}
+              icon={<StickyNote2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+            >
               <Box sx={{ px: 2.5, py: 1, '& > div': { py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {notes.map((n) => (
                   <Box key={n.id}>
@@ -280,7 +254,7 @@ export function OrderDetail({
                   </Box>
                 ))}
               </Box>
-            </Card>
+            </CollapsibleCard>
           )}
         </Stack>
         )}

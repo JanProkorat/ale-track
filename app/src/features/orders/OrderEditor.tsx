@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Breadcrumbs, Button, Card, Chip, CircularProgress, IconButton, Link, Stack,
+  Box, Button, Card, Chip, CircularProgress, IconButton, Stack,
   TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -10,7 +10,6 @@ import CheckIcon from '@mui/icons-material/CheckOutlined';
 import HistoryIcon from '@mui/icons-material/HistoryOutlined';
 import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
@@ -18,7 +17,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
-import { PageHeader } from 'src/components/common/PageHeader';
+import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { compareProductsForDisplay } from 'src/lib/productSort';
 import { SearchField } from 'src/components/common/SearchField';
@@ -559,17 +558,13 @@ export function OrderEditor({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onCancel} sx={{ fontSize: 13 }}>
-          Objednávky
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{title}</Typography>
-      </Breadcrumbs>
-
-      <PageHeader
-        eyebrow="Prodej"
+      {/* Back runs the same onCancel the Zrušit button does, so the router-level
+          unsaved-changes guard still intercepts a dirty editor. */}
+      <DetailHeader
+        onBack={onCancel}
+        backLabel="Zpět na objednávky"
         title={title}
-        subtitle="Vyberte produkty — nejdřív se nabízí dříve objednané."
+        meta={['Vyberte produkty — nejdřív se nabízí dříve objednané.']}
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>
@@ -581,16 +576,65 @@ export function OrderEditor({
       />
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1fr 380px' }, alignItems: 'start' }}>
+        {/* Client, delivery address and term. First in DOM order so it leads on a
+            phone: the catalog stays empty until a client is picked, so the picker
+            cannot sit below the thing it unlocks. Explicit placement puts it back
+            at the top of the right column on lg. */}
+        <Card sx={{ p: 2.5, gridColumn: { lg: 2 }, gridRow: { lg: 1 } }}>
+          <Stack spacing={2}>
+            <Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.75 }}>
+                Klient <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+              </Typography>
+              {clientId && selectedClient ? (
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  alignItems="center"
+                  sx={{ p: 1.25, border: 1, borderColor: 'warning.main', borderRadius: 1.5, bgcolor: (t) => t.vars!.palette.brand.amberTint }}
+                >
+                  <Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12, bgcolor: 'background.paper' }}>
+                    {clientInitials(selectedClient.name)}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: 13.5, flex: 1, minWidth: 0 }} noWrap>{selectedClient.name}</Typography>
+                  {mode === 'create' && (
+                    <Button size="small" onClick={() => changeClient(null)}>Změnit</Button>
+                  )}
+                </Stack>
+              ) : (
+                <Combobox value={clientId} onChange={changeClient} options={clientOptions} placeholder="Vyberte klienta…" fullWidth />
+              )}
+            </Box>
+
+            <OrderDeliveryAddressField
+              clientId={clientId}
+              value={deliveryAddress}
+              onChange={setDeliveryAddress}
+              deletedPlaceName={loadedPlaceName}
+            />
+
+            <DatePicker
+              label="Požadovaný termín dodání"
+              value={requiredDate}
+              onChange={setRequiredDate}
+              slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+            />
+          </Stack>
+        </Card>
+
         {/* Self-contained scroll pane (lg+): the catalog is capped to the
             viewport and sticks in place, its body scrolls internally, and
             overscrollBehavior: 'contain' stops that scroll from chaining to the
             page at the ends. So a wheel over the catalog scrolls only the
             catalog; a wheel anywhere else scrolls the page. On xs it flows
-            normally in the page (single column). */}
+            normally in the page (single column). It spans both right-column rows
+            so the client card above does not shorten it. */}
         <Card sx={{
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
+          gridColumn: { lg: 1 },
+          gridRow: { lg: '1 / span 2' },
           position: { lg: 'sticky' },
           top: { lg: TOPBAR_H + 16 },
           maxHeight: { lg: `calc(100vh - ${TOPBAR_H + 32}px)` },
@@ -620,7 +664,9 @@ export function OrderEditor({
             </Box>
 
             {!clientId ? (
-              <EmptyState title="Vyberte klienta" description="Katalog produktů se zobrazí po výběru klienta vpravo." dense />
+              // No "vpravo": the client card is above the catalog on a phone and
+              // beside it on lg, so a positional word is wrong half the time.
+              <EmptyState title="Vyberte klienta" description="Katalog produktů se zobrazí po výběru klienta." dense />
             ) : historyQuery.isLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={28} /></Box>
             ) : catalogTab === 'history' ? (
@@ -705,49 +751,7 @@ export function OrderEditor({
             and buys back the three cards below it. A max-height with its own
             overflow would keep the stickiness, but nested scroll containers are
             their own trap here — see app/CLAUDE.md. */}
-        <Stack spacing={2}>
-          <Card sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Box>
-                <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.75 }}>
-                  Klient <Box component="span" sx={{ color: 'error.main' }}>*</Box>
-                </Typography>
-                {clientId && selectedClient ? (
-                  <Stack
-                    direction="row"
-                    spacing={1.25}
-                    alignItems="center"
-                    sx={{ p: 1.25, border: 1, borderColor: 'warning.main', borderRadius: 1.5, bgcolor: (t) => t.vars!.palette.brand.amberTint }}
-                  >
-                    <Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12, bgcolor: 'background.paper' }}>
-                      {clientInitials(selectedClient.name)}
-                    </Box>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13.5, flex: 1, minWidth: 0 }} noWrap>{selectedClient.name}</Typography>
-                    {mode === 'create' && (
-                      <Button size="small" onClick={() => changeClient(null)}>Změnit</Button>
-                    )}
-                  </Stack>
-                ) : (
-                  <Combobox value={clientId} onChange={changeClient} options={clientOptions} placeholder="Vyberte klienta…" fullWidth />
-                )}
-              </Box>
-
-              <OrderDeliveryAddressField
-                clientId={clientId}
-                value={deliveryAddress}
-                onChange={setDeliveryAddress}
-                deletedPlaceName={loadedPlaceName}
-              />
-
-              <DatePicker
-                label="Požadovaný termín dodání"
-                value={requiredDate}
-                onChange={setRequiredDate}
-                slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-              />
-            </Stack>
-          </Card>
-
+        <Stack spacing={2} sx={{ gridColumn: { lg: 2 }, gridRow: { lg: 2 } }}>
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <ShoppingCartOutlinedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />

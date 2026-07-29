@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Box, Card, Stack, Typography, Button, IconButton, Chip, Tabs, Tab, Breadcrumbs, Link,
+  Box, Card, Stack, Typography, Button, IconButton, Chip, Tabs, Tab,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
@@ -14,6 +13,8 @@ import ScheduleIcon from '@mui/icons-material/ScheduleOutlined';
 import MailIcon from '@mui/icons-material/MailOutlineOutlined';
 import PhoneIcon from '@mui/icons-material/PhoneOutlined';
 import { PointMap } from 'src/components/common/PointMap';
+import { DetailHeader } from 'src/components/common/DetailHeader';
+import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { countryLabel, regionLabel, contactTypeLabel, isEmailContact } from 'src/lib/labels';
 import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/generated/api-client';
@@ -33,16 +34,13 @@ function addressesEqual(a?: AddressDto, b?: AddressDto): boolean {
   return a.streetName === b.streetName && a.streetNumber === b.streetNumber && a.city === b.city && a.zip === b.zip && a.country === b.country;
 }
 
-/** Titled card matching the prototype: header band + body — copied from BreweryDetail. */
+/** Titled card matching the prototype: header band + padded body. Owns only the
+ * body padding; CollapsibleCard supplies the band and the collapse behaviour. */
 function TitledCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <Card sx={{ overflow: 'hidden' }}>
-      <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{title}</Typography>
-        {action}
-      </Stack>
+    <CollapsibleCard title={title} action={action}>
       <Box sx={{ p: 2.5 }}>{children}</Box>
-    </Card>
+    </CollapsibleCard>
   );
 }
 
@@ -129,25 +127,13 @@ export function ClientDetail({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onBack} sx={{ fontSize: 13 }}>
-          Klienti
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{client.name}</Typography>
-      </Breadcrumbs>
-
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" spacing={2} sx={{ mb: 3 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
-            Klient · {regionLabel(client.region)}
-          </Typography>
-          <Typography variant="h1" sx={{ fontSize: 26 }}>{client.name}</Typography>
-          {client.businessName && (
-            <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>{client.businessName}</Typography>
-          )}
-        </Box>
-        {editable && (
-          <Stack direction="row" spacing={1} flexShrink={0}>
+      <DetailHeader
+        onBack={onBack}
+        backLabel="Zpět na klienty"
+        title={client.name}
+        meta={[client.businessName, regionLabel(client.region)]}
+        actions={editable && (
+          <>
             <Button
               variant="outlined"
               startIcon={<EditIcon />}
@@ -159,9 +145,9 @@ export function ClientDetail({
             <IconButton color="error" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }} aria-label="Smazat klienta">
               <DeleteIcon />
             </IconButton>
-          </Stack>
+          </>
         )}
-      </Stack>
+      />
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tab} onChange={(_e, v: SubTab) => setTab(v)} variant="scrollable" scrollButtons="auto">

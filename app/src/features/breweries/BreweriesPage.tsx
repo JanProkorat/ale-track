@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, Button, Divider, IconButton, Tooltip, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Box, Button, Divider, IconButton, MenuItem, Select, Stack, Tooltip, Typography, useMediaQuery } from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 import { useQueries } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -40,6 +40,9 @@ function CountBadge({ n, active, color }: { n: number; active: boolean; color: s
 export function BreweriesPage() {
   const { canEdit } = useAuth();
   const editable = canEdit('breweries');
+  // The tab strip and the action button cannot share one row on a phone: the
+  // strip is left ~150px, so a single tab shows and gets cut mid-word.
+  const isCompact = useMediaQuery((t: Theme) => t.breakpoints.down('compact'));
   const { enqueueSnackbar } = useSnackbar();
   const ds = useDataSource();
   const navigate = useNavigate();
@@ -105,7 +108,70 @@ export function BreweriesPage() {
       >
         {(rows: BreweryListItemDto[]) => (
           <>
-            {/* Brewery tab strip */}
+            {isCompact ? (
+              /* Phone: pick the brewery from a dropdown instead of swiping a strip.
+                 Scales as breweries are added, and the edit/delete actions move out
+                 of the tab — inside it they doubled the active tab's width. */
+              <Stack spacing={1.5} sx={{ mb: 3 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Select
+                    value={selectedId ?? ''}
+                    onChange={(e) => navigate(`${PATHS.breweries}/${e.target.value}`)}
+                    size="small"
+                    sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}
+                    renderValue={(value) => {
+                      const brewery = rows.find((b) => b.id === value);
+                      if (!brewery) return null;
+                      const color = brewery.color ?? '#8791A0';
+                      return (
+                        <Stack direction="row" spacing={1.1} alignItems="center" sx={{ minWidth: 0 }}>
+                          <Box sx={{ width: 11, height: 11, borderRadius: '4px', bgcolor: color, flexShrink: 0 }} />
+                          <Typography sx={{ fontWeight: 700, fontSize: 14.5, flex: 1, minWidth: 0 }} noWrap>
+                            {brewery.name}
+                          </Typography>
+                          <CountBadge n={countFor(brewery.id)} active color={color} />
+                        </Stack>
+                      );
+                    }}
+                  >
+                    {rows.map((b) => {
+                      const color = b.color ?? '#8791A0';
+                      return (
+                        <MenuItem key={b.id} value={b.id ?? ''}>
+                          <Stack direction="row" spacing={1.1} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+                            <Box sx={{ width: 11, height: 11, borderRadius: '4px', bgcolor: color, flexShrink: 0 }} />
+                            <Typography sx={{ fontWeight: 700, fontSize: 14.5, flex: 1, minWidth: 0 }} noWrap>
+                              {b.name}
+                            </Typography>
+                            <CountBadge n={countFor(b.id)} active={false} color={color} />
+                          </Stack>
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                  {editable && (
+                    <>
+                      <Tooltip title="Upravit pivovar">
+                        <IconButton onClick={() => setEditingOpen(true)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, flexShrink: 0 }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Smazat pivovar">
+                        <IconButton color="error" onClick={() => setConfirmDelete(true)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, flexShrink: 0 }}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  )}
+                </Stack>
+                {editable && (
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormOpen(true)} fullWidth>
+                    Nový pivovar
+                  </Button>
+                )}
+              </Stack>
+            ) : (
+            /* Brewery tab strip */
             <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 1.5, borderBottom: '2px solid', borderColor: 'divider', mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, flex: 1, overflowX: 'auto' }}>
                 {rows.map((b) => {
@@ -160,6 +226,7 @@ export function BreweriesPage() {
                 </>
               )}
             </Box>
+            )}
 
             <QueryBoundary query={detail}>
               {(brewery) => <BreweryDetail key={brewery.id} brewery={brewery} editable={editable} />}

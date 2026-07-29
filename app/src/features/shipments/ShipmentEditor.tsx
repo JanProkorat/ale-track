@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Breadcrumbs, Button, Card, Checkbox, Chip, IconButton, Link, ListSubheader, MenuItem,
+  Box, Button, Card, Checkbox, Chip, IconButton, ListSubheader, MenuItem,
   Select, Stack, TextField, Typography,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpwardOutlined';
@@ -13,14 +13,13 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PageHeader } from 'src/components/common/PageHeader';
+import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
@@ -574,17 +573,13 @@ export function ShipmentEditor({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onCancel} sx={{ fontSize: 13 }}>
-          Vývozy
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{title}</Typography>
-      </Breadcrumbs>
-
-      <PageHeader
-        eyebrow="Prodej"
+      {/* Back runs the same onCancel the Zrušit button does, so the router-level
+          unsaved-changes guard still intercepts a dirty editor. */}
+      <DetailHeader
+        onBack={onCancel}
+        backLabel="Zpět na vývozy"
         title={title}
-        subtitle="Vyberte objednávky, seřaďte zastávky a přiřaďte vůz a řidiče."
+        meta={['Vyberte objednávky, seřaďte zastávky a přiřaďte vůz a řidiče.']}
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>

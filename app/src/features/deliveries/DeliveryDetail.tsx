@@ -1,8 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
-  Box, Breadcrumbs, Button, ButtonBase, Card, Chip, Collapse, Link, Stack, Typography,
+  Box, Button, ButtonBase, Card, Chip, Collapse, Stack, Typography,
 } from '@mui/material';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -13,6 +12,7 @@ import DirectionsCarFilledOutlinedIcon from '@mui/icons-material/DirectionsCarFi
 import { useSnackbar } from 'notistack';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, deliveryNumber, plural } from 'src/lib/format';
@@ -178,42 +178,36 @@ export function DeliveryDetail({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onBack} sx={{ fontSize: 13 }}>
-          Dovozy zboží
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{num}</Typography>
-      </Breadcrumbs>
-
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" spacing={2} sx={{ mb: 3 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
-            Dovoz z pivovarů
-          </Typography>
-          <Typography variant="h1" sx={{ fontSize: 26 }}>{num}</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
-            {delivery.deliveryDate ? fmtDate(delivery.deliveryDate) : 'termín neurčen'} · {stops.length} {plural(stops.length, 'pivovar', 'pivovary', 'pivovarů')}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <StatusPill tone={status.tone} label={status.label} />
-          {editable && forward && (
-            <Button
-              variant={forward.primary ? 'contained' : 'outlined'}
-              startIcon={forward.icon}
-              onClick={() => (forward.confirm ? setConfirmFinish(true) : advance(forward.to))}
-              sx={forward.primary ? undefined : ghostBtnSx}
-            >
-              {forward.label}
-            </Button>
-          )}
-          {editable && !done && !cancelled && (
-            <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={ghostBtnSx}>
-              Upravit
-            </Button>
-          )}
-        </Stack>
-      </Stack>
+      <DetailHeader
+        onBack={onBack}
+        backLabel="Zpět na dovozy zboží"
+        title={num}
+        titleMono
+        status={<StatusPill tone={status.tone} label={status.label} />}
+        meta={[
+          delivery.deliveryDate ? fmtDate(delivery.deliveryDate) : 'termín neurčen',
+          `${stops.length} ${plural(stops.length, 'pivovar', 'pivovary', 'pivovarů')}`,
+        ]}
+        actions={(
+          <>
+            {editable && forward && (
+              <Button
+                variant={forward.primary ? 'contained' : 'outlined'}
+                startIcon={forward.icon}
+                onClick={() => (forward.confirm ? setConfirmFinish(true) : advance(forward.to))}
+                sx={forward.primary ? undefined : ghostBtnSx}
+              >
+                {forward.label}
+              </Button>
+            )}
+            {editable && !done && !cancelled && (
+              <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={ghostBtnSx}>
+                Upravit
+              </Button>
+            )}
+          </>
+        )}
+      />
 
       {done && (
         <Card sx={{ mb: 2, bgcolor: (t) => t.vars!.palette.success.main, color: '#fff', border: 'none' }}>

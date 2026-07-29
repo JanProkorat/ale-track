@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Breadcrumbs, Button, Card, Chip, CircularProgress, Collapse, IconButton, Link, Stack,
+  Box, Button, Card, Chip, CircularProgress, Collapse, IconButton, Stack,
   TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -12,12 +12,11 @@ import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
-import { PageHeader } from 'src/components/common/PageHeader';
+import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox } from 'src/components/common/Combobox';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
@@ -419,17 +418,13 @@ export function DeliveryEditor({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onCancel} sx={{ fontSize: 13 }}>
-          Dovozy zboží
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{title}</Typography>
-      </Breadcrumbs>
-
-      <PageHeader
-        eyebrow="Sklad"
+      {/* Back runs the same onCancel the Zrušit button does, so the router-level
+          unsaved-changes guard still intercepts a dirty editor. */}
+      <DetailHeader
+        onBack={onCancel}
+        backLabel="Zpět na dovozy zboží"
         title={title}
-        subtitle="Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů."
+        meta={['Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů.']}
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>

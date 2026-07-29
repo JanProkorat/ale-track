@@ -11,6 +11,7 @@ import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
 import SportsBarIcon from '@mui/icons-material/SportsBarOutlined';
 import { useSnackbar } from 'notistack';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
+import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
@@ -37,13 +38,9 @@ function addressesEqual(a?: AddressDto, b?: AddressDto): boolean {
 /** Titled card matching the prototype: header band + body. */
 function TitledCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <Card sx={{ overflow: 'hidden' }}>
-      <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>{title}</Typography>
-        {action}
-      </Stack>
+    <CollapsibleCard title={title} action={action}>
       <Box sx={{ p: 2.5 }}>{children}</Box>
-    </Card>
+    </CollapsibleCard>
   );
 }
 

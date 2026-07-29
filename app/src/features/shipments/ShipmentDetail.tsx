@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Box, Breadcrumbs, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, Stack,
+  Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
@@ -15,13 +15,13 @@ import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
-import NavigateNextIcon from '@mui/icons-material/NavigateNextOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
@@ -902,52 +902,44 @@ export function ShipmentDetail({
 
   return (
     <Box>
-      <Breadcrumbs separator={<NavigateNextIcon sx={{ fontSize: 16 }} />} sx={{ mb: 1.5, fontSize: 13 }}>
-        <Link component="button" type="button" underline="hover" color="text.secondary" onClick={onBack} sx={{ fontSize: 13 }}>
-          Vývozy
-        </Link>
-        <Typography color="text.primary" sx={{ fontSize: 13 }}>{shipment.name}</Typography>
-      </Breadcrumbs>
-
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" spacing={2} sx={{ mb: 3 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'primary.dark', mb: 0.6 }}>
-            Vývoz · <Box component="span" sx={{ fontFamily: 'monospace' }}>{shipmentNumber(shipment.id)}</Box>
-          </Typography>
-          <Typography variant="h1" sx={{ fontSize: 26 }}>{shipment.name}</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.6, fontSize: 14 }}>
-            {shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen'}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <StatusPill tone={status.tone} label={status.label} />
-          {editable && forwardStep && (
-            <Button variant={forwardStep.primary ? 'contained' : 'outlined'} startIcon={forwardStep.icon} onClick={() => advance(forwardStep.to)}>
-              {forwardStep.label}
-            </Button>
-          )}
-          {editable && revertTo !== undefined && (
-            <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => advance(revertTo)} sx={ghostBtnSx}>
-              Vrátit
-            </Button>
-          )}
-          {editable && shipmentActive && (
-            <Button variant="outlined" color="error" startIcon={<BlockIcon />} onClick={() => setConfirmCancel(true)}>
-              Zrušit vývoz
-            </Button>
-          )}
-          {editable && stateName === 'Cancelled' && (
-            <Button variant="outlined" startIcon={<ReplayIcon />} onClick={() => advance(OutgoingShipmentState.Created)} sx={ghostBtnSx}>
-              Znovu otevřít
-            </Button>
-          )}
-          {editable && shipmentActive && (
-            <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={ghostBtnSx}>
-              Upravit
-            </Button>
-          )}
-        </Stack>
-      </Stack>
+      <DetailHeader
+        onBack={onBack}
+        backLabel="Zpět na vývozy"
+        title={shipment.name}
+        lead={shipmentNumber(shipment.id)}
+        leadMono
+        status={<StatusPill tone={status.tone} label={status.label} />}
+        meta={[shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen']}
+        actions={(
+          <>
+            {editable && forwardStep && (
+              <Button variant={forwardStep.primary ? 'contained' : 'outlined'} startIcon={forwardStep.icon} onClick={() => advance(forwardStep.to)}>
+                {forwardStep.label}
+              </Button>
+            )}
+            {editable && revertTo !== undefined && (
+              <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => advance(revertTo)} sx={ghostBtnSx}>
+                Vrátit
+              </Button>
+            )}
+            {editable && shipmentActive && (
+              <Button variant="outlined" color="error" startIcon={<BlockIcon />} onClick={() => setConfirmCancel(true)}>
+                Zrušit vývoz
+              </Button>
+            )}
+            {editable && stateName === 'Cancelled' && (
+              <Button variant="outlined" startIcon={<ReplayIcon />} onClick={() => advance(OutgoingShipmentState.Created)} sx={ghostBtnSx}>
+                Znovu otevřít
+              </Button>
+            )}
+            {editable && shipmentActive && (
+              <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit} sx={ghostBtnSx}>
+                Upravit
+              </Button>
+            )}
+          </>
+        )}
+      />
 
       <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} />
 

@@ -33,6 +33,55 @@ function PermSummary({ user }: { user: UserListItemDto }) {
 
 const fullName = (u: UserListItemDto) => [u.firstName, u.lastName].filter(Boolean).join(' ');
 
+/** Phone layout for one user. Actions live in the card rather than a hidden
+ * column, and the row is not clickable, so these buttons are the only ones. */
+function UserCard({
+  user,
+  editable,
+  onEdit,
+  onDelete,
+}: {
+  user: UserListItemDto;
+  editable: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1} alignItems="flex-start">
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700 }} noWrap>{fullName(user) || user.userName}</Typography>
+          <Typography variant="body2" color="text.secondary" noWrap>@{user.userName}</Typography>
+        </Stack>
+        {editable && (
+          <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+            <Tooltip title="Upravit">
+              <IconButton size="small" onClick={onEdit}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Smazat">
+              <IconButton size="small" color="error" onClick={onDelete}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
+      </Stack>
+      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+        {(user.userRoles ?? []).map((r) =>
+          r === UserRoleType.Admin ? (
+            <Chip key="admin" label="Administrátor" size="small" color="primary" />
+          ) : (
+            <Chip key="user" label="Uživatel" size="small" />
+          )
+        )}
+        <PermSummary user={user} />
+      </Stack>
+    </Stack>
+  );
+}
+
 export function UsersPage() {
   const { canEdit } = useAuth();
   const editable = canEdit('users');
@@ -138,7 +187,14 @@ export function UsersPage() {
         subtitle="Správa uživatelů a jejich práv k jednotlivým modulům."
         actions={
           <>
-            <SearchField value={search} onChange={setSearch} placeholder="Hledat uživatele…" />
+            {/* Full width on a phone so it claims its own row: at its default 260px
+                the search and the button shrink side by side instead of wrapping. */}
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Hledat uživatele…"
+              width={{ xs: '100%', compact: 260 }}
+            />
             {editable && (
               <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
                 Přidat uživatele
@@ -186,6 +242,14 @@ export function UsersPage() {
                 columns={columns}
                 rows={filtered}
                 getRowKey={(u) => u.id ?? u.userName ?? ''}
+                mobileCard={(u) => (
+                  <UserCard
+                    user={u}
+                    editable={editable}
+                    onEdit={() => openEdit(u)}
+                    onDelete={() => setConfirm(u)}
+                  />
+                )}
               />
             );
           }}
