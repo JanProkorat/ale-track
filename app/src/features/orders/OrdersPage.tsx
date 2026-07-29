@@ -155,6 +155,47 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
     </Button>
   );
 
+  // Phone layout for one order: identity first, then state and the two dates.
+  // Same fields as the columns above, stacked instead of scrolled sideways.
+  const orderCard = (o: OrderListItemDto) => {
+    const name = o.clientName ?? '—';
+    const color = colorFor(name);
+    const status = ORDER_STATUS[orderStateName(o.state) ?? 'New'] ?? ORDER_STATUS.New;
+    return (
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            sx={{
+              width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center',
+              flexShrink: 0, fontWeight: 800, fontSize: 12.5, bgcolor: `${color}22`, color,
+            }}
+          >
+            {clientInitials(name)}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700 }} noWrap>{name}</Typography>
+            <Typography sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
+              {orderNumber(o.id)}
+            </Typography>
+          </Box>
+          <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+        </Stack>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <StatusPill tone={status.tone} label={status.label} />
+          <Box sx={{ flex: 1 }} />
+          <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+            {o.requiredDeliveryDate ? fmtDate(o.requiredDeliveryDate) : 'termín neurčen'}
+          </Typography>
+          {o.actualDeliveryDate && (
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'success.main' }}>
+              → {fmtDate(o.actualDeliveryDate)}
+            </Typography>
+          )}
+        </Stack>
+      </Stack>
+    );
+  };
+
   if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
@@ -207,7 +248,14 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
           >
             {() => (
               <>
-                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
+                <Stack
+                  direction={{ xs: 'column', compact: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ xs: 'stretch', compact: 'center' }}
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mb: 2 }}
+                >
                   <SegControl
                     value={filter}
                     onChange={setFilter}
@@ -221,9 +269,22 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
                       ),
                     }))}
                   />
-                  <SearchField value={clientSearch} onChange={setClientSearch} placeholder="Hledat klienta…" width={240} />
-                  <Box sx={{ flex: 1 }} />
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
+                  <SearchField
+                    value={clientSearch}
+                    onChange={setClientSearch}
+                    placeholder="Hledat klienta…"
+                    width={{ xs: '100%', compact: 240 }}
+                  />
+                  <Box sx={{ flex: 1, display: { xs: 'none', compact: 'block' } }} />
+                  {/* Redundant on a phone — the active "Vše 438" segment already says it. */}
+                  <Typography
+                    sx={{
+                      display: { xs: 'none', compact: 'block' },
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: 'text.disabled',
+                    }}
+                  >
                     {filtered.length} z {orders.length}
                   </Typography>
                 </Stack>
@@ -232,7 +293,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
                   <EmptyState icon={<ReceiptLongOutlinedIcon />} title="Žádné objednávky v tomto filtru" dense />
                 ) : (
                   <Card variant="outlined">
-                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => navigate(`${PATHS.orders}/${o.id}`)} />
+                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => navigate(`${PATHS.orders}/${o.id}`)} mobileCard={orderCard} />
                   </Card>
                 )}
               </>

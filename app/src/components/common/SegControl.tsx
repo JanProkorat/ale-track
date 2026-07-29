@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { Box, ButtonBase } from '@mui/material';
+import { mobileGrid } from './segControlModel';
 
 export interface SegOption<T extends string> {
   value: T;
@@ -17,10 +18,15 @@ export function SegControl<T extends string>({
   onChange: (v: T) => void;
   options: SegOption<T>[];
 }) {
+  const { columns, lastSpansRow } = mobileGrid(options.length);
+
   return (
     <Box
       sx={{
-        display: 'inline-flex',
+        display: columns ? { xs: 'grid', compact: 'inline-flex' } : 'inline-flex',
+        gridTemplateColumns: columns
+          ? { xs: `repeat(${columns}, minmax(0, 1fr))`, compact: 'none' }
+          : undefined,
         flexWrap: 'wrap',
         gap: '2px',
         p: '3px',
@@ -30,16 +36,23 @@ export function SegControl<T extends string>({
         borderColor: 'divider',
       }}
     >
-      {options.map((o) => {
+      {options.map((o, i) => {
         const on = o.value === value;
+        const spansRow = lastSpansRow && i === options.length - 1;
         return (
           <ButtonBase
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={on}
             sx={{
-              px: 1.6,
+              gridColumn: spansRow ? { xs: '1 / -1', compact: 'auto' } : undefined,
+              // Tighter gutters and minWidth:0 in a grid cell: a long label like
+              // "Dokončené 431" wraps inside its cell rather than overflowing it.
+              px: columns ? { xs: 0.75, compact: 1.6 } : 1.6,
               py: 0.75,
+              minWidth: 0,
+              justifyContent: 'center',
+              textAlign: 'center',
               borderRadius: '6px',
               fontWeight: 700,
               fontSize: 12.5,

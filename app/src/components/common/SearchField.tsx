@@ -16,7 +16,8 @@ export function SearchField({
   onChange: (v: string) => void;
   placeholder?: string;
   delay?: number;
-  width?: number | string;
+  /** Accepts an sx-style responsive object so callers can go full-width on mobile. */
+  width?: number | string | Record<string, number | string>;
 }) {
   const [local, setLocal] = useState(value);
   const onChangeRef = useRef(onChange);

@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, Typography } from '@mui/material';
+import { Box, Card, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
@@ -76,6 +76,31 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
     </Button>
   );
 
+  // Phone layout: the name identifies the shipment, state and date sit below it.
+  const shipmentCard = (s: OutgoingShipmentListItemDto) => {
+    const status = SHIP_STATUS[shipStateName(s.state) ?? 'Created'] ?? SHIP_STATUS.Created;
+    return (
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700 }} noWrap>{s.name}</Typography>
+            <Typography sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
+              {shipmentNumber(s.id)}
+            </Typography>
+          </Box>
+          <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+        </Stack>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <StatusPill tone={status.tone} label={status.label} />
+          <Box sx={{ flex: 1 }} />
+          <Typography sx={{ fontSize: 12.5, color: s.deliveryDate ? 'text.secondary' : 'text.disabled' }}>
+            {s.deliveryDate ? fmtDate(s.deliveryDate) : 'termín neurčen'}
+          </Typography>
+        </Stack>
+      </Stack>
+    );
+  };
+
   if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
@@ -133,7 +158,7 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
                   </Typography>
                 </Stack>
                 <Card variant="outlined">
-                  <DataTable columns={columns} rows={rows} getRowKey={(s) => s.id ?? ''} onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)} />
+                  <DataTable columns={columns} rows={rows} getRowKey={(s) => s.id ?? ''} onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)} mobileCard={shipmentCard} />
                 </Card>
               </>
             )}

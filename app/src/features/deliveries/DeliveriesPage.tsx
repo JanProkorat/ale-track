@@ -95,6 +95,35 @@ export function DeliveriesPage({ view }: { view?: 'create' | 'edit' }) {
     </Button>
   );
 
+  // Phone layout: number and date lead, the brewery chips wrap freely below.
+  const deliveryCard = (d: ProductDeliveryListItemDto) => {
+    const status = DELIVERY_STATUS[deliveryStateName(d.state) ?? 'InPlanning'] ?? DELIVERY_STATUS.InPlanning;
+    const stops = d.stopNames ?? [];
+    return (
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13, flex: 1, minWidth: 0 }}>
+            {deliveryNumber(d.id)}
+          </Typography>
+          <Typography sx={{ fontSize: 12.5, color: d.deliveryDate ? 'text.secondary' : 'text.disabled' }}>
+            {d.deliveryDate ? fmtDate(d.deliveryDate) : 'neurčeno'}
+          </Typography>
+          <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+        </Stack>
+        {stops.length > 0 && (
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            {stops.map((name, i) => (
+              <Box key={i} component="span" sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'action.hover', fontSize: 12.5, fontWeight: 600 }}>
+                {name}
+              </Box>
+            ))}
+          </Stack>
+        )}
+        <StatusPill tone={status.tone} label={status.label} />
+      </Stack>
+    );
+  };
+
   if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
@@ -152,7 +181,7 @@ export function DeliveriesPage({ view }: { view?: 'create' | 'edit' }) {
                   </Typography>
                 </Stack>
                 <Card variant="outlined">
-                  <DataTable columns={columns} rows={rows} getRowKey={(d) => d.id ?? ''} onRowClick={(d) => navigate(`${PATHS.deliveries}/${d.id}`)} />
+                  <DataTable columns={columns} rows={rows} getRowKey={(d) => d.id ?? ''} onRowClick={(d) => navigate(`${PATHS.deliveries}/${d.id}`)} mobileCard={deliveryCard} />
                 </Card>
               </>
             )}

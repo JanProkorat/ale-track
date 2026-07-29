@@ -45,7 +45,24 @@ export function PageHeader({
           </Typography>
         )}
       </Box>
-      {actions && <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>{actions}</Box>}
+      {/* On a phone the actions take their own full-width row and stretch to fill
+          it — one button spans, a cancel/save pair splits — rather than hanging
+          off the right edge under the title. */}
+      {actions && (
+        <Box
+          sx={{
+            ml: { compact: 'auto' },
+            width: { xs: '100%', compact: 'auto' },
+            display: 'flex',
+            gap: 1,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            '& > *': { flex: { xs: '1 1 auto', compact: '0 0 auto' } },
+          }}
+        >
+          {actions}
+        </Box>
+      )}
     </Stack>
   );
 }

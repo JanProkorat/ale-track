@@ -203,6 +203,53 @@ export function ClientsPage() {
     </Button>
   );
 
+  // Phone layout: the client identifies itself, address and contacts stack under
+  // it. Contact chips wrap rather than being clipped by a narrow column.
+  const clientCard = (c: ClientListItemDto) => {
+    const detail = detailFor(c.id);
+    const color = colorFor(c.id ?? c.name ?? '');
+    const contacts = detail?.contacts ?? [];
+    const address = addrOneLine(detail?.officialAddress);
+    return (
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            sx={{
+              width: 38, height: 38, borderRadius: 1.5, display: 'grid', placeItems: 'center',
+              flexShrink: 0, fontWeight: 800, fontSize: 13, bgcolor: `${color}22`, color,
+            }}
+          >
+            {clientInitials(c.name ?? '?')}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
+            {detail?.businessName && (
+              <Typography variant="body2" color="text.secondary" noWrap>{detail.businessName}</Typography>
+            )}
+          </Box>
+          <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+        </Stack>
+        {address && (
+          <Typography sx={{ fontSize: 12.5 }} color="text.secondary">{address}</Typography>
+        )}
+        {contacts.length > 0 && (
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            {contacts.map((ct, i) => (
+              <Chip
+                key={i}
+                size="small"
+                variant="outlined"
+                icon={isEmailContact(ct.type) ? <MailIcon /> : <PhoneIcon />}
+                label={ct.value}
+                title={ct.value}
+              />
+            ))}
+          </Stack>
+        )}
+      </Stack>
+    );
+  };
+
   return (
     <PageContainer>
       {selectedId ? (
@@ -290,6 +337,7 @@ export function ClientsPage() {
                             rows={rows}
                             getRowKey={(c) => c.id ?? ''}
                             onRowClick={(c) => navigate(`${PATHS.clients}/${c.id}`)}
+                            mobileCard={clientCard}
                           />
                         </Card>
                       </Box>
