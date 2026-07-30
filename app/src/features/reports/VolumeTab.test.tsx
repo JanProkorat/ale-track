@@ -103,6 +103,36 @@ describe('VolumeTab', () => {
     expect(screen.getByText('3,4 t')).toBeInTheDocument();
   });
 
+  it('keeps the donut ring inside its own viewport so no slice is clipped', () => {
+    const { container } = renderTab();
+
+    // The donut is the only square 158x158 chart on the tab.
+    const svg = Array.from(container.querySelectorAll('svg')).find((s) => s.getAttribute('viewBox') === '0 0 158 158');
+    expect(svg).toBeTruthy();
+
+    // MUI centres the pie at viewBox/2 and derives the radius it is allowed to use from
+    // that same half-extent (PieChart/getPieCoordinates.js: `Math.min(width, height) / 2`).
+    // A numeric outerRadius is NOT clamped to it (PieChart/seriesConfig/seriesLayout.js),
+    // so a radius larger than this draws the ring outside the SVG and the browser clips it
+    // into a squared-off blob. Arc coordinates are emitted relative to that centre, so each
+    // coordinate pair's distance from the origin is the radius it sits at.
+    const availableRadius = 158 / 2;
+
+    const arcs = Array.from(svg!.querySelectorAll('path[class*="MuiPieArc-root"]'));
+    expect(arcs.length).toBeGreaterThan(0);
+
+    const radii = arcs.flatMap((arc) => {
+      const pairs = (arc.getAttribute('d') ?? '').match(/-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?/g) ?? [];
+      return pairs.map((pair) => {
+        const [x, y] = pair.split(',').map(Number);
+        return Math.hypot(x, y);
+      });
+    });
+
+    expect(radii.length).toBeGreaterThan(0);
+    expect(Math.max(...radii)).toBeLessThanOrEqual(availableRadius);
+  });
+
   it('fires onGranularityChange with the clicked option', () => {
     const onGranularityChange = vi.fn();
     render(

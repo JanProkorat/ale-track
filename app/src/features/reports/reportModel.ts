@@ -80,6 +80,43 @@ export function fmtKg(kg: number): string {
   return kg >= 1000 ? `${num1(kg / 1000)} t` : `${num(Math.round(kg))} kg`;
 }
 
+/** A tonne tick for the per-brewery x-axis. Weights arrive in kilograms, but the KPIs, the
+ * donut legend and the package table all speak tonnes, so the ticks are converted rather
+ * than relabelled.
+ *
+ * Deliberately NOT `fmtKg`, which switches unit per value — that would put "0 kg" and
+ * "5,0 t" on the same axis. `num` (cs-CZ Intl) keeps up to three decimals and trims
+ * trailing zeros, so a 0–50 t axis reads "5 / 10 / 15" rather than "5,0 / 10,0", while a
+ * low-volume period still separates its ticks ("0,8", "0,01") instead of rounding every
+ * one of them to "0".
+ */
+export function tonnesAxisTick(kg: number): string {
+  return num(kg / 1000);
+}
+
+/** Width to reserve for a horizontal bar chart's category (y-axis) tick labels.
+ *
+ * @mui/x-charts reserves a FIXED band for a y-axis (`DEFAULT_AXIS_SIZE_WIDTH` is a flat
+ * 45px, see internals/.../defaultizeAxis.js) and right-aligns the tick labels against the
+ * axis line — in this version it never fits the band to its content. The plot area starts
+ * at `margin.left + yAxis.width`, so an over-generous width is not harmless padding: it
+ * shifts the entire chart right and leaves dead space under the card's left edge. The flat
+ * widths this replaced (150 for breweries, 170 for clients, 130 for regions) wasted up to
+ * ~85px on short names like "Svijany".
+ *
+ * Estimated rather than measured because the real width needs a laid-out DOM, which the
+ * chart never gets under happy-dom (same constraint noted on `clientMetricValue`). ~7px
+ * per character at the 12px tick font plus a 12px gap to the axis; floored so a short name
+ * still has room, and capped so one pathological name cannot eat the plot area (a name
+ * past `cap` ellipsizes, which is the lesser evil).
+ *
+ * @param cap upper bound, per chart — client names run longer than region names.
+ */
+export function bandAxisWidth(names: string[], cap = 150): number {
+  const longest = names.reduce((max, name) => Math.max(max, name.length), 0);
+  return Math.min(cap, Math.max(56, longest * 7 + 12));
+}
+
 /** A part's share of a total, one forced decimal, safe on a zero total. */
 export function sharePct(part: number, total: number): string {
   return `${num1(total > 0 ? (part / total) * 100 : 0)} %`;

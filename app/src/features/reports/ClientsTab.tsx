@@ -18,10 +18,12 @@ import { PATHS } from 'src/routes/paths';
 import { ChartCard } from './ChartCard';
 import {
   METRIC_OPTIONS,
+  bandAxisWidth,
   clientMetricFormat,
   clientMetricValue,
   fmtKg,
   sharePct,
+  tonnesAxisTick,
   type ClientMetric,
 } from './reportModel';
 import { useReportPalette } from './reportPalette';
@@ -56,6 +58,17 @@ export function ClientsTab({ data }: { data: ClientVolumeReportDto }) {
   const top = clients.slice(0, 10);
   const metricValue = (c: ClientVolumeRowDto) => clientMetricValue(c, metric);
   const metricFormat = (v: number) => clientMetricFormat(v, metric);
+
+  const clientNames = top.map((c) => c.clientName ?? '—');
+  const regionNames = regions.map((r) => regionLabel(r.region) ?? '—');
+
+  // The top-clients axis follows the Hmotnost/Kusy toggle: tonnes for weight (matching the
+  // KPIs and the table), a raw count for units. Only the tick text is converted — the bars
+  // stay driven by the underlying values.
+  const clientAxis =
+    metric === 'kg'
+      ? { label: 'Hmotnost (t)', valueFormatter: tonnesAxisTick }
+      : { label: 'Počet kusů', valueFormatter: (v: number) => num(v) };
 
   const columns: Column<ClientVolumeRowDto>[] = [
     { key: 'name', header: 'Klient', render: (r) => r.clientName },
@@ -109,34 +122,45 @@ export function ClientsTab({ data }: { data: ClientVolumeReportDto }) {
         </Card>
       ) : (
         <Stack spacing={2} sx={{ mt: 2 }}>
-          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1.25fr 1fr' }, alignItems: 'start' }}>
+          {/* No alignItems: 'start' — the grid's default stretch is what makes the pair share
+              a height. Both cards take `fill` so the shorter chart centres in the leftover
+              space instead of leaving one card mostly empty below its bars. */}
+          <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1.25fr 1fr' } }}>
             <ChartCard
               icon={<StorefrontOutlinedIcon />}
               title="Nejlepší klienti"
               action={<SegControl value={metric} onChange={setMetric} options={METRIC_OPTIONS} />}
+              fill
             >
-              <Box sx={{ width: '100%', height: 40 + top.length * 40 }}>
+              {/* +60 rather than +40: the x-axis label costs an extra 20px of axis height
+                  (AXIS_LABEL_DEFAULT_HEIGHT), which would otherwise thin every bar. */}
+              <Box sx={{ width: '100%', height: 60 + top.length * 40 }}>
                 <BarChart
                   layout="horizontal"
                   series={[{ data: top.map(metricValue), valueFormatter: (v) => metricFormat(v ?? 0) }]}
-                  yAxis={[{ scaleType: 'band', data: top.map((c) => c.clientName ?? '—'), width: 170 }]}
-                  xAxis={[{ valueFormatter: (v: number) => num(v) }]}
+                  // Fitted to the names, not a flat 170 — the plot area starts at
+                  // margin.left + width, so an over-wide band shifts the whole chart right.
+                  yAxis={[{ scaleType: 'band', data: clientNames, width: bandAxisWidth(clientNames, 170) }]}
+                  xAxis={[clientAxis]}
                   colors={[palette[0]]}
-                  margin={{ right: 16 }}
+                  // 2*24 = 48px of room for the last tick label (ChartsXAxis/shortenLabels.js
+                  // allows a centred label twice its distance to the edge), so it is not
+                  // ellipsized the way "50 000" was at right: 16.
+                  margin={{ right: 24 }}
                   hideLegend
                 />
               </Box>
             </ChartCard>
 
-            <ChartCard icon={<MapOutlinedIcon />} title="Podle regionu">
-              <Box sx={{ width: '100%', height: 40 + regions.length * 40 }}>
+            <ChartCard icon={<MapOutlinedIcon />} title="Podle regionu" fill>
+              <Box sx={{ width: '100%', height: 60 + regions.length * 40 }}>
                 <BarChart
                   layout="horizontal"
                   series={[{ data: regions.map((r) => r.weightKg ?? 0), valueFormatter: (v) => fmtKg(v ?? 0) }]}
-                  yAxis={[{ scaleType: 'band', data: regions.map((r) => regionLabel(r.region) ?? '—'), width: 130 }]}
-                  xAxis={[{ valueFormatter: (v: number) => num(v) }]}
+                  yAxis={[{ scaleType: 'band', data: regionNames, width: bandAxisWidth(regionNames, 130) }]}
+                  xAxis={[{ label: 'Hmotnost (t)', valueFormatter: tonnesAxisTick }]}
                   colors={[palette[3]]}
-                  margin={{ right: 16 }}
+                  margin={{ right: 24 }}
                   hideLegend
                 />
               </Box>
