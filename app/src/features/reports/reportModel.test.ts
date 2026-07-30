@@ -9,6 +9,8 @@ import {
   bucketLabel,
   clientMetricValue,
   clientMetricFormat,
+  bandAxisWidth,
+  tonnesAxisTick,
   PERIOD_LABEL,
 } from './reportModel';
 
@@ -108,6 +110,70 @@ describe('clientMetricValue / clientMetricFormat', () => {
   it('defaults a missing field to 0 rather than NaN/undefined', () => {
     expect(clientMetricValue({} as ClientVolumeRowDto, 'kg')).toBe(0);
     expect(clientMetricValue({} as ClientVolumeRowDto, 'units')).toBe(0);
+  });
+});
+
+describe('tonnesAxisTick', () => {
+  it('converts kilograms to tonnes without a trailing decimal on whole tonnes', () => {
+    // The axis in the screenshot: 0 … 50 000 kg becomes 0 … 50 t.
+    expect(tonnesAxisTick(0)).toBe('0');
+    expect(tonnesAxisTick(5000)).toBe('5');
+    expect(tonnesAxisTick(50000)).toBe('50');
+  });
+
+  it('keeps a decimal when the tick is not a whole tonne', () => {
+    expect(tonnesAxisTick(12500)).toBe('12,5');
+  });
+
+  it('still separates sub-tonne ticks instead of rounding them all to zero', () => {
+    // A low-volume period would otherwise collapse every tick to "0" and make the axis
+    // unreadable — this is the tradeoff of a fixed-unit axis, so it must hold.
+    expect(tonnesAxisTick(800)).toBe('0,8');
+    expect(tonnesAxisTick(10)).toBe('0,01');
+    expect(tonnesAxisTick(800)).not.toBe(tonnesAxisTick(10));
+  });
+
+  it('never mixes units the way fmtKg would on an axis', () => {
+    // fmtKg(0) is "0 kg" but fmtKg(5000) is "5,0 t"; the axis must not do that.
+    expect(tonnesAxisTick(0)).not.toContain('kg');
+    expect(tonnesAxisTick(5000)).not.toContain('t');
+  });
+});
+
+describe('bandAxisWidth', () => {
+  it('reserves far less than the old flat 150 for the short real brewery names', () => {
+    // The three names that exposed the bug. A flat 150 left ~85px of dead space and pushed
+    // the whole plot right; these must all come back well under it.
+    expect(bandAxisWidth(['Rohozec', 'Primátor', 'Svijany'])).toBeLessThan(120);
+  });
+
+  it('grows with the longest name, not the first or the count', () => {
+    const short = bandAxisWidth(['Svijany']);
+    const long = bandAxisWidth(['Svijany', 'Pivovar Chemnitz']);
+
+    expect(long).toBeGreaterThan(short);
+    // Order must not matter — only the longest name decides.
+    expect(bandAxisWidth(['Pivovar Chemnitz', 'Svijany'])).toBe(long);
+  });
+
+  it('never returns less than the floor, even with no breweries or empty names', () => {
+    // breweries can be empty while the rest of the tab still has data, so this has to
+    // return a usable number rather than a degenerate one.
+    expect(bandAxisWidth([])).toBe(56);
+    expect(bandAxisWidth(['', '—'])).toBe(56);
+  });
+
+  it('caps a pathological name so it cannot eat the plot area', () => {
+    expect(bandAxisWidth(['Pivovar '.repeat(20)])).toBe(150);
+  });
+
+  it('honours a per-chart cap — client names run longer than region names', () => {
+    const long = ['Restaurace U Zlatého Tygra v Praze'];
+
+    expect(bandAxisWidth(long, 170)).toBe(170);
+    expect(bandAxisWidth(long, 130)).toBe(130);
+    // The cap is an upper bound, not a fixed width: a short name ignores it entirely.
+    expect(bandAxisWidth(['Praha'], 170)).toBe(56);
   });
 });
 

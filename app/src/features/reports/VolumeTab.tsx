@@ -14,7 +14,16 @@ import { type DeliveryVolumeReportDto, type ProductKind } from 'src/generated/ap
 import { num } from 'src/lib/format';
 import { kindLabel, kindName } from 'src/lib/labels';
 import { ChartCard } from './ChartCard';
-import { GRANULARITY_OPTIONS, bucketLabel, fmtKg, fmtUnits, sharePct, type VolumeGranularity } from './reportModel';
+import {
+  GRANULARITY_OPTIONS,
+  bandAxisWidth,
+  bucketLabel,
+  fmtKg,
+  fmtUnits,
+  sharePct,
+  tonnesAxisTick,
+  type VolumeGranularity,
+} from './reportModel';
 import { foldTypes, useReportPalette } from './reportPalette';
 
 interface KindRow {
@@ -121,9 +130,17 @@ export function VolumeTab({
           </Box>
         </ChartCard>
 
-        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1.25fr 1fr' }, alignItems: 'start' }}>
-          <ChartCard icon={<SportsBarOutlinedIcon />} title="Podle pivovaru">
-            <Box sx={{ width: '100%', height: 40 + breweries.length * 46 }}>
+        {/* No alignItems: 'start' — the grid's default stretch is what makes the pair share a
+            height. Both cards take `fill` so the shorter one centres its chart in the leftover
+            space rather than leaving a gap under it. The bar card grows with the brewery count
+            while the donut is a fixed 158px, so which of the two is taller varies with the
+            data; centring keeps either combination balanced. */}
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1.25fr 1fr' } }}>
+          <ChartCard icon={<SportsBarOutlinedIcon />} title="Podle pivovaru" fill>
+            {/* +60 rather than +40: the x-axis label below costs an extra
+                AXIS_LABEL_DEFAULT_HEIGHT (20px) of axis height, which would otherwise be
+                taken out of the bars and thin every one of them. */}
+            <Box sx={{ width: '100%', height: 60 + breweries.length * 46 }}>
               <BarChart
                 layout="horizontal"
                 series={[{ data: breweries.map((b) => b.weightKg ?? 0), valueFormatter: (v) => fmtKg(v ?? 0) }]}
@@ -143,18 +160,27 @@ export function VolumeTab({
                     // the display name for the tick labels and hover tooltip.
                     data: breweryKeys,
                     valueFormatter: (id: string) => breweryNameByKey.get(id) ?? '—',
-                    width: 150,
+                    // Fitted to the names instead of a flat 150, which pushed the plot
+                    // right and left the card's left edge empty — see bandAxisWidth.
+                    width: bandAxisWidth(breweryNames),
                     colorMap: { type: 'ordinal', values: breweryKeys, colors: breweryColors },
                   },
                 ]}
-                xAxis={[{ valueFormatter: (v: number) => num(v) }]}
-                margin={{ right: 16 }}
+                // Tonnes, matching the KPIs and the donut legend. The bars stay driven by the
+                // raw kilogram values, so only the tick text is converted — see tonnesAxisTick.
+                xAxis={[{ label: 'Hmotnost (t)', valueFormatter: tonnesAxisTick }]}
+                // right: 24, not 16. A centred tick label is allowed twice the space between
+                // its tick and the drawing area's edge (ChartsXAxis/shortenLabels.js), so the
+                // last tick got 2*16 = 32px — enough for a tonne label like "50", but not for
+                // the "50 000" this axis used to show, which MUI ellipsized to "50…". 2*24 =
+                // 48px also clears a five-digit tonne axis ("1 250") on a very large period.
+                margin={{ right: 24 }}
                 hideLegend
               />
             </Box>
           </ChartCard>
 
-          <ChartCard icon={<LocalOfferOutlinedIcon />} title="Podle typu">
+          <ChartCard icon={<LocalOfferOutlinedIcon />} title="Podle typu" fill>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* Donut with the prototype's centre total (line 892: chDonut(..., {center})).
                   MUI's PieChart has no built-in centre-text slot, so the total is an
@@ -164,8 +190,13 @@ export function VolumeTab({
                 <PieChart
                   series={[
                     {
-                      innerRadius: 52,
-                      outerRadius: 92,
+                      // Radii must stay inside the 158px box: with margin 0 the chart's
+                      // available radius is 158/2 = 79, and anything past that is clipped by
+                      // the SVG viewport (a squared-off ring, not a smaller one). These are
+                      // the prototype's own numbers — chDonut draws r=(158/2)-12=67 with
+                      // stroke-width 18, i.e. a ring spanning radius 58 → 76.
+                      innerRadius: 58,
+                      outerRadius: 76,
                       paddingAngle: 1.5,
                       data: typeSlices.map((s, i) => ({ id: i, value: s.value, label: s.label, color: s.color })),
                       valueFormatter: (v) => fmtKg(v.value),

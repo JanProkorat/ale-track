@@ -119,6 +119,9 @@ export function UsersPage() {
     {
       key: 'name',
       header: 'Jméno',
+      // Mirrors the fallback in render, so a user with no full name sorts under the same
+      // text the row actually shows.
+      sortValue: (u) => fullName(u) || u.userName,
       render: (u) => (
         <Typography sx={{ fontWeight: 600 }}>{fullName(u) || u.userName}</Typography>
       ),
@@ -126,6 +129,7 @@ export function UsersPage() {
     {
       key: 'userName',
       header: 'Přihlašovací jméno',
+      sortValue: (u) => u.userName,
       render: (u) => (
         <Typography variant="body2" color="text.secondary">
           @{u.userName}
@@ -135,6 +139,8 @@ export function UsersPage() {
     {
       key: 'roles',
       header: 'Role',
+      // Admins first: they are the rows worth finding, and there are only two values.
+      sortValue: (u) => ((u.userRoles ?? []).includes(UserRoleType.Admin) ? 'Administrátor' : 'Uživatel'),
       render: (u) => (
         <Stack direction="row" spacing={0.5}>
           {(u.userRoles ?? []).map((r) =>
@@ -242,6 +248,10 @@ export function UsersPage() {
                 columns={columns}
                 rows={filtered}
                 getRowKey={(u) => u.id ?? u.userName ?? ''}
+                paginated
+                pageSizeKey="users"
+                defaultSort={{ key: 'name', direction: 'asc' }}
+                pageResetKey={search}
                 mobileCard={(u) => (
                   <UserCard
                     user={u}
