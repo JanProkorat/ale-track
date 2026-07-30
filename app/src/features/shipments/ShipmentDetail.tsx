@@ -55,7 +55,7 @@ import {
 } from './purchaseSplitModel';
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
-  PurchaseInvoiceRowMetrics, PurchaseInvoiceStateControls, PurchaseInvoiceTotalsLines,
+  PurchaseInvoiceRowMetrics, PurchaseInvoiceTotalsLines,
 } from './PurchaseInvoiceColumns';
 import { NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByKind, type KindSection } from './nakladkaGrouping';
@@ -360,15 +360,14 @@ function AggLoadingRow({
  * that fit on one line is the worse trade.
  */
 function AggLoadingStackedRow({
-  agg, editable, onAdjustStockPurchase, onAdjustSourcing, stateControls, invoiceMetrics,
+  agg, editable, onAdjustStockPurchase, onAdjustSourcing, invoiceMetrics,
 }: {
   agg: AggRow;
   editable: boolean;
   onAdjustStockPurchase?: (delta: number) => void;
   onAdjustSourcing?: (delta: number) => void;
-  /** Loading controls, one per invoice carrying pieces. */
-  stateControls: ReactNode;
-  /** Pieces per brewery invoice, as inline metric groups. */
+  /** Pieces per brewery invoice, as inline metric groups — the loading-state
+   * control for a column lives right next to its own number, not up here. */
   invoiceMetrics: ReactNode;
 }) {
   const chipText = platoSizeChipText(agg.platoDegree, agg.packageSize);
@@ -387,11 +386,12 @@ function AggLoadingStackedRow({
         <Typography sx={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
           {agg.quantity} ks
         </Typography>
-        {stateControls}
       </Stack>
       {/* Wrapping rather than scrolling: on the narrowest phones the invoice groups
-          drop to a second line instead of hiding past the right edge. */}
-      <Stack direction="row" alignItems="center" columnGap={1} rowGap={0.25} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+          drop to a second line instead of hiding past the right edge. columnGap is
+          wider than a plain Stack spacing would give — these are distinct sections
+          (sourcing, then one per invoice) and read as one run without a gap this size. */}
+      <Stack direction="row" alignItems="center" columnGap={2} rowGap={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
         {breakdownEntries(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry) => (
           <NakladkaMetric key={entry.label} {...entry} />
         ))}
@@ -1269,21 +1269,14 @@ export function ShipmentDetail({
                     editable={nakladkaEditable}
                     onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                     onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    stateControls={(
-                      <PurchaseInvoiceStateControls
-                        row={agg}
-                        invoices={purchaseInvoices}
-                        states={loadingStates}
-                        editable={nakladkaEditable}
-                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                      />
-                    )}
                     invoiceMetrics={(
                       <PurchaseInvoiceRowMetrics
                         row={agg}
                         invoices={purchaseInvoices}
+                        states={loadingStates}
                         editable={nakladkaEditable}
                         onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
                       />
                     )}
                   />

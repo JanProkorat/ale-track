@@ -150,82 +150,46 @@ export function PurchaseInvoiceRowCells({
 const TOUCH_TARGET = 34;
 
 /**
- * The loading controls that stay visible on a collapsed stacked row — one per
- * column that actually carries pieces, because ticking a product off is the whole
- * job at the brewery ramp and must never need an expand first.
+ * The same column pair as {@link PurchaseInvoiceRowCells}, as inline `F1 3` groups
+ * for the stacked layout — a line each was four lines of mostly zeroes. Each group
+ * carries its own loading-state control right after the number, same pairing as
+ * the desktop table's two cells per column; a separate row of controls up in the
+ * header read as unrelated to the invoice they belonged to and left the header
+ * cramped besides. A column carrying nothing yet gets a "—" instead of the control
+ * — nothing physically sits there to check off — rather than being skipped, so the
+ * row still shows one slot per invoice.
  *
- * The `F1`/`F2` prefix appears only once a row is split; with a single column it
- * would label a control that has no sibling to be distinguished from.
+ * The first column is the remainder and never editable, so it is a bare number;
+ * it still gets the control, because pieces taken from our own garage ride along
+ * on it with no invoice behind them at all and still have to be loaded.
  */
-export function PurchaseInvoiceStateControls({
-  row, invoices, states, editable, onSetState,
+export function PurchaseInvoiceRowMetrics({
+  row, invoices, states, editable, onSet, onSetState,
 }: {
   row: PurchasableRow;
   invoices: OutgoingShipmentPurchaseInvoiceDto[];
   states: OutgoingShipmentLoadingStateDto[];
   editable: boolean;
+  onSet: (sequence: number, quantity: number) => void;
   onSetState: (sequence: number, state: LoadingStateName) => void;
 }) {
-  const carrying = columnsOf(invoices).filter((column) => piecesInColumn(row, invoices, column.sequence) > 0);
+  const columns = columnsOf(invoices);
+  const carrying = columns.filter((column) => piecesInColumn(row, invoices, column.sequence) > 0);
 
-  if (carrying.length === 0) {
-    return (
-      <Tooltip title="Nekupuje se od pivovaru — celé ze skladu">
-        <Typography sx={{ fontSize: 13, color: 'text.disabled', width: TOUCH_TARGET, textAlign: 'center' }}>—</Typography>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
-      {carrying.map((column) => (
-        <Stack key={column.sequence} direction="row" spacing={0.25} alignItems="center">
-          {carrying.length > 1 && (
-            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.secondary' }}>
-              {`F${column.sequence}`}
-            </Typography>
-          )}
-          <LoadingStateControl
-            state={loadingStateAt(states, row.productId, column.sequence)}
-            editable={editable}
-            onChange={(next) => onSetState(column.sequence, next)}
-            label={`Nakládka na faktuře ${column.sequence}`}
-            size={TOUCH_TARGET}
-          />
-        </Stack>
-      ))}
-    </Stack>
-  );
-}
-
-/**
- * The same column pair as {@link PurchaseInvoiceRowCells}, as inline `F1 3` metric
- * groups for the stacked layout — a line each was four lines of mostly zeroes.
- *
- * Only the numbers live here; the loading controls stay on the row's first line,
- * where they sit in one place down the whole list for the ramp to work through.
- * The first column is the remainder and never editable, so it is a bare number.
- */
-export function PurchaseInvoiceRowMetrics({
-  row, invoices, editable, onSet,
-}: {
-  row: PurchasableRow;
-  invoices: OutgoingShipmentPurchaseInvoiceDto[];
-  editable: boolean;
-  onSet: (sequence: number, quantity: number) => void;
-}) {
-  // Nothing on any brewery invoice — the row is served entirely off our own shelf.
+  // Nothing physically goes onto any brewery invoice column — the row is served
+  // entirely off our own shelf, with nothing left here to bill or to check off.
   // The separator belongs to this group so it disappears with it, rather than
   // dangling at the end of the sourcing numbers.
-  if (purchasedTotal(row) === 0) {
+  if (carrying.length === 0) {
     return null;
   }
 
   return (
     <>
       <MetricDivider />
-      {columnsOf(invoices).map((column, index) => {
+      {columns.map((column, index) => {
         const claimed = index === 0 ? remainderOf(row, invoices) : claimAt(invoices, column.sequence, row.productId);
+        const carries = piecesInColumn(row, invoices, column.sequence) > 0;
         // A later column with nothing in it is worth a stepper only while the row can
         // still be split; read-only it would be a permanent zero taking up the line.
         if (index > 0 && claimed === 0 && !editable) {
@@ -233,22 +197,34 @@ export function PurchaseInvoiceRowMetrics({
         }
 
         return (
-          <NakladkaMetric
-            key={column.sequence}
-            label={`F${column.sequence}`}
-            value={claimed}
-            tone={index === 0 ? 'text.secondary' : undefined}
-            adjust={index > 0 && editable ? {
-              onAdjust: (delta) => onSet(
-                column.sequence,
-                Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
-              ),
-              canDecrease: claimed > 0,
-              canIncrease: claimed < capFor(row, invoices, column.sequence),
-              decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
-              increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
-            } : undefined}
-          />
+          <Stack key={column.sequence} direction="row" alignItems="center" spacing={0.5}>
+            <NakladkaMetric
+              label={`F${column.sequence}`}
+              value={claimed}
+              tone={index === 0 ? 'text.secondary' : undefined}
+              adjust={index > 0 && editable ? {
+                onAdjust: (delta) => onSet(
+                  column.sequence,
+                  Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
+                ),
+                canDecrease: claimed > 0,
+                canIncrease: claimed < capFor(row, invoices, column.sequence),
+                decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
+                increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
+              } : undefined}
+            />
+            {carries ? (
+              <LoadingStateControl
+                state={loadingStateAt(states, row.productId, column.sequence)}
+                editable={editable}
+                onChange={(next) => onSetState(column.sequence, next)}
+                label={`Nakládka na faktuře ${column.sequence}`}
+                size={TOUCH_TARGET}
+              />
+            ) : (
+              <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
+            )}
+          </Stack>
         );
       })}
     </>
