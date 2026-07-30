@@ -1169,7 +1169,7 @@ export function ShipmentDetail({
         )}
       />
 
-      <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} />
+      <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} navigable />
 
       {/* Directly under the map, matching ShipmentEditor.tsx — a warning four
           cards down (its previous spot, at the bottom of the right column)
