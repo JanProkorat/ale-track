@@ -100,11 +100,14 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
       key: 'number',
       header: 'Číslo',
       width: 110,
+      // Sorts on the displayed number, not the raw id, so the order matches what is on screen.
+      sortValue: (o) => orderNumber(o.id),
       render: (o) => <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{orderNumber(o.id)}</Typography>,
     },
     {
       key: 'client',
       header: 'Klient',
+      sortValue: (o) => o.clientName,
       render: (o) => {
         const name = o.clientName ?? '—';
         const color = colorFor(name);
@@ -121,6 +124,9 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
     {
       key: 'state',
       header: 'Stav',
+      // The Czech label, not the enum: sorting by the wire value would scatter states that
+      // read alike and follow an order the user cannot see.
+      sortValue: (o) => (ORDER_STATUS[orderStateName(o.state) ?? 'New'] ?? ORDER_STATUS.New).label,
       render: (o) => {
         const status = ORDER_STATUS[orderStateName(o.state) ?? 'New'] ?? ORDER_STATUS.New;
         return <StatusPill tone={status.tone} label={status.label} />;
@@ -129,6 +135,8 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
     {
       key: 'term',
       header: 'Termín',
+      // Undated rows ("neurčeno") land last in both directions — see dataTableModel.
+      sortValue: (o) => o.requiredDeliveryDate,
       render: (o) => (o.requiredDeliveryDate
         ? <Typography>{fmtDate(o.requiredDeliveryDate)}</Typography>
         : <Typography color="text.disabled">neurčeno</Typography>),
@@ -136,6 +144,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
     {
       key: 'delivered',
       header: 'Doručeno',
+      sortValue: (o) => o.actualDeliveryDate,
       render: (o) => (o.actualDeliveryDate
         ? <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{fmtDate(o.actualDeliveryDate)}</Typography>
         : <Typography color="text.disabled">—</Typography>),
@@ -293,7 +302,20 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
                   <EmptyState icon={<ReceiptLongOutlinedIcon />} title="Žádné objednávky v tomto filtru" dense />
                 ) : (
                   <Card variant="outlined">
-                    <DataTable columns={columns} rows={filtered} getRowKey={(o) => o.id ?? ''} onRowClick={(o) => navigate(`${PATHS.orders}/${o.id}`)} mobileCard={orderCard} />
+                    {/* No defaultSort: the incoming order is already newest-first
+                        (sortOrdersNewestFirst above, keyed on createdDate, which has no
+                        column of its own), and DataTable preserves it until a header is
+                        clicked. Sorting is stable, so it stays the tiebreak afterwards. */}
+                    <DataTable
+                      columns={columns}
+                      rows={filtered}
+                      getRowKey={(o) => o.id ?? ''}
+                      onRowClick={(o) => navigate(`${PATHS.orders}/${o.id}`)}
+                      mobileCard={orderCard}
+                      paginated
+                      pageSizeKey="orders"
+                      pageResetKey={`${filter}|${clientSearch}`}
+                    />
                   </Card>
                 )}
               </>

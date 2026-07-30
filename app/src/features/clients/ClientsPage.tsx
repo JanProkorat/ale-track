@@ -13,6 +13,7 @@ import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { DataTable, type Column } from 'src/components/common/DataTable';
+import { type SortState } from 'src/components/common/dataTableModel';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
@@ -119,6 +120,12 @@ export function ClientsPage() {
     return Object.keys(L.region).filter((r) => byRegion[r]?.length).map((r) => ({ region: r, rows: byRegion[r] }));
   }, [filtered]);
 
+  // Lifted out of DataTable because this page renders one table per region: with the state
+  // inside each table, clicking "Klient" would reorder that region alone and leave the rest
+  // as they were. Held here, one click reorders every region at once.
+  // undefined is the third, unsorted state — rows then show in the order the API returned.
+  const [sort, setSort] = useState<SortState | undefined>({ key: 'client', direction: 'asc' });
+
   const openCreate = () => setFormOpen(true);
   const openEdit = () => setEditingOpen(true);
 
@@ -138,6 +145,7 @@ export function ClientsPage() {
     {
       key: 'client',
       header: 'Klient',
+      sortValue: (c) => c.name,
       render: (c) => {
         const d = detailFor(c.id);
         const color = colorFor(c.id ?? c.name ?? '');
@@ -164,6 +172,10 @@ export function ClientsPage() {
     {
       key: 'address',
       header: 'Sídlo',
+      // Address arrives from a per-row detail query, so this is blank until that resolves;
+      // blanks sort last, which keeps the not-yet-loaded rows out of the way rather than
+      // heading the list.
+      sortValue: (c) => addrOneLine(detailFor(c.id)?.officialAddress),
       render: (c) => <Typography color="text.secondary">{addrOneLine(detailFor(c.id)?.officialAddress)}</Typography>,
     },
     {
@@ -338,6 +350,17 @@ export function ClientsPage() {
                             getRowKey={(c) => c.id ?? ''}
                             onRowClick={(c) => navigate(`${PATHS.clients}/${c.id}`)}
                             mobileCard={clientCard}
+                            paginated
+                            // One key for all the region tables: they are one list split by
+                            // region, so they share the reading preference.
+                            pageSizeKey="clients"
+                            sort={sort}
+                            onSortChange={setSort}
+                            // Sort is part of the key: each region table owns its own page,
+                            // so without it a re-sort would send only the clicked table back
+                            // to page one and leave the others on a stale page of reordered
+                            // rows.
+                            pageResetKey={`${search}|${region}|${sort?.key ?? ''}|${sort?.direction ?? ''}`}
                           />
                         </Card>
                       </Box>

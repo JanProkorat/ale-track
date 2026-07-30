@@ -39,16 +39,19 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
       key: 'number',
       header: 'Číslo',
       width: 110,
+      sortValue: (s) => shipmentNumber(s.id),
       render: (s) => <Typography sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{shipmentNumber(s.id)}</Typography>,
     },
     {
       key: 'name',
       header: 'Název',
+      sortValue: (s) => s.name,
       render: (s) => <Typography sx={{ fontWeight: 700 }}>{s.name}</Typography>,
     },
     {
       key: 'state',
       header: 'Stav',
+      sortValue: (s) => (SHIP_STATUS[shipStateName(s.state) ?? 'Created'] ?? SHIP_STATUS.Created).label,
       render: (s) => {
         const status = SHIP_STATUS[shipStateName(s.state) ?? 'Created'] ?? SHIP_STATUS.Created;
         return <StatusPill tone={status.tone} label={status.label} />;
@@ -57,6 +60,7 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
     {
       key: 'date',
       header: 'Datum',
+      sortValue: (s) => s.deliveryDate,
       render: (s) => (s.deliveryDate
         ? <Typography>{fmtDate(s.deliveryDate)}</Typography>
         : <Typography color="text.disabled">termín neurčen</Typography>),
@@ -158,7 +162,16 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
                   </Typography>
                 </Stack>
                 <Card variant="outlined">
-                  <DataTable columns={columns} rows={rows} getRowKey={(s) => s.id ?? ''} onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)} mobileCard={shipmentCard} />
+                  <DataTable
+                    columns={columns}
+                    rows={rows}
+                    getRowKey={(s) => s.id ?? ''}
+                    onRowClick={(s) => navigate(`${PATHS.shipments}/${s.id}`)}
+                    mobileCard={shipmentCard}
+                    paginated
+                    pageSizeKey="shipments"
+                    defaultSort={{ key: 'date', direction: 'desc' }}
+                  />
                 </Card>
               </>
             )}
