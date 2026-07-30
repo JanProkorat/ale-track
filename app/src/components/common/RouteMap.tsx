@@ -11,6 +11,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
 import { DEPOT, haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
+import { RouteNavButton } from 'src/components/common/RouteNavButton';
 
 function viaIcon(): L.DivIcon {
   const svg = '<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="6" fill="#fff" stroke="#F08C00" stroke-width="3.5"/></svg>';
@@ -69,13 +70,16 @@ function depotIcon(): L.DivIcon {
  * click the route to drop one, drag to move, click to remove — and OSRM
  * alternatives can be shown and adopted. Placeholder when no stop is located. */
 export function RouteMap({
-  stops, height = 340, viaPoints = [], editable = false, onViasChange,
+  stops, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
 }: {
   stops: RouteStop[];
   height?: number;
   viaPoints?: LatLng[];
   editable?: boolean;
   onViasChange?: (vias: LatLng[]) => void;
+  /** Adds a control that hands the route to Mapy.cz / Google / Apple Maps.
+   * Opt-in so it appears on the screens a driver actually navigates from. */
+  navigable?: boolean;
 }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
@@ -276,6 +280,16 @@ export function RouteMap({
               <AltRouteIcon />
             </Box>
           </MuiTooltip>
+        )}
+        {navigable && (
+          <RouteNavButton
+            depot={{ lat: DEPOT.lat, lng: DEPOT.lng }}
+            stops={located.map((s) => ({ lat: s.lat, lng: s.lng }))}
+            // Only while fullscreen: a menu portaled to document.body is
+            // invisible then. `isFull` state guarantees a re-render at the
+            // moment this needs to change.
+            container={isFull ? wrapRef.current : undefined}
+          />
         )}
         <MuiTooltip title={isFull ? 'Ukončit celou obrazovku' : 'Celá obrazovka'} placement="left">
           <Box component="button" type="button" onClick={toggleFull} aria-label="Celá obrazovka">
