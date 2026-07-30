@@ -354,6 +354,23 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     expect(row.getByText('Z pivovaru')).toBeInTheDocument();
   });
 
+  it('gives every invoice its own state control, right next to its own number', () => {
+    setCompact(true);
+    renderNakladka();
+
+    // The product hasn't been split onto invoice 2 yet, so only F1 carries pieces —
+    // but the row still owes F2 a slot (a placeholder dash) alongside its stepper,
+    // same as the desktop table does. Losing that slot is what made only one
+    // control show up at all, off in the header rather than by its own invoice.
+    const row = within(screen.getByTestId('nakladka-row'));
+    expect(row.getByLabelText('Nakládka na faktuře 1: Nenaloženo')).toBeInTheDocument();
+    expect(row.getByText('F1')).toBeInTheDocument();
+    expect(row.getByText('F2')).toBeInTheDocument();
+    // The em dash is otherwise unused on this row (the metric divider is a "·"),
+    // so its presence pins down the F2 placeholder specifically.
+    expect(row.getByText('—')).toBeInTheDocument();
+  });
+
   it('commits a loading state straight off the row', () => {
     setCompact(true);
     renderNakladka();
