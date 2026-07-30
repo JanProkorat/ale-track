@@ -75,7 +75,12 @@ export function PageContainer({ children }: { children: ReactNode }) {
         px: { xs: 1.75, mobile: 3.5 },
         pt: { xs: 2, mobile: 3 },
         pb: { xs: 6.25, mobile: 8 },
-        maxWidth: 1500,
+        // Every page in the app goes through this container, so this is the app's single
+        // width cap. 1500 + `mx: auto` centres the content, which reads well up to about a
+        // 1600px viewport but leaves a growing dead margin either side beyond it. Above the
+        // xl breakpoint (1536) the cap is dropped so pages use the full width of a large
+        // monitor; below it nothing changes.
+        maxWidth: { xs: 1500, xl: 'none' },
         mx: 'auto',
         width: '100%',
       }}
