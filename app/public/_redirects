@@ -1,0 +1,4 @@
+# SPA fallback: serve index.html for every path so client-side routes
+# survive a hard refresh / direct link. Status 200 = rewrite, not redirect,
+# so the URL in the address bar is preserved for React Router.
+/*  /index.html  200
