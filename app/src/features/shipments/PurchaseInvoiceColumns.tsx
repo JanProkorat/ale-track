@@ -5,6 +5,11 @@
 // computed, grey, never editable — and the rest are steppers. Kept out of
 // ShipmentDetail because they are self-contained: give them a row and the
 // invoices, and they render and commit their own cells.
+//
+// Below the `compact` breakpoint the nakládka is a stacked list rather than a
+// table, so the same controls also come in a phone form: the piece counts as
+// inline `F1 3` metric groups, the loading states as thumb-sized buttons on the
+// row's first line. Same model calls, same commits — only the frame differs.
 
 import { Fragment, useEffect, useState } from 'react';
 import { Box, ButtonBase, IconButton, InputBase, Stack, TableCell, Tooltip, Typography } from '@mui/material';
@@ -21,6 +26,7 @@ import {
   capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
+import { MetricDivider, NakladkaMetric } from './NakladkaMetric';
 
 // The two cells of a column group are pulled together rather than each centred in
 // its own box: the pieces end on the right of theirs, the state starts on the left
@@ -140,6 +146,144 @@ export function PurchaseInvoiceRowCells({
   );
 }
 
+/** Thumb-sized hit area for the stacked layout. */
+const TOUCH_TARGET = 34;
+
+/**
+ * The loading controls that stay visible on a collapsed stacked row — one per
+ * column that actually carries pieces, because ticking a product off is the whole
+ * job at the brewery ramp and must never need an expand first.
+ *
+ * The `F1`/`F2` prefix appears only once a row is split; with a single column it
+ * would label a control that has no sibling to be distinguished from.
+ */
+export function PurchaseInvoiceStateControls({
+  row, invoices, states, editable, onSetState,
+}: {
+  row: PurchasableRow;
+  invoices: OutgoingShipmentPurchaseInvoiceDto[];
+  states: OutgoingShipmentLoadingStateDto[];
+  editable: boolean;
+  onSetState: (sequence: number, state: LoadingStateName) => void;
+}) {
+  const carrying = columnsOf(invoices).filter((column) => piecesInColumn(row, invoices, column.sequence) > 0);
+
+  if (carrying.length === 0) {
+    return (
+      <Tooltip title="Nekupuje se od pivovaru — celé ze skladu">
+        <Typography sx={{ fontSize: 13, color: 'text.disabled', width: TOUCH_TARGET, textAlign: 'center' }}>—</Typography>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+      {carrying.map((column) => (
+        <Stack key={column.sequence} direction="row" spacing={0.25} alignItems="center">
+          {carrying.length > 1 && (
+            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.secondary' }}>
+              {`F${column.sequence}`}
+            </Typography>
+          )}
+          <LoadingStateControl
+            state={loadingStateAt(states, row.productId, column.sequence)}
+            editable={editable}
+            onChange={(next) => onSetState(column.sequence, next)}
+            label={`Nakládka na faktuře ${column.sequence}`}
+            size={TOUCH_TARGET}
+          />
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * The same column pair as {@link PurchaseInvoiceRowCells}, as inline `F1 3` metric
+ * groups for the stacked layout — a line each was four lines of mostly zeroes.
+ *
+ * Only the numbers live here; the loading controls stay on the row's first line,
+ * where they sit in one place down the whole list for the ramp to work through.
+ * The first column is the remainder and never editable, so it is a bare number.
+ */
+export function PurchaseInvoiceRowMetrics({
+  row, invoices, editable, onSet,
+}: {
+  row: PurchasableRow;
+  invoices: OutgoingShipmentPurchaseInvoiceDto[];
+  editable: boolean;
+  onSet: (sequence: number, quantity: number) => void;
+}) {
+  // Nothing on any brewery invoice — the row is served entirely off our own shelf.
+  // The separator belongs to this group so it disappears with it, rather than
+  // dangling at the end of the sourcing numbers.
+  if (purchasedTotal(row) === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <MetricDivider />
+      {columnsOf(invoices).map((column, index) => {
+        const claimed = index === 0 ? remainderOf(row, invoices) : claimAt(invoices, column.sequence, row.productId);
+        // A later column with nothing in it is worth a stepper only while the row can
+        // still be split; read-only it would be a permanent zero taking up the line.
+        if (index > 0 && claimed === 0 && !editable) {
+          return null;
+        }
+
+        return (
+          <NakladkaMetric
+            key={column.sequence}
+            label={`F${column.sequence}`}
+            value={claimed}
+            tone={index === 0 ? 'text.secondary' : undefined}
+            adjust={index > 0 && editable ? {
+              onAdjust: (delta) => onSet(
+                column.sequence,
+                Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
+              ),
+              canDecrease: claimed > 0,
+              canIncrease: claimed < capFor(row, invoices, column.sequence),
+              decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
+              increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
+            } : undefined}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/** Per-invoice totals for the stacked layout's summary bar. */
+export function PurchaseInvoiceTotalsLines({
+  totals, progress,
+}: {
+  totals: number[];
+  progress: Array<{ dictated: number; checked: number; total: number }>;
+}) {
+  return (
+    <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+      {totals.map((total, index) => (
+        <Stack key={index} direction="row" spacing={0.5} alignItems="baseline">
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>{`F${index + 1}`}</Typography>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total} ks</Typography>
+          <Typography
+            sx={{
+              fontSize: 11,
+              color: (progress[index]?.total ?? 0) > 0 && progress[index]?.checked === progress[index]?.total
+                ? 'success.main'
+                : 'text.secondary',
+            }}
+          >
+            {progress[index]?.checked ?? 0}/{progress[index]?.total ?? 0}
+          </Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
 const STATE_LABEL: Record<LoadingStateName, string> = {
   NotLoaded: 'Nenaloženo',
   Dictated: 'Nadiktováno',
@@ -154,19 +298,22 @@ const STATE_LABEL: Record<LoadingStateName, string> = {
  * and the two were never independent anyway — nothing is checked before it is loaded.
  */
 function LoadingStateControl({
-  state, editable, onChange, label,
+  state, editable, onChange, label, size = 26,
 }: {
   state: LoadingStateName;
   editable: boolean;
   onChange: (next: LoadingStateName) => void;
   label: string;
+  /** Diameter of the hit area. The stacked layout uses a thumb-sized one. */
+  size?: number;
 }) {
   const done = state === 'Checked';
+  const glyph = Math.round(size * 0.65);
   const icon = state === 'NotLoaded'
-    ? <Box sx={{ width: 13, height: 13, borderRadius: '4px', border: 2, borderColor: 'text.disabled' }} />
+    ? <Box sx={{ width: glyph - 4, height: glyph - 4, borderRadius: '4px', border: 2, borderColor: 'text.disabled' }} />
     : done
-      ? <DoneAllOutlinedIcon sx={{ fontSize: 17 }} />
-      : <RecordVoiceOverOutlinedIcon sx={{ fontSize: 17 }} />;
+      ? <DoneAllOutlinedIcon sx={{ fontSize: glyph }} />
+      : <RecordVoiceOverOutlinedIcon sx={{ fontSize: glyph }} />;
 
   return (
     <Tooltip title={editable ? `${STATE_LABEL[state]} — klikněte pro další stav` : STATE_LABEL[state]}>
@@ -176,7 +323,7 @@ function LoadingStateControl({
           onClick={() => onChange(nextLoadingState(state))}
           aria-label={`${label}: ${STATE_LABEL[state]}`}
           sx={{
-            width: 26, height: 26, borderRadius: '50%',
+            width: size, height: size, borderRadius: '50%',
             color: done ? 'success.main' : state === 'Dictated' ? 'info.main' : 'text.disabled',
             '&:hover': { bgcolor: 'action.hover' },
           }}

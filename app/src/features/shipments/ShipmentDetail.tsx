@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  useMediaQuery, type Theme,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -49,10 +50,14 @@ import {
   useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetLoadingState, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
 import { SegControl, type SegOption } from 'src/components/common/SegControl';
-import { columnsOf, columnTotals, loadingProgress, rowsOnInvoice } from './purchaseSplitModel';
+import {
+  columnsOf, columnTotals, loadingProgress, rowsOnInvoice, type LoadingStateName,
+} from './purchaseSplitModel';
 import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
+  PurchaseInvoiceRowMetrics, PurchaseInvoiceStateControls, PurchaseInvoiceTotalsLines,
 } from './PurchaseInvoiceColumns';
+import { NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByKind, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
@@ -201,35 +206,89 @@ function BreakdownRow({
   value: number;
   /** Colour of the number; the ordered count is plain, sourced ones are tinted. */
   tone?: string;
-  adjust?: {
-    onAdjust: (delta: number) => void;
-    canDecrease: boolean;
-    canIncrease: boolean;
-    decreaseLabel: string;
-    increaseLabel: string;
-  };
+  adjust?: MetricAdjust;
 }) {
   const numberSx = {
     fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const,
     textAlign: 'center' as const, color: value > 0 ? tone ?? 'text.primary' : 'text.disabled',
   };
+  const buttonSx = { width: 16, height: 16, color: 'info.main', justifySelf: 'center' };
 
   return (
     <>
       <Typography sx={{ fontSize: 11, color: 'text.secondary', justifySelf: 'end' }}>{label}</Typography>
       {adjust ? (
-        <IconButton size="small" onClick={() => adjust.onAdjust(-1)} disabled={!adjust.canDecrease} aria-label={adjust.decreaseLabel} sx={{ width: 16, height: 16, color: 'info.main', justifySelf: 'center' }}>
+        <IconButton size="small" onClick={() => adjust.onAdjust(-1)} disabled={!adjust.canDecrease} aria-label={adjust.decreaseLabel} sx={buttonSx}>
           <RemoveIcon sx={{ fontSize: 12 }} />
         </IconButton>
       ) : <span />}
       <Typography sx={numberSx}>{value}</Typography>
       {adjust ? (
-        <IconButton size="small" onClick={() => adjust.onAdjust(1)} disabled={!adjust.canIncrease} aria-label={adjust.increaseLabel} sx={{ width: 16, height: 16, color: 'info.main', justifySelf: 'center' }}>
+        <IconButton size="small" onClick={() => adjust.onAdjust(1)} disabled={!adjust.canIncrease} aria-label={adjust.increaseLabel} sx={buttonSx}>
           <AddIcon sx={{ fontSize: 12 }} />
         </IconButton>
       ) : <span />}
     </>
   );
+}
+
+/**
+ * Where a product's pieces come from: what the brewery hands over, what comes off
+ * our own shelf instead, and what we buy for the shelf.
+ *
+ * The three are addends of the row's total, not a total and its parts. Sourcing a
+ * piece from the garage moves it out of the brewery line, which is why that entry
+ * is ordered minus sourced.
+ *
+ * Returned as data rather than rendered, because the two layouts present them
+ * differently — the table stacks them under the total in the Množství cell, the
+ * phone flows them along one line — and only the conditions for *which* entries
+ * exist are worth sharing.
+ */
+function breakdownEntries(
+  agg: AggRow,
+  sourceable: boolean,
+  adjustable: boolean,
+  onAdjustSourcing?: (delta: number) => void,
+  onAdjustStockPurchase?: (delta: number) => void,
+): Array<{ label: string; value: number; tone?: string; adjust?: MetricAdjust }> {
+  const entries: Array<{ label: string; value: number; tone?: string; adjust?: MetricAdjust }> = [];
+
+  if (agg.orderQuantity > 0) {
+    entries.push({ label: 'Z pivovaru', value: agg.orderQuantity - agg.fromInventory });
+  }
+
+  if (sourceable || agg.fromInventory > 0) {
+    entries.push({
+      label: 'Z garáže',
+      value: agg.fromInventory,
+      tone: 'info.main',
+      adjust: sourceable ? {
+        onAdjust: onAdjustSourcing!,
+        canDecrease: agg.fromInventory > 0,
+        canIncrease: agg.fromInventory < agg.orderQuantity,
+        decreaseLabel: 'Ubrat kus z garáže',
+        increaseLabel: 'Přidat kus z garáže',
+      } : undefined,
+    });
+  }
+
+  if (agg.stockPurchaseQuantity > 0) {
+    entries.push({
+      label: 'Do garáže',
+      value: agg.stockPurchaseQuantity,
+      tone: 'info.main',
+      adjust: adjustable ? {
+        onAdjust: onAdjustStockPurchase!,
+        canDecrease: true,
+        canIncrease: true,
+        decreaseLabel: 'Ubrat kus do garáže',
+        increaseLabel: 'Přidat kus do garáže',
+      } : undefined,
+    });
+  }
+
+  return entries;
 }
 
 /** One aggregated product line on "Celková nakládka": what the product is, how many
@@ -262,6 +321,9 @@ function AggLoadingRow({
       {/* What goes into the van, and where each piece comes from. The total is the sum
           of the lines below it, every controllable number in one place. */}
       <TableCell align="right" sx={QTY_CELL_SX}>
+        {/* The four-column grid keeps every number in one column whether or not its
+            line has a stepper — a line without buttons would otherwise pull its
+            number out of alignment with the ones that have them. */}
         <Box
           sx={{
             display: 'inline-grid', gridTemplateColumns: 'auto 20px 22px 20px',
@@ -272,44 +334,9 @@ function AggLoadingRow({
           <Typography sx={{ gridColumn: '1 / -1', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
             {agg.quantity} ks
           </Typography>
-
-          {/* The three lines are addends of the total, not a total and its parts: what
-              the brewery hands over, what comes off our own shelf instead, and what we
-              buy for the shelf. Sourcing a piece from the garage moves it out of the
-              brewery line, which is why that line is ordered minus sourced. */}
-          {agg.orderQuantity > 0 && (
-            <BreakdownRow label="Z pivovaru" value={agg.orderQuantity - agg.fromInventory} />
-          )}
-
-          {(sourceable || agg.fromInventory > 0) && (
-            <BreakdownRow
-              label="Z garáže"
-              value={agg.fromInventory}
-              tone="info.main"
-              adjust={sourceable ? {
-                onAdjust: onAdjustSourcing!,
-                canDecrease: agg.fromInventory > 0,
-                canIncrease: agg.fromInventory < agg.orderQuantity,
-                decreaseLabel: 'Ubrat kus z garáže',
-                increaseLabel: 'Přidat kus z garáže',
-              } : undefined}
-            />
-          )}
-
-          {agg.stockPurchaseQuantity > 0 && (
-            <BreakdownRow
-              label="Do garáže"
-              value={agg.stockPurchaseQuantity}
-              tone="info.main"
-              adjust={adjustable ? {
-                onAdjust: onAdjustStockPurchase!,
-                canDecrease: true,
-                canIncrease: true,
-                decreaseLabel: 'Ubrat kus do garáže',
-                increaseLabel: 'Přidat kus do garáže',
-              } : undefined}
-            />
-          )}
+          {breakdownEntries(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry) => (
+            <BreakdownRow key={entry.label} {...entry} />
+          ))}
         </Box>
       </TableCell>
       {invoiceCells}
@@ -317,9 +344,136 @@ function AggLoadingRow({
   );
 }
 
-/** "Celková nakládka" — the loading list: one row per distinct product, with the
- * loading state living inside each brewery-invoice column group. */
-function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, emptyText, invoiceHeaders, invoiceFooters }: {
+/**
+ * One product of the loading list where the columns don't fit: the same row as
+ * {@link AggLoadingRow}, stacked instead of spread across a table.
+ *
+ * Two lines, nothing hidden. Line one is what the ramp works from — what the product
+ * is, how many pieces, and the loading control to tick it off, the last of these in
+ * the same place down the whole list so it can be hit without looking. Line two is
+ * every number behind that total, flowed inline rather than one per line: a product
+ * carries up to five of them and the list runs to thirty-odd products, so a line each
+ * made a screen's worth of mostly zeroes out of every three items.
+ *
+ * The row does not collapse. An expander made each product cheap to skip but the list
+ * is not skimmed, it is worked through, and paying a tap per product to see numbers
+ * that fit on one line is the worse trade.
+ */
+function AggLoadingStackedRow({
+  agg, editable, onAdjustStockPurchase, onAdjustSourcing, stateControls, invoiceMetrics,
+}: {
+  agg: AggRow;
+  editable: boolean;
+  onAdjustStockPurchase?: (delta: number) => void;
+  onAdjustSourcing?: (delta: number) => void;
+  /** Loading controls, one per invoice carrying pieces. */
+  stateControls: ReactNode;
+  /** Pieces per brewery invoice, as inline metric groups. */
+  invoiceMetrics: ReactNode;
+}) {
+  const chipText = platoSizeChipText(agg.platoDegree, agg.packageSize);
+  const adjustable = Boolean(onAdjustStockPurchase) && editable;
+  const sourceable = Boolean(onAdjustSourcing) && editable;
+
+  return (
+    <Box data-testid="nakladka-row" sx={{ pl: 2, pr: 1, py: 0.75 }}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{agg.name}</Typography>
+          {chipText && (
+            <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />
+          )}
+        </Stack>
+        <Typography sx={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+          {agg.quantity} ks
+        </Typography>
+        {stateControls}
+      </Stack>
+      {/* Wrapping rather than scrolling: on the narrowest phones the invoice groups
+          drop to a second line instead of hiding past the right edge. */}
+      <Stack direction="row" alignItems="center" columnGap={1} rowGap={0.25} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+        {breakdownEntries(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry) => (
+          <NakladkaMetric key={entry.label} {...entry} />
+        ))}
+        {invoiceMetrics}
+      </Stack>
+    </Box>
+  );
+}
+
+/** Heading above each kind's rows — crates first, kegs last, because that is the
+ * order the van is packed in. Shared by both layouts. */
+function sectionHeadingText(section: KindSection<AggRow>): string {
+  return `${section.rows.length} ${plural(section.rows.length, 'položka', 'položky', 'položek')}`;
+}
+
+/**
+ * The width an element actually got, measured rather than inferred from the viewport.
+ *
+ * The nakládka's width is not a function of the viewport. From `md` up the detail
+ * screen puts it in a 1.5fr track beside a 1fr column, so a 1000px tablet hands it
+ * *less* room than an 800px one, where the page is still a single column. A media
+ * query reads that backwards and leaves the table scrolling sideways at exactly the
+ * widths where the split has squeezed it hardest.
+ *
+ * Reports 0 until the first observation, which callers must read as "not known yet"
+ * rather than "zero wide" — a phone would otherwise paint the table for one frame
+ * before the measurement lands.
+ */
+function useMeasuredWidth() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const element = ref.current;
+    // happy-dom ships no ResizeObserver; tests that need the stacked layout either
+    // stub one or drive it off the media query instead.
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width] as const;
+}
+
+/**
+ * Narrowest content width the table is still worth rendering at.
+ *
+ * Produkt needs about 180px to keep the longest product names on one line, Množství
+ * is fixed at {@link QTY_CELL_SX}'s 170, and every brewery invoice adds a 112px
+ * column pair. Below this the table does not fail outright — it scrolls sideways,
+ * which is precisely the failure worth swapping layouts to avoid.
+ *
+ * Two invoices puts the crossover at 574px of card content. A 1440px window clears
+ * it by ~65px even with the detail screen's 1.5fr/1fr split taking its share; a
+ * 1280px one does not, and stacks. That is deliberate — at 543px the table has
+ * 149px for Produkt and wraps every second name onto three lines.
+ */
+function tableFloorWidth(columnCount: number): number {
+  return 350 + columnCount * 112;
+}
+
+/**
+ * "Celková nakládka" — the loading list: one row per distinct product, with the
+ * loading state living inside each brewery-invoice column group.
+ *
+ * When the card is too narrow for the columns the table is replaced by a stacked
+ * list, the same swap `DataTable` makes: scrolling sideways to reach the loading
+ * control is exactly the interaction the brewery ramp has no free hand for. Unlike
+ * `DataTable` the trigger is the measured card width, not a breakpoint — see
+ * {@link useMeasuredWidth} for why the viewport is the wrong thing to ask.
+ *
+ * One tree either way rather than two behind CSS: the DOM would double and every
+ * text query in the page tests turn ambiguous.
+ */
+function AggLoadingTable({
+  sections, totalQuantity, columnCount, renderRow, emptyText, invoiceHeaders, invoiceFooters,
+  renderStackedRow, stackedFooter,
+}: {
   /** Rows grouped by product kind, in loading order. */
   sections: KindSection<AggRow>[];
   totalQuantity: number;
@@ -330,12 +484,71 @@ function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, empt
   /** Brewery-invoice column headers and totals, two cells per invoice. */
   invoiceHeaders: ReactNode;
   invoiceFooters: (footSx: object) => ReactNode;
+  /** The same row as `renderRow`, stacked for when the columns don't fit. */
+  renderStackedRow: (a: AggRow) => ReactNode;
+  /** Per-invoice totals for the stacked layout's summary bar. */
+  stackedFooter: ReactNode;
 }) {
-  if (sections.length === 0) {
-    return <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>;
-  }
-  const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
+  // Two signals for one decision: the media query answers before first paint so a
+  // phone never flashes the table, and the measurement catches the squeezed middle
+  // widths — a split-column tablet — that no viewport breakpoint can describe.
+  const isCompact = useMediaQuery((t: Theme) => t.breakpoints.down('compact'));
+  const [measureRef, measuredWidth] = useMeasuredWidth();
+  const stacked = isCompact || (measuredWidth > 0 && measuredWidth < tableFloorWidth(columnCount));
+
+  // The wrapper is outside every branch, empty state included: the ref has to be
+  // attached on mount for the observer to ever start, and a branch that skipped it
+  // would leave the measurement stuck at 0 for as long as the list stayed empty.
   return (
+    <Box ref={measureRef} sx={{ minWidth: 0 }}>
+      {sections.length === 0
+        ? <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>
+        : stacked
+          ? renderStacked()
+          : renderTable()}
+    </Box>
+  );
+
+  function renderStacked() {
+    return (
+      <Card variant="outlined">
+        {sections.map((section) => (
+          <Fragment key={section.kind}>
+            <Box
+              sx={{
+                px: 2, py: 0.75, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                textTransform: 'uppercase', color: 'text.secondary',
+                bgcolor: (t) => t.vars!.palette.brand.surface3,
+              }}
+            >
+              {section.label}
+              <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
+                {sectionHeadingText(section)}
+              </Box>
+            </Box>
+            <Stack divider={<Divider />}>{section.rows.map(renderStackedRow)}</Stack>
+          </Fragment>
+        ))}
+        <Stack
+          spacing={0.5}
+          sx={{ px: 2, py: 1.25, borderTop: 1, borderColor: 'divider', bgcolor: (t) => t.vars!.palette.brand.surface2 }}
+        >
+          <Stack direction="row" alignItems="baseline" spacing={1}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>Celkem k naložení</Typography>
+            <Box sx={{ flex: 1 }} />
+            <Typography sx={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+              {totalQuantity} ks
+            </Typography>
+          </Stack>
+          {stackedFooter}
+        </Stack>
+      </Card>
+    );
+  }
+
+  function renderTable() {
+    const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
+    return (
     <Card variant="outlined">
       <TableContainer sx={{ overflowX: 'auto' }}>
         <Table size="small">
@@ -362,7 +575,7 @@ function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, empt
                   >
                     {section.label}
                     <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
-                      {section.rows.length} {plural(section.rows.length, 'položka', 'položky', 'položek')}
+                      {sectionHeadingText(section)}
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -378,7 +591,8 @@ function AggLoadingTable({ sections, totalQuantity, columnCount, renderRow, empt
         </Table>
       </TableContainer>
     </Card>
-  );
+    );
+  }
 }
 
 function ProductLine({ row }: { row: NakladkaRow }) {
@@ -900,6 +1114,20 @@ export function ShipmentDetail({
     enqueueSnackbar('Zboží na sklad přidáno do nakládky.', { variant: 'success' });
   }
 
+  // Both nakládka layouts commit through these — the table cells and the stacked
+  // rows differ only in how they present the same two writes.
+  function commitInvoiceLine(productId: string, sequence: number, quantity: number) {
+    setPurchaseInvoiceLine.mutate({ sequence, productId, quantity }, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Rozdělení se nepodařilo uložit'), { variant: 'error' }),
+    });
+  }
+
+  function commitLoadingState(productId: string, sequence: number, state: LoadingStateName) {
+    setLoadingState.mutate({ sequence, productId, state }, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Stav nakládky se nepodařilo uložit'), { variant: 'error' }),
+    });
+  }
+
   return (
     <Box>
       <DetailHeader
@@ -981,7 +1209,9 @@ export function ShipmentDetail({
                 </Stack>
               )}
             </Stack>
-            <Box sx={{ px: 2.5, py: 2 }}>
+            {/* Tighter gutters on a phone: 2.5 each side plus the inner card's own
+                border spends ~45px of a 390px screen on nothing. */}
+            <Box sx={{ px: { xs: 1.25, compact: 2.5 }, py: 2 }}>
               <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
                 <StatusPill
                   tone={progress.total > 0 && progress.dictated === progress.total ? 'ok' : 'grey'}
@@ -1026,18 +1256,39 @@ export function ShipmentDetail({
                         invoices={purchaseInvoices}
                         states={loadingStates}
                         editable={nakladkaEditable}
-                        onSet={(sequence, quantity) => setPurchaseInvoiceLine.mutate(
-                          { sequence, productId: agg.productId!, quantity },
-                          { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Rozdělení se nepodařilo uložit'), { variant: 'error' }) },
-                        )}
-                        onSetState={(sequence, state) => setLoadingState.mutate(
-                          { sequence, productId: agg.productId!, state },
-                          { onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Stav nakládky se nepodařilo uložit'), { variant: 'error' }) },
-                        )}
+                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
                       />
                     )}
                   />
                 )}
+                renderStackedRow={(agg) => (
+                  <AggLoadingStackedRow
+                    key={agg.key}
+                    agg={agg}
+                    editable={nakladkaEditable}
+                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                    stateControls={(
+                      <PurchaseInvoiceStateControls
+                        row={agg}
+                        invoices={purchaseInvoices}
+                        states={loadingStates}
+                        editable={nakladkaEditable}
+                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
+                      />
+                    )}
+                    invoiceMetrics={(
+                      <PurchaseInvoiceRowMetrics
+                        row={agg}
+                        invoices={purchaseInvoices}
+                        editable={nakladkaEditable}
+                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                      />
+                    )}
+                  />
+                )}
+                stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
               />
             </Box>
           </Card>

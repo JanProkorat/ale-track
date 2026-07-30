@@ -4,18 +4,20 @@
 // other stop keeps the plain `address · kind` line unchanged. The pure
 // resolution behind both is covered directly in stopAddress.test.ts.
 
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AddressDto,
   ClientDeliveryPlaceDto,
   Country,
   OutgoingShipmentDetailDto,
+  OutgoingShipmentOrderItemDto,
   OutgoingShipmentState,
   DeliveryAddressKind,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
+  ProductKind,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -49,11 +51,15 @@ vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLo
 // screen only calls on click. Mocked for the same reason as the rest — this
 // file is about stop headers and route points, not about a QueryClient.
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [], isLoading: false }) }));
+// Hoisted rather than a fresh `vi.fn()` per call: the stacked-layout tests below
+// assert that ticking a product off commits, which needs a spy that survives
+// across the re-renders the hook factory would otherwise hand a new one to.
+const setLoadingStateMutate = vi.hoisted(() => vi.fn());
 vi.mock('src/hooks/usePurchaseInvoices', () => ({
   useAddPurchaseInvoice: () => ({ mutate: vi.fn(), isPending: false }),
   useDeletePurchaseInvoice: () => ({ mutate: vi.fn(), isPending: false }),
   useSetPurchaseInvoiceLine: () => ({ mutate: vi.fn(), isPending: false }),
-  useSetLoadingState: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetLoadingState: () => ({ mutate: setLoadingStateMutate, isPending: false }),
 }));
 
 // ShipmentInvoicing renders unconditionally at the bottom of the detail
@@ -246,5 +252,149 @@ describe('ShipmentDetail — address-changed banner position', () => {
   it('adds no stray gap under the map when there is nothing to announce', () => {
     renderDetail([officialStop()]);
     expect(screen.queryByText('Změna adresy doručení')).not.toBeInTheDocument();
+  });
+});
+
+// When the card is too narrow for its columns the nakládka drops the table and
+// stacks, because reaching the loading control meant scrolling sideways — the one
+// interaction the brewery ramp has no free hand for. What the swap must preserve:
+// the ramp's own control stays reachable without expanding anything, and the desk
+// controls stay reachable at all.
+describe('ShipmentDetail — nakládka when the columns do not fit', () => {
+  /** MUI's useMediaQuery reads window.matchMedia; happy-dom resolves it against a
+   * 1024px window, so force the answer rather than depend on that default. */
+  function setCompact(compact: boolean) {
+    window.matchMedia = ((query: string) => ({
+      matches: compact && query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  /** happy-dom ships no ResizeObserver, so the card measures 0 (= "not known") and
+   * the layout falls back to the media query. Stubbing one lets a test say how much
+   * room the card actually got, which is the signal the tablet case turns on. */
+  function setCardWidth(width: number) {
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe() {
+        this.callback(
+          [{ contentRect: { width } } as ResizeObserverEntry],
+          this as unknown as ResizeObserver,
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+  }
+
+  const originalMatchMedia = window.matchMedia;
+  beforeEach(() => setLoadingStateMutate.mockClear());
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    vi.unstubAllGlobals();
+  });
+
+  function stopWithProduct(): OutgoingShipmentStopDto {
+    const stop = officialStop();
+    stop.products = [new OutgoingShipmentOrderItemDto({
+      id: 'product-1',
+      orderItemId: 'item-1',
+      name: 'Roh. Cherry beer',
+      kind: ProductKind.Bottle,
+      packageSize: 0.5,
+      platoDegree: 10,
+      quantity: 3,
+      weight: 12,
+      quantityFromInventory: 0,
+    })];
+    return stop;
+  }
+
+  function renderNakladka() {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created,
+      driverIds: [], stops: [stopWithProduct()],
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  it('stacks the loading list instead of rendering the table', () => {
+    setCompact(true);
+    renderNakladka();
+
+    expect(screen.getByText('Roh. Cherry beer')).toBeInTheDocument();
+    expect(screen.getAllByText('3 ks').length).toBeGreaterThan(0);
+    // The Množství column header is table-only; its absence is what proves the swap.
+    expect(screen.queryByText('Množství')).not.toBeInTheDocument();
+  });
+
+  it('shows every control without an expander, so nothing costs a tap to reach', () => {
+    setCompact(true);
+    renderNakladka();
+
+    // No expander at all: an earlier revision hid the numbers below behind one, and
+    // a list that is worked through rather than skimmed pays that tap on every item.
+    expect(screen.queryByLabelText('Rozbalit Roh. Cherry beer')).not.toBeInTheDocument();
+
+    // Scoped to the row — "F1" is also the filter tab and the summary bar's label.
+    const row = within(screen.getByTestId('nakladka-row'));
+    expect(row.getByLabelText('Přidat kus z garáže')).toBeInTheDocument();
+    expect(row.getByLabelText('Přidat kus na fakturu 2')).toBeInTheDocument();
+    expect(row.getByText('F1')).toBeInTheDocument();
+    expect(row.getByText('Z pivovaru')).toBeInTheDocument();
+  });
+
+  it('commits a loading state straight off the row', () => {
+    setCompact(true);
+    renderNakladka();
+
+    fireEvent.click(screen.getByLabelText('Nakládka na faktuře 1: Nenaloženo'));
+
+    expect(setLoadingStateMutate).toHaveBeenCalledTimes(1);
+    expect(setLoadingStateMutate.mock.calls[0][0]).toMatchObject({
+      productId: 'product-1', sequence: 1, state: 'Dictated',
+    });
+  });
+
+  it('still renders the table above the breakpoint', () => {
+    setCompact(false);
+    renderNakladka();
+
+    expect(screen.getByText('Množství')).toBeInTheDocument();
+    // The table's own split control is a typable field, not the phone's stepper pair.
+    expect(screen.getByLabelText('Kusy na faktuře 2')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Přidat kus na fakturu 2')).not.toBeInTheDocument();
+  });
+
+  // The tablet case, and the reason the swap is measured rather than a breakpoint:
+  // from `md` up the detail screen splits into 1.5fr/1.2fr, so a wide viewport can
+  // still hand the nakládka a card too narrow for its columns. A media query calls
+  // that viewport "desktop" and leaves the table scrolling sideways.
+  it('stacks when the card is squeezed, however wide the viewport says it is', () => {
+    setCompact(false);
+    setCardWidth(420);
+    renderNakladka();
+
+    expect(screen.queryByText('Množství')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nakladka-row')).toBeInTheDocument();
+  });
+
+  it('keeps the table when the card has room for the columns', () => {
+    setCompact(false);
+    setCardWidth(900);
+    renderNakladka();
+
+    expect(screen.getByText('Množství')).toBeInTheDocument();
+    expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
   });
 });
