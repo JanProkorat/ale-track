@@ -103,8 +103,16 @@ export function ptypeLabel(t?: ProductType | string | number): string | undefine
   return name ? (L.ptype[name] ?? name) : undefined;
 }
 
+/** The Country enum's member name (e.g. "Czechia"), resolved from either the
+ * numeric (demo) or string (real) wire representation — used as the form value
+ * in the address editors, the way regionName is, so a round-tripped address
+ * matches its option instead of falling back to blank. */
+export function countryName(c?: Country | string | number): string | undefined {
+  return enumName(Country as unknown as Record<string, string | number>, c);
+}
+
 export function countryLabel(c?: Country | string | number): string | undefined {
-  const name = enumName(Country as unknown as Record<string, string | number>, c);
+  const name = countryName(c);
   return name ? (L.country[name] ?? name) : undefined;
 }
 
