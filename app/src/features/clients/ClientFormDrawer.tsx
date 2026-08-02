@@ -9,7 +9,7 @@ import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { L, regionName } from 'src/lib/labels';
+import { L, countryName, regionName } from 'src/lib/labels';
 import { geocodeAddress, type LatLng } from 'src/lib/geo';
 import {
   CreateClientDto,
@@ -74,15 +74,15 @@ const schema = z
   });
 type FormValues = z.infer<typeof schema>;
 
-const COUNTRY_OPTIONS = [
-  { value: String(Country.Czechia), label: 'Česko' },
-  { value: String(Country.Germany), label: 'Německo' },
-];
+/** Keyed by enum member name, not numeric value: the API serializes enums as
+ * their name, so that is what a loaded address carries. Same convention as the
+ * region and contact-type selects below. */
+const COUNTRY_OPTIONS = Object.entries(L.country).map(([value, label]) => ({ value, label }));
 const REGION_OPTIONS = Object.entries(L.region).map(([value, label]) => ({ value, label }));
 const CONTACT_TYPE_OPTIONS = Object.entries(L.contact).map(([value, label]) => ({ value, label }));
 
 const emptyAddr: AddressValues = {
-  streetName: '', streetNumber: '', city: '', zip: '', country: String(Country.Czechia),
+  streetName: '', streetNumber: '', city: '', zip: '', country: Country[Country.Czechia],
 };
 const empty: FormValues = {
   name: '', businessName: '', region: 'ZittauCity', official: emptyAddr, hasContact: false, contact: emptyAddr, contacts: [],
@@ -92,7 +92,7 @@ function addrToForm(a: { streetName?: string; streetNumber?: string; city?: stri
   if (!a) return emptyAddr;
   return {
     streetName: a.streetName ?? '', streetNumber: a.streetNumber ?? '', city: a.city ?? '', zip: a.zip ?? '',
-    country: a.country != null ? String(a.country) : String(Country.Czechia),
+    country: countryName(a.country) ?? Country[Country.Czechia],
   };
 }
 /** Coordinates are not entered by hand — they're geocoded from the address on
@@ -101,7 +101,7 @@ function addrToForm(a: { streetName?: string; streetNumber?: string; city?: stri
 function toAddressDto(a: AddressValues, coords?: LatLng | null): AddressDto {
   return new AddressDto({
     streetName: a.streetName, streetNumber: a.streetNumber, city: a.city, zip: a.zip,
-    country: Number(a.country) as Country,
+    country: Country[a.country as keyof typeof Country],
     latitude: coords?.lat, longitude: coords?.lng,
   });
 }
@@ -200,8 +200,10 @@ export function ClientFormDrawer({ open, client, onClose }: {
     let contactCoords: LatLng | null = null;
     try {
       [officialCoords, contactCoords] = await Promise.all([
-        geocodeAddress({ ...v.official, country: Country[Number(v.official.country)] }),
-        v.hasContact ? geocodeAddress({ ...v.contact, country: Country[Number(v.contact.country)] }) : Promise.resolve(null),
+        // The form already holds the enum member name, which is also the
+        // English country name Nominatim understands.
+        geocodeAddress(v.official),
+        v.hasContact ? geocodeAddress(v.contact) : Promise.resolve(null),
       ]);
     } finally {
       setGeocoding(false);

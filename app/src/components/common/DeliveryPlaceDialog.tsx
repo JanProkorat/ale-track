@@ -19,15 +19,22 @@ import { AddressMapPicker } from 'src/components/common/AddressMapPicker';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { type AddressHit, type LatLng } from 'src/lib/geo';
+import { L, countryName } from 'src/lib/labels';
 import { AddressDto, Country, SaveClientDeliveryPlaceDto, type ClientDeliveryPlaceDto } from 'src/generated/api-client';
 import { useCreateDeliveryPlace, useUpdateDeliveryPlace } from 'src/hooks/useDeliveryPlaces';
 
-// Duplicated locally rather than shared — same small, one-off list as
-// ClientFormDrawer's COUNTRY_OPTIONS.
-const COUNTRY_OPTIONS = [
-  { value: String(Country.Czechia), label: 'Česko' },
-  { value: String(Country.Germany), label: 'Německo' },
-];
+// Keyed by enum member name, not numeric value — a loaded address carries the
+// name, since the API serializes enums as strings. Same list as
+// ClientFormDrawer's COUNTRY_OPTIONS, built from the same label table.
+const COUNTRY_OPTIONS = Object.entries(L.country).map(([value, label]) => ({ value, label }));
+
+/** A loaded address carries the enum member name ("Czechia"), a geocoding hit
+ * carries the numeric enum — normalize either back to the numeric value the
+ * dialog keeps in state and sends. */
+function toCountry(c?: Country | string | number | null): Country {
+  const name = countryName(c ?? undefined);
+  return (name && Country[name as keyof typeof Country]) || Country.Czechia;
+}
 
 /** Create/edit a client's own delivery place — a named drop-off point offered
  * alongside the official/contact address when picking a shipment stop.
@@ -79,7 +86,7 @@ export function DeliveryPlaceDialog({
     setStreetNumber(a?.streetNumber ?? '');
     setCity(a?.city ?? '');
     setZip(a?.zip ?? '');
-    setCountry(a?.country ?? Country.Czechia);
+    setCountry(toCountry(a?.country));
     setPoint(a?.latitude != null && a?.longitude != null ? { lat: a.latitude, lng: a.longitude } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -205,8 +212,8 @@ export function DeliveryPlaceDialog({
           <Box sx={{ gridColumn: '1 / -1' }}>
             <Combobox
               label="Země"
-              value={String(country)}
-              onChange={(v) => setCountry(v ? (Number(v) as Country) : Country.Czechia)}
+              value={Country[country]}
+              onChange={(v) => setCountry(toCountry(v))}
               options={COUNTRY_OPTIONS}
               clearable={false}
             />

@@ -19,6 +19,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
+import { clientComboOptions } from './clientOptions';
 import { compareProductsForDisplay } from 'src/lib/productSort';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
@@ -438,7 +439,7 @@ export function OrderEditor({
   const cartTotalQty = cart.reduce((n, c) => n + c.quantity, 0);
   const cartTotalPrice = cart.reduce((sum, c) => sum + (productMap.get(c.productId)?.priceWithVat ?? 0) * c.quantity, 0);
 
-  const clientOptions: ComboOption[] = clients.map((c) => ({ value: c.id ?? '', label: c.name ?? '' }));
+  const clientOptions: ComboOption[] = useMemo(() => clientComboOptions(clients), [clients]);
   const selectedClient = clients.find((c) => c.id === clientId);
 
   // The old delivery-address choice belongs to the old client — a saved
@@ -602,7 +603,7 @@ export function OrderEditor({
                   )}
                 </Stack>
               ) : (
-                <Combobox value={clientId} onChange={changeClient} options={clientOptions} placeholder="Vyberte klienta…" fullWidth />
+                <Combobox value={clientId} onChange={changeClient} options={clientOptions} placeholder="Vyberte klienta…" fullWidth collapsibleGroups />
               )}
             </Box>
 
