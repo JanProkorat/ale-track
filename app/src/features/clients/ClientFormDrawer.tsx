@@ -33,6 +33,19 @@ const addressSchema = z.object({
 });
 type AddressValues = z.infer<typeof addressSchema>;
 
+/** Same shape as addressSchema but with no required-field checks. The contact
+ * address is only filled in when the toggle is on, and it is validated there by
+ * the superRefine below — requiring it in the base shape instead makes the blank
+ * hidden fields fail validation, which silently blocks submit with the errors
+ * attached to inputs that aren't rendered. */
+const blankableAddressSchema = z.object({
+  streetName: z.string(),
+  streetNumber: z.string(),
+  city: z.string(),
+  zip: z.string(),
+  country: z.string(),
+});
+
 const contactSchema = z.object({
   type: z.string().min(1),
   description: z.string().optional(),
@@ -46,7 +59,7 @@ const schema = z
     region: z.string().min(1, 'Vyberte region'),
     official: addressSchema,
     hasContact: z.boolean(),
-    contact: addressSchema,
+    contact: blankableAddressSchema,
     contacts: z.array(contactSchema),
   })
   .superRefine((val, ctx) => {

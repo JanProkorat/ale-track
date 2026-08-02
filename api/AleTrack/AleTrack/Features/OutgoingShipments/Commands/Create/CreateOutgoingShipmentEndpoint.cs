@@ -59,6 +59,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         {
             Name = req.Data.Name,
             DeliveryDate = req.Data.DeliveryDate,
+            CreatedDate = DateTime.UtcNow,
             State = OutgoingShipmentState.Created,
             Vehicle = vehicle,
             Drivers = [.. drivers
