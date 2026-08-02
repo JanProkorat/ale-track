@@ -25,6 +25,12 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     /// </summary>
     [Column("delivery_date")]
     public DateTime? DeliveryDate { get; set; }
+
+    /// <summary>
+    /// Date when the shipment was created
+    /// </summary>
+    [Column("created_date")]
+    public DateTime CreatedDate { get; set; }
     
     /// <summary>
     /// ID of the vehicle used for the shipment

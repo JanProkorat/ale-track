@@ -37,13 +37,17 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
     {
         var planningState = req.Parameters.GetPlanningState();
 
+        // Newest-created first by default; an explicit "sort" parameter still wins,
+        // because ApplyFilterAndSort re-orders the query when one is supplied.
         var outgoingShipments = await dbContext.OutgoingShipments
+            .OrderByDescending(os => os.CreatedDate)
             .Select(os => new OutgoingShipmentListItemDto
             {
                 Id = os.PublicId,
                 Name = os.Name,
                 State = os.State,
                 DeliveryDate = os.DeliveryDate,
+                CreatedDate = os.CreatedDate,
                 PlanningState = os.PlanningState
             })
             .ApplyFilterAndSort(req.Parameters)

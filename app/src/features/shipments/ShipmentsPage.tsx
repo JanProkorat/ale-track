@@ -162,6 +162,10 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
                   </Typography>
                 </Stack>
                 <Card variant="outlined">
+                  {/* No defaultSort: the endpoint already returns the list newest-created
+                      first (createdDate has no column of its own), and DataTable keeps
+                      that order until a header is clicked. The delivery date is a
+                      planning field that moves, so it never decided the list's order. */}
                   <DataTable
                     columns={columns}
                     rows={rows}
@@ -170,7 +174,6 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
                     mobileCard={shipmentCard}
                     paginated
                     pageSizeKey="shipments"
-                    defaultSort={{ key: 'date', direction: 'desc' }}
                   />
                 </Card>
               </>

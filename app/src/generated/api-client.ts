@@ -10605,6 +10605,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
     id?: string;
     state?: OutgoingShipmentState;
     deliveryDate?: Date | undefined;
+    createdDate?: Date;
     name?: string;
     planningState?: PlanningState;
 
@@ -10622,6 +10623,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
             this.id = _data["id"];
             this.state = _data["state"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
+            this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : undefined as any;
             this.name = _data["name"];
             this.planningState = _data["planningState"];
         }
@@ -10639,6 +10641,7 @@ export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto
         data["id"] = this.id;
         data["state"] = this.state;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
+        data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : undefined as any;
         data["name"] = this.name;
         data["planningState"] = this.planningState;
         return data;
@@ -10649,6 +10652,7 @@ export interface IOutgoingShipmentListItemDto {
     id?: string;
     state?: OutgoingShipmentState;
     deliveryDate?: Date | undefined;
+    createdDate?: Date;
     name?: string;
     planningState?: PlanningState;
 }
