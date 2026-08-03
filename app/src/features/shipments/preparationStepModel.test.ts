@@ -8,7 +8,7 @@ describe('defaultChecklistSteps', () => {
   it('prefills the standard pre-departure list in order', () => {
     expect(defaultChecklistSteps().map((s) => s.label)).toEqual([
       'Rudlík',
-      'Parkovací karta',
+      'Tankovací karta',
       'Soupis',
       'Vozejk',
       'Klíče',
@@ -16,6 +16,7 @@ describe('defaultChecklistSteps', () => {
       'Biogon',
       'Prázdné',
       'Reklamace',
+      'Bonusy',
       'Věci z předchozího vývozu',
     ]);
   });

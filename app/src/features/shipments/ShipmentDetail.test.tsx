@@ -4,7 +4,7 @@
 // other stop keeps the plain `address · kind` line unchanged. The pure
 // resolution behind both is covered directly in stopAddress.test.ts.
 
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitForElementToBeRemoved, act } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -51,6 +51,12 @@ vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLo
 // screen only calls on click. Mocked for the same reason as the rest — this
 // file is about stop headers and route points, not about a QueryClient.
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [], isLoading: false }) }));
+// The nakládka marks each brewery section with the brewery's own colour, which rides on
+// the cached brewery list rather than on the shipment. Only Frýdlant has one here, so the
+// fallback for a brewery without a colour is exercised too.
+vi.mock('src/hooks/useBreweries', () => ({
+  useBreweryColors: () => (id?: string) => (id === 'brewery-frydlant' ? '#F08C00' : undefined),
+}));
 // Hoisted rather than a fresh `vi.fn()` per call: the stacked-layout tests below
 // assert that ticking a product off commits, which needs a spy that survives
 // across the re-renders the hook factory would otherwise hand a new one to.
@@ -413,5 +419,155 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
 
     expect(screen.getByText('Množství')).toBeInTheDocument();
     expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
+  });
+
+  /** Two products of two breweries. Svijany's row is first in the data, while Frýdlant's
+   *  lower display order puts its section on top — so the order proves the sections are
+   *  not simply following the stop. */
+  function renderTwoBreweries() {
+    const stop = officialStop();
+    stop.products = [
+      new OutgoingShipmentOrderItemDto({
+        id: 'product-svijany', orderItemId: 'item-svijany', name: 'Vozka 11°',
+        kind: ProductKind.Bottle, packageSize: 0.5, platoDegree: 11, quantity: 2, weight: 10,
+        quantityFromInventory: 0,
+        breweryId: 'brewery-svijany', breweryName: 'Pivovar Svijany', breweryDisplayOrder: 2,
+      }),
+      new OutgoingShipmentOrderItemDto({
+        id: 'product-frydlant', orderItemId: 'item-frydlant', name: 'Albrecht 12°',
+        kind: ProductKind.Keg, packageSize: 30, platoDegree: 12, quantity: 1, weight: 60,
+        quantityFromInventory: 0,
+        breweryId: 'brewery-frydlant', breweryName: 'Pivovar Frýdlant', breweryDisplayOrder: 1,
+      }),
+    ];
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created,
+      driverIds: [], stops: [stop],
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  it('heads each brewery of the table, with that brewery’s kinds under it', () => {
+    setCompact(false);
+    setCardWidth(900);
+    const { container } = renderTwoBreweries();
+
+    // Each brewery owns a table of its own, labelled with its name — that is what lets
+    // Collapse slide a section without the rows leaving the layout of the others.
+    const frydlant = screen.getByRole('table', { name: 'Pivovar Frýdlant' });
+    // The kind heading is the only cell in it that spans the columns.
+    expect([...frydlant.querySelectorAll('td[colspan]')].map((c) => c.textContent))
+      .toEqual(['Sud1 položka']);
+    expect(within(frydlant).getByText('Albrecht 12°')).toBeInTheDocument();
+
+    const svijany = screen.getByRole('table', { name: 'Pivovar Svijany' });
+    expect([...svijany.querySelectorAll('td[colspan]')].map((c) => c.textContent))
+      .toEqual(['Basa1 položka']);
+    expect(within(svijany).getByText('Vozka 11°')).toBeInTheDocument();
+
+    // Frýdlant's display order is the lower one, so its block comes first.
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Pivovar Frýdlant')).toBeLessThan(text.indexOf('Pivovar Svijany'));
+  });
+
+  it('keeps the brewery sections when the list stacks', () => {
+    setCompact(true);
+    const { container } = renderTwoBreweries();
+
+    // The brewery names appear nowhere else on the screen, so their positions in the
+    // rendered text are the section order.
+    const text = container.textContent ?? '';
+    expect(text).toContain('Pivovar Frýdlant');
+    expect(text.indexOf('Pivovar Frýdlant')).toBeLessThan(text.indexOf('Pivovar Svijany'));
+  });
+
+  it('keeps the columns of the head, the sections and the totals lined up', () => {
+    setCompact(false);
+    setCardWidth(900);
+    const { container } = renderTwoBreweries();
+
+    // The wide layout is four tables — head, one per brewery, totals — so that a section
+    // can slide. They line up only because Produkt is declared elastic in each of them
+    // while every other column is a fixed width; dropping that on any one table would
+    // knock its rows out of line with the head.
+    const tables = [...container.querySelectorAll('table')];
+    expect(tables).toHaveLength(4);
+    for (const table of tables) {
+      const firstColumnCell = [...table.querySelectorAll('th,td')]
+        .find((cell) => !cell.hasAttribute('colspan'));
+      expect(firstColumnCell).toHaveStyle({ width: '100%' });
+    }
+  });
+
+  it('marks each brewery head with that brewery’s own colour', () => {
+    setCompact(false);
+    setCardWidth(900);
+    renderTwoBreweries();
+
+    // The square is what makes a group boundary visible mid-list.
+    const squares = screen.getAllByTestId('brewery-color');
+    expect(squares[0]).toHaveStyle({ backgroundColor: '#F08C00' });
+    // Svijany has no colour recorded, so its square falls back rather than repeating the
+    // previous brewery's — that would mark the boundary wrong.
+    expect(squares[1]).not.toHaveStyle({ backgroundColor: '#F08C00' });
+  });
+
+  it('collapses a brewery to its head, and expands it again', async () => {
+    setCompact(false);
+    setCardWidth(900);
+    renderTwoBreweries();
+
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Sbalit Pivovar Frýdlant'));
+
+    // The section slides shut before it unmounts, so its rows are still there right after
+    // the click — the wait is what the animation costs, not flakiness. The generous timeout
+    // is for a loaded machine: the removal hangs off a transition timer, which a busy test
+    // run can starve well past the default second.
+    await waitForElementToBeRemoved(() => screen.queryByText('Albrecht 12°'), { timeout: 5000 });
+
+    // Frýdlant's kind heading goes with its rows; the head and the other brewery stay.
+    expect(screen.queryByText('Sud')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Rozbalit Pivovar Frýdlant')).toBeInTheDocument();
+    expect(screen.getByText('Vozka 11°')).toBeInTheDocument();
+
+    // Collapsing is presentation only — what is on the pallet has not changed, so the
+    // totals row still counts the hidden brewery's piece.
+    const totals = screen.getByText('Celkem k naložení').closest('tr');
+    expect(totals?.textContent).toContain('3 ks');
+
+    fireEvent.click(screen.getByLabelText('Rozbalit Pivovar Frýdlant'));
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+
+  it('keeps the rows when a brewery is reopened mid-slide', async () => {
+    setCompact(false);
+    setCardWidth(900);
+    renderTwoBreweries();
+
+    fireEvent.click(screen.getByLabelText('Sbalit Pivovar Frýdlant'));
+    // Reopened while the section is still closing: it must reverse rather than finish
+    // shutting and unmount the rows behind the reader's back.
+    fireEvent.click(screen.getByLabelText('Rozbalit Pivovar Frýdlant'));
+
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+    // Long enough for the shut that was cancelled to have finished, had it kept running.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)); });
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+
+  it('collapses the stacked list the same way', async () => {
+    setCompact(true);
+    renderTwoBreweries();
+
+    fireEvent.click(screen.getByLabelText('Sbalit Pivovar Svijany'));
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Vozka 11°'), { timeout: 5000 });
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
   });
 });

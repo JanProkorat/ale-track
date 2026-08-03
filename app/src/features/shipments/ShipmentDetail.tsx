@@ -46,6 +46,7 @@ import { useVehicle } from 'src/hooks/useVehicles';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
+import { useBreweryColors } from 'src/hooks/useBreweries';
 import {
   useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetLoadingState, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
@@ -58,7 +59,7 @@ import {
   PurchaseInvoiceRowMetrics, PurchaseInvoiceTotalsLines,
 } from './PurchaseInvoiceColumns';
 import { NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
-import { groupByKind, type KindSection } from './nakladkaGrouping';
+import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
@@ -79,6 +80,10 @@ interface NakladkaRow {
   type?: ProductType;
   packageSize?: number;
   platoDegree?: number;
+  /** Brewery supplying the product — the loading list is sectioned by it. */
+  breweryId?: string;
+  breweryName?: string;
+  breweryDisplayOrder?: number;
   quantity: number;
   weight: number;
   /** Of `quantity`, how many pieces come from our own stock (order rows only). */
@@ -101,6 +106,9 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     type: p.type,
     packageSize: p.packageSize,
     platoDegree: p.platoDegree,
+    breweryId: p.breweryId,
+    breweryName: p.breweryName,
+    breweryDisplayOrder: p.breweryDisplayOrder,
     quantity: p.quantity ?? 0,
     weight: p.weight ?? 0,
     fromInventory: p.quantityFromInventory ?? 0,
@@ -120,6 +128,9 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     type: e.type,
     packageSize: e.packageSize,
     platoDegree: e.platoDegree,
+    breweryId: e.breweryId,
+    breweryName: e.breweryName,
+    breweryDisplayOrder: e.breweryDisplayOrder,
     quantity: e.quantity ?? 0,
     weight: e.weight ?? 0,
     fromInventory: 0,
@@ -132,6 +143,16 @@ const ALL_INVOICES = 'all';
 
 /** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
 const QTY_CELL_SX = { width: 170, minWidth: 170 };
+
+/**
+ * Produkt is the one elastic column: it takes whatever the fixed ones leave.
+ *
+ * Spelled out rather than left to the browser because the wide layout is several tables
+ * (see `renderTable`) — the head, one per brewery, the totals. Every other column is a
+ * fixed width in all of them, so declaring this one "as wide as possible" is what makes
+ * their columns line up instead of each table sizing Produkt to its own content.
+ */
+const PRODUCT_CELL_SX = { width: '100%' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
@@ -159,6 +180,10 @@ interface AggRow {
   type?: ProductType;
   packageSize?: number;
   platoDegree?: number;
+  /** Brewery supplying the product — the section this line is read out under. */
+  breweryId?: string;
+  breweryName?: string;
+  breweryDisplayOrder?: number;
   quantity: number;
   orderQuantity: number;
   stockPurchaseQuantity: number;
@@ -169,16 +194,19 @@ interface AggRow {
 }
 
 /** Collapse the per-order/per-stock-purchase rows into one line per distinct product
- * (name + kind + package size), summing quantities. This is the loading list —
- * two orders with the same product become a single line with the total. */
+ * (brewery + name + kind + package size), summing quantities. This is the loading list —
+ * two orders with the same product become a single line with the total.
+ *
+ * The brewery joins the key so a line can never straddle two sections: same-named products
+ * of two breweries are two lines, which is also what the pallet looks like. */
 function aggregateRows(rows: NakladkaRow[]): AggRow[] {
   const map = new Map<string, AggRow>();
   const order: string[] = [];
   for (const r of rows) {
-    const key = `${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
+    const key = `${r.breweryId ?? ''}|${r.name}|${r.kind ?? ''}|${r.packageSize ?? ''}`;
     let agg = map.get(key);
     if (!agg) {
-      agg = { key, productId: r.productId, name: r.name, kind: r.kind, type: r.type, packageSize: r.packageSize, platoDegree: r.platoDegree, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
+      agg = { key, productId: r.productId, name: r.name, kind: r.kind, type: r.type, packageSize: r.packageSize, platoDegree: r.platoDegree, breweryId: r.breweryId, breweryName: r.breweryName, breweryDisplayOrder: r.breweryDisplayOrder, quantity: 0, orderQuantity: 0, stockPurchaseQuantity: 0, fromInventory: 0, stockPurchase: true, sources: [] };
       map.set(key, agg);
       order.push(key);
     }
@@ -310,7 +338,7 @@ function AggLoadingRow({
   const sourceable = Boolean(onAdjustSourcing) && editable;
   return (
     <TableRow hover>
-      <TableCell>
+      <TableCell sx={PRODUCT_CELL_SX}>
         <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{agg.name}</Typography>
         {/* Only what the product *is* lives here; how many of it and where the pieces
             come from is the Množství cell's job, so both steppers sit together there. */}
@@ -401,10 +429,70 @@ function AggLoadingStackedRow({
   );
 }
 
-/** Heading above each kind's rows — crates first, kegs last, because that is the
- * order the van is packed in. Shared by both layouts. */
-function sectionHeadingText(section: KindSection<AggRow>): string {
+/** The item count beside a section heading, brewery or kind. Shared by both layouts. */
+function sectionHeadingText(section: BrewerySection<AggRow> | KindSection<AggRow>): string {
   return `${section.rows.length} ${plural(section.rows.length, 'položka', 'položky', 'položek')}`;
+}
+
+/** How long a section takes to open or shut. Shared by both layouts so the two feel the
+ *  same, and by the table's delayed unmount so its rows leave when the fade ends. */
+const SECTION_MOTION_MS = 180;
+
+
+/**
+ * The clickable head of one brewery's part of the loading list: the brewery's own colour,
+ * its name and item count, and the chevron at the far end of the row.
+ *
+ * The colour square marks where a group starts — a run of thirty-odd rows split across
+ * three breweries otherwise reads as one wall of products. It is the same square the
+ * product picker uses (`ProductCombobox`), so a brewery is recognised by the same mark on
+ * both screens, and it comes from the brewery list rather than from the shipment: a colour
+ * is presentation and follows the brewery, exactly as in the volume reports.
+ *
+ * Collapsing hides rows and nothing else — the totals and the loading progress still count
+ * the whole run, because what is on the pallet does not change with what is on screen.
+ */
+function BreweryHeadingContent({
+  label, count, color, collapsed, onToggle,
+}: {
+  label: string;
+  count: string;
+  /** The brewery's own colour, or undefined for a brewery that has none recorded. */
+  color?: string;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <ButtonBase
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      aria-label={`${collapsed ? 'Rozbalit' : 'Sbalit'} ${label}`}
+      sx={{ width: '100%', justifyContent: 'flex-start', gap: 1, px: 2, py: 0.75 }}
+    >
+      <Box
+        data-testid="brewery-color"
+        sx={{ width: 9, height: 9, borderRadius: '2px', flexShrink: 0, bgcolor: color ?? 'text.disabled' }}
+      />
+      <Typography
+        sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.03em', textTransform: 'uppercase' }}
+        noWrap
+      >
+        {label}
+      </Typography>
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.disabled' }}>{count}</Typography>
+      {/* Pushes the chevron to the right edge, where it sits in the same place down the
+          whole list rather than a name's width in from the left. */}
+      <Box sx={{ flex: 1 }} />
+      <ExpandMoreIcon
+        fontSize="small"
+        sx={{
+          color: 'text.secondary', flexShrink: 0,
+          transition: `transform ${SECTION_MOTION_MS}ms ease`,
+          transform: collapsed ? 'rotate(-90deg)' : 'none',
+        }}
+      />
+    </ButtonBase>
+  );
 }
 
 /**
@@ -458,8 +546,9 @@ function tableFloorWidth(columnCount: number): number {
 }
 
 /**
- * "Celková nakládka" — the loading list: one row per distinct product, with the
- * loading state living inside each brewery-invoice column group.
+ * "Celková nakládka" — the loading list: one row per distinct product, sectioned by
+ * brewery and then by kind, with the loading state living inside each brewery-invoice
+ * column group.
  *
  * When the card is too narrow for the columns the table is replaced by a stacked
  * list, the same swap `DataTable` makes: scrolling sideways to reach the loading
@@ -474,8 +563,8 @@ function AggLoadingTable({
   sections, totalQuantity, columnCount, renderRow, emptyText, invoiceHeaders, invoiceFooters,
   renderStackedRow, stackedFooter,
 }: {
-  /** Rows grouped by product kind, in loading order. */
-  sections: KindSection<AggRow>[];
+  /** Rows grouped by brewery and, inside each, by product kind in loading order. */
+  sections: BrewerySection<AggRow>[];
   totalQuantity: number;
   /** Brewery-invoice columns, for the width of a section heading. */
   columnCount: number;
@@ -496,6 +585,21 @@ function AggLoadingTable({
   const [measureRef, measuredWidth] = useMeasuredWidth();
   const stacked = isCompact || (measuredWidth > 0 && measuredWidth < tableFloorWidth(columnCount));
 
+  const colorForBrewery = useBreweryColors();
+  // Collapsed rather than expanded ids, so every brewery starts open: the list is worked
+  // through, and a run that arrives folded shut costs a tap per brewery before any of it
+  // can be read out. The set survives the invoice filter and both layouts, but not a
+  // different shipment — the screen is remounted for those.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>());
+
+  function toggleBrewery(breweryId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(breweryId)) next.add(breweryId);
+      return next;
+    });
+  }
+
   // The wrapper is outside every branch, empty state included: the ref has to be
   // attached on mount for the observer to ever start, and a branch that skipped it
   // would leave the measurement stuck at 0 for as long as the list stayed empty.
@@ -512,21 +616,43 @@ function AggLoadingTable({
   function renderStacked() {
     return (
       <Card variant="outlined">
-        {sections.map((section) => (
-          <Fragment key={section.kind}>
+        {sections.map((brewery) => (
+          <Fragment key={brewery.breweryId}>
+            {/* The brewery leads: the pallet is collected one brewery at a time, and the
+                kinds below it are how that pallet goes into the van. */}
             <Box
               sx={{
-                px: 2, py: 0.75, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
-                textTransform: 'uppercase', color: 'text.secondary',
-                bgcolor: (t) => t.vars!.palette.brand.surface3,
+                bgcolor: (t) => t.vars!.palette.brand.surface2,
+                borderTop: 1, borderColor: 'divider',
               }}
             >
-              {section.label}
-              <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
-                {sectionHeadingText(section)}
-              </Box>
+              <BreweryHeadingContent
+                label={brewery.label}
+                count={sectionHeadingText(brewery)}
+                color={colorForBrewery(brewery.breweryId)}
+                collapsed={collapsed.has(brewery.breweryId)}
+                onToggle={() => toggleBrewery(brewery.breweryId)}
+              />
             </Box>
-            <Stack divider={<Divider />}>{section.rows.map(renderStackedRow)}</Stack>
+            <Collapse in={!collapsed.has(brewery.breweryId)} timeout={SECTION_MOTION_MS} unmountOnExit>
+              {brewery.kinds.map((section) => (
+                <Fragment key={section.kind}>
+                  <Box
+                    sx={{
+                      pl: 3, pr: 2, py: 0.75, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                      textTransform: 'uppercase', color: 'text.secondary',
+                      bgcolor: (t) => t.vars!.palette.brand.surface3,
+                    }}
+                  >
+                    {section.label}
+                    <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
+                      {sectionHeadingText(section)}
+                    </Box>
+                  </Box>
+                  <Stack divider={<Divider />}>{section.rows.map(renderStackedRow)}</Stack>
+                </Fragment>
+              ))}
+            </Collapse>
           </Fragment>
         ))}
         <Stack
@@ -546,6 +672,19 @@ function AggLoadingTable({
     );
   }
 
+  /**
+   * The wide layout: the column head, then one brewery block after another, then the totals.
+   *
+   * Deliberately several tables rather than one. A section has to sit in a box whose height
+   * can be animated for it to slide open, and a `<tbody>` is not one — a table row group
+   * ignores height. Splitting the sections into sibling tables gives `Collapse` a real box
+   * per section, and the columns still line up because every column but Produkt is a fixed
+   * width (Množství {@link QTY_CELL_SX}, 112px per brewery invoice) and Produkt takes what
+   * is left in each of them ({@link PRODUCT_CELL_SX}).
+   *
+   * The cost is that the columns are no longer announced with the rows by a screen reader,
+   * so each section table is labelled with its brewery instead.
+   */
   function renderTable() {
     const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
     return (
@@ -554,36 +693,59 @@ function AggLoadingTable({
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <TableCell sx={HEAD_SX}>Produkt</TableCell>
+              <TableCell sx={{ ...HEAD_SX, ...PRODUCT_CELL_SX }}>Produkt</TableCell>
               <TableCell align="center" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
               {invoiceHeaders}
             </TableRow>
           </TableHead>
+        </Table>
+        {/* Sections rather than one flat list: the pallet is collected brewery by brewery,
+            and within one brewery the van is packed by kind — crates first, kegs last. */}
+        {sections.map((brewery) => (
+          <Fragment key={brewery.breweryId}>
+            {/* No border of its own: the last row above already draws that line, and two
+                1px borders from two tables do not collapse into one. */}
+            <Box sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
+              <BreweryHeadingContent
+                label={brewery.label}
+                count={sectionHeadingText(brewery)}
+                color={colorForBrewery(brewery.breweryId)}
+                collapsed={collapsed.has(brewery.breweryId)}
+                onToggle={() => toggleBrewery(brewery.breweryId)}
+              />
+            </Box>
+            <Collapse in={!collapsed.has(brewery.breweryId)} timeout={SECTION_MOTION_MS} unmountOnExit>
+              <Table size="small" aria-label={brewery.label}>
+                <TableBody>
+                  {brewery.kinds.map((section) => (
+                    <Fragment key={section.kind}>
+                      <TableRow>
+                        <TableCell
+                          colSpan={2 + columnCount * 2}
+                          sx={{
+                            py: 0.5, pl: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                            textTransform: 'uppercase', color: 'text.secondary',
+                            bgcolor: (t) => t.vars!.palette.brand.surface3,
+                          }}
+                        >
+                          {section.label}
+                          <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
+                            {sectionHeadingText(section)}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                      {section.rows.map(renderRow)}
+                    </Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </Collapse>
+          </Fragment>
+        ))}
+        <Table size="small">
           <TableBody>
-            {/* Sections rather than one flat list: the van is packed by kind, so the
-                list is read out that way — crates first, kegs last. */}
-            {sections.map((section) => (
-              <Fragment key={section.kind}>
-                <TableRow>
-                  <TableCell
-                    colSpan={2 + columnCount * 2}
-                    sx={{
-                      py: 0.5, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
-                      textTransform: 'uppercase', color: 'text.secondary',
-                      bgcolor: (t) => t.vars!.palette.brand.surface3,
-                    }}
-                  >
-                    {section.label}
-                    <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
-                      {sectionHeadingText(section)}
-                    </Box>
-                  </TableCell>
-                </TableRow>
-                {section.rows.map(renderRow)}
-              </Fragment>
-            ))}
             <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <TableCell sx={{ ...footSx, fontWeight: 700 }}>Celkem k naložení</TableCell>
+              <TableCell sx={{ ...footSx, ...PRODUCT_CELL_SX, fontWeight: 700 }}>Celkem k naložení</TableCell>
               <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totalQuantity} ks</TableCell>
               {invoiceFooters(footSx)}
             </TableRow>
@@ -948,7 +1110,7 @@ export function ShipmentDetail({
     [visibleRows, purchaseInvoices, loadingStates],
   );
   const totalQty = visibleRows.reduce((s, a) => s + a.quantity, 0);
-  const sections = useMemo(() => groupByKind(visibleRows), [visibleRows]);
+  const sections = useMemo(() => groupByBreweryThenKind(visibleRows), [visibleRows]);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
   const vehicle = vehicleQuery.data;

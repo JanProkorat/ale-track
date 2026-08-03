@@ -11611,6 +11611,9 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
     platoDegree?: number | undefined;
     type?: ProductType | undefined;
     weight?: number | undefined;
+    breweryId?: string;
+    breweryName?: string;
+    breweryDisplayOrder?: number;
     isShipmentLoadingConfirmed?: boolean;
 
     constructor(data?: IOutgoingShipmentProductDto) {
@@ -11632,6 +11635,9 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
             this.platoDegree = _data["platoDegree"];
             this.type = _data["type"];
             this.weight = _data["weight"];
+            this.breweryId = _data["breweryId"];
+            this.breweryName = _data["breweryName"];
+            this.breweryDisplayOrder = _data["breweryDisplayOrder"];
             this.isShipmentLoadingConfirmed = _data["isShipmentLoadingConfirmed"];
         }
     }
@@ -11653,6 +11659,9 @@ export class OutgoingShipmentProductDto implements IOutgoingShipmentProductDto {
         data["platoDegree"] = this.platoDegree;
         data["type"] = this.type;
         data["weight"] = this.weight;
+        data["breweryId"] = this.breweryId;
+        data["breweryName"] = this.breweryName;
+        data["breweryDisplayOrder"] = this.breweryDisplayOrder;
         data["isShipmentLoadingConfirmed"] = this.isShipmentLoadingConfirmed;
         return data;
     }
@@ -11667,6 +11676,9 @@ export interface IOutgoingShipmentProductDto {
     platoDegree?: number | undefined;
     type?: ProductType | undefined;
     weight?: number | undefined;
+    breweryId?: string;
+    breweryName?: string;
+    breweryDisplayOrder?: number;
     isShipmentLoadingConfirmed?: boolean;
 }
 
