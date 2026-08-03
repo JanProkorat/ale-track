@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Stack,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, ListItemIcon, ListItemText,
+  Menu, MenuItem, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
   useMediaQuery, type Theme,
 } from '@mui/material';
@@ -20,6 +21,9 @@ import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
@@ -41,7 +45,10 @@ import {
   StockPurchaseDto,
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
-import { useUpdateShipment, useSetPreparationStep } from 'src/hooks/useShipments';
+import {
+  useUpdateShipment, useSetPreparationStep, useExportShipment, type ShipmentExportFormat,
+} from 'src/hooks/useShipments';
+import { downloadBlob } from 'src/lib/download';
 import { useVehicle } from 'src/hooks/useVehicles';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
@@ -1020,7 +1027,9 @@ export function ShipmentDetail({
   const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
   const setLoadingState = useSetLoadingState(shipment.id);
   const setPreparationStep = useSetPreparationStep(shipment.id);
+  const exportShipment = useExportShipment();
 
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
   const [stockPurchaseProductId, setStockPurchaseProductId] = useState<string | null>(null);
@@ -1163,6 +1172,23 @@ export function ShipmentDetail({
     void save(draftFromShipment(shipment), next);
   }
 
+  // The server names the file (`vyvoz-<date>-<name>.xlsx`/`.docx`) and the generated client reads
+  // that name off Content-Disposition, so nothing here has to reconstruct it. The fallback only
+  // covers a proxy that strips the header, and carries the right extension per format so the file
+  // still opens in the right program.
+  function runExport(format: ShipmentExportFormat) {
+    setExportMenuAnchor(null);
+    if (!shipment.id) return;
+
+    exportShipment.mutate({ id: shipment.id, format }, {
+      onSuccess: (file) => downloadBlob(
+        file.data,
+        file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'),
+      ),
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Export se nepodařilo vytvořit'), { variant: 'error' }),
+    });
+  }
+
   // Adjust the "Zboží na sklad" quantity of an aggregated product by `delta`
   // (+1 / -1). Removes the item at zero.
   //
@@ -1302,6 +1328,41 @@ export function ShipmentDetail({
         meta={[shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen']}
         actions={(
           <>
+            {/* Not gated on `editable`: exporting is reading, and the office needs the file for
+                runs it may no longer change. The route already gates view permission.
+
+                One button opening a format menu rather than two buttons: the header already carries
+                up to four lifecycle actions, and a fifth wraps it onto a second row. */}
+            <Button
+              variant="outlined"
+              startIcon={exportShipment.isPending
+                ? <CircularProgress size={16} color="inherit" />
+                : <FileDownloadOutlinedIcon />}
+              endIcon={exportShipment.isPending ? undefined : <ExpandMoreIcon />}
+              onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+              disabled={exportShipment.isPending}
+              aria-haspopup="menu"
+              aria-expanded={exportMenuAnchor != null}
+              sx={ghostBtnSx}
+            >
+              {exportShipment.isPending ? 'Exportuji…' : 'Export'}
+            </Button>
+            <Menu
+              anchorEl={exportMenuAnchor}
+              open={exportMenuAnchor != null}
+              onClose={() => setExportMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+              <MenuItem onClick={() => runExport('excel')}>
+                <ListItemIcon><TableChartOutlinedIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Excel" secondary="List pro každého klienta" />
+              </MenuItem>
+              <MenuItem onClick={() => runExport('word')}>
+                <ListItemIcon><DescriptionOutlinedIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Word" secondary="Stránka pro každého klienta" />
+              </MenuItem>
+            </Menu>
             {editable && forwardStep && (
               <Button variant={forwardStep.primary ? 'contained' : 'outlined'} startIcon={forwardStep.icon} onClick={() => advance(forwardStep.to)}>
                 {forwardStep.label}

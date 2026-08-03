@@ -60,7 +60,8 @@ try
                 s.Version = "v1";
                 s.OperationProcessors.Add(new FilterableQueryProcessor());
                 s.OperationProcessors.Add(new BadRequestResponseProcessor());
-                
+                s.OperationProcessors.Add(new BinaryResponseProcessor());
+
             };
             o.ShortSchemaNames = true;
             o.SerializerSettings = s =>

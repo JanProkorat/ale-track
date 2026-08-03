@@ -21,7 +21,15 @@ import {
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
-vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
+// Hoisted rather than a fresh spy per call so the export tests can assert what was surfaced.
+const enqueueSnackbar = vi.hoisted(() => vi.fn());
+vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
+
+// The real helper drives an <a download> click, which happy-dom cannot act on. Saving the file is
+// covered directly in download.test.ts; here the question is only whether the screen hands it the
+// blob and the server's filename.
+const downloadBlob = vi.hoisted(() => vi.fn());
+vi.mock('src/lib/download', () => ({ downloadBlob }));
 
 // Pulls in react-leaflet, which doesn't run under happy-dom — same stub used
 // by ShipmentEditor.test.tsx. Captures the `stops` prop (rather than just
@@ -36,12 +44,17 @@ vi.mock('src/components/common/RouteMap', () => ({
   },
 }));
 
+// Hoisted so the export tests below can assert what the button fired and drive the mutation's
+// callbacks; a fresh vi.fn() per hook call would hand each re-render a different spy.
+const exportShipmentMutate = vi.hoisted(() => vi.fn());
+const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 vi.mock('src/hooks/useShipments', () => ({
   useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
   // Ticking a preparation step is a mutation the screen only fires on click; the checklist card
   // has its own tests (PreparationStepsCard.test.tsx).
   useSetPreparationStep: () => ({ mutate: vi.fn(), isPending: false }),
+  useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
 }));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
@@ -186,6 +199,104 @@ describe('ShipmentDetail — lifecycle affordances', () => {
     renderEditableDetail(OutgoingShipmentState.InTransit);
 
     expect(screen.getByRole('button', { name: 'Vrátit' })).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — export', () => {
+  beforeEach(() => {
+    exportShipmentMutate.mockReset();
+    downloadBlob.mockReset();
+    enqueueSnackbar.mockReset();
+    exportShipmentPending.value = false;
+  });
+
+  /** Opens the format menu and picks one, the way a user does. */
+  function pickFormat(label: 'Excel' | 'Word') {
+    fireEvent.click(screen.getByRole('button', { name: /^Export/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(`^${label}`) }));
+  }
+
+  // Exporting is reading, so it must not disappear on a run the office can no longer edit —
+  // a delivered shipment is exactly when the file is wanted.
+  it('offers the export on a read-only shipment', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.getByRole('button', { name: /^Export/ })).toBeEnabled();
+  });
+
+  // The button itself must not export: picking a format is the whole point of the menu, and a
+  // button that fired Excel on click would make the Word item unreachable in one gesture.
+  it('opens a format menu rather than exporting straight away', () => {
+    renderDetail([officialStop()]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Export/ }));
+
+    expect(exportShipmentMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('menuitem', { name: /^Excel/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^Word/ })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Excel', 'excel'],
+    ['Word', 'word'],
+  ] as const)('exports the shipment being viewed as %s', (label, format) => {
+    renderDetail([officialStop()]);
+
+    pickFormat(label);
+
+    expect(exportShipmentMutate).toHaveBeenCalledTimes(1);
+    expect(exportShipmentMutate.mock.calls[0][0]).toEqual({ id: 'ship-1', format });
+  });
+
+  it('saves the file under the name the server sent', () => {
+    renderDetail([officialStop()]);
+
+    pickFormat('Word');
+
+    const blob = new Blob(['docx']);
+    const { onSuccess } = exportShipmentMutate.mock.calls[0][1];
+    act(() => onSuccess({ data: blob, fileName: 'vyvoz-2026-08-03-rozvoz-zitava.docx', status: 200 }));
+
+    expect(downloadBlob).toHaveBeenCalledWith(blob, 'vyvoz-2026-08-03-rozvoz-zitava.docx');
+  });
+
+  // A proxy that strips Content-Disposition would otherwise save the file as "undefined" — and the
+  // fallback has to carry the extension of the format that was actually asked for, or the file
+  // opens in the wrong program.
+  it.each([
+    ['Excel', 'vyvoz.xlsx'],
+    ['Word', 'vyvoz.docx'],
+  ] as const)('falls back to a %s-shaped name when the response carries none', (label, expected) => {
+    renderDetail([officialStop()]);
+
+    pickFormat(label);
+
+    const blob = new Blob(['bytes']);
+    const { onSuccess } = exportShipmentMutate.mock.calls[0][1];
+    act(() => onSuccess({ data: blob, fileName: undefined, status: 200 }));
+
+    expect(downloadBlob).toHaveBeenCalledWith(blob, expected);
+  });
+
+  it('surfaces a failed export instead of saving nothing silently', () => {
+    renderDetail([officialStop()]);
+
+    pickFormat('Excel');
+
+    const { onError } = exportShipmentMutate.mock.calls[0][1];
+    act(() => onError(new Error('boom')));
+
+    expect(downloadBlob).not.toHaveBeenCalled();
+    expect(enqueueSnackbar).toHaveBeenCalledWith(expect.any(String), { variant: 'error' });
+  });
+
+  // Generating the file is a server round trip; a button that stays live invites a second click
+  // and a second file.
+  it('disables the button while the export is running', () => {
+    exportShipmentPending.value = true;
+    renderDetail([officialStop()]);
+
+    expect(screen.getByRole('button', { name: 'Exportuji…' })).toBeDisabled();
   });
 });
 

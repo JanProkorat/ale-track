@@ -280,6 +280,18 @@ export interface IClient {
     addShipmentInvoiceEndpoint(id: string, data: AddShipmentInvoiceDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Exports an outgoing shipment to an .xlsx workbook
+     * @return Workbook generated
+     */
+    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+
+    /**
+     * Exports an outgoing shipment to a .docx document
+     * @return Document generated
+     */
+    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+
+    /**
      * Retrieves details of an existing outgoing shipment
      * @return Outgoing shipment details retrieved
      */
@@ -3448,6 +3460,140 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Exports an outgoing shipment to an .xlsx workbook
+     * @return Workbook generated
+     */
+    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/excel";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processExportOutgoingShipmentExcelEndpoint(_response);
+        });
+    }
+
+    protected processExportOutgoingShipmentExcelEndpoint(response: Response): Promise<FileResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse>(null as any);
+    }
+
+    /**
+     * Exports an outgoing shipment to a .docx document
+     * @return Document generated
+     */
+    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/word";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processExportOutgoingShipmentWordEndpoint(_response);
+        });
+    }
+
+    protected processExportOutgoingShipmentWordEndpoint(response: Response): Promise<FileResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse>(null as any);
     }
 
     /**
@@ -11142,6 +11288,36 @@ export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
 export interface IGetShipmentInvoicesRequest {
 }
 
+export class ExportOutgoingShipmentRequest implements IExportOutgoingShipmentRequest {
+
+    constructor(data?: IExportOutgoingShipmentRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): ExportOutgoingShipmentRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExportOutgoingShipmentRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IExportOutgoingShipmentRequest {
+}
+
 export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     id?: string;
     state?: OutgoingShipmentState;
@@ -15929,6 +16105,13 @@ function formatDate(d: Date) {
     return d.getFullYear() + '-' + 
         (d.getMonth() < 9 ? ('0' + (d.getMonth()+1)) : (d.getMonth()+1)) + '-' +
         (d.getDate() < 10 ? ('0' + d.getDate()) : d.getDate());
+}
+
+export interface FileResponse {
+    data: Blob;
+    status: number;
+    fileName?: string;
+    headers?: { [name: string]: any };
 }
 
 export class ApiException extends Error {
