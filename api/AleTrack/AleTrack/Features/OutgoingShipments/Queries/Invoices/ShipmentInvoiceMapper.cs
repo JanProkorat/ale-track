@@ -65,18 +65,36 @@ public static class ShipmentInvoiceMapper
     private sealed record SortedLine(ShipmentInvoiceLineDto Dto, ProductType Type, float? PlatoDegree, double? PackageSize);
 
     /// <summary>
-    /// Puts the lines of one invoice in the app-wide product order (see
-    /// <see cref="ProductOrdering"/>), dropping the ones whose source item is gone.
+    /// Puts the lines of one invoice in display order, dropping the ones whose source item is
+    /// gone: kegs first, then the app-wide product order (see <see cref="ProductOrdering"/>)
+    /// for everything else.
     /// </summary>
+    /// <remarks>
+    /// Kegs lead here and nowhere else. An invoice is read against the pallet the way the office
+    /// checks it — the sudy carry most of the value and get reconciled first — while the nakládka
+    /// keeps its own order, in which the kegs go into the van last.
+    /// </remarks>
     private static List<ShipmentInvoiceLineDto> OrderForDisplay(IEnumerable<SortedLine?> lines) =>
         lines
             .Where(line => line is not null)
             .Select(line => line!)
-            .Order(Comparer<SortedLine>.Create((a, b) => ProductOrdering.Compare(
-                (a.Type, a.PlatoDegree, a.PackageSize, a.Dto.Name),
-                (b.Type, b.PlatoDegree, b.PackageSize, b.Dto.Name))))
+            .Order(Comparer<SortedLine>.Create((a, b) =>
+            {
+                var byKeg = KegRank(a.Dto.Kind).CompareTo(KegRank(b.Dto.Kind));
+                if (byKeg != 0) return byKeg;
+
+                return ProductOrdering.Compare(
+                    (a.Type, a.PlatoDegree, a.PackageSize, a.Dto.Name),
+                    (b.Type, b.PlatoDegree, b.PackageSize, b.Dto.Name));
+            }))
             .Select(line => line.Dto)
             .ToList();
+
+    /// <summary>
+    /// Kegs sort ahead of every other kind. A line with no kind at all — a custom extra — ranks
+    /// with the non-kegs rather than being pulled to the front by a missing value.
+    /// </summary>
+    private static int KegRank(ProductKind? kind) => kind == ProductKind.Keg ? 0 : 1;
 
     /// <summary>
     /// Maps one line, or null when its source item cannot be found in the graph — which should

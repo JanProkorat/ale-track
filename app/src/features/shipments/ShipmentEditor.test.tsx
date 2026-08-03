@@ -390,7 +390,7 @@ describe('ShipmentEditor — checklist', () => {
     renderEditor('create');
 
     expect((screen.getByLabelText('Položka 1') as HTMLInputElement).value).toBe('Rudlík');
-    expect((screen.getByLabelText('Položka 10') as HTMLInputElement).value).toBe('Věci z předchozího vývozu');
+    expect((screen.getByLabelText('Položka 11') as HTMLInputElement).value).toBe('Věci z předchozího vývozu');
   });
 
   it('leaves an existing shipment its own checklist, not the default one', () => {

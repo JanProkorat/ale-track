@@ -324,7 +324,24 @@ public record OutgoingShipmentProductDto
     /// Weight of the product in kilograms
     /// </summary>
     public double? Weight { get; set; }
-    
+
+    /// <summary>
+    /// ID of the brewery supplying the product. The nakládka sections its rows by brewery,
+    /// and it aggregates across every stop, so the key has to travel on each line.
+    /// </summary>
+    public Guid BreweryId { get; set; }
+
+    /// <summary>
+    /// Name of that brewery — the nakládka's section heading.
+    /// </summary>
+    public string BreweryName { get; set; } = null!;
+
+    /// <summary>
+    /// The brewery's own display order, so the sections read in the app-wide brewery order
+    /// rather than in whichever order the stops happened to introduce them.
+    /// </summary>
+    public int BreweryDisplayOrder { get; set; }
+
     /// <summary>
     /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
     /// </summary>

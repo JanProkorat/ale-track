@@ -20,7 +20,7 @@ export const STEP_LABEL_MAX = 200;
  */
 export const DEFAULT_CHECKLIST_LABELS = [
   'Rudlík',
-  'Parkovací karta',
+  'Tankovací karta',
   'Soupis',
   'Vozejk',
   'Klíče',
@@ -28,6 +28,7 @@ export const DEFAULT_CHECKLIST_LABELS = [
   'Biogon',
   'Prázdné',
   'Reklamace',
+  'Bonusy',
   'Věci z předchozího vývozu',
 ] as const;
 
