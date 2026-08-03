@@ -329,11 +329,16 @@ public sealed class ShipmentExportWorkbookBuilderTests
         var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
         var headerRow = RowOf(sheet, "PRODUKT");
 
-        // Package size carries no explicit format on purpose: it renders as 0,5 and 30 on General,
-        // while every decimal format either pads a whole size with zeros or leaves "30," behind.
+        // Package size carries no explicit format on purpose: General renders 0,5 and 30 in the
+        // reader's own locale, while every decimal format either pads a whole size with zeros or
+        // leaves a trailing separator behind ("30,").
+        //
+        // Asserted on the format rather than on GetFormattedString(): that renders using the ambient
+        // culture, so an expected "0,5" passes on a comma-decimal machine and fails on CI.
         var size = sheet.Cell(headerRow + 1, 3);
         size.DataType.Should().Be(XLDataType.Number);
-        size.GetFormattedString().Should().Be("0,5");
+        size.GetValue<double>().Should().Be(0.5);
+        size.Style.NumberFormat.Format.Should().BeEmpty("General, so the reader's locale decides");
 
         var quantity = sheet.Cell(headerRow + 1, 4);
         quantity.DataType.Should().Be(XLDataType.Number);
