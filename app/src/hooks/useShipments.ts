@@ -161,6 +161,32 @@ export function useSetPreparationStep(shipmentId: string | undefined) {
   });
 }
 
+/** Which file the shipment export produces. */
+export type ShipmentExportFormat = 'excel' | 'word';
+
+/**
+ * Downloads the shipment as a spreadsheet or a document — an overview of the run, then one sheet
+ * (Excel) or one page (Word) per client listing what that client ordered.
+ *
+ * A mutation rather than a query even though the endpoints only read: it runs when the user picks a
+ * format, and its result is a file rather than something to cache. Nothing is invalidated for the
+ * same reason — exporting changes no server state.
+ *
+ * One hook over both formats rather than two: the caller has one button and one pending state, and
+ * splitting them would let the two exports be in flight at once for no gain. The generated client
+ * returns a `FileResponse` either way, so the blob and the server's own filename both arrive here;
+ * the caller saves them with `downloadBlob`.
+ */
+export function useExportShipment() {
+  const ds = useDataSource();
+  return useMutation({
+    mutationFn: ({ id, format }: { id: string; format: ShipmentExportFormat }) =>
+      (format === 'word'
+        ? ds.exportOutgoingShipmentWordEndpoint(id)
+        : ds.exportOutgoingShipmentExcelEndpoint(id)),
+  });
+}
+
 /** Orders eligible to become a stop on this shipment (or already on it, when
  * editing) — excludes orders already assigned to a *different* shipment. Pass
  * `undefined` when creating a brand-new shipment. */

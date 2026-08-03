@@ -1,0 +1,447 @@
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using static AleTrack.Features.OutgoingShipments.Queries.Export.ShipmentExportLabels;
+
+namespace AleTrack.Features.OutgoingShipments.Queries.Export;
+
+/// <summary>
+/// Writes a <see cref="ShipmentExportModel"/> out as a .docx document: the run's overview, then one
+/// page per client stop.
+/// </summary>
+/// <remarks>
+/// The same content as <see cref="ShipmentExportWorkbookBuilder"/>, laid out for a document rather
+/// than a grid — a client gets a page with a heading rather than a worksheet, because this is the
+/// version that gets printed and handed over.
+///
+/// Formatting is applied directly to the runs; the styles part carries nothing but document-wide
+/// defaults, because there is not enough variation here for named styles to earn the indirection.
+///
+/// Four details are load-bearing rather than cosmetic, and each has a test of its own: the body ends
+/// in a <c>sectPr</c> declaring the page (without it a reader has no page to lay content out against
+/// and gives every table a sheet of its own), no two tables ever sit directly against each other
+/// (Word merges those into one), each table carries a <c>tblGrid</c>, and clients are separated by an
+/// explicit page-break run rather than by <c>pageBreakBefore</c> (see <see cref="PageBreak"/>).
+/// </remarks>
+public static class ShipmentExportDocumentBuilder
+{
+    /// <summary>Half-points, as Word measures font size. 20 = 10pt.</summary>
+    private const string BodyFontSize = "20";
+
+    private const string HeadingFontSize = "28";
+
+    private const string FooterFontSize = "16";
+
+    /// <summary>
+    /// Column widths in twentieths of a point, summing to the text width of a portrait A4 page at
+    /// Word's default margins.
+    /// </summary>
+    /// <remarks>
+    /// Every table needs a <c>tblGrid</c>: it is required by the schema, and Word repairs — rather
+    /// than opens — a table without one.
+    /// </remarks>
+    private static readonly int[] LabelColumns = [2400, 6600];
+
+    private static readonly int[] ProductColumns = [4200, 1500, 1500, 1800];
+
+    /// <summary>Stop number needs far less room than the town it is in.</summary>
+    private static readonly int[] StopColumns = [1000, 3800, 2900, 1300];
+
+    private static readonly int[] ReturnColumns = [3600, 3600, 1800];
+
+    /// <summary>Widths for a returns table whose items carry no notes — see WriteStopPage.</summary>
+    private static readonly int[] ReturnColumnsWithoutNotes = [6600, 2400];
+
+    /// <summary>Header-row fill, matching the workbook's.</summary>
+    private const string HeaderFill = "F2F2F2";
+
+    /// <summary>
+    /// Builds the document and returns its bytes.
+    /// </summary>
+    public static byte[] Build(ShipmentExportModel model)
+    {
+        using var stream = new MemoryStream();
+
+        using (var document = WordprocessingDocument.Create(stream, WordprocessingDocumentType.Document))
+        {
+            var mainPart = document.AddMainDocumentPart();
+            WriteStyles(mainPart);
+
+            var body = new Body();
+
+            WriteOverview(body, model);
+
+            foreach (var stop in model.ClientStops)
+                WriteStopPage(body, stop);
+
+            // Last child of the body, as the schema requires. Without it the document declares no
+            // page size or margins at all, and a reader with no page to lay out against pushes each
+            // fixed-width table onto a sheet of its own — which is what put one client's heading,
+            // address and goods on three separate pages.
+            var setup = PageSetup();
+            WriteFooter(mainPart, model, setup);
+            body.AppendChild(setup);
+
+            mainPart.Document = new Document(body);
+        }
+
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// A4 portrait with 2 cm margins, leaving 9638 twips of text width for the 9000-twip tables.
+    /// </summary>
+    private static SectionProperties PageSetup() =>
+        new(
+            new PageSize { Width = 11906, Height = 16838 },
+            new PageMargin
+            {
+                Top = 1134, Bottom = 1134, Left = 1134, Right = 1134, Header = 720, Footer = 720, Gutter = 0
+            });
+
+    /// <summary>
+    /// Footer naming the run and numbering the pages.
+    /// </summary>
+    /// <remarks>
+    /// The pages of this document get separated on purpose — one per stop, handed over as the van goes
+    /// round — and a loose sheet carrying nothing but a client name says nothing about which run it
+    /// came off. The footer is what keeps a page identifiable once it leaves the stack.
+    ///
+    /// The reference goes at the front of the section properties: sectPr's header and footer
+    /// references precede the page geometry in the schema's sequence.
+    /// </remarks>
+    private static void WriteFooter(MainDocumentPart mainPart, ShipmentExportModel model, SectionProperties setup)
+    {
+        var part = mainPart.AddNewPart<FooterPart>();
+
+        part.Footer = new Footer(new Paragraph(
+            new ParagraphProperties(
+                new SpacingBetweenLines { Before = "120", After = "0" },
+                new Justification { Val = JustificationValues.Center }),
+            Run($"{model.ShipmentName} · {Date(model.DeliveryDate)} · Strana ", fontSize: FooterFontSize),
+            // Field codes rather than a computed number: the reader knows how many pages it ended up
+            // laying out, and this writer does not. The cached run is what shows before a recalc.
+            PageNumberField(" PAGE "),
+            Run(" z ", fontSize: FooterFontSize),
+            PageNumberField(" NUMPAGES ")));
+
+        part.Footer.Save();
+
+        setup.PrependChild(new FooterReference
+        {
+            Id = mainPart.GetIdOfPart(part), Type = HeaderFooterValues.Default
+        });
+    }
+
+    private static SimpleField PageNumberField(string instruction) =>
+        new(Run("1", fontSize: FooterFontSize)) { Instruction = instruction };
+
+    /// <summary>
+    /// Document-wide defaults, so text has a defined font and line spacing rather than whatever the
+    /// reader happens to fall back to.
+    /// </summary>
+    private static void WriteStyles(MainDocumentPart mainPart)
+    {
+        var part = mainPart.AddNewPart<StyleDefinitionsPart>();
+
+        part.Styles = new Styles(
+            new DocDefaults(
+                new RunPropertiesDefault(
+                    new RunPropertiesBaseStyle(
+                        new RunFonts { Ascii = "Calibri", HighAnsi = "Calibri" },
+                        new FontSize { Val = BodyFontSize },
+                        new FontSizeComplexScript { Val = BodyFontSize })),
+                new ParagraphPropertiesDefault(
+                    new ParagraphPropertiesBaseStyle(
+                        new SpacingBetweenLines
+                        {
+                            After = "0", Line = "240", LineRule = LineSpacingRuleValues.Auto
+                        }))));
+
+        part.Styles.Save();
+    }
+
+    private static void WriteOverview(Body body, ShipmentExportModel model)
+    {
+        body.AppendChild(Heading(model.ShipmentName));
+
+        var summary = LabelTable();
+        summary.AppendChild(LabelRow("Datum dodání", Date(model.DeliveryDate)));
+        summary.AppendChild(LabelRow("Vozidlo", model.VehicleName ?? Missing));
+        // Singular when one drives, so a one-driver run does not read as a list of one.
+        summary.AppendChild(LabelRow(
+            model.DriverNames.Count == 1 ? "Řidič" : "Řidiči",
+            model.DriverNames.Count > 0 ? string.Join(", ", model.DriverNames) : Missing));
+        summary.AppendChild(LabelRow("Zastávek", Number(model.Stops.Count)));
+        summary.AppendChild(LabelRow("Klientů", Number(model.ClientStops.Count())));
+        // The unit is named once, never twice: bare here because "Celkem kusů" already says "ks",
+        // spelled out under the product tables' "Množství", which names no unit of its own.
+        summary.AppendChild(LabelRow("Celkem kusů", Number(model.TotalQuantity)));
+        summary.AppendChild(LabelRow("Hmotnost", Kilograms(model.TotalWeight)));
+        AppendTable(body, summary);
+
+        body.AppendChild(SectionHeading("Zastávky"));
+
+        var stops = BuildTable(StopColumns);
+        stops.AppendChild(HeaderRow("Zastávka", "Klient", "Město", "Kusů"));
+
+        foreach (var stop in model.Stops)
+        {
+            stops.AppendChild(DataRow(
+                Number(stop.Order),
+                stop.ClientName ?? stop.Label ?? Missing,
+                stop.City ?? Missing,
+                // A custom stop delivers nothing, so a 0 here would read as a wasted trip. Bare
+                // number — this column's own header is "Kusů".
+                stop.ClientName is null ? Missing : Number(stop.TotalQuantity)));
+        }
+
+        AppendTable(body, stops);
+
+        if (model.StockPurchases.Count == 0)
+            return;
+
+        body.AppendChild(SectionHeading("Zboží na sklad"));
+        WriteProductTable(body, model.StockPurchases);
+    }
+
+    private static void WriteStopPage(Body body, ShipmentExportStop stop)
+    {
+        // Each client starts a fresh page: this is meant to be handed over per stop, and a page
+        // holding the tail of one client and the head of the next cannot be. The break also ends the
+        // overview's page, so the first client starts clean too.
+        body.AppendChild(PageBreak());
+        body.AppendChild(Heading($"{stop.Order}. {stop.ClientName ?? Missing}"));
+
+        var details = LabelTable();
+        details.AppendChild(LabelRow("Ulice", stop.Street ?? Missing));
+        details.AppendChild(LabelRow("PSČ a město", stop.CityLine ?? Missing));
+
+        if (stop.DeliveryPlaceName is not null)
+            details.AppendChild(LabelRow("Místo dodání", stop.DeliveryPlaceName));
+
+        // Nothing at all rather than an empty row: a blank "Poznámky" reads as "no instructions",
+        // which is a claim this page has no business making.
+        for (var i = 0; i < stop.Notes.Count; i++)
+            details.AppendChild(LabelRow(i == 0 ? "Poznámky" : string.Empty, stop.Notes[i]));
+
+        AppendTable(body, details);
+
+        WriteProductTable(body, stop.Products);
+
+        if (stop.Returns.Count == 0)
+            return;
+
+        // Below the products, not above: what the client hands back reads after what is delivered.
+        body.AppendChild(SectionHeading("Vrací"));
+
+        // Most vratky carry no note at all, and an always-present empty column reads as information
+        // that failed to load. The column appears only once something is in it.
+        var anyNotes = stop.Returns.Any(item => !string.IsNullOrWhiteSpace(item.Note));
+
+        var returns = BuildTable(anyNotes ? ReturnColumns : ReturnColumnsWithoutNotes);
+        returns.AppendChild(anyNotes
+            ? HeaderRow("Položka", "Poznámka", "Množství")
+            : HeaderRow("Položka", "Množství"));
+
+        foreach (var item in stop.Returns)
+        {
+            returns.AppendChild(anyNotes
+                ? DataRow(item.Name, item.Note ?? string.Empty, Pieces(item.Quantity))
+                : DataRow(item.Name, Pieces(item.Quantity)));
+        }
+
+        AppendTable(body, returns);
+    }
+
+    private static void WriteProductTable(Body body, List<ShipmentExportProduct> products)
+    {
+        if (products.Count == 0)
+        {
+            body.AppendChild(Paragraph("Bez položek", italic: true));
+            return;
+        }
+
+        var table = BuildTable(ProductColumns);
+        table.AppendChild(HeaderRow("Produkt", "Druh", "Balení", "Množství"));
+
+        foreach (var product in products)
+        {
+            table.AppendChild(DataRow(
+                product.Name,
+                KindLabel(product.Kind),
+                Litres(product.PackageSize),
+                Pieces(product.Quantity)));
+        }
+
+        table.AppendChild(TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity))));
+        AppendTable(body, table);
+    }
+
+    /// <summary>
+    /// Appends a table followed by an empty paragraph.
+    /// </summary>
+    /// <remarks>
+    /// The trailing paragraph is not decoration. Word merges two tables that sit directly against
+    /// each other into one — which is what ran a client's address block into their product table —
+    /// and a body whose last element is a table is a shape Word repairs rather than opens. Routing
+    /// every table through here makes both impossible to reintroduce by adding a section later.
+    /// </remarks>
+    private static void AppendTable(Body body, Table table)
+    {
+        body.AppendChild(table);
+        body.AppendChild(new Paragraph(new ParagraphProperties(
+            new SpacingBetweenLines { After = "0", Line = "120", LineRule = LineSpacingRuleValues.Auto })));
+    }
+
+    private static Paragraph Heading(string text) =>
+        new(
+            new ParagraphProperties(new SpacingBetweenLines { After = "160" }),
+            Run(text, bold: true, fontSize: HeadingFontSize));
+
+    /// <summary>
+    /// A hard page break — what Ctrl+Enter inserts.
+    /// </summary>
+    /// <remarks>
+    /// An explicit break run rather than <c>pageBreakBefore</c> on the following heading. The latter
+    /// is a paragraph *hint*, and readers outside Word routinely ignore it, which left every client
+    /// running onto the previous client's page — the one thing a per-stop handover sheet cannot do.
+    ///
+    /// The two mechanisms must never be combined: a reader honouring both breaks twice and leaves a
+    /// blank page between every client.
+    /// </remarks>
+    private static Paragraph PageBreak() =>
+        new(new Run(new Break { Type = BreakValues.Page }));
+
+    private static Paragraph SectionHeading(string text) =>
+        new(
+            new ParagraphProperties(new SpacingBetweenLines { Before = "240", After = "80" }),
+            Run(text.ToUpperInvariant(), bold: true));
+
+    private static Paragraph Paragraph(string text, bool italic = false) =>
+        new(Run(text, italic: italic));
+
+    private static Run Run(string text, bool bold = false, bool italic = false, string? fontSize = null)
+    {
+        // Bold and italic before the size: rPr's children are a fixed sequence (b, i, … sz), and
+        // Word refuses a document that orders them any other way.
+        var properties = new RunProperties();
+
+        if (bold)
+            properties.AppendChild(new Bold());
+
+        if (italic)
+            properties.AppendChild(new Italic());
+
+        properties.AppendChild(new FontSize { Val = fontSize ?? BodyFontSize });
+
+        // Space preserved because notes and product names can begin or end on one, and Word would
+        // otherwise collapse it away.
+        return new Run(properties, new Text(text) { Space = SpaceProcessingModeValues.Preserve });
+    }
+
+    /// <summary>
+    /// Borderless two-column table for label/value blocks — a layout grid, not a data table.
+    /// </summary>
+    private static Table LabelTable() => BuildTable(LabelColumns, bordered: false);
+
+    private static Table BuildTable(int[] columnWidths, bool bordered = true)
+    {
+        // tblPr's children are a fixed sequence too: width, then borders, then layout.
+        var properties = new TableProperties(
+            new TableWidth { Width = columnWidths.Sum().ToString(), Type = TableWidthUnitValues.Dxa });
+
+        if (bordered)
+        {
+            // Ordered top, left, bottom, right, inside-h, inside-v — again the schema's sequence,
+            // not the CSS one.
+            properties.AppendChild(new TableBorders(
+                new TopBorder { Val = BorderValues.Single, Size = 4 },
+                new LeftBorder { Val = BorderValues.Single, Size = 4 },
+                new BottomBorder { Val = BorderValues.Single, Size = 4 },
+                new RightBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 }));
+        }
+
+        properties.AppendChild(new TableLayout { Type = TableLayoutValues.Fixed });
+
+        // Cell padding, after the layout per the schema's sequence. Without it text sits hard against
+        // the cell border, which is legible on screen and cramped on paper.
+        properties.AppendChild(new TableCellMarginDefault(
+            new TopMargin { Width = "40", Type = TableWidthUnitValues.Dxa },
+            new TableCellLeftMargin { Width = 108, Type = TableWidthValues.Dxa },
+            new BottomMargin { Width = "40", Type = TableWidthUnitValues.Dxa },
+            new TableCellRightMargin { Width = 108, Type = TableWidthValues.Dxa }));
+
+        var grid = new TableGrid(columnWidths.Select(width =>
+            (OpenXmlElement)new GridColumn { Width = width.ToString() }));
+
+        return new Table(properties, grid);
+    }
+
+    private static TableRow LabelRow(string label, string value) =>
+        Row(Cell(label, bold: true), Cell(value));
+
+    /// <summary>
+    /// Column headings — shaded, and repeated at the top of every page the table runs onto.
+    /// </summary>
+    /// <remarks>
+    /// A long order spills past one page, and a column of bare quantities with no heading above it is
+    /// exactly the kind of thing that gets read into the wrong row.
+    /// </remarks>
+    private static TableRow HeaderRow(params string[] headers)
+    {
+        var row = Row(headers
+            .Select(header => Cell(header.ToUpperInvariant(), bold: true, shaded: true))
+            .ToArray());
+
+        row.TableRowProperties!.AppendChild(new TableHeader());
+        return row;
+    }
+
+    private static TableRow DataRow(params string[] values) =>
+        Row(values.Select(value => Cell(value)).ToArray());
+
+    /// <summary>
+    /// Closing total, with the two columns that carry no total merged rather than left blank —
+    /// an empty bordered cell reads as a value that failed to arrive.
+    /// </summary>
+    private static TableRow TotalRow(string label, string total) =>
+        Row(Cell(label, bold: true), Cell(string.Empty, gridSpan: 2), Cell(total, bold: true));
+
+    /// <summary>
+    /// A row that will not be split across a page boundary.
+    /// </summary>
+    /// <remarks>
+    /// trPr's children are a fixed sequence, so cantSplit goes in before anything HeaderRow adds.
+    /// </remarks>
+    private static TableRow Row(params TableCell[] cells)
+    {
+        var row = new TableRow(new TableRowProperties(new CantSplit()));
+
+        foreach (var cell in cells)
+            row.AppendChild(cell);
+
+        return row;
+    }
+
+    /// <remarks>
+    /// tcPr's children are a fixed sequence: the span before the shading.
+    /// </remarks>
+    private static TableCell Cell(string text, bool bold = false, bool shaded = false, int gridSpan = 1)
+    {
+        var properties = new TableCellProperties();
+
+        if (gridSpan > 1)
+            properties.AppendChild(new GridSpan { Val = gridSpan });
+
+        if (shaded)
+            properties.AppendChild(new Shading
+            {
+                Val = ShadingPatternValues.Clear, Color = "auto", Fill = HeaderFill
+            });
+
+        return new TableCell(properties, new Paragraph(Run(text, bold: bold)));
+    }
+}
