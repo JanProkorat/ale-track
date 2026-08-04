@@ -11,7 +11,9 @@ public static class AddressBuilder
         string? streetName = null,
         string? streetNumber = null,
         Country country = Country.Czechia,
-        string? zip = null)
+        string? zip = null,
+        decimal? latitude = null,
+        decimal? longitude = null)
     {
         return new Address
         {
@@ -19,7 +21,9 @@ public static class AddressBuilder
             StreetName = streetName ?? "Default Street",
             StreetNumber = streetNumber ?? "1",
             Country = country,
-            Zip = zip ?? "00000"
+            Zip = zip ?? "00000",
+            Latitude = latitude,
+            Longitude = longitude
         };
     }
 
