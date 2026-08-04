@@ -162,6 +162,14 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         outgoingShipment.StockPurchases = stockPurchases;
         outgoingShipment.PreparationSteps = BuildPreparationSteps(req.Data.PreparationSteps, outgoingShipment);
 
+        // Only while the content is still open: past Created the stock purchases cannot
+        // change either, so there is nothing to reconcile and mutating a frozen run's
+        // stops would be a bug.
+        if (ShipmentMutability.IsContentEditable(outgoingShipment.State))
+        {
+            CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
+        }
+
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
 

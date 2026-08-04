@@ -130,6 +130,10 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         foreach (var order in orders.Where(o => o.State == OrderState.New))
             order.State = OrderState.Planning;
 
+        // A created shipment is always Created, so the content is always open —
+        // no mutability gate needed here.
+        CompanyStopReconciler.Apply(outgoingShipment, company);
+
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);

@@ -20,10 +20,25 @@ public sealed class CompanyStopTests
     /// The label and coordinates are the server's to write. A stale — or hostile —
     /// client must not be able to pin the warehouse stop somewhere else.
     /// </summary>
+    /// <remarks>
+    /// The shipment carries a stock purchase so the Company stop is legitimate under
+    /// <see cref="CompanyStopReconciler"/>'s invariant — without one, the reconciler would
+    /// strip the stop entirely rather than leave it for the client's claim to be checked.
+    /// </remarks>
     [Fact]
     public async Task HandleAsync_CompanyStopInRequest_PersistsCompanyAddressNotTheClientsClaim()
     {
         var (shipment, request, dbContext) = Arrange(OutgoingShipmentState.Created, []);
+
+        var product = ProductBuilder.BuildEntity();
+        var stockPurchaseId = Guid.NewGuid();
+        shipment.StockPurchases.Add(new OutgoingShipmentStockPurchaseItem
+        {
+            PublicId = stockPurchaseId,
+            Product = product,
+            ProductId = product.Id,
+            Quantity = 6
+        });
 
         request.Data.CustomStops =
         [
@@ -34,6 +49,15 @@ public sealed class CompanyStopTests
                 Label = "Někde jinde",
                 Latitude = 0m,
                 Longitude = 0m
+            }
+        ];
+        request.Data.StockPurchases =
+        [
+            new StockPurchaseDto
+            {
+                Id = stockPurchaseId,
+                ProductId = product.PublicId,
+                Quantity = 6
             }
         ];
 
