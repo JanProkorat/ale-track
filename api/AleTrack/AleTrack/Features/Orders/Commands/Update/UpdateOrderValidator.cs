@@ -96,5 +96,9 @@ public sealed class UpdateOrderItemDtoValidator : Validator<UpdateOrderItemDto>
         RuleFor(r => r.ProductId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
         RuleFor(r => r.ReminderState).IsInEnum().When(r => r.ReminderState != null);
+        RuleFor(r => r.Note)
+            .MaximumLength(500)
+            .When(r => r.Note != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
     }
 }

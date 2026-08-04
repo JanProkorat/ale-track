@@ -89,4 +89,11 @@ public sealed record UpdateOrderItemDto
     /// State of the reminder for this item.
     /// </summary>
     public OrderItemReminderState? ReminderState { get; set; }
+
+    /// <summary>
+    /// Optional free-form note about this line. Applied by its own merge step, not by the
+    /// item rebuild, so a note-only save works even once the content is frozen — see
+    /// <see cref="UpdateOrderEndpoint"/>.
+    /// </summary>
+    public string? Note { get; set; }
 }

@@ -49,8 +49,10 @@ on both the new-row and the update-in-place branch.
 
 ### Read path
 
-Free: `OrderDto.CustomExtraItems` and `OutgoingShipmentStopDto.CustomExtraItems`
-both project this same DTO.
+`OrderDto.CustomExtraItems` and `OutgoingShipmentStopDto.CustomExtraItems` both
+carry this DTO, but each is built by a hand-written `Select`, so both projections
+name the new field explicitly — `GetOrderDetailEndpoint` and
+`GetOutgoingShipmentDetailEndpoint`.
 
 ### UI
 

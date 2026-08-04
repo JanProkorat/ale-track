@@ -99,6 +99,12 @@ interface NakladkaRow {
   inventoryItemName?: string;
   /** Pieces on hand in that stock entry, for the over-draw warning. */
   inventoryAvailable?: number;
+  /**
+   * The order line's own note (order rows only). Shown in the per-order overview,
+   * never in the aggregated loading table — that table merges the same product
+   * across clients, and a note belongs to one client's line.
+   */
+  note?: string;
 }
 
 function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
@@ -122,6 +128,7 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     inventoryItemId: p.inventoryItemId,
     inventoryItemName: p.inventoryItemName,
     inventoryAvailable: p.inventoryItemAvailable,
+    note: p.note,
   };
 }
 function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
@@ -778,10 +785,14 @@ function AggLoadingTable({
 function ProductLine({ row }: { row: NakladkaRow }) {
   const chipText = kindSizeChipText(row.kind, row.packageSize);
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
+    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{row.name}</Typography>
         {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600, mt: 0.25 }} />}
+        {/* The instruction the loader needs; owned and edited by the order. */}
+        {row.note && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{row.note}</Typography>
+        )}
       </Box>
       <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
     </Stack>
@@ -1552,10 +1563,11 @@ export function ShipmentDetail({
               <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
                 {/* Owned by the order — added there, only displayed here. */}
                 {customExtras.map(({ clientName, extra }) => (
-                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography noWrap>{extra.description}</Typography>
-                      <Typography variant="caption" color="text.secondary">{clientName}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{clientName}</Typography>
+                      {extra.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{extra.note}</Typography>}
                     </Box>
                     <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{extra.quantity} ks</Typography>
                   </Stack>

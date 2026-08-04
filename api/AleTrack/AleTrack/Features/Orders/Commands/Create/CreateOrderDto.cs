@@ -77,4 +77,9 @@ public sealed record CreateOrderItemDto
     /// State of the reminder for this item.
     /// </summary>
     public OrderItemReminderState? ReminderState { get; set; }
+
+    /// <summary>
+    /// Optional free-form note about this line.
+    /// </summary>
+    public string? Note { get; set; }
 }
