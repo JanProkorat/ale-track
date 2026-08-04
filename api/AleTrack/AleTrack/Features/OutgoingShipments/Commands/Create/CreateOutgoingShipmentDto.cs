@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Create;
@@ -8,6 +9,18 @@ public sealed record CreateOutgoingShipmentDto
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Where the run is loaded before it sets off. Defaults to the company warehouse.
+    /// </summary>
+    public ShipmentStartPointKind StartPointKind { get; set; } = ShipmentStartPointKind.Company;
+
+    /// <summary>
+    /// Public ID of the brewery the run starts at. Required when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Brewery"/>,
+    /// and must be null otherwise.
+    /// </summary>
+    public Guid? StartBreweryId { get; set; }
     
     /// <summary>
     /// Date when shipments are going to be delivered

@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using FastEndpoints;
@@ -41,11 +42,25 @@ public sealed class CreateOutgoingShipmentDtoValidator : AbstractValidator<Creat
         RuleFor(dto => dto.ClientOrderShipments)
             .NotEmpty()
             .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-        
+
         RuleForEach(dto => dto.ClientOrderShipments)
             .SetValidator(new ClientOrderShipmentDtoValidator());
 
         RuleForEach(dto => dto.PreparationSteps)
             .SetValidator(new PreparationStepDtoValidator());
+
+        RuleFor(dto => dto.StartPointKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        RuleFor(dto => dto.StartBreweryId)
+            .NotNull()
+            .When(dto => dto.StartPointKind == ShipmentStartPointKind.Brewery)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
+        RuleFor(dto => dto.StartBreweryId)
+            .Null()
+            .When(dto => dto.StartPointKind == ShipmentStartPointKind.Company)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
     }
 }

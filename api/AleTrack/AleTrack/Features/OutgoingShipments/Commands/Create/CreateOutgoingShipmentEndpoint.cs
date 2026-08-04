@@ -54,6 +54,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
         var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, ct);
 
         var outgoingShipment = new OutgoingShipment
         {
@@ -62,6 +63,8 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             CreatedDate = DateTime.UtcNow,
             State = OutgoingShipmentState.Created,
             Vehicle = vehicle,
+            StartPointKind = req.Data.StartPointKind,
+            StartBrewery = startBrewery,
             Drivers = [.. drivers
                 .Select(d => new OutgoingShipmentDriver 
                 {
@@ -165,6 +168,28 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, CancellationToken ct)
+    {
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
+        {
+            return null;
+        }
+
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
+
+        if (brewery is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        return brewery;
     }
 
     private async Task<List<Driver>> GetDriversAsync(List<Guid> driverIds, CancellationToken ct)

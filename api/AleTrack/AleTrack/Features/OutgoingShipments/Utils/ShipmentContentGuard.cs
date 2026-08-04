@@ -43,6 +43,10 @@ public static class ShipmentContentGuard
         if (!StockPurchasesMatch(stored, incoming))
             changed.Add(nameof(incoming.StockPurchases));
 
+        if (stored.StartPointKind != incoming.StartPointKind
+            || stored.StartBrewery?.PublicId != incoming.StartBreweryId)
+            changed.Add(nameof(incoming.StartPointKind));
+
         return changed;
     }
 

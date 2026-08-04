@@ -99,6 +99,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         .Include(os => os.Stops)
             .ThenInclude(s => s.Items)
         .Include(os => os.PreparationSteps)
+        // Needed by ShipmentContentGuard, which compares the stored start brewery by
+        // public ID — without this every save of a brewery-started shipment would read
+        // the brewery as removed and be wrongly rejected as frozen content.
+        .Include(os => os.StartBrewery)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -139,11 +143,14 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
         var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
         var stockPurchases = await GetStockPurchasesAsync(req.Data.StockPurchases, outgoingShipment, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, ct);
 
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
+        outgoingShipment.StartPointKind = req.Data.StartPointKind;
+        outgoingShipment.StartBrewery = startBrewery;
         outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
@@ -525,6 +532,28 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, CancellationToken ct)
+    {
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
+        {
+            return null;
+        }
+
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
+
+        if (brewery is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        return brewery;
     }
 
     /// <summary>

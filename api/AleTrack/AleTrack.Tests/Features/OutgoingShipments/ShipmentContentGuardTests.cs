@@ -191,6 +191,18 @@ public sealed class ShipmentContentGuardTests
     }
 
     [Fact]
+    public void ChangedFrozenFields_StartPointChanged_ReportsStartPointKind()
+    {
+        var (shipment, dto) = RoundTripped();
+
+        dto.StartPointKind = ShipmentStartPointKind.Brewery;
+        dto.StartBreweryId = Guid.NewGuid();
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto)
+            .Should().Contain(nameof(UpdateOutgoingShipmentDto.StartPointKind));
+    }
+
+    [Fact]
     public void ChangedFrozenFields_EverythingFrozenChanged_ReportsEveryField()
     {
         var (shipment, dto) = RoundTripped();
@@ -227,6 +239,8 @@ public sealed class ShipmentContentGuardTests
             Client = client,
             Address = AddressBuilder.BuildEntity()
         };
+
+        var startBrewery = BreweryBuilder.BuildEntity(name: "Svijany");
 
         var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
         product.Id = 11;
@@ -282,6 +296,9 @@ public sealed class ShipmentContentGuardTests
                 customStop
             ]);
 
+        shipment.StartPointKind = ShipmentStartPointKind.Brewery;
+        shipment.StartBrewery = startBrewery;
+
         shipment.RouteViaPoints =
         [
             new OutgoingShipmentRoutePoint { Order = 0, Latitude = 50.0m, Longitude = 14.0m },
@@ -306,6 +323,8 @@ public sealed class ShipmentContentGuardTests
             VehicleId = vehicle.PublicId,
             DriverIds = [],
             State = OutgoingShipmentState.Loaded,
+            StartPointKind = ShipmentStartPointKind.Brewery,
+            StartBreweryId = startBrewery.PublicId,
             ClientOrderShipments =
             [
                 new ClientOrderShipmentDto
