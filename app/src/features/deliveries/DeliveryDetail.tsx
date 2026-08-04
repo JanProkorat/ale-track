@@ -10,13 +10,13 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import DirectionsCarFilledOutlinedIcon from '@mui/icons-material/DirectionsCarFilledOutlined';
 import { useSnackbar } from 'notistack';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, deliveryNumber, plural } from 'src/lib/format';
-import { DELIVERY_STATUS, deliveryStateName } from 'src/lib/labels';
+import { DELIVERY_STATUS, deliveryStateName, startPointKindName } from 'src/lib/labels';
 import {
   ProductDeliveryState,
   UpdateProductDeliveryDto,
@@ -27,6 +27,7 @@ import {
 } from 'src/generated/api-client';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useUpdateDelivery } from 'src/hooks/useDeliveries';
+import { useShipmentStartPoints } from 'src/hooks/useShipments';
 
 const DRIVER_COLORS = ['#F08C00', '#0E7C9B', '#7C3AED', '#15873F', '#C22A2A', '#B4620A', '#0891B2', '#DB2777'];
 function colorFor(str: string): string {
@@ -117,8 +118,18 @@ export function DeliveryDetail({
   const { enqueueSnackbar } = useSnackbar();
   const updateDelivery = useUpdateDelivery();
   const breweriesQuery = useBreweries();
+  const startPoints = useShipmentStartPoints();
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // A dovoz (incoming delivery) is the reverse of a vývoz: the van visits
+  // breweries and comes home to the company at both ends, so the route's
+  // start and end are the same company point — falls back to (0, 0) while
+  // that reference-data query is still pending or has failed.
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const companyPoint: RouteEndpoint = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : { lat: 0, lng: 0, name: '—' };
 
   const breweryById = useMemo(() => {
     const m = new Map<string, { lat?: number; lng?: number; color?: string }>();
@@ -221,7 +232,7 @@ export function DeliveryDetail({
         </Card>
       )}
 
-      <RouteMap stops={routeStops} height={340} />
+      <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={340} />
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start', mt: 2.5 }}>
         {/* LEFT: aggregated "what's arriving" list. */}

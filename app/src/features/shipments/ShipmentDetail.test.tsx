@@ -18,6 +18,7 @@ import {
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
   ProductKind,
+  ShipmentStartPointKind,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -48,6 +49,15 @@ vi.mock('src/components/common/RouteMap', () => ({
 // callbacks; a fresh vi.fn() per hook call would hand each re-render a different spy.
 const exportShipmentMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
+// Mutable so the start-point test below can assert against a specific company
+// entry without every other test in this file having to know about it — the
+// happy-path default carries one, matching the reference data every shipment
+// screen actually gets.
+const startPointsData = vi.hoisted(() => ({
+  value: [
+    { kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 },
+  ] as { kind: string; name: string; address?: string; latitude?: number; longitude?: number }[],
+}));
 vi.mock('src/hooks/useShipments', () => ({
   useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -55,6 +65,12 @@ vi.mock('src/hooks/useShipments', () => ({
   // has its own tests (PreparationStepsCard.test.tsx).
   useSetPreparationStep: () => ({ mutate: vi.fn(), isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
+  // String "kind" here, deliberately not the numeric enum member — the real
+  // backend serializes every enum as its string name (JsonStringEnumConverter,
+  // Program.cs), and the screen must resolve the company entry through that
+  // wire shape (see startPointKindName in src/lib/labels.ts), not by comparing
+  // against ShipmentStartPointKind.Company directly.
+  useShipmentStartPoints: () => ({ data: startPointsData.value, isPending: false, isError: false }),
 }));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
@@ -343,6 +359,30 @@ describe('ShipmentDetail — route map point resolution', () => {
     // The place's own coordinates (50.9, 14.8), not the official address's (50.897, 14.808).
     expect(stops[0].lat).toBe(50.9);
     expect(stops[0].lng).toBe(14.8);
+  });
+
+  // The company address used to be a fixed DEPOT read from an env var and
+  // hardcoded as both ends of every route. A run is loaded at a brewery and
+  // only comes home to the company at the end, so the map's start must come
+  // from the shipment's own resolved start point instead.
+  it('draws the route from the shipment start point, not a fixed depot', () => {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+      stops: [officialStop()],
+      startPointKind: ShipmentStartPointKind.Brewery,
+      startPointName: 'Pivovar Svijany',
+      startPointLatitude: 50.5,
+      startPointLongitude: 15.0,
+    });
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(routeMapProps).toHaveBeenCalled();
+    const { start } = routeMapProps.mock.calls.at(-1)![0];
+    expect(start).toEqual({ lat: 50.5, lng: 15.0, name: 'Pivovar Svijany', address: undefined });
   });
 });
 

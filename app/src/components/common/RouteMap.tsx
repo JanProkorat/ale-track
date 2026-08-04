@@ -10,7 +10,7 @@ import FullscreenIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
-import { DEPOT, haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
+import { haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
 import { RouteNavButton } from 'src/components/common/RouteNavButton';
 
 function viaIcon(): L.DivIcon {
@@ -25,6 +25,14 @@ export interface RouteStop {
   color?: string;
   /** 'custom' stops render as a diamond waypoint; 'order' (default) as a pin. */
   kind?: 'order' | 'custom';
+}
+
+/** One end of a route — where the van is loaded, and where it comes home to. */
+export interface RouteEndpoint {
+  lat: number;
+  lng: number;
+  name: string;
+  address?: string;
 }
 
 function fmtDur(min: number): string {
@@ -64,15 +72,21 @@ function depotIcon(): L.DivIcon {
   return L.divIcon({ html: svg, className: 'route-map-depot', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
 
-/** Leaflet route map for the shipment screens: the company depot (start + end)
- * plus a numbered marker per stop, connected by the actual fastest driving
- * route (OSRM). In editable mode the route can be reshaped with via points —
- * click the route to drop one, drag to move, click to remove — and OSRM
- * alternatives can be shown and adopted. Placeholder when no stop is located. */
+/** Leaflet route map for the shipment screens: the run's own start and end
+ * points (a brewery pickup and the company, in that order — the two may
+ * coincide) plus a numbered marker per stop, connected by the actual fastest
+ * driving route (OSRM). In editable mode the route can be reshaped with via
+ * points — click the route to drop one, drag to move, click to remove — and
+ * OSRM alternatives can be shown and adopted. Placeholder when no stop is
+ * located. */
 export function RouteMap({
-  stops, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
+  stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
 }: {
   stops: RouteStop[];
+  /** Where the van is loaded — a brewery or the company, resolved by the caller. */
+  start: RouteEndpoint;
+  /** Where the van comes home to — always the company. */
+  end: RouteEndpoint;
   height?: number;
   viaPoints?: LatLng[];
   editable?: boolean;
@@ -87,14 +101,17 @@ export function RouteMap({
   // rather than taking a responsive prop, so every call site benefits as-is.
   const mapHeight = { xs: Math.min(height, 260), mobile: height };
 
-  // Base round-trip: depot -> each located stop (in order) -> depot.
+  // Base trip: the run's start -> each located stop (in order) -> its end.
+  // Usually a brewery pickup and the company, but a run that both loads and
+  // unloads at the company collapses this to the depot round-trip RouteMap
+  // used to hardcode.
   const base = useMemo<LatLng[]>(
     () => [
-      { lat: DEPOT.lat, lng: DEPOT.lng },
+      { lat: start.lat, lng: start.lng },
       ...located.map((s) => ({ lat: s.lat, lng: s.lng })),
-      { lat: DEPOT.lat, lng: DEPOT.lng },
+      { lat: end.lat, lng: end.lng },
     ],
-    [located],
+    [located, start.lat, start.lng, end.lat, end.lng],
   );
   // Full sequence with via points inserted at their nearest segment.
   const full = useMemo(() => insertVias(base, viaPoints), [base, viaPoints]);
@@ -238,12 +255,32 @@ export function RouteMap({
               <Tooltip direction="top" offset={[0, -8]}>Průjezdový bod · klikni pro odebrání</Tooltip>
             </Marker>
           ))}
-          <Marker position={[DEPOT.lat, DEPOT.lng]} icon={depotIcon()}>
-            <Tooltip direction="top" offset={[0, -14]}>
-              <strong>{DEPOT.name}</strong> · start i cíl trasy
-              {DEPOT.address ? <><br />{DEPOT.address}</> : null}
-            </Tooltip>
-          </Marker>
+          {/* A single combined pin only when the run's start and end are literally
+              the same point (loads and unloads at the company) — otherwise two
+              markers, one per endpoint, each labelled with its own role. */}
+          {start.lat === end.lat && start.lng === end.lng ? (
+            <Marker position={[start.lat, start.lng]} icon={depotIcon()}>
+              <Tooltip direction="top" offset={[0, -14]}>
+                <strong>{start.name}</strong> · start i cíl trasy
+                {start.address ? <><br />{start.address}</> : null}
+              </Tooltip>
+            </Marker>
+          ) : (
+            <>
+              <Marker position={[start.lat, start.lng]} icon={depotIcon()}>
+                <Tooltip direction="top" offset={[0, -14]}>
+                  <strong>{start.name}</strong> · start trasy
+                  {start.address ? <><br />{start.address}</> : null}
+                </Tooltip>
+              </Marker>
+              <Marker position={[end.lat, end.lng]} icon={depotIcon()}>
+                <Tooltip direction="top" offset={[0, -14]}>
+                  <strong>{end.name}</strong> · cíl trasy
+                  {end.address ? <><br />{end.address}</> : null}
+                </Tooltip>
+              </Marker>
+            </>
+          )}
           {located.map((s, i) => (
             <Marker
               key={i}
@@ -283,7 +320,7 @@ export function RouteMap({
         )}
         {navigable && (
           <RouteNavButton
-            depot={{ lat: DEPOT.lat, lng: DEPOT.lng }}
+            depot={{ lat: start.lat, lng: start.lng }}
             stops={located.map((s) => ({ lat: s.lat, lng: s.lng }))}
             // Only while fullscreen: a menu portaled to document.body is
             // invisible then. `isFull` state guarantees a re-render at the

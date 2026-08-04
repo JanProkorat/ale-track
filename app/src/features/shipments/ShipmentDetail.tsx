@@ -28,11 +28,11 @@ import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
@@ -46,7 +46,8 @@ import {
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 import {
-  useUpdateShipment, useSetPreparationStep, useExportShipment, type ShipmentExportFormat,
+  useUpdateShipment, useSetPreparationStep, useExportShipment, useShipmentStartPoints,
+  type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
 import { useVehicle } from 'src/hooks/useVehicles';
@@ -1028,6 +1029,7 @@ export function ShipmentDetail({
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const updateShipment = useUpdateShipment();
+  const startPoints = useShipmentStartPoints();
   const vehicleQuery = useVehicle(shipment.vehicleId ?? undefined);
   const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
@@ -1066,6 +1068,23 @@ export function ShipmentDetail({
     const { lat, lng } = resolveDetailStopAddress(st);
     return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
+
+  // The detail DTO already carries the shipment's own resolved start point, so
+  // the map does not wait on the start-points query for it — only the
+  // homeward end (the company) needs that lookup. While the query is still
+  // pending or has failed, `company` stays undefined and the end falls back
+  // to the same point as the start: a single combined marker rather than a
+  // second pin plotted at (0, 0).
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const routeStart: RouteEndpoint = {
+    lat: shipment.startPointLatitude ?? 0,
+    lng: shipment.startPointLongitude ?? 0,
+    name: shipment.startPointName ?? '—',
+    address: shipment.startPointAddress,
+  };
+  const routeEnd: RouteEndpoint = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : routeStart;
 
   const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
@@ -1402,7 +1421,14 @@ export function ShipmentDetail({
         )}
       />
 
-      <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} navigable />
+      <RouteMap
+        stops={routeStops}
+        start={routeStart}
+        end={routeEnd}
+        viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
+        height={360}
+        navigable
+      />
 
       {/* Directly under the map, matching ShipmentEditor.tsx — a warning four
           cards down (its previous spot, at the bottom of the right column)

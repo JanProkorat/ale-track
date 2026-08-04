@@ -22,11 +22,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { EmptyState } from 'src/components/common/EmptyState';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
-import { DEPOT, haversine } from 'src/lib/geo';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
+import { haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel, shipStateName, addrKindValue } from 'src/lib/labels';
+import { regionLabel, shipStateName, addrKindValue, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -39,7 +39,9 @@ import {
   UpdateOutgoingShipmentDto,
   PreparationStepDto,
 } from 'src/generated/api-client';
-import { useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders } from 'src/hooks/useShipments';
+import {
+  useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders, useShipmentStartPoints,
+} from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useDrivers } from 'src/hooks/useDrivers';
@@ -217,6 +219,17 @@ export function ShipmentEditor({
   const clientsQuery = useClients();
   const createShipment = useCreateShipment();
   const updateShipment = useUpdateShipment();
+  const startPointsQuery = useShipmentStartPoints();
+
+  // Task 8 adds a start-point picker; until then every shipment starts (and,
+  // as always, ends) at the company entry, preserving today's behaviour. Falls
+  // back to (0, 0) while the reference-data query is still pending or has
+  // failed — the same "no better data yet" choice ShipmentDetail makes for its
+  // own end point.
+  const company = (startPointsQuery.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const start: RouteEndpoint = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : { lat: 0, lng: 0, name: '—' };
 
   const [name, setName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(dayjs().add(2, 'day').hour(7).minute(0).second(0));
@@ -457,14 +470,14 @@ export function ShipmentEditor({
   }
 
   const stopCoords = (s: DraftStop) => {
-    if (s.kind === 'custom') return { lat: s.lat ?? DEPOT.lat, lng: s.lng ?? DEPOT.lng };
+    if (s.kind === 'custom') return { lat: s.lat ?? start.lat, lng: s.lng ?? start.lng };
     const pt = resolveStopAddress(orderById.get(s.orderId ?? ''), s.addressKind, s.deliveryPlaceId);
-    return { lat: pt.lat ?? DEPOT.lat, lng: pt.lng ?? DEPOT.lng };
+    return { lat: pt.lat ?? start.lat, lng: pt.lng ?? start.lng };
   };
 
   function optimizeRoute() {
     if (stopsSorted.length < 2) { enqueueSnackbar('Málo zastávek', { variant: 'info' }); return; }
-    let cur = { lat: DEPOT.lat, lng: DEPOT.lng };
+    let cur = { lat: start.lat, lng: start.lng };
     const remaining = stopsSorted.slice();
     const ordered: DraftStop[] = [];
     while (remaining.length) {
@@ -605,7 +618,15 @@ export function ShipmentEditor({
           so the tracks stop honouring their fr shares and the columns spill sideways. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.4fr) minmax(0, 1fr)' }, alignItems: 'start' }}>
         <Stack spacing={2}>
-          <RouteMap stops={routeStops} viaPoints={viaPoints} editable={!structureLocked} onViasChange={setViaPoints} height={320} />
+          <RouteMap
+            stops={routeStops}
+            start={start}
+            end={start}
+            viaPoints={viaPoints}
+            editable={!structureLocked}
+            onViasChange={setViaPoints}
+            height={320}
+          />
 
           {/* Fed from the loaded server shipment (shipmentQuery.data), not the local
               `stops` draft — the draft is client-side and carries no `addressChangedAt`,

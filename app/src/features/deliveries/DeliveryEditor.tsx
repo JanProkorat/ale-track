@@ -20,10 +20,10 @@ import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox } from 'src/components/common/Combobox';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { apiErrorMessage } from 'src/api/errors';
 import { plural, fmtLiters, deliveryNumber } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   ProductKind,
   CreateProductsDeliveryDto,
@@ -42,6 +42,7 @@ import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useDelivery, useCreateDelivery, useUpdateDelivery } from 'src/hooks/useDeliveries';
+import { useShipmentStartPoints } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 
@@ -256,6 +257,15 @@ export function DeliveryEditor({
   const vehiclesQuery = useVehicles();
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const startPoints = useShipmentStartPoints();
+
+  // Same reasoning as DeliveryDetail: a dovoz starts and ends at the company,
+  // so both RouteMap endpoints are this one point. Falls back to (0, 0) while
+  // the reference-data query is still pending or has failed.
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const companyPoint: RouteEndpoint = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : { lat: 0, lng: 0, name: '—' };
 
   const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(1, 'day') : null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -446,7 +456,7 @@ export function DeliveryEditor({
                 <Chip size="small" label="sklad → pivovary → sklad" />
               </Stack>
               <Box sx={{ p: 2 }}>
-                <RouteMap stops={routeStops} height={280} />
+                <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={280} />
               </Box>
             </Card>
           )}

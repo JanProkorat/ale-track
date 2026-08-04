@@ -14,11 +14,10 @@ export default defineConfig({
     // Fixed env for tests. `apiClient` throws at import time without a base URL,
     // so any test whose subject transitively imports it fails to even load —
     // and it fails only where no .env exists, i.e. in CI and not on the machine
-    // that wrote the test. Pinning both vars here also keeps runs from varying
-    // with whatever a developer happens to have in their .env.
+    // that wrote the test. Pinning it here also keeps runs from varying with
+    // whatever a developer happens to have in their .env.
     env: {
       VITE_API_BASE_URL: 'http://localhost:8080',
-      VITE_COMPANY_ADDRESS: '{"label":"Sklad","city":"Žitava","lat":50.897,"lng":14.807}',
     },
   },
 });

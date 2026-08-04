@@ -70,6 +70,14 @@ vi.mock('src/hooks/useShipments', () => ({
   useCreateShipment: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateShipment: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // The optimizer's origin and every stop's fallback coordinates now come from
+  // the company start-point entry rather than the old fixed DEPOT — RouteMap
+  // itself is stubbed above, so only the shape of the data matters here.
+  useShipmentStartPoints: () => ({
+    data: [{ kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 }],
+    isPending: false,
+    isError: false,
+  }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));
