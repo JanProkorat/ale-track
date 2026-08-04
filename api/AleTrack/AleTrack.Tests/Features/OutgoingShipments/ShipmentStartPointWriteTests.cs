@@ -1,6 +1,5 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
-using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
@@ -22,6 +21,7 @@ public sealed class ShipmentStartPointWriteTests
     public async Task HandleAsync_StartPointIsBrewery_PersistsTheBrewery()
     {
         var brewery = BreweryBuilder.BuildEntity(name: "Svijany");
+        brewery.Id = 7;
         var (shipment, request, dbContext) = Arrange(OutgoingShipmentState.Created, [brewery]);
 
         request.Data.StartPointKind = ShipmentStartPointKind.Brewery;
@@ -34,6 +34,7 @@ public sealed class ShipmentStartPointWriteTests
 
         shipment.StartPointKind.Should().Be(ShipmentStartPointKind.Brewery);
         shipment.StartBrewery.Should().Be(brewery);
+        shipment.StartBreweryId.Should().Be(brewery.Id);
     }
 
     [Fact]
@@ -95,23 +96,6 @@ public sealed class ShipmentStartPointWriteTests
 
         result.ShouldHaveValidationErrorFor(d => d.StartBreweryId);
     }
-
-    /// <summary>
-    /// Not consumed by the write endpoints under test here — they only persist
-    /// <c>StartPointKind</c>/<c>StartBreweryId</c> and never resolve the company's display
-    /// address. Kept as the fixture a later read-side test in this same file can share.
-    /// </summary>
-    private static readonly CompanyOptions Company = new()
-    {
-        Name = "AleTrack s.r.o.",
-        StreetName = "Nádražní",
-        StreetNumber = "12",
-        City = "Liberec",
-        Zip = "46001",
-        Country = Country.Czechia,
-        Latitude = 50.7663m,
-        Longitude = 15.0543m
-    };
 
     /// <summary>
     /// A shipment in the given state with one order stop, plus a PUT that round-trips

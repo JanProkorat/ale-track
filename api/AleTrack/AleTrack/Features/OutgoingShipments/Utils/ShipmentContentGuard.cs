@@ -21,8 +21,9 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 public static class ShipmentContentGuard
 {
     /// <summary>
-    /// Names of the frozen DTO fields whose value differs from the stored shipment. Empty
-    /// means the request changes no frozen content.
+    /// Names of the frozen DTO fields whose value differs from the stored shipment — vehicle,
+    /// stops, custom stops, via points, stock purchases and the run's start point. Empty means
+    /// the request changes no frozen content.
     /// </summary>
     public static List<string> ChangedFrozenFields(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
     {
@@ -45,7 +46,9 @@ public static class ShipmentContentGuard
 
         if (stored.StartPointKind != incoming.StartPointKind
             || stored.StartBrewery?.PublicId != incoming.StartBreweryId)
+        {
             changed.Add(nameof(incoming.StartPointKind));
+        }
 
         return changed;
     }

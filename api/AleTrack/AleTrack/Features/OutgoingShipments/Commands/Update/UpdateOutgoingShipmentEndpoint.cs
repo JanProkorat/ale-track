@@ -151,6 +151,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         outgoingShipment.Drivers = drivers;
         outgoingShipment.StartPointKind = req.Data.StartPointKind;
         outgoingShipment.StartBrewery = startBrewery;
+        outgoingShipment.StartBreweryId = startBrewery?.Id;
         outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];

@@ -65,6 +65,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             Vehicle = vehicle,
             StartPointKind = req.Data.StartPointKind,
             StartBrewery = startBrewery,
+            StartBreweryId = startBrewery?.Id,
             Drivers = [.. drivers
                 .Select(d => new OutgoingShipmentDriver 
                 {
