@@ -18,8 +18,8 @@
 import { useMemo, useState } from 'react';
 import {
   Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TextField, Typography,
+  DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
@@ -674,6 +674,24 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   );
 }
 
+/** The target list groups by client and can run long, so its menu gets a scroll cap and a
+ *  flat, bordered surface — a Menu paper sits at elevation 8, and MUI's dark-mode elevation
+ *  overlay washes it far enough off `background.paper` to bleach the group headers. */
+const MOVE_TARGET_MENU_PROPS = {
+  slotProps: {
+    paper: {
+      sx: {
+        maxHeight: 360,
+        backgroundImage: 'none',
+        bgcolor: 'background.paper',
+        border: 1,
+        borderColor: 'divider',
+        '& .MuiList-root': { py: 0 },
+      },
+    },
+  },
+} as const;
+
 /** Moves a partial quantity to another invoice — including one of a different client, or
  *  off invoicing altogether. Opened from the private block it works the other way round:
  *  the pieces come off the private ones and go back onto an invoice.
@@ -790,16 +808,56 @@ function MoveDialog({ data, target, pending, onClose, onSubmit }: {
               ? 'Můžete zvolit i fakturu jiného klienta — položka se označí jako přefakturovaná. Volbou „Soukromé“ kusy z fakturace vyřadíte.'
               : 'Kusy se vrátí na zvolenou fakturu a budou se opět fakturovat.'}
             fullWidth
+            slotProps={{ select: { MenuProps: MOVE_TARGET_MENU_PROPS } }}
           >
             {options.map((o, i) => {
               const isFirstOfGroup = i === 0 || options[i - 1].group !== o.group;
+              // A "+ nová faktura" row creates something rather than picking an existing
+              // invoice, so it reads in the accent colour instead of the body colour.
+              const creates = o.value.startsWith('new:');
               return [
                 isFirstOfGroup ? (
-                  <MenuItem key={`${o.group}-label`} disabled sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', opacity: 1, color: 'text.disabled' }}>
+                  <ListSubheader
+                    key={`${o.group}-label`}
+                    // A bare `li` inside the listbox maps to `option`; the heading is not
+                    // one, so it keeps the same aria-disabled marking the old header row had.
+                    aria-disabled
+                    sx={{
+                      px: 1.5,
+                      py: 0.75,
+                      lineHeight: 1.4,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'text.secondary',
+                      bgcolor: (t) => t.vars!.palette.brand.surface2,
+                      borderTop: i === 0 ? 0 : 1,
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                    }}
+                  >
                     {o.group}
-                  </MenuItem>
+                  </ListSubheader>
                 ) : null,
-                <MenuItem key={o.value} value={o.value} sx={{ pl: 3 }}>{o.label}</MenuItem>,
+                <MenuItem
+                  key={o.value}
+                  value={o.value}
+                  sx={{
+                    px: 1.5,
+                    py: 0.75,
+                    fontSize: 13.5,
+                    color: creates ? 'primary.main' : 'text.primary',
+                    fontWeight: creates ? 600 : 400,
+                    '&.Mui-selected': {
+                      bgcolor: (t) => t.vars!.palette.brand.amberTint,
+                      fontWeight: 700,
+                      '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint },
+                    },
+                  }}
+                >
+                  {o.label}
+                </MenuItem>,
               ];
             })}
           </TextField>
