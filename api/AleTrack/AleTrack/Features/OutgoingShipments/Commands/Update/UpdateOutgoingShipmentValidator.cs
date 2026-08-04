@@ -43,7 +43,13 @@ public sealed class UpdateOutgoingShipmentDtoValidator : AbstractValidator<Updat
         RuleFor(dto => dto.ClientOrderShipments)
             .NotEmpty()
             .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-        
+
+        // A route can start at the company at most once — a second one would be a
+        // second warehouse stop with no meaning on the route.
+        RuleFor(dto => dto.CustomStops)
+            .Must(stops => stops.Count(s => s.Kind == OutgoingShipmentStopKind.Company) <= 1)
+            .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+
         RuleFor(dto => dto.State)
             .NotNull()
             .WithErrorCode(ErrorCodes.ValidationNotNullError);

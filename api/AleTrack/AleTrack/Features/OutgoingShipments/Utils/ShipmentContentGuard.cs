@@ -115,10 +115,17 @@ public static class ShipmentContentGuard
 
     private static bool CustomStopsMatch(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
     {
-        var storedStops = stored.Stops
-            .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
+        // Both non-order kinds live in this list; filtering to Custom alone would make a
+        // stored Company stop look like it vanished from every incoming request (it still
+        // travels in CustomStops), rejecting every save of a non-Created shipment.
+        var storedStopsById = stored.Stops
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom or OutgoingShipmentStopKind.Company)
+            .ToDictionary(s => s.PublicId);
+
+        var storedStops = storedStopsById.Values
             .Select(s => (
                 Id: (Guid?)s.PublicId,
+                s.Kind,
                 s.Order,
                 s.Label,
                 s.Note,
@@ -127,14 +134,26 @@ public static class ShipmentContentGuard
             .OrderBy(s => s.Id)
             .ToList();
 
+        // A Company stop's label and coordinates are server-authored from CompanyOptions
+        // and ignored on write (see BuildCustomStops), so whatever a client sends there is
+        // never real content. Normalize through the stored value — the last value they were
+        // authored with — so a stale or blank client submission cannot register as a change.
         var incomingStops = incoming.CustomStops
-            .Select(s => (
-                s.Id,
-                s.Order,
-                Label: (string?)s.Label,
-                s.Note,
-                Latitude: (decimal?)s.Latitude,
-                Longitude: (decimal?)s.Longitude))
+            .Select(s =>
+            {
+                var storedCompanyStop = s.Kind == OutgoingShipmentStopKind.Company && s.Id is not null
+                    ? storedStopsById.GetValueOrDefault(s.Id.Value)
+                    : null;
+
+                return (
+                    s.Id,
+                    s.Kind,
+                    s.Order,
+                    Label: storedCompanyStop?.Label ?? (string?)s.Label,
+                    s.Note,
+                    Latitude: storedCompanyStop?.Latitude ?? (decimal?)s.Latitude,
+                    Longitude: storedCompanyStop?.Longitude ?? (decimal?)s.Longitude);
+            })
             .OrderBy(s => s.Id)
             .ToList();
 

@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Create;
 
@@ -24,7 +26,9 @@ public record CreateOutgoingShipmentRequest
 /// Endpoint for creating a new outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+    : Endpoint<CreateOutgoingShipmentRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -50,6 +54,8 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        var company = companyOptions.Value;
+
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
@@ -94,14 +100,18 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                         return stop;
                     }),
                 .. req.Data.CustomStops
-                    .Select(cs => new OutgoingShipmentStop
+                    .Select(cs =>
                     {
-                        Kind = OutgoingShipmentStopKind.Custom,
-                        Order = cs.Order,
-                        Label = cs.Label,
-                        Note = cs.Note,
-                        Latitude = cs.Latitude,
-                        Longitude = cs.Longitude
+                        var isCompany = cs.Kind == OutgoingShipmentStopKind.Company;
+                        return new OutgoingShipmentStop
+                        {
+                            Kind = cs.Kind,
+                            Order = cs.Order,
+                            Label = isCompany ? company.Name : cs.Label,
+                            Note = cs.Note,
+                            Latitude = isCompany ? company.Latitude : cs.Latitude,
+                            Longitude = isCompany ? company.Longitude : cs.Longitude
+                        };
                     })
             ],
             RouteViaPoints = [.. req.Data.RouteViaPoints

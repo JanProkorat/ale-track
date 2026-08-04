@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.SetPreparationStep;
@@ -9,6 +10,7 @@ using AleTrack.Infrastructure.Persistence;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
@@ -220,7 +222,7 @@ public sealed class PreparationStepTests
 
     private static async Task Save(Fixture f, List<PreparationStepDto> steps)
     {
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
             Id = f.Shipment.PublicId,

@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Update;
 
@@ -29,7 +31,9 @@ public sealed record UpdateOutgoingShipmentRequest
 /// Endpoint for updating an existing outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+    : Endpoint<UpdateOutgoingShipmentRequest>
 {
     /// <summary>
     /// States in which the OutgoingShipment has to have filled all data
@@ -401,34 +405,44 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         return stops;
     }
 
-    private static List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
+    private List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
     {
+        var company = companyOptions.Value;
+
+        // Both non-order kinds live in this list; filtering to Custom alone would make
+        // every Company stop look new on each save and orphan the stored row.
         var existingById = outgoingShipment.Stops
-            .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom or OutgoingShipmentStopKind.Company)
             .ToDictionary(s => s.PublicId);
 
         var result = new List<OutgoingShipmentStop>();
         foreach (var dto in customStops)
         {
+            var isCompany = dto.Kind == OutgoingShipmentStopKind.Company;
+            var label = isCompany ? company.Name : dto.Label;
+            var latitude = isCompany ? company.Latitude : dto.Latitude;
+            var longitude = isCompany ? company.Longitude : dto.Longitude;
+
             if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
             {
+                existing.Kind = dto.Kind;
                 existing.Order = dto.Order;
-                existing.Label = dto.Label;
+                existing.Label = label;
                 existing.Note = dto.Note;
-                existing.Latitude = dto.Latitude;
-                existing.Longitude = dto.Longitude;
+                existing.Latitude = latitude;
+                existing.Longitude = longitude;
                 result.Add(existing);
             }
             else
             {
                 result.Add(new OutgoingShipmentStop
                 {
-                    Kind = OutgoingShipmentStopKind.Custom,
+                    Kind = dto.Kind,
                     Order = dto.Order,
-                    Label = dto.Label,
+                    Label = label,
                     Note = dto.Note,
-                    Latitude = dto.Latitude,
-                    Longitude = dto.Longitude
+                    Latitude = latitude,
+                    Longitude = longitude
                 });
             }
         }

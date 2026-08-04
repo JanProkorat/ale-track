@@ -1,5 +1,4 @@
 using AleTrack.Common.Enums;
-using AleTrack.Common.Options;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Queries.StartPoints;
 using AleTrack.Tests.Builders;
@@ -7,6 +6,7 @@ using AleTrack.Tests.Mocks;
 using FastEndpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
+using static AleTrack.Tests.Features.OutgoingShipments.OutgoingShipmentTestHelpers;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
@@ -16,18 +16,6 @@ namespace AleTrack.Tests.Features.OutgoingShipments;
 /// </summary>
 public sealed class GetShipmentStartPointsTests
 {
-    private static readonly CompanyOptions Company = new()
-    {
-        Name = "AleTrack s.r.o.",
-        StreetName = "Nádražní",
-        StreetNumber = "12",
-        City = "Liberec",
-        Zip = "46001",
-        Country = Country.Czechia,
-        Latitude = 50.7663m,
-        Longitude = 15.0543m
-    };
-
     [Fact]
     public async Task HandleAsync_CompanyAndBreweries_ReturnsCompanyFirstThenBreweriesByDisplayOrder()
     {
