@@ -88,3 +88,8 @@ GitHub Actions live only at the repo root (`.github/workflows/`) and are **path-
 ## Local secrets (never committed)
 
 Real connection strings and keys live only in git-ignored working-tree files: `api/AleTrack/AleTrack/appsettings.Development*.json`, `appsettings.Production.json`, and `app/.env*`. The committed baselines hold placeholders. This is a **public** repository — keep real secrets out of tracked files.
+
+## Claude: scope → stack
+
+- `api/**` → dotnet
+- `app/**` → react

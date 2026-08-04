@@ -26,7 +26,7 @@ import {
   capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
-import { MetricDivider, NakladkaMetric } from './NakladkaMetric';
+import { NakladkaMetric } from './NakladkaMetric';
 
 // The two cells of a column group are pulled together rather than each centred in
 // its own box: the pieces end on the right of theirs, the state starts on the left
@@ -162,6 +162,10 @@ const TOUCH_TARGET = 34;
  * The first column is the remainder and never editable, so it is a bare number;
  * it still gets the control, because pieces taken from our own garage ride along
  * on it with no invoice behind them at all and still have to be loaded.
+ *
+ * Rendered into the row's metric grid (`METRIC_GRID_SX`), one cell per column: a
+ * column with nothing to show still spends its cell, or the columns after it would
+ * sit a track left of where the same invoice sits on every other row.
  */
 export function PurchaseInvoiceRowMetrics({
   row, invoices, states, editable, onSet, onSetState,
@@ -178,26 +182,24 @@ export function PurchaseInvoiceRowMetrics({
 
   // Nothing physically goes onto any brewery invoice column — the row is served
   // entirely off our own shelf, with nothing left here to bill or to check off.
-  // The separator belongs to this group so it disappears with it, rather than
-  // dangling at the end of the sourcing numbers.
   if (carrying.length === 0) {
     return null;
   }
 
   return (
     <>
-      <MetricDivider />
       {columns.map((column, index) => {
         const claimed = index === 0 ? remainderOf(row, invoices) : claimAt(invoices, column.sequence, row.productId);
         const carries = piecesInColumn(row, invoices, column.sequence) > 0;
         // A later column with nothing in it is worth a stepper only while the row can
         // still be split; read-only it would be a permanent zero taking up the line.
+        // Its grid cell stays, so the columns after it keep their place.
         if (index > 0 && claimed === 0 && !editable) {
-          return null;
+          return <span key={column.sequence} />;
         }
 
         return (
-          <Stack key={column.sequence} direction="row" alignItems="center" spacing={0.5}>
+          <Stack key={column.sequence} direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
             <NakladkaMetric
               label={`F${column.sequence}`}
               value={claimed}
