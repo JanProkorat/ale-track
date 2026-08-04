@@ -11,16 +11,17 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto } from 'src/generated/api-client';
+import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto, ProductListItemDto, ProductType } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
 const createMutate = vi.fn();
 let orderResponse: OrderDto | undefined;
+let historyResponse: unknown = [];
 
 vi.mock('src/hooks/useOrders', () => ({
   useOrder: () => ({ data: orderResponse, isLoading: false, isError: false }),
-  useClientProductHistory: () => ({ data: [], isLoading: false }),
+  useClientProductHistory: () => ({ data: historyResponse, isLoading: false }),
   useCreateOrder: () => ({ mutateAsync: createMutate, isPending: false }),
   useUpdateOrder: () => ({ mutateAsync: updateMutate, isPending: false }),
 }));
@@ -109,10 +110,24 @@ function extraInputs(): HTMLInputElement[] {
   return within(extrasCard()).getAllByPlaceholderText('Např. tácky') as HTMLInputElement[];
 }
 
+function extraNoteInputs(): HTMLInputElement[] {
+  return within(extrasCard()).getAllByPlaceholderText('Poznámka (nepovinné)') as HTMLInputElement[];
+}
+
+/** The Košík card, located by its heading. */
+function cartCard(): HTMLElement {
+  return screen.getByText('Košík').closest('.MuiCard-root') as HTMLElement;
+}
+
+function cartNoteInput(): HTMLInputElement {
+  return within(cartCard()).getByPlaceholderText('Poznámka k položce (nepovinné)') as HTMLInputElement;
+}
+
 beforeEach(() => {
   updateMutate.mockReset().mockResolvedValue(undefined);
   createMutate.mockReset().mockResolvedValue('new-id');
   orderResponse = order([]);
+  historyResponse = [];
 });
 
 describe('OrderEditor — vratky a poznámky', () => {
@@ -287,6 +302,134 @@ describe('OrderEditor — vratky a poznámky', () => {
     expect(save).not.toBeDisabled();
   });
 
+  it('loads, edits and round-trips a custom extra note', async () => {
+    orderResponse = order([], [], [
+      new OrderCustomExtraItemDto({ id: 'x1', description: 'Tácky', quantity: 100, note: 'Původní' }),
+    ]);
+
+    renderEditor();
+    expect(extraNoteInputs()[0].value).toBe('Původní');
+
+    const save = screen.getByRole('button', { name: /Uložit/i });
+    fireEvent.change(extraNoteInputs()[0], { target: { value: 'S logem, ne generické' } });
+
+    // The unsaved-changes baseline covers extra notes, so this alone is enough.
+    expect(save).not.toBeDisabled();
+
+    fireEvent.click(save);
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    const sent = updateMutate.mock.calls[0][0].data.customExtraItems;
+    expect(sent).toHaveLength(1);
+    expect(sent[0].note).toBe('S logem, ne generické');
+  });
+
+  it('omits a blank custom extra note rather than sending an empty string', async () => {
+    renderEditor();
+
+    fireEvent.click(within(extrasCard()).getByRole('button', { name: 'Přidat' }));
+    fireEvent.change(extraInputs()[0], { target: { value: 'Sklo' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    expect(updateMutate.mock.calls[0][0].data.customExtraItems[0].note).toBeUndefined();
+  });
+});
+
+describe('OrderEditor — poznámka u položky košíku', () => {
+  it('hides the note field until the note button is pressed', () => {
+    renderEditor();
+
+    expect(within(cartCard()).queryByPlaceholderText('Poznámka k položce (nepovinné)')).not.toBeInTheDocument();
+
+    fireEvent.click(within(cartCard()).getByRole('button', { name: 'Přidat poznámku' }));
+
+    expect(cartNoteInput()).toBeInTheDocument();
+  });
+
+  it('shows a loaded note without needing the button', () => {
+    orderResponse = new OrderDto({
+      id: 'order-1',
+      client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
+      orderItems: [
+        new OrderItemDto({
+          id: 'item-1',
+          orderId: 'order-1',
+          productId: 'prod-1',
+          productName: 'Albrecht 12°',
+          quantity: 2,
+          note: 'Nechat u zadního vchodu',
+        }),
+      ],
+      returns: [],
+      notes: [],
+      customExtraItems: [],
+    });
+
+    renderEditor();
+
+    expect(cartNoteInput().value).toBe('Nechat u zadního vchodu');
+  });
+
+  it('sends the note with its order item and marks the form dirty', async () => {
+    renderEditor();
+
+    const save = screen.getByRole('button', { name: /Uložit/i });
+    fireEvent.click(within(cartCard()).getByRole('button', { name: 'Přidat poznámku' }));
+    fireEvent.change(cartNoteInput(), { target: { value: 'Vyložit u rampy' } });
+
+    expect(save).not.toBeDisabled();
+
+    fireEvent.click(save);
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    const items = updateMutate.mock.calls[0][0].data.orderItems;
+    expect(items).toHaveLength(1);
+    expect(items[0].productId).toBe('prod-1');
+    expect(items[0].note).toBe('Vyložit u rampy');
+  });
+
+  it('omits an untouched note rather than sending an empty string', async () => {
+    renderEditor();
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    expect(updateMutate.mock.calls[0][0].data.orderItems[0].note).toBeUndefined();
+  });
+});
+
+// Reported: the "Dříve objednané" tab did not read in the same order as the
+// browse tab. It rendered the history endpoint's flat `recent` array as it came;
+// the fix runs it through inDisplayOrder, which orderCatalogModel.test.ts covers
+// in isolation. This test guards the wiring — that `recent` actually goes through
+// it — which a unit test on the helper cannot see.
+describe('OrderEditor — pořadí v „Dříve objednané“', () => {
+  it('renders previously-ordered products in catalog order', () => {
+    historyResponse = {
+      // Deliberately out of order, and with a soft drink first.
+      recent: [
+        new ProductListItemDto({ id: 'p-lim', name: 'Limonáda', type: ProductType.Lemonade }),
+        new ProductListItemDto({ id: 'p-12', name: 'Dvanáctka', type: ProductType.PaleLager, platoDegree: 12 }),
+        new ProductListItemDto({ id: 'p-10', name: 'Desítka', type: ProductType.PaleDraftBeer, platoDegree: 10 }),
+      ],
+      breweries: [],
+    };
+
+    renderEditor();
+
+    const catalog = screen.getByText('Katalog produktů').closest('.MuiCard-root') as HTMLElement;
+    const rendered = ['Desítka', 'Dvanáctka', 'Limonáda']
+      .map((name) => within(catalog).getByText(name));
+
+    // Compare by document position: degree order first, soft drink last.
+    expect(rendered[0].compareDocumentPosition(rendered[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rendered[1].compareDocumentPosition(rendered[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('OrderEditor — vratky a poznámky, pokračování', () => {
   it('marks the form dirty when only a return changed', () => {
     orderResponse = order([new OrderReturnDto({ id: 'ret-1', name: 'Sud 50 l', quantity: 4 })]);
 

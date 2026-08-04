@@ -20,7 +20,7 @@ import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { clientComboOptions } from './clientOptions';
-import { compareProductsForDisplay } from 'src/lib/productSort';
+import { groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
@@ -55,6 +55,8 @@ interface CartLine {
   productId: string;
   quantity: number;
   reminderState?: OrderItemReminderState;
+  /** Instruction for whoever loads or delivers this line. */
+  note?: string;
 }
 
 /** A vratka row being edited. `id` is present only for rows already persisted. */
@@ -64,7 +66,7 @@ interface DraftReturn { id?: string; name: string; quantity: number; note: strin
 interface DraftNote { id?: string; text: string }
 
 /** A custom extra being edited — something no brewery supplies. */
-interface DraftExtra { id?: string; description: string; quantity: number }
+interface DraftExtra { id?: string; description: string; quantity: number; note: string }
 
 /** Serialized snapshot of the savable form state, for unsaved-change detection. */
 function serializeForm(
@@ -79,43 +81,17 @@ function serializeForm(
   return JSON.stringify({
     clientId,
     date: date ? date.toISOString() : null,
-    cart,
+    cart: cart.map((c) => ({ ...c, note: c.note?.trim() ?? '' })),
     returns: returns.map((r) => ({ name: r.name.trim(), quantity: r.quantity, note: r.note.trim() })),
     notes: notes.map((n) => n.text.trim()),
-    extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity })),
+    extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity, note: e.note.trim() })),
     deliveryAddress: { kind: deliveryAddress.kind, placeId: deliveryAddress.placeId ?? null },
   });
-}
-interface NameGroup {
-  name: string;
-  items: ProductListItemDto[];
-}
-
-/** Groups a flat product list by name so same-name/different-size variants
- * cluster into one card, in first-seen order — mirrors the prototype's
- * oeGroupList grouping. */
-function groupByName(products: ProductListItemDto[]): NameGroup[] {
-  const order: string[] = [];
-  const byName = new Map<string, ProductListItemDto[]>();
-  for (const p of products) {
-    const name = p.name ?? '';
-    if (!byName.has(name)) { byName.set(name, []); order.push(name); }
-    byName.get(name)!.push(p);
-  }
-  return order.map((name) => ({ name, items: byName.get(name)! }));
 }
 function flattenKind(k: KindGroupDto): ProductListItemDto[] {
   return (k.packageSizes ?? []).flatMap((pkg) => pkg.items ?? []);
 }
 
-/**
- * The history endpoint nests its products brewery → kind → package size, so
- * flattening it would order the catalog by kind and lose the degree order the
- * server sent. Re-sorting the flat list restores it.
- */
-function inDisplayOrder(products: ProductListItemDto[]): ProductListItemDto[] {
-  return products.slice().sort(compareProductsForDisplay);
-}
 function clientInitials(name?: string): string {
   const [a, b] = (name ?? '').trim().split(/\s+/);
   return initials(a, b);
@@ -360,6 +336,7 @@ export function OrderEditor({
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<ProductKind | 'all'>('all');
   const [brewOpen, setBrewOpen] = useState<Record<string, boolean>>({});
+  const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
   const autoTabClientRef = useRef<string | null>(null);
   const loadedOrderRef = useRef(false);
   // Baseline of the savable state to compare against for unsaved changes.
@@ -379,7 +356,12 @@ export function OrderEditor({
     loadedOrderRef.current = true;
     const loadedClientId = o.client?.id ?? null;
     const loadedDate = o.requiredDeliveryDate ? dayjs(o.requiredDeliveryDate) : null;
-    const loadedCart: CartLine[] = (o.orderItems ?? []).map((it) => ({ productId: it.productId ?? '', quantity: it.quantity ?? 1, reminderState: it.reminderState }));
+    const loadedCart: CartLine[] = (o.orderItems ?? []).map((it) => ({
+      productId: it.productId ?? '',
+      quantity: it.quantity ?? 1,
+      reminderState: it.reminderState,
+      note: it.note ?? undefined,
+    }));
     const loadedDeliveryAddress = {
       kind: addrKindValue(o.deliveryAddress?.kind),
       placeId: o.deliveryAddress?.placeId ?? undefined,
@@ -392,7 +374,7 @@ export function OrderEditor({
     const loadedNotes: DraftNote[] = (o.notes ?? []).map((n) => ({ id: n.id, text: n.text ?? '' }));
     setCart(loadedCart);
     setReturns(loadedReturns);
-    const loadedExtras: DraftExtra[] = (o.customExtraItems ?? []).map((e) => ({ id: e.id, description: e.description ?? '', quantity: e.quantity ?? 1 }));
+    const loadedExtras: DraftExtra[] = (o.customExtraItems ?? []).map((e) => ({ id: e.id, description: e.description ?? '', quantity: e.quantity ?? 1, note: e.note ?? '' }));
     setNotes(loadedNotes);
     setExtras(loadedExtras);
     setFallbackNames(Object.fromEntries((o.orderItems ?? []).map((it) => [it.productId ?? '', it.productName ?? '—'])));
@@ -464,13 +446,22 @@ export function OrderEditor({
       .filter((c) => c.quantity > 0));
   };
   const removeProduct = (productId: string) => setCart((prev) => prev.filter((c) => c.productId !== productId));
+  const setCartNote = (productId: string, note: string) => setCart((prev) => prev
+    .map((c) => (c.productId === productId ? { ...c, note } : c)));
+
+  // Which cart lines have their note field revealed. A line that already carries a
+  // note counts as revealed without an entry, so a loaded order shows its notes.
+  const isNoteOpen = (line: CartLine) => noteOpen[line.productId] ?? Boolean(line.note);
+  const toggleNote = (line: CartLine) => setNoteOpen((prev) => ({ ...prev, [line.productId]: !isNoteOpen(line) }));
 
   const matchesSearch = (p: ProductListItemDto) => {
     const q = search.trim().toLowerCase();
     return !q || (p.name ?? '').toLowerCase().includes(q);
   };
 
-  const recentAll = historyQuery.data?.recent ?? [];
+  // Sorted before the search filter, so the list and the tab's own count agree on
+  // one order — the same one "Procházet dle pivovaru" uses.
+  const recentAll = useMemo(() => inDisplayOrder(historyQuery.data?.recent ?? []), [historyQuery.data]);
   const recent = recentAll.filter(matchesSearch);
   const breweries = historyQuery.data?.breweries ?? [];
 
@@ -509,7 +500,12 @@ export function OrderEditor({
 
     const extrasPayload = extras
       .filter((e) => e.description.trim())
-      .map((e) => new OrderCustomExtraItemDto({ id: e.id, description: e.description.trim(), quantity: e.quantity }));
+      .map((e) => new OrderCustomExtraItemDto({
+        id: e.id,
+        description: e.description.trim(),
+        quantity: e.quantity,
+        note: e.note.trim() || undefined,
+      }));
 
     try {
       let savedId: string;
@@ -519,7 +515,12 @@ export function OrderEditor({
           data: new UpdateOrderDto({
             clientId,
             requiredDeliveryDate: requiredDate ? requiredDate.toDate() : undefined,
-            orderItems: cart.map((c) => new UpdateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
+            orderItems: cart.map((c) => new UpdateOrderItemDto({
+              productId: c.productId,
+              quantity: c.quantity,
+              reminderState: c.reminderState,
+              note: c.note?.trim() || undefined,
+            })),
             returns: returnsPayload,
             notes: notesPayload,
             customExtraItems: extrasPayload,
@@ -533,7 +534,12 @@ export function OrderEditor({
         savedId = await createOrder.mutateAsync(new CreateOrderDto({
           clientId,
           requiredDeliveryDate: requiredDate ? requiredDate.toDate() : undefined,
-          orderItems: cart.map((c) => new CreateOrderItemDto({ productId: c.productId, quantity: c.quantity, reminderState: c.reminderState })),
+          orderItems: cart.map((c) => new CreateOrderItemDto({
+            productId: c.productId,
+            quantity: c.quantity,
+            reminderState: c.reminderState,
+            note: c.note?.trim() || undefined,
+          })),
           returns: returnsPayload,
           notes: notesPayload,
           customExtraItems: extrasPayload,
@@ -769,26 +775,55 @@ export function OrderEditor({
                     const name = p?.name ?? fallbackNames[c.productId] ?? '—';
                     const color = p?.breweryId ? colorByBreweryId.get(p.breweryId) : undefined;
                     const lineTotal = (p?.priceWithVat ?? 0) * c.quantity;
+                    const noteShown = isNoteOpen(c);
                     return (
-                      <Stack key={c.productId} direction="row" spacing={1.25} alignItems="center" sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {[kindLabel(p?.kind), p?.packageSize != null ? fmtLiters(p.packageSize) : undefined, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
-                          </Typography>
-                        </Box>
-                        <IconButton size="small" onClick={() => changeQty(c.productId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
-                          <RemoveIcon sx={{ fontSize: 15 }} />
-                        </IconButton>
-                        <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{c.quantity}</Typography>
-                        <IconButton size="small" onClick={() => changeQty(c.productId, 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
-                          <AddIcon sx={{ fontSize: 15 }} />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => removeProduct(c.productId)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
-                          <DeleteIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      </Stack>
+                      // Two rows per line: the product itself, and — once revealed — its note.
+                      // Keeping the note out of the way unless it is wanted is what stops a
+                      // twenty-line cart from doubling in height.
+                      <Box key={c.productId} sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {[kindLabel(p?.kind), p?.packageSize != null ? fmtLiters(p.packageSize) : undefined, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
+                            </Typography>
+                          </Box>
+                          <IconButton size="small" onClick={() => changeQty(c.productId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
+                            <RemoveIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                          <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{c.quantity}</Typography>
+                          <IconButton size="small" onClick={() => changeQty(c.productId, 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
+                            <AddIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => toggleNote(c)}
+                            sx={{
+                              border: 1, borderRadius: 1.5, width: 26, height: 26,
+                              borderColor: c.note?.trim() ? 'warning.main' : 'divider',
+                              color: c.note?.trim() ? 'warning.dark' : 'inherit',
+                            }}
+                            aria-label={noteShown ? 'Skrýt poznámku' : 'Přidat poznámku'}
+                          >
+                            <StickyNote2OutlinedIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => removeProduct(c.productId)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
+                            <DeleteIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Stack>
+                        {noteShown && (
+                          <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="Poznámka k položce (nepovinné)"
+                            value={c.note ?? ''}
+                            onChange={(e) => setCartNote(c.productId, e.target.value)}
+                            slotProps={{ htmlInput: { 'aria-label': `Poznámka k položce ${name}` } }}
+                            sx={{ mt: 1 }}
+                          />
+                        )}
+                      </Box>
                     );
                   })}
                 </Stack>
@@ -863,7 +898,7 @@ export function OrderEditor({
             <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Položky navíc</Typography>
-              <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setExtras((es) => [...es, { description: '', quantity: 1 }])}>
+              <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setExtras((es) => [...es, { description: '', quantity: 1, note: '' }])}>
                 Přidat
               </Button>
             </Stack>
@@ -873,29 +908,40 @@ export function OrderEditor({
                   Žádné položky navíc. Přidejte, co klient chce a pivovar nedodává (tácky, sklo…).
                 </Typography>
               ) : extras.map((e, i) => (
-                <Stack key={i} direction="row" spacing={1} alignItems="center">
+                // Two lines per row, boxed like a Vratka so a row doesn't visually
+                // merge with the next once the note field is under it.
+                <Stack key={i} spacing={1} sx={{ p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <TextField
+                      size="small"
+                      placeholder="Např. tácky"
+                      value={e.description}
+                      onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))}
+                      sx={{ flex: 1 }}
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={e.quantity}
+                      onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, quantity: Math.max(1, Number(ev.target.value) || 1) } : x)))}
+                      slotProps={{ htmlInput: { min: 1, style: { width: 56, textAlign: 'right' }, 'aria-label': 'Počet' } }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => setExtras((es) => es.filter((_, j) => j !== i))}
+                      sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
+                      aria-label="Odebrat položku navíc"
+                    >
+                      <DeleteIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Stack>
                   <TextField
                     size="small"
-                    placeholder="Např. tácky"
-                    value={e.description}
-                    onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, description: ev.target.value } : x)))}
-                    sx={{ flex: 1 }}
+                    fullWidth
+                    placeholder="Poznámka (nepovinné)"
+                    value={e.note}
+                    onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, note: ev.target.value } : x)))}
                   />
-                  <TextField
-                    size="small"
-                    type="number"
-                    value={e.quantity}
-                    onChange={(ev) => setExtras((es) => es.map((x, j) => (j === i ? { ...x, quantity: Math.max(1, Number(ev.target.value) || 1) } : x)))}
-                    slotProps={{ htmlInput: { min: 1, style: { width: 56, textAlign: 'right' }, 'aria-label': 'Počet' } }}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => setExtras((es) => es.filter((_, j) => j !== i))}
-                    sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }}
-                    aria-label="Odebrat položku navíc"
-                  >
-                    <DeleteIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
                 </Stack>
               ))}
             </Stack>

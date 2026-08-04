@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
@@ -39,7 +40,22 @@ public sealed class OrderItem : PublicEntity
     /// </summary>
     [Column("reminder_state")]
     public OrderItemReminderState? ReminderState { get; set; }
-    
+
+    /// <summary>
+    /// Optional free-form note about this line — an instruction for whoever loads or
+    /// delivers it ("nechat u zadního vchodu").
+    /// </summary>
+    /// <remarks>
+    /// Not part of the frozen content: unlike <see cref="Quantity"/> it does not describe
+    /// what is on the truck, only what to do with it, and it is most useful precisely once
+    /// the shipment is already packed. So it is written by its own merge step rather than
+    /// by the item rebuild in <c>UpdateOrderEndpoint</c>, and stays editable at every state.
+    /// </remarks>
+    [MaxLength(500)]
+    [Column("note")]
+    public string? Note { get; set; }
+
+
     /// <summary>
     /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
     /// </summary>

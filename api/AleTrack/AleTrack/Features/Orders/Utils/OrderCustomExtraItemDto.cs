@@ -20,13 +20,17 @@ public sealed record OrderCustomExtraItemDto
     /// <summary>Quantity delivered to the client.</summary>
     public int Quantity { get; set; }
 
+    /// <summary>Optional free-form note about the item.</summary>
+    public string? Note { get; set; }
+
     /// <summary>Whether loading was confirmed. Owned by the shipment; ignored on order write.</summary>
     public bool IsLoadingConfirmed { get; set; }
 }
 
 /// <summary>
 /// Validates a custom extra row: a non-empty description of at most 200 characters
-/// (the limit on <see cref="Entities.OrderCustomExtraItem"/>) and a positive quantity.
+/// (the limit on <see cref="Entities.OrderCustomExtraItem"/>), a positive quantity, and
+/// a note of at most 500.
 /// </summary>
 public sealed class OrderCustomExtraItemDtoValidator : Validator<OrderCustomExtraItemDto>
 {
@@ -35,5 +39,9 @@ public sealed class OrderCustomExtraItemDtoValidator : Validator<OrderCustomExtr
         RuleFor(e => e.Description).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
         RuleFor(e => e.Description).MaximumLength(200).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         RuleFor(e => e.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
+        RuleFor(e => e.Note)
+            .MaximumLength(500)
+            .When(e => e.Note != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
     }
 }

@@ -78,7 +78,8 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             {
                 Product = relatedProduct!,
                 Quantity = orderItem.Quantity,
-                ReminderState = orderItem.ReminderState
+                ReminderState = orderItem.ReminderState,
+                Note = orderItem.Note
             });
         }
         
@@ -97,7 +98,8 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             order.CustomExtraItems.Add(new OrderCustomExtraItem
             {
                 Description = extra.Description,
-                Quantity = extra.Quantity
+                Quantity = extra.Quantity,
+                Note = extra.Note
             });
         }
 
