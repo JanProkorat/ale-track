@@ -1,9 +1,11 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
@@ -50,7 +52,7 @@ public sealed class GetOutgoingShipmentDetailBreweryTests
             outgoingShipments: [shipment]);
 
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object);
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = shipmentId }, CancellationToken.None);
 

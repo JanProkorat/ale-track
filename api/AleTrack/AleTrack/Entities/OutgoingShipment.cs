@@ -27,6 +27,31 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public DateTime? DeliveryDate { get; set; }
 
     /// <summary>
+    /// Where the run is loaded before it sets off.
+    /// </summary>
+    /// <remarks>
+    /// Runs created before this existed default to
+    /// <see cref="ShipmentStartPointKind.Company"/>, which is exactly what the
+    /// hardcoded depot origin used to mean.
+    /// </remarks>
+    [Column("start_point_kind")]
+    public ShipmentStartPointKind StartPointKind { get; set; } = ShipmentStartPointKind.Company;
+
+    /// <summary>
+    /// The brewery the run is loaded at. Set only when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Brewery"/>.
+    /// </summary>
+    [Column("start_brewery_id")]
+    public long? StartBreweryId { get; set; }
+
+    /// <summary>
+    /// Brewery the run starts at. Restricted rather than cascaded: deleting a brewery
+    /// a planned run loads at should fail loudly, not delete the run.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
+    public Brewery? StartBrewery { get; set; }
+
+    /// <summary>
     /// Date when the shipment was created
     /// </summary>
     [Column("created_date")]
