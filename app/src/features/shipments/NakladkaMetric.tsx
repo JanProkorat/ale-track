@@ -3,46 +3,67 @@
 // The stacked layout can't afford a line per number — a product carries up to five
 // of them (brewery, garage, stock, and one per brewery invoice) and the list runs to
 // thirty-odd products. So each becomes an inline `label value` group instead, and a
-// row's numbers sit on the shared grid below rather than down five lines.
+// row's numbers sit across the fixed slots below rather than down five lines.
 //
 // Shared by ShipmentDetail (the sourcing numbers) and PurchaseInvoiceColumns (the
 // invoice split), which is why it sits in its own module rather than either of them.
 
-import { IconButton, Stack, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
+import { Box, IconButton, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 
-/**
- * Width of one metric slot on the stacked layout's grid.
- *
- * The widest group is a labelled three-digit number between two 28px steppers
- * ("Do garáže − 100 +"), or an invoice number followed by its 34px loading
- * control — both land just under this.
- */
-const METRIC_TRACK = 140;
+/** A slot holding a bare labelled number: "Z pivovaru 20", or "F1 40" and its control. */
+const SLOT_PLAIN = 88;
 
 /**
- * The grid a row's metric groups are placed on, and the whole reason they line up.
- *
- * Flowing them along a wrapping flex line broke down the moment two products
- * carried a different number of groups: the line wrapped in a different place on
- * every row, so no two rows had their numbers in the same column and a stray
- * group dangled alone on a second line. A grid of fixed-width tracks wraps at the
- * same place for every row instead — the track count follows the card width, which
- * every row shares — so a given number sits in one column all the way down the list
- * and the ramp can find it without reading the label.
- *
- * `auto-fill` rather than a fixed count: the same rule has to serve a 390px phone
- * (two tracks) and a squeezed tablet column (three), and `1fr` lets the tracks take
- * the leftover width instead of leaving a ragged gap at the right edge.
+ * A slot holding a labelled number between two 28px steppers — "Do garáže − 100 +",
+ * the widest label of the run, or an invoice's stepper pair plus its 34px control.
+ * Both land a few pixels under this.
  */
-export const METRIC_GRID_SX = {
-  display: 'grid',
-  gridTemplateColumns: `repeat(auto-fill, minmax(${METRIC_TRACK}px, 1fr))`,
+const SLOT_STEPPER = 144;
+
+/**
+ * The run a row's metric groups sit on, and the whole reason they line up.
+ *
+ * Every slot reserves the same width on every row, so a given number sits in one
+ * column all the way down the list and the ramp can find it without reading the
+ * label. What broke before was not the wrapping but the sizing: groups took their
+ * content's width, so a product without "Do garáže" put its neighbours' numbers
+ * somewhere else entirely and the line wrapped in a different place on every row.
+ *
+ * The widths are reserved as `minWidth`, not `width`: a label that measures wider
+ * than the estimate above then pushes its own slot instead of overlapping the next
+ * one — a row slightly out of line beats a row that reads as two numbers run together.
+ *
+ * Wrapping rather than stretching to fill: a 390px phone fits two slots and a
+ * squeezed tablet column three or four, and the leftover belongs in one piece at the
+ * right edge. Split across the slots as `1fr` tracks it put a 70px chasm between
+ * "Z pivovaru" and the number beside it.
+ */
+export const METRIC_ROW_SX = {
+  display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
-  columnGap: 0.5,
-  rowGap: 0.25,
+  columnGap: 1.5,
+  rowGap: 0.5,
 } as const;
+
+/**
+ * One slot of {@link METRIC_ROW_SX}, by position in the run. The first holds a bare
+ * number — "Z pivovaru", or an invoice's uneditable remainder — and the rest a
+ * number between two steppers, in both the sourcing run and the invoice one.
+ *
+ * Rendered empty for a slot the row has nothing to put in, which is what keeps the
+ * slots after it under the same ones on every other row.
+ */
+export function MetricSlot({ index, children }: { index: number; children?: ReactNode }) {
+  return (
+    <Box sx={{ flex: '0 0 auto', minWidth: index === 0 ? SLOT_PLAIN : SLOT_STEPPER }}>
+      {children}
+    </Box>
+  );
+}
 
 export interface MetricAdjust {
   onAdjust: (delta: number) => void;
@@ -66,7 +87,7 @@ export function NakladkaMetric({
   return (
     <Stack direction="row" alignItems="center" spacing={0.25} sx={{ minWidth: 0 }}>
       {/* Never wrapped: a label folded onto two lines makes its row taller than its
-          neighbours and breaks the run of numbers the grid exists to keep straight. */}
+          neighbours and breaks the column of numbers the slots exist to keep straight. */}
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mr: 0.25, whiteSpace: 'nowrap' }}>{label}</Typography>
       {adjust && (
         <IconButton

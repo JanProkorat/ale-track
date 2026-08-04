@@ -26,7 +26,7 @@ import {
   capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
-import { NakladkaMetric } from './NakladkaMetric';
+import { MetricSlot, NakladkaMetric } from './NakladkaMetric';
 
 // The two cells of a column group are pulled together rather than each centred in
 // its own box: the pieces end on the right of theirs, the state starts on the left
@@ -163,9 +163,9 @@ const TOUCH_TARGET = 34;
  * it still gets the control, because pieces taken from our own garage ride along
  * on it with no invoice behind them at all and still have to be loaded.
  *
- * Rendered into the row's metric grid (`METRIC_GRID_SX`), one cell per column: a
- * column with nothing to show still spends its cell, or the columns after it would
- * sit a track left of where the same invoice sits on every other row.
+ * Rendered into the row's metric run (`METRIC_ROW_SX`), one slot per column: a
+ * column with nothing to show still spends its slot, or the columns after it would
+ * sit left of where the same invoice sits on every other row.
  */
 export function PurchaseInvoiceRowMetrics({
   row, invoices, states, editable, onSet, onSetState,
@@ -193,40 +193,42 @@ export function PurchaseInvoiceRowMetrics({
         const carries = piecesInColumn(row, invoices, column.sequence) > 0;
         // A later column with nothing in it is worth a stepper only while the row can
         // still be split; read-only it would be a permanent zero taking up the line.
-        // Its grid cell stays, so the columns after it keep their place.
+        // Its slot stays, so the columns after it keep their place.
         if (index > 0 && claimed === 0 && !editable) {
-          return <span key={column.sequence} />;
+          return <MetricSlot key={column.sequence} index={index} />;
         }
 
         return (
-          <Stack key={column.sequence} direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
-            <NakladkaMetric
-              label={`F${column.sequence}`}
-              value={claimed}
-              tone={index === 0 ? 'text.secondary' : undefined}
-              adjust={index > 0 && editable ? {
-                onAdjust: (delta) => onSet(
-                  column.sequence,
-                  Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
-                ),
-                canDecrease: claimed > 0,
-                canIncrease: claimed < capFor(row, invoices, column.sequence),
-                decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
-                increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
-              } : undefined}
-            />
-            {carries ? (
-              <LoadingStateControl
-                state={loadingStateAt(states, row.productId, column.sequence)}
-                editable={editable}
-                onChange={(next) => onSetState(column.sequence, next)}
-                label={`Nakládka na faktuře ${column.sequence}`}
-                size={TOUCH_TARGET}
+          <MetricSlot key={column.sequence} index={index}>
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <NakladkaMetric
+                label={`F${column.sequence}`}
+                value={claimed}
+                tone={index === 0 ? 'text.secondary' : undefined}
+                adjust={index > 0 && editable ? {
+                  onAdjust: (delta) => onSet(
+                    column.sequence,
+                    Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
+                  ),
+                  canDecrease: claimed > 0,
+                  canIncrease: claimed < capFor(row, invoices, column.sequence),
+                  decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
+                  increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
+                } : undefined}
               />
-            ) : (
-              <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
-            )}
-          </Stack>
+              {carries ? (
+                <LoadingStateControl
+                  state={loadingStateAt(states, row.productId, column.sequence)}
+                  editable={editable}
+                  onChange={(next) => onSetState(column.sequence, next)}
+                  label={`Nakládka na faktuře ${column.sequence}`}
+                  size={TOUCH_TARGET}
+                />
+              ) : (
+                <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
+              )}
+            </Stack>
+          </MetricSlot>
         );
       })}
     </>
