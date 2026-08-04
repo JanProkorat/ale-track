@@ -9,3 +9,20 @@
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# claude-kit onboarding (bin/kit-onboard.sh) — do not remove
+.claude/state/
+.claude/private/
+.claude/hooks/inject-task-flow.py
+.claude/hooks/log/
+
+# claude-kit hub wiring — symlinks into ~/.claude-kit + generated settings.
+# Machine-specific and re-creatable; each clone runs `kit-onboard.sh` locally.
+.claude/agents/
+.claude/hooks/
+.claude/rules/
+.claude/schemas/
+.claude/skills/
+.claude/settings.json
+.claude/.kit-manifest
+.claude/.build-state/
