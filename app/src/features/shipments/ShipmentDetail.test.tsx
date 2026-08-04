@@ -483,8 +483,8 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     expect(row.getByLabelText('Nakládka na faktuře 1: Nenaloženo')).toBeInTheDocument();
     expect(row.getByText('F1')).toBeInTheDocument();
     expect(row.getByText('F2')).toBeInTheDocument();
-    // The em dash is otherwise unused on this row (the metric divider is a "·"),
-    // so its presence pins down the F2 placeholder specifically.
+    // The em dash is otherwise unused on this row, so its presence pins down the
+    // F2 placeholder specifically.
     expect(row.getByText('—')).toBeInTheDocument();
   });
 

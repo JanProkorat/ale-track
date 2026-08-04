@@ -65,7 +65,7 @@ import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
   PurchaseInvoiceRowMetrics, PurchaseInvoiceTotalsLines,
 } from './PurchaseInvoiceColumns';
-import { NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
+import { METRIC_GRID_SX, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
@@ -234,15 +234,7 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
  * numbers of every line sit in one column — without that, a line without buttons
  * pulls its number out of alignment with the ones that have them.
  */
-function BreakdownRow({
-  label, value, tone, adjust,
-}: {
-  label: string;
-  value: number;
-  /** Colour of the number; the ordered count is plain, sourced ones are tinted. */
-  tone?: string;
-  adjust?: MetricAdjust;
-}) {
+function BreakdownRow({ label, value, tone, adjust }: BreakdownEntry) {
   const numberSx = {
     fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const,
     textAlign: 'center' as const, color: value > 0 ? tone ?? 'text.primary' : 'text.disabled',
@@ -267,6 +259,15 @@ function BreakdownRow({
   );
 }
 
+/** One labelled number of the Množství breakdown, in either layout. */
+interface BreakdownEntry {
+  label: string;
+  value: number;
+  /** Colour of the number; the ordered count is plain, sourced ones are tinted. */
+  tone?: string;
+  adjust?: MetricAdjust;
+}
+
 /**
  * Where a product's pieces come from: what the brewery hands over, what comes off
  * our own shelf instead, and what we buy for the shelf.
@@ -275,55 +276,57 @@ function BreakdownRow({
  * piece from the garage moves it out of the brewery line, which is why that entry
  * is ordered minus sourced.
  *
+ * Returned as three fixed slots — `null` where the row has nothing to say — rather
+ * than a packed list, because the stacked layout puts each slot in its own grid
+ * column and a row that skipped "Do garáže" would otherwise pull the numbers of
+ * every following slot one column left of its neighbours'. The table packs them
+ * itself: there a slot is a line, and an empty one would be a blank line.
+ *
  * Returned as data rather than rendered, because the two layouts present them
  * differently — the table stacks them under the total in the Množství cell, the
- * phone flows them along one line — and only the conditions for *which* entries
- * exist are worth sharing.
+ * phone lays them across the row's grid — and only the conditions for *which*
+ * entries exist are worth sharing.
  */
-function breakdownEntries(
+function breakdownSlots(
   agg: AggRow,
   sourceable: boolean,
   adjustable: boolean,
   onAdjustSourcing?: (delta: number) => void,
   onAdjustStockPurchase?: (delta: number) => void,
-): Array<{ label: string; value: number; tone?: string; adjust?: MetricAdjust }> {
-  const entries: Array<{ label: string; value: number; tone?: string; adjust?: MetricAdjust }> = [];
-
-  if (agg.orderQuantity > 0) {
-    entries.push({ label: 'Z pivovaru', value: agg.orderQuantity - agg.fromInventory });
-  }
-
-  if (sourceable || agg.fromInventory > 0) {
-    entries.push({
-      label: 'Z garáže',
-      value: agg.fromInventory,
-      tone: 'info.main',
-      adjust: sourceable ? {
-        onAdjust: onAdjustSourcing!,
-        canDecrease: agg.fromInventory > 0,
-        canIncrease: agg.fromInventory < agg.orderQuantity,
-        decreaseLabel: 'Ubrat kus z garáže',
-        increaseLabel: 'Přidat kus z garáže',
-      } : undefined,
-    });
-  }
-
-  if (agg.stockPurchaseQuantity > 0) {
-    entries.push({
-      label: 'Do garáže',
-      value: agg.stockPurchaseQuantity,
-      tone: 'info.main',
-      adjust: adjustable ? {
-        onAdjust: onAdjustStockPurchase!,
-        canDecrease: true,
-        canIncrease: true,
-        decreaseLabel: 'Ubrat kus do garáže',
-        increaseLabel: 'Přidat kus do garáže',
-      } : undefined,
-    });
-  }
-
-  return entries;
+): Array<BreakdownEntry | null> {
+  return [
+    agg.orderQuantity > 0
+      ? { label: 'Z pivovaru', value: agg.orderQuantity - agg.fromInventory }
+      : null,
+    sourceable || agg.fromInventory > 0
+      ? {
+        label: 'Z garáže',
+        value: agg.fromInventory,
+        tone: 'info.main',
+        adjust: sourceable ? {
+          onAdjust: onAdjustSourcing!,
+          canDecrease: agg.fromInventory > 0,
+          canIncrease: agg.fromInventory < agg.orderQuantity,
+          decreaseLabel: 'Ubrat kus z garáže',
+          increaseLabel: 'Přidat kus z garáže',
+        } : undefined,
+      }
+      : null,
+    agg.stockPurchaseQuantity > 0
+      ? {
+        label: 'Do garáže',
+        value: agg.stockPurchaseQuantity,
+        tone: 'info.main',
+        adjust: adjustable ? {
+          onAdjust: onAdjustStockPurchase!,
+          canDecrease: true,
+          canIncrease: true,
+          decreaseLabel: 'Ubrat kus do garáže',
+          increaseLabel: 'Přidat kus do garáže',
+        } : undefined,
+      }
+      : null,
+  ];
 }
 
 /** One aggregated product line on "Celková nakládka": what the product is, how many
@@ -369,9 +372,11 @@ function AggLoadingRow({
           <Typography sx={{ gridColumn: '1 / -1', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
             {agg.quantity} ks
           </Typography>
-          {breakdownEntries(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry) => (
-            <BreakdownRow key={entry.label} {...entry} />
-          ))}
+          {breakdownSlots(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase)
+            .filter((entry): entry is BreakdownEntry => entry !== null)
+            .map((entry) => (
+              <BreakdownRow key={entry.label} {...entry} />
+            ))}
         </Box>
       </TableCell>
       {invoiceCells}
@@ -383,12 +388,16 @@ function AggLoadingRow({
  * One product of the loading list where the columns don't fit: the same row as
  * {@link AggLoadingRow}, stacked instead of spread across a table.
  *
- * Two lines, nothing hidden. Line one is what the ramp works from — what the product
+ * Two blocks, nothing hidden. The head is what the ramp works from — what the product
  * is, how many pieces, and the loading control to tick it off, the last of these in
- * the same place down the whole list so it can be hit without looking. Line two is
- * every number behind that total, flowed inline rather than one per line: a product
+ * the same place down the whole list so it can be hit without looking. Below it sits
+ * every number behind that total, laid on a grid rather than one per line: a product
  * carries up to five of them and the list runs to thirty-odd products, so a line each
  * made a screen's worth of mostly zeroes out of every three items.
+ *
+ * Sourcing and the invoice split get a grid each, of the same tracks, so the two read
+ * as separate runs without a separator between them — the sourcing numbers never
+ * trail off into an invoice group at whatever point the line happened to run out.
  *
  * The row does not collapse. An expander made each product cheap to skip but the list
  * is not skimmed, it is worked through, and paying a tap per product to see numbers
@@ -422,16 +431,17 @@ function AggLoadingStackedRow({
           {agg.quantity} ks
         </Typography>
       </Stack>
-      {/* Wrapping rather than scrolling: on the narrowest phones the invoice groups
-          drop to a second line instead of hiding past the right edge. columnGap is
-          wider than a plain Stack spacing would give — these are distinct sections
-          (sourcing, then one per invoice) and read as one run without a gap this size. */}
-      <Stack direction="row" alignItems="center" columnGap={2} rowGap={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
-        {breakdownEntries(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry) => (
-          <NakladkaMetric key={entry.label} {...entry} />
+      {/* Wrapping rather than scrolling: where the tracks run out the remaining groups
+          drop to a second line instead of hiding past the right edge. METRIC_GRID_SX
+          has why that wrapping happens on a grid and not a flex line. An absent slot
+          spends an empty cell, which is what holds a row's numbers in the same columns
+          as its neighbours' — the cell collapses to nothing, so it costs no height. */}
+      <Box sx={{ ...METRIC_GRID_SX, mt: 0.5 }}>
+        {breakdownSlots(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry, index) => (
+          entry ? <NakladkaMetric key={entry.label} {...entry} /> : <span key={index} />
         ))}
-        {invoiceMetrics}
-      </Stack>
+      </Box>
+      <Box sx={{ ...METRIC_GRID_SX, mt: 0.25 }}>{invoiceMetrics}</Box>
     </Box>
   );
 }
