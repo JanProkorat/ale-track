@@ -47,6 +47,7 @@ export function CustomStopDialog({
   onClose,
   onAdd,
   hasCompanyStop = false,
+  hasStockPurchases = true,
   showCompanyOption = true,
 }: {
   open: boolean;
@@ -55,6 +56,12 @@ export function CustomStopDialog({
   /** Disables the company toggle (with an explanatory tooltip) once the
    *  route already has one. Ignored when `showCompanyOption` is false. */
   hasCompanyStop?: boolean;
+  /** Whether the run carries goods for our own warehouse. The server keeps the
+   *  Company stop in step with those purchases in both directions, so adding
+   *  the stop without them would be undone by the very next save — the toggle
+   *  is disabled (with a tooltip) rather than silently swallowing the click.
+   *  Defaults to true so a caller with no such concept is unaffected. */
+  hasStockPurchases?: boolean;
   showCompanyOption?: boolean;
 }) {
   const { enqueueSnackbar } = useSnackbar();
@@ -65,6 +72,13 @@ export function CustomStopDialog({
   const [note, setNote] = useState('');
 
   const companyPoint = (startPointsQuery.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  // Empty string = enabled; the tooltip and the disabled state are the same
+  // decision, so they read off one value and cannot drift apart.
+  const companyDisabledReason = hasCompanyStop
+    ? 'Trasa už zastávku ve firmě má.'
+    : !hasStockPurchases
+      ? 'Zastávku ve firmě lze přidat, až bude v nakládce zboží na sklad — jinak ji uložení zase odstraní.'
+      : '';
 
   const reset = () => {
     setMode('custom');
@@ -106,9 +120,9 @@ export function CustomStopDialog({
             sx={{ mb: 2 }}
           >
             <ToggleButton value="custom">Vlastní místo</ToggleButton>
-            <Tooltip title={hasCompanyStop ? 'Trasa už zastávku ve firmě má.' : ''}>
+            <Tooltip title={companyDisabledReason}>
               <span>
-                <ToggleButton value="company" disabled={hasCompanyStop}>Firemní sklad</ToggleButton>
+                <ToggleButton value="company" disabled={companyDisabledReason !== ''}>Firemní sklad</ToggleButton>
               </span>
             </Tooltip>
           </ToggleButtonGroup>

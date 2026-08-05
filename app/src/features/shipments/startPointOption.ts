@@ -1,4 +1,5 @@
 import { ShipmentStartPointKind } from 'src/generated/api-client';
+import type { RouteEndpoint } from 'src/components/common/RouteMap';
 import { startPointKindName } from 'src/lib/labels';
 
 /** A start point value as carried by the editor's draft: enough to identify
@@ -19,4 +20,33 @@ export interface StartPointValue {
  * the component itself. */
 export function optionKey(point: { kind?: ShipmentStartPointKind | string; breweryId?: string }): string {
   return startPointKindName(point.kind) === 'Company' ? 'company' : `brewery:${point.breweryId ?? ''}`;
+}
+
+/** A place with a name and, maybe, coordinates — either a `ShipmentStartPointDto`
+ * or the shipment detail DTO's own resolved start point, whose fields carry the
+ * same meaning under different names. */
+export interface LocatablePoint {
+  latitude?: number | null;
+  longitude?: number | null;
+  name?: string | null;
+  address?: string | null;
+}
+
+/** The map endpoint for a start point, or `undefined` when it has no coordinates
+ * to plot.
+ *
+ * The start-points endpoint deliberately lists breweries whose address was never
+ * geocoded — a legal choice the map simply cannot draw. Coercing those nulls to
+ * zero (`latitude ?? 0`) does not degrade gracefully: it plants the marker off
+ * West Africa and, worse, seeds the nearest-neighbour optimizer with (0, 0) as
+ * the run's origin, which reorders every stop by distance from null island.
+ * Returning `undefined` instead lets each caller fall through to something real. */
+export function routeEndpointFrom(point: LocatablePoint | undefined | null): RouteEndpoint | undefined {
+  if (point?.latitude == null || point.longitude == null) return undefined;
+  return {
+    lat: point.latitude,
+    lng: point.longitude,
+    name: point.name ?? '—',
+    address: point.address ?? undefined,
+  };
 }

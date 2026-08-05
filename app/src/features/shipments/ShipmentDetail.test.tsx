@@ -395,6 +395,26 @@ describe('ShipmentDetail — route map point resolution', () => {
     const { start } = routeMapProps.mock.calls.at(-1)![0];
     expect(start).toEqual({ lat: 50.5, lng: 15.0, name: 'Pivovar Svijany', address: undefined });
   });
+
+  it('falls back to the company rather than plotting an ungeocoded start point at (0, 0)', () => {
+    // A brewery whose address was never geocoded is a legal start point — the
+    // start-points endpoint deliberately lists it. Coercing its missing
+    // coordinates to zero drew the route from off the coast of Africa.
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+      stops: [officialStop()],
+      startPointKind: ShipmentStartPointKind.Brewery,
+      startPointName: 'Pivovar bez adresy',
+    });
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    const { start } = routeMapProps.mock.calls.at(-1)![0];
+    expect(start).toEqual({ lat: 50.897, lng: 14.807, name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava' });
+  });
 });
 
 describe('ShipmentDetail — address-changed banner position', () => {

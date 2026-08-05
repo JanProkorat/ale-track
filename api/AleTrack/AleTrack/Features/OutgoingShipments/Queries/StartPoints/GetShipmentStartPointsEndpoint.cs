@@ -23,8 +23,13 @@ public sealed class GetShipmentStartPointsEndpoint(
     public override void Configure()
     {
         Get("outgoing-shipments/start-points");
+        // Cross-cutting reference data, not shipment content: the company entry is
+        // also the incoming-delivery screens' address source, so gating this on
+        // Shipments/View would 403 a deliveries-only user and silently draw their
+        // delivery route from the wrong origin. Same treatment as exchange rates
+        // and the other master-data lookups.
         Description(b => b
-            .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
+            .RequireAuthenticated()
             .Produces<List<ShipmentStartPointDto>>(StatusCodes.Status200OK)
             .WithName(nameof(GetShipmentStartPointsEndpoint)));
 

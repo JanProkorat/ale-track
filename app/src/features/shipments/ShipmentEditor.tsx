@@ -59,7 +59,7 @@ import { defaultChecklistSteps, type DraftStep } from './preparationStepModel';
 import { resolveStopAddress } from './stopAddress';
 import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
 import { StartPointPicker } from './StartPointPicker';
-import { optionKey, type StartPointValue } from './startPointOption';
+import { optionKey, routeEndpointFrom, type StartPointValue } from './startPointOption';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
@@ -421,9 +421,18 @@ export function ShipmentEditor({
     }
     : undefined;
   const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
-  const knownStart: RouteEndpoint | undefined = pickedStartPoint
-    ? { lat: pickedStartPoint.latitude ?? 0, lng: pickedStartPoint.longitude ?? 0, name: pickedStartPoint.name ?? '—', address: pickedStartPoint.address }
-    : savedStart ?? (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
+  // `routeEndpointFrom` yields undefined for a start point with no coordinates —
+  // a brewery whose address was never geocoded is a legal pick — so such a pick
+  // falls through the same cascade a not-yet-loaded one does rather than
+  // anchoring the map (and the optimizer) at (0, 0).
+  const knownStart: RouteEndpoint | undefined = routeEndpointFrom(pickedStartPoint)
+    ?? savedStart
+    ?? (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
+  // The run comes home: the route always ends at the company, wherever it
+  // started. Falls back to the start only while the start-points query has
+  // nothing to offer, so the map draws one combined marker rather than a
+  // second pin at (0, 0).
+  const knownEnd: RouteEndpoint | undefined = routeEndpointFrom(companyStartPoint);
   // Internal-only: `stopCoords`/`optimizeRoute` need a concrete number to sort
   // by even in the no-real-point case, but that fallback never reaches
   // RouteMap (gated on `knownStart` below), so (0, 0) there only ever affects
@@ -717,7 +726,7 @@ export function ShipmentEditor({
             <RouteMap
               stops={routeStops}
               start={knownStart}
-              end={knownStart}
+              end={knownEnd ?? knownStart}
               viaPoints={viaPoints}
               editable={!structureLocked}
               onViasChange={setViaPoints}
@@ -899,7 +908,13 @@ export function ShipmentEditor({
         </Stack>
       </Box>
 
-      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} hasCompanyStop={hasCompanyStop} />
+      <CustomStopDialog
+        open={customStopOpen}
+        onClose={() => setCustomStopOpen(false)}
+        onAdd={addCustomStop}
+        hasCompanyStop={hasCompanyStop}
+        hasStockPurchases={hasStockPurchases}
+      />
       {newPlaceTarget && (
         <DeliveryPlaceDialog
           open

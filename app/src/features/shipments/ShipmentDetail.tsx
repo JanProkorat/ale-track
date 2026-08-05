@@ -70,6 +70,7 @@ import { METRIC_GRID_SX, NakladkaMetric, type MetricAdjust } from './NakladkaMet
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
+import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
@@ -1065,21 +1066,29 @@ export function ShipmentDetail({
   }), [stopsSorted]);
 
   // The detail DTO already carries the shipment's own resolved start point, so
-  // the map does not wait on the start-points query for it — only the
-  // homeward end (the company) needs that lookup. While the query is still
-  // pending or has failed, `company` stays undefined and the end falls back
-  // to the same point as the start: a single combined marker rather than a
-  // second pin plotted at (0, 0).
+  // the map does not wait on the start-points query for it — only the homeward
+  // end (the company) needs that lookup. While the query is still pending or
+  // has failed, `companyEnd` stays undefined and the end falls back to the same
+  // point as the start: a single combined marker rather than a second pin
+  // plotted at (0, 0).
   const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
-  const routeStart: RouteEndpoint = {
-    lat: shipment.startPointLatitude ?? 0,
-    lng: shipment.startPointLongitude ?? 0,
-    name: shipment.startPointName ?? '—',
+  const companyEnd = routeEndpointFrom(company);
+  // A brewery whose address was never geocoded is a legal start point, so the
+  // shipment's own resolved coordinates may be absent — in which case there is
+  // nothing to plot and the map falls back to the company (always configured
+  // with coordinates), or, failing even that, is not drawn at all.
+  const startPointEnd = routeEndpointFrom({
+    latitude: shipment.startPointLatitude,
+    longitude: shipment.startPointLongitude,
+    name: shipment.startPointName,
     address: shipment.startPointAddress,
-  };
-  const routeEnd: RouteEndpoint = company
-    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
-    : routeStart;
+  });
+  const routeStart: RouteEndpoint | undefined = startPointEnd ?? companyEnd;
+  const routeEnd: RouteEndpoint | undefined = companyEnd ?? routeStart;
+  // The Vykládka header only prints the start point's name and address, so it
+  // stays truthful even when there are no coordinates to draw with — it must
+  // not inherit the map's company fallback.
+  const startPointLabel = { name: shipment.startPointName ?? '—', address: shipment.startPointAddress };
 
   const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
@@ -1425,14 +1434,27 @@ export function ShipmentDetail({
         )}
       />
 
-      <RouteMap
-        stops={routeStops}
-        start={routeStart}
-        end={routeEnd}
-        viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
-        height={360}
-        navigable
-      />
+      {routeStart ? (
+        <RouteMap
+          stops={routeStops}
+          start={routeStart}
+          end={routeEnd ?? routeStart}
+          viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
+          height={360}
+          navigable
+        />
+      ) : (
+        // Same dashed placeholder ShipmentEditor draws while it has no locatable
+        // origin — better than a route anchored at (0, 0).
+        <Box
+          sx={{
+            height: 360, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+            bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+          }}
+        >
+          <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+        </Box>
+      )}
 
       {/* Directly under the map, matching ShipmentEditor.tsx — a warning four
           cards down (its previous spot, at the bottom of the right column)
@@ -1488,10 +1510,7 @@ export function ShipmentDetail({
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
-                // `routeStart` already carries the same `startPointName ?? '—'` /
-                // `startPointAddress` fallback the map uses — reusing it here
-                // rather than rebuilding the fallback keeps the two from drifting.
-                <UnloadOrderList stops={unloadStops} startPoint={routeStart} />
+                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} />
               ) : (
                 <AggLoadingTable
                   sections={sections}

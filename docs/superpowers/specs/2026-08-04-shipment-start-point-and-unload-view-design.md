@@ -170,6 +170,18 @@ nakládka will not stick — the save puts it back. That follows directly from t
 add/remove sync rule, and the way out is to remove the goods. The editor should not
 pretend otherwise; see the frontend note below.
 
+The second consequence is about the *address*, not the stop. `BuildCustomStops`
+authors a Company stop's label and coordinates from the *current* `CompanyOptions`,
+while `ShipmentContentGuard.CustomStopsMatch` normalizes the incoming side through
+the *stored* values. So correcting the configured company address silently rewrites
+a frozen shipment's Company stop on its next save, and the freeze does not report it
+as a content change. That is deliberate: comparing against live configuration
+instead would make every frozen shipment carrying a Company stop permanently
+unsaveable the moment the address is corrected — no state advance, no delivery. A
+warehouse that moved is a fact about the company, not a change to the planner's
+route, so the run picks up the new address and keeps going. Do not "fix" the
+normalizer without reading this paragraph first.
+
 ## Frontend
 
 The backend change and its consumption land in the same commit, per the repo's

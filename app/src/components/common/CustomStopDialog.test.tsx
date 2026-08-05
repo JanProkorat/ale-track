@@ -74,6 +74,21 @@ describe('CustomStopDialog', () => {
     expect(screen.getByRole('button', { name: 'Firemní sklad' })).toBeDisabled();
   });
 
+  it('disables the company option while the run carries no stock purchases', () => {
+    // The server keeps the Company stop in step with the stock purchases in both
+    // directions, so adding one now would be removed again by the very next save.
+    // Offering the click and silently undoing it is worse than not offering it.
+    render(<CustomStopDialog open onClose={() => {}} onAdd={() => {}} hasCompanyStop={false} hasStockPurchases={false} />);
+
+    expect(screen.getByRole('button', { name: 'Firemní sklad' })).toBeDisabled();
+  });
+
+  it('enables the company option once the run carries stock purchases', () => {
+    render(<CustomStopDialog open onClose={() => {}} onAdd={() => {}} hasCompanyStop={false} hasStockPurchases />);
+
+    expect(screen.getByRole('button', { name: 'Firemní sklad' })).toBeEnabled();
+  });
+
   it('falls back to a generic label when there is no company entry in the start-points data (e.g. still loading)', () => {
     startPointsPending = true;
     startPoints = [];

@@ -25,8 +25,16 @@ import {
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
 
 // Pulls in react-leaflet, which doesn't run under happy-dom — same reasoning
-// as DeliveryPlacesPanel.test.tsx stubbing AddressMapPicker.
-vi.mock('src/components/common/RouteMap', () => ({ RouteMap: () => <div data-testid="route-map-stub" /> }));
+// as DeliveryPlacesPanel.test.tsx stubbing AddressMapPicker. Records its props
+// so the route's two endpoints can be asserted: which point the run leaves from
+// and which it comes home to are decisions ShipmentEditor makes, not RouteMap.
+const routeMapProps = vi.fn();
+vi.mock('src/components/common/RouteMap', () => ({
+  RouteMap: (props: { start: { lat: number; lng: number; name: string }; end: { lat: number; lng: number; name: string } }) => {
+    routeMapProps(props);
+    return <div data-testid="route-map-stub" />;
+  },
+}));
 
 // Stubbed rather than exercised for real: its own create/edit/validate
 // behaviour is covered by DeliveryPlaceDialog.test.tsx. Here we only need to
@@ -155,6 +163,7 @@ beforeEach(() => {
   updateMutateAsync.mockResolvedValue(undefined);
   createMutateAsync.mockResolvedValue('new-shipment-id');
   deliveryPlaceDialogProps.mockClear();
+  routeMapProps.mockClear();
   shipmentLoading = false;
   shipmentError = false;
   availableOrdersLoading = false;
@@ -458,6 +467,49 @@ describe('ShipmentEditor — start-point picker', () => {
     renderEditor({ mode: 'edit', state: OutgoingShipmentState.Loaded });
 
     expect(screen.getByLabelText('Výchozí bod')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('ShipmentEditor — the route\'s two ends', () => {
+  /** The props of the most recent RouteMap render — the editor re-renders on
+   *  every pick, and only the latest state is the one on screen. */
+  const lastRouteMap = () => routeMapProps.mock.calls.at(-1)?.[0];
+
+  it('starts at the picked brewery but still comes home to the company', async () => {
+    // The run does not end where it began. Passing the picked start point as
+    // `end` too would draw a loop back to the brewery and estimate the wrong
+    // distance for the leg that actually matters — the drive home.
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    await waitFor(() => {
+      expect(lastRouteMap().start).toMatchObject({ name: 'Pivovar Svijany', lat: 50.6, lng: 15.15 });
+    });
+    expect(lastRouteMap().end).toMatchObject({ name: 'Sklad AleTrack', lat: 50.897, lng: 14.807 });
+  });
+
+  it('does not plot a start point that was never geocoded', async () => {
+    // The start-points endpoint deliberately lists breweries with no coordinates.
+    // Coercing those nulls to zero would anchor the route — and the optimizer's
+    // origin — off the coast of Africa; the cascade must fall through instead.
+    startPoints = [
+      DEFAULT_START_POINTS[0],
+      { kind: 'Brewery', breweryId: 'brewery-nowhere', name: 'Pivovar bez adresy' },
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar bez adresy'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Výchozí bod')).toHaveTextContent('Pivovar bez adresy');
+    });
+    // Falls through to the first located stop (the loaded order's own address),
+    // never to (0, 0).
+    expect(lastRouteMap().start).not.toMatchObject({ lat: 0, lng: 0 });
+    expect(lastRouteMap().start.name).not.toBe('Pivovar bez adresy');
   });
 });
 
