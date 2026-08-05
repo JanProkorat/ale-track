@@ -95,10 +95,16 @@ should fail loudly rather than silently delete the run.
 
 ### New slice: `Features/OutgoingShipments/Queries/StartPoints/`
 
-`GET outgoing-shipments/start-points`, permission `ModuleType.Shipments` /
-`PermissionLevel.View`, matching the sibling endpoints' shape (`public sealed`,
-`Description(b => b.RequirePermission(...).Produces<...>().WithName(...))`,
-`DontCatchExceptions()`, `Summary`).
+`GET outgoing-shipments/start-points`, matching the sibling endpoints' shape
+(`public sealed`, `Description(b => b...Produces<...>().WithName(...))`,
+`DontCatchExceptions()`, `Summary`) except for its permission gate: the
+Deliveries module's `DeliveryDetail`/`DeliveryEditor` screens read the company
+entry too (`RouteMap`'s route-home point, per Task 7 of the plan), so it is
+`RequireAuthenticated()` rather than `RequirePermission(ModuleType.Shipments,
+...)` — cross-cutting reference data available to any authenticated user, the
+same pattern this repo already uses for exchange rates and similar master
+data. A Shipments-scoped permission would 403 those screens for a user
+provisioned only for Deliveries.
 
 ```csharp
 public sealed record ShipmentStartPointDto
