@@ -114,6 +114,36 @@ public sealed class CompanyStopTests
     }
 
     /// <summary>
+    /// A payload that omits <see cref="CustomStopDto.Kind"/> and
+    /// <see cref="UpdateOutgoingShipmentDto.StartPointKind"/> is not the same shipment,
+    /// whatever the caller intended — both fields fall back to their DTO defaults
+    /// (Custom, Company) and describe a run that starts at the depot with the warehouse
+    /// stop demoted to an ordinary custom one.
+    /// </summary>
+    /// <remarks>
+    /// A regression guard, not a change: this is the backend correctly refusing a
+    /// client that does not round-trip the two fields. A frontend defect of exactly
+    /// that shape reached review, and the guard is the thing that caught it — the
+    /// symptom was "Vyrazit" failing with ShipmentContentFrozen on any run with a
+    /// brewery origin or a warehouse stop. Loosening either comparison to make such a
+    /// payload pass would trade a loud failure for silent data loss.
+    /// </remarks>
+    [Fact]
+    public void ChangedFrozenFields_RequestOmittingStopKindAndStartPoint_ReportsBoth()
+    {
+        var (shipment, dto) = RoundTrippedWithCompanyStop();
+
+        dto.CustomStops[0].Kind = OutgoingShipmentStopKind.Custom;
+        dto.StartPointKind = ShipmentStartPointKind.Company;
+        dto.StartBreweryId = null;
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto).Should().BeEquivalentTo([
+            nameof(UpdateOutgoingShipmentDto.CustomStops),
+            nameof(UpdateOutgoingShipmentDto.StartPointKind)
+        ]);
+    }
+
+    /// <summary>
     /// Builds on <see cref="OutgoingShipmentTestHelpers.RoundTripped"/> by adding a stored
     /// Company stop and its matching DTO — but the incoming side carries blank label and
     /// zeroed coordinates, exactly what a client that does not preserve server-authored
