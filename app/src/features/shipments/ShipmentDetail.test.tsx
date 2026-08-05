@@ -15,6 +15,7 @@ import {
   OutgoingShipmentOrderItemDto,
   OutgoingShipmentState,
   DeliveryAddressKind,
+  type IOutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
   ProductKind,
@@ -179,9 +180,19 @@ function contactStop(): OutgoingShipmentStopDto {
   });
 }
 
-function renderDetail(stops: OutgoingShipmentStopDto[]) {
+/**
+ * Renders the detail screen either from a bare stop list (the shape every
+ * existing call site here uses) or a partial shipment override carrying its
+ * own `stops` — the Vykládka tests below need to vary `startPointName` too,
+ * which a stop array alone cannot express.
+ */
+function renderDetail(
+  input: OutgoingShipmentStopDto[] | (Partial<IOutgoingShipmentDetailDto> & { stops: OutgoingShipmentStopDto[] }),
+) {
+  const overrides: Partial<IOutgoingShipmentDetailDto> = Array.isArray(input) ? { stops: input } : input;
   const shipment = new OutgoingShipmentDetailDto({
-    id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [], stops,
+    id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+    ...overrides,
   });
   return render(
     <MuiThemeProvider theme={theme}>
@@ -720,5 +731,92 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText('Vozka 11°'), { timeout: 5000 });
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — the Vykládka tab', () => {
+  // Forces the stacked nakládka layout (data-testid="nakladka-row" only exists on that
+  // row, never on the desktop table's <TableRow>) regardless of the environment's default
+  // viewport. Without this, happy-dom's default 1024px window is above the `compact`
+  // breakpoint and the card measures 0 wide (no ResizeObserver), so the loading list
+  // renders as the plain table and never carries the testid at all — the "switching back
+  // to Vše restores the table" assertion below would then pass or fail for reasons that
+  // have nothing to do with the tab switch itself, which is exactly the kind of vacuous
+  // test this feature has already shipped four of. Same stub as the "nakládka when the
+  // columns do not fit" describe above (duplicated — its helpers are scoped to that block).
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe() {
+        this.callback([{ contentRect: { width: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** An order stop carrying a product, so the loading list has something to show —
+   * without this, aggRows is empty and the table renders its own empty text instead
+   * of any row at all, and the "restores the table" assertion could never observe a
+   * nakladka-row regardless of what the tab switch does. */
+  function unloadOrderStop(): OutgoingShipmentStopDto {
+    const stop = officialStop();
+    stop.order = 1;
+    stop.products = [new OutgoingShipmentOrderItemDto({
+      id: 'product-unload-1',
+      orderItemId: 'item-unload-1',
+      name: 'Ley 12',
+      kind: ProductKind.Bottle,
+      packageSize: 0.5,
+      platoDegree: 12,
+      quantity: 10,
+      weight: 5,
+      quantityFromInventory: 0,
+    })];
+    return stop;
+  }
+
+  /** A Custom stop unloads nothing of its own (unloadOrder.ts) — its `title` is the
+   * whole rendered text of its heading line, which is what makes an exact-match
+   * `getByText('Chrastava')` meaningful rather than a lucky substring hit inside a
+   * longer formatted address string. */
+  function chrastavaStop(): OutgoingShipmentStopDto {
+    return new OutgoingShipmentStopDto({
+      id: 'stop-chrastava',
+      kind: OutgoingShipmentStopKind.Custom,
+      order: 2,
+      label: 'Chrastava',
+      products: [],
+      returns: [],
+    });
+  }
+
+  const shipmentWithTwoStops = { stops: [unloadOrderStop(), chrastavaStop()] };
+
+  it('swaps the loading table for the stop-by-stop list', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.getByText('Chrastava')).toBeInTheDocument();
+    expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
+  });
+
+  it('names the start point above the numbered stops', () => {
+    renderDetail({ ...shipmentWithTwoStops, startPointName: 'Pivovar Svijany' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.getByText(/Pivovar Svijany/)).toBeInTheDocument();
+  });
+
+  it('keeps the invoice tabs reachable from the unload view', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vše' }));
+
+    expect(screen.getAllByTestId('nakladka-row').length).toBeGreaterThan(0);
   });
 });

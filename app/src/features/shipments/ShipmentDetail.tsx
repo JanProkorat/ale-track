@@ -72,7 +72,8 @@ import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
-import { platoSizeChipText } from './unloadOrder';
+import { platoSizeChipText, unloadOrder } from './unloadOrder';
+import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsCard } from './PreparationStepsCard';
@@ -149,6 +150,12 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 
 /** Tab value for the unfiltered loading list; the rest are invoice sequences. */
 const ALL_INVOICES = 'all';
+
+/** Tab value for the driver's stop-by-stop unload view; every other option
+ * filters the loading list instead. A plain string, not a sequence — the
+ * invoice tabs' values are `String(sequence)`, always numeric, so there is no
+ * real collision risk, but this reads clearly in the SegControl regardless. */
+const UNLOAD_VIEW = 'unload';
 
 /** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
 const QTY_CELL_SX = { width: 170, minWidth: 170 };
@@ -1108,10 +1115,19 @@ export function ShipmentDetail({
   const filterOptions = useMemo<SegOption<string>[]>(() => [
     { value: ALL_INVOICES, label: 'Vše' },
     ...invoiceColumns.map((column) => ({ value: String(column.sequence), label: `F${column.sequence}` })),
+    { value: UNLOAD_VIEW, label: 'Vykládka' },
   ], [invoiceColumns]);
 
   // A deleted invoice must not leave the table filtered by a column that is gone.
   const activeFilter = filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
+
+  // The driver's stop-by-stop unload order, for the Vykládka tab. Kept in
+  // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
+  // without a rendering harness — this screen only shapes it into rows.
+  const unloadStops = useMemo(
+    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? []),
+    [stopsSorted, shipment.stockPurchases],
+  );
 
   const visibleRows = useMemo(
     () => (activeFilter === ALL_INVOICES
@@ -1471,65 +1487,72 @@ export function ShipmentDetail({
                 <Box sx={{ flex: 1 }} />
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
-              <AggLoadingTable
-                sections={sections}
-                totalQuantity={totalQty}
-                columnCount={invoiceColumns.length}
-                emptyText={activeFilter === ALL_INVOICES
-                  ? 'Zatím žádné produkty k naložení.'
-                  : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
-                invoiceHeaders={(
-                  <PurchaseInvoiceHeaderCells
-                    invoices={purchaseInvoices}
-                    editable={nakladkaEditable}
-                    onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
-                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
-                    })}
-                  />
-                )}
-                invoiceFooters={(footSx) => (
-                  <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
-                )}
-                renderRow={(agg) => (
-                  <AggLoadingRow
-                    key={agg.key}
-                    agg={agg}
-                    editable={nakladkaEditable}
-                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    invoiceCells={(
-                      <PurchaseInvoiceRowCells
-                        row={agg}
-                        invoices={purchaseInvoices}
-                        states={loadingStates}
-                        editable={nakladkaEditable}
-                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                      />
-                    )}
-                  />
-                )}
-                renderStackedRow={(agg) => (
-                  <AggLoadingStackedRow
-                    key={agg.key}
-                    agg={agg}
-                    editable={nakladkaEditable}
-                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    invoiceMetrics={(
-                      <PurchaseInvoiceRowMetrics
-                        row={agg}
-                        invoices={purchaseInvoices}
-                        states={loadingStates}
-                        editable={nakladkaEditable}
-                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                      />
-                    )}
-                  />
-                )}
-                stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
-              />
+              {activeFilter === UNLOAD_VIEW ? (
+                <UnloadOrderList
+                  stops={unloadStops}
+                  startPoint={{ name: shipment.startPointName ?? '—', address: shipment.startPointAddress }}
+                />
+              ) : (
+                <AggLoadingTable
+                  sections={sections}
+                  totalQuantity={totalQty}
+                  columnCount={invoiceColumns.length}
+                  emptyText={activeFilter === ALL_INVOICES
+                    ? 'Zatím žádné produkty k naložení.'
+                    : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
+                  invoiceHeaders={(
+                    <PurchaseInvoiceHeaderCells
+                      invoices={purchaseInvoices}
+                      editable={nakladkaEditable}
+                      onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
+                        onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
+                      })}
+                    />
+                  )}
+                  invoiceFooters={(footSx) => (
+                    <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
+                  )}
+                  renderRow={(agg) => (
+                    <AggLoadingRow
+                      key={agg.key}
+                      agg={agg}
+                      editable={nakladkaEditable}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                      invoiceCells={(
+                        <PurchaseInvoiceRowCells
+                          row={agg}
+                          invoices={purchaseInvoices}
+                          states={loadingStates}
+                          editable={nakladkaEditable}
+                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
+                        />
+                      )}
+                    />
+                  )}
+                  renderStackedRow={(agg) => (
+                    <AggLoadingStackedRow
+                      key={agg.key}
+                      agg={agg}
+                      editable={nakladkaEditable}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                      invoiceMetrics={(
+                        <PurchaseInvoiceRowMetrics
+                          row={agg}
+                          invoices={purchaseInvoices}
+                          states={loadingStates}
+                          editable={nakladkaEditable}
+                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
+                        />
+                      )}
+                    />
+                  )}
+                  stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
+                />
+              )}
             </Box>
           </Card>
 
