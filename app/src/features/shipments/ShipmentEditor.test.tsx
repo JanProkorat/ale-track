@@ -9,7 +9,7 @@
 // selected, as a disabled "(smazáno)" option, rather than silently falling
 // back to no selection.
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -419,13 +419,39 @@ describe('ShipmentEditor — route optimizer origin', () => {
 });
 
 describe('ShipmentEditor — start-point picker', () => {
-  it('marks the form dirty when the start point changes', async () => {
+  it('sends the picked start point in the save payload', async () => {
+    // The brief's original assertion here checked that "Uložit" stayed enabled,
+    // but that button is only ever gated on `busy` (ShipmentEditor.tsx's
+    // `disabled={busy}`), never on the dirty flag — it is enabled from the very
+    // first render, so that check would still pass even if `startPoint` were
+    // dropped from `serializeShipment` entirely. What this test actually needs
+    // to guard against is a picked start point silently failing to reach the
+    // saved shipment, so it asserts the save payload directly instead.
     renderEditor({ mode: 'edit' });
 
     fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
     fireEvent.click(await screen.findByText('Pivovar Svijany'));
 
-    expect(screen.getByRole('button', { name: 'Uložit' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            // The fixture's `kind` is the wire-format string ('Brewery'), not the
+            // numeric ShipmentStartPointKind member — StartPointPicker passes the
+            // picked entry's `kind` straight through with no re-typing, exactly as
+            // the real backend's data flows (see optionKey's own comment on why a
+            // raw `===` against the numeric enum is unsafe). Asserting the numeric
+            // enum value here would fail against what the app, and the real
+            // backend round-trip, actually carries.
+            startPointKind: 'Brewery',
+            startBreweryId: 'brewery-svijany',
+          }),
+        }),
+      );
+    });
   });
 
   it('locks the start point once the run is loaded', () => {
