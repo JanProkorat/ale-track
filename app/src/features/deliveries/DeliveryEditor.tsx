@@ -326,12 +326,10 @@ export function DeliveryEditor({
     setPickBrewery(null);
   };
   const addCustomStop = (stop: CustomStopResult) => {
-    // A delivery already always ends at the company (see `company` below, used
-    // as the route's endpoint) — it has no separate "company stop" concept of
-    // its own (DeliveryStopKind has no Company member), so this dialog instance
-    // always passes hasCompanyStop, keeping that toggle disabled and this
-    // branch unreachable in practice.
-    if (stop.kind === 'company') return;
+    // showCompanyOption={false} below hides the company toggle entirely, so
+    // `stop` is always the custom variant in practice — narrowed here only to
+    // satisfy CustomStopResult's type, not as a domain-specific guard.
+    if (stop.kind !== 'custom') return;
     setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
     setCustomStopOpen(false);
   };
@@ -600,10 +598,10 @@ export function DeliveryEditor({
       </Box>
 
       {/* Deliveries have no company-stop concept of their own (a delivery already
-          always ends at the company) — hasCompanyStop is always true here to keep
-          that toggle permanently disabled rather than adding a feature this domain
-          can't persist. */}
-      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} hasCompanyStop />
+          always ends at the company) — showCompanyOption={false} hides that toggle
+          entirely, leaving this dialog exactly as it was before that option existed,
+          rather than disabling it with a tooltip that would be untrue here. */}
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} showCompanyOption={false} />
 
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>

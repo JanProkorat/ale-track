@@ -21,10 +21,14 @@ vi.mock('src/components/common/AddressMapPicker', () => ({
 }));
 
 // Mutable rather than a literal — able to express loading/error/no-data per
-// app/CLAUDE.md's testing convention: the dialog reads the company address
-// from this query for its read-only address block, and a mock that always
-// succeeds cannot catch a crash on a missing/erroring one. Reset in
-// beforeEach; the "graceful fallback" tests below flip one each.
+// app/CLAUDE.md's testing convention. CustomStopDialog itself only ever reads
+// `.data` (no isPending/isError branch), so the two states worth covering are
+// "no company entry in `data`" (whether that's because the query is still
+// pending or genuinely came back empty — same code path either way) and "the
+// query errored but TanStack Query still holds a previously cached `data`" —
+// a real scenario (data and isError can coexist on a background refetch
+// failure), not a fabricated one. Reset in beforeEach; the two tests below
+// each flip one flag.
 const DEFAULT_START_POINTS = [{ kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava' }];
 let startPoints: { kind: string; name: string; address?: string }[] = DEFAULT_START_POINTS;
 let startPointsPending = false;
@@ -56,7 +60,12 @@ describe('CustomStopDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Firemní sklad' }));
 
-    expect(screen.queryByLabelText('Název zastávky')).not.toBeInTheDocument();
+    // A regex, not the exact string: the field is `required`, so MUI renders
+    // its label with a trailing " *" indicator — an exact-string match against
+    // 'Název zastávky' never matches even when the field IS present, which
+    // would make this assertion pass unconditionally regardless of the bug it
+    // guards.
+    expect(screen.queryByLabelText(/Název zastávky/)).not.toBeInTheDocument();
   });
 
   it('disables the company option when the route already has one', () => {
@@ -65,7 +74,7 @@ describe('CustomStopDialog', () => {
     expect(screen.getByRole('button', { name: 'Firemní sklad' })).toBeDisabled();
   });
 
-  it('still adds a company stop when the start-points query is still pending', () => {
+  it('falls back to a generic label when there is no company entry in the start-points data (e.g. still loading)', () => {
     startPointsPending = true;
     startPoints = [];
     const onAdd = vi.fn();
@@ -79,15 +88,45 @@ describe('CustomStopDialog', () => {
     expect(onAdd).toHaveBeenCalledWith({ kind: 'company' });
   });
 
-  it('still adds a company stop when the start-points query has failed', () => {
+  it('still shows the cached company address when the start-points query is currently erroring', () => {
+    // A background refetch failure leaves TanStack Query's `data` holding the
+    // last successful result alongside `isError: true` — the dialog reads
+    // `.data` unconditionally, so a current error must not blank an address
+    // it already has.
     startPointsError = true;
-    startPoints = [];
     const onAdd = vi.fn();
     render(<CustomStopDialog open onClose={() => {}} onAdd={onAdd} hasCompanyStop={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Firemní sklad' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Přidat zastávku' }));
 
+    expect(screen.getByText('Nádražní 1, Žitava')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat zastávku' }));
     expect(onAdd).toHaveBeenCalledWith({ kind: 'company' });
+  });
+
+  it('resets to custom mode when the close (X) button is clicked, so reopening lands correctly', () => {
+    // The real caller (ShipmentEditor) renders <CustomStopDialog open={...} .../>
+    // unconditionally — only the `open` boolean toggles, the component instance
+    // itself never unmounts. So the fix under test (reset() running as part of
+    // the same click, before onClose fires) is provable without physically
+    // cycling MUI's own Dialog open/close transition: `open` is left `true`
+    // throughout, and onClose is a spy rather than something that actually
+    // hides the dialog. If `reset()` did not run, mode would still read
+    // 'company' here and the custom-place field would stay hidden.
+    const onClose = vi.fn();
+    render(<CustomStopDialog open onClose={onClose} onAdd={() => {}} hasCompanyStop={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Firemní sklad' }));
+    // Sanity check: now in company mode, so the custom-place field is hidden.
+    expect(screen.queryByLabelText(/Název zastávky/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zavřít' }));
+
+    expect(onClose).toHaveBeenCalled();
+    // Before the fix, the X button called the raw `onClose` prop directly
+    // instead of the local `close` that calls `reset()` — mode (and the
+    // point/label/note fields) stuck at 'company'.
+    expect(screen.getByLabelText(/Název zastávky/)).toBeInTheDocument();
   });
 });

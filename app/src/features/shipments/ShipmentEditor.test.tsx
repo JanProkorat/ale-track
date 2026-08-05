@@ -19,7 +19,7 @@ import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
   OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
-  OutgoingShipmentPreparationStepDto,
+  OutgoingShipmentPreparationStepDto, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -458,6 +458,47 @@ describe('ShipmentEditor — start-point picker', () => {
     renderEditor({ mode: 'edit', state: OutgoingShipmentState.Loaded });
 
     expect(screen.getByLabelText('Výchozí bod')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('ShipmentEditor — company stop round-trip', () => {
+  it('keeps a loaded Company stop as Company on save, rather than demoting it to Custom', async () => {
+    // The wire-format string ('Company'), as the real backend actually sends
+    // this enum — not the numeric OutgoingShipmentStopKind member. The
+    // edit-mode load effect classifies a loaded stop with no orderId via
+    // `stopKindName(st.kind) === 'Company'` (ShipmentEditor.tsx); before that
+    // check existed, any such stop was hard-defaulted to 'custom'. Saving
+    // straight back out (no edits at all) must still send this stop as
+    // Company — if the detection ever regressed to always 'custom', the save
+    // payload's customStops would carry this stop with no `kind: Company` at
+    // all, and this assertion would fail.
+    shipmentResponse!.stops = [
+      ...(shipmentResponse!.stops ?? []),
+      new OutgoingShipmentStopDto({
+        id: 'company-stop-1',
+        order: 2,
+        kind: 'Company' as unknown as OutgoingShipmentStopKind,
+        label: 'Sklad AleTrack',
+        latitude: 50.897,
+        longitude: 14.807,
+      }),
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            customStops: expect.arrayContaining([
+              expect.objectContaining({ id: 'company-stop-1', kind: OutgoingShipmentStopKind.Company }),
+            ]),
+          }),
+        }),
+      );
+    });
   });
 });
 

@@ -34,17 +34,28 @@ export type CustomStopResult =
 /** Dialog to add a non-order stop, either a custom place (typed address or
  * map click, then named) or the company warehouse. A route carries at most
  * one company stop, so that mode is disabled (with a tooltip) once one
- * already exists — the caller decides that via `hasCompanyStop`. */
+ * already exists — the caller decides that via `hasCompanyStop`.
+ *
+ * Not every caller's domain has a company-stop concept at all (a delivery
+ * already always ends at the company, for instance) — `showCompanyOption`
+ * lets such a caller hide the toggle entirely instead of disabling it with a
+ * tooltip that would be untrue for that domain. Defaults to true so the
+ * shipment editor (this dialog's original and still-primary caller) is
+ * unaffected. */
 export function CustomStopDialog({
   open,
   onClose,
   onAdd,
-  hasCompanyStop,
+  hasCompanyStop = false,
+  showCompanyOption = true,
 }: {
   open: boolean;
   onClose: () => void;
   onAdd: (stop: CustomStopResult) => void;
-  hasCompanyStop: boolean;
+  /** Disables the company toggle (with an explanatory tooltip) once the
+   *  route already has one. Ignored when `showCompanyOption` is false. */
+  hasCompanyStop?: boolean;
+  showCompanyOption?: boolean;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const startPointsQuery = useShipmentStartPoints();
@@ -81,25 +92,27 @@ export function CustomStopDialog({
     <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box component="span" sx={{ flex: 1 }}>Vlastní zastávka</Box>
-        <IconButton onClick={onClose} aria-label="Zavřít" size="small">
+        <IconButton onClick={close} aria-label="Zavřít" size="small">
           <CloseIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <ToggleButtonGroup
-          value={mode}
-          exclusive
-          size="small"
-          onChange={(_, next: 'custom' | 'company' | null) => { if (next) setMode(next); }}
-          sx={{ mb: 2 }}
-        >
-          <ToggleButton value="custom">Vlastní místo</ToggleButton>
-          <Tooltip title={hasCompanyStop ? 'Trasa už zastávku ve firmě má.' : ''}>
-            <span>
-              <ToggleButton value="company" disabled={hasCompanyStop}>Firemní sklad</ToggleButton>
-            </span>
-          </Tooltip>
-        </ToggleButtonGroup>
+        {showCompanyOption && (
+          <ToggleButtonGroup
+            value={mode}
+            exclusive
+            size="small"
+            onChange={(_, next: 'custom' | 'company' | null) => { if (next) setMode(next); }}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="custom">Vlastní místo</ToggleButton>
+            <Tooltip title={hasCompanyStop ? 'Trasa už zastávku ve firmě má.' : ''}>
+              <span>
+                <ToggleButton value="company" disabled={hasCompanyStop}>Firemní sklad</ToggleButton>
+              </span>
+            </Tooltip>
+          </ToggleButtonGroup>
+        )}
 
         {mode === 'company' ? (
           <Stack spacing={1.5}>
