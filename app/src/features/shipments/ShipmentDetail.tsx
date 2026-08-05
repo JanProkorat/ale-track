@@ -72,6 +72,7 @@ import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
+import { platoSizeChipText } from './unloadOrder';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsCard } from './PreparationStepsCard';
@@ -164,19 +165,6 @@ const PRODUCT_CELL_SX = { width: '100%' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
-}
-
-/**
- * Chip for a row of the loading list: degree and package size.
- *
- * No kind — the section heading above the row already says it. The degree is what
- * distinguishes two otherwise identically named beers on the pallet.
- */
-function platoSizeChipText(platoDegree: number | undefined, packageSize: number | undefined): string {
-  return [
-    platoDegree != null ? `${platoDegree}°` : '',
-    packageSize != null ? fmtLiters(packageSize) : '',
-  ].filter(Boolean).join(' · ');
 }
 
 interface AggRow {
