@@ -147,7 +147,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
         var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
         var stockPurchases = await GetStockPurchasesAsync(req.Data.StockPurchases, outgoingShipment, ct);
-        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
@@ -156,6 +156,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         outgoingShipment.StartPointKind = req.Data.StartPointKind;
         outgoingShipment.StartBrewery = startBrewery;
         outgoingShipment.StartBreweryId = startBrewery?.Id;
+        outgoingShipment.StartBreweryAddressKind = req.Data.StartBreweryAddressKind;
         outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
@@ -561,7 +562,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
     /// Resolves the brewery a run starts at, or null when it starts at the company.
     /// </summary>
     private async Task<Brewery?> GetStartBreweryAsync(
-        ShipmentStartPointKind kind, Guid? breweryId, CancellationToken ct)
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
     {
         if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
         {
@@ -574,6 +575,13 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         if (brewery is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
         }
 
         return brewery;

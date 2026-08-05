@@ -68,8 +68,8 @@ public sealed class CompanyStopTests
 
         var stored = shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Company);
         stored.Label.Should().Be("AleTrack s.r.o.");
-        stored.Latitude.Should().Be(50.7663m);
-        stored.Longitude.Should().Be(15.0543m);
+        stored.Latitude.Should().Be(50.841437m);
+        stored.Longitude.Should().Be(14.837309m);
     }
 
     [Fact]

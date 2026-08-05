@@ -60,7 +60,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
         var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
-        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
         var outgoingShipment = new OutgoingShipment
         {
@@ -72,6 +72,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
             StartPointKind = req.Data.StartPointKind,
             StartBrewery = startBrewery,
             StartBreweryId = startBrewery?.Id,
+            StartBreweryAddressKind = req.Data.StartBreweryAddressKind,
             Drivers = [.. drivers
                 .Select(d => new OutgoingShipmentDriver 
                 {
@@ -189,7 +190,7 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
     /// Resolves the brewery a run starts at, or null when it starts at the company.
     /// </summary>
     private async Task<Brewery?> GetStartBreweryAsync(
-        ShipmentStartPointKind kind, Guid? breweryId, CancellationToken ct)
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
     {
         if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
         {
@@ -202,6 +203,13 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
         if (brewery is null)
         {
             ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
         }
 
         return brewery;

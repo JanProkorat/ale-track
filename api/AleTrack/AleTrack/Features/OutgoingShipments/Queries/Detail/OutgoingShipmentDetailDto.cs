@@ -38,6 +38,12 @@ public sealed record OutgoingShipmentDetailDto
     /// <summary>Public ID of the start brewery; null when the run starts at the company.</summary>
     public Guid? StartBreweryId { get; set; }
 
+    /// <summary>
+    /// Which of the start brewery's addresses the run is loaded at. Meaningless when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Company"/>.
+    /// </summary>
+    public DeliveryAddressKind StartBreweryAddressKind { get; set; }
+
     /// <summary>Resolved display name of the start point.</summary>
     public string StartPointName { get; set; } = null!;
 

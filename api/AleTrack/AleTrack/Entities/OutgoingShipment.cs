@@ -52,6 +52,15 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public Brewery? StartBrewery { get; set; }
 
     /// <summary>
+    /// Which of the start brewery's addresses the run is loaded at. Meaningless when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Company"/>, and
+    /// restricted to <see cref="DeliveryAddressKind.Official"/>/<see cref="DeliveryAddressKind.Contact"/>
+    /// — a brewery has no delivery-place navigation.
+    /// </summary>
+    [Column("start_brewery_address_kind")]
+    public DeliveryAddressKind StartBreweryAddressKind { get; set; } = DeliveryAddressKind.Official;
+
+    /// <summary>
     /// Date when the shipment was created
     /// </summary>
     [Column("created_date")]

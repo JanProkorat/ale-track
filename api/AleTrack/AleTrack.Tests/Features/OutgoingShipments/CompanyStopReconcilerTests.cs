@@ -23,7 +23,7 @@ public sealed class CompanyStopReconcilerTests
         var companyStop = shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Company);
         companyStop.Order.Should().Be(3);
         companyStop.Label.Should().Be("AleTrack s.r.o.");
-        companyStop.Latitude.Should().Be(50.7663m);
+        companyStop.Latitude.Should().Be(50.841437m);
     }
 
     /// <summary>
@@ -40,8 +40,8 @@ public sealed class CompanyStopReconcilerTests
             Kind = OutgoingShipmentStopKind.Company,
             Order = 3,
             Label = "AleTrack s.r.o.",
-            Latitude = 50.7663m,
-            Longitude = 15.0543m
+            Latitude = 50.841437m,
+            Longitude = 14.837309m
         });
 
         CompanyStopReconciler.Apply(shipment, Company);

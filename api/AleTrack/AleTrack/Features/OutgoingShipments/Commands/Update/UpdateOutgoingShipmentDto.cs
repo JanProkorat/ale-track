@@ -24,7 +24,15 @@ public sealed record UpdateOutgoingShipmentDto
     /// and must be null otherwise.
     /// </summary>
     public Guid? StartBreweryId { get; set; }
-    
+
+    /// <summary>
+    /// Which of the start brewery's addresses the run is loaded at. Meaningless when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Company"/>.
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/> is never valid — a brewery has
+    /// no delivery-place navigation.
+    /// </summary>
+    public DeliveryAddressKind StartBreweryAddressKind { get; set; } = DeliveryAddressKind.Official;
+
     /// <summary>
     /// Date when shipments are going to be delivered
     /// </summary>

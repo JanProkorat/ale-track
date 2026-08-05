@@ -80,5 +80,15 @@ public sealed class UpdateOutgoingShipmentDtoValidator : AbstractValidator<Updat
             .Null()
             .When(dto => dto.StartPointKind == ShipmentStartPointKind.Company)
             .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
+        RuleFor(dto => dto.StartBreweryAddressKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        // A brewery has no delivery-place navigation — only its official and
+        // contact addresses can ever be a start point.
+        RuleFor(dto => dto.StartBreweryAddressKind)
+            .NotEqual(DeliveryAddressKind.DeliveryPlace)
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
     }
 }

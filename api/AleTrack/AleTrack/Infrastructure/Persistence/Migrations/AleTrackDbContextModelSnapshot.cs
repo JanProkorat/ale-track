@@ -904,6 +904,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
+                    b.Property<int>("StartBreweryAddressKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_brewery_address_kind");
+
                     b.Property<long?>("StartBreweryId")
                         .HasColumnType("bigint")
                         .HasColumnName("start_brewery_id");

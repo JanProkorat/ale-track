@@ -32,11 +32,48 @@ public sealed class GetShipmentStartPointsTests
         result.Should().HaveCount(3);
         result[0].Kind.Should().Be(ShipmentStartPointKind.Company);
         result[0].BreweryId.Should().BeNull();
+        result[0].AddressKind.Should().BeNull();
         result[0].Name.Should().Be("AleTrack s.r.o.");
-        result[0].Address.Should().Be("Nádražní 12, 46001 Liberec");
+        result[0].Address.Should().Be("Turistická 211, 46334 Hrádek nad Nisou");
         result[1].Kind.Should().Be(ShipmentStartPointKind.Brewery);
         result[1].Name.Should().Be("Rohozec");
+        // Neither of these has a contact address, so each contributes exactly the
+        // one Official entry — no Contact duplicate sneaks in.
+        result[1].AddressKind.Should().Be(DeliveryAddressKind.Official);
         result[2].Name.Should().Be("Svijany");
+        result[2].AddressKind.Should().Be(DeliveryAddressKind.Official);
+    }
+
+    /// <summary>
+    /// A brewery is not always loaded at its official address: when it also has a
+    /// contact address on file, both are pickable start points. The two addresses use
+    /// deliberately distinct cities and coordinates so a bug that resolved both entries
+    /// from the same (official) address would fail this assertion.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BreweryWithContactAddress_ReturnsBothAddressesWithDistinctKinds()
+    {
+        var official = AddressBuilder.BuildEntity(city: "Rohozec", latitude: 50.6m, longitude: 15.1m);
+        var contact = AddressBuilder.BuildEntity(city: "Turnov", latitude: 50.59m, longitude: 15.16m);
+        var brewery = BreweryBuilder.BuildEntity(
+            name: "Rohozec", displayOrder: 1, officialAddress: official, contactAddress: contact);
+
+        var endpoint = CreateEndpoint([brewery]);
+
+        await endpoint.HandleAsync(default);
+
+        var result = endpoint.Response;
+        result.Should().HaveCount(3);
+
+        var officialEntry = result.Single(r => r.AddressKind == DeliveryAddressKind.Official);
+        officialEntry.BreweryId.Should().Be(brewery.PublicId);
+        officialEntry.Address.Should().Contain("Rohozec");
+        officialEntry.Latitude.Should().Be(50.6m);
+
+        var contactEntry = result.Single(r => r.AddressKind == DeliveryAddressKind.Contact);
+        contactEntry.BreweryId.Should().Be(brewery.PublicId);
+        contactEntry.Address.Should().Contain("Turnov");
+        contactEntry.Latitude.Should().Be(50.59m);
     }
 
     /// <summary>

@@ -10,6 +10,13 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<int>(
+                name: "start_brewery_address_kind",
+                table: "outgoing_shipments",
+                type: "integer",
+                nullable: false,
+                defaultValue: 0);
+
             migrationBuilder.AddColumn<long>(
                 name: "start_brewery_id",
                 table: "outgoing_shipments",
@@ -46,6 +53,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropIndex(
                 name: "IX_outgoing_shipments_start_brewery_id",
+                table: "outgoing_shipments");
+
+            migrationBuilder.DropColumn(
+                name: "start_brewery_address_kind",
                 table: "outgoing_shipments");
 
             migrationBuilder.DropColumn(

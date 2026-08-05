@@ -25,13 +25,13 @@ internal static class OutgoingShipmentTestHelpers
     internal static readonly CompanyOptions Company = new()
     {
         Name = "AleTrack s.r.o.",
-        StreetName = "Nádražní",
-        StreetNumber = "12",
-        City = "Liberec",
-        Zip = "46001",
+        StreetName = "Turistická",
+        StreetNumber = "211",
+        City = "Hrádek nad Nisou",
+        Zip = "46334",
         Country = Country.Czechia,
-        Latitude = 50.7663m,
-        Longitude = 15.0543m
+        Latitude = 50.841437m,
+        Longitude = 14.837309m
     };
 
     /// <summary>

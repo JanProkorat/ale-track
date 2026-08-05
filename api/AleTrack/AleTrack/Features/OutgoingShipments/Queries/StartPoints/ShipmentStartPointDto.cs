@@ -13,6 +13,15 @@ public sealed record ShipmentStartPointDto
     /// <summary>Public ID of the brewery; null for the company entry.</summary>
     public Guid? BreweryId { get; set; }
 
+    /// <summary>
+    /// Which of the brewery's addresses this entry is. Null for the company entry, which
+    /// has a single address and no meaningful kind. A brewery contributes one entry per
+    /// address it has set (always <see cref="DeliveryAddressKind.Official"/>, plus
+    /// <see cref="DeliveryAddressKind.Contact"/> when it has a contact address) — never
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>.
+    /// </summary>
+    public DeliveryAddressKind? AddressKind { get; set; }
+
     /// <summary>Display name — the company name or the brewery name.</summary>
     public string Name { get; set; } = null!;
 

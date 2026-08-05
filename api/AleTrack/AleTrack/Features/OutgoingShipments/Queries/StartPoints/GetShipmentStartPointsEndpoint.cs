@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -49,20 +50,12 @@ public sealed class GetShipmentStartPointsEndpoint(
 
         // Ordered by the brewery's own display order — the same key the catalogue
         // and the loading list sort by, so the picker reads in a familiar order.
+        // Projected as entities (no method calls, so this stays EF-translatable) —
+        // the fan-out into one-or-two entries per brewery happens afterwards, in memory.
         var breweries = await dbContext.Breweries
             .AsNoTracking()
             .OrderBy(b => b.DisplayOrder)
             .ThenBy(b => b.Name)
-            .Select(b => new ShipmentStartPointDto
-            {
-                Kind = ShipmentStartPointKind.Brewery,
-                BreweryId = b.PublicId,
-                Name = b.Name,
-                Address = b.OfficialAddress.StreetName + " " + b.OfficialAddress.StreetNumber
-                    + ", " + b.OfficialAddress.Zip + " " + b.OfficialAddress.City,
-                Latitude = b.OfficialAddress.Latitude,
-                Longitude = b.OfficialAddress.Longitude
-            })
             .ToListAsync(ct);
 
         List<ShipmentStartPointDto> startPoints =
@@ -71,14 +64,53 @@ public sealed class GetShipmentStartPointsEndpoint(
             {
                 Kind = ShipmentStartPointKind.Company,
                 BreweryId = null,
+                AddressKind = null,
                 Name = company.Name,
                 Address = company.FormatAddress(),
                 Latitude = company.Latitude,
                 Longitude = company.Longitude
             },
-            .. breweries
+            .. breweries.SelectMany(BuildBreweryStartPoints)
         ];
 
         await Send.OkAsync(startPoints, ct);
     }
+
+    /// <summary>
+    /// A brewery is not always loaded at its official address — it contributes one
+    /// start point per address it actually has set: always the official one, plus the
+    /// contact address when one is on file. Coordinates are passed through as-is,
+    /// including when they are unset — an ungeocoded address is still a valid, pickable
+    /// start point.
+    /// </summary>
+    private static IEnumerable<ShipmentStartPointDto> BuildBreweryStartPoints(Brewery brewery)
+    {
+        yield return new ShipmentStartPointDto
+        {
+            Kind = ShipmentStartPointKind.Brewery,
+            BreweryId = brewery.PublicId,
+            AddressKind = DeliveryAddressKind.Official,
+            Name = brewery.Name,
+            Address = FormatAddress(brewery.OfficialAddress),
+            Latitude = brewery.OfficialAddress.Latitude,
+            Longitude = brewery.OfficialAddress.Longitude
+        };
+
+        if (brewery.ContactAddress is not null)
+        {
+            yield return new ShipmentStartPointDto
+            {
+                Kind = ShipmentStartPointKind.Brewery,
+                BreweryId = brewery.PublicId,
+                AddressKind = DeliveryAddressKind.Contact,
+                Name = brewery.Name,
+                Address = FormatAddress(brewery.ContactAddress),
+                Latitude = brewery.ContactAddress.Latitude,
+                Longitude = brewery.ContactAddress.Longitude
+            };
+        }
+    }
+
+    private static string FormatAddress(Address address)
+        => $"{address.StreetName} {address.StreetNumber}, {address.Zip} {address.City}";
 }

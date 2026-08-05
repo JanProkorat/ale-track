@@ -201,6 +201,23 @@ public sealed class ShipmentContentGuardTests
             .Should().Contain(nameof(UpdateOutgoingShipmentDto.StartPointKind));
     }
 
+    /// <summary>
+    /// Same brewery, same <see cref="ShipmentStartPointKind"/> — only which of the
+    /// brewery's addresses the run loads at changes. Without comparing this field
+    /// separately, a planner switching Official to Contact on a frozen shipment would
+    /// silently pass the guard and revert on save.
+    /// </summary>
+    [Fact]
+    public void ChangedFrozenFields_StartBreweryAddressKindChanged_ReportsStartPointKind()
+    {
+        var (shipment, dto) = RoundTripped();
+
+        dto.StartBreweryAddressKind = DeliveryAddressKind.Contact;
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto)
+            .Should().Contain(nameof(UpdateOutgoingShipmentDto.StartPointKind));
+    }
+
     [Fact]
     public void ChangedFrozenFields_EverythingFrozenChanged_ReportsEveryField()
     {

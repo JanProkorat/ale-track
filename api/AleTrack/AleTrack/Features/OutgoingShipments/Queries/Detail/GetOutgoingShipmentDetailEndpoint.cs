@@ -70,13 +70,28 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                 VehicleId = os.Vehicle != null ? os.Vehicle.PublicId : null,
                 StartPointKind = os.StartPointKind,
                 StartBreweryId = os.StartBrewery != null ? os.StartBrewery.PublicId : null,
+                StartBreweryAddressKind = os.StartBreweryAddressKind,
                 StartPointName = os.StartBrewery != null ? os.StartBrewery.Name : company.Name,
+                // Resolves from whichever address the shipment actually chose — a brewery is
+                // not always loaded at its official address. Property access and a ternary
+                // only, no method calls, so this stays translatable.
                 StartPointAddress = os.StartBrewery != null
-                    ? os.StartBrewery.OfficialAddress.StreetName + " " + os.StartBrewery.OfficialAddress.StreetNumber
-                        + ", " + os.StartBrewery.OfficialAddress.Zip + " " + os.StartBrewery.OfficialAddress.City
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.StreetName + " " + os.StartBrewery.ContactAddress.StreetNumber
+                            + ", " + os.StartBrewery.ContactAddress.Zip + " " + os.StartBrewery.ContactAddress.City
+                        : os.StartBrewery.OfficialAddress.StreetName + " " + os.StartBrewery.OfficialAddress.StreetNumber
+                            + ", " + os.StartBrewery.OfficialAddress.Zip + " " + os.StartBrewery.OfficialAddress.City)
                     : companyAddress,
-                StartPointLatitude = os.StartBrewery != null ? os.StartBrewery.OfficialAddress.Latitude : company.Latitude,
-                StartPointLongitude = os.StartBrewery != null ? os.StartBrewery.OfficialAddress.Longitude : company.Longitude,
+                StartPointLatitude = os.StartBrewery != null
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.Latitude
+                        : os.StartBrewery.OfficialAddress.Latitude)
+                    : company.Latitude,
+                StartPointLongitude = os.StartBrewery != null
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.Longitude
+                        : os.StartBrewery.OfficialAddress.Longitude)
+                    : company.Longitude,
                 DriverIds = os.Drivers
                     .Select(d => d.Driver.PublicId)
                     .ToList(),
