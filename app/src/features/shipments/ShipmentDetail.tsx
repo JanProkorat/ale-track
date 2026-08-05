@@ -1488,10 +1488,10 @@ export function ShipmentDetail({
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
-                <UnloadOrderList
-                  stops={unloadStops}
-                  startPoint={{ name: shipment.startPointName ?? '—', address: shipment.startPointAddress }}
-                />
+                // `routeStart` already carries the same `startPointName ?? '—'` /
+                // `startPointAddress` fallback the map uses — reusing it here
+                // rather than rebuilding the fallback keeps the two from drifting.
+                <UnloadOrderList stops={unloadStops} startPoint={routeStart} />
               ) : (
                 <AggLoadingTable
                   sections={sections}

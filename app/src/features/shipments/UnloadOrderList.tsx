@@ -14,6 +14,7 @@ import type { UnloadLine, UnloadStop } from './unloadOrder';
 function SeqBadge({ seq }: { seq: number }) {
   return (
     <Box
+      data-testid="unload-stop-seq"
       sx={{
         width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
         fontSize: 12, fontWeight: 800, flexShrink: 0, color: 'text.primary',

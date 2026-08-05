@@ -801,6 +801,15 @@ describe('ShipmentDetail — the Vykládka tab', () => {
 
     expect(screen.getByText('Chrastava')).toBeInTheDocument();
     expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
+    // The tab exists to show what comes off at each stop — assert the payload
+    // itself, not just that the tab swapped. Without these, a dropped quantity,
+    // an omitted chip, or an inverted "has lines" check would leave every
+    // assertion above still green.
+    expect(screen.getByText('Ley 12')).toBeInTheDocument();
+    expect(screen.getByText('× 10')).toBeInTheDocument();
+    // The Custom stop (Chrastava) unloads nothing by construction — its own
+    // placeholder, not a second copy of the order stop's content.
+    expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
   it('names the start point above the numbered stops', () => {
@@ -809,6 +818,16 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
 
     expect(screen.getByText(/Pivovar Svijany/)).toBeInTheDocument();
+    // Pins the "the start point is never itself a numbered stop" contract:
+    // unloadOrder() renumbers 1..N over the stops alone, so the two stops here
+    // must read 1 and 2, not 0 and 1 (which a bug prepending the start point
+    // into the numbered list would produce) and not 2 and 3 (appending it).
+    // Scoped to the seq badges themselves (data-testid) rather than a bare
+    // getByText('1') — a plain "1" or "2" also appears elsewhere on the
+    // screen (e.g. the progress pills' "n/n" counts), which a bare text match
+    // would collide with.
+    const seqBadges = screen.getAllByTestId('unload-stop-seq').map((el) => el.textContent);
+    expect(seqBadges).toEqual(['1', '2']);
   });
 
   it('keeps the invoice tabs reachable from the unload view', () => {
