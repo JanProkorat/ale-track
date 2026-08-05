@@ -221,16 +221,6 @@ export function ShipmentEditor({
   const updateShipment = useUpdateShipment();
   const startPointsQuery = useShipmentStartPoints();
 
-  // Task 8 adds a start-point picker; until then every shipment starts (and,
-  // as always, ends) at the company entry, preserving today's behaviour. Falls
-  // back to (0, 0) while the reference-data query is still pending or has
-  // failed — the same "no better data yet" choice ShipmentDetail makes for its
-  // own end point.
-  const company = (startPointsQuery.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
-  const start: RouteEndpoint = company
-    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
-    : { lat: 0, lng: 0, name: '—' };
-
   const [name, setName] = useState('');
   const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(dayjs().add(2, 'day').hour(7).minute(0).second(0));
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -364,6 +354,36 @@ export function ShipmentEditor({
     const pt = resolveStopAddress(order, st.addressKind, st.deliveryPlaceId);
     return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.key), kind: 'order' };
   }), [stopsSorted, orderById]);
+
+  // Task 8 adds a start-point picker; until then every shipment starts (and,
+  // as always, ends) at the company entry. While that reference-data query
+  // hasn't resolved, a synthetic (0, 0) would plant a marker at null island —
+  // there is always better information on screen instead: the shipment's own
+  // previously-saved start point (edit mode), or failing that the first stop
+  // that already has real coordinates. Only a brand-new, stop-less shipment
+  // with the query still pending or failed has nothing real to fall back to;
+  // `knownStart` says so explicitly and the render below skips RouteMap
+  // entirely then rather than draw a route anchored at (0, 0).
+  const company = (startPointsQuery.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const savedStart: RouteEndpoint | undefined = mode === 'edit'
+    && shipmentQuery.data?.startPointLatitude != null
+    && shipmentQuery.data?.startPointLongitude != null
+    ? {
+      lat: shipmentQuery.data.startPointLatitude,
+      lng: shipmentQuery.data.startPointLongitude,
+      name: shipmentQuery.data.startPointName ?? '—',
+      address: shipmentQuery.data.startPointAddress,
+    }
+    : undefined;
+  const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
+  const knownStart: RouteEndpoint | undefined = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : savedStart ?? (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
+  // Internal-only: `stopCoords`/`optimizeRoute` need a concrete number to sort
+  // by even in the no-real-point case, but that fallback never reaches
+  // RouteMap (gated on `knownStart` below), so (0, 0) there only ever affects
+  // a nearest-neighbour sort, never a rendered pin.
+  const start: RouteEndpoint = knownStart ?? { lat: 0, lng: 0, name: '—' };
 
   const selectedVehicle = (vehiclesQuery.data ?? []).find((v) => v.id === vehicleId);
   const totalWeight = useMemo(() => stopsSorted.reduce((sum, st) => {
@@ -618,15 +638,26 @@ export function ShipmentEditor({
           so the tracks stop honouring their fr shares and the columns spill sideways. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.4fr) minmax(0, 1fr)' }, alignItems: 'start' }}>
         <Stack spacing={2}>
-          <RouteMap
-            stops={routeStops}
-            start={start}
-            end={start}
-            viaPoints={viaPoints}
-            editable={!structureLocked}
-            onViasChange={setViaPoints}
-            height={320}
-          />
+          {knownStart ? (
+            <RouteMap
+              stops={routeStops}
+              start={knownStart}
+              end={knownStart}
+              viaPoints={viaPoints}
+              editable={!structureLocked}
+              onViasChange={setViaPoints}
+              height={320}
+            />
+          ) : (
+            <Box
+              sx={{
+                height: 320, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+                bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+              }}
+            >
+              <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+            </Box>
+          )}
 
           {/* Fed from the loaded server shipment (shipmentQuery.data), not the local
               `stops` draft — the draft is client-side and carries no `addressChangedAt`,

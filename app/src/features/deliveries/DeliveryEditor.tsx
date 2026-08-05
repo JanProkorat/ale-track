@@ -259,14 +259,6 @@ export function DeliveryEditor({
   const updateDelivery = useUpdateDelivery();
   const startPoints = useShipmentStartPoints();
 
-  // Same reasoning as DeliveryDetail: a dovoz starts and ends at the company,
-  // so both RouteMap endpoints are this one point. Falls back to (0, 0) while
-  // the reference-data query is still pending or has failed.
-  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
-  const companyPoint: RouteEndpoint = company
-    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
-    : { lat: 0, lng: 0, name: '—' };
-
   const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(1, 'day') : null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [driverIds, setDriverIds] = useState<string[]>([]);
@@ -356,6 +348,19 @@ export function DeliveryEditor({
     const b = breweryById.get(s.breweryId);
     return { lat: b?.latitude ?? undefined, lng: b?.longitude ?? undefined, label: b?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
   }), [stops, breweryById]);
+
+  // Same reasoning as DeliveryDetail: a dovoz starts and ends at the company,
+  // so both RouteMap endpoints are this one point. While that reference-data
+  // query hasn't resolved, prefer a stop's own real coordinates (a brewery
+  // already picked for this delivery) over a synthetic (0, 0) — only a
+  // brand-new, stop-less delivery with the query still pending has nothing
+  // real to fall back to; RouteMap is skipped entirely then (see the render
+  // below) rather than draw a route anchored at null island.
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
+  const companyPoint: RouteEndpoint | undefined = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
 
   const busy = createDelivery.isPending || updateDelivery.isPending;
 
@@ -456,7 +461,18 @@ export function DeliveryEditor({
                 <Chip size="small" label="sklad → pivovary → sklad" />
               </Stack>
               <Box sx={{ p: 2 }}>
-                <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={280} />
+                {companyPoint ? (
+                  <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={280} />
+                ) : (
+                  <Box
+                    sx={{
+                      height: 280, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+                      bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+                    }}
+                  >
+                    <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+                  </Box>
+                )}
               </Box>
             </Card>
           )}

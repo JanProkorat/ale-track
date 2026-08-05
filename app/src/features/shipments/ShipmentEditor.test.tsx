@@ -64,6 +64,15 @@ let vehiclesLoading = false;
 let driversLoading = false;
 let clientsLoading = false;
 
+interface StartPointFixture { kind: string; name: string; address?: string; latitude?: number; longitude?: number }
+const DEFAULT_START_POINTS: StartPointFixture[] = [
+  { kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 },
+];
+// Mutable (not a literal) so the route-origin regression test below can point
+// the company entry at coordinates chosen to make nearest-neighbour ordering
+// unambiguous — see "ShipmentEditor — route optimizer origin".
+let startPoints: StartPointFixture[] = DEFAULT_START_POINTS;
+
 vi.mock('src/hooks/useShipments', () => ({
   useShipment: () => ({ data: shipmentResponse, isLoading: shipmentLoading, isError: shipmentError }),
   useAvailableOrders: () => ({ data: availableOrders, isLoading: availableOrdersLoading, isError: availableOrdersError }),
@@ -73,11 +82,7 @@ vi.mock('src/hooks/useShipments', () => ({
   // The optimizer's origin and every stop's fallback coordinates now come from
   // the company start-point entry rather than the old fixed DEPOT — RouteMap
   // itself is stubbed above, so only the shape of the data matters here.
-  useShipmentStartPoints: () => ({
-    data: [{ kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 }],
-    isPending: false,
-    isError: false,
-  }),
+  useShipmentStartPoints: () => ({ data: startPoints, isPending: false, isError: false }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));
@@ -146,6 +151,7 @@ beforeEach(() => {
   vehiclesLoading = false;
   driversLoading = false;
   clientsLoading = false;
+  startPoints = DEFAULT_START_POINTS;
   availableOrders = [
     new OutgoingShipmentOrderDto({
       id: 'order-1',
@@ -354,6 +360,48 @@ describe('ShipmentEditor — new stop inherits the order\'s address', () => {
     fireEvent.click(screen.getByText('Pivnice Na Rohu'));
 
     expect(stopSelects()[1]).toHaveTextContent('Fakturační');
+  });
+});
+
+describe('ShipmentEditor — route optimizer origin', () => {
+  it('optimizes stop order from the company start point, not a stop\'s own coordinates', () => {
+    // The mocked company entry sits right next to a second order (Brno) and
+    // ~200 km from the first, already-loaded one (Žitava, the default
+    // `officialAddress()` fixture). Nearest-neighbour from the *company*
+    // point visits the close one first — even though it was added to the
+    // route second — which only happens if the optimizer's origin really is
+    // the company coordinates. If that origin ever regressed to a stop's own
+    // location (the shape of bug the start/end fallback cascade in
+    // ShipmentEditor.tsx exists to avoid: the first-loaded stop is trivially
+    // "nearest to itself"), the order would never flip and this assertion
+    // would fail.
+    startPoints = [
+      { kind: 'Company', name: 'Sklad AleTrack', latitude: 49.2, longitude: 16.6 },
+    ];
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-2',
+        clientName: 'Penzion Morava',
+        clientOfficialAddress: new AddressDto({
+          streetName: 'Zelný trh', streetNumber: '1', city: 'Brno', zip: '60200', country: Country.Czechia,
+          latitude: 49.25, longitude: 16.65,
+        }),
+        items: [],
+      }),
+    ];
+    renderEditor();
+    fireEvent.click(screen.getByText('Penzion Morava'));
+
+    const card = screen.getByText('Pořadí zastávek').closest('.MuiCard-root') as HTMLElement;
+    const stopNames = () => within(card).getAllByText(/^(Hospoda U Netopýra|Penzion Morava)$/).map((el) => el.textContent);
+
+    // Sanity check before optimizing: the loaded stop first, the just-added one second.
+    expect(stopNames()).toEqual(['Hospoda U Netopýra', 'Penzion Morava']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Optimalizovat trasu' }));
+
+    expect(stopNames()).toEqual(['Penzion Morava', 'Hospoda U Netopýra']);
   });
 });
 

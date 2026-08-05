@@ -122,15 +122,6 @@ export function DeliveryDetail({
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // A dovoz (incoming delivery) is the reverse of a vývoz: the van visits
-  // breweries and comes home to the company at both ends, so the route's
-  // start and end are the same company point — falls back to (0, 0) while
-  // that reference-data query is still pending or has failed.
-  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
-  const companyPoint: RouteEndpoint = company
-    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
-    : { lat: 0, lng: 0, name: '—' };
-
   const breweryById = useMemo(() => {
     const m = new Map<string, { lat?: number; lng?: number; color?: string }>();
     for (const b of breweriesQuery.data ?? []) {
@@ -144,6 +135,20 @@ export function DeliveryDetail({
     const b = s.brewery?.id ? breweryById.get(s.brewery.id) : undefined;
     return { lat: b?.lat, lng: b?.lng, label: s.brewery?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
   }), [stops, breweryById]);
+
+  // A dovoz (incoming delivery) is the reverse of a vývoz: the van visits
+  // breweries and comes home to the company at both ends, so the route's
+  // start and end are the same company point. While that reference-data
+  // query hasn't resolved, prefer a stop's own real coordinates (this
+  // delivery's actual breweries, already on screen) over a synthetic
+  // (0, 0) — only a delivery whose brewery coordinates also haven't loaded
+  // yet has nothing real to show, and RouteMap is skipped entirely then
+  // (see the render below) rather than draw a route anchored at null island.
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
+  const companyPoint: RouteEndpoint | undefined = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
 
   // Aggregated arriving goods: sum quantity per product across all breweries.
   const aggProducts = useMemo(() => {
@@ -232,7 +237,18 @@ export function DeliveryDetail({
         </Card>
       )}
 
-      <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={340} />
+      {companyPoint ? (
+        <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={340} />
+      ) : (
+        <Box
+          sx={{
+            height: 340, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+            bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+          }}
+        >
+          <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+        </Box>
+      )}
 
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1.5fr 1fr' }, alignItems: 'start', mt: 2.5 }}>
         {/* LEFT: aggregated "what's arriving" list. */}
