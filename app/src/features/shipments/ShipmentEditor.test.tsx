@@ -63,10 +63,13 @@ let availableOrdersError = false;
 let vehiclesLoading = false;
 let driversLoading = false;
 let clientsLoading = false;
+let startPointsPending = false;
+let startPointsError = false;
 
-interface StartPointFixture { kind: string; name: string; address?: string; latitude?: number; longitude?: number }
+interface StartPointFixture { kind: string; breweryId?: string; name: string; address?: string; latitude?: number; longitude?: number }
 const DEFAULT_START_POINTS: StartPointFixture[] = [
   { kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 },
+  { kind: 'Brewery', breweryId: 'brewery-svijany', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
 ];
 // Mutable (not a literal) so the route-origin regression test below can point
 // the company entry at coordinates chosen to make nearest-neighbour ordering
@@ -82,7 +85,7 @@ vi.mock('src/hooks/useShipments', () => ({
   // The optimizer's origin and every stop's fallback coordinates now come from
   // the company start-point entry rather than the old fixed DEPOT — RouteMap
   // itself is stubbed above, so only the shape of the data matters here.
-  useShipmentStartPoints: () => ({ data: startPoints, isPending: false, isError: false }),
+  useShipmentStartPoints: () => ({ data: startPoints, isPending: startPointsPending, isError: startPointsError }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));
@@ -105,7 +108,15 @@ function officialAddress(): AddressDto {
   return new AddressDto({ streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.897, longitude: 14.808 });
 }
 
-function renderEditor(mode: 'edit' | 'create' = 'edit') {
+/** `state` overrides the mocked shipment's loaded state before rendering — used
+ * to exercise the structure-locked (e.g. Loaded) editor without a separate
+ * fixture per test. Only meaningful in edit mode, where a `shipmentResponse`
+ * already exists by the time this runs. */
+function renderEditor(opts: { mode?: 'edit' | 'create'; state?: OutgoingShipmentState } = {}) {
+  const mode = opts.mode ?? 'edit';
+  if (opts.state !== undefined && shipmentResponse) {
+    shipmentResponse.state = opts.state;
+  }
   const router = createMemoryRouter([
     {
       path: '/',
@@ -151,6 +162,8 @@ beforeEach(() => {
   vehiclesLoading = false;
   driversLoading = false;
   clientsLoading = false;
+  startPointsPending = false;
+  startPointsError = false;
   startPoints = DEFAULT_START_POINTS;
   availableOrders = [
     new OutgoingShipmentOrderDto({
@@ -405,6 +418,23 @@ describe('ShipmentEditor — route optimizer origin', () => {
   });
 });
 
+describe('ShipmentEditor — start-point picker', () => {
+  it('marks the form dirty when the start point changes', async () => {
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    expect(screen.getByRole('button', { name: 'Uložit' })).toBeEnabled();
+  });
+
+  it('locks the start point once the run is loaded', () => {
+    renderEditor({ mode: 'edit', state: OutgoingShipmentState.Loaded });
+
+    expect(screen.getByLabelText('Výchozí bod')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
 describe('ShipmentEditor — non-happy query states', () => {
   it('does not crash while the available-orders query is still loading, falling back to a placeholder client name', () => {
     // orderById is built purely from useAvailableOrders' data — while it's
@@ -443,7 +473,7 @@ describe('ShipmentEditor — checklist', () => {
   it('prefills the standard pre-departure list on a new shipment', () => {
     // The list is the same before every departure, so a new vývoz arrives with it filled in —
     // and every row stays editable from there.
-    renderEditor('create');
+    renderEditor({ mode: 'create' });
 
     expect((screen.getByLabelText('Položka 1') as HTMLInputElement).value).toBe('Rudlík');
     expect((screen.getByLabelText('Položka 11') as HTMLInputElement).value).toBe('Věci z předchozího vývozu');

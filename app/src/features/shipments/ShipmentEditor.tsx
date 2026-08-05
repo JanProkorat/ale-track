@@ -26,7 +26,7 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel, shipStateName, addrKindValue, startPointKindName } from 'src/lib/labels';
+import { regionLabel, shipStateName, addrKindValue } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -38,6 +38,7 @@ import {
   CreateOutgoingShipmentDto,
   UpdateOutgoingShipmentDto,
   PreparationStepDto,
+  ShipmentStartPointKind,
 } from 'src/generated/api-client';
 import {
   useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders, useShipmentStartPoints,
@@ -55,6 +56,8 @@ import { PreparationStepsEditor } from './PreparationStepsEditor';
 import { defaultChecklistSteps, type DraftStep } from './preparationStepModel';
 import { resolveStopAddress } from './stopAddress';
 import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
+import { StartPointPicker } from './StartPointPicker';
+import { optionKey, type StartPointValue } from './startPointOption';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
@@ -77,7 +80,7 @@ interface DraftStop {
 }
 
 /** Serialized snapshot of the savable state, for unsaved-change detection. */
-function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[], steps: DraftStep[]): string {
+function serializeShipment(name: string, date: Dayjs | null, vehicleId: string | null, driverIds: string[], stops: DraftStop[], viaPoints: { lat: number; lng: number }[], steps: DraftStep[], startPoint: StartPointValue): string {
   return JSON.stringify({
     name: name.trim(),
     date: date ? date.toISOString() : null,
@@ -88,6 +91,7 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     // Position matters (it is the order the steps are worked in), so this is the array order,
     // not a sorted copy. The local `key` is left out — it changes per session.
     steps: steps.map((s) => ({ id: s.id ?? null, label: s.label.trim() })),
+    startPoint: { kind: startPoint.kind, breweryId: startPoint.breweryId ?? null },
   });
 }
 
@@ -238,11 +242,14 @@ export function ShipmentEditor({
   // same list every time, and it stays editable, so this is a starting point rather than a rule.
   // Edit mode starts empty and the load effect below fills it from the server.
   const [steps, setSteps] = useState<DraftStep[]>(() => (mode === 'create' ? defaultChecklistSteps() : []));
+  // Defaults to the company — that is what every run started at before this
+  // picker existed. Edit mode overwrites this from the loaded shipment below.
+  const [startPoint, setStartPoint] = useState<StartPointValue>({ kind: ShipmentStartPointKind.Company });
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps);
+    if (mode === 'create') baselineRef.current = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps, startPoint);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -278,6 +285,7 @@ export function ShipmentEditor({
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st) => ({ key: st.id ?? `step-${st.order ?? 0}`, id: st.id, label: st.label ?? '' }));
+    const loadedStartPoint: StartPointValue = { kind: s.startPointKind ?? ShipmentStartPointKind.Company, breweryId: s.startBreweryId };
     setName(loadedName);
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
@@ -285,7 +293,8 @@ export function ShipmentEditor({
     setStops(loadedStops);
     setViaPoints(loadedVias);
     setSteps(loadedSteps);
-    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias, loadedSteps);
+    setStartPoint(loadedStartPoint);
+    baselineRef.current = serializeShipment(loadedName, loadedDate, loadedVehicle, loadedDrivers, loadedStops, loadedVias, loadedSteps, loadedStartPoint);
   }, [mode, shipmentQuery.data]);
 
   // Once the shipment is Loaded (or beyond), its order composition and vehicle
@@ -355,16 +364,16 @@ export function ShipmentEditor({
     return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.key), kind: 'order' };
   }), [stopsSorted, orderById]);
 
-  // Task 8 adds a start-point picker; until then every shipment starts (and,
-  // as always, ends) at the company entry. While that reference-data query
-  // hasn't resolved, a synthetic (0, 0) would plant a marker at null island —
-  // there is always better information on screen instead: the shipment's own
-  // previously-saved start point (edit mode), or failing that the first stop
-  // that already has real coordinates. Only a brand-new, stop-less shipment
-  // with the query still pending or failed has nothing real to fall back to;
-  // `knownStart` says so explicitly and the render below skips RouteMap
-  // entirely then rather than draw a route anchored at (0, 0).
-  const company = (startPointsQuery.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  // The picker's own choice drives the route's origin. While that reference-data
+  // query hasn't resolved (or the picked entry isn't in it yet), a synthetic
+  // (0, 0) would plant a marker at null island — there is always better
+  // information on screen instead: the shipment's own previously-saved start
+  // point (edit mode), or failing that the first stop that already has real
+  // coordinates. Only a brand-new, stop-less shipment with the query still
+  // pending or failed has nothing real to fall back to; `knownStart` says so
+  // explicitly and the render below skips RouteMap entirely then rather than
+  // draw a route anchored at (0, 0).
+  const pickedStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === optionKey(startPoint));
   const savedStart: RouteEndpoint | undefined = mode === 'edit'
     && shipmentQuery.data?.startPointLatitude != null
     && shipmentQuery.data?.startPointLongitude != null
@@ -376,8 +385,8 @@ export function ShipmentEditor({
     }
     : undefined;
   const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
-  const knownStart: RouteEndpoint | undefined = company
-    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+  const knownStart: RouteEndpoint | undefined = pickedStartPoint
+    ? { lat: pickedStartPoint.latitude ?? 0, lng: pickedStartPoint.longitude ?? 0, name: pickedStartPoint.name ?? '—', address: pickedStartPoint.address }
     : savedStart ?? (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
   // Internal-only: `stopCoords`/`optimizeRoute` need a concrete number to sort
   // by even in the no-real-point case, but that fallback never reaches
@@ -517,7 +526,7 @@ export function ShipmentEditor({
 
   const busy = createShipment.isPending || updateShipment.isPending;
 
-  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps);
+  const snapshot = serializeShipment(name, deliveryDate, vehicleId, driverIds, stops, viaPoints, steps, startPoint);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
@@ -572,6 +581,8 @@ export function ShipmentEditor({
             routeViaPoints,
             stockPurchases: existingDraft?.stockPurchases ?? [],
             preparationSteps,
+            startPointKind: startPoint.kind,
+            startBreweryId: startPoint.breweryId,
           }),
         });
         savedId = shipmentId;
@@ -586,6 +597,8 @@ export function ShipmentEditor({
           customStops,
           routeViaPoints,
           preparationSteps,
+          startPointKind: startPoint.kind,
+          startBreweryId: startPoint.breweryId,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
       }
@@ -663,6 +676,8 @@ export function ShipmentEditor({
               `stops` draft — the draft is client-side and carries no `addressChangedAt`,
               so passing it here would silently never render anything. */}
           <AddressChangedBanner shipmentId={shipmentId ?? ''} stops={shipmentQuery.data?.stops ?? []} />
+
+          <StartPointPicker value={startPoint} onChange={setStartPoint} disabled={structureLocked} />
 
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
