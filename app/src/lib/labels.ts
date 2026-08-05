@@ -4,7 +4,7 @@
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
-  ShipmentStartPointKind,
+  ShipmentStartPointKind, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
 
 export const L = {
@@ -219,6 +219,14 @@ export function addrKindLabel(k?: DeliveryAddressKind | string | number): string
  * wire form (the same trap `addrKindName` above exists to avoid). */
 export function startPointKindName(k?: ShipmentStartPointKind | string | number): string | undefined {
   return enumName(ShipmentStartPointKind as unknown as Record<string, string | number>, k);
+}
+
+/** The OutgoingShipmentStopKind enum's member name ("Order"/"Custom"/"Company"),
+ * resolved from either wire representation — same trap as `startPointKindName`
+ * above: a loaded stop's `kind` never `===` the numeric enum member against
+ * live (string-serialized) data. */
+export function stopKindName(k?: OutgoingShipmentStopKind | string | number): string | undefined {
+  return enumName(OutgoingShipmentStopKind as unknown as Record<string, string | number>, k);
 }
 
 export const KIND_ORDER: Record<string, number> = {

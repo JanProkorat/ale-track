@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Button, Card, Checkbox, Chip, IconButton, ListSubheader, MenuItem,
-  Select, Stack, TextField, Typography,
+  Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpwardOutlined';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownwardOutlined';
@@ -13,6 +13,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -26,7 +27,7 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel, shipStateName, addrKindValue } from 'src/lib/labels';
+import { regionLabel, shipStateName, addrKindValue, stopKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -39,6 +40,7 @@ import {
   UpdateOutgoingShipmentDto,
   PreparationStepDto,
   ShipmentStartPointKind,
+  OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
 import {
   useShipment, useCreateShipment, useUpdateShipment, useAvailableOrders, useShipmentStartPoints,
@@ -49,7 +51,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useClients } from 'src/hooks/useClients';
 import { colorForClient } from './clientColor';
 import { draftFromShipment } from './shipmentDraft';
-import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
+import { CustomStopDialog, type CustomStopResult } from 'src/components/common/CustomStopDialog';
 import { DeliveryPlaceDialog } from 'src/components/common/DeliveryPlaceDialog';
 import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsEditor } from './PreparationStepsEditor';
@@ -61,9 +63,9 @@ import { optionKey, type StartPointValue } from './startPointOption';
 
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
-   *  id for custom stops. Used as the sortable/dnd key. */
+   *  id for custom/company stops. Used as the sortable/dnd key. */
   key: string;
-  kind: 'order' | 'custom';
+  kind: 'order' | 'custom' | 'company';
   order: number;
   addressKind: DeliveryAddressKind;
   // order stops
@@ -71,8 +73,8 @@ interface DraftStop {
   /** Set only when addressKind is DeliveryPlace. Undefined for a freshly
    *  toggled order or when Official/Contact is chosen. */
   deliveryPlaceId?: string;
-  // custom stops
-  customId?: string; // existing custom stop's PublicId (undefined when new)
+  // custom and company stops
+  customId?: string; // existing custom/company stop's PublicId (undefined when new)
   label?: string;
   note?: string;
   lat?: number;
@@ -96,7 +98,7 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
 }
 
 function SortableStopRow({
-  stop, index, order, total, locked, deletedPlaceName, onMove, onRemove, onAddrChoice,
+  stop, index, order, total, locked, deletedPlaceName, companyAddress, hasStockPurchases, onMove, onRemove, onAddrChoice,
 }: {
   stop: DraftStop;
   index: number;
@@ -107,6 +109,14 @@ function SortableStopRow({
    *  was loaded, used only when that place no longer appears in
    *  `order.clientDeliveryPlaces` (soft-deleted since). */
   deletedPlaceName?: string;
+  /** The company start-point entry's address — a company stop's second line,
+   *  resolved live from `useShipmentStartPoints()` rather than the stop's own
+   *  stored fields (mirrors StartPointPicker). Unused for order/custom rows. */
+  companyAddress?: string;
+  /** Whether the run currently carries stock purchases — while it does, the
+   *  server re-adds a removed company stop on save. Unused for order/custom
+   *  rows. */
+  hasStockPurchases?: boolean;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   /** Raw <Select> value — 'Official' | 'Contact' | `place:<id>` | the
@@ -116,7 +126,8 @@ function SortableStopRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.key, disabled: locked });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
-  const isCustom = stop.kind === 'custom';
+  const isOrder = stop.kind === 'order';
+  const isCompany = stop.kind === 'company';
   const places = order?.clientDeliveryPlaces ?? [];
   // Gated on `deletedPlaceName` (not just "missing from the list"), because a
   // place is *also* briefly missing from the list right after "+ Nové
@@ -128,7 +139,12 @@ function SortableStopRow({
   const isGone = stop.addressKind === DeliveryAddressKind.DeliveryPlace
     && deletedPlaceName != null
     && !places.some((p) => p.id === stop.deliveryPlaceId);
-  const addressText = isCustom ? undefined : resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text;
+  const addressText = isOrder ? resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text : undefined;
+  const title = isCompany ? (stop.label || 'Firemní sklad') : isOrder ? (order?.clientName ?? '—') : (stop.label || 'Vlastní zastávka');
+  const subtitle = isCompany ? companyAddress : isOrder ? addressText : (stop.note || 'Vlastní zastávka');
+  const deleteTooltip = isCompany && hasStockPurchases
+    ? 'Dokud je v nakládce zboží na sklad, zastávka se po uložení vrátí.'
+    : '';
   return (
     <Box
       ref={setNodeRef}
@@ -142,23 +158,27 @@ function SortableStopRow({
       )}
       <Box sx={{
         width: 28, height: 28, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0,
-        borderRadius: isCustom ? '4px' : '50%',
-        transform: isCustom ? 'rotate(45deg)' : undefined,
-        bgcolor: isCustom ? '#1A2B4C' : colorForClient(order?.clientName ?? stop.key),
+        borderRadius: isOrder ? '50%' : '4px',
+        transform: isOrder ? undefined : 'rotate(45deg)',
+        bgcolor: isOrder ? colorForClient(order?.clientName ?? stop.key) : '#1A2B4C',
       }}>
-        <Box component="span" sx={{ transform: isCustom ? 'rotate(-45deg)' : undefined }}>{index + 1}</Box>
+        {isCompany ? (
+          <WarehouseOutlinedIcon sx={{ fontSize: 15, transform: 'rotate(-45deg)' }} />
+        ) : (
+          <Box component="span" sx={{ transform: isOrder ? undefined : 'rotate(-45deg)' }}>{index + 1}</Box>
+        )}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{isCustom ? (stop.label || 'Vlastní zastávka') : (order?.clientName ?? '—')}</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{title}</Typography>
         {/* Prototype's stopAddressText prefixes this with the order number
          * (`o.number + ' · '`); OutgoingShipmentOrderDto carries no such
          * field, so that prefix is dropped here — a data-model deviation,
          * not a design one. */}
         <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
-          {isCustom ? (stop.note || 'Vlastní zastávka') : addressText}
+          {subtitle}
         </Typography>
       </Box>
-      {!isCustom && (
+      {isOrder && (
         <Select
           size="small"
           value={encodeStopChoice(stop.addressKind, stop.deliveryPlaceId)}
@@ -191,9 +211,11 @@ function SortableStopRow({
           <IconButton size="small" onClick={() => onMove(1)} disabled={index === total - 1} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
             <ArrowDownwardIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-            <DeleteOutlineOutlinedIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title={deleteTooltip}>
+            <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
+              <DeleteOutlineOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       )}
     </Box>
@@ -271,7 +293,9 @@ export function ShipmentEditor({
           }
         : {
             key: st.id ?? `custom-${i}`,
-            kind: 'custom',
+            // `stopKindName` (not a raw `=== OutgoingShipmentStopKind.Company`) because the
+            // backend serializes this enum as a JSON string — see stopKindName's own comment.
+            kind: stopKindName(st.kind) === 'Company' ? 'company' : 'custom',
             customId: st.id,
             label: st.label ?? '',
             note: st.note,
@@ -356,8 +380,12 @@ export function ShipmentEditor({
 
   const stopsSorted = useMemo(() => stops.slice().sort((a, b) => a.order - b.order), [stops]);
   const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
-    if (st.kind === 'custom') {
-      return { lat: st.lat, lng: st.lng, label: st.label || 'Vlastní zastávka', color: '#1A2B4C', kind: 'custom' };
+    // RouteMap only distinguishes 'order' vs. 'custom' waypoints — a company
+    // stop renders the same diamond marker a custom stop does; that map isn't
+    // this task's to extend, and visually the two aren't meant to differ.
+    if (st.kind === 'custom' || st.kind === 'company') {
+      const fallbackLabel = st.kind === 'company' ? 'Firemní sklad' : 'Vlastní zastávka';
+      return { lat: st.lat, lng: st.lng, label: st.label || fallbackLabel, color: '#1A2B4C', kind: 'custom' };
     }
     const order = orderById.get(st.orderId ?? '');
     const pt = resolveStopAddress(order, st.addressKind, st.deliveryPlaceId);
@@ -374,6 +402,14 @@ export function ShipmentEditor({
   // explicitly and the render below skips RouteMap entirely then rather than
   // draw a route anchored at (0, 0).
   const pickedStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === optionKey(startPoint));
+  // The company entry regardless of which start point is currently picked — a
+  // company *stop* (dropped off at the warehouse mid-route) is independent of
+  // where the run *starts* from, so this is looked up separately from
+  // `pickedStartPoint` above. Feeds both a freshly-added company stop's
+  // display coordinates/label and every company row's address line.
+  const companyStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === 'company');
+  const hasCompanyStop = stops.some((s) => s.kind === 'company');
+  const hasStockPurchases = Boolean(shipmentQuery.data?.stockPurchases?.length);
   const savedStart: RouteEndpoint | undefined = mode === 'edit'
     && shipmentQuery.data?.startPointLatitude != null
     && shipmentQuery.data?.startPointLongitude != null
@@ -396,7 +432,7 @@ export function ShipmentEditor({
 
   const selectedVehicle = (vehiclesQuery.data ?? []).find((v) => v.id === vehicleId);
   const totalWeight = useMemo(() => stopsSorted.reduce((sum, st) => {
-    if (st.kind === 'custom') return sum;
+    if (st.kind !== 'order') return sum;
     const order = orderById.get(st.orderId ?? '');
     return sum + (order?.items ?? []).reduce((s, it) => s + (it.weight ?? 0) * (it.quantity ?? 0), 0);
   }, 0), [stopsSorted, orderById]);
@@ -439,7 +475,23 @@ export function ShipmentEditor({
       }];
     });
   }
-  function addCustomStop(stop: { label: string; note?: string; lat: number; lng: number }) {
+  function addCustomStop(stop: CustomStopResult) {
+    if (stop.kind === 'company') {
+      // No coordinates in the payload — the server authors a Company stop's
+      // label and location itself (from configuration) and ignores whatever
+      // the client sends. The company start-point entry is only used here to
+      // give the freshly-added row something real to show before saving.
+      setStops((prev) => [...prev, {
+        key: `company-${crypto.randomUUID()}`,
+        kind: 'company' as const,
+        label: companyStartPoint?.name ?? 'Firemní sklad',
+        lat: companyStartPoint?.latitude,
+        lng: companyStartPoint?.longitude,
+        addressKind: DeliveryAddressKind.Official,
+        order: prev.length + 1,
+      }]);
+      return;
+    }
     setStops((prev) => [...prev, {
       key: `custom-${crypto.randomUUID()}`,
       kind: 'custom' as const,
@@ -499,7 +551,7 @@ export function ShipmentEditor({
   }
 
   const stopCoords = (s: DraftStop) => {
-    if (s.kind === 'custom') return { lat: s.lat ?? start.lat, lng: s.lng ?? start.lng };
+    if (s.kind !== 'order') return { lat: s.lat ?? start.lat, lng: s.lng ?? start.lng };
     const pt = resolveStopAddress(orderById.get(s.orderId ?? ''), s.addressKind, s.deliveryPlaceId);
     return { lat: pt.lat ?? start.lat, lng: pt.lng ?? start.lng };
   };
@@ -548,9 +600,19 @@ export function ShipmentEditor({
       }));
 
     const customStops = stopsSorted
-      .filter((st) => st.kind === 'custom')
+      .filter((st) => st.kind === 'custom' || st.kind === 'company')
       .map((st) => {
-        const dto = new CustomStopDto({ order: st.order, label: st.label ?? '', note: st.note, latitude: st.lat ?? 0, longitude: st.lng ?? 0 });
+        // A company stop is sent as a CustomStopDto with kind: Company — the server
+        // authors its label/coordinates itself and ignores whatever is sent here;
+        // a plain custom stop leaves `kind` unset, defaulting server-side to Custom.
+        const dto = new CustomStopDto({
+          order: st.order,
+          label: st.label ?? '',
+          note: st.note,
+          latitude: st.lat ?? 0,
+          longitude: st.lng ?? 0,
+          ...(st.kind === 'company' ? { kind: OutgoingShipmentStopKind.Company } : {}),
+        });
         dto.id = st.customId; // undefined for new (base class, but keep the pattern explicit)
         return dto;
       });
@@ -712,6 +774,8 @@ export function ShipmentEditor({
                           locked={structureLocked}
                           order={st.orderId ? orderById.get(st.orderId) : undefined}
                           deletedPlaceName={st.orderId ? loadedPlaceNames.get(st.orderId) : undefined}
+                          companyAddress={companyStartPoint?.address}
+                          hasStockPurchases={hasStockPurchases}
                           onMove={(dir) => moveStop(st.key, dir)}
                           onRemove={() => removeStop(st.key)}
                           onAddrChoice={(value) => handleAddrChoice(st.key, st.orderId, value)}
@@ -835,7 +899,7 @@ export function ShipmentEditor({
         </Stack>
       </Box>
 
-      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} hasCompanyStop={hasCompanyStop} />
       {newPlaceTarget && (
         <DeliveryPlaceDialog
           open

@@ -36,7 +36,7 @@ import {
   DeliveryStopKind,
   type BreweryProductListItemDto,
 } from 'src/generated/api-client';
-import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
+import { CustomStopDialog, type CustomStopResult } from 'src/components/common/CustomStopDialog';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
@@ -325,7 +325,13 @@ export function DeliveryEditor({
     setStops((prev) => [...prev, { key: newKey(), kind: 'brewery', breweryId, note: '', items: [] }]);
     setPickBrewery(null);
   };
-  const addCustomStop = (stop: { label: string; note?: string; lat: number; lng: number }) => {
+  const addCustomStop = (stop: CustomStopResult) => {
+    // A delivery already always ends at the company (see `company` below, used
+    // as the route's endpoint) — it has no separate "company stop" concept of
+    // its own (DeliveryStopKind has no Company member), so this dialog instance
+    // always passes hasCompanyStop, keeping that toggle disabled and this
+    // branch unreachable in practice.
+    if (stop.kind === 'company') return;
     setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
     setCustomStopOpen(false);
   };
@@ -593,7 +599,11 @@ export function DeliveryEditor({
         </Stack>
       </Box>
 
-      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
+      {/* Deliveries have no company-stop concept of their own (a delivery already
+          always ends at the company) — hasCompanyStop is always true here to keep
+          that toggle permanently disabled rather than adding a feature this domain
+          can't persist. */}
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} hasCompanyStop />
 
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
