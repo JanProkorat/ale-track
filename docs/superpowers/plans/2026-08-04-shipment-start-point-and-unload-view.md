@@ -1677,13 +1677,23 @@ git commit -m "refactor: route from the shipment's own endpoints, not a fixed de
 Add to `app/src/features/shipments/ShipmentEditor.test.tsx`:
 
 ```tsx
-it('marks the form dirty when the start point changes', async () => {
+it('sends the picked start point in the save payload', async () => {
   renderEditor({ mode: 'edit' });
 
   fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
   fireEvent.click(await screen.findByText('Pivovar Svijany'));
+  fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
 
-  expect(screen.getByRole('button', { name: 'Uložit' })).toBeEnabled();
+  await waitFor(() => {
+    expect(updateShipmentMutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          startPointKind: ShipmentStartPointKind.Brewery,
+          startBreweryId: /* the mocked Svijany brewery's id */,
+        }),
+      }),
+    );
+  });
 });
 
 it('locks the start point once the run is loaded', () => {
@@ -1692,6 +1702,19 @@ it('locks the start point once the run is loaded', () => {
   expect(screen.getByLabelText('Výchozí bod')).toHaveAttribute('aria-disabled', 'true');
 });
 ```
+
+> Corrected during execution. The original version of the first test asserted
+> `screen.getByRole('button', { name: 'Uložit' })).toBeEnabled()` as a proxy for
+> "the start point participates in dirty-tracking." That assertion is vacuous in
+> this codebase: the Save button is `disabled={busy}` only and has never been
+> gated by the `dirty` flag — `dirty` feeds solely `useUnsavedChangesGuard`, the
+> nav-away blocker. The button is enabled from the first render, before the
+> picker is even touched, so the test would pass even if `startPoint` were
+> dropped from `serializeShipment` entirely. Testing the nav-guard directly needs
+> a multi-route `MemoryRouter` harness with no precedent in this file — a
+> disproportionate lift for what the test is actually meant to catch: a picked
+> start point silently failing to reach the saved shipment. Asserting the save
+> payload directly catches exactly that, and is simpler.
 
 Mock `useShipmentStartPoints` alongside the file's other hook mocks, and make the mock able to express loading and error — not just a happy list. A mock that always succeeds cannot catch a crash on a missing one, which is how a page-level crash shipped here once.
 
