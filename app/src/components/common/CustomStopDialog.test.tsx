@@ -29,7 +29,7 @@ vi.mock('src/components/common/AddressMapPicker', () => ({
 // a real scenario (data and isError can coexist on a background refetch
 // failure), not a fabricated one. Reset in beforeEach; the two tests below
 // each flip one flag.
-const DEFAULT_START_POINTS = [{ kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava' }];
+const DEFAULT_START_POINTS = [{ kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou' }];
 let startPoints: { kind: string; name: string; address?: string }[] = DEFAULT_START_POINTS;
 let startPointsPending = false;
 let startPointsError = false;
@@ -97,7 +97,7 @@ describe('CustomStopDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Firemní sklad' }));
     // No address line to show yet — falls back to a generic label rather than crashing on `undefined`.
-    expect(screen.queryByText('Nádražní 1, Žitava')).not.toBeInTheDocument();
+    expect(screen.queryByText('Turistická 211, 46334 Hrádek nad Nisou')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Přidat zastávku' }));
     expect(onAdd).toHaveBeenCalledWith({ kind: 'company' });
@@ -114,7 +114,7 @@ describe('CustomStopDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Firemní sklad' }));
 
-    expect(screen.getByText('Nádražní 1, Žitava')).toBeInTheDocument();
+    expect(screen.getByText('Turistická 211, 46334 Hrádek nad Nisou')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Přidat zastávku' }));
     expect(onAdd).toHaveBeenCalledWith({ kind: 'company' });

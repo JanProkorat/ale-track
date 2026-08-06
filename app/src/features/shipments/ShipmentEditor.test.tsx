@@ -74,9 +74,9 @@ let clientsLoading = false;
 let startPointsPending = false;
 let startPointsError = false;
 
-interface StartPointFixture { kind: string; breweryId?: string; name: string; address?: string; latitude?: number; longitude?: number }
+interface StartPointFixture { kind: string; breweryId?: string; addressKind?: string; name: string; address?: string; latitude?: number; longitude?: number }
 const DEFAULT_START_POINTS: StartPointFixture[] = [
-  { kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 },
+  { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309 },
   { kind: 'Brewery', breweryId: 'brewery-svijany', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
 ];
 // Mutable (not a literal) so the route-origin regression test below can point
@@ -463,6 +463,40 @@ describe('ShipmentEditor — start-point picker', () => {
     });
   });
 
+  it('sends the picked address kind when a brewery contributes two entries', async () => {
+    // Svijany now lists two entries — its official seat and a separate contact
+    // address it actually loads from — distinguishable in the <Select> only by the
+    // "— Kontaktní" suffix and the address caption (StartPointPicker.test.tsx covers
+    // the suffix itself). Picking the second one must carry `addressKind` all the way
+    // to the save payload: without it, `breweryId` alone cannot tell the two apart, and
+    // a resave would silently default back to the official address.
+    startPoints = [
+      DEFAULT_START_POINTS[0],
+      { kind: 'Brewery', breweryId: 'brewery-svijany', addressKind: 'Official', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
+      { kind: 'Brewery', breweryId: 'brewery-svijany', addressKind: 'Contact', name: 'Pivovar Svijany', address: 'Skladová 9, Turnov', latitude: 50.59, longitude: 15.16 },
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText((_, el) => el?.textContent?.startsWith('Pivovar Svijany — Kontaktní') ?? false));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            // Wire-format string, as the DTO carries with no coercion of its own — a
+            // prior round of this feature confirmed the DTO does not normalize this.
+            startBreweryId: 'brewery-svijany',
+            startBreweryAddressKind: 'Contact',
+          }),
+        }),
+      );
+    });
+  });
+
   it('locks the start point once the run is loaded', () => {
     renderEditor({ mode: 'edit', state: OutgoingShipmentState.Loaded });
 
@@ -487,7 +521,7 @@ describe('ShipmentEditor — the route\'s two ends', () => {
     await waitFor(() => {
       expect(lastRouteMap().start).toMatchObject({ name: 'Pivovar Svijany', lat: 50.6, lng: 15.15 });
     });
-    expect(lastRouteMap().end).toMatchObject({ name: 'Sklad AleTrack', lat: 50.897, lng: 14.807 });
+    expect(lastRouteMap().end).toMatchObject({ name: 'Sklad AleTrack', lat: 50.841437, lng: 14.837309 });
   });
 
   it('does not plot a start point that was never geocoded', async () => {

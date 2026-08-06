@@ -2,6 +2,7 @@ import { Box, Card, MenuItem, Select, Stack, Typography } from '@mui/material';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
 import { useShipmentStartPoints } from 'src/hooks/useShipments';
 import { ShipmentStartPointKind } from 'src/generated/api-client';
+import { addrKindLabel } from 'src/lib/labels';
 import { optionKey, type StartPointValue } from './startPointOption';
 
 /** Where the run is loaded before it sets off.
@@ -16,6 +17,16 @@ export function StartPointPicker({ value, onChange, disabled }: {
   disabled?: boolean;
 }) {
   const { data, isPending, isError } = useShipmentStartPoints();
+
+  // Count entries per brewery so the address-kind suffix ("— Fakturační" /
+  // "— Kontaktní") appears only where it disambiguates two entries of the
+  // same brewery — a single-address brewery gets no suffix at all, since the
+  // rendered address caption already tells it apart from every other entry.
+  const breweryEntryCount = new Map<string, number>();
+  for (const point of data ?? []) {
+    if (point.breweryId == null) continue;
+    breweryEntryCount.set(point.breweryId, (breweryEntryCount.get(point.breweryId) ?? 0) + 1);
+  }
 
   return (
     <Card sx={{ overflow: 'hidden' }}>
@@ -39,18 +50,27 @@ export function StartPointPicker({ value, onChange, disabled }: {
             onChange={(e) => {
               const picked = (data ?? []).find((p) => optionKey(p) === e.target.value);
               if (picked) {
-                onChange({ kind: picked.kind ?? ShipmentStartPointKind.Company, breweryId: picked.breweryId });
+                onChange({
+                  kind: picked.kind ?? ShipmentStartPointKind.Company,
+                  breweryId: picked.breweryId,
+                  addressKind: picked.addressKind,
+                });
               }
             }}
           >
-            {(data ?? []).map((point) => (
-              <MenuItem key={optionKey(point)} value={optionKey(point)}>
-                {point.name}
-                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  {point.address}
-                </Typography>
-              </MenuItem>
-            ))}
+            {(data ?? []).map((point) => {
+              const hasMultipleEntries = point.breweryId != null && (breweryEntryCount.get(point.breweryId) ?? 0) > 1;
+              const kindLabel = hasMultipleEntries ? addrKindLabel(point.addressKind) : undefined;
+              return (
+                <MenuItem key={optionKey(point)} value={optionKey(point)}>
+                  {point.name}
+                  {kindLabel && ` — ${kindLabel}`}
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    {point.address}
+                  </Typography>
+                </MenuItem>
+              );
+            })}
           </Select>
         )}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

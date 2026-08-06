@@ -56,7 +56,7 @@ const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 // screen actually gets.
 const startPointsData = vi.hoisted(() => ({
   value: [
-    { kind: 'Company', name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava', latitude: 50.897, longitude: 14.807 },
+    { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309 },
   ] as { kind: string; name: string; address?: string; latitude?: number; longitude?: number }[],
 }));
 vi.mock('src/hooks/useShipments', () => ({
@@ -413,7 +413,7 @@ describe('ShipmentDetail — route map point resolution', () => {
     );
 
     const { start } = routeMapProps.mock.calls.at(-1)![0];
-    expect(start).toEqual({ lat: 50.897, lng: 14.807, name: 'Sklad AleTrack', address: 'Nádražní 1, Žitava' });
+    expect(start).toEqual({ lat: 50.841437, lng: 14.837309, name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou' });
   });
 });
 

@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  DeliveryAddressKind,
   OutgoingShipmentDetailDto,
   OutgoingShipmentPreparationStepDto,
   OutgoingShipmentStopDto,
@@ -64,8 +65,8 @@ describe('draftFromShipment — the Company stop', () => {
           order: 1,
           kind: 'Company' as unknown as OutgoingShipmentStopKind,
           label: 'AleTrack s.r.o.',
-          latitude: 50.7663,
-          longitude: 15.0543,
+          latitude: 50.841437,
+          longitude: 14.837309,
         }),
         new OutgoingShipmentStopDto({
           id: 'fuel',
@@ -107,5 +108,24 @@ describe('draftFromShipment — the start point', () => {
 
     expect(draft.startPointKind).toBe(ShipmentStartPointKind.Company);
     expect(draft.startBreweryId).toBeUndefined();
+  });
+
+  it('round-trips a brewery start point picked at its contact address', () => {
+    // This field class has already caused a Critical bug on this branch once: `shipmentDraft.ts`
+    // was previously missed when `startPointKind`/`startBreweryId` were added, so every nakládka
+    // click silently reverted a brewery start point back to the company. Without this field riding
+    // along too, the same regression reappears for `startBreweryAddressKind` specifically — a run
+    // picked at the brewery's *contact* address would resave as its *official* one (the write DTO's
+    // default) the next time any detail-screen save fires for an unrelated reason.
+    const draft = draftFromShipment(new OutgoingShipmentDetailDto({
+      id: 'ship-1',
+      name: 'Rozvoz',
+      stops: [],
+      startPointKind: 'Brewery' as unknown as ShipmentStartPointKind,
+      startBreweryId: 'brewery-svijany',
+      startBreweryAddressKind: 'Contact' as unknown as DeliveryAddressKind,
+    }));
+
+    expect(draft.startBreweryAddressKind).toBe('Contact');
   });
 });

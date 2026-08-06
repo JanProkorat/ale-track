@@ -1,25 +1,32 @@
-import { ShipmentStartPointKind } from 'src/generated/api-client';
+import { DeliveryAddressKind, ShipmentStartPointKind } from 'src/generated/api-client';
 import type { RouteEndpoint } from 'src/components/common/RouteMap';
-import { startPointKindName } from 'src/lib/labels';
+import { addrKindName, startPointKindName } from 'src/lib/labels';
 
 /** A start point value as carried by the editor's draft: enough to identify
  * which entry from `useShipmentStartPoints()` was chosen, without the rest of
- * that entry's (server-owned) display fields. */
+ * that entry's (server-owned) display fields. `addressKind` is undefined for
+ * the company entry and for a brewery entry that predates this field; it is
+ * part of a brewery entry's identity because a brewery now contributes one
+ * entry per address it has set (Official, plus Contact when set) — a bare
+ * `breweryId` alone no longer picks out a single entry. */
 export interface StartPointValue {
   kind: ShipmentStartPointKind;
   breweryId?: string;
+  addressKind?: DeliveryAddressKind;
 }
 
 /** Stable <Select> value for a start point — the company has no id of its own,
- * so it is keyed by its kind while a brewery is keyed by its id. Compares
- * through `startPointKindName` rather than `=== ShipmentStartPointKind.Company`
- * — the backend serializes enums as JSON strings while the generated TS enum
- * is numeric, so a raw `===` against the numeric member never matches live
- * data (see `src/lib/labels.ts`). Pulled into its own module (rather than
- * living alongside `StartPointPicker`) so that component file only exports
- * the component itself. */
-export function optionKey(point: { kind?: ShipmentStartPointKind | string; breweryId?: string }): string {
-  return startPointKindName(point.kind) === 'Company' ? 'company' : `brewery:${point.breweryId ?? ''}`;
+ * so it is keyed by its kind while a brewery is keyed by its id plus which of
+ * its addresses this entry is. Compares through `startPointKindName` /
+ * `addrKindName` rather than `=== ShipmentStartPointKind.Company` /
+ * `=== DeliveryAddressKind.Contact` — the backend serializes enums as JSON
+ * strings while the generated TS enum is numeric, so a raw `===` against the
+ * numeric member never matches live data (see `src/lib/labels.ts`). Pulled
+ * into its own module (rather than living alongside `StartPointPicker`) so
+ * that component file only exports the component itself. */
+export function optionKey(point: { kind?: ShipmentStartPointKind | string; breweryId?: string; addressKind?: DeliveryAddressKind | string }): string {
+  if (startPointKindName(point.kind) === 'Company') return 'company';
+  return `brewery:${point.breweryId ?? ''}:${addrKindName(point.addressKind) ?? 'Official'}`;
 }
 
 /** A place with a name and, maybe, coordinates — either a `ShipmentStartPointDto`

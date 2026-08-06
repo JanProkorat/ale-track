@@ -10816,6 +10816,7 @@ export interface IUpdateProductDeliveryItemDto {
 export class ShipmentStartPointDto implements IShipmentStartPointDto {
     kind?: ShipmentStartPointKind;
     breweryId?: string | undefined;
+    addressKind?: DeliveryAddressKind | undefined;
     name?: string;
     address?: string;
     latitude?: number | undefined;
@@ -10834,6 +10835,7 @@ export class ShipmentStartPointDto implements IShipmentStartPointDto {
         if (_data) {
             this.kind = _data["kind"];
             this.breweryId = _data["breweryId"];
+            this.addressKind = _data["addressKind"];
             this.name = _data["name"];
             this.address = _data["address"];
             this.latitude = _data["latitude"];
@@ -10852,6 +10854,7 @@ export class ShipmentStartPointDto implements IShipmentStartPointDto {
         data = typeof data === 'object' ? data : {};
         data["kind"] = this.kind;
         data["breweryId"] = this.breweryId;
+        data["addressKind"] = this.addressKind;
         data["name"] = this.name;
         data["address"] = this.address;
         data["latitude"] = this.latitude;
@@ -10863,6 +10866,7 @@ export class ShipmentStartPointDto implements IShipmentStartPointDto {
 export interface IShipmentStartPointDto {
     kind?: ShipmentStartPointKind;
     breweryId?: string | undefined;
+    addressKind?: DeliveryAddressKind | undefined;
     name?: string;
     address?: string;
     latitude?: number | undefined;
@@ -11052,6 +11056,12 @@ export interface ICreateProductDeliveryItemDto {
 export enum ShipmentStartPointKind {
     Company = 0,
     Brewery = 1,
+}
+
+export enum DeliveryAddressKind {
+    Official = 0,
+    Contact = 1,
+    DeliveryPlace = 2,
 }
 
 export class OutgoingShipmentListItemDto implements IOutgoingShipmentListItemDto {
@@ -11452,6 +11462,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     startPointName?: string;
     startPointAddress?: string;
     startPointLatitude?: number | undefined;
@@ -11482,6 +11493,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
             this.startPointKind = _data["startPointKind"];
             this.startBreweryId = _data["startBreweryId"];
+            this.startBreweryAddressKind = _data["startBreweryAddressKind"];
             this.startPointName = _data["startPointName"];
             this.startPointAddress = _data["startPointAddress"];
             this.startPointLatitude = _data["startPointLatitude"];
@@ -11540,6 +11552,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
         data["startPointKind"] = this.startPointKind;
         data["startBreweryId"] = this.startBreweryId;
+        data["startBreweryAddressKind"] = this.startBreweryAddressKind;
         data["startPointName"] = this.startPointName;
         data["startPointAddress"] = this.startPointAddress;
         data["startPointLatitude"] = this.startPointLatitude;
@@ -11591,6 +11604,7 @@ export interface IOutgoingShipmentDetailDto {
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     startPointName?: string;
     startPointAddress?: string;
     startPointLatitude?: number | undefined;
@@ -11822,12 +11836,6 @@ export interface IAddressDto {
 export enum Country {
     Czechia = 1,
     Germany = 2,
-}
-
-export enum DeliveryAddressKind {
-    Official = 0,
-    Contact = 1,
-    DeliveryPlace = 2,
 }
 
 export class ClientDeliveryPlaceDto implements IClientDeliveryPlaceDto {
@@ -12526,6 +12534,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
     name!: string;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     deliveryDate?: Date | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
@@ -12555,6 +12564,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
             this.name = _data["name"];
             this.startPointKind = _data["startPointKind"];
             this.startBreweryId = _data["startBreweryId"];
+            this.startBreweryAddressKind = _data["startBreweryAddressKind"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
             this.vehicleId = _data["vehicleId"];
             if (Array.isArray(_data["driverIds"])) {
@@ -12613,6 +12623,7 @@ export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
         data["name"] = this.name;
         data["startPointKind"] = this.startPointKind;
         data["startBreweryId"] = this.startBreweryId;
+        data["startBreweryAddressKind"] = this.startBreweryAddressKind;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
         data["vehicleId"] = this.vehicleId;
         if (Array.isArray(this.driverIds)) {
@@ -12664,6 +12675,7 @@ export interface IUpdateOutgoingShipmentDto {
     name: string;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     deliveryDate?: Date | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
@@ -13416,6 +13428,7 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
     name!: string;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     deliveryDate?: Date | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
@@ -13441,6 +13454,7 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
             this.name = _data["name"];
             this.startPointKind = _data["startPointKind"];
             this.startBreweryId = _data["startBreweryId"];
+            this.startBreweryAddressKind = _data["startBreweryAddressKind"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
             this.vehicleId = _data["vehicleId"];
             if (Array.isArray(_data["driverIds"])) {
@@ -13483,6 +13497,7 @@ export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
         data["name"] = this.name;
         data["startPointKind"] = this.startPointKind;
         data["startBreweryId"] = this.startBreweryId;
+        data["startBreweryAddressKind"] = this.startBreweryAddressKind;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
         data["vehicleId"] = this.vehicleId;
         if (Array.isArray(this.driverIds)) {
@@ -13518,6 +13533,7 @@ export interface ICreateOutgoingShipmentDto {
     name: string;
     startPointKind?: ShipmentStartPointKind;
     startBreweryId?: string | undefined;
+    startBreweryAddressKind?: DeliveryAddressKind;
     deliveryDate?: Date | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];

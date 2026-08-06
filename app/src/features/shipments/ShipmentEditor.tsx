@@ -93,7 +93,7 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     // Position matters (it is the order the steps are worked in), so this is the array order,
     // not a sorted copy. The local `key` is left out — it changes per session.
     steps: steps.map((s) => ({ id: s.id ?? null, label: s.label.trim() })),
-    startPoint: { kind: startPoint.kind, breweryId: startPoint.breweryId ?? null },
+    startPoint: { kind: startPoint.kind, breweryId: startPoint.breweryId ?? null, addressKind: startPoint.addressKind ?? null },
   });
 }
 
@@ -309,7 +309,11 @@ export function ShipmentEditor({
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st) => ({ key: st.id ?? `step-${st.order ?? 0}`, id: st.id, label: st.label ?? '' }));
-    const loadedStartPoint: StartPointValue = { kind: s.startPointKind ?? ShipmentStartPointKind.Company, breweryId: s.startBreweryId };
+    const loadedStartPoint: StartPointValue = {
+      kind: s.startPointKind ?? ShipmentStartPointKind.Company,
+      breweryId: s.startBreweryId,
+      addressKind: s.startBreweryAddressKind,
+    };
     setName(loadedName);
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
@@ -654,6 +658,7 @@ export function ShipmentEditor({
             preparationSteps,
             startPointKind: startPoint.kind,
             startBreweryId: startPoint.breweryId,
+            startBreweryAddressKind: startPoint.addressKind,
           }),
         });
         savedId = shipmentId;
@@ -670,6 +675,7 @@ export function ShipmentEditor({
           preparationSteps,
           startPointKind: startPoint.kind,
           startBreweryId: startPoint.breweryId,
+          startBreweryAddressKind: startPoint.addressKind,
         }));
         enqueueSnackbar('Vývoz naplánován.', { variant: 'success' });
       }

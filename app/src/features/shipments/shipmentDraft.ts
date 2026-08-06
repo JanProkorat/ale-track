@@ -31,6 +31,13 @@ export interface ShipmentDraft {
    *  the resend as a route change and reject the state advance outright. */
   startPointKind: ShipmentStartPointKind;
   startBreweryId?: string;
+  /** Which of the brewery's two addresses was picked — omitted here just as
+   *  easily forgotten as `startPointKind`/`startBreweryId` were before this
+   *  field existed (see the commit that added those two), so it rides along
+   *  for exactly the same reason: an unrelated detail-screen save must not
+   *  silently move the run's origin from the brewery's contact address back
+   *  to its official one. */
+  startBreweryAddressKind?: DeliveryAddressKind;
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -96,5 +103,6 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
     // point recorded.
     startPointKind: shipment.startPointKind ?? ShipmentStartPointKind.Company,
     startBreweryId: shipment.startBreweryId,
+    startBreweryAddressKind: shipment.startBreweryAddressKind,
   };
 }
