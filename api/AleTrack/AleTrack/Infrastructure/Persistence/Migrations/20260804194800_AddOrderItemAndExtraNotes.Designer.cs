@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260804194800_AddOrderItemAndExtraNotes")]
+    partial class AddOrderItemAndExtraNotes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -914,18 +917,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
-                    b.Property<int>("StartBreweryAddressKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("start_brewery_address_kind");
-
-                    b.Property<long?>("StartBreweryId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("start_brewery_id");
-
-                    b.Property<int>("StartPointKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("start_point_kind");
-
                     b.Property<int>("State")
                         .HasColumnType("integer")
                         .HasColumnName("state");
@@ -938,8 +929,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PublicId")
                         .IsUnique();
-
-                    b.HasIndex("StartBreweryId");
 
                     b.HasIndex("VehicleId");
 
@@ -2282,17 +2271,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>
                 {
-                    b.HasOne("AleTrack.Entities.Brewery", "StartBrewery")
-                        .WithMany()
-                        .HasForeignKey("StartBreweryId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("AleTrack.Entities.Vehicle", "Vehicle")
                         .WithMany("OutgoingShipments")
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("StartBrewery");
 
                     b.Navigation("Vehicle");
                 });

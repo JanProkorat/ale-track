@@ -12020,6 +12020,7 @@ export interface IOutgoingShipmentProductDto {
 
 export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto implements IOutgoingShipmentOrderItemDto {
     orderItemId?: string;
+    note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
     inventoryItemName?: string | undefined;
@@ -12033,6 +12034,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
         super.init(_data);
         if (_data) {
             this.orderItemId = _data["orderItemId"];
+            this.note = _data["note"];
             this.quantityFromInventory = _data["quantityFromInventory"];
             this.inventoryItemId = _data["inventoryItemId"];
             this.inventoryItemName = _data["inventoryItemName"];
@@ -12050,6 +12052,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["orderItemId"] = this.orderItemId;
+        data["note"] = this.note;
         data["quantityFromInventory"] = this.quantityFromInventory;
         data["inventoryItemId"] = this.inventoryItemId;
         data["inventoryItemName"] = this.inventoryItemName;
@@ -12061,6 +12064,7 @@ export class OutgoingShipmentOrderItemDto extends OutgoingShipmentProductDto imp
 
 export interface IOutgoingShipmentOrderItemDto extends IOutgoingShipmentProductDto {
     orderItemId?: string;
+    note?: string | undefined;
     quantityFromInventory?: number;
     inventoryItemId?: string | undefined;
     inventoryItemName?: string | undefined;
@@ -12119,6 +12123,7 @@ export class OrderCustomExtraItemDto implements IOrderCustomExtraItemDto {
     id?: string | undefined;
     description?: string;
     quantity?: number;
+    note?: string | undefined;
     isLoadingConfirmed?: boolean;
 
     constructor(data?: IOrderCustomExtraItemDto) {
@@ -12135,6 +12140,7 @@ export class OrderCustomExtraItemDto implements IOrderCustomExtraItemDto {
             this.id = _data["id"];
             this.description = _data["description"];
             this.quantity = _data["quantity"];
+            this.note = _data["note"];
             this.isLoadingConfirmed = _data["isLoadingConfirmed"];
         }
     }
@@ -12151,6 +12157,7 @@ export class OrderCustomExtraItemDto implements IOrderCustomExtraItemDto {
         data["id"] = this.id;
         data["description"] = this.description;
         data["quantity"] = this.quantity;
+        data["note"] = this.note;
         data["isLoadingConfirmed"] = this.isLoadingConfirmed;
         return data;
     }
@@ -12160,6 +12167,7 @@ export interface IOrderCustomExtraItemDto {
     id?: string | undefined;
     description?: string;
     quantity?: number;
+    note?: string | undefined;
     isLoadingConfirmed?: boolean;
 }
 
@@ -13913,6 +13921,7 @@ export class OrderItemDto implements IOrderItemDto {
     productName?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
     breweryDisplayOrder?: number;
     displayOrder?: number;
 
@@ -13933,6 +13942,7 @@ export class OrderItemDto implements IOrderItemDto {
             this.productName = _data["productName"];
             this.quantity = _data["quantity"];
             this.reminderState = _data["reminderState"];
+            this.note = _data["note"];
             this.breweryDisplayOrder = _data["breweryDisplayOrder"];
             this.displayOrder = _data["displayOrder"];
         }
@@ -13953,6 +13963,7 @@ export class OrderItemDto implements IOrderItemDto {
         data["productName"] = this.productName;
         data["quantity"] = this.quantity;
         data["reminderState"] = this.reminderState;
+        data["note"] = this.note;
         data["breweryDisplayOrder"] = this.breweryDisplayOrder;
         data["displayOrder"] = this.displayOrder;
         return data;
@@ -13966,6 +13977,7 @@ export interface IOrderItemDto {
     productName?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
     breweryDisplayOrder?: number;
     displayOrder?: number;
 }
@@ -14143,6 +14155,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
 
     constructor(data?: IUpdateOrderItemDto) {
         if (data) {
@@ -14158,6 +14171,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
             this.reminderState = _data["reminderState"];
+            this.note = _data["note"];
         }
     }
 
@@ -14173,6 +14187,7 @@ export class UpdateOrderItemDto implements IUpdateOrderItemDto {
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
         data["reminderState"] = this.reminderState;
+        data["note"] = this.note;
         return data;
     }
 }
@@ -14181,6 +14196,7 @@ export interface IUpdateOrderItemDto {
     productId?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
 }
 
 export class SetOrderItemReminderStateDto implements ISetOrderItemReminderStateDto {
@@ -14359,6 +14375,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
 
     constructor(data?: ICreateOrderItemDto) {
         if (data) {
@@ -14374,6 +14391,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
             this.productId = _data["productId"];
             this.quantity = _data["quantity"];
             this.reminderState = _data["reminderState"];
+            this.note = _data["note"];
         }
     }
 
@@ -14389,6 +14407,7 @@ export class CreateOrderItemDto implements ICreateOrderItemDto {
         data["productId"] = this.productId;
         data["quantity"] = this.quantity;
         data["reminderState"] = this.reminderState;
+        data["note"] = this.note;
         return data;
     }
 }
@@ -14397,6 +14416,7 @@ export interface ICreateOrderItemDto {
     productId?: string;
     quantity?: number;
     reminderState?: OrderItemReminderState | undefined;
+    note?: string | undefined;
 }
 
 export class GetBreweryNotesRequest implements IGetBreweryNotesRequest {

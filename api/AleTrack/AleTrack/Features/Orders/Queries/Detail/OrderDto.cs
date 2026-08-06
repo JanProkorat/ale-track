@@ -118,7 +118,12 @@ public sealed record OrderItemDto
     /// State of the reminder for this item.
     /// </summary>
     public OrderItemReminderState? ReminderState { get; set; }
-    
+
+    /// <summary>
+    /// Optional free-form note about this line.
+    /// </summary>
+    public string? Note { get; set; }
+
     /// <summary>
     /// Display order based on brewery.
     /// </summary>

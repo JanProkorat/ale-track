@@ -383,6 +383,12 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     public Guid OrderItemId { get; set; }
 
     /// <summary>
+    /// The order line's own note — an instruction for whoever loads or delivers it.
+    /// Read-only here; owned and edited by the order.
+    /// </summary>
+    public string? Note { get; set; }
+
+    /// <summary>
     /// How many of <see cref="OutgoingShipmentProductDto.Quantity"/> pieces come from our
     /// own stock rather than the brewery. Zero when the brewery supplied all of them.
     /// </summary>

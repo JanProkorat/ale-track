@@ -110,6 +110,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         ProductId = i.Product.PublicId,
                         ProductName = i.Product.Name,
                         ReminderState = i.ReminderState,
+                        Note = i.Note,
                         BreweryDisplayOrder = i.Product.Brewery.DisplayOrder,
                         DisplayOrder = i.Product.DisplayOrder
                     })
@@ -129,6 +130,7 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         Id = e.PublicId,
                         Description = e.Description,
                         Quantity = e.Quantity,
+                        Note = e.Note,
                         IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                     })
                     .ToList()

@@ -66,7 +66,7 @@ import {
   PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
   PurchaseInvoiceRowMetrics, PurchaseInvoiceTotalsLines,
 } from './PurchaseInvoiceColumns';
-import { METRIC_GRID_SX, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
+import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
@@ -103,6 +103,12 @@ interface NakladkaRow {
   inventoryItemName?: string;
   /** Pieces on hand in that stock entry, for the over-draw warning. */
   inventoryAvailable?: number;
+  /**
+   * The order line's own note (order rows only). Shown in the per-order overview,
+   * never in the aggregated loading table — that table merges the same product
+   * across clients, and a note belongs to one client's line.
+   */
+  note?: string;
 }
 
 function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
@@ -126,6 +132,7 @@ function productRowFrom(p: OutgoingShipmentOrderItemDto): NakladkaRow {
     inventoryItemId: p.inventoryItemId,
     inventoryItemName: p.inventoryItemName,
     inventoryAvailable: p.inventoryItemAvailable,
+    note: p.note,
   };
 }
 function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
@@ -274,14 +281,14 @@ interface BreakdownEntry {
  * is ordered minus sourced.
  *
  * Returned as three fixed slots — `null` where the row has nothing to say — rather
- * than a packed list, because the stacked layout puts each slot in its own grid
- * column and a row that skipped "Do garáže" would otherwise pull the numbers of
- * every following slot one column left of its neighbours'. The table packs them
- * itself: there a slot is a line, and an empty one would be a blank line.
+ * than a packed list, because the stacked layout gives each slot a reserved width
+ * and a row that skipped "Do garáže" would otherwise pull the numbers of every
+ * following slot left of its neighbours'. The table packs them itself: there a slot
+ * is a line, and an empty one would be a blank line.
  *
  * Returned as data rather than rendered, because the two layouts present them
  * differently — the table stacks them under the total in the Množství cell, the
- * phone lays them across the row's grid — and only the conditions for *which*
+ * phone lays them across the row's slots — and only the conditions for *which*
  * entries exist are worth sharing.
  */
 function breakdownSlots(
@@ -388,13 +395,13 @@ function AggLoadingRow({
  * Two blocks, nothing hidden. The head is what the ramp works from — what the product
  * is, how many pieces, and the loading control to tick it off, the last of these in
  * the same place down the whole list so it can be hit without looking. Below it sits
- * every number behind that total, laid on a grid rather than one per line: a product
- * carries up to five of them and the list runs to thirty-odd products, so a line each
- * made a screen's worth of mostly zeroes out of every three items.
+ * every number behind that total, laid across fixed slots rather than one per line: a
+ * product carries up to five of them and the list runs to thirty-odd products, so a
+ * line each made a screen's worth of mostly zeroes out of every three items.
  *
- * Sourcing and the invoice split get a grid each, of the same tracks, so the two read
- * as separate runs without a separator between them — the sourcing numbers never
- * trail off into an invoice group at whatever point the line happened to run out.
+ * Sourcing and the invoice split get a run each, of the same slots, so the two read as
+ * separate groups without a separator between them — the sourcing numbers never trail
+ * off into an invoice group at whatever point the line happened to run out.
  *
  * The row does not collapse. An expander made each product cheap to skip but the list
  * is not skimmed, it is worked through, and paying a tap per product to see numbers
@@ -428,17 +435,18 @@ function AggLoadingStackedRow({
           {agg.quantity} ks
         </Typography>
       </Stack>
-      {/* Wrapping rather than scrolling: where the tracks run out the remaining groups
-          drop to a second line instead of hiding past the right edge. METRIC_GRID_SX
-          has why that wrapping happens on a grid and not a flex line. An absent slot
-          spends an empty cell, which is what holds a row's numbers in the same columns
-          as its neighbours' — the cell collapses to nothing, so it costs no height. */}
-      <Box sx={{ ...METRIC_GRID_SX, mt: 0.5 }}>
+      {/* Wrapping rather than scrolling: where the row runs out of width the remaining
+          slots drop to a second line instead of hiding past the right edge. An absent
+          slot is still rendered, empty, which is what holds the slots after it under
+          the same ones on every other row — it costs its width but no height. */}
+      <Box sx={{ ...METRIC_ROW_SX, mt: 0.5 }}>
         {breakdownSlots(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry, index) => (
-          entry ? <NakladkaMetric key={entry.label} {...entry} /> : <span key={index} />
+          <MetricSlot key={entry?.label ?? index} index={index}>
+            {entry && <NakladkaMetric {...entry} />}
+          </MetricSlot>
         ))}
       </Box>
-      <Box sx={{ ...METRIC_GRID_SX, mt: 0.25 }}>{invoiceMetrics}</Box>
+      <Box sx={{ ...METRIC_ROW_SX, mt: 0.25 }}>{invoiceMetrics}</Box>
     </Box>
   );
 }
@@ -774,10 +782,14 @@ function AggLoadingTable({
 function ProductLine({ row }: { row: NakladkaRow }) {
   const chipText = kindSizeChipText(row.kind, row.packageSize);
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
+    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{row.name}</Typography>
         {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600, mt: 0.25 }} />}
+        {/* The instruction the loader needs; owned and edited by the order. */}
+        {row.note && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{row.note}</Typography>
+        )}
       </Box>
       <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
     </Stack>
@@ -1607,10 +1619,11 @@ export function ShipmentDetail({
               <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
                 {/* Owned by the order — added there, only displayed here. */}
                 {customExtras.map(({ clientName, extra }) => (
-                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography noWrap>{extra.description}</Typography>
-                      <Typography variant="caption" color="text.secondary">{clientName}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{clientName}</Typography>
+                      {extra.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{extra.note}</Typography>}
                     </Box>
                     <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{extra.quantity} ks</Typography>
                   </Stack>

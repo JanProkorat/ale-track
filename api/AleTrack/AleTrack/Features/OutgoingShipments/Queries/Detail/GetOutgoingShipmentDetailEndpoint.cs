@@ -166,6 +166,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     BreweryName = oi.Product.Brewery.Name,
                                     BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder,
                                     OrderItemId = oi.PublicId,
+                                    Note = oi.Note,
                                     QuantityFromInventory = oi.QuantityFromInventory,
                                     InventoryItemId = oi.InventoryItem != null ? oi.InventoryItem.PublicId : null,
                                     InventoryItemName = oi.InventoryItem != null
@@ -193,6 +194,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                                     Id = e.PublicId,
                                     Description = e.Description,
                                     Quantity = e.Quantity,
+                                    Note = e.Note,
                                     IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                                 })
                                 .ToList()

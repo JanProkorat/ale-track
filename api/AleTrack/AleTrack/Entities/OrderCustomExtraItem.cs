@@ -31,6 +31,14 @@ public sealed class OrderCustomExtraItem : PublicEntity
     public int Quantity { get; set; }
 
     /// <summary>
+    /// Optional free-form note about the item — an instruction for whoever packs
+    /// or delivers it ("s logem, ne generické").
+    /// </summary>
+    [MaxLength(500)]
+    [Column("note")]
+    public string? Note { get; set; }
+
+    /// <summary>
     /// Whether loading was confirmed on the shipment carrying this order.
     /// Owned by the shipment, not by the order editor.
     /// </summary>

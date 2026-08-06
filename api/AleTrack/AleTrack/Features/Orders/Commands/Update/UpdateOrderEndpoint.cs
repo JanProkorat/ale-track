@@ -141,6 +141,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
         order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
+        ApplyItemNotes(req.Data.OrderItems, order);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
@@ -232,7 +233,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         var result = extras
             .Where(e => e.Id is null)
-            .Select(e => new OrderCustomExtraItem { Description = e.Description, Quantity = e.Quantity })
+            .Select(e => new OrderCustomExtraItem { Description = e.Description, Quantity = e.Quantity, Note = e.Note })
             .ToList();
 
         foreach (var e in extras.Where(e => e.Id is not null && order.CustomExtraItems.Any(x => x.PublicId == e.Id!.Value)))
@@ -240,10 +241,44 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             var existing = order.CustomExtraItems.First(x => x.PublicId == e.Id!.Value);
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;
+            existing.Note = e.Note;
             result.Add(existing);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Copies each posted line's note onto the persisted <see cref="OrderItem"/> for the same
+    /// product.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately outside the item rebuild above, and deliberately absent from
+    /// <see cref="RequestChangesFrozenContent"/>. That comparison exists so an unchanged PUT
+    /// skips the destructive rebuild and leaves the rows — and the invoice lines cascading off
+    /// them — alive; a note-only save therefore never reaches the rebuild at all. Counting the
+    /// note as frozen content would fix that by re-entering the rebuild, at the cost of
+    /// deleting invoice lines for the sake of a note.
+    ///
+    /// So notes are written here instead: on every save, at every order state. They instruct
+    /// rather than describe — what to do with a line, not what is on the truck — and are most
+    /// useful precisely once the shipment is packed and the loader is looking at it.
+    ///
+    /// Matching on the product is safe: the order editor increments an existing cart line
+    /// rather than adding a second one for the same product, so a product appears at most
+    /// once. A posted line whose product is not on the order is ignored — adding and removing
+    /// items belongs to the rebuild.
+    /// </remarks>
+    private static void ApplyItemNotes(List<UpdateOrderItemDto> items, Order order)
+    {
+        foreach (var item in order.OrderItems)
+        {
+            var posted = items.FirstOrDefault(i => i.ProductId == item.Product.PublicId);
+            if (posted is not null)
+            {
+                item.Note = posted.Note;
+            }
+        }
     }
 
     private async Task<List<Product>> GetExistingProductsAsync(List<UpdateOrderItemDto> orderItems, CancellationToken ct)

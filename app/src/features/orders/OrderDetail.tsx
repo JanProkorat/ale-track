@@ -167,7 +167,7 @@ export function OrderDetail({
             {items.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Objednávka nemá žádné položky.</Typography>
             ) : (
-              <Box sx={{ '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+              <Box sx={{ '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {items.map((it) => {
                   const rs = reminderStateName(effState(it.id ?? '', it.reminderState));
                   return (
@@ -176,6 +176,7 @@ export function OrderDetail({
                         <Typography sx={{ fontWeight: 700 }}>{it.productName}</Typography>
                         {rs === 'Added' && <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 700 }}>hlídáno</Typography>}
                         {rs === 'Resolved' && <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>vyřešeno</Typography>}
+                        {it.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{it.note}</Typography>}
                       </Box>
                       <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>
                       {editable && canEditOrder && (
@@ -226,10 +227,13 @@ export function OrderDetail({
               count={extras.length}
               icon={<Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
             >
-              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'center', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
+              <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {extras.map((e) => (
                   <Box key={e.id}>
-                    <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{e.description}</Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{e.description}</Typography>
+                      {e.note && <Typography variant="caption" color="text.secondary">{e.note}</Typography>}
+                    </Box>
                     <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.quantity} ks</Typography>
                   </Box>
                 ))}
