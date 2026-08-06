@@ -7,6 +7,7 @@ using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
+using AleTrack.Tests.Mocks;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Microsoft.Extensions.Options;
@@ -193,6 +194,42 @@ public sealed class ShipmentStartPointWriteTests
         detailEndpoint.Response.StartBreweryAddressKind.Should().Be(DeliveryAddressKind.Contact);
         detailEndpoint.Response.StartPointAddress.Should().Contain("Turnov");
         detailEndpoint.Response.StartPointAddress.Should().NotContain("Svijany");
+    }
+
+    /// <summary>
+    /// The Create endpoint's <c>GetStartBreweryAsync</c> duplicates this same guard
+    /// (rather than sharing it with Update's — the two endpoints have no common base to
+    /// put it on). Nothing else exercises the Create copy, so deleting it currently
+    /// breaks no test; this mirrors <see cref="HandleAsync_StartBreweryAddressKindContactButBreweryHasNoContactAddress_ThrowsBadRequest"/>
+    /// against <see cref="CreateOutgoingShipmentEndpoint"/> instead.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CreateStartBreweryAddressKindContactButBreweryHasNoContactAddress_ThrowsBadRequest()
+    {
+        var brewery = BreweryBuilder.BuildEntity(name: "Svijany"); // no contact address
+        var orderId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        var order = OrderBuilder.BuildEntity(publicId: orderId, client: client);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(orders: [order], breweries: [brewery]);
+
+        var request = new CreateOutgoingShipmentRequest
+        {
+            Data = OutgoingShipmentBuilder.BuildCreateDto(
+                driverIds: [],
+                clientOrderShipments: [new ClientOrderShipmentDto { ClientOrderId = orderId, Order = 1 }])
+        };
+        request.Data.StartPointKind = ShipmentStartPointKind.Brewery;
+        request.Data.StartBreweryId = brewery.PublicId;
+        request.Data.StartBreweryAddressKind = DeliveryAddressKind.Contact;
+
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()));
+
+        var act = async () => await endpoint.HandleAsync(request, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
     }
 
     // Arrange(state, breweries) is shared with CompanyStopTests — see

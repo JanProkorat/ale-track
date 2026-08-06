@@ -53,7 +53,16 @@ export function StartPointPicker({ value, onChange, disabled }: {
                 onChange({
                   kind: picked.kind ?? ShipmentStartPointKind.Company,
                   breweryId: picked.breweryId,
-                  addressKind: picked.addressKind,
+                  // The company entry carries an explicit `"addressKind": null` on the
+                  // wire (GetShipmentStartPointsEndpoint sets it to null rather than
+                  // omitting it, and the DTO has no DefaultIgnoreCondition to drop it),
+                  // so `picked.addressKind` is a real `null` at runtime even though the
+                  // generated type only admits `undefined`. Both write DTOs declare
+                  // `StartBreweryAddressKind` as a non-nullable enum — sending the literal
+                  // `null` (JSON.stringify keeps it; it only drops `undefined`) fails
+                  // model binding with a generic 400 on every save that starts at the
+                  // company. Coalescing to `undefined` here drops the key instead.
+                  addressKind: picked.addressKind ?? undefined,
                 });
               }
             }}

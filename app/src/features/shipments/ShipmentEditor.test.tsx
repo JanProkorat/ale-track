@@ -9,7 +9,7 @@
 // selected, as a disabled "(smazáno)" option, rather than silently falling
 // back to no selection.
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -74,9 +74,14 @@ let clientsLoading = false;
 let startPointsPending = false;
 let startPointsError = false;
 
-interface StartPointFixture { kind: string; breweryId?: string; addressKind?: string; name: string; address?: string; latitude?: number; longitude?: number }
+interface StartPointFixture { kind: string; breweryId?: string; addressKind?: string | null; name: string; address?: string; latitude?: number; longitude?: number }
+// The company entry's `addressKind` is explicitly `null` here, not omitted — that is
+// the real wire shape (GetShipmentStartPointsEndpoint assigns `AddressKind = null` with
+// no DefaultIgnoreCondition to drop it), and a fixture that instead omits the key
+// (producing `undefined`, which JSON.stringify drops harmlessly) cannot reproduce the
+// 400-on-save bug the company-pick tests below guard against.
 const DEFAULT_START_POINTS: StartPointFixture[] = [
-  { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309 },
+  { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309, addressKind: null },
   { kind: 'Brewery', breweryId: 'brewery-svijany', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
 ];
 // Mutable (not a literal) so the route-origin regression test below can point
@@ -141,8 +146,11 @@ function renderEditor(opts: { mode?: 'edit' | 'create'; state?: OutgoingShipment
         </MuiThemeProvider>
       ),
     },
+    // Only reachable via `router.navigate` from a test exercising the unsaved-changes
+    // guard (`useBlocker` needs a *different* route to block navigation towards).
+    { path: '/elsewhere', element: <div>Elsewhere</div> },
   ]);
-  return render(<RouterProvider router={router} />);
+  return { ...render(<RouterProvider router={router} />), router };
 }
 
 /** The "Pořadí zastávek" card's stop rows are the only <Select>s it renders,
@@ -495,6 +503,54 @@ describe('ShipmentEditor — start-point picker', () => {
         }),
       );
     });
+  });
+
+  it('does not 400 when picking the company as the start point', async () => {
+    // GetShipmentStartPointsEndpoint sets AddressKind = null explicitly on the company
+    // entry (Program.cs's JsonOptions has no DefaultIgnoreCondition to drop it), so
+    // `picked.addressKind` is a real `null` at runtime, not `undefined`, even though
+    // the fixture's TS type only admits the latter — DEFAULT_START_POINTS[0] models
+    // that shape explicitly. Both write DTOs declare `StartBreweryAddressKind` as a
+    // non-nullable enum: sending the literal `null` (JSON.stringify keeps it — only
+    // `undefined` is dropped) fails model binding with a generic 400. This is the
+    // regression a bare `picked.addressKind` (no coalesce) reintroduces.
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Sklad AleTrack'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalled();
+    });
+
+    const payload = updateMutateAsync.mock.calls.at(-1)![0] as { data: { startBreweryAddressKind?: unknown } };
+    expect(payload.data.startBreweryAddressKind).not.toBeNull();
+  });
+
+  it('does not flag the form dirty after picking a brewery and then picking the company back', async () => {
+    // The loaded baseline's addressKind always arrives as a concrete wire string
+    // ('Official') — the detail DTO's field is non-nullable, so even a company-start
+    // shipment carries a real (if meaningless) value. Picking a brewery then picking
+    // the company back must collapse back to that exact same baseline representation,
+    // or the unsaved-changes guard fires on a run nothing actually changed about.
+    const { router } = renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Sklad AleTrack'));
+
+    await act(async () => {
+      await router.navigate('/elsewhere');
+    });
+
+    expect(screen.queryByText('Neuložené změny')).not.toBeInTheDocument();
   });
 
   it('locks the start point once the run is loaded', () => {

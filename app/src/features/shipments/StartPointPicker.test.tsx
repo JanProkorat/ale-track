@@ -13,7 +13,7 @@ import type { StartPointValue } from './startPointOption';
 interface StartPointFixture {
   kind: string;
   breweryId?: string;
-  addressKind?: string;
+  addressKind?: string | null;
   name: string;
   address?: string;
   latitude?: number;
@@ -26,7 +26,13 @@ vi.mock('src/hooks/useShipments', () => ({
   useShipmentStartPoints: () => ({ data: startPoints, isPending: false, isError: false }),
 }));
 
-const COMPANY: StartPointFixture = { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou' };
+// `addressKind: null` explicitly, not omitted — the real GetShipmentStartPointsEndpoint
+// assigns `AddressKind = null` on the company entry, and there is no
+// DefaultIgnoreCondition to drop it from the response, so the wire carries an explicit
+// `"addressKind": null` rather than leaving the key out. A fixture that omits the key
+// entirely (producing `undefined`, which JSON.stringify drops) cannot reproduce the bug
+// this shape exists to catch.
+const COMPANY: StartPointFixture = { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', addressKind: null };
 // Two entries for the same brewery — its official seat and a separate contact
 // address it actually loads from. Distinct town names so a test asserting on
 // either address string cannot pass by coincidence.
@@ -94,6 +100,25 @@ describe('StartPointPicker — picking an entry', () => {
       kind: 'Brewery',
       breweryId: 'brewery-svijany',
       addressKind: 'Contact',
+    });
+  });
+
+  it('never hands onChange a null addressKind when picking the company', () => {
+    // Both write DTOs declare `StartBreweryAddressKind` as a non-nullable enum:
+    // System.Text.Json throws on a literal `null` against a non-nullable enum at model
+    // binding, so a `null` reaching the save payload 400s every save that starts at the
+    // company. `undefined` is safe — JSON.stringify drops it, so the key is simply
+    // absent and the server falls back to its own default.
+    startPoints = [COMPANY, SVIJANY_OFFICIAL];
+    const onChange = renderPicker({ kind: ShipmentStartPointKind.Brewery, breweryId: 'brewery-svijany', addressKind: 'Official' as never });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(screen.getByText('Sklad AleTrack'));
+
+    expect(onChange).toHaveBeenCalledWith({
+      kind: 'Company',
+      breweryId: undefined,
+      addressKind: undefined,
     });
   });
 });

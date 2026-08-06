@@ -27,7 +27,7 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { haversine } from 'src/lib/geo';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num } from 'src/lib/format';
-import { regionLabel, shipStateName, addrKindValue, stopKindName } from 'src/lib/labels';
+import { regionLabel, shipStateName, addrKindValue, startPointKindName, stopKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentOrderDto,
   type Region,
@@ -93,7 +93,31 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     // Position matters (it is the order the steps are worked in), so this is the array order,
     // not a sorted copy. The local `key` is left out — it changes per session.
     steps: steps.map((s) => ({ id: s.id ?? null, label: s.label.trim() })),
-    startPoint: { kind: startPoint.kind, breweryId: startPoint.breweryId ?? null, addressKind: startPoint.addressKind ?? null },
+    // `kind` and `addressKind` are both normalized to a single concrete representation
+    // rather than passed through (or bare-coalesced) as-is — the load path and the
+    // picker hand this function the same logical choice through different shapes, and a
+    // literal-value comparison must not tell those shapes apart:
+    //  - `kind`: the loaded shipment's own `startPointKind` may already be a wire string
+    //    ('Company'/'Brewery') or, when the shipment records none, the *numeric*
+    //    fallback `ShipmentStartPointKind.Company` (see `loadedStartPoint` above); a
+    //    freshly picked entry's `kind` is always whatever wire shape the start-points
+    //    list carries. `startPointKindName` collapses both to the same string.
+    //  - `addressKind`: the loaded baseline's is always a concrete wire string in
+    //    production ('Official' even for a company-kind run — the detail DTO's field is
+    //    non-nullable, so a company run persists Official as its meaningless-but-present
+    //    value), while a freshly picked company entry carries no addressKind of its own
+    //    (`undefined`, after StartPointPicker's null-coalesce for the Critical fix).
+    //    `addrKindValue` collapses both to the same concrete member instead of leaving
+    //    `undefined`/`null` as a value distinct from `'Official'`.
+    // Without both normalized the same way, picking a brewery and then picking the
+    // company back leaves this snapshot different from the baseline and spuriously
+    // flags the form dirty — confirmed by running the regression test below against
+    // each partial fix before landing on this one.
+    startPoint: {
+      kind: startPointKindName(startPoint.kind) ?? 'Company',
+      breweryId: startPoint.breweryId ?? null,
+      addressKind: addrKindValue(startPoint.addressKind),
+    },
   });
 }
 
