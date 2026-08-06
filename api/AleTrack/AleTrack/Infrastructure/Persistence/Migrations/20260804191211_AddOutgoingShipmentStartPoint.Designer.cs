@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    [Migration("20260805151656_AddOutgoingShipmentStartPoint")]
+    [Migration("20260804191211_AddOutgoingShipmentStartPoint")]
     partial class AddOutgoingShipmentStartPoint
     {
         /// <inheritdoc />
@@ -906,10 +906,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
-
-                    b.Property<int>("StartBreweryAddressKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("start_brewery_address_kind");
 
                     b.Property<long?>("StartBreweryId")
                         .HasColumnType("bigint")
