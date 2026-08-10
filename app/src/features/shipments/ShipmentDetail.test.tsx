@@ -188,6 +188,7 @@ function contactStop(): OutgoingShipmentStopDto {
  */
 function renderDetail(
   input: OutgoingShipmentStopDto[] | (Partial<IOutgoingShipmentDetailDto> & { stops: OutgoingShipmentStopDto[] }),
+  onOpenOrder?: (orderId: string) => void,
 ) {
   const overrides: Partial<IOutgoingShipmentDetailDto> = Array.isArray(input) ? { stops: input } : input;
   const shipment = new OutgoingShipmentDetailDto({
@@ -196,7 +197,7 @@ function renderDetail(
   });
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} onOpenOrder={onOpenOrder} />
     </MuiThemeProvider>,
   );
 }
@@ -331,7 +332,7 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('shows the place chip and its formatted address for a DeliveryPlace stop', () => {
     renderDetail([placeStop()]);
 
-    const row = screen.getByText('Hospoda U Netopýra').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Letní zahrádka')).toBeInTheDocument();
     expect(within(row).getByText('Nábřežní 3, 02763 Žitava')).toBeInTheDocument();
     // The address line must not repeat the place name — formatPlaceAddress
@@ -342,7 +343,7 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('keeps the plain address · kind line, and no chip, for a stop on the official address', () => {
     renderDetail([officialStop()]);
 
-    const row = screen.getByText('Restaurace B').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
@@ -354,9 +355,46 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('shows the contact address · kind line, and no place chip, for a Contact stop', () => {
     renderDetail([contactStop()]);
 
-    const row = screen.getByText('Restaurace C').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Dvůr 2a, 02763 Žitava · Kontaktní')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — opening a stop\'s order', () => {
+  it('opens the order from the client name, without expanding the row', () => {
+    const onOpenOrder = vi.fn();
+    renderDetail([officialStop()], onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurace B' }));
+
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+    // The name sits inside the row's click target, so following the link must
+    // not also toggle the products underneath it.
+    expect(screen.queryByText('Žádné položky.')).not.toBeInTheDocument();
+  });
+
+  it('still expands the row from the chevron and from the rest of the header', () => {
+    const onOpenOrder = vi.fn();
+    renderDetail([officialStop()], onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rozbalit Restaurace B' }));
+    expect(screen.getByText('Žádné položky.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava · Fakturační'));
+    expect(screen.getByRole('button', { name: 'Rozbalit Restaurace B' })).toBeInTheDocument();
+
+    expect(onOpenOrder).not.toHaveBeenCalled();
+  });
+
+  // The page omits the callback for a user who cannot see the Objednávky
+  // module; a link into a screen ProtectedRoute would bounce them off is worse
+  // than no link at all.
+  it('leaves the client name plain when the caller passes no handler', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.queryByRole('button', { name: 'Restaurace B' })).not.toBeInTheDocument();
+    expect(screen.getByText('Restaurace B')).toBeInTheDocument();
   });
 });
 

@@ -17,6 +17,7 @@ import { type OutgoingShipmentListItemDto } from 'src/generated/api-client';
 import { useShipments, useShipment } from 'src/hooks/useShipments';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
+import { type DetailBackState } from 'src/routes/backNav';
 import { ShipmentDetail } from './ShipmentDetail';
 import { ShipmentEditor } from './ShipmentEditor';
 
@@ -24,7 +25,7 @@ import { ShipmentEditor } from './ShipmentEditor';
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
  * is URL-driven: /shipments (list), /shipments/:id (detail), /shipments/new + /:id/edit. */
 export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
-  const { canEdit } = useAuth();
+  const { canEdit, canSee } = useAuth();
   const editable = canEdit('shipments');
   const navigate = useNavigate();
   const { id } = useParams();
@@ -130,6 +131,17 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               editable={editable}
               onBack={() => navigate(PATHS.shipments)}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
+              // The order is opened as a detour from this vývoz, so it carries
+              // the way back with it — its own back arrow returns here rather
+              // than dropping the user on the orders list.
+              onOpenOrder={canSee('orders')
+                ? (orderId) => navigate(`${PATHS.orders}/${orderId}`, {
+                  state: {
+                    backTo: `${PATHS.shipments}/${id}`,
+                    backLabel: 'Zpět na vývoz',
+                  } satisfies DetailBackState,
+                })
+                : undefined}
             />
           )}
         </QueryBoundary>

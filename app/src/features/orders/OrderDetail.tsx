@@ -54,12 +54,16 @@ export function OrderDetail({
   order,
   editable,
   onBack,
+  backLabel = 'Zpět na objednávky',
   onEdit,
   onDelete,
 }: {
   order: OrderDto;
   editable: boolean;
   onBack: () => void;
+  /** Overridden when the order was opened from another screen and Back returns
+   *  there — see `DetailBackState`. */
+  backLabel?: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -114,7 +118,7 @@ export function OrderDetail({
     <Box>
       <DetailHeader
         onBack={onBack}
-        backLabel="Zpět na objednávky"
+        backLabel={backLabel}
         title={orderNumber(order.id)}
         titleMono
         lead={order.client?.name ?? '—'}

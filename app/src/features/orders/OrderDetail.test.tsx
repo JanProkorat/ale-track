@@ -30,13 +30,30 @@ function order(over: Partial<OrderDto> = {}): OrderDto {
   });
 }
 
-function renderDetail(o: OrderDto) {
+function renderDetail(o: OrderDto, backLabel?: string) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <OrderDetail order={o} editable onBack={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} />
+      <OrderDetail order={o} editable onBack={vi.fn()} backLabel={backLabel} onEdit={vi.fn()} onDelete={vi.fn()} />
     </MuiThemeProvider>,
   );
 }
+
+describe('OrderDetail — the back arrow', () => {
+  it('goes back to the orders list by default', () => {
+    renderDetail(order());
+
+    expect(screen.getByRole('button', { name: 'Zpět na objednávky' })).toBeInTheDocument();
+  });
+
+  // An order opened from a vývoz's order overview returns there, so the arrow
+  // has to say so — on a phone its label is the only cue for where Back leads.
+  it('names the caller screen when one was passed', () => {
+    renderDetail(order(), 'Zpět na vývoz');
+
+    expect(screen.getByRole('button', { name: 'Zpět na vývoz' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zpět na objednávky' })).not.toBeInTheDocument();
+  });
+});
 
 /** Titles of the page's cards, in DOM order. */
 function cardTitles(container: HTMLElement): string[] {

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, ListItemIcon, ListItemText,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, ListItemIcon, ListItemText,
   Menu, MenuItem, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
   useMediaQuery, type Theme,
@@ -801,7 +801,7 @@ function ProductLine({ row }: { row: NakladkaRow }) {
  * that reveals its product list on click. The item count that used to be the
  * sole subtitle moved to a trailing badge — see {@link OrdersOverviewCard} —
  * to make room for the destination address without losing it. */
-function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }: {
+function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, onOpen }: {
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
@@ -814,17 +814,38 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
   rows: NakladkaRow[];
   open: boolean;
   onToggle: () => void;
+  /** Opens the row's source order — makes the client name a link. Omitted for
+   *  rows with no order behind them (the dokládka pseudo-row) and for users who
+   *  cannot see the Objednávky module, who then get the plain name back. */
+  onOpen?: () => void;
 }) {
   return (
-    <Box sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
-      <ButtonBase
+    <Box data-testid="overview-row" sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
+      {/* The header expands the row, but it is a plain Box rather than a
+          ButtonBase: the client name inside it is its own control, and a
+          button (or link) nested in a button is invalid markup. Keyboard users
+          reach the expander through the chevron's IconButton; the surrounding
+          click target is a mouse convenience on top of it. */}
+      <Box
         onClick={onToggle}
-        sx={{ width: '100%', px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
+        sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
       >
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            {onOpen ? (
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={(e) => { e.stopPropagation(); onOpen(); }}
+                sx={{ fontWeight: 700, fontSize: 13.5, color: 'primary.dark', textAlign: 'left', minWidth: 0 }}
+              >
+                {title}
+              </Link>
+            ) : (
+              <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            )}
             {chip}
           </Stack>
           {addressLine && (
@@ -834,8 +855,15 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
         <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: 'text.disabled', flexShrink: 0 }}>
           {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
         </Typography>
-        <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
-      </ButtonBase>
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          aria-label={`${open ? 'Sbalit' : 'Rozbalit'} ${title}`}
+          sx={{ flexShrink: 0 }}
+        >
+          <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
+        </IconButton>
+      </Box>
       <Collapse in={open} unmountOnExit>
         <Box sx={{ pb: 0.75 }}>
           {rows.length > 0
@@ -850,7 +878,11 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
 /** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
  * row per client, expandable to its products), plus a stock-purchase row listing all
  * stock extras when present. Read-only; the loading workflow lives elsewhere. */
-function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopDto[]; extraRows: NakladkaRow[] }) {
+function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
+  stops: OutgoingShipmentStopDto[];
+  extraRows: NakladkaRow[];
+  onOpenOrder?: (orderId: string) => void;
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (key: string) => setExpanded((prev) => {
     const n = new Set(prev);
@@ -902,6 +934,7 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
                 rows={(stop.products ?? []).map(productRowFrom)}
                 open={expanded.has(key)}
                 onToggle={() => toggle(key)}
+                onOpen={onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined}
               />
             );
           })}
@@ -1029,11 +1062,15 @@ export function ShipmentDetail({
   editable,
   onBack,
   onEdit,
+  onOpenOrder,
 }: {
   shipment: OutgoingShipmentDetailDto;
   editable: boolean;
   onBack: () => void;
   onEdit: () => void;
+  /** Navigates to a stop's source order. Left out when the user has no access
+   *  to the Objednávky module, which hides the affordance entirely. */
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const updateShipment = useUpdateShipment();
@@ -1716,7 +1753,11 @@ export function ShipmentDetail({
             emptyText="Nic se z garáže nenakládá."
           />
 
-          <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
+          <OrdersOverviewCard
+            stops={stopsSorted.filter((st) => st.orderId != null)}
+            extraRows={extraRows}
+            onOpenOrder={onOpenOrder}
+          />
 
           <ReturnsCard stops={stopsSorted} />
 
