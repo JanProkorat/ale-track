@@ -5,9 +5,11 @@ using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
+using AleTrack.Common.Options;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Detail;
 
@@ -26,7 +28,9 @@ public sealed record GetOutgoingShipmentDetailRequest
 /// Endpoint responsible for retrieving details of an outgoing shipment.
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContext) : Endpoint<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto>
+/// <param name="companyOptions"></param>
+public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+    : Endpoint<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -52,6 +56,9 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
     /// <inheritdoc />
     public override async Task HandleAsync(GetOutgoingShipmentDetailRequest req, CancellationToken ct)
     {
+        var company = companyOptions.Value;
+        var companyAddress = company.FormatAddress();
+
         var outgoingShipment = await dbContext.OutgoingShipments
             .Where(os => os.PublicId == req.Id)
             .Select(os => new OutgoingShipmentDetailDto
@@ -61,6 +68,30 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                 State = os.State,
                 DeliveryDate = os.DeliveryDate,
                 VehicleId = os.Vehicle != null ? os.Vehicle.PublicId : null,
+                StartPointKind = os.StartPointKind,
+                StartBreweryId = os.StartBrewery != null ? os.StartBrewery.PublicId : null,
+                StartBreweryAddressKind = os.StartBreweryAddressKind,
+                StartPointName = os.StartBrewery != null ? os.StartBrewery.Name : company.Name,
+                // Resolves from whichever address the shipment actually chose — a brewery is
+                // not always loaded at its official address. Property access and a ternary
+                // only, no method calls, so this stays translatable.
+                StartPointAddress = os.StartBrewery != null
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.StreetName + " " + os.StartBrewery.ContactAddress.StreetNumber
+                            + ", " + os.StartBrewery.ContactAddress.Zip + " " + os.StartBrewery.ContactAddress.City
+                        : os.StartBrewery.OfficialAddress.StreetName + " " + os.StartBrewery.OfficialAddress.StreetNumber
+                            + ", " + os.StartBrewery.OfficialAddress.Zip + " " + os.StartBrewery.OfficialAddress.City)
+                    : companyAddress,
+                StartPointLatitude = os.StartBrewery != null
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.Latitude
+                        : os.StartBrewery.OfficialAddress.Latitude)
+                    : company.Latitude,
+                StartPointLongitude = os.StartBrewery != null
+                    ? (os.StartBreweryAddressKind == DeliveryAddressKind.Contact && os.StartBrewery.ContactAddress != null
+                        ? os.StartBrewery.ContactAddress.Longitude
+                        : os.StartBrewery.OfficialAddress.Longitude)
+                    : company.Longitude,
                 DriverIds = os.Drivers
                     .Select(d => d.Driver.PublicId)
                     .ToList(),

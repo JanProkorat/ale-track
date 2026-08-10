@@ -1,3 +1,5 @@
+using AleTrack.Common.Enums;
+
 namespace AleTrack.Features.OutgoingShipments.Utils;
 
 /// <summary>
@@ -10,6 +12,18 @@ public sealed record CustomStopDto
     /// Public ID of an existing custom stop. Null when creating a new one.
     /// </summary>
     public Guid? Id { get; set; }
+
+    /// <summary>
+    /// Whether this is a free-form waypoint or the company warehouse.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="OutgoingShipmentStopKind.Company"/> stop's label and coordinates
+    /// are authored by the server from configuration — whatever the client sends in
+    /// those fields is ignored, so a stale client cannot pin the warehouse elsewhere.
+    /// Defaults to <see cref="OutgoingShipmentStopKind.Custom"/> so an existing
+    /// payload keeps its meaning.
+    /// </remarks>
+    public OutgoingShipmentStopKind Kind { get; set; } = OutgoingShipmentStopKind.Custom;
 
     /// <summary>
     /// Position of the stop in the shipment route.

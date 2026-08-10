@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, Card, Stack, Typography } from '@mui/material';
 import { SegControl } from 'src/components/common/SegControl';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -21,6 +21,7 @@ import { type OrderListItemDto } from 'src/generated/api-client';
 import { useOrders, useOrder, useDeleteOrder } from 'src/hooks/useOrders';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
+import { detailBackState } from 'src/routes/backNav';
 import { OrderDetail } from './OrderDetail';
 import { sortOrdersNewestFirst } from './orderSort';
 import { OrderEditor } from './OrderEditor';
@@ -54,6 +55,7 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
   const editable = canEdit('orders');
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
 
   const list = useOrders();
@@ -82,6 +84,10 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
   }, [orders, filter, clientSearch]);
 
   const openCreate = () => navigate(`${PATHS.orders}/new`);
+
+  // Set when the detail was opened from another screen (a vývoz's order
+  // overview) — that screen, not the orders list, is where Back belongs.
+  const backTarget = detailBackState(location.state);
 
   const doCancel = async () => {
     if (!confirmCancelId) return;
@@ -228,7 +234,8 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
             <OrderDetail
               order={order}
               editable={editable}
-              onBack={() => navigate(PATHS.orders)}
+              onBack={() => navigate(backTarget?.backTo ?? PATHS.orders)}
+              backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.orders}/${id}/edit`)}
               onDelete={() => setConfirmCancelId(id)}
             />

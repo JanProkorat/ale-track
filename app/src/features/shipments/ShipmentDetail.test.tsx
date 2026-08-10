@@ -15,9 +15,11 @@ import {
   OutgoingShipmentOrderItemDto,
   OutgoingShipmentState,
   DeliveryAddressKind,
+  type IOutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
   ProductKind,
+  ShipmentStartPointKind,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -48,6 +50,15 @@ vi.mock('src/components/common/RouteMap', () => ({
 // callbacks; a fresh vi.fn() per hook call would hand each re-render a different spy.
 const exportShipmentMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
+// Mutable so the start-point test below can assert against a specific company
+// entry without every other test in this file having to know about it — the
+// happy-path default carries one, matching the reference data every shipment
+// screen actually gets.
+const startPointsData = vi.hoisted(() => ({
+  value: [
+    { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309 },
+  ] as { kind: string; name: string; address?: string; latitude?: number; longitude?: number }[],
+}));
 vi.mock('src/hooks/useShipments', () => ({
   useUpdateShipment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -55,6 +66,12 @@ vi.mock('src/hooks/useShipments', () => ({
   // has its own tests (PreparationStepsCard.test.tsx).
   useSetPreparationStep: () => ({ mutate: vi.fn(), isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
+  // String "kind" here, deliberately not the numeric enum member — the real
+  // backend serializes every enum as its string name (JsonStringEnumConverter,
+  // Program.cs), and the screen must resolve the company entry through that
+  // wire shape (see startPointKindName in src/lib/labels.ts), not by comparing
+  // against ShipmentStartPointKind.Company directly.
+  useShipmentStartPoints: () => ({ data: startPointsData.value, isPending: false, isError: false }),
 }));
 vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
 vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
@@ -163,13 +180,24 @@ function contactStop(): OutgoingShipmentStopDto {
   });
 }
 
-function renderDetail(stops: OutgoingShipmentStopDto[]) {
+/**
+ * Renders the detail screen either from a bare stop list (the shape every
+ * existing call site here uses) or a partial shipment override carrying its
+ * own `stops` — the Vykládka tests below need to vary `startPointName` too,
+ * which a stop array alone cannot express.
+ */
+function renderDetail(
+  input: OutgoingShipmentStopDto[] | (Partial<IOutgoingShipmentDetailDto> & { stops: OutgoingShipmentStopDto[] }),
+  onOpenOrder?: (orderId: string) => void,
+) {
+  const overrides: Partial<IOutgoingShipmentDetailDto> = Array.isArray(input) ? { stops: input } : input;
   const shipment = new OutgoingShipmentDetailDto({
-    id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [], stops,
+    id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+    ...overrides,
   });
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} onOpenOrder={onOpenOrder} />
     </MuiThemeProvider>,
   );
 }
@@ -304,7 +332,7 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('shows the place chip and its formatted address for a DeliveryPlace stop', () => {
     renderDetail([placeStop()]);
 
-    const row = screen.getByText('Hospoda U Netopýra').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Letní zahrádka')).toBeInTheDocument();
     expect(within(row).getByText('Nábřežní 3, 02763 Žitava')).toBeInTheDocument();
     // The address line must not repeat the place name — formatPlaceAddress
@@ -315,7 +343,7 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('keeps the plain address · kind line, and no chip, for a stop on the official address', () => {
     renderDetail([officialStop()]);
 
-    const row = screen.getByText('Restaurace B').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
@@ -327,9 +355,46 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
   it('shows the contact address · kind line, and no place chip, for a Contact stop', () => {
     renderDetail([contactStop()]);
 
-    const row = screen.getByText('Restaurace C').closest('button') as HTMLElement;
+    const row = screen.getByTestId('overview-row');
     expect(within(row).getByText('Dvůr 2a, 02763 Žitava · Kontaktní')).toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — opening a stop\'s order', () => {
+  it('opens the order from the client name, without expanding the row', () => {
+    const onOpenOrder = vi.fn();
+    renderDetail([officialStop()], onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurace B' }));
+
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+    // The name sits inside the row's click target, so following the link must
+    // not also toggle the products underneath it.
+    expect(screen.queryByText('Žádné položky.')).not.toBeInTheDocument();
+  });
+
+  it('still expands the row from the chevron and from the rest of the header', () => {
+    const onOpenOrder = vi.fn();
+    renderDetail([officialStop()], onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rozbalit Restaurace B' }));
+    expect(screen.getByText('Žádné položky.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava · Fakturační'));
+    expect(screen.getByRole('button', { name: 'Rozbalit Restaurace B' })).toBeInTheDocument();
+
+    expect(onOpenOrder).not.toHaveBeenCalled();
+  });
+
+  // The page omits the callback for a user who cannot see the Objednávky
+  // module; a link into a screen ProtectedRoute would bounce them off is worse
+  // than no link at all.
+  it('leaves the client name plain when the caller passes no handler', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.queryByRole('button', { name: 'Restaurace B' })).not.toBeInTheDocument();
+    expect(screen.getByText('Restaurace B')).toBeInTheDocument();
   });
 });
 
@@ -343,6 +408,50 @@ describe('ShipmentDetail — route map point resolution', () => {
     // The place's own coordinates (50.9, 14.8), not the official address's (50.897, 14.808).
     expect(stops[0].lat).toBe(50.9);
     expect(stops[0].lng).toBe(14.8);
+  });
+
+  // The company address used to be a fixed DEPOT read from an env var and
+  // hardcoded as both ends of every route. A run is loaded at a brewery and
+  // only comes home to the company at the end, so the map's start must come
+  // from the shipment's own resolved start point instead.
+  it('draws the route from the shipment start point, not a fixed depot', () => {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+      stops: [officialStop()],
+      startPointKind: ShipmentStartPointKind.Brewery,
+      startPointName: 'Pivovar Svijany',
+      startPointLatitude: 50.5,
+      startPointLongitude: 15.0,
+    });
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(routeMapProps).toHaveBeenCalled();
+    const { start } = routeMapProps.mock.calls.at(-1)![0];
+    expect(start).toEqual({ lat: 50.5, lng: 15.0, name: 'Pivovar Svijany', address: undefined });
+  });
+
+  it('falls back to the company rather than plotting an ungeocoded start point at (0, 0)', () => {
+    // A brewery whose address was never geocoded is a legal start point — the
+    // start-points endpoint deliberately lists it. Coercing its missing
+    // coordinates to zero drew the route from off the coast of Africa.
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+      stops: [officialStop()],
+      startPointKind: ShipmentStartPointKind.Brewery,
+      startPointName: 'Pivovar bez adresy',
+    });
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    const { start } = routeMapProps.mock.calls.at(-1)![0];
+    expect(start).toEqual({ lat: 50.841437, lng: 14.837309, name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou' });
   });
 });
 
@@ -680,5 +789,111 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
 
     await waitForElementToBeRemoved(() => screen.queryByText('Vozka 11°'), { timeout: 5000 });
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — the Vykládka tab', () => {
+  // Forces the stacked nakládka layout (data-testid="nakladka-row" only exists on that
+  // row, never on the desktop table's <TableRow>) regardless of the environment's default
+  // viewport. Without this, happy-dom's default 1024px window is above the `compact`
+  // breakpoint and the card measures 0 wide (no ResizeObserver), so the loading list
+  // renders as the plain table and never carries the testid at all — the "switching back
+  // to Vše restores the table" assertion below would then pass or fail for reasons that
+  // have nothing to do with the tab switch itself, which is exactly the kind of vacuous
+  // test this feature has already shipped four of. Same stub as the "nakládka when the
+  // columns do not fit" describe above (duplicated — its helpers are scoped to that block).
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe() {
+        this.callback([{ contentRect: { width: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** An order stop carrying a product, so the loading list has something to show —
+   * without this, aggRows is empty and the table renders its own empty text instead
+   * of any row at all, and the "restores the table" assertion could never observe a
+   * nakladka-row regardless of what the tab switch does. */
+  function unloadOrderStop(): OutgoingShipmentStopDto {
+    const stop = officialStop();
+    stop.order = 1;
+    stop.products = [new OutgoingShipmentOrderItemDto({
+      id: 'product-unload-1',
+      orderItemId: 'item-unload-1',
+      name: 'Ley 12',
+      kind: ProductKind.Bottle,
+      packageSize: 0.5,
+      platoDegree: 12,
+      quantity: 10,
+      weight: 5,
+      quantityFromInventory: 0,
+    })];
+    return stop;
+  }
+
+  /** A Custom stop unloads nothing of its own (unloadOrder.ts) — its `title` is the
+   * whole rendered text of its heading line, which is what makes an exact-match
+   * `getByText('Chrastava')` meaningful rather than a lucky substring hit inside a
+   * longer formatted address string. */
+  function chrastavaStop(): OutgoingShipmentStopDto {
+    return new OutgoingShipmentStopDto({
+      id: 'stop-chrastava',
+      kind: OutgoingShipmentStopKind.Custom,
+      order: 2,
+      label: 'Chrastava',
+      products: [],
+      returns: [],
+    });
+  }
+
+  const shipmentWithTwoStops = { stops: [unloadOrderStop(), chrastavaStop()] };
+
+  it('swaps the loading table for the stop-by-stop list', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.getByText('Chrastava')).toBeInTheDocument();
+    expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
+    // The tab exists to show what comes off at each stop — assert the payload
+    // itself, not just that the tab swapped. Without these, a dropped quantity,
+    // an omitted chip, or an inverted "has lines" check would leave every
+    // assertion above still green.
+    expect(screen.getByText('Ley 12')).toBeInTheDocument();
+    expect(screen.getByText('× 10')).toBeInTheDocument();
+    // The Custom stop (Chrastava) unloads nothing by construction — its own
+    // placeholder, not a second copy of the order stop's content.
+    expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
+  });
+
+  it('names the start point above the numbered stops', () => {
+    renderDetail({ ...shipmentWithTwoStops, startPointName: 'Pivovar Svijany' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.getByText(/Pivovar Svijany/)).toBeInTheDocument();
+    // Pins the "the start point is never itself a numbered stop" contract:
+    // unloadOrder() renumbers 1..N over the stops alone, so the two stops here
+    // must read 1 and 2, not 0 and 1 (which a bug prepending the start point
+    // into the numbered list would produce) and not 2 and 3 (appending it).
+    // Scoped to the seq badges themselves (data-testid) rather than a bare
+    // getByText('1') — a plain "1" or "2" also appears elsewhere on the
+    // screen (e.g. the progress pills' "n/n" counts), which a bare text match
+    // would collide with.
+    const seqBadges = screen.getAllByTestId('unload-stop-seq').map((el) => el.textContent);
+    expect(seqBadges).toEqual(['1', '2']);
+  });
+
+  it('keeps the invoice tabs reachable from the unload view', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vše' }));
+
+    expect(screen.getAllByTestId('nakladka-row').length).toBeGreaterThan(0);
   });
 });

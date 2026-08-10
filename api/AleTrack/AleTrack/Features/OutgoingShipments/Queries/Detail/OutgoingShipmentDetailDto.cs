@@ -32,6 +32,30 @@ public sealed record OutgoingShipmentDetailDto
     /// </summary>
     public DateTime? DeliveryDate { get; set; }
 
+    /// <summary>Which kind of place the run is loaded at.</summary>
+    public ShipmentStartPointKind StartPointKind { get; set; }
+
+    /// <summary>Public ID of the start brewery; null when the run starts at the company.</summary>
+    public Guid? StartBreweryId { get; set; }
+
+    /// <summary>
+    /// Which of the start brewery's addresses the run is loaded at. Meaningless when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Company"/>.
+    /// </summary>
+    public DeliveryAddressKind StartBreweryAddressKind { get; set; }
+
+    /// <summary>Resolved display name of the start point.</summary>
+    public string StartPointName { get; set; } = null!;
+
+    /// <summary>Resolved one-line address of the start point.</summary>
+    public string StartPointAddress { get; set; } = null!;
+
+    /// <summary>Latitude of the start point, when known.</summary>
+    public decimal? StartPointLatitude { get; set; }
+
+    /// <summary>Longitude of the start point, when known.</summary>
+    public decimal? StartPointLongitude { get; set; }
+
     /// <summary>
     /// ID of the vehicle assigned to the shipment
     /// </summary>

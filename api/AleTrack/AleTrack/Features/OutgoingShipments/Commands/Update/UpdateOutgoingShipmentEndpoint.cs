@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Update;
 
@@ -29,7 +31,9 @@ public sealed record UpdateOutgoingShipmentRequest
 /// Endpoint for updating an existing outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+    : Endpoint<UpdateOutgoingShipmentRequest>
 {
     /// <summary>
     /// States in which the OutgoingShipment has to have filled all data
@@ -99,6 +103,10 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         .Include(os => os.Stops)
             .ThenInclude(s => s.Items)
         .Include(os => os.PreparationSteps)
+        // Needed by ShipmentContentGuard, which compares the stored start brewery by
+        // public ID — without this every save of a brewery-started shipment would read
+        // the brewery as removed and be wrongly rejected as frozen content.
+        .Include(os => os.StartBrewery)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
@@ -139,16 +147,29 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
         var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
         var stockPurchases = await GetStockPurchasesAsync(req.Data.StockPurchases, outgoingShipment, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
+        outgoingShipment.StartPointKind = req.Data.StartPointKind;
+        outgoingShipment.StartBrewery = startBrewery;
+        outgoingShipment.StartBreweryId = startBrewery?.Id;
+        outgoingShipment.StartBreweryAddressKind = req.Data.StartBreweryAddressKind;
         outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
         outgoingShipment.StockPurchases = stockPurchases;
         outgoingShipment.PreparationSteps = BuildPreparationSteps(req.Data.PreparationSteps, outgoingShipment);
+
+        // Only while the content is still open: past Created the stock purchases cannot
+        // change either, so there is nothing to reconcile and mutating a frozen run's
+        // stops would be a bug.
+        if (ShipmentMutability.IsContentEditable(outgoingShipment.State))
+        {
+            CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
+        }
 
         if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
@@ -393,34 +414,44 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         return stops;
     }
 
-    private static List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
+    private List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
     {
+        var company = companyOptions.Value;
+
+        // Both non-order kinds live in this list; filtering to Custom alone would make
+        // every Company stop look new on each save and orphan the stored row.
         var existingById = outgoingShipment.Stops
-            .Where(s => s.Kind == OutgoingShipmentStopKind.Custom)
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom or OutgoingShipmentStopKind.Company)
             .ToDictionary(s => s.PublicId);
 
         var result = new List<OutgoingShipmentStop>();
         foreach (var dto in customStops)
         {
+            var isCompany = dto.Kind == OutgoingShipmentStopKind.Company;
+            var label = isCompany ? company.Name : dto.Label;
+            var latitude = isCompany ? company.Latitude : dto.Latitude;
+            var longitude = isCompany ? company.Longitude : dto.Longitude;
+
             if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
             {
+                existing.Kind = dto.Kind;
                 existing.Order = dto.Order;
-                existing.Label = dto.Label;
+                existing.Label = label;
                 existing.Note = dto.Note;
-                existing.Latitude = dto.Latitude;
-                existing.Longitude = dto.Longitude;
+                existing.Latitude = latitude;
+                existing.Longitude = longitude;
                 result.Add(existing);
             }
             else
             {
                 result.Add(new OutgoingShipmentStop
                 {
-                    Kind = OutgoingShipmentStopKind.Custom,
+                    Kind = dto.Kind,
                     Order = dto.Order,
-                    Label = dto.Label,
+                    Label = label,
                     Note = dto.Note,
-                    Latitude = dto.Latitude,
-                    Longitude = dto.Longitude
+                    Latitude = latitude,
+                    Longitude = longitude
                 });
             }
         }
@@ -525,6 +556,35 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
+    {
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
+        {
+            return null;
+        }
+
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
+
+        if (brewery is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
+        }
+
+        return brewery;
     }
 
     /// <summary>

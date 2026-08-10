@@ -14,6 +14,7 @@ import {
   StockPurchaseDto,
   PreparationStepDto,
   DeliveryAddressKind,
+  ShipmentStartPointKind,
 } from 'src/generated/api-client';
 
 export interface ShipmentDraft {
@@ -22,6 +23,21 @@ export interface ShipmentDraft {
   routeViaPoints: RoutePointDto[];
   stockPurchases: StockPurchaseDto[];
   preparationSteps: PreparationStepDto[];
+  /** Where the run starts from. Part of the draft — not just the editor's own
+   *  state — because the detail screen resends the whole shipment for reasons
+   *  that have nothing to do with the route (a nakládka tick, a state advance),
+   *  and the write DTO defaults an omitted value to Company: a brewery start
+   *  point would silently revert, and the frozen-content guard would then read
+   *  the resend as a route change and reject the state advance outright. */
+  startPointKind: ShipmentStartPointKind;
+  startBreweryId?: string;
+  /** Which of the brewery's two addresses was picked — omitted here just as
+   *  easily forgotten as `startPointKind`/`startBreweryId` were before this
+   *  field existed (see the commit that added those two), so it rides along
+   *  for exactly the same reason: an unrelated detail-screen save must not
+   *  silently move the run's origin from the brewery's contact address back
+   *  to its official one. */
+  startBreweryAddressKind?: DeliveryAddressKind;
 }
 
 export function draftFromShipment(shipment: OutgoingShipmentDetailDto): ShipmentDraft {
@@ -51,6 +67,12 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
     })),
     customStops: stops.filter((st) => st.orderId == null).map((st) => new CustomStopDto({
       id: st.id,
+      // Both non-order kinds travel in this list, and an omitted `kind` means
+      // Custom to the server — so leaving it off demotes a stored Company stop
+      // in place, after which the reconciler appends a fresh one (a duplicate
+      // per save) and the content freeze reports the demotion as a route change.
+      // The read side already carries the wire value; pass it straight through.
+      kind: st.kind,
       order: st.order ?? 0,
       label: st.label ?? '',
       note: st.note,
@@ -76,5 +98,11 @@ export function draftFromShipment(shipment: OutgoingShipmentDetailDto): Shipment
     preparationSteps: (shipment.preparationSteps ?? []).map((s) => new PreparationStepDto({
       id: s.id, order: s.order ?? 0, label: s.label ?? '',
     })),
+    // Company is the entity's own default, so falling back to it here only ever
+    // restates what the server already holds for a shipment that has no start
+    // point recorded.
+    startPointKind: shipment.startPointKind ?? ShipmentStartPointKind.Company,
+    startBreweryId: shipment.startBreweryId,
+    startBreweryAddressKind: shipment.startBreweryAddressKind,
   };
 }

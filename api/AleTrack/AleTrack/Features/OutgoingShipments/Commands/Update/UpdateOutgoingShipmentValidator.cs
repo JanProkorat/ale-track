@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using FastEndpoints;
@@ -42,7 +43,13 @@ public sealed class UpdateOutgoingShipmentDtoValidator : AbstractValidator<Updat
         RuleFor(dto => dto.ClientOrderShipments)
             .NotEmpty()
             .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
-        
+
+        // A route can start at the company at most once — a second one would be a
+        // second warehouse stop with no meaning on the route.
+        RuleFor(dto => dto.CustomStops)
+            .Must(stops => stops.Count(s => s.Kind == OutgoingShipmentStopKind.Company) <= 1)
+            .WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+
         RuleFor(dto => dto.State)
             .NotNull()
             .WithErrorCode(ErrorCodes.ValidationNotNullError);
@@ -59,5 +66,29 @@ public sealed class UpdateOutgoingShipmentDtoValidator : AbstractValidator<Updat
 
         RuleForEach(dto => dto.PreparationSteps)
             .SetValidator(new PreparationStepDtoValidator());
+
+        RuleFor(dto => dto.StartPointKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        RuleFor(dto => dto.StartBreweryId)
+            .NotNull()
+            .When(dto => dto.StartPointKind == ShipmentStartPointKind.Brewery)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
+        RuleFor(dto => dto.StartBreweryId)
+            .Null()
+            .When(dto => dto.StartPointKind == ShipmentStartPointKind.Company)
+            .WithErrorCode(ErrorCodes.ValidationNotNullError);
+
+        RuleFor(dto => dto.StartBreweryAddressKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        // A brewery has no delivery-place navigation — only its official and
+        // contact addresses can ever be a start point.
+        RuleFor(dto => dto.StartBreweryAddressKind)
+            .NotEqual(DeliveryAddressKind.DeliveryPlace)
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
     }
 }

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Infrastructure.Converters;
 using AleTrack.Infrastructure.Persistence;
@@ -43,7 +44,8 @@ try
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
         options.SerializerOptions.Converters.Add(new UtcDateTimeConverter());
     });
-    
+    services.Configure<CompanyOptions>(configuration.GetSection(CompanyOptions.SectionName));
+
     services.AddEndpointsApiExplorer();
     
     services.AddMemoryCache();

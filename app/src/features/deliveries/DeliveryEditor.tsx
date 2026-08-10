@@ -20,10 +20,10 @@ import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox } from 'src/components/common/Combobox';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { apiErrorMessage } from 'src/api/errors';
 import { plural, fmtLiters, deliveryNumber } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   ProductKind,
   CreateProductsDeliveryDto,
@@ -36,12 +36,13 @@ import {
   DeliveryStopKind,
   type BreweryProductListItemDto,
 } from 'src/generated/api-client';
-import { CustomStopDialog } from 'src/components/common/CustomStopDialog';
+import { CustomStopDialog, type CustomStopResult } from 'src/components/common/CustomStopDialog';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useDelivery, useCreateDelivery, useUpdateDelivery } from 'src/hooks/useDeliveries';
+import { useShipmentStartPoints } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 
@@ -256,6 +257,7 @@ export function DeliveryEditor({
   const vehiclesQuery = useVehicles();
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const startPoints = useShipmentStartPoints();
 
   const [deliveryDate, setDeliveryDate] = useState<Dayjs | null>(mode === 'create' ? dayjs().add(1, 'day') : null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -323,7 +325,11 @@ export function DeliveryEditor({
     setStops((prev) => [...prev, { key: newKey(), kind: 'brewery', breweryId, note: '', items: [] }]);
     setPickBrewery(null);
   };
-  const addCustomStop = (stop: { label: string; note?: string; lat: number; lng: number }) => {
+  const addCustomStop = (stop: CustomStopResult) => {
+    // showCompanyOption={false} below hides the company toggle entirely, so
+    // `stop` is always the custom variant in practice — narrowed here only to
+    // satisfy CustomStopResult's type, not as a domain-specific guard.
+    if (stop.kind !== 'custom') return;
     setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
     setCustomStopOpen(false);
   };
@@ -346,6 +352,19 @@ export function DeliveryEditor({
     const b = breweryById.get(s.breweryId);
     return { lat: b?.latitude ?? undefined, lng: b?.longitude ?? undefined, label: b?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
   }), [stops, breweryById]);
+
+  // Same reasoning as DeliveryDetail: a dovoz starts and ends at the company,
+  // so both RouteMap endpoints are this one point. While that reference-data
+  // query hasn't resolved, prefer a stop's own real coordinates (a brewery
+  // already picked for this delivery) over a synthetic (0, 0) — only a
+  // brand-new, stop-less delivery with the query still pending has nothing
+  // real to fall back to; RouteMap is skipped entirely then (see the render
+  // below) rather than draw a route anchored at null island.
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const firstLocatedStop = routeStops.find((s) => s.lat != null && s.lng != null);
+  const companyPoint: RouteEndpoint | undefined = company
+    ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
+    : (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
 
   const busy = createDelivery.isPending || updateDelivery.isPending;
 
@@ -446,7 +465,18 @@ export function DeliveryEditor({
                 <Chip size="small" label="sklad → pivovary → sklad" />
               </Stack>
               <Box sx={{ p: 2 }}>
-                <RouteMap stops={routeStops} height={280} />
+                {companyPoint ? (
+                  <RouteMap stops={routeStops} start={companyPoint} end={companyPoint} height={280} />
+                ) : (
+                  <Box
+                    sx={{
+                      height: 280, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+                      bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+                    }}
+                  >
+                    <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+                  </Box>
+                )}
               </Box>
             </Card>
           )}
@@ -567,7 +597,11 @@ export function DeliveryEditor({
         </Stack>
       </Box>
 
-      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} />
+      {/* Deliveries have no company-stop concept of their own (a delivery already
+          always ends at the company) — showCompanyOption={false} hides that toggle
+          entirely, leaving this dialog exactly as it was before that option existed,
+          rather than disabling it with a tooltip that would be untrue here. */}
+      <CustomStopDialog open={customStopOpen} onClose={() => setCustomStopOpen(false)} onAdd={addCustomStop} showCompanyOption={false} />
 
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>

@@ -39,6 +39,7 @@ export const qk = {
   orders: resource('orders'),
   shipments: resource('shipments'),
   shipmentOrders: ['shipments', 'available-orders'] as const,
+  shipmentStartPoints: ['shipments', 'start-points'] as const,
   shipmentInvoices: (shipmentId: string) => ['shipments', shipmentId, 'invoices'] as const,
   deliveries: resource('deliveries'),
   deliveryStates: ['deliveries', 'states'] as const,

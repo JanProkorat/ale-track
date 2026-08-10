@@ -9,5 +9,8 @@ public enum OutgoingShipmentStopKind
     Order = 0,
 
     /// <summary>A custom waypoint (no order) — a free-form point on the route.</summary>
-    Custom = 1
+    Custom = 1,
+
+    /// <summary>The company's own warehouse — where goods bought for stock come off.</summary>
+    Company = 2
 }

@@ -197,3 +197,17 @@ export function useAvailableOrders(shipmentId: string | undefined) {
     queryFn: ({ signal }) => ds.getOrdersListForOutgoingShipmentsEndpoint(shipmentId ?? null, {}, signal),
   });
 }
+
+/** Places a run may be loaded at: the company warehouse, then every brewery.
+ *
+ * Reference data that changes only when a brewery is added or its address is
+ * corrected, so it is cached far longer than the 30s client default — every
+ * shipment screen mounts it. */
+export function useShipmentStartPoints() {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.shipmentStartPoints,
+    queryFn: ({ signal }) => ds.getShipmentStartPointsEndpoint(signal),
+    staleTime: 30 * 60 * 1000,
+  });
+}

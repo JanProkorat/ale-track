@@ -1,9 +1,11 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
@@ -18,8 +20,11 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// delivered.
 /// </remarks>
 /// <param name="dbContext"></param>
+/// <param name="companyOptions"></param>
 [BinaryResponse(ExportOutgoingShipmentWordEndpoint.DocumentContentType)]
-public sealed class ExportOutgoingShipmentWordEndpoint(AleTrackDbContext dbContext)
+public sealed class ExportOutgoingShipmentWordEndpoint(
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions)
     : Endpoint<ExportOutgoingShipmentRequest>
 {
     /// <summary>
@@ -55,7 +60,7 @@ public sealed class ExportOutgoingShipmentWordEndpoint(AleTrackDbContext dbConte
     /// <inheritdoc />
     public override async Task HandleAsync(ExportOutgoingShipmentRequest req, CancellationToken ct)
     {
-        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, ct);
+        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, companyOptions.Value, ct);
         if (model is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 

@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Create;
@@ -7,6 +8,7 @@ using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
@@ -59,7 +61,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         dbContext.Verify(e => e.OutgoingShipments.Add(It.Is<OutgoingShipment>(os =>
@@ -108,7 +110,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -148,7 +150,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -187,7 +189,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);

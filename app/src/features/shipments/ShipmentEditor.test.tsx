@@ -9,7 +9,7 @@
 // selected, as a disabled "(smazáno)" option, rather than silently falling
 // back to no selection.
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -19,14 +19,22 @@ import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
   OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
-  OutgoingShipmentPreparationStepDto,
+  OutgoingShipmentPreparationStepDto, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
 
 // Pulls in react-leaflet, which doesn't run under happy-dom — same reasoning
-// as DeliveryPlacesPanel.test.tsx stubbing AddressMapPicker.
-vi.mock('src/components/common/RouteMap', () => ({ RouteMap: () => <div data-testid="route-map-stub" /> }));
+// as DeliveryPlacesPanel.test.tsx stubbing AddressMapPicker. Records its props
+// so the route's two endpoints can be asserted: which point the run leaves from
+// and which it comes home to are decisions ShipmentEditor makes, not RouteMap.
+const routeMapProps = vi.fn();
+vi.mock('src/components/common/RouteMap', () => ({
+  RouteMap: (props: { start: { lat: number; lng: number; name: string }; end: { lat: number; lng: number; name: string } }) => {
+    routeMapProps(props);
+    return <div data-testid="route-map-stub" />;
+  },
+}));
 
 // Stubbed rather than exercised for real: its own create/edit/validate
 // behaviour is covered by DeliveryPlaceDialog.test.tsx. Here we only need to
@@ -63,6 +71,23 @@ let availableOrdersError = false;
 let vehiclesLoading = false;
 let driversLoading = false;
 let clientsLoading = false;
+let startPointsPending = false;
+let startPointsError = false;
+
+interface StartPointFixture { kind: string; breweryId?: string; addressKind?: string | null; name: string; address?: string; latitude?: number; longitude?: number }
+// The company entry's `addressKind` is explicitly `null` here, not omitted — that is
+// the real wire shape (GetShipmentStartPointsEndpoint assigns `AddressKind = null` with
+// no DefaultIgnoreCondition to drop it), and a fixture that instead omits the key
+// (producing `undefined`, which JSON.stringify drops harmlessly) cannot reproduce the
+// 400-on-save bug the company-pick tests below guard against.
+const DEFAULT_START_POINTS: StartPointFixture[] = [
+  { kind: 'Company', name: 'Sklad AleTrack', address: 'Turistická 211, 46334 Hrádek nad Nisou', latitude: 50.841437, longitude: 14.837309, addressKind: null },
+  { kind: 'Brewery', breweryId: 'brewery-svijany', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
+];
+// Mutable (not a literal) so the route-origin regression test below can point
+// the company entry at coordinates chosen to make nearest-neighbour ordering
+// unambiguous — see "ShipmentEditor — route optimizer origin".
+let startPoints: StartPointFixture[] = DEFAULT_START_POINTS;
 
 vi.mock('src/hooks/useShipments', () => ({
   useShipment: () => ({ data: shipmentResponse, isLoading: shipmentLoading, isError: shipmentError }),
@@ -70,6 +95,10 @@ vi.mock('src/hooks/useShipments', () => ({
   useCreateShipment: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateShipment: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // The optimizer's origin and every stop's fallback coordinates now come from
+  // the company start-point entry rather than the old fixed DEPOT — RouteMap
+  // itself is stubbed above, so only the shape of the data matters here.
+  useShipmentStartPoints: () => ({ data: startPoints, isPending: startPointsPending, isError: startPointsError }),
 }));
 
 vi.mock('src/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [], isLoading: vehiclesLoading }) }));
@@ -92,7 +121,15 @@ function officialAddress(): AddressDto {
   return new AddressDto({ streetName: 'Náměstí', streetNumber: '14', city: 'Žitava', zip: '02763', country: Country.Czechia, latitude: 50.897, longitude: 14.808 });
 }
 
-function renderEditor(mode: 'edit' | 'create' = 'edit') {
+/** `state` overrides the mocked shipment's loaded state before rendering — used
+ * to exercise the structure-locked (e.g. Loaded) editor without a separate
+ * fixture per test. Only meaningful in edit mode, where a `shipmentResponse`
+ * already exists by the time this runs. */
+function renderEditor(opts: { mode?: 'edit' | 'create'; state?: OutgoingShipmentState } = {}) {
+  const mode = opts.mode ?? 'edit';
+  if (opts.state !== undefined && shipmentResponse) {
+    shipmentResponse.state = opts.state;
+  }
   const router = createMemoryRouter([
     {
       path: '/',
@@ -109,8 +146,11 @@ function renderEditor(mode: 'edit' | 'create' = 'edit') {
         </MuiThemeProvider>
       ),
     },
+    // Only reachable via `router.navigate` from a test exercising the unsaved-changes
+    // guard (`useBlocker` needs a *different* route to block navigation towards).
+    { path: '/elsewhere', element: <div>Elsewhere</div> },
   ]);
-  return render(<RouterProvider router={router} />);
+  return { ...render(<RouterProvider router={router} />), router };
 }
 
 /** The "Pořadí zastávek" card's stop rows are the only <Select>s it renders,
@@ -131,6 +171,7 @@ beforeEach(() => {
   updateMutateAsync.mockResolvedValue(undefined);
   createMutateAsync.mockResolvedValue('new-shipment-id');
   deliveryPlaceDialogProps.mockClear();
+  routeMapProps.mockClear();
   shipmentLoading = false;
   shipmentError = false;
   availableOrdersLoading = false;
@@ -138,6 +179,9 @@ beforeEach(() => {
   vehiclesLoading = false;
   driversLoading = false;
   clientsLoading = false;
+  startPointsPending = false;
+  startPointsError = false;
+  startPoints = DEFAULT_START_POINTS;
   availableOrders = [
     new OutgoingShipmentOrderDto({
       id: 'order-1',
@@ -349,6 +393,257 @@ describe('ShipmentEditor — new stop inherits the order\'s address', () => {
   });
 });
 
+describe('ShipmentEditor — route optimizer origin', () => {
+  it('optimizes stop order from the company start point, not a stop\'s own coordinates', () => {
+    // The mocked company entry sits right next to a second order (Brno) and
+    // ~200 km from the first, already-loaded one (Žitava, the default
+    // `officialAddress()` fixture). Nearest-neighbour from the *company*
+    // point visits the close one first — even though it was added to the
+    // route second — which only happens if the optimizer's origin really is
+    // the company coordinates. If that origin ever regressed to a stop's own
+    // location (the shape of bug the start/end fallback cascade in
+    // ShipmentEditor.tsx exists to avoid: the first-loaded stop is trivially
+    // "nearest to itself"), the order would never flip and this assertion
+    // would fail.
+    startPoints = [
+      { kind: 'Company', name: 'Sklad AleTrack', latitude: 49.2, longitude: 16.6 },
+    ];
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-2',
+        clientName: 'Penzion Morava',
+        clientOfficialAddress: new AddressDto({
+          streetName: 'Zelný trh', streetNumber: '1', city: 'Brno', zip: '60200', country: Country.Czechia,
+          latitude: 49.25, longitude: 16.65,
+        }),
+        items: [],
+      }),
+    ];
+    renderEditor();
+    fireEvent.click(screen.getByText('Penzion Morava'));
+
+    const card = screen.getByText('Pořadí zastávek').closest('.MuiCard-root') as HTMLElement;
+    const stopNames = () => within(card).getAllByText(/^(Hospoda U Netopýra|Penzion Morava)$/).map((el) => el.textContent);
+
+    // Sanity check before optimizing: the loaded stop first, the just-added one second.
+    expect(stopNames()).toEqual(['Hospoda U Netopýra', 'Penzion Morava']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Optimalizovat trasu' }));
+
+    expect(stopNames()).toEqual(['Penzion Morava', 'Hospoda U Netopýra']);
+  });
+});
+
+describe('ShipmentEditor — start-point picker', () => {
+  it('sends the picked start point in the save payload', async () => {
+    // The brief's original assertion here checked that "Uložit" stayed enabled,
+    // but that button is only ever gated on `busy` (ShipmentEditor.tsx's
+    // `disabled={busy}`), never on the dirty flag — it is enabled from the very
+    // first render, so that check would still pass even if `startPoint` were
+    // dropped from `serializeShipment` entirely. What this test actually needs
+    // to guard against is a picked start point silently failing to reach the
+    // saved shipment, so it asserts the save payload directly instead.
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            // The fixture's `kind` is the wire-format string ('Brewery'), not the
+            // numeric ShipmentStartPointKind member — StartPointPicker passes the
+            // picked entry's `kind` straight through with no re-typing, exactly as
+            // the real backend's data flows (see optionKey's own comment on why a
+            // raw `===` against the numeric enum is unsafe). Asserting the numeric
+            // enum value here would fail against what the app, and the real
+            // backend round-trip, actually carries.
+            startPointKind: 'Brewery',
+            startBreweryId: 'brewery-svijany',
+          }),
+        }),
+      );
+    });
+  });
+
+  it('sends the picked address kind when a brewery contributes two entries', async () => {
+    // Svijany now lists two entries — its official seat and a separate contact
+    // address it actually loads from — distinguishable in the <Select> only by the
+    // "— Kontaktní" suffix and the address caption (StartPointPicker.test.tsx covers
+    // the suffix itself). Picking the second one must carry `addressKind` all the way
+    // to the save payload: without it, `breweryId` alone cannot tell the two apart, and
+    // a resave would silently default back to the official address.
+    startPoints = [
+      DEFAULT_START_POINTS[0],
+      { kind: 'Brewery', breweryId: 'brewery-svijany', addressKind: 'Official', name: 'Pivovar Svijany', address: 'Svijany 1, Svijany', latitude: 50.6, longitude: 15.15 },
+      { kind: 'Brewery', breweryId: 'brewery-svijany', addressKind: 'Contact', name: 'Pivovar Svijany', address: 'Skladová 9, Turnov', latitude: 50.59, longitude: 15.16 },
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText((_, el) => el?.textContent?.startsWith('Pivovar Svijany — Kontaktní') ?? false));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            // Wire-format string, as the DTO carries with no coercion of its own — a
+            // prior round of this feature confirmed the DTO does not normalize this.
+            startBreweryId: 'brewery-svijany',
+            startBreweryAddressKind: 'Contact',
+          }),
+        }),
+      );
+    });
+  });
+
+  it('does not 400 when picking the company as the start point', async () => {
+    // GetShipmentStartPointsEndpoint sets AddressKind = null explicitly on the company
+    // entry (Program.cs's JsonOptions has no DefaultIgnoreCondition to drop it), so
+    // `picked.addressKind` is a real `null` at runtime, not `undefined`, even though
+    // the fixture's TS type only admits the latter — DEFAULT_START_POINTS[0] models
+    // that shape explicitly. Both write DTOs declare `StartBreweryAddressKind` as a
+    // non-nullable enum: sending the literal `null` (JSON.stringify keeps it — only
+    // `undefined` is dropped) fails model binding with a generic 400. This is the
+    // regression a bare `picked.addressKind` (no coalesce) reintroduces.
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Sklad AleTrack'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalled();
+    });
+
+    const payload = updateMutateAsync.mock.calls.at(-1)![0] as { data: { startBreweryAddressKind?: unknown } };
+    expect(payload.data.startBreweryAddressKind).not.toBeNull();
+  });
+
+  it('does not flag the form dirty after picking a brewery and then picking the company back', async () => {
+    // The loaded baseline's addressKind always arrives as a concrete wire string
+    // ('Official') — the detail DTO's field is non-nullable, so even a company-start
+    // shipment carries a real (if meaningless) value. Picking a brewery then picking
+    // the company back must collapse back to that exact same baseline representation,
+    // or the unsaved-changes guard fires on a run nothing actually changed about.
+    const { router } = renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Sklad AleTrack'));
+
+    await act(async () => {
+      await router.navigate('/elsewhere');
+    });
+
+    expect(screen.queryByText('Neuložené změny')).not.toBeInTheDocument();
+  });
+
+  it('locks the start point once the run is loaded', () => {
+    renderEditor({ mode: 'edit', state: OutgoingShipmentState.Loaded });
+
+    expect(screen.getByLabelText('Výchozí bod')).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('ShipmentEditor — the route\'s two ends', () => {
+  /** The props of the most recent RouteMap render — the editor re-renders on
+   *  every pick, and only the latest state is the one on screen. */
+  const lastRouteMap = () => routeMapProps.mock.calls.at(-1)?.[0];
+
+  it('starts at the picked brewery but still comes home to the company', async () => {
+    // The run does not end where it began. Passing the picked start point as
+    // `end` too would draw a loop back to the brewery and estimate the wrong
+    // distance for the leg that actually matters — the drive home.
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar Svijany'));
+
+    await waitFor(() => {
+      expect(lastRouteMap().start).toMatchObject({ name: 'Pivovar Svijany', lat: 50.6, lng: 15.15 });
+    });
+    expect(lastRouteMap().end).toMatchObject({ name: 'Sklad AleTrack', lat: 50.841437, lng: 14.837309 });
+  });
+
+  it('does not plot a start point that was never geocoded', async () => {
+    // The start-points endpoint deliberately lists breweries with no coordinates.
+    // Coercing those nulls to zero would anchor the route — and the optimizer's
+    // origin — off the coast of Africa; the cascade must fall through instead.
+    startPoints = [
+      DEFAULT_START_POINTS[0],
+      { kind: 'Brewery', breweryId: 'brewery-nowhere', name: 'Pivovar bez adresy' },
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.mouseDown(screen.getByLabelText('Výchozí bod'));
+    fireEvent.click(await screen.findByText('Pivovar bez adresy'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Výchozí bod')).toHaveTextContent('Pivovar bez adresy');
+    });
+    // Falls through to the first located stop (the loaded order's own address),
+    // never to (0, 0).
+    expect(lastRouteMap().start).not.toMatchObject({ lat: 0, lng: 0 });
+    expect(lastRouteMap().start.name).not.toBe('Pivovar bez adresy');
+  });
+});
+
+describe('ShipmentEditor — company stop round-trip', () => {
+  it('keeps a loaded Company stop as Company on save, rather than demoting it to Custom', async () => {
+    // The wire-format string ('Company'), as the real backend actually sends
+    // this enum — not the numeric OutgoingShipmentStopKind member. The
+    // edit-mode load effect classifies a loaded stop with no orderId via
+    // `stopKindName(st.kind) === 'Company'` (ShipmentEditor.tsx); before that
+    // check existed, any such stop was hard-defaulted to 'custom'. Saving
+    // straight back out (no edits at all) must still send this stop as
+    // Company — if the detection ever regressed to always 'custom', the save
+    // payload's customStops would carry this stop with no `kind: Company` at
+    // all, and this assertion would fail.
+    shipmentResponse!.stops = [
+      ...(shipmentResponse!.stops ?? []),
+      new OutgoingShipmentStopDto({
+        id: 'company-stop-1',
+        order: 2,
+        kind: 'Company' as unknown as OutgoingShipmentStopKind,
+        label: 'Sklad AleTrack',
+        latitude: 50.897,
+        longitude: 14.807,
+      }),
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'ship-1',
+          data: expect.objectContaining({
+            customStops: expect.arrayContaining([
+              expect.objectContaining({ id: 'company-stop-1', kind: OutgoingShipmentStopKind.Company }),
+            ]),
+          }),
+        }),
+      );
+    });
+  });
+});
+
 describe('ShipmentEditor — non-happy query states', () => {
   it('does not crash while the available-orders query is still loading, falling back to a placeholder client name', () => {
     // orderById is built purely from useAvailableOrders' data — while it's
@@ -387,7 +682,7 @@ describe('ShipmentEditor — checklist', () => {
   it('prefills the standard pre-departure list on a new shipment', () => {
     // The list is the same before every departure, so a new vývoz arrives with it filled in —
     // and every row stays editable from there.
-    renderEditor('create');
+    renderEditor({ mode: 'create' });
 
     expect((screen.getByLabelText('Položka 1') as HTMLInputElement).value).toBe('Rudlík');
     expect((screen.getByLabelText('Položka 11') as HTMLInputElement).value).toBe('Věci z předchozího vývozu');

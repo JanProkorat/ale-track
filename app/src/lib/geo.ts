@@ -9,29 +9,6 @@ export interface LatLng {
   lng: number;
 }
 
-/** The company depot — every outgoing shipment starts and ends here. Read from
- * the `VITE_COMPANY_ADDRESS` env JSON (supports both `latitude/longitude` and
- * `lat/lng` shapes); falls back to a Žitava-area default if unset/malformed. */
-export const DEPOT: LatLng & { name: string; address?: string } = readDepot();
-
-function readDepot(): LatLng & { name: string; address?: string } {
-  const fallback = { lat: 50.897, lng: 14.807, name: 'Sklad' };
-  const raw = import.meta.env.VITE_COMPANY_ADDRESS;
-  if (!raw) return fallback;
-  try {
-    const c = JSON.parse(raw) as Record<string, unknown>;
-    const lat = Number(c.latitude ?? c.lat);
-    const lng = Number(c.longitude ?? c.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return fallback;
-    const street = [c.streetName, c.streetNumber].filter(Boolean).join(' ').trim();
-    const address = [street, c.city].filter(Boolean).join(', ') || undefined;
-    const name = (c.label as string) || (c.city ? `Sklad — ${c.city}` : 'Sklad');
-    return { lat, lng, name, address };
-  } catch {
-    return fallback;
-  }
-}
-
 /** A postal address to geocode. `country` is the English country name or ISO
  * code Nominatim understands (e.g. "Czechia", "Germany", "cz"). */
 export interface GeocodeAddress {

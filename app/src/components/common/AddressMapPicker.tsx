@@ -3,12 +3,17 @@ import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Autocomplete, Box, CircularProgress, TextField } from '@mui/material';
-import { DEPOT, searchAddresses, type AddressHit, type LatLng } from 'src/lib/geo';
+import { searchAddresses, type AddressHit, type LatLng } from 'src/lib/geo';
 
 /** Min. characters before an address search fires, and the debounce after the
  * last keystroke — keeps us within Nominatim's ~1 request/second guidance. */
 const MIN_QUERY = 3;
 const DEBOUNCE_MS = 350;
+
+/** Where the map centers before a point is picked — a Žitava-area default, the
+ * business's home region. Only ever the initial view; it has no bearing on
+ * the picked coordinates themselves. */
+const DEFAULT_CENTER: LatLng = { lat: 50.897, lng: 14.807 };
 
 function pinIcon(): L.DivIcon {
   const svg = `
@@ -139,7 +144,7 @@ export function AddressMapPicker({
         )}
       />
       <Box sx={{ borderRadius: 2, overflow: 'hidden', border: 1, borderColor: 'divider', mb: 2, '& .leaflet-container': { height, width: '100%' } }}>
-        <MapContainer center={[DEPOT.lat, DEPOT.lng]} zoom={10} attributionControl={false} style={{ height, width: '100%' }}>
+        <MapContainer center={[DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]} zoom={10} attributionControl={false} style={{ height, width: '100%' }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <ClickCapture onPick={pickOnMap} />
           {searchedPoint && <Recenter lat={searchedPoint.lat} lng={searchedPoint.lng} />}

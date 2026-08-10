@@ -4,6 +4,7 @@
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
+  ShipmentStartPointKind, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
 
 export const L = {
@@ -209,6 +210,23 @@ export function addrKindValue(k?: DeliveryAddressKind | string | number): Delive
 export function addrKindLabel(k?: DeliveryAddressKind | string | number): string | undefined {
   const name = addrKindName(k);
   return name ? (L.addrKind[name] ?? name) : undefined;
+}
+
+/** The ShipmentStartPointKind enum's member name ("Company"/"Brewery"),
+ * resolved from either wire representation — used to pick the company entry
+ * out of `useShipmentStartPoints()` without comparing directly against the
+ * numeric enum member, which never matches the backend's string-serialized
+ * wire form (the same trap `addrKindName` above exists to avoid). */
+export function startPointKindName(k?: ShipmentStartPointKind | string | number): string | undefined {
+  return enumName(ShipmentStartPointKind as unknown as Record<string, string | number>, k);
+}
+
+/** The OutgoingShipmentStopKind enum's member name ("Order"/"Custom"/"Company"),
+ * resolved from either wire representation — same trap as `startPointKindName`
+ * above: a loaded stop's `kind` never `===` the numeric enum member against
+ * live (string-serialized) data. */
+export function stopKindName(k?: OutgoingShipmentStopKind | string | number): string | undefined {
+  return enumName(OutgoingShipmentStopKind as unknown as Record<string, string | number>, k);
 }
 
 export const KIND_ORDER: Record<string, number> = {

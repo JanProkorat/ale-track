@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
@@ -7,6 +8,7 @@ using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
@@ -69,7 +71,7 @@ public sealed class UpdateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         
         // Manually set up callback to simulate EF Core behavior of setting VehicleId when Vehicle is set
         dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -139,7 +141,7 @@ public sealed class UpdateOutgoingShipmentTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -204,7 +206,7 @@ public sealed class UpdateOutgoingShipmentTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -225,7 +227,7 @@ public sealed class UpdateOutgoingShipmentTests
             Data = OutgoingShipmentBuilder.BuildUpdateDto()
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -273,7 +275,7 @@ public sealed class UpdateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -321,7 +323,7 @@ public sealed class UpdateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -368,7 +370,7 @@ public sealed class UpdateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -460,7 +462,7 @@ public sealed class UpdateOutgoingShipmentTests
         var data = EchoDto(f, OutgoingShipmentState.Loaded);
         data.ClientOrderShipments.Clear(); // drop the order off a packed truck
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);
@@ -482,7 +484,7 @@ public sealed class UpdateOutgoingShipmentTests
         var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
         var db = MockForFreeze(f);
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -506,7 +508,7 @@ public sealed class UpdateOutgoingShipmentTests
         f.Order.State = OrderState.Finished;
         var db = MockForFreeze(f);
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -529,7 +531,7 @@ public sealed class UpdateOutgoingShipmentTests
         f.Order.State = OrderState.Finished;
         var db = MockForFreeze(f);
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -550,7 +552,7 @@ public sealed class UpdateOutgoingShipmentTests
         var f = BuildFreezeFixture(OutgoingShipmentState.Created);
         var db = MockForFreeze(f);
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -573,7 +575,7 @@ public sealed class UpdateOutgoingShipmentTests
         var f = BuildFreezeFixture(OutgoingShipmentState.Cancelled);
         var db = MockForFreeze(f);
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -601,7 +603,7 @@ public sealed class UpdateOutgoingShipmentTests
         data.DeliveryDate = newDate;
         data.DriverIds = [f.Driver.PublicId, f.SpareDriver.PublicId];
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(
             new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);
@@ -630,7 +632,7 @@ public sealed class UpdateOutgoingShipmentTests
         ];
 
         var db = MockForFreeze(f);
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -670,7 +672,7 @@ public sealed class UpdateOutgoingShipmentTests
         stop.ClientRegion = Region.ZittauCity;
 
         var db = MockForFreeze(f);
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -702,7 +704,7 @@ public sealed class UpdateOutgoingShipmentTests
         stop.Items = [existing];
 
         var db = MockForFreeze(f);
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
@@ -730,7 +732,7 @@ public sealed class UpdateOutgoingShipmentTests
         var data = EchoDto(f, OutgoingShipmentState.Loaded);
         data.VehicleId = otherVehicle.PublicId;
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOutgoingShipmentRequest { Id = f.Shipment.PublicId, Data = data }, CancellationToken.None);

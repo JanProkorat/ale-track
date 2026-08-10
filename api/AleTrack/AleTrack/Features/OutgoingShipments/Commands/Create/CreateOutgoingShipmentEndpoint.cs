@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Create;
 
@@ -24,7 +26,9 @@ public record CreateOutgoingShipmentRequest
 /// Endpoint for creating a new outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+    : Endpoint<CreateOutgoingShipmentRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -50,10 +54,13 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        var company = companyOptions.Value;
+
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
         var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
         var outgoingShipment = new OutgoingShipment
         {
@@ -62,6 +69,10 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             CreatedDate = DateTime.UtcNow,
             State = OutgoingShipmentState.Created,
             Vehicle = vehicle,
+            StartPointKind = req.Data.StartPointKind,
+            StartBrewery = startBrewery,
+            StartBreweryId = startBrewery?.Id,
+            StartBreweryAddressKind = req.Data.StartBreweryAddressKind,
             Drivers = [.. drivers
                 .Select(d => new OutgoingShipmentDriver 
                 {
@@ -90,14 +101,18 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                         return stop;
                     }),
                 .. req.Data.CustomStops
-                    .Select(cs => new OutgoingShipmentStop
+                    .Select(cs =>
                     {
-                        Kind = OutgoingShipmentStopKind.Custom,
-                        Order = cs.Order,
-                        Label = cs.Label,
-                        Note = cs.Note,
-                        Latitude = cs.Latitude,
-                        Longitude = cs.Longitude
+                        var isCompany = cs.Kind == OutgoingShipmentStopKind.Company;
+                        return new OutgoingShipmentStop
+                        {
+                            Kind = cs.Kind,
+                            Order = cs.Order,
+                            Label = isCompany ? company.Name : cs.Label,
+                            Note = cs.Note,
+                            Latitude = isCompany ? company.Latitude : cs.Latitude,
+                            Longitude = isCompany ? company.Longitude : cs.Longitude
+                        };
                     })
             ],
             RouteViaPoints = [.. req.Data.RouteViaPoints
@@ -115,6 +130,10 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         // Orders added to a shipment move into planning.
         foreach (var order in orders.Where(o => o.State == OrderState.New))
             order.State = OrderState.Planning;
+
+        // A created shipment is always Created, so the content is always open —
+        // no mutability gate needed here.
+        CompanyStopReconciler.Apply(outgoingShipment, company);
 
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
@@ -165,6 +184,35 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
+    {
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
+        {
+            return null;
+        }
+
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
+
+        if (brewery is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
+        }
+
+        return brewery;
     }
 
     private async Task<List<Driver>> GetDriversAsync(List<Guid> driverIds, CancellationToken ct)

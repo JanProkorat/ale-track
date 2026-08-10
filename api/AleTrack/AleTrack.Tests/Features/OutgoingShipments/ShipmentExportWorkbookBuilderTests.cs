@@ -34,12 +34,24 @@ public sealed class ShipmentExportWorkbookBuilderTests
             Returns = returns ?? []
         };
 
+    /// <summary>
+    /// A product row. <paramref name="invoicedQuantity"/> left null makes it a row nobody is billed
+    /// for — the run's own stock purchases, which is the only shape that has no invoice behind it.
+    /// </summary>
     private static ShipmentExportProduct BuildProduct(
         string name,
         int quantity,
         ProductKind? kind = ProductKind.Bottle,
-        double? packageSize = 0.5) =>
-        new() { Name = name, Quantity = quantity, Kind = kind, PackageSize = packageSize };
+        double? packageSize = 0.5,
+        int? invoicedQuantity = null) =>
+        new()
+        {
+            Name = name,
+            Quantity = quantity,
+            Kind = kind,
+            PackageSize = packageSize,
+            InvoicedQuantity = invoicedQuantity
+        };
 
     private static ShipmentExportModel BuildModel(
         string name = "Pátek – Brno",
@@ -402,7 +414,121 @@ public sealed class ShipmentExportWorkbookBuilderTests
     }
 
     [Fact]
-    public void Build_StockPurchases_GetABlockOnTheOverviewSheetRatherThanASheetOfTheirOwn()
+    public void Build_StopSheet_ReportsDeliveredAndBilledPiecesSideBySide()
+    {
+        var model = BuildModel(stops:
+        [
+            BuildStop(1, "Hospoda U Kotvy", products:
+            [
+                // Delivered and billed to the same client — the ordinary row.
+                BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
+                // Half of it billed to somebody else.
+                BuildProduct("Kozel 11", 6, ProductKind.Keg, 30, invoicedQuantity: 2),
+                // Cross-billed in: this client pays for pieces another stop receives.
+                BuildProduct("Radegast", 0, ProductKind.Keg, 50, invoicedQuantity: 4)
+            ])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+
+        var headerRow = RowOf(sheet, "PRODUKT");
+        sheet.Cell(headerRow, 4).GetString().Should().Be("SKUTEČNĚ (KS)");
+        sheet.Cell(headerRow, 5).GetString().Should().Be("FAKTURAČNĚ (KS)");
+
+        sheet.Cell(headerRow + 1, 4).GetValue<int>().Should().Be(24);
+        sheet.Cell(headerRow + 1, 5).GetValue<int>().Should().Be(24);
+
+        sheet.Cell(headerRow + 2, 4).GetValue<int>().Should().Be(6);
+        sheet.Cell(headerRow + 2, 5).GetValue<int>().Should().Be(2);
+
+        // Billed here, handed over somewhere else.
+        sheet.Cell(headerRow + 3, 4).GetValue<int>().Should().Be(0);
+        sheet.Cell(headerRow + 3, 5).GetValue<int>().Should().Be(4);
+
+        var totalRow = RowOf(sheet, "Celkem");
+        sheet.Cell(totalRow, 4).GetValue<int>().Should().Be(30);
+        sheet.Cell(totalRow, 5).GetValue<int>().Should().Be(30);
+
+        // Both columns are numbers, so the office can sum either in Excel itself.
+        sheet.Cell(headerRow + 1, 5).DataType.Should().Be(XLDataType.Number);
+    }
+
+    /// <summary>
+    /// Nobody is billed for goods bought into our own warehouse, and a column of nothing but dashes
+    /// reads as data that failed to load.
+    /// </summary>
+    /// <summary>
+    /// The run calls at our own warehouse to drop the goods bought for stock, so that stop reads
+    /// like any other: a sheet of its own, a town and a piece count on the overview.
+    /// </summary>
+    [Fact]
+    public void Build_WarehouseStop_GetsItsOwnSheetAndTakesTheStockGoodsOffTheOverview()
+    {
+        var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
+
+        var model = BuildModel(
+            stops:
+            [
+                BuildStop(1, "Hospoda U Kotvy",
+                    products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)]),
+                new ShipmentExportStop
+                {
+                    Order = 2, IsWarehouse = true, Label = "AleTrack s.r.o.",
+                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
+                    Products = stockGoods
+                }
+            ],
+            stockPurchases: stockGoods);
+
+        using var workbook = Open(model);
+
+        workbook.Worksheets.Select(s => s.Name).Should().Equal(
+            "Přehled", "1. Hospoda U Kotvy", "2. AleTrack s.r.o.");
+
+        var overview = workbook.Worksheet("Přehled");
+        var stopsHeader = RowOf(overview, "ZASTÁVKA");
+
+        // The row that used to read "— —".
+        overview.Cell(stopsHeader + 2, 2).GetString().Should().Be("AleTrack s.r.o.");
+        overview.Cell(stopsHeader + 2, 3).GetString().Should().Be("Liberec");
+        overview.Cell(stopsHeader + 2, 4).GetValue<int>().Should().Be(3);
+
+        // Not printed twice: the goods are the warehouse sheet's table now.
+        overview.Column(1).CellsUsed(c => c.GetString() == "ZBOŽÍ NA SKLAD").Should().BeEmpty();
+
+        var sheet = workbook.Worksheet("2. AleTrack s.r.o.");
+        sheet.Cell(RowOf(sheet, "Místo"), 2).GetString().Should().Be("AleTrack s.r.o.", "the warehouse is not a customer");
+        sheet.Cell(RowOf(sheet, "Ulice"), 2).GetString().Should().Be("Skladová 7");
+        sheet.Cell(RowOf(sheet, "PSČ a město"), 2).GetString().Should().Be("460 01 Liberec");
+
+        var productsHeader = RowOf(sheet, "PRODUKT");
+        sheet.Cell(productsHeader, 4).GetString().Should().Be("MNOŽSTVÍ (KS)", "nobody is billed for stock goods");
+        sheet.Cell(productsHeader + 1, 1).GetString().Should().Be("Radegast");
+        sheet.Cell(productsHeader + 1, 4).GetValue<int>().Should().Be(3);
+    }
+
+    [Fact]
+    public void Build_StockPurchases_KeepTheSingleQuantityColumn()
+    {
+        var model = BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Přehled");
+        var headingRow = RowOf(sheet, "ZBOŽÍ NA SKLAD");
+
+        sheet.Cell(headingRow + 1, 4).GetString().Should().Be("MNOŽSTVÍ (KS)");
+        sheet.Cell(headingRow + 1, 5).GetString().Should().BeEmpty("there is no billed column to head");
+        sheet.Cell(headingRow + 2, 5).GetString().Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The fallback for a run that carries stock goods without a warehouse stop — one saved before
+    /// the company stop existed. Better an odd-looking block on the overview than goods that appear
+    /// nowhere in the file.
+    /// </summary>
+    [Fact]
+    public void Build_StockPurchasesWithNoWarehouseStop_GetABlockOnTheOverviewSheet()
     {
         var model = BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
 

@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Queries.OutgoingShipmentsList;
@@ -10,6 +11,7 @@ using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
@@ -128,7 +130,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -193,7 +195,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -250,7 +252,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -304,7 +306,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -374,7 +376,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -427,7 +429,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -471,7 +473,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
 
         var request = new GetOutgoingShipmentDetailRequest { Id = shipmentId };
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object);
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(request, CancellationToken.None);
 
@@ -532,7 +534,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -591,7 +593,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -653,7 +655,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 

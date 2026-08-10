@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
@@ -8,6 +9,7 @@ using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.OutgoingShipments;
@@ -128,7 +130,7 @@ public sealed class OrderItemInventorySourcingTests
     }
 
     private static UpdateOutgoingShipmentEndpoint Endpoint(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db) =>
-        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object);
+        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
     [Fact]
     public async Task Update_RecordsHowManyPiecesCameFromStock()
@@ -241,7 +243,7 @@ public sealed class OrderItemInventorySourcingTests
         f.Item.InventoryItemId = f.Stock.Id;
 
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(MockFor(f).Object);
+            .Create(MockFor(f).Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = f.Shipment.PublicId }, CancellationToken.None);
 
         var row = endpoint.Response.Stops.Single(s => s.OrderId == f.Order.PublicId).Products.Should().ContainSingle().Subject;

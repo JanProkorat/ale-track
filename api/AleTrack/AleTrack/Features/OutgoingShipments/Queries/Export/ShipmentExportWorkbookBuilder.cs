@@ -49,7 +49,7 @@ public static class ShipmentExportWorkbookBuilder
         // route, so names are tracked as they are handed out rather than assumed unique.
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { OverviewSheetName };
 
-        foreach (var stop in model.ClientStops)
+        foreach (var stop in model.SheetStops)
             WriteStopSheet(workbook, stop, usedNames);
 
         using var stream = new MemoryStream();
@@ -58,16 +58,16 @@ public static class ShipmentExportWorkbookBuilder
     }
 
     /// <summary>
-    /// Worksheet name for a client stop — <c>1. Hospoda U Kotvy</c>, cut to what Excel accepts and
-    /// suffixed when a client holds more than one stop under a name that truncates to the same
-    /// thing.
+    /// Worksheet name for a stop that gets a sheet — <c>1. Hospoda U Kotvy</c>, cut to what Excel
+    /// accepts and suffixed when a client holds more than one stop under a name that truncates to
+    /// the same thing. The warehouse stop has no client and is named by its label.
     /// </summary>
     public static string SheetNameFor(ShipmentExportStop stop, ISet<string> usedNames)
     {
         // Replaced with a space rather than dropped: deleting the slash out of "pivo/pivo" would run
         // the two words together, which reads as a different name than the client has. Whitespace
         // runs then collapse, so a stripped character leaves no double space behind.
-        var sanitized = new string((stop.ClientName ?? Missing)
+        var sanitized = new string((stop.ClientName ?? stop.Label ?? Missing)
             .Select(c => ForbiddenSheetNameChars.Contains(c) ? ' ' : c)
             .ToArray());
 
@@ -130,7 +130,12 @@ public static class ShipmentExportWorkbookBuilder
 
         row = WriteStopTable(sheet, row, model);
 
-        if (model.StockPurchases.Count > 0)
+        // Only when no warehouse stop lists them already: on a run that calls at the warehouse the
+        // goods belong to that stop's sheet, beside the address the driver unloads at, and printing
+        // the same table twice invites the two to be read as two deliveries. The block stays for a
+        // run that carries stock goods without the stop — better an odd-looking block than goods
+        // that appear nowhere.
+        if (model.StockPurchases.Count > 0 && !model.HasWarehouseStop)
         {
             row++;
             WriteSectionHeading(sheet, row++, "Zboží na sklad");
@@ -156,9 +161,10 @@ public static class ShipmentExportWorkbookBuilder
             sheet.Cell(row, 2).Value = stop.ClientName ?? stop.Label ?? Missing;
             sheet.Cell(row, 3).Value = stop.City ?? Missing;
 
-            if (stop.ClientName is null)
+            if (stop.ClientName is null && !stop.IsWarehouse)
             {
-                // A custom stop delivers nothing, so a 0 here would read as a wasted trip.
+                // A custom stop delivers nothing, so a 0 here would read as a wasted trip. The
+                // warehouse does hand goods over — its own stock purchases — and reports them.
                 sheet.Cell(row, 4).Value = Missing;
             }
             else
@@ -181,10 +187,18 @@ public static class ShipmentExportWorkbookBuilder
         sheet.Column(2).Width = 16;
         sheet.Column(3).Width = 14;
         sheet.Column(4).Width = 16;
+        // Wider than the delivered column beside it: "FAKTURAČNĚ (KS)" is the longest header on the
+        // sheet and truncates at 16.
+        sheet.Column(5).Width = 18;
 
         var row = 1;
 
-        WriteLabel(sheet, row++, "Klient", stop.ClientName ?? Missing);
+        // The warehouse is a place we call at, not a customer, so it is not labelled as one.
+        WriteLabel(
+            sheet,
+            row++,
+            stop.IsWarehouse ? "Místo" : "Klient",
+            stop.ClientName ?? stop.Label ?? Missing);
         WriteLabel(sheet, row++, "Ulice", stop.Street ?? Missing);
         WriteLabel(sheet, row++, "PSČ a město", stop.CityLine ?? Missing);
 
@@ -238,13 +252,27 @@ public static class ShipmentExportWorkbookBuilder
         }
     }
 
+    /// <summary>
+    /// A product table, with the billed column beside the delivered one wherever the rows can
+    /// answer for it.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the rows rather than passed in: only goods delivered to a client are billed to
+    /// anyone, so the run's own stock purchases have no invoice to report and get the single
+    /// quantity column they had before. A column of nothing but dashes reads as data that failed
+    /// to load.
+    /// </remarks>
     private static void WriteProductTable(
         IXLWorksheet sheet,
         ref int row,
         List<ShipmentExportProduct> products,
         bool withTotal)
     {
-        WriteTableHeader(sheet, row++, "Produkt", "Druh", "Balení (l)", "Množství (ks)");
+        var withInvoiced = products.Any(p => p.InvoicedQuantity is not null);
+
+        WriteTableHeader(sheet, row++, withInvoiced
+            ? ["Produkt", "Druh", "Balení (l)", "Skutečně (ks)", "Fakturačně (ks)"]
+            : ["Produkt", "Druh", "Balení (l)", "Množství (ks)"]);
 
         if (products.Count == 0)
         {
@@ -266,6 +294,10 @@ public static class ShipmentExportWorkbookBuilder
 
             sheet.Cell(row, 4).Value = product.Quantity;
             sheet.Cell(row, 4).Style.NumberFormat.Format = QuantityFormat;
+
+            if (withInvoiced)
+                WriteInvoicedCell(sheet, row, product.InvoicedQuantity);
+
             row++;
         }
 
@@ -274,12 +306,38 @@ public static class ShipmentExportWorkbookBuilder
 
         sheet.Cell(row, 1).Value = "Celkem";
         sheet.Cell(row, 1).Style.Font.Bold = true;
-        sheet.Cell(row, 4).Value = products.Sum(p => p.Quantity);
-        sheet.Cell(row, 4).Style.Font.Bold = true;
-        sheet.Cell(row, 4).Style.NumberFormat.Format = QuantityFormat;
-        sheet.Cell(row, 4).Style.Border.TopBorder = XLBorderStyleValues.Thin;
         sheet.Cell(row, 1).Style.Border.TopBorder = XLBorderStyleValues.Thin;
+
+        WriteTotalCell(sheet, row, 4, products.Sum(p => p.Quantity));
+
+        if (withInvoiced)
+            WriteTotalCell(sheet, row, 5, products.Sum(p => p.InvoicedQuantity ?? 0));
+
         row++;
+    }
+
+    /// <summary>
+    /// The billed count of one row — a dash where the row cannot be billed to the client whose
+    /// table this is, which reads as "not applicable" rather than as "billed nothing".
+    /// </summary>
+    private static void WriteInvoicedCell(IXLWorksheet sheet, int row, int? quantity)
+    {
+        if (quantity is null)
+        {
+            sheet.Cell(row, 5).Value = Missing;
+            return;
+        }
+
+        sheet.Cell(row, 5).Value = quantity.Value;
+        sheet.Cell(row, 5).Style.NumberFormat.Format = QuantityFormat;
+    }
+
+    private static void WriteTotalCell(IXLWorksheet sheet, int row, int column, int total)
+    {
+        sheet.Cell(row, column).Value = total;
+        sheet.Cell(row, column).Style.Font.Bold = true;
+        sheet.Cell(row, column).Style.NumberFormat.Format = QuantityFormat;
+        sheet.Cell(row, column).Style.Border.TopBorder = XLBorderStyleValues.Thin;
     }
 
     /// <summary>

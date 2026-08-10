@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, ListItemIcon, ListItemText,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, ListItemIcon, ListItemText,
   Menu, MenuItem, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
   useMediaQuery, type Theme,
@@ -28,11 +28,11 @@ import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
-import { RouteMap, type RouteStop } from 'src/components/common/RouteMap';
+import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
@@ -46,7 +46,8 @@ import {
   UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 import {
-  useUpdateShipment, useSetPreparationStep, useExportShipment, type ShipmentExportFormat,
+  useUpdateShipment, useSetPreparationStep, useExportShipment, useShipmentStartPoints,
+  type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
 import { useVehicle } from 'src/hooks/useVehicles';
@@ -69,8 +70,11 @@ import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
+import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
 import { resolveDetailStopAddress } from './stopAddress';
+import { platoSizeChipText, unloadOrder } from './unloadOrder';
+import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsCard } from './PreparationStepsCard';
@@ -155,6 +159,12 @@ const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTr
 /** Tab value for the unfiltered loading list; the rest are invoice sequences. */
 const ALL_INVOICES = 'all';
 
+/** Tab value for the driver's stop-by-stop unload view; every other option
+ * filters the loading list instead. A plain string, not a sequence — the
+ * invoice tabs' values are `String(sequence)`, always numeric, so there is no
+ * real collision risk, but this reads clearly in the SegControl regardless. */
+const UNLOAD_VIEW = 'unload';
+
 /** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
 const QTY_CELL_SX = { width: 170, minWidth: 170 };
 
@@ -170,19 +180,6 @@ const PRODUCT_CELL_SX = { width: '100%' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
-}
-
-/**
- * Chip for a row of the loading list: degree and package size.
- *
- * No kind — the section heading above the row already says it. The degree is what
- * distinguishes two otherwise identically named beers on the pallet.
- */
-function platoSizeChipText(platoDegree: number | undefined, packageSize: number | undefined): string {
-  return [
-    platoDegree != null ? `${platoDegree}°` : '',
-    packageSize != null ? fmtLiters(packageSize) : '',
-  ].filter(Boolean).join(' · ');
 }
 
 interface AggRow {
@@ -804,7 +801,7 @@ function ProductLine({ row }: { row: NakladkaRow }) {
  * that reveals its product list on click. The item count that used to be the
  * sole subtitle moved to a trailing badge — see {@link OrdersOverviewCard} —
  * to make room for the destination address without losing it. */
-function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }: {
+function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, onOpen }: {
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
@@ -817,17 +814,38 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
   rows: NakladkaRow[];
   open: boolean;
   onToggle: () => void;
+  /** Opens the row's source order — makes the client name a link. Omitted for
+   *  rows with no order behind them (the dokládka pseudo-row) and for users who
+   *  cannot see the Objednávky module, who then get the plain name back. */
+  onOpen?: () => void;
 }) {
   return (
-    <Box sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
-      <ButtonBase
+    <Box data-testid="overview-row" sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
+      {/* The header expands the row, but it is a plain Box rather than a
+          ButtonBase: the client name inside it is its own control, and a
+          button (or link) nested in a button is invalid markup. Keyboard users
+          reach the expander through the chevron's IconButton; the surrounding
+          click target is a mouse convenience on top of it. */}
+      <Box
         onClick={onToggle}
-        sx={{ width: '100%', px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
+        sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
       >
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            {onOpen ? (
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={(e) => { e.stopPropagation(); onOpen(); }}
+                sx={{ fontWeight: 700, fontSize: 13.5, color: 'primary.dark', textAlign: 'left', minWidth: 0 }}
+              >
+                {title}
+              </Link>
+            ) : (
+              <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{title}</Typography>
+            )}
             {chip}
           </Stack>
           {addressLine && (
@@ -837,8 +855,15 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
         <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: 'text.disabled', flexShrink: 0 }}>
           {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
         </Typography>
-        <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
-      </ButtonBase>
+        <IconButton
+          size="small"
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          aria-label={`${open ? 'Sbalit' : 'Rozbalit'} ${title}`}
+          sx={{ flexShrink: 0 }}
+        >
+          <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
+        </IconButton>
+      </Box>
       <Collapse in={open} unmountOnExit>
         <Box sx={{ pb: 0.75 }}>
           {rows.length > 0
@@ -853,7 +878,11 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle }:
 /** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
  * row per client, expandable to its products), plus a stock-purchase row listing all
  * stock extras when present. Read-only; the loading workflow lives elsewhere. */
-function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopDto[]; extraRows: NakladkaRow[] }) {
+function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
+  stops: OutgoingShipmentStopDto[];
+  extraRows: NakladkaRow[];
+  onOpenOrder?: (orderId: string) => void;
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (key: string) => setExpanded((prev) => {
     const n = new Set(prev);
@@ -905,6 +934,7 @@ function OrdersOverviewCard({ stops, extraRows }: { stops: OutgoingShipmentStopD
                 rows={(stop.products ?? []).map(productRowFrom)}
                 open={expanded.has(key)}
                 onToggle={() => toggle(key)}
+                onOpen={onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined}
               />
             );
           })}
@@ -1032,14 +1062,19 @@ export function ShipmentDetail({
   editable,
   onBack,
   onEdit,
+  onOpenOrder,
 }: {
   shipment: OutgoingShipmentDetailDto;
   editable: boolean;
   onBack: () => void;
   onEdit: () => void;
+  /** Navigates to a stop's source order. Left out when the user has no access
+   *  to the Objednávky module, which hides the affordance entirely. */
+  onOpenOrder?: (orderId: string) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const updateShipment = useUpdateShipment();
+  const startPoints = useShipmentStartPoints();
   const vehicleQuery = useVehicle(shipment.vehicleId ?? undefined);
   const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
@@ -1079,6 +1114,31 @@ export function ShipmentDetail({
     return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
   }), [stopsSorted]);
 
+  // The detail DTO already carries the shipment's own resolved start point, so
+  // the map does not wait on the start-points query for it — only the homeward
+  // end (the company) needs that lookup. While the query is still pending or
+  // has failed, `companyEnd` stays undefined and the end falls back to the same
+  // point as the start: a single combined marker rather than a second pin
+  // plotted at (0, 0).
+  const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
+  const companyEnd = routeEndpointFrom(company);
+  // A brewery whose address was never geocoded is a legal start point, so the
+  // shipment's own resolved coordinates may be absent — in which case there is
+  // nothing to plot and the map falls back to the company (always configured
+  // with coordinates), or, failing even that, is not drawn at all.
+  const startPointEnd = routeEndpointFrom({
+    latitude: shipment.startPointLatitude,
+    longitude: shipment.startPointLongitude,
+    name: shipment.startPointName,
+    address: shipment.startPointAddress,
+  });
+  const routeStart: RouteEndpoint | undefined = startPointEnd ?? companyEnd;
+  const routeEnd: RouteEndpoint | undefined = companyEnd ?? routeStart;
+  // The Vykládka header only prints the start point's name and address, so it
+  // stays truthful even when there are no coordinates to draw with — it must
+  // not inherit the map's company fallback.
+  const startPointLabel = { name: shipment.startPointName ?? '—', address: shipment.startPointAddress };
+
   const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
   // Custom extras belong to the orders on the route; the nakládka only lists them.
@@ -1113,10 +1173,19 @@ export function ShipmentDetail({
   const filterOptions = useMemo<SegOption<string>[]>(() => [
     { value: ALL_INVOICES, label: 'Vše' },
     ...invoiceColumns.map((column) => ({ value: String(column.sequence), label: `F${column.sequence}` })),
+    { value: UNLOAD_VIEW, label: 'Vykládka' },
   ], [invoiceColumns]);
 
   // A deleted invoice must not leave the table filtered by a column that is gone.
   const activeFilter = filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
+
+  // The driver's stop-by-stop unload order, for the Vykládka tab. Kept in
+  // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
+  // without a rendering harness — this screen only shapes it into rows.
+  const unloadStops = useMemo(
+    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? []),
+    [stopsSorted, shipment.stockPurchases],
+  );
 
   const visibleRows = useMemo(
     () => (activeFilter === ALL_INVOICES
@@ -1414,7 +1483,27 @@ export function ShipmentDetail({
         )}
       />
 
-      <RouteMap stops={routeStops} viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))} height={360} navigable />
+      {routeStart ? (
+        <RouteMap
+          stops={routeStops}
+          start={routeStart}
+          end={routeEnd ?? routeStart}
+          viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
+          height={360}
+          navigable
+        />
+      ) : (
+        // Same dashed placeholder ShipmentEditor draws while it has no locatable
+        // origin — better than a route anchored at (0, 0).
+        <Box
+          sx={{
+            height: 360, borderRadius: 2, border: '1px dashed', borderColor: 'divider',
+            bgcolor: 'action.hover', display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.disabled',
+          }}
+        >
+          <Typography color="text.secondary">Trasa se zobrazí, jakmile se načte výchozí bod.</Typography>
+        </Box>
+      )}
 
       {/* Directly under the map, matching ShipmentEditor.tsx — a warning four
           cards down (its previous spot, at the bottom of the right column)
@@ -1469,65 +1558,69 @@ export function ShipmentDetail({
                 <Box sx={{ flex: 1 }} />
                 <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
               </Stack>
-              <AggLoadingTable
-                sections={sections}
-                totalQuantity={totalQty}
-                columnCount={invoiceColumns.length}
-                emptyText={activeFilter === ALL_INVOICES
-                  ? 'Zatím žádné produkty k naložení.'
-                  : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
-                invoiceHeaders={(
-                  <PurchaseInvoiceHeaderCells
-                    invoices={purchaseInvoices}
-                    editable={nakladkaEditable}
-                    onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
-                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
-                    })}
-                  />
-                )}
-                invoiceFooters={(footSx) => (
-                  <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
-                )}
-                renderRow={(agg) => (
-                  <AggLoadingRow
-                    key={agg.key}
-                    agg={agg}
-                    editable={nakladkaEditable}
-                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    invoiceCells={(
-                      <PurchaseInvoiceRowCells
-                        row={agg}
-                        invoices={purchaseInvoices}
-                        states={loadingStates}
-                        editable={nakladkaEditable}
-                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                      />
-                    )}
-                  />
-                )}
-                renderStackedRow={(agg) => (
-                  <AggLoadingStackedRow
-                    key={agg.key}
-                    agg={agg}
-                    editable={nakladkaEditable}
-                    onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                    onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                    invoiceMetrics={(
-                      <PurchaseInvoiceRowMetrics
-                        row={agg}
-                        invoices={purchaseInvoices}
-                        states={loadingStates}
-                        editable={nakladkaEditable}
-                        onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                        onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                      />
-                    )}
-                  />
-                )}
-                stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
-              />
+              {activeFilter === UNLOAD_VIEW ? (
+                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} />
+              ) : (
+                <AggLoadingTable
+                  sections={sections}
+                  totalQuantity={totalQty}
+                  columnCount={invoiceColumns.length}
+                  emptyText={activeFilter === ALL_INVOICES
+                    ? 'Zatím žádné produkty k naložení.'
+                    : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
+                  invoiceHeaders={(
+                    <PurchaseInvoiceHeaderCells
+                      invoices={purchaseInvoices}
+                      editable={nakladkaEditable}
+                      onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
+                        onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo smazat'), { variant: 'error' }),
+                      })}
+                    />
+                  )}
+                  invoiceFooters={(footSx) => (
+                    <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
+                  )}
+                  renderRow={(agg) => (
+                    <AggLoadingRow
+                      key={agg.key}
+                      agg={agg}
+                      editable={nakladkaEditable}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                      invoiceCells={(
+                        <PurchaseInvoiceRowCells
+                          row={agg}
+                          invoices={purchaseInvoices}
+                          states={loadingStates}
+                          editable={nakladkaEditable}
+                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
+                        />
+                      )}
+                    />
+                  )}
+                  renderStackedRow={(agg) => (
+                    <AggLoadingStackedRow
+                      key={agg.key}
+                      agg={agg}
+                      editable={nakladkaEditable}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
+                      invoiceMetrics={(
+                        <PurchaseInvoiceRowMetrics
+                          row={agg}
+                          invoices={purchaseInvoices}
+                          states={loadingStates}
+                          editable={nakladkaEditable}
+                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
+                        />
+                      )}
+                    />
+                  )}
+                  stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
+                />
+              )}
             </Box>
           </Card>
 
@@ -1660,7 +1753,11 @@ export function ShipmentDetail({
             emptyText="Nic se z garáže nenakládá."
           />
 
-          <OrdersOverviewCard stops={stopsSorted.filter((st) => st.orderId != null)} extraRows={extraRows} />
+          <OrdersOverviewCard
+            stops={stopsSorted.filter((st) => st.orderId != null)}
+            extraRows={extraRows}
+            onOpenOrder={onOpenOrder}
+          />
 
           <ReturnsCard stops={stopsSorted} />
 

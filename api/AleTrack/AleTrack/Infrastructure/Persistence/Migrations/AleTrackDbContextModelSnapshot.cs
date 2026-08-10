@@ -914,6 +914,18 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
+                    b.Property<int>("StartBreweryAddressKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_brewery_address_kind");
+
+                    b.Property<long?>("StartBreweryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("start_brewery_id");
+
+                    b.Property<int>("StartPointKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_point_kind");
+
                     b.Property<int>("State")
                         .HasColumnType("integer")
                         .HasColumnName("state");
@@ -926,6 +938,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("StartBreweryId");
 
                     b.HasIndex("VehicleId");
 
@@ -2268,10 +2282,17 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>
                 {
+                    b.HasOne("AleTrack.Entities.Brewery", "StartBrewery")
+                        .WithMany()
+                        .HasForeignKey("StartBreweryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("AleTrack.Entities.Vehicle", "Vehicle")
                         .WithMany("OutgoingShipments")
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("StartBrewery");
 
                     b.Navigation("Vehicle");
                 });

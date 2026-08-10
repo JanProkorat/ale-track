@@ -19,27 +19,57 @@ public static class ShipmentInvoiceGraph
     /// Loads a shipment with everything reconciliation and invoice mapping need, tracked, plus
     /// the pieces excluded from invoicing. Null when the shipment does not exist.
     /// </summary>
-    public static async Task<ShipmentInvoiceSplit?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct)
+    public static Task<ShipmentInvoiceSplit?> LoadAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct) =>
+        LoadCoreAsync(dbContext, shipmentId, tracked: true, ct);
+
+    /// <summary>
+    /// The same graph, untracked — for a reader that reconciles only to see the current split and
+    /// must never persist it.
+    /// </summary>
+    /// <remarks>
+    /// Reconciliation materialises invoices and lines into the loaded graph, so a tracked load
+    /// leaves a <c>SaveChanges</c> anywhere later in the request writing a split its caller never
+    /// meant to write. The export reads this way; the four invoicing endpoints, which do mean to
+    /// persist, keep <see cref="LoadAsync"/>.
+    ///
+    /// Identity resolution stays on: without it the include chain hands back several instances of
+    /// the same order item, and reconciliation matches lines to items by reference-free key but
+    /// walks the collections it is given.
+    /// </remarks>
+    public static Task<ShipmentInvoiceSplit?> LoadReadOnlyAsync(AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct) =>
+        LoadCoreAsync(dbContext, shipmentId, tracked: false, ct);
+
+    private static async Task<ShipmentInvoiceSplit?> LoadCoreAsync(
+        AleTrackDbContext dbContext,
+        Guid shipmentId,
+        bool tracked,
+        CancellationToken ct)
     {
-        var shipment = await dbContext.OutgoingShipments
+        IQueryable<OutgoingShipment> shipments = dbContext.OutgoingShipments
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.Client)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.InventoryItem)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.CustomExtraItems)
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
-            .Include(s => s.Invoices).ThenInclude(i => i.Client)
-            .FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
+            .Include(s => s.Invoices).ThenInclude(i => i.Client);
+
+        if (!tracked)
+            shipments = shipments.AsNoTrackingWithIdentityResolution();
+
+        var shipment = await shipments.FirstOrDefaultAsync(s => s.PublicId == shipmentId, ct);
 
         if (shipment is null)
             return null;
 
         // Loaded by their own query rather than through a navigation — see
         // OutgoingShipmentInvoiceLineConfiguration for why there is none.
-        var privateLines = await dbContext.OutgoingShipmentInvoiceLines
-            .Where(l => l.OutgoingShipmentId == shipment.Id && l.IsPrivate)
-            .ToListAsync(ct);
+        IQueryable<OutgoingShipmentInvoiceLine> privateLines = dbContext.OutgoingShipmentInvoiceLines
+            .Where(l => l.OutgoingShipmentId == shipment.Id && l.IsPrivate);
 
-        return new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = privateLines };
+        if (!tracked)
+            privateLines = privateLines.AsNoTracking();
+
+        return new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = await privateLines.ToListAsync(ct) };
     }
 
     /// <summary>

@@ -204,10 +204,14 @@ Tests sit next to what they test (`shipmentInvoiceModel.test.ts`).
 
 ## Environment
 
-`VITE_API_BASE_URL` (no trailing slash — the client appends `ale-track/`) and
-`VITE_COMPANY_ADDRESS` (JSON depot address + coordinates for route start/end).
-Copy `env.example` to `.env`; `.env*` files are git-ignored and this is a
-**public repository** — keep real values out of tracked files.
+`VITE_API_BASE_URL` (no trailing slash — the client appends `ale-track/`) is the
+only required env var. Copy `env.example` to `.env`; `.env*` files are git-ignored
+and this is a **public repository** — keep real values out of tracked files.
+
+The company address is no longer a frontend env var — it lives in backend
+configuration and reaches the frontend via the shipment start-points endpoint
+(`useShipmentStartPoints()` in `src/hooks/useShipments.ts`, the entry whose
+`kind` is `Company`).
 
 Dev server port **3039** is hardcoded in `vite.config.ts`; the backend is expected
 on **8080**. `src/` resolves via the `src/…` alias, configured in both
