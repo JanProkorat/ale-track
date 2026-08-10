@@ -39,12 +39,24 @@ public sealed class ShipmentExportDocumentBuilderTests
             Returns = returns ?? []
         };
 
+    /// <summary>
+    /// A product row. <paramref name="invoicedQuantity"/> left null makes it a row nobody is billed
+    /// for — the run's own stock purchases, which is the only shape that has no invoice behind it.
+    /// </summary>
     private static ShipmentExportProduct BuildProduct(
         string name,
         int quantity,
         ProductKind? kind = ProductKind.Bottle,
-        double? packageSize = 0.5) =>
-        new() { Name = name, Quantity = quantity, Kind = kind, PackageSize = packageSize };
+        double? packageSize = 0.5,
+        int? invoicedQuantity = null) =>
+        new()
+        {
+            Name = name,
+            Quantity = quantity,
+            Kind = kind,
+            PackageSize = packageSize,
+            InvoicedQuantity = invoicedQuantity
+        };
 
     private static ShipmentExportModel BuildModel(
         string name = "Pátek – Brno",
@@ -110,7 +122,9 @@ public sealed class ShipmentExportDocumentBuilderTests
     public void Build_ProducesSchemaValidWordprocessingMl()
     {
         // Exercised over a model that reaches every branch: a custom stop, notes, returns, a custom
-        // extra with no product behind it, and the stock-purchase block.
+        // extra with no product behind it, both product-table shapes, and the warehouse page.
+        var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
+
         var model = BuildModel(
             stops:
             [
@@ -121,14 +135,20 @@ public sealed class ShipmentExportDocumentBuilderTests
                     notes: ["Volat 30 min předem", "Brána z boku"],
                     products:
                     [
-                        BuildProduct("Pilsner Urquell", 24),
-                        BuildProduct("Slunečník", 2, kind: null, packageSize: null)
+                        BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
+                        BuildProduct("Slunečník", 2, kind: null, packageSize: null, invoicedQuantity: 0)
                     ],
                     returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }]),
                 new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" },
-                BuildStop(3, "Bez položek s.r.o.", products: [])
+                BuildStop(3, "Bez položek s.r.o.", products: []),
+                new ShipmentExportStop
+                {
+                    Order = 4, IsWarehouse = true, Label = "AleTrack s.r.o.",
+                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
+                    Products = stockGoods
+                }
             ],
-            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
+            stockPurchases: stockGoods);
 
         var stream = new MemoryStream(ShipmentExportDocumentBuilder.Build(model));
         using var document = WordprocessingDocument.Open(stream, isEditable: false);
@@ -357,6 +377,179 @@ public sealed class ShipmentExportDocumentBuilderTests
         sheetTable(body, 3).Elements<TableRow>().Last()
             .Elements<TableCell>().ElementAt(1)
             .TableCellProperties!.GridSpan!.Val!.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void Build_StopPage_ReportsDeliveredAndBilledPiecesSideBySide()
+    {
+        var body = Open(BuildModel(stops:
+        [
+            BuildStop(1, "Hospoda U Kotvy", products:
+            [
+                // Delivered and billed to the same client — the ordinary row.
+                BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
+                // Half of it billed to somebody else.
+                BuildProduct("Kozel 11", 6, ProductKind.Keg, 30, invoicedQuantity: 2),
+                // Cross-billed in: this client pays for pieces another stop receives.
+                BuildProduct("Radegast", 0, ProductKind.Keg, 50, invoicedQuantity: 4)
+            ])
+        ]));
+
+        var products = TableRows(body, 3);
+        products[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
+        products[1].Should().Equal("Pilsner Urquell", "Basa", "0,5 l", "24 ks", "24 ks");
+        products[2].Should().Equal("Kozel 11", "Sud", "30 l", "6 ks", "2 ks");
+        products[3].Should().Equal("Radegast", "Sud", "50 l", "0 ks", "4 ks");
+
+        // Four cells across five columns: the kind and the package have nothing to total, so they
+        // stay merged, and both quantity columns close with their own sum.
+        products[4].Should().Equal("Celkem", string.Empty, "30 ks", "30 ks");
+        sheetTable(body, 3).Elements<TableRow>().Last()
+            .Elements<TableCell>().ElementAt(1)
+            .TableCellProperties!.GridSpan!.Val!.Value.Should().Be(2);
+    }
+
+    /// <summary>
+    /// Every column heading has to sit on one line: a header that wraps costs a row of height on
+    /// every page the table runs onto, and reads as a broken word.
+    /// </summary>
+    /// <remarks>
+    /// Two headers have already shipped wrapped — "FAKTURAČNĚ" in a column sized like its
+    /// neighbour's, and "ZASTÁVKA" in a column sized for the stop number under it. Both are widths
+    /// chosen for the values, forgetting that the heading above them is the longest text in the
+    /// column.
+    ///
+    /// The width model is deliberately crude and deliberately pessimistic: <see cref="CapsWidth"/>
+    /// measures against a wide serif rather than the declared Calibri, because a reader without
+    /// Calibri substitutes its own and the file has to survive that. It cannot prove a header fits
+    /// in Word, only that nobody sized a column below what the heading plainly needs.
+    /// </remarks>
+    [Fact]
+    public void Build_EveryColumnHeading_IsGivenAColumnWideEnoughToHoldItOnOneLine()
+    {
+        var body = Open(BuildModel(
+            stops:
+            [
+                BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)],
+                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }]),
+                BuildStop(2, "Pivnice Na Růhu", products: [BuildProduct("Kozel 11", 6, invoicedQuantity: 6)])
+            ],
+            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
+
+        var headed = body.Elements<Table>()
+            .Where(table => table.Elements<TableRow>()
+                .Any(row => row.TableRowProperties?.Elements<TableHeader>().Any() == true))
+            .ToList();
+
+        headed.Should().NotBeEmpty("the model above reaches every table that has a heading row");
+
+        foreach (var table in headed)
+        {
+            var columns = table.GetFirstChild<TableGrid>()!
+                .Elements<GridColumn>()
+                .Select(column => int.Parse(column.Width!.Value!))
+                .ToList();
+
+            var headers = table.Elements<TableRow>()
+                .First(row => row.TableRowProperties?.Elements<TableHeader>().Any() == true)
+                .Elements<TableCell>()
+                .Select(cell => cell.InnerText)
+                .ToList();
+
+            for (var i = 0; i < headers.Count; i++)
+                columns[i].Should().BeGreaterThanOrEqualTo(CapsWidth(headers[i]), $"\"{headers[i]}\" has to fit its column");
+        }
+    }
+
+    /// <summary>
+    /// Twips a bold uppercase heading needs, cell padding included — 144 per character, which is a
+    /// wide serif at the document's 10pt rather than Calibri's narrower caps.
+    /// </summary>
+    private static int CapsWidth(string header) => header.Length * 144 + 216;
+
+    /// <summary>
+    /// "FAKTURAČNĚ" is the longest header in the file and broke over two lines when its column was
+    /// sized like its neighbour's.
+    /// </summary>
+    [Fact]
+    public void Build_BilledColumn_IsTheWidestOfTheNarrowOnesAndKeepsTheTableOnThePage()
+    {
+        var body = Open(BuildModel(stops:
+        [
+            BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)])
+        ]));
+
+        var columns = sheetTable(body, 3).GetFirstChild<TableGrid>()!
+            .Elements<GridColumn>()
+            .Select(c => int.Parse(c.Width!.Value!))
+            .ToList();
+
+        columns.Should().HaveCount(5);
+        columns.Sum().Should().Be(9000, "every table is sized to the same text width");
+
+        // Wider than the delivered column beside it, which carries the shorter header.
+        columns[4].Should().BeGreaterThan(columns[3]);
+        columns[4].Should().BeGreaterThan(columns[1], "and wider than the kind and package columns");
+        columns[4].Should().BeGreaterThan(columns[2]);
+    }
+
+    /// <summary>
+    /// The run calls at our own warehouse to drop the goods bought for stock, so that stop reads
+    /// like any other: a page of its own, a town and a piece count on the overview.
+    /// </summary>
+    [Fact]
+    public void Build_WarehouseStop_GetsItsOwnPageAndTakesTheStockGoodsOffTheOverview()
+    {
+        var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
+
+        var body = Open(BuildModel(
+            stops:
+            [
+                BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)]),
+                new ShipmentExportStop
+                {
+                    Order = 2, IsWarehouse = true, Label = "AleTrack s.r.o.",
+                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
+                    Products = stockGoods
+                }
+            ],
+            stockPurchases: stockGoods));
+
+        // The row that used to read "— —".
+        var stops = TableRows(body, 1);
+        stops.Should().Contain(row => row[1] == "AleTrack s.r.o." && row[2] == "Liberec" && row[3] == "3");
+
+        // Not printed twice: the goods are the warehouse page's table now, so the overview's own
+        // block is gone and the client page follows the stop table directly.
+        Paragraphs(body).Should().NotContain("ZBOŽÍ NA SKLAD");
+        Paragraphs(body).Should().Contain("2. AleTrack s.r.o.");
+
+        // Tables: 0 summary, 1 stops, 2 the client's address block, 3 their goods, 4 the
+        // warehouse's address block, 5 what comes off there.
+        TableRows(body, 4).Should().Contain(row => row[0] == "Ulice" && row[1] == "Skladová 7");
+
+        var stock = TableRows(body, 5);
+        stock[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
+        stock[1].Should().Equal("Radegast", "Sud", "50 l", "3 ks");
+    }
+
+    /// <summary>
+    /// Nobody is billed for goods bought into our own warehouse, and a column of nothing but dashes
+    /// reads as data that failed to load. This is also the fallback for a run that carries stock
+    /// goods without a warehouse stop — one saved before the company stop existed.
+    /// </summary>
+    [Fact]
+    public void Build_StockPurchasesWithNoWarehouseStop_KeepTheSingleQuantityColumnOnTheOverview()
+    {
+        var body = Open(BuildModel(
+            stops: [BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)])],
+            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
+
+        // Table 2 on the overview: 0 is the summary, 1 the stop list, 2 the stock block — the stop
+        // pages come after it.
+        var stock = TableRows(body, 2);
+        stock[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
+        stock[1].Should().Equal("Radegast", "Sud", "50 l", "3 ks");
     }
 
     /// <summary>

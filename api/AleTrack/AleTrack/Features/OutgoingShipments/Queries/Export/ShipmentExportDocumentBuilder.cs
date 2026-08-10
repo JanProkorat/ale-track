@@ -44,8 +44,23 @@ public static class ShipmentExportDocumentBuilder
 
     private static readonly int[] ProductColumns = [4200, 1500, 1500, 1800];
 
-    /// <summary>Stop number needs far less room than the town it is in.</summary>
-    private static readonly int[] StopColumns = [1000, 3800, 2900, 1300];
+    /// <summary>
+    /// Widths for a product table that also reports what is billed — see WriteProductTable. The
+    /// product name gives up the room the extra column needs; it is the one that can wrap.
+    /// </summary>
+    /// <remarks>
+    /// The billed column is the widest of the four narrow ones on purpose: "FAKTURAČNĚ" is the
+    /// longest header in the file, and at 1550 it broke over two lines — measured against a
+    /// substituted serif rather than the declared Calibri, because a reader without Calibri picks
+    /// its own and every viewer must render the header on one line.
+    /// </remarks>
+    private static readonly int[] ProductColumnsWithInvoiced = [2800, 1300, 1300, 1650, 1950];
+
+    /// <summary>
+    /// Stop number needs far less room than the town it is in — but not less than its own header:
+    /// at 1000 the column was sized for the value and broke "ZASTÁVKA" over two lines.
+    /// </summary>
+    private static readonly int[] StopColumns = [1450, 3600, 2650, 1300];
 
     private static readonly int[] ReturnColumns = [3600, 3600, 1800];
 
@@ -71,7 +86,7 @@ public static class ShipmentExportDocumentBuilder
 
             WriteOverview(body, model);
 
-            foreach (var stop in model.ClientStops)
+            foreach (var stop in model.SheetStops)
                 WriteStopPage(body, stop);
 
             // Last child of the body, as the schema requires. Without it the document declares no
@@ -191,14 +206,17 @@ public static class ShipmentExportDocumentBuilder
                 Number(stop.Order),
                 stop.ClientName ?? stop.Label ?? Missing,
                 stop.City ?? Missing,
-                // A custom stop delivers nothing, so a 0 here would read as a wasted trip. Bare
-                // number — this column's own header is "Kusů".
-                stop.ClientName is null ? Missing : Number(stop.TotalQuantity)));
+                // A custom stop delivers nothing, so a 0 here would read as a wasted trip. The
+                // warehouse does hand goods over — its own stock purchases — and reports them.
+                // Bare number: this column's own header is "Kusů".
+                stop.ClientName is null && !stop.IsWarehouse ? Missing : Number(stop.TotalQuantity)));
         }
 
         AppendTable(body, stops);
 
-        if (model.StockPurchases.Count == 0)
+        // Only when no warehouse stop lists them already — see the workbook writer for why the two
+        // are not printed side by side, and why the block survives for a run with no such stop.
+        if (model.StockPurchases.Count == 0 || model.HasWarehouseStop)
             return;
 
         body.AppendChild(SectionHeading("Zboží na sklad"));
@@ -211,7 +229,8 @@ public static class ShipmentExportDocumentBuilder
         // holding the tail of one client and the head of the next cannot be. The break also ends the
         // overview's page, so the first client starts clean too.
         body.AppendChild(PageBreak());
-        body.AppendChild(Heading($"{stop.Order}. {stop.ClientName ?? Missing}"));
+        // The warehouse stop has no client; its label names it.
+        body.AppendChild(Heading($"{stop.Order}. {stop.ClientName ?? stop.Label ?? Missing}"));
 
         var details = LabelTable();
         details.AppendChild(LabelRow("Ulice", stop.Street ?? Missing));
@@ -254,6 +273,15 @@ public static class ShipmentExportDocumentBuilder
         AppendTable(body, returns);
     }
 
+    /// <summary>
+    /// A product table, with the billed column beside the delivered one wherever the rows can
+    /// answer for it.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the rows, like the workbook's: only goods delivered to a client are billed to
+    /// anyone, so the run's own stock purchases keep the single quantity column. A column of
+    /// nothing but dashes reads as data that failed to load.
+    /// </remarks>
     private static void WriteProductTable(Body body, List<ShipmentExportProduct> products)
     {
         if (products.Count == 0)
@@ -262,19 +290,34 @@ public static class ShipmentExportDocumentBuilder
             return;
         }
 
-        var table = BuildTable(ProductColumns);
-        table.AppendChild(HeaderRow("Produkt", "Druh", "Balení", "Množství"));
+        var withInvoiced = products.Any(p => p.InvoicedQuantity is not null);
+
+        var table = BuildTable(withInvoiced ? ProductColumnsWithInvoiced : ProductColumns);
+        table.AppendChild(withInvoiced
+            ? HeaderRow("Produkt", "Druh", "Balení", "Skutečně", "Fakturačně")
+            : HeaderRow("Produkt", "Druh", "Balení", "Množství"));
 
         foreach (var product in products)
         {
-            table.AppendChild(DataRow(
+            string[] cells =
+            [
                 product.Name,
                 KindLabel(product.Kind),
                 Litres(product.PackageSize),
-                Pieces(product.Quantity)));
+                Pieces(product.Quantity)
+            ];
+
+            table.AppendChild(withInvoiced
+                // A dash where the row cannot be billed to this client, which reads as "not
+                // applicable" rather than as "billed nothing".
+                ? DataRow([.. cells, product.InvoicedQuantity is null ? Missing : Pieces(product.InvoicedQuantity.Value)])
+                : DataRow(cells));
         }
 
-        table.AppendChild(TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity))));
+        table.AppendChild(withInvoiced
+            ? TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity)), Pieces(products.Sum(p => p.InvoicedQuantity ?? 0)))
+            : TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity))));
+
         AppendTable(body, table);
     }
 
@@ -404,11 +447,20 @@ public static class ShipmentExportDocumentBuilder
         Row(values.Select(value => Cell(value)).ToArray());
 
     /// <summary>
-    /// Closing total, with the two columns that carry no total merged rather than left blank —
-    /// an empty bordered cell reads as a value that failed to arrive.
+    /// Closing total, with the columns that carry no total merged rather than left blank — an empty
+    /// bordered cell reads as a value that failed to arrive.
     /// </summary>
-    private static TableRow TotalRow(string label, string total) =>
-        Row(Cell(label, bold: true), Cell(string.Empty, gridSpan: 2), Cell(total, bold: true));
+    /// <remarks>
+    /// Takes one total per trailing column. The merged span is two either way — the kind and the
+    /// package are the columns with nothing to total, in both the four-column shape and the
+    /// five-column one that adds a billed total beside the delivered one.
+    /// </remarks>
+    private static TableRow TotalRow(string label, params string[] totals) =>
+        Row([
+            Cell(label, bold: true),
+            Cell(string.Empty, gridSpan: 2),
+            .. totals.Select(total => Cell(total, bold: true))
+        ]);
 
     /// <summary>
     /// A row that will not be split across a page boundary.

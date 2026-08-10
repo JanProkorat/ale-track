@@ -1,9 +1,11 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
@@ -15,15 +17,20 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// Read-only, and gated on View rather than Edit: exporting is reading, and the office needs the
 /// file for runs it may no longer change.
 ///
-/// Carries no prices and no invoice attribution. It answers "who ordered which product", so it
-/// reads the shipment's own stops and never touches the invoice split behind the Fakturace section.
+/// Carries no prices, but every product row reports both what is delivered to the stop and what
+/// lands on that client's invoices, so it does read the split behind the Fakturace section. It
+/// reconciles that split without saving — see <see cref="ShipmentExportQuery"/>; a View-gated
+/// download must not write one.
 ///
 /// The .docx sibling is <see cref="ExportOutgoingShipmentWordEndpoint"/>; both read the same
 /// <see cref="ShipmentExportQuery"/> and differ only in the writer they hand the model to.
 /// </remarks>
 /// <param name="dbContext"></param>
+/// <param name="companyOptions"></param>
 [BinaryResponse(ExportOutgoingShipmentExcelEndpoint.WorkbookContentType)]
-public sealed class ExportOutgoingShipmentExcelEndpoint(AleTrackDbContext dbContext)
+public sealed class ExportOutgoingShipmentExcelEndpoint(
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions)
     : Endpoint<ExportOutgoingShipmentRequest>
 {
     /// <summary>
@@ -59,7 +66,7 @@ public sealed class ExportOutgoingShipmentExcelEndpoint(AleTrackDbContext dbCont
     /// <inheritdoc />
     public override async Task HandleAsync(ExportOutgoingShipmentRequest req, CancellationToken ct)
     {
-        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, ct);
+        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, companyOptions.Value, ct);
         if (model is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 

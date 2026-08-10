@@ -11,9 +11,10 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// numbers and enums, so it can be exercised without a database and the query can be exercised
 /// without opening a spreadsheet.
 ///
-/// Carries no money and no invoice attribution: the export answers "who ordered which product",
-/// not "who gets billed for it". That is why it reads the shipment's own stops rather than the
-/// invoice split of the Fakturace section.
+/// Carries no money, but it does carry invoice attribution: every product row reports both what
+/// the van drops at the stop and what lands on that client's invoices, which is the pair the
+/// office reads the file for. The quantities come from the same reconciled split the Fakturace
+/// section shows — see <see cref="ShipmentExportProduct.InvoicedQuantity"/>.
 /// </remarks>
 public sealed record ShipmentExportModel
 {
@@ -38,19 +39,26 @@ public sealed record ShipmentExportModel
     public List<string> DriverNames { get; init; } = [];
 
     /// <summary>
-    /// Every stop on the route in route order, custom stops included — the overview sheet lists
-    /// all of them, while only the ones with a client get a sheet of their own.
+    /// Every stop on the route in route order, custom waypoints and the warehouse included — the
+    /// overview sheet lists all of them, while only the ones that hand goods over get a sheet of
+    /// their own.
     /// </summary>
     public List<ShipmentExportStop> Stops { get; init; } = [];
 
     /// <summary>
-    /// Goods bought from the brewery on this run for our own warehouse. No client ordered them, so
-    /// they get a block on the overview sheet rather than a sheet of their own.
+    /// Goods bought from the brewery on this run for our own warehouse.
     /// </summary>
+    /// <remarks>
+    /// Also the warehouse stop's own product table, when the run has one — the pieces come off the
+    /// van there, and that stop is where a driver reads what to unload. Kept on the model as well
+    /// so a run that carries stock goods without a warehouse stop still reports them somewhere; see
+    /// <see cref="HasWarehouseStop"/>.
+    /// </remarks>
     public List<ShipmentExportProduct> StockPurchases { get; init; } = [];
 
     /// <summary>
-    /// Stops that deliver to a client, in route order — one sheet each.
+    /// Stops that deliver to a client, in route order. Counted on the overview as "Klientů", so the
+    /// warehouse is deliberately not one of them.
     /// </summary>
     /// <remarks>
     /// One client holding two stops yields two sheets, not one merged sheet. The two deliveries go
@@ -60,10 +68,27 @@ public sealed record ShipmentExportModel
     public IEnumerable<ShipmentExportStop> ClientStops => Stops.Where(s => s.ClientName is not null);
 
     /// <summary>
+    /// Stops that get a sheet of their own: every client delivery, plus the warehouse when the run
+    /// calls at it. A custom waypoint hands nothing over and so has nothing to list.
+    /// </summary>
+    public IEnumerable<ShipmentExportStop> SheetStops =>
+        Stops.Where(s => s.ClientName is not null || s.IsWarehouse);
+
+    /// <summary>
+    /// Whether the run calls at our own warehouse — which is where its stock purchases come off.
+    /// </summary>
+    public bool HasWarehouseStop => Stops.Any(s => s.IsWarehouse);
+
+    /// <summary>
     /// Pieces the run carries in total, its own stock purchases included.
     /// </summary>
+    /// <remarks>
+    /// The stock purchases are added only when no warehouse stop carries them already, or a run
+    /// with one would count them twice.
+    /// </remarks>
     public int TotalQuantity =>
-        Stops.Sum(s => s.TotalQuantity) + StockPurchases.Sum(p => p.Quantity);
+        Stops.Sum(s => s.TotalQuantity)
+        + (HasWarehouseStop ? 0 : StockPurchases.Sum(p => p.Quantity));
 
     /// <summary>
     /// Weight of everything the run carries, in kilograms. Products with no recorded weight
@@ -71,11 +96,11 @@ public sealed record ShipmentExportModel
     /// </summary>
     public double TotalWeight =>
         Stops.Sum(s => s.Products.Sum(p => (p.Weight ?? 0) * p.Quantity))
-        + StockPurchases.Sum(p => (p.Weight ?? 0) * p.Quantity);
+        + (HasWarehouseStop ? 0 : StockPurchases.Sum(p => (p.Weight ?? 0) * p.Quantity));
 }
 
 /// <summary>
-/// One stop of the run — either a client delivery or a custom waypoint.
+/// One stop of the run — a client delivery, our own warehouse, or a custom waypoint.
 /// </summary>
 public sealed record ShipmentExportStop
 {
@@ -85,14 +110,23 @@ public sealed record ShipmentExportStop
     public required int Order { get; init; }
 
     /// <summary>
-    /// Name of the client delivered to, or null for a custom stop.
+    /// Name of the client delivered to, or null for a warehouse or custom stop.
     /// </summary>
     public string? ClientName { get; init; }
 
     /// <summary>
-    /// Label of a custom stop, or null for a client delivery.
+    /// Label of a warehouse or custom stop, or null for a client delivery.
     /// </summary>
     public string? Label { get; init; }
+
+    /// <summary>
+    /// Whether this is the call at our own warehouse, where the run's stock purchases come off.
+    /// </summary>
+    /// <remarks>
+    /// It hands goods over like a client stop and so gets a sheet, but nobody is billed for them
+    /// and it is not a client — the overview's client count leaves it out.
+    /// </remarks>
+    public bool IsWarehouse { get; init; }
 
     /// <summary>
     /// Street line of the destination — <c>Dlouhá 14</c>. Null when the stop delivers to a place
@@ -136,6 +170,11 @@ public sealed record ShipmentExportStop
     /// Pieces delivered at this stop.
     /// </summary>
     public int TotalQuantity => Products.Sum(p => p.Quantity);
+
+    /// <summary>
+    /// Pieces billed to this stop's client, across every invoice they hold on the run.
+    /// </summary>
+    public int TotalInvoicedQuantity => Products.Sum(p => p.InvoicedQuantity ?? 0);
 }
 
 /// <summary>
@@ -165,9 +204,23 @@ public sealed record ShipmentExportProduct
     public double? Weight { get; init; }
 
     /// <summary>
-    /// Pieces of this item.
+    /// Pieces of this item the van actually drops — "skutečně".
     /// </summary>
     public required int Quantity { get; init; }
+
+    /// <summary>
+    /// Pieces of this item that land on the invoices of the client whose table this is —
+    /// "fakturačně" — or null where the question does not apply, which is the run's own stock
+    /// purchases: nobody is billed for goods bought into our warehouse.
+    /// </summary>
+    /// <remarks>
+    /// Differs from <see cref="Quantity"/> exactly where the Fakturace section was edited: pieces
+    /// moved onto another client's invoice, or kept off every invoice as soukromé, bill less than
+    /// they deliver, and pieces moved in from another client's order bill more. A row that bills
+    /// pieces this stop does not deliver at all — cross-billed in — carries
+    /// <see cref="Quantity"/> 0.
+    /// </remarks>
+    public int? InvoicedQuantity { get; init; }
 }
 
 /// <summary>
