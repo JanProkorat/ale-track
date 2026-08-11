@@ -110,4 +110,14 @@ public static class ErrorCodes
     /// Error code for case when the content of a closed or loaded order would be changed
     /// </summary>
     public const string OrderContentFrozen = "ORDER_CONTENT_FROZEN";
+
+    /// <summary>
+    /// Error code for case when the price list being applied is not the one that was previewed
+    /// </summary>
+    public const string PriceListSourceChanged = "PRICE_LIST_SOURCE_CHANGED";
+
+    /// <summary>
+    /// Error code for case when an uploaded price list cannot be read
+    /// </summary>
+    public const string PriceListUnreadable = "PRICE_LIST_UNREADABLE";
 }

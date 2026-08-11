@@ -90,6 +90,42 @@ public static class ThrowHelper
             });
 
     /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when the price list being applied is not the one
+    /// the caller previewed.
+    /// </summary>
+    /// <param name="expected">Hash the caller says it reviewed.</param>
+    /// <param name="actual">Hash of the file it actually sent.</param>
+    /// <exception cref="AleTrackException">
+    /// Thrown with 409 Conflict. Applying a file other than the reviewed one would write prices
+    /// nobody approved, so it is refused rather than reconciled.
+    /// </exception>
+    [DoesNotReturn]
+    public static void PriceListSourceChanged(string expected, string actual)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.PriceListSourceChanged,
+            new Dictionary<string, object>
+            {
+                { nameof(expected), expected },
+                { nameof(actual), actual }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an uploaded price list cannot be read.
+    /// </summary>
+    /// <param name="errors">Every reason the file was rejected, so one upload reports them all.</param>
+    /// <exception cref="AleTrackException">Thrown with 400 Bad Request.</exception>
+    [DoesNotReturn]
+    public static void PriceListUnreadable(IReadOnlyCollection<object> errors)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.PriceListUnreadable,
+            new Dictionary<string, object>
+            {
+                { nameof(errors), errors }
+            });
+
+    /// <summary>
     /// Throws an <see cref="AleTrackException"/> when an order is already assigned to an outgoing shipment.
     /// </summary>
     /// <param name="orderIds">Ids of the orders that are already assigned to an outgoing shipment.</param>

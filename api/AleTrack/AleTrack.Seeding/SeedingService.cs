@@ -40,6 +40,14 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorCanProducts());
         dbContext.Breweries.Add(primator);
 
+        // Primátor's builder describes packaging in the superseded shape; resolve it before
+        // anything reads a weight off these products. Rows read from a price-list catalogue already
+        // carry theirs and are left alone.
+        foreach (var brewery in (Brewery[])[svijany, rohozec, primator])
+        {
+            SeedingProductPackaging.Fill(brewery.Products);
+        }
+
         InsertOperationalData([svijany, rohozec, primator]);
 
         await dbContext.SaveChangesAsync();
@@ -177,6 +185,9 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorBottleProducts());
         primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorMultipackProducts());
         primator.Products.AddRange(PrimatorProductsBuilder.GetPrimatorCanProducts());
+
+        // Unlike the catalogue-backed breweries, Primátor's literals still need packaging resolved.
+        SeedingProductPackaging.Fill(primator.Products);
 
         await dbContext.SaveChangesAsync();
     }

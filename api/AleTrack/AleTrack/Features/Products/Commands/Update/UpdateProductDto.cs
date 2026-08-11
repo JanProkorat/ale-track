@@ -18,10 +18,21 @@ public sealed record UpdateProductDto
     public string? Description { get; set; }
     
     /// <summary>
-    /// Kind of the product
+    /// The vessel the drink is in.
     /// </summary>
-    public ProductKind Kind { get; set; }
-    
+    public ProductContainer Container { get; set; }
+
+    /// <summary>
+    /// What one sellable unit of this product is.
+    /// </summary>
+    public ProductSaleUnit SaleUnit { get; set; }
+
+    /// <summary>
+    /// How many containers one sellable unit holds. 1 for a keg, 20 for a 0.5 l crate, 12 for a
+    /// 0.33 l can tray.
+    /// </summary>
+    public int UnitsPerPackage { get; set; } = 1;
+
     /// <summary>
     /// Type of the product
     /// </summary>

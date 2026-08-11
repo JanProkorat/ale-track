@@ -607,6 +607,23 @@ export interface IClient {
      * @return Brewery deleted
      */
     deleteBreweryEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Previews what applying a price list would change
+     * @param file (optional) 
+     * @param effectiveFrom (optional) 
+     * @return Diff between the list and the catalogue
+     */
+    previewPriceListEndpoint(id: string, file: FileParameter | undefined, effectiveFrom: Date | undefined, signal?: AbortSignal): Promise<PriceListPreviewDto>;
+
+    /**
+     * Applies a previewed price list to a brewery's products
+     * @param file (optional) 
+     * @param effectiveFrom (optional) 
+     * @param sourceHash (optional) 
+     * @return Import applied
+     */
+    applyPriceListEndpoint(id: string, file: FileParameter | undefined, effectiveFrom: Date | undefined, sourceHash: string | undefined, signal?: AbortSignal): Promise<PriceListApplyResultDto>;
 }
 
 export class Client implements IClient {
@@ -6988,6 +7005,178 @@ export class Client implements IClient {
         }
         return Promise.resolve<string>(null as any);
     }
+
+    /**
+     * Previews what applying a price list would change
+     * @param file (optional) 
+     * @param effectiveFrom (optional) 
+     * @return Diff between the list and the catalogue
+     */
+    previewPriceListEndpoint(id: string, file: FileParameter | undefined, effectiveFrom: Date | undefined, signal?: AbortSignal): Promise<PriceListPreviewDto> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{Id}/price-list/preview";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = new FormData();
+        if (file === null || file === undefined)
+            throw new globalThis.Error("The parameter 'file' cannot be null.");
+        else
+            content_.append("file", file.data, file.fileName ? file.fileName : "file");
+        if (effectiveFrom === null || effectiveFrom === undefined)
+            throw new globalThis.Error("The parameter 'effectiveFrom' cannot be null.");
+        else
+            content_.append("effectiveFrom", effectiveFrom.toJSON());
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processPreviewPriceListEndpoint(_response);
+        });
+    }
+
+    protected processPreviewPriceListEndpoint(response: Response): Promise<PriceListPreviewDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = PriceListPreviewDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Price list could not be read", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Brewery not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PriceListPreviewDto>(null as any);
+    }
+
+    /**
+     * Applies a previewed price list to a brewery's products
+     * @param file (optional) 
+     * @param effectiveFrom (optional) 
+     * @param sourceHash (optional) 
+     * @return Import applied
+     */
+    applyPriceListEndpoint(id: string, file: FileParameter | undefined, effectiveFrom: Date | undefined, sourceHash: string | undefined, signal?: AbortSignal): Promise<PriceListApplyResultDto> {
+        let url_ = this.baseUrl + "/ale-track/breweries/{Id}/price-list/apply";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = new FormData();
+        if (file === null || file === undefined)
+            throw new globalThis.Error("The parameter 'file' cannot be null.");
+        else
+            content_.append("file", file.data, file.fileName ? file.fileName : "file");
+        if (effectiveFrom === null || effectiveFrom === undefined)
+            throw new globalThis.Error("The parameter 'effectiveFrom' cannot be null.");
+        else
+            content_.append("effectiveFrom", effectiveFrom.toJSON());
+        if (sourceHash === null || sourceHash === undefined)
+            throw new globalThis.Error("The parameter 'sourceHash' cannot be null.");
+        else
+            content_.append("sourceHash", sourceHash.toString());
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processApplyPriceListEndpoint(_response);
+        });
+    }
+
+    protected processApplyPriceListEndpoint(response: Response): Promise<PriceListApplyResultDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = PriceListApplyResultDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Price list could not be read", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Brewery not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result409 = FailureResponse.fromJS(resultData409);
+            return throwException("Uploaded file is not the previewed one", status, _responseText, _headers, result409);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PriceListApplyResultDto>(null as any);
+    }
 }
 
 export class FailureResponse implements IFailureResponse {
@@ -7447,6 +7636,7 @@ export interface ICreateVehicleDto {
 export enum UserRoleType {
     Admin = 0,
     User = 1,
+    Driver = 2,
 }
 
 export class ModulePermissionDto implements IModulePermissionDto {
@@ -9429,6 +9619,9 @@ export class ProductListItemDto implements IProductListItemDto {
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -9457,6 +9650,9 @@ export class ProductListItemDto implements IProductListItemDto {
             this.name = _data["name"];
             this.description = _data["description"];
             this.kind = _data["kind"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.type = _data["type"];
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
@@ -9485,6 +9681,9 @@ export class ProductListItemDto implements IProductListItemDto {
         data["name"] = this.name;
         data["description"] = this.description;
         data["kind"] = this.kind;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["type"] = this.type;
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
@@ -9506,6 +9705,9 @@ export interface IProductListItemDto {
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -9604,11 +9806,29 @@ export interface ICreateReminderDto {
     activeUntil?: Date | undefined;
 }
 
+export enum ProductContainer {
+    Keg = 1,
+    Bottle = 2,
+    Can = 3,
+    Jug = 4,
+    Other = 5,
+}
+
+export enum ProductSaleUnit {
+    Single = 1,
+    Crate = 2,
+    Multipack = 3,
+    Tray = 4,
+}
+
 export class ProductDto implements IProductDto {
     id?: string;
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -9633,6 +9853,9 @@ export class ProductDto implements IProductDto {
             this.name = _data["name"];
             this.description = _data["description"];
             this.kind = _data["kind"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.type = _data["type"];
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
@@ -9657,6 +9880,9 @@ export class ProductDto implements IProductDto {
         data["name"] = this.name;
         data["description"] = this.description;
         data["kind"] = this.kind;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["type"] = this.type;
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
@@ -9674,6 +9900,9 @@ export interface IProductDto {
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -9978,7 +10207,9 @@ export interface IDeleteProductRequest {
 export class UpdateProductDto implements IUpdateProductDto {
     name!: string;
     description?: string | undefined;
-    kind!: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type!: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -10000,7 +10231,9 @@ export class UpdateProductDto implements IUpdateProductDto {
         if (_data) {
             this.name = _data["name"];
             this.description = _data["description"];
-            this.kind = _data["kind"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.type = _data["type"];
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
@@ -10022,7 +10255,9 @@ export class UpdateProductDto implements IUpdateProductDto {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
         data["description"] = this.description;
-        data["kind"] = this.kind;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["type"] = this.type;
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
@@ -10037,7 +10272,9 @@ export class UpdateProductDto implements IUpdateProductDto {
 export interface IUpdateProductDto {
     name: string;
     description?: string | undefined;
-    kind: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -10101,7 +10338,9 @@ export interface ICreateProductsDto {
 export class CreateProductDto implements ICreateProductDto {
     name?: string;
     description?: string | undefined;
-    kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -10123,7 +10362,9 @@ export class CreateProductDto implements ICreateProductDto {
         if (_data) {
             this.name = _data["name"];
             this.description = _data["description"];
-            this.kind = _data["kind"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.type = _data["type"];
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
@@ -10145,7 +10386,9 @@ export class CreateProductDto implements ICreateProductDto {
         data = typeof data === 'object' ? data : {};
         data["name"] = this.name;
         data["description"] = this.description;
-        data["kind"] = this.kind;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["type"] = this.type;
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
@@ -10160,7 +10403,9 @@ export class CreateProductDto implements ICreateProductDto {
 export interface ICreateProductDto {
     name?: string;
     description?: string | undefined;
-    kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -15939,6 +16184,9 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -15964,6 +16212,9 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
             this.name = _data["name"];
             this.description = _data["description"];
             this.kind = _data["kind"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
             this.type = _data["type"];
             this.alcoholPercentage = _data["alcoholPercentage"];
             this.platoDegree = _data["platoDegree"];
@@ -15989,6 +16240,9 @@ export class BreweryProductListItemDto implements IBreweryProductListItemDto {
         data["name"] = this.name;
         data["description"] = this.description;
         data["kind"] = this.kind;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["unitsPerPackage"] = this.unitsPerPackage;
         data["type"] = this.type;
         data["alcoholPercentage"] = this.alcoholPercentage;
         data["platoDegree"] = this.platoDegree;
@@ -16007,6 +16261,9 @@ export interface IBreweryProductListItemDto {
     name?: string;
     description?: string | undefined;
     kind?: ProductKind;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    unitsPerPackage?: number;
     type?: ProductType;
     alcoholPercentage?: number | undefined;
     platoDegree?: number | undefined;
@@ -16183,9 +16440,15 @@ export class GetBreweryDetailRequest implements IGetBreweryDetailRequest {
 export interface IGetBreweryDetailRequest {
 }
 
-export class DeleteBreweryRequest implements IDeleteBreweryRequest {
+export class PriceListPreviewDto implements IPriceListPreviewDto {
+    sourceHash?: string;
+    effectiveFrom?: Date;
+    sourceName?: string | undefined;
+    breweryName?: string;
+    summary?: PriceListPreviewSummaryDto;
+    items?: PriceListPreviewItemDto[];
 
-    constructor(data?: IDeleteBreweryRequest) {
+    constructor(data?: IPriceListPreviewDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -16195,22 +16458,50 @@ export class DeleteBreweryRequest implements IDeleteBreweryRequest {
     }
 
     init(_data?: any) {
+        if (_data) {
+            this.sourceHash = _data["sourceHash"];
+            this.effectiveFrom = _data["effectiveFrom"] ? new Date(_data["effectiveFrom"].toString()) : undefined as any;
+            this.sourceName = _data["sourceName"];
+            this.breweryName = _data["breweryName"];
+            this.summary = _data["summary"] ? PriceListPreviewSummaryDto.fromJS(_data["summary"]) : undefined as any;
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(PriceListPreviewItemDto.fromJS(item));
+            }
+        }
     }
 
-    static fromJS(data: any): DeleteBreweryRequest {
+    static fromJS(data: any): PriceListPreviewDto {
         data = typeof data === 'object' ? data : {};
-        let result = new DeleteBreweryRequest();
+        let result = new PriceListPreviewDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["sourceHash"] = this.sourceHash;
+        data["effectiveFrom"] = this.effectiveFrom ? formatDate(this.effectiveFrom) : undefined as any;
+        data["sourceName"] = this.sourceName;
+        data["breweryName"] = this.breweryName;
+        data["summary"] = this.summary ? this.summary.toJSON() : undefined as any;
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
 
-export interface IDeleteBreweryRequest {
+export interface IPriceListPreviewDto {
+    sourceHash?: string;
+    effectiveFrom?: Date;
+    sourceName?: string | undefined;
+    breweryName?: string;
+    summary?: PriceListPreviewSummaryDto;
+    items?: PriceListPreviewItemDto[];
 }
 
 export class UpdateBreweryDto implements IUpdateBreweryDto {
@@ -16261,6 +16552,324 @@ export interface IUpdateBreweryDto {
     contactAddress?: AddressDto | undefined;
 }
 
+export class PriceListPreviewSummaryDto implements IPriceListPreviewSummaryDto {
+    added?: number;
+    repriced?: number;
+    changed?: number;
+    unchanged?: number;
+    toRemove?: number;
+    blocked?: number;
+
+    constructor(data?: IPriceListPreviewSummaryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.added = _data["added"];
+            this.repriced = _data["repriced"];
+            this.changed = _data["changed"];
+            this.unchanged = _data["unchanged"];
+            this.toRemove = _data["toRemove"];
+            this.blocked = _data["blocked"];
+        }
+    }
+
+    static fromJS(data: any): PriceListPreviewSummaryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new PriceListPreviewSummaryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["added"] = this.added;
+        data["repriced"] = this.repriced;
+        data["changed"] = this.changed;
+        data["unchanged"] = this.unchanged;
+        data["toRemove"] = this.toRemove;
+        data["blocked"] = this.blocked;
+        return data;
+    }
+}
+
+export interface IPriceListPreviewSummaryDto {
+    added?: number;
+    repriced?: number;
+    changed?: number;
+    unchanged?: number;
+    toRemove?: number;
+    blocked?: number;
+}
+
+export class PriceListPreviewItemDto implements IPriceListPreviewItemDto {
+    kind?: PriceListChangeKind;
+    name?: string;
+    productId?: string | undefined;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    volumeLiters?: number | undefined;
+    unitsPerPackage?: number;
+    priceWithVat?: number | undefined;
+    derived?: PriceDerivation;
+    changes?: PriceListFieldChange[];
+
+    constructor(data?: IPriceListPreviewItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.name = _data["name"];
+            this.productId = _data["productId"];
+            this.container = _data["container"];
+            this.saleUnit = _data["saleUnit"];
+            this.volumeLiters = _data["volumeLiters"];
+            this.unitsPerPackage = _data["unitsPerPackage"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.derived = _data["derived"];
+            if (Array.isArray(_data["changes"])) {
+                this.changes = [] as any;
+                for (let item of _data["changes"])
+                    this.changes!.push(PriceListFieldChange.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): PriceListPreviewItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new PriceListPreviewItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["name"] = this.name;
+        data["productId"] = this.productId;
+        data["container"] = this.container;
+        data["saleUnit"] = this.saleUnit;
+        data["volumeLiters"] = this.volumeLiters;
+        data["unitsPerPackage"] = this.unitsPerPackage;
+        data["priceWithVat"] = this.priceWithVat;
+        data["derived"] = this.derived;
+        if (Array.isArray(this.changes)) {
+            data["changes"] = [];
+            for (let item of this.changes)
+                data["changes"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IPriceListPreviewItemDto {
+    kind?: PriceListChangeKind;
+    name?: string;
+    productId?: string | undefined;
+    container?: ProductContainer;
+    saleUnit?: ProductSaleUnit;
+    volumeLiters?: number | undefined;
+    unitsPerPackage?: number;
+    priceWithVat?: number | undefined;
+    derived?: PriceDerivation;
+    changes?: PriceListFieldChange[];
+}
+
+export enum PriceListChangeKind {
+    Added = 1,
+    Repriced = 2,
+    Changed = 3,
+    Unchanged = 4,
+    ToRemove = 5,
+    Blocked = 6,
+}
+
+export enum PriceDerivation {
+    None = 0,
+    UnitPrice = 1,
+    PackPrice = 2,
+    WithoutVat = 4,
+}
+
+export class PriceListFieldChange implements IPriceListFieldChange {
+    field?: string;
+    before?: string | undefined;
+    after?: string | undefined;
+
+    constructor(data?: IPriceListFieldChange) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.field = _data["field"];
+            this.before = _data["before"];
+            this.after = _data["after"];
+        }
+    }
+
+    static fromJS(data: any): PriceListFieldChange {
+        data = typeof data === 'object' ? data : {};
+        let result = new PriceListFieldChange();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["field"] = this.field;
+        data["before"] = this.before;
+        data["after"] = this.after;
+        return data;
+    }
+}
+
+export interface IPriceListFieldChange {
+    field?: string;
+    before?: string | undefined;
+    after?: string | undefined;
+}
+
+export class PreviewPriceListRequest implements IPreviewPriceListRequest {
+    file?: string;
+    effectiveFrom?: Date;
+
+    constructor(data?: IPreviewPriceListRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.file = _data["file"];
+            this.effectiveFrom = _data["effectiveFrom"] ? new Date(_data["effectiveFrom"].toString()) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): PreviewPriceListRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new PreviewPriceListRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["file"] = this.file;
+        data["effectiveFrom"] = this.effectiveFrom ? formatDate(this.effectiveFrom) : undefined as any;
+        return data;
+    }
+}
+
+export interface IPreviewPriceListRequest {
+    file?: string;
+    effectiveFrom?: Date;
+}
+
+export class DeleteBreweryRequest implements IDeleteBreweryRequest {
+
+    constructor(data?: IDeleteBreweryRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteBreweryRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteBreweryRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteBreweryRequest {
+}
+
+export class PriceListApplyResultDto implements IPriceListApplyResultDto {
+    importId?: string;
+    added?: number;
+    updated?: number;
+    removed?: number;
+    blocked?: number;
+
+    constructor(data?: IPriceListApplyResultDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.importId = _data["importId"];
+            this.added = _data["added"];
+            this.updated = _data["updated"];
+            this.removed = _data["removed"];
+            this.blocked = _data["blocked"];
+        }
+    }
+
+    static fromJS(data: any): PriceListApplyResultDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new PriceListApplyResultDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["importId"] = this.importId;
+        data["added"] = this.added;
+        data["updated"] = this.updated;
+        data["removed"] = this.removed;
+        data["blocked"] = this.blocked;
+        return data;
+    }
+}
+
+export interface IPriceListApplyResultDto {
+    importId?: string;
+    added?: number;
+    updated?: number;
+    removed?: number;
+    blocked?: number;
+}
+
 export class CreateBreweryDto implements ICreateBreweryDto {
     name!: string;
     color!: string;
@@ -16309,6 +16918,50 @@ export interface ICreateBreweryDto {
     contactAddress?: AddressDto | undefined;
 }
 
+export class ApplyPriceListRequest implements IApplyPriceListRequest {
+    file?: string;
+    effectiveFrom?: Date;
+    sourceHash?: string;
+
+    constructor(data?: IApplyPriceListRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.file = _data["file"];
+            this.effectiveFrom = _data["effectiveFrom"] ? new Date(_data["effectiveFrom"].toString()) : undefined as any;
+            this.sourceHash = _data["sourceHash"];
+        }
+    }
+
+    static fromJS(data: any): ApplyPriceListRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new ApplyPriceListRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["file"] = this.file;
+        data["effectiveFrom"] = this.effectiveFrom ? formatDate(this.effectiveFrom) : undefined as any;
+        data["sourceHash"] = this.sourceHash;
+        return data;
+    }
+}
+
+export interface IApplyPriceListRequest {
+    file?: string;
+    effectiveFrom?: Date;
+    sourceHash?: string;
+}
+
 function formatDate(d: Date) {
     return d.getFullYear() + '-' + 
         (d.getMonth() < 9 ? ('0' + (d.getMonth()+1)) : (d.getMonth()+1)) + '-' +
@@ -16351,4 +17004,17 @@ function throwException(message: string, status: number, response: string, heade
         throw result;
     else
         throw new ApiException(message, status, response, headers, null);
+}
+
+/* Extra declarations copied verbatim into src/generated/api-client.ts by NSwag.
+ *
+ * NSwag references FileParameter from every multipart operation it generates but only emits the
+ * declaration for uploads described the Swagger 2 way, as a formData parameter. FastEndpoints
+ * describes them the OpenAPI 3 way, as a requestBody, so the generated client compiled against a
+ * type that was never written. Declaring it here keeps the fix in the generation step — the client
+ * itself must never be hand-edited. */
+
+export interface FileParameter {
+    data: any;
+    fileName: string;
 }

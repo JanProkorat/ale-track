@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Features.Products.Commands.Update;
+using AleTrack.Features.Products.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -25,7 +26,8 @@ public sealed class UpdateProductTests
             Data = ProductBuilder.BuildUpdateProductDto(
                 name: "Updated Product Name",
                 description: "Updated Description",
-                kind: ProductKind.Other,
+                container: ProductContainer.Jug,
+                saleUnit: ProductSaleUnit.Single,
                 type: ProductType.PaleLager,
                 alcoholPercentage: 6.0f,
                 platoDegree: 14.0f,
@@ -42,7 +44,10 @@ public sealed class UpdateProductTests
         // Verify that the product entity was updated with correct values
         product.Name.Should().Be(command.Data.Name);
         product.Description.Should().Be(command.Data.Description);
-        product.Kind.Should().Be(command.Data.Kind);
+        product.Container.Should().Be(command.Data.Container);
+        product.SaleUnit.Should().Be(command.Data.SaleUnit);
+        product.Kind.Should().Be(
+            ProductPackaging.DeriveKind(command.Data.Container, command.Data.SaleUnit));
         product.Type.Should().Be(command.Data.Type);
         product.AlcoholPercentage.Should().Be(command.Data.AlcoholPercentage);
         product.PlatoDegree.Should().Be(command.Data.PlatoDegree);

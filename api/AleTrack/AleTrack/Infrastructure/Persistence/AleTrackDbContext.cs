@@ -155,6 +155,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    /// <summary>
+    /// DbSet of <see cref="PriceListImport"/>
+    /// </summary>
+    public virtual DbSet<PriceListImport> PriceListImports => Set<PriceListImport>();
+
     // /// <summary>
     // /// DbSet of <see cref="Ean"/>
     // /// </summary>

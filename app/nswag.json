@@ -15,6 +15,7 @@
       "namespace": "",
       "typeScriptVersion": 4.3,
       "template": "Fetch",
+      "extensionCode": "nswag.extensions.ts",
       "promiseType": "Promise",
       "httpClass": "HttpClient",
       "dateTimeType": "Date",

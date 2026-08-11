@@ -1,0 +1,152 @@
+# brewery: Svijany
+# effective_from: 2026-05-01
+# source: pivovarsvijany.cz/file/2336
+#
+# Transcribed from the brewery's published price list, PLATNY OD 1. KVETNA 2026.
+# Printed figures only - the list rounds its per-0,5 l and per-package prices
+# independently, so recomputing either would misstate a real price.
+# unit_* is the list's per-0,5 l reference price wherever the list prints one; on rows
+# whose sellable unit IS one container (2 l cans, jugs, 5 l soudky) it repeats the
+# package price, which is the shape the seeded products already carry.
+# Names are the catalogue's existing short form, without the degree suffix the list
+# prints, so reading them from here is not a rename of every product.
+public_id,name,type,alcohol,plato,container,volume_l,sale_unit,units,unit_novat,unit_vat,pack_novat,pack_vat
+#
+# LAHVE - prepravka = 20 x 0,5 l
+,Svijanská Desítka,PaleDraftBeer,4.0,10,Bottle,0.5,Crate,20,13.14,15.90,,318.00
+,Svijanský Máz,PaleLager,4.8,11,Bottle,0.5,Crate,20,14.88,18.00,,360.00
+,Svijanský Fanda,UnfilteredBlendedLager,4.8,11,Bottle,0.5,Crate,20,15.70,19.00,,380.00
+,Svijany 450,PaleLagerPremium,4.6,11,Bottle,0.5,Crate,20,17.11,20.70,,414.00
+,Svijanský Rytíř,PaleLager,5.0,12,Bottle,0.5,Crate,20,15.45,18.70,,374.00
+,Svijanský Kníže,PaleStrong,5.6,13,Bottle,0.5,Crate,20,17.52,21.20,,424.00
+,Svijanská Kněžna,DarkStrong,5.2,13,Bottle,0.5,Crate,20,17.85,21.60,,432.00
+,Svijanský Baron,PaleStrong,6.5,15,Bottle,0.5,Crate,20,18.93,22.90,,458.00
+,Svijanský Vozka,NonAlcoholicBeer,0.5,,Bottle,0.5,Crate,20,12.89,15.60,,312.00
+#
+# SUDY
+,Shine,PaleDraftBeer,2.9,,Keg,30,Single,1,15.51,18.77,930.58,1126.00
+,Shine,PaleDraftBeer,2.9,,Keg,15,Single,1,16.23,19.63,486.78,589.00
+,Svijanská Desítka,PaleDraftBeer,4.0,10,Keg,50,Single,1,15.37,18.60,1537.19,1860.00
+,Svijanská Desítka,PaleDraftBeer,4.0,10,Keg,30,Single,1,15.37,18.60,922.31,1116.00
+,Svijanská Desítka,PaleDraftBeer,4.0,10,Keg,15,Single,1,16.20,19.60,485.95,588.00
+,Šlik,PaleLager,4.4,11,Keg,50,Single,1,18.60,22.50,1859.50,2250.00
+,Šlik,PaleLager,4.4,11,Keg,30,Single,1,18.60,22.50,1115.70,1350.00
+,Šlik,PaleLager,4.4,11,Keg,15,Single,1,19.42,23.50,582.64,705.00
+,Svijanský Máz,PaleLager,4.8,11,Keg,50,Single,1,17.69,21.40,1768.60,2140.00
+,Svijanský Máz,PaleLager,4.8,11,Keg,30,Single,1,17.69,21.40,1061.16,1284.00
+,Svijanský Máz,PaleLager,4.8,11,Keg,15,Single,1,18.51,22.40,555.37,672.00
+,Zámek,YeastLager,4.8,11,Keg,30,Single,1,18.51,22.40,1110.74,1344.00
+,Zámek,YeastLager,4.8,11,Keg,15,Single,1,19.34,23.40,580.17,702.00
+,Svijanský Rytíř,PaleLager,5.0,12,Keg,50,Single,1,18.18,22.00,1818.18,2200.00
+,Svijanský Rytíř,PaleLager,5.0,12,Keg,30,Single,1,18.18,22.00,1090.91,1320.00
+,Svijanský Rytíř,PaleLager,5.0,12,Keg,15,Single,1,19.01,23.00,570.25,690.00
+,Svijany 450,PaleLagerPremium,4.6,11,Keg,50,Single,1,19.59,23.70,1958.68,2370.00
+,Svijany 450,PaleLagerPremium,4.6,11,Keg,30,Single,1,19.59,23.70,1175.21,1422.00
+,Svijany 450,PaleLagerPremium,4.6,11,Keg,15,Single,1,20.41,24.70,612.40,741.00
+,Svijanský Kvasničák,PaleStrong,6.0,13,Keg,30,Single,1,19.75,23.90,1185.12,1434.00
+,Svijanský Kvasničák,PaleStrong,6.0,13,Keg,15,Single,1,20.58,24.90,617.36,747.00
+,Svijanský Kníže,PaleStrong,5.6,13,Keg,30,Single,1,19.75,23.90,1185.12,1434.00
+,Svijanský Kníže,PaleStrong,5.6,13,Keg,15,Single,1,20.58,24.90,617.36,747.00
+,Svijanská Kněžna,DarkStrong,5.2,13,Keg,30,Single,1,19.75,23.90,1185.12,1434.00
+,Svijanská Kněžna,DarkStrong,5.2,13,Keg,15,Single,1,20.58,24.90,617.36,747.00
+,Svijanský Fanda,UnfilteredBlendedLager,4.8,11,Keg,30,Single,1,17.69,21.40,1061.16,1284.00
+,Svijanský Fanda,UnfilteredBlendedLager,4.8,11,Keg,15,Single,1,18.51,22.40,555.37,672.00
+,Svijanský Baron,PaleStrong,6.5,15,Keg,30,Single,1,21.24,25.70,1274.38,1542.00
+,Svijanský Baron,PaleStrong,6.5,15,Keg,15,Single,1,22.07,26.70,661.98,801.00
+,Dux,PaleStrong,5.5,13,Keg,30,Single,1,21.13,25.57,1267.77,1534.00
+,Svátek,FestiveLager,5.0,13,Keg,30,Single,1,20.14,24.37,1208.26,1462.00
+,Bidlovka,PaleLager,5.0,,Keg,30,Single,1,20.74,25.10,1244.40,1506.00
+,Svijany 20 - výroční pivo,PaleStrong,9.5,20,Keg,15,Single,1,37.08,44.87,1112.40,1346.00
+,Weizenbier,WheatBeer,5.0,,Keg,30,Single,1,22.64,27.40,1358.68,1644.00
+,Weizenbier,WheatBeer,5.0,,Keg,15,Single,1,23.47,28.40,704.13,852.00
+,Svijanský Vozka,NonAlcoholicBeer,0.5,,Keg,30,Single,1,15.70,19.00,942.15,1140.00
+,Svijanský Vozka,NonAlcoholicBeer,0.5,,Keg,15,Single,1,16.53,20.00,495.87,600.00
+,Svijanský Vozka angrešt & červený rybíz,NonAlcoholicFlavourBeer,0.5,,Keg,30,Single,1,20.99,25.40,1259.50,1524.00
+,Svijanský Vozka angrešt & červený rybíz,NonAlcoholicFlavourBeer,0.5,,Keg,15,Single,1,21.57,26.10,647.11,783.00
+,Svijanský Vozka yuzu & bergamot,NonAlcoholicFlavourBeer,0.5,,Keg,30,Single,1,20.99,25.40,1259.50,1524.00
+,Svijanský Vozka yuzu & bergamot,NonAlcoholicFlavourBeer,0.5,,Keg,15,Single,1,21.57,26.10,647.11,783.00
+#
+# SUDY - LIMONADY
+,Svijanela Pomeranč,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Pomeranč,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Herbal Cola,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Herbal Cola,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Malina,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Malina,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Hrozno,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Hrozno,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Mango,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Mango,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Citrón,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Citrón,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Svijanela Ananas,Lemonade,,,Keg,30,Single,1,9.67,11.70,580.20,702.00
+,Svijanela Ananas,Lemonade,,,Keg,50,Single,1,9.67,11.70,967.00,1170.00
+,Soda,Lemonade,,,Keg,50,Single,1,6.94,8.40,694.00,840.00
+#
+# SOUDKY 5 L - the list prints one price per soudek and no per-0,5 l reference
+,Svijanský Máz,PaleLager,4.8,11,Keg,5,Single,1,275.21,333.00,275.21,333.00
+,Svijany 450,PaleLagerPremium,4.6,11,Keg,5,Single,1,295.04,357.00,295.04,357.00
+,Šlik,PaleLager,4.4,11,Keg,5,Single,1,295.04,357.00,295.04,357.00
+,Svijanský Rytíř,PaleLager,5.0,12,Keg,5,Single,1,280.99,340.00,280.99,340.00
+,Svijanský Kníže,PaleStrong,5.6,13,Keg,5,Single,1,290.08,351.00,290.08,351.00
+,Svijanský Kvasničák,PaleStrong,6.0,13,Keg,5,Single,1,290.08,351.00,290.08,351.00
+,Svijanský Fanda,UnfilteredBlendedLager,4.8,11,Keg,5,Single,1,280.99,340.00,280.99,340.00
+#
+# MULTIPACKY
+,Svijanský Máz - 8x,PaleLager,4.8,11,Bottle,0.5,Multipack,8,,,138.02,167.00
+,Svijany 450 - 8x,PaleLagerPremium,4.6,11,Bottle,0.5,Multipack,8,,,156.20,189.00
+,Svijanský Rytíř - 8x,PaleLager,5.0,12,Bottle,0.5,Multipack,8,,,145.45,176.00
+,Svijanský Kníže - 8x,PaleStrong,5.6,13,Bottle,0.5,Multipack,8,,,159.50,193.00
+,Svijany - 7 svijanských kousků,Mix,,,Bottle,0.5,Multipack,7,,,146.28,177.00
+,Svijany 6 piv + sklenička,Mix,,,Bottle,0.5,Multipack,6,,,167.36,202.50
+#
+# DUOPACKY - 2 x 1 l
+,Svijany 450,PaleLagerPremium,4.6,11,Bottle,1,Multipack,2,,,43.72,52.90
+,Řízni si kněžnu,MixedLager,5.6,13,Bottle,1,Multipack,2,,,43.72,52.90
+#
+# PLECHOVKY 0,5 L - tray = 24 ks, 12 ks for Shine and the Vozka nealko range
+,Shine,PaleDraftBeer,2.9,,Can,0.5,Tray,12,17.69,21.40,,256.80
+,Svijanská Desítka,PaleDraftBeer,4.0,10,Can,0.5,Tray,24,17.27,20.90,,501.60
+,Svijanský Máz,PaleLager,4.8,11,Can,0.5,Tray,24,18.10,21.90,,525.60
+,Svijany 450,PaleLagerPremium,4.6,11,Can,0.5,Tray,24,18.93,22.90,,549.60
+,Svijanský Rytíř,PaleLager,5.0,12,Can,0.5,Tray,24,18.93,22.90,,549.60
+,Svijanský Kníže,PaleStrong,5.6,13,Can,0.5,Tray,24,19.42,23.50,,564.00
+,Svijanská Kněžna,DarkStrong,5.2,13,Can,0.5,Tray,24,19.75,23.90,,573.60
+,Svijanský Baron,PaleStrong,6.5,15,Can,0.5,Tray,24,21.07,25.50,,612.00
+,Svijanský Vozka,NonAlcoholicBeer,0.5,,Can,0.5,Tray,12,18.10,21.90,,262.80
+,Svijanský Vozka černý rybíz & limetka,NonAlcoholicFlavourBeer,0.5,,Can,0.5,Tray,12,20.66,25.00,,300.00
+,Svijanský Vozka yuzu & bergamot,NonAlcoholicFlavourBeer,0.5,,Can,0.5,Tray,12,20.66,25.00,,300.00
+,Svijanský Vozka angrešt & červený rybíz,NonAlcoholicFlavourBeer,0.5,,Can,0.5,Tray,12,20.66,25.00,,300.00
+# The MixClip is a mixed six-can pack; the list prices it per clip and per tray of four
+# clips. A mixed clip has no per-can price, so the clip itself is the sellable unit.
+,6-Pack mix svijanských piv,Mix,,,Can,0.5,Multipack,6,,,120.58,145.90
+#
+# PLECHOVKY 0,33 L
+,Svijany 450,PaleLagerPremium,4.6,11,Can,0.33,Tray,24,18.10,21.90,,525.60
+#
+# SVIJANELA PLECHOVKY 0,5 L - tray = 12 ks
+,Svijanela Pomeranč,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Herbal Cola,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Malina,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Hrozno,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Mango,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Citrón,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela Ananas,Lemonade,,,Can,0.5,Tray,12,21.40,25.90,256.80,310.80
+,Svijanela MixClip,Lemonade,,,Can,0.5,Multipack,6,,,128.43,155.40
+#
+# PLECHOVKY 2L - priced za kus
+,Svijanský Máz,PaleLager,4.8,11,Can,2,Single,1,119.83,145.00,119.83,145.00
+,Šlik,PaleLager,4.4,11,Can,2,Single,1,123.14,149.00,123.14,149.00
+,Zámek,YeastLager,4.8,11,Can,2,Single,1,128.93,156.00,128.93,156.00
+,Svijany 450,PaleLagerPremium,4.6,11,Can,2,Single,1,129.75,157.00,129.75,157.00
+,Svijanský Rytíř,PaleLager,5.0,12,Can,2,Single,1,123.97,150.00,123.97,150.00
+,Svijanský Kníže,PaleStrong,5.6,13,Can,2,Single,1,132.20,160.00,132.20,160.00
+,Svijanský Baron,PaleStrong,6.5,15,Can,2,Single,1,137.19,166.00,137.19,166.00
+,Dux,PaleStrong,5.5,13,Can,2,Single,1,139.67,169.00,139.67,169.00
+#
+# DEKORATIVNI LAHVE, DZBANY
+,Svijanský Kvasničák,PaleStrong,6.0,13,Jug,2,Single,1,404.96,490.00,404.96,490.00
+,Svijanský Kvasničák,PaleStrong,6.0,13,Jug,1,Single,1,135.54,164.00,135.54,164.00
+,Svijanský Fanda,UnfilteredBlendedLager,4.8,11,Jug,1,Single,1,128.10,155.00,128.10,155.00
+,Pivo přímo ze sklepa lahev,OriginalCraftLager,4.9,11,Jug,1,Single,1,81.82,99.00,81.82,99.00
+,Svijany 20 - výroční pivo,PaleStrong,9.5,20,Jug,1,Single,1,94.21,114.00,94.21,114.00

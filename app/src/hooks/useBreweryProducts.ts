@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
-import { type CreateProductsDto, type UpdateProductDto } from 'src/generated/api-client';
+import {
+  type CreateProductsDto, type FileParameter, type UpdateProductDto,
+} from 'src/generated/api-client';
 
 /** The brewery's ceník (price list). */
 export function useBreweryProducts(breweryId: string | undefined, params: Record<string, string> = {}) {
@@ -34,6 +36,39 @@ export function useUpdateProduct(breweryId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.breweryProducts(breweryId) });
       qc.invalidateQueries({ queryKey: qk.products.all });
+    },
+  });
+}
+
+/**
+ * Ask what an uploaded price list would change. Writes nothing, so it is a mutation only in the
+ * sense that it posts a file — the returned `sourceHash` is what ties the apply below to the diff
+ * the user actually reviewed.
+ */
+export function usePreviewPriceList(breweryId: string) {
+  const ds = useDataSource();
+  return useMutation({
+    mutationFn: ({ file, effectiveFrom }: { file: FileParameter; effectiveFrom: Date }) =>
+      ds.previewPriceListEndpoint(breweryId, file, effectiveFrom),
+  });
+}
+
+/** Apply a previewed price list. The API rejects a file that no longer matches `sourceHash`. */
+export function useApplyPriceList(breweryId: string) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, effectiveFrom, sourceHash }: {
+      file: FileParameter;
+      effectiveFrom: Date;
+      sourceHash: string;
+    }) => ds.applyPriceListEndpoint(breweryId, file, effectiveFrom, sourceHash),
+    onSuccess: () => {
+      // An import can add, reprice and remove at once, so nothing narrower than the whole
+      // product surface is safe to keep.
+      qc.invalidateQueries({ queryKey: qk.breweryProducts(breweryId) });
+      qc.invalidateQueries({ queryKey: qk.products.all });
+      qc.invalidateQueries({ queryKey: qk.inventory.all });
     },
   });
 }

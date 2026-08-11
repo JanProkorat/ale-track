@@ -154,11 +154,19 @@ public sealed class ProductWeightCalculatorTests
     {
         var crate = new Product
         {
-            Kind = ProductKind.Bottle, PackageSize = BottleSize.ZeroPointFiveLiters, UnitsPerPackage = 20,
+            Container = ProductContainer.Bottle,
+            SaleUnit = ProductSaleUnit.Crate,
+            PackageSize = BottleSize.ZeroPointFiveLiters,
+            UnitsPerPackage = 20,
         };
         crate.Weight.Should().BeApproximately(19.7, 0.001);
 
-        var keg = new Product { Kind = ProductKind.Keg, PackageSize = KegSize.FiftyLiters };
+        var keg = new Product
+        {
+            Container = ProductContainer.Keg,
+            SaleUnit = ProductSaleUnit.Single,
+            PackageSize = KegSize.FiftyLiters,
+        };
         keg.Weight.Should().Be(62.0);
     }
 

@@ -65,11 +65,13 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
                 Name = product.Name,
                 Description = product.Description,
                 Type = product.Type,
-                Kind = product.Kind,
+                Container = product.Container,
+                SaleUnit = product.SaleUnit,
+                // Denormalised from the pair above for the reporting projections, which select it
+                // in SQL and so cannot call a computed property.
+                Kind = ProductPackaging.DeriveKind(product.Container, product.SaleUnit),
                 PackageSize = product.PackageSize,
-                // Derived from the product's own details, never supplied by the caller.
-                UnitsPerPackage = ProductUnitsResolver.Resolve(
-                    product.Kind, product.PackageSize, product.Name),
+                UnitsPerPackage = product.UnitsPerPackage,
                 PriceForUnitWithoutVat = product.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = product.PriceForUnitWithVat,
                 PriceWithVat = product.PriceWithVat,

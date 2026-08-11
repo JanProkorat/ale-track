@@ -60,7 +60,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipmentStopItem>? outgoingShipmentStopItems = null,
         ICollection<OutgoingShipmentLoadingState>? outgoingShipmentLoadingStates = null,
         ICollection<RefreshToken>? refreshTokens = null,
-        ICollection<ClientDeliveryPlace>? clientDeliveryPlaces = null)
+        ICollection<ClientDeliveryPlace>? clientDeliveryPlaces = null,
+        ICollection<PriceListImport>? priceListImports = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -86,7 +87,8 @@ public static class AleTrackDbContextMockFactory
             outgoingShipmentStopItems ?? [],
             outgoingShipmentLoadingStates ?? [],
             refreshTokens ?? [],
-            clientDeliveryPlaces ?? []);
+            clientDeliveryPlaces ?? [],
+            priceListImports ?? []);
     }
 
     /// <summary>
@@ -129,7 +131,8 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipmentStopItem> outgoingShipmentStopItems,
         ICollection<OutgoingShipmentLoadingState> outgoingShipmentLoadingStates,
         ICollection<RefreshToken> refreshTokens,
-        ICollection<ClientDeliveryPlace> clientDeliveryPlaces)
+        ICollection<ClientDeliveryPlace> clientDeliveryPlaces,
+        ICollection<PriceListImport> priceListImports)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -153,6 +156,7 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<OutgoingShipmentLoadingState>>(x => x.OutgoingShipmentLoadingStates).ReturnsDbSet(outgoingShipmentLoadingStates);
         dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
         dbContextMock.Setup<DbSet<ClientDeliveryPlace>>(x => x.ClientDeliveryPlaces).ReturnsDbSet(clientDeliveryPlaces);
+        dbContextMock.Setup<DbSet<PriceListImport>>(x => x.PriceListImports).ReturnsDbSet(priceListImports);
 
         return dbContextMock;
     }
