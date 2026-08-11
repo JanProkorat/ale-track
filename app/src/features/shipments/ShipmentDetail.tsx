@@ -1060,12 +1060,20 @@ export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
 export function ShipmentDetail({
   shipment,
   editable,
+  canSeeInvoicing = true,
+  canSeeLoadingBreakdown = true,
   onBack,
   onEdit,
   onOpenOrder,
 }: {
   shipment: OutgoingShipmentDetailDto;
   editable: boolean;
+  /** Fakturace section. Denied to drivers, and the endpoint behind it 403s for them,
+   *  so the section is dropped rather than left to fail. */
+  canSeeInvoicing?: boolean;
+  /** The Vše / F1 / F2 aggregation tabs. Denied to drivers, who get the Vykládka
+   *  view as the card's only content. */
+  canSeeLoadingBreakdown?: boolean;
   onBack: () => void;
   onEdit: () => void;
   /** Navigates to a stop's source order. Left out when the user has no access
@@ -1177,7 +1185,11 @@ export function ShipmentDetail({
   ], [invoiceColumns]);
 
   // A deleted invoice must not leave the table filtered by a column that is gone.
-  const activeFilter = filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
+  // Without the breakdown capability the filter is pinned to the unload view: the
+  // aggregation is never rendered, so nothing can select it.
+  const activeFilter = !canSeeLoadingBreakdown
+    ? UNLOAD_VIEW
+    : filterOptions.some((o) => o.value === invoiceFilter) ? invoiceFilter : ALL_INVOICES;
 
   // The driver's stop-by-stop unload order, for the Vykládka tab. Kept in
   // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
@@ -1556,7 +1568,11 @@ export function ShipmentDetail({
                   label={`Zkontrolováno ${progress.checked}/${progress.total}`}
                 />
                 <Box sx={{ flex: 1 }} />
-                <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
+                {/* A one-option toggle is worse than none, so it goes entirely rather
+                    than rendering a lone Vykládka button. */}
+                {canSeeLoadingBreakdown && (
+                  <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
+                )}
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
                 <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} />
@@ -1774,10 +1790,13 @@ export function ShipmentDetail({
       </Box>
 
       {/* Full width below the grid: the split needs the whole row, and its audience
-          (the office doing the billing) is not the nakládka's. */}
-      <Box sx={{ mt: 2.5 }}>
-        <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
-      </Box>
+          (the office doing the billing) is not the nakládka's. The wrapper goes with
+          it when hidden, so no orphan margin is left behind. */}
+      {canSeeInvoicing && (
+        <Box sx={{ mt: 2.5 }}>
+          <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
+        </Box>
+      )}
 
       <Dialog open={stockPurchaseOpen} onClose={() => setStockPurchaseOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Zboží na sklad</DialogTitle>

@@ -47,6 +47,7 @@ public static class AuthenticationExtensions
     public static IServiceCollection AddUserAuthorization(this IServiceCollection services)
     {
         services.AddSingleton<IAuthorizationHandler, ModulePermissionHandler>();
+        services.AddSingleton<IAuthorizationHandler, CapabilityHandler>();
 
         var builder = services.AddAuthorizationBuilder()
             .AddPolicy(nameof(UserRoleType.Admin), policy => policy.RequireRole(nameof(UserRoleType.Admin)))
@@ -62,6 +63,17 @@ public static class AuthenticationExtensions
                     ModulePermissionRequirement.PolicyName(module, level),
                     policy => policy.AddRequirements(new ModulePermissionRequirement(module, level)));
             }
+        }
+
+        // One policy per capability, ANDed with the module policy on the endpoints that
+        // expose restricted content.
+        foreach (var capability in Enum.GetValues<Capability>())
+        {
+            builder.AddPolicy(
+                CapabilityRequirement.PolicyName(capability),
+                policy => policy
+                    .RequireAuthenticatedUser()
+                    .AddRequirements(new CapabilityRequirement(capability)));
         }
 
         return services;

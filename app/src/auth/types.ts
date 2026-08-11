@@ -1,6 +1,6 @@
 import { type Permissions } from './permissions';
 
-export type UserRole = 'Admin' | 'User';
+export type UserRole = 'Admin' | 'User' | 'Driver';
 
 export interface CurrentUser {
   id: string;

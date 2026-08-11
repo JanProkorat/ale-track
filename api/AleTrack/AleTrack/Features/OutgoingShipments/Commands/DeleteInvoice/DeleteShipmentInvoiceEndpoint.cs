@@ -44,6 +44,7 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext) :
         Delete("outgoing-shipments/{Id:guid}/invoices/{InvoiceId:guid}");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
+            .RequireCapability(Capability.Invoicing)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)

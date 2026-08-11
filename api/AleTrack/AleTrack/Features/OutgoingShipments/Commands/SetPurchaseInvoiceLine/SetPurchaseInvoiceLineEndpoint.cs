@@ -92,6 +92,7 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
         Put("outgoing-shipments/{Id:guid}/purchase-invoices/lines");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
+            .RequireCapability(Capability.Invoicing)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)

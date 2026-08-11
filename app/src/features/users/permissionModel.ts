@@ -72,6 +72,27 @@ export function isAdminUser(u: Pick<UserListItemDto, 'userRoles'>): boolean {
   return (u.userRoles ?? []).includes(UserRoleType.Admin);
 }
 
+/** The three assignable roles, in the order the form offers them. */
+export const ASSIGNABLE_ROLES = [UserRoleType.Admin, UserRoleType.User, UserRoleType.Driver] as const;
+
+export const ROLE_LABELS: Record<UserRoleType, string> = {
+  [UserRoleType.Admin]: 'Administrátor',
+  [UserRoleType.User]: 'Uživatel',
+  [UserRoleType.Driver]: 'Řidič',
+};
+
+/**
+ * The single role a user is treated as. The form assigns exactly one, but nothing on
+ * the backend enforces that, so a user carrying several resolves to the most privileged
+ * — matching how the backend's capability check lets an Admin claim win.
+ */
+export function roleOf(u: Pick<UserListItemDto, 'userRoles'>): UserRoleType {
+  const roles = u.userRoles ?? [];
+  if (roles.includes(UserRoleType.Admin)) return UserRoleType.Admin;
+  if (roles.includes(UserRoleType.Driver)) return UserRoleType.Driver;
+  return UserRoleType.User;
+}
+
 /** Counts of edit/view grants for the list summary. */
 export function permCounts(u: Pick<UserListItemDto, 'permissions'>): { edit: number; view: number } {
   let edit = 0;

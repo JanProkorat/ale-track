@@ -25,7 +25,7 @@ import { ShipmentEditor } from './ShipmentEditor';
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
  * is URL-driven: /shipments (list), /shipments/:id (detail), /shipments/new + /:id/edit. */
 export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
-  const { canEdit, canSee } = useAuth();
+  const { canEdit, canSee, can } = useAuth();
   const editable = canEdit('shipments');
   const navigate = useNavigate();
   const { id } = useParams();
@@ -129,6 +129,10 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
             <ShipmentDetail
               shipment={shipment}
               editable={editable}
+              // Resolved here rather than inside the detail, same as `editable`:
+              // the screen stays renderable without an auth provider.
+              canSeeInvoicing={can('invoicing')}
+              canSeeLoadingBreakdown={can('loadingBreakdown')}
               onBack={() => navigate(PATHS.shipments)}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
               // The order is opened as a detour from this vývoz, so it carries

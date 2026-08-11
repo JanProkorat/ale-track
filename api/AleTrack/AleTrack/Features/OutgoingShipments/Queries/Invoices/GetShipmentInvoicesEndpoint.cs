@@ -44,6 +44,7 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext)
         Get("outgoing-shipments/{Id:guid}/invoices");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
+            .RequireCapability(Capability.Invoicing)
             .Produces<ShipmentInvoicesDto>()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetShipmentInvoicesEndpoint)));
