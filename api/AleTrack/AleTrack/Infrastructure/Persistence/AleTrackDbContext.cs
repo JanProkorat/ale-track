@@ -160,6 +160,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<PriceListImport> PriceListImports => Set<PriceListImport>();
 
+    /// <summary>
+    /// DbSet of <see cref="RoleCapability"/>
+    /// </summary>
+    public virtual DbSet<RoleCapability> RoleCapabilities => Set<RoleCapability>();
+
     // /// <summary>
     // /// DbSet of <see cref="Ean"/>
     // /// </summary>
