@@ -47,7 +47,8 @@ public static class AuthenticationExtensions
     public static IServiceCollection AddUserAuthorization(this IServiceCollection services)
     {
         services.AddSingleton<IAuthorizationHandler, ModulePermissionHandler>();
-        services.AddSingleton<IAuthorizationHandler, CapabilityHandler>();
+        services.AddScoped<RoleCapabilityPolicy>();
+        services.AddScoped<IAuthorizationHandler, CapabilityHandler>();
 
         var builder = services.AddAuthorizationBuilder()
             .AddPolicy(nameof(UserRoleType.Admin), policy => policy.RequireRole(nameof(UserRoleType.Admin)))

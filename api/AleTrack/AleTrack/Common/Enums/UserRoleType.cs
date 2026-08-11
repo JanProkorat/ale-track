@@ -17,9 +17,8 @@ public enum UserRoleType
 
     /// <summary>
     /// A driver in the field. Granted access through the same permission matrix as
-    /// <see cref="Manager"/>, but denied the capabilities in
-    /// <see cref="Authorization.RoleCapabilities"/> — invoicing, the loading breakdown
-    /// and money — so the shipment screen shows only what is needed on the road.
+    /// <see cref="Manager"/>, but denied capabilities configured per role in the
+    /// role_capabilities table — by default invoicing, the loading breakdown and money.
     /// </summary>
     Driver
 }

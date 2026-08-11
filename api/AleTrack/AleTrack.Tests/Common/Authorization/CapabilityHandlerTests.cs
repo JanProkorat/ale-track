@@ -1,8 +1,14 @@
 using System.Security.Claims;
 using AleTrack.Common.Authorization;
 using AleTrack.Common.Enums;
+using AleTrack.Entities;
+using AleTrack.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Moq;
+using Moq.EntityFrameworkCore;
 
 namespace AleTrack.Tests.Common.Authorization;
 
@@ -13,7 +19,10 @@ namespace AleTrack.Tests.Common.Authorization;
 /// </summary>
 public sealed class CapabilityHandlerTests
 {
-    private static async Task<bool> SucceedsAsync(Capability capability, params UserRoleType[] roles)
+    private static async Task<bool> SucceedsAsync(
+        Capability capability,
+        RoleCapability[] rows,
+        params UserRoleType[] roles)
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             roles.Select(r => new Claim(ClaimTypes.Role, r.ToString())),
@@ -21,13 +30,30 @@ public sealed class CapabilityHandlerTests
             nameType: ClaimTypes.Name,
             roleType: ClaimTypes.Role));
 
+        var dbContext = new Mock<AleTrackDbContext>(new DbContextOptions<AleTrackDbContext>());
+        dbContext.Setup(x => x.RoleCapabilities).ReturnsDbSet(rows);
+        var policy = new RoleCapabilityPolicy(dbContext.Object, new MemoryCache(new MemoryCacheOptions()));
+
         var requirement = new CapabilityRequirement(capability);
         var context = new AuthorizationHandlerContext([requirement], principal, resource: null);
 
-        await new CapabilityHandler().HandleAsync(context);
+        await new CapabilityHandler(policy).HandleAsync(context);
 
         return context.HasSucceeded;
     }
+
+    private static RoleCapability[] DriverDeniedInvoicing() =>
+    [
+        new() { Role = UserRoleType.Driver, CapabilityKey = nameof(Capability.Invoicing), IsVisible = false }
+    ];
+
+    private static RoleCapability[] DriverDeniedEveryCapability() =>
+        Enum.GetValues<Capability>()
+            .Select(capability => new RoleCapability
+            {
+                Role = UserRoleType.Driver, CapabilityKey = capability.ToString(), IsVisible = false
+            })
+            .ToArray();
 
     [Theory]
     [InlineData(Capability.Invoicing)]
@@ -35,7 +61,7 @@ public sealed class CapabilityHandlerTests
     [InlineData(Capability.Money)]
     public async Task HandleAsync_CallerIsAdmin_SucceedsForEveryCapability(Capability capability)
     {
-        (await SucceedsAsync(capability, UserRoleType.Admin)).Should().BeTrue();
+        (await SucceedsAsync(capability, DriverDeniedEveryCapability(), UserRoleType.Admin)).Should().BeTrue();
     }
 
     [Theory]
@@ -44,7 +70,7 @@ public sealed class CapabilityHandlerTests
     [InlineData(Capability.Money)]
     public async Task HandleAsync_CallerIsPlainUser_SucceedsForEveryCapability(Capability capability)
     {
-        (await SucceedsAsync(capability, UserRoleType.Manager)).Should().BeTrue();
+        (await SucceedsAsync(capability, DriverDeniedEveryCapability(), UserRoleType.Manager)).Should().BeTrue();
     }
 
     [Theory]
@@ -53,7 +79,7 @@ public sealed class CapabilityHandlerTests
     [InlineData(Capability.Money)]
     public async Task HandleAsync_CallerIsDriver_FailsForEveryDeniedCapability(Capability capability)
     {
-        (await SucceedsAsync(capability, UserRoleType.Driver)).Should().BeFalse();
+        (await SucceedsAsync(capability, DriverDeniedEveryCapability(), UserRoleType.Driver)).Should().BeFalse();
     }
 
     /// <summary>
@@ -63,10 +89,10 @@ public sealed class CapabilityHandlerTests
     [Fact]
     public async Task HandleAsync_CallerIsDriverAndUser_DenialWins()
     {
-        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Driver, UserRoleType.Manager))
+        (await SucceedsAsync(Capability.Invoicing, DriverDeniedInvoicing(), UserRoleType.Driver, UserRoleType.Manager))
             .Should().BeFalse();
 
-        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Manager, UserRoleType.Driver))
+        (await SucceedsAsync(Capability.Invoicing, DriverDeniedInvoicing(), UserRoleType.Manager, UserRoleType.Driver))
             .Should().BeFalse();
     }
 
@@ -77,7 +103,7 @@ public sealed class CapabilityHandlerTests
     [Fact]
     public async Task HandleAsync_CallerIsDriverAndAdmin_AdminShortCircuitWins()
     {
-        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Driver, UserRoleType.Admin))
+        (await SucceedsAsync(Capability.Invoicing, DriverDeniedInvoicing(), UserRoleType.Driver, UserRoleType.Admin))
             .Should().BeTrue();
     }
 
@@ -90,6 +116,21 @@ public sealed class CapabilityHandlerTests
     [Fact]
     public async Task HandleAsync_NoRoles_SucceedsBecauseAuthenticationIsThePolicysJob()
     {
-        (await SucceedsAsync(Capability.Invoicing)).Should().BeTrue();
+        (await SucceedsAsync(Capability.Invoicing, DriverDeniedInvoicing())).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The point of moving policy into the database: a row flipped to visible lets the role
+    /// through without a deploy.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DriverRowFlippedToVisible_Succeeds()
+    {
+        RoleCapability[] rows =
+        [
+            new() { Role = UserRoleType.Driver, CapabilityKey = nameof(Capability.Invoicing), IsVisible = true }
+        ];
+
+        (await SucceedsAsync(Capability.Invoicing, rows, UserRoleType.Driver)).Should().BeTrue();
     }
 }
