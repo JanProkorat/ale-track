@@ -131,8 +131,8 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               editable={editable}
               // Resolved here rather than inside the detail, same as `editable`:
               // the screen stays renderable without an auth provider.
-              canSeeInvoicing={can('invoicing')}
-              canSeeLoadingBreakdown={can('loadingBreakdown')}
+              canSeeInvoicing={can('Invoicing')}
+              canSeeLoadingBreakdown={can('LoadingBreakdown')}
               onBack={() => navigate(PATHS.shipments)}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
               // The order is opened as a detour from this vývoz, so it carries

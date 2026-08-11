@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { type CurrentUser } from './types';
 import { canEdit as canEditPerms, canSee as canSeePerms, type ModuleKey } from './permissions';
-import { capabilitiesFor, type Capability } from './capabilities';
+import { type Capability } from './capabilityRegistry';
 import { userFromToken, isTokenExpired } from './jwt';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginUserDto } from 'src/generated/api-client';
@@ -120,18 +120,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   const value = useMemo<AuthContextValue>(
-    () => {
-      const caps = capabilitiesFor(user?.roles ?? []);
-      return {
-        user,
-        isAuthenticated: user !== null,
-        signIn,
-        signOut,
-        canSee: (m) => (user ? canSeePerms(user.perms, m) : false),
-        canEdit: (m) => (user ? canEditPerms(user.perms, m) : false),
-        can: (c) => (user ? caps[c] : false),
-      };
-    },
+    () => ({
+      user,
+      isAuthenticated: user !== null,
+      signIn,
+      signOut,
+      canSee: (m) => (user ? canSeePerms(user.perms, m) : false),
+      canEdit: (m) => (user ? canEditPerms(user.perms, m) : false),
+      can: (c) => user?.caps[c] ?? false,
+    }),
     [user, signIn, signOut]
   );
 

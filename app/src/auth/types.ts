@@ -1,3 +1,4 @@
+import { type Capabilities } from './capabilities';
 import { type Permissions } from './permissions';
 
 export type UserRole = 'Admin' | 'Manager' | 'Driver';
@@ -9,6 +10,7 @@ export interface CurrentUser {
   lastName?: string;
   roles: UserRole[];
   perms: Permissions;
+  caps: Capabilities;
 }
 
 export interface AuthTokens {

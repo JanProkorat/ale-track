@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { userFromToken } from './jwt';
-import { capabilitiesFor } from './capabilities';
 
 const CLAIM_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
 const CLAIM_NAME = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name';
@@ -26,7 +25,12 @@ describe('userFromToken', () => {
     const user = userFromToken(tokenWith({ [CLAIM_NAME]: 'novak', [CLAIM_ROLE]: 'Driver' }));
 
     expect(user?.roles).not.toContain('Manager');
-    expect(capabilitiesFor(user!.roles).invoicing).toBe(false);
+  });
+
+  it('decodes cap claims onto the user', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Invoicing', 'Money'] }));
+
+    expect(user?.caps).toEqual({ Invoicing: false, LoadingBreakdown: true, Money: false });
   });
 
   it('keeps multiple role claims', () => {

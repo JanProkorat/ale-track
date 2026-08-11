@@ -1,4 +1,5 @@
 import { jwtDecode } from 'jwt-decode';
+import { capabilitiesFromClaims } from './capabilities';
 import { type CurrentUser, type UserRole } from './types';
 import {
   allPerms,
@@ -9,8 +10,9 @@ import {
   type Permissions,
 } from './permissions';
 
-// The backend issues standard-URI claims plus one custom "perm" claim per
-// module carrying "Module:Level" (e.g. "Orders:Edit").
+// The backend issues standard-URI claims plus one custom "perm" claim per module carrying
+// "Module:Level" (e.g. "Orders:Edit"), and one custom "cap" claim per capability the
+// caller's roles may not see (e.g. "Invoicing").
 const CLAIM = {
   id: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
   name: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
@@ -18,6 +20,7 @@ const CLAIM = {
   surname: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname',
   role: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
   perm: 'perm',
+  cap: 'cap',
 } as const;
 
 interface JwtPayload {
@@ -74,6 +77,7 @@ export function userFromToken(accessToken: string): CurrentUser | null {
       lastName: p[CLAIM.surname] ? String(p[CLAIM.surname]) : undefined,
       roles: roles.length ? roles : ['Manager'],
       perms: isAdmin ? allPerms('edit') : permsFromClaims(asArray(p[CLAIM.perm])),
+      caps: capabilitiesFromClaims(roles.length ? roles : ['Manager'], asArray(p[CLAIM.cap])),
     };
   } catch {
     return null;

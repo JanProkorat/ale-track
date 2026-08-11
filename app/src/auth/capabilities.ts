@@ -2,42 +2,39 @@
 // module × level matrix in permissions.ts: the matrix grants access to a module, a
 // capability subtracts part of it.
 //
-// This table mirrors the backend's RoleCapabilities, which is the authority — the
-// endpoints enforce Invoicing and Money themselves (403). The copy here exists so a
-// driver isn't shown chrome that would only 403 or sit empty.
+// The backend is the authority — role capability visibility is stored in the database
+// (editable via the role-capabilities admin screen) and the endpoints enforce Invoicing
+// and Money themselves (403). The backend stamps every capability the caller's roles do
+// NOT see as a "cap" claim on the access token; capabilitiesFromClaims below resolves
+// those claims into a full Capabilities map so a driver isn't shown chrome that would
+// only 403 or sit empty.
 //
 // LoadingBreakdown has no server-side counterpart on purpose: the Vše/F1/F2 tabs
 // aggregate quantity data drivers legitimately receive for the unload view, so it is
 // a decluttering capability, not a security boundary.
+import { CAPABILITY_REGISTRY, type Capability } from './capabilityRegistry';
 import { type UserRole } from './types';
 
-export const CAPABILITIES = ['invoicing', 'loadingBreakdown', 'money'] as const;
-
-export type Capability = (typeof CAPABILITIES)[number];
 export type Capabilities = Record<Capability, boolean>;
 
-/** Capabilities each role is denied. A role absent here is denied nothing. */
-const DENIED_BY_ROLE: Partial<Record<UserRole, readonly Capability[]>> = {
-  Driver: ['invoicing', 'loadingBreakdown', 'money'],
-};
-
 function all(value: boolean): Capabilities {
-  return Object.fromEntries(CAPABILITIES.map((c) => [c, value])) as Capabilities;
+  return Object.fromEntries(CAPABILITY_REGISTRY.map((c) => [c.key, value])) as Capabilities;
 }
 
 /**
- * Resolve a role set into capabilities. Admin short-circuits to all-allowed, matching
- * the module matrix where Admin bypasses permissions entirely; otherwise the rule is
- * deny-if-any-denies, because nothing on the backend enforces one role per account.
+ * Resolve the capability set from the token: Admin sees everything, otherwise every registry
+ * key is allowed except those the backend named in a `cap` claim. Unknown claim keys are
+ * ignored — a capability removed from the registry must not break an old token.
  */
-export function capabilitiesFor(roles: readonly UserRole[]): Capabilities {
+export function capabilitiesFromClaims(
+  roles: readonly UserRole[],
+  hiddenKeys: readonly string[],
+): Capabilities {
   if (roles.includes('Admin')) return all(true);
 
   const caps = all(true);
-  for (const role of roles) {
-    for (const denied of DENIED_BY_ROLE[role] ?? []) {
-      caps[denied] = false;
-    }
+  for (const key of hiddenKeys) {
+    if (key in caps) caps[key as Capability] = false;
   }
   return caps;
 }

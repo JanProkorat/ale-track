@@ -1,43 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { CAPABILITIES, capabilitiesFor, roleOfRoles, ROLE_CLAIM_LABELS } from './capabilities';
+import { capabilitiesFromClaims, roleOfRoles, ROLE_CLAIM_LABELS } from './capabilities';
 import { type UserRole } from './types';
 
-describe('capabilitiesFor', () => {
-  it('allows everything for a plain user', () => {
-    const caps = capabilitiesFor(['Manager']);
-    expect(CAPABILITIES.every((c) => caps[c])).toBe(true);
+describe('capabilitiesFromClaims', () => {
+  it('allows everything when no capability is hidden', () => {
+    const caps = capabilitiesFromClaims(['Manager'], []);
+    expect(Object.values(caps).every(Boolean)).toBe(true);
   });
 
-  it('allows everything for an admin', () => {
-    const caps = capabilitiesFor(['Admin']);
-    expect(CAPABILITIES.every((c) => caps[c])).toBe(true);
-  });
-
-  it('denies invoicing, the loading breakdown and money to a driver', () => {
-    expect(capabilitiesFor(['Driver'])).toEqual({
-      invoicing: false,
-      loadingBreakdown: false,
-      money: false,
+  it('hides exactly the keys the token names', () => {
+    expect(capabilitiesFromClaims(['Driver'], ['Invoicing', 'Money'])).toEqual({
+      Invoicing: false,
+      LoadingBreakdown: true,
+      Money: false,
     });
   });
 
-  // Nothing on the backend enforces one role per account, so the resolver has to
-  // land on the restrictive answer no matter what order the claims arrive in.
-  it.each<UserRole[][]>([[['Driver', 'Manager']], [['Manager', 'Driver']]])(
-    'denies when any role denies (%j)',
-    (roles) => {
-      expect(capabilitiesFor(roles).invoicing).toBe(false);
-    }
-  );
-
-  // Matches the module matrix, where Admin bypasses permissions entirely.
-  it('lets an admin claim win over a denying role', () => {
-    expect(capabilitiesFor(['Driver', 'Admin']).invoicing).toBe(true);
+  it('ignores an unknown claim key', () => {
+    expect(capabilitiesFromClaims(['Driver'], ['Wizardry']).Invoicing).toBe(true);
   });
 
-  it('denies nothing for a role-less user, leaving access to the permission matrix', () => {
-    const caps = capabilitiesFor([]);
-    expect(CAPABILITIES.every((c) => caps[c])).toBe(true);
+  it('lets Admin override any hidden key', () => {
+    expect(capabilitiesFromClaims(['Admin'], ['Invoicing']).Invoicing).toBe(true);
   });
 });
 
@@ -57,8 +41,8 @@ describe('roleOfRoles', () => {
     }
   );
 
-  // Matches capabilitiesFor's Admin short-circuit — Admin must win even over a role that
-  // would otherwise restrict. This fails if the Admin check is ever moved after the
+  // Matches capabilitiesFromClaims's Admin short-circuit — Admin must win even over a role
+  // that would otherwise restrict. This fails if the Admin check is ever moved after the
   // Driver check.
   it('resolves Driver+Admin to Admin, not Driver', () => {
     expect(roleOfRoles(['Driver', 'Admin'])).toBe('Admin');
