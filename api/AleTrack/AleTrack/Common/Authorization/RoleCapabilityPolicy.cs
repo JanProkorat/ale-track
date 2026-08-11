@@ -18,10 +18,12 @@ public sealed class RoleCapabilityPolicy(AleTrackDbContext dbContext, IMemoryCac
     public const string CacheKey = "role-capabilities";
 
     /// <summary>
-    /// Absolute expiration backstop on top of <see cref="Invalidate"/>. Covers a direct database
-    /// edit (nothing calls <see cref="Invalidate"/>) and multi-instance deployments (a save on one
-    /// instance cannot clear another instance's in-process cache). The table is a handful of rows,
-    /// so a re-read every couple of minutes is free.
+    /// Absolute expiration backstop on top of <see cref="Invalidate"/>, which the role capability
+    /// PUT endpoint calls after every save. This backstop covers what that call cannot reach: a
+    /// direct database edit (bypassing the endpoint, so nothing calls <see cref="Invalidate"/>)
+    /// and multi-instance deployments (a save on one instance cannot clear another instance's
+    /// in-process cache). The table is a handful of rows, so a re-read every couple of minutes
+    /// is free.
     /// </summary>
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(2);
 

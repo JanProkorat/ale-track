@@ -7,8 +7,13 @@ describe('capability registry', () => {
   // the two, the endpoint stops matching and the gate silently opens — so this fails loudly.
   it('gives every server-enforced capability a key matching the generated enum', () => {
     const apiNames = Object.keys(ApiCapability).filter((k) => Number.isNaN(Number(k)));
+    const guarded = CAPABILITY_REGISTRY.filter((c) => c.guardsData);
 
-    for (const entry of CAPABILITY_REGISTRY.filter((c) => c.guardsData)) {
+    // An empty list here would make the loop below run zero assertions and pass vacuously,
+    // silently stopping the guard from guarding anything.
+    expect(guarded.length).toBeGreaterThan(0);
+
+    for (const entry of guarded) {
       expect(apiNames).toContain(entry.key);
     }
   });

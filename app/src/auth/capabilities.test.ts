@@ -23,6 +23,15 @@ describe('capabilitiesFromClaims', () => {
   it('lets Admin override any hidden key', () => {
     expect(capabilitiesFromClaims(['Admin'], ['Invoicing']).Invoicing).toBe(true);
   });
+
+  // The backend matches capability_key case-insensitively (RoleCapabilityPolicy folds it with
+  // OrdinalIgnoreCase) because nothing pins its casing to the enum name — a row written by a
+  // direct DB edit or a seed, not just the admin screen, could carry any casing. The `cap`
+  // claim carries that same string verbatim, so a case-sensitive match here would silently
+  // un-hide a capability the backend is actively hiding and 403ing.
+  it('hides a capability whose claim key differs only in casing', () => {
+    expect(capabilitiesFromClaims(['Driver'], ['money']).Money).toBe(false);
+  });
 });
 
 describe('roleOfRoles', () => {

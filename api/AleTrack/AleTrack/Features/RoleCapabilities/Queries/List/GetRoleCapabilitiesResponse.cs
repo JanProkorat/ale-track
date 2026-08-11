@@ -12,8 +12,9 @@ public sealed record GetRoleCapabilitiesResponse
     public List<RoleCapabilityDto> Items { get; set; } = [];
 
     /// <summary>
-    /// Every capability key the backend enforces, so the editor can render a row for a
-    /// data-guarding capability that has no saved override yet. Also the mechanism by which
+    /// Every capability the backend knows about, whether or not it is enforced server-side
+    /// (<see cref="Capability.LoadingBreakdown"/> is UI decluttering only), so the editor can
+    /// render a row for one that has no saved override yet. Also the mechanism by which
     /// <see cref="Capability"/> crosses the OpenAPI boundary, so the generated client exposes
     /// it for the frontend registry drift test to check against.
     /// </summary>

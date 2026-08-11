@@ -65,9 +65,12 @@ export function isTokenExpired(accessToken: string): boolean {
 export function userFromToken(accessToken: string): CurrentUser | null {
   try {
     const p = jwtDecode<JwtPayload>(accessToken);
-    // Every role the app knows has to be listed here. A role that falls through this
-    // filter disappears, and since the fallback below is ['Manager'], a restricted account
-    // would decode as an unrestricted one — the capability layer would fail open.
+    // Every role the app knows has to be listed here. A role that falls through this filter
+    // disappears, and since the fallback below is ['Manager'], a Driver account would be
+    // mislabelled as a manager wherever the raw role list is read directly — roleOfRoles
+    // (Sidebar/AccountMenu) and the Admin short-circuit below and in capabilitiesFromClaims.
+    // Capabilities themselves are not at risk from this: they come from the token's own "cap"
+    // claims, not from this role list.
     const roles = asArray(p[CLAIM.role]).filter((r): r is UserRole => KNOWN_ROLES.includes(r as UserRole));
     const isAdmin = roles.includes('Admin');
     return {

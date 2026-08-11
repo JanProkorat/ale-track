@@ -19,9 +19,11 @@ describe('userFromToken', () => {
   });
 
   // The regression this guards: the role filter used to accept only Admin|Manager, so a
-  // Driver claim was dropped and the ['Manager'] fallback took over — the account decoded
-  // as unrestricted and every capability check passed. Failing open, silently.
-  it('does not let a driver decode as an unrestricted user', () => {
+  // Driver claim was dropped and the ['Manager'] fallback took over — the account would be
+  // mislabelled as a manager anywhere the raw role list is read directly (roleOfRoles,
+  // Sidebar/AccountMenu). Capabilities aren't at risk here: they come from the token's own
+  // "cap" claims, not from this role list.
+  it('does not let a driver decode as a manager', () => {
     const user = userFromToken(tokenWith({ [CLAIM_NAME]: 'novak', [CLAIM_ROLE]: 'Driver' }));
 
     expect(user?.roles).not.toContain('Manager');

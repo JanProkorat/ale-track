@@ -21,10 +21,22 @@ function all(value: boolean): Capabilities {
   return Object.fromEntries(CAPABILITY_REGISTRY.map((c) => [c.key, value])) as Capabilities;
 }
 
+// The stored capability_key column is matched case-insensitively on the backend
+// (RoleCapabilityPolicy folds it with OrdinalIgnoreCase), because nothing pins its casing to
+// the enum name — the PUT validator only checks non-empty and max-length. A row written with
+// different casing (a direct DB edit, a seed, any writer other than the admin screen) still
+// hides the same capability there, so the `cap` claim carrying that same string must resolve
+// here the same way. This map is keyed by lowercase so a claim key of any casing finds its
+// canonical registry key.
+const CANONICAL_KEY_BY_LOWER: Readonly<Record<string, Capability>> = Object.fromEntries(
+  CAPABILITY_REGISTRY.map((c) => [c.key.toLowerCase(), c.key]),
+);
+
 /**
  * Resolve the capability set from the token: Admin sees everything, otherwise every registry
- * key is allowed except those the backend named in a `cap` claim. Unknown claim keys are
- * ignored — a capability removed from the registry must not break an old token.
+ * key is allowed except those the backend named in a `cap` claim. Matching is case-insensitive
+ * (see CANONICAL_KEY_BY_LOWER). Unknown claim keys are ignored — a capability removed from the
+ * registry must not break an old token.
  */
 export function capabilitiesFromClaims(
   roles: readonly UserRole[],
@@ -34,7 +46,8 @@ export function capabilitiesFromClaims(
 
   const caps = all(true);
   for (const key of hiddenKeys) {
-    if (key in caps) caps[key as Capability] = false;
+    const canonicalKey = CANONICAL_KEY_BY_LOWER[key.toLowerCase()];
+    if (canonicalKey) caps[canonicalKey] = false;
   }
   return caps;
 }
