@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlineOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
@@ -16,7 +18,9 @@ import { useAuth } from 'src/auth/AuthProvider';
 import { apiErrorMessage } from 'src/api/errors';
 import { UserRoleType, type UserListItemDto } from 'src/generated/api-client';
 import { useUsers, useDeleteUser } from 'src/hooks/useUsers';
+import { PATHS } from 'src/routes/paths';
 import { UserFormDrawer } from './UserFormDrawer';
+import { RoleCapabilitiesPanel } from './RoleCapabilitiesPanel';
 import { isAdminUser, permCounts, roleOf, ROLE_LABELS } from './permissionModel';
 
 // One chip per user, from the single role the form assigns. Rendered from roleOf rather
@@ -89,11 +93,14 @@ function UserCard({
   );
 }
 
-export function UsersPage() {
+export function UsersPage({ view }: { view?: 'roles' }) {
   const { canEdit } = useAuth();
   const editable = canEdit('users');
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
 
+  // Always called regardless of `view` — same dispatch pattern as ShipmentsPage —
+  // so the list stays warm in cache when an admin bounces back from the roles screen.
   const query = useUsers();
   const del = useDeleteUser();
 
@@ -186,6 +193,19 @@ export function UsersPage() {
       : []),
   ];
 
+  if (view === 'roles') {
+    return (
+      <PageContainer>
+        <PageHeader
+          eyebrow="Správa"
+          title="Role a komponenty"
+          subtitle="Nastavte, které části aplikace jednotlivé role vidí."
+        />
+        <RoleCapabilitiesPanel />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       <PageHeader
@@ -202,6 +222,15 @@ export function UsersPage() {
               placeholder="Hledat uživatele…"
               width={{ xs: '100%', compact: 260 }}
             />
+            {editable && (
+              <Button
+                variant="outlined"
+                startIcon={<SettingsOutlinedIcon />}
+                onClick={() => navigate(PATHS.userRoles)}
+              >
+                Role a komponenty
+              </Button>
+            )}
             {editable && (
               <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
                 Přidat uživatele

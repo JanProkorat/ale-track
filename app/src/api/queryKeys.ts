@@ -47,6 +47,7 @@ export const qk = {
   drivers: resource('drivers'),
   vehicles: resource('vehicles'),
   users: resource('users'),
+  roleCapabilities: resource('roleCapabilities'),
 
   reminders: ['reminders'] as const,
   orderItemReminders: ['reminders', 'order-items'] as const,
