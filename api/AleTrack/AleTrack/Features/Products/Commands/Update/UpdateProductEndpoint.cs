@@ -61,11 +61,12 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
         product!.Name = req.Data.Name;
         product.Description = req.Data.Description;
         product.Type = req.Data.Type;
-        product.Kind = req.Data.Kind;
+        product.Container = req.Data.Container;
+        product.SaleUnit = req.Data.SaleUnit;
+        // Re-derived whenever the packaging pair moves; see Product.Kind for why it is a column.
+        product.Kind = ProductPackaging.DeriveKind(req.Data.Container, req.Data.SaleUnit);
         product.PackageSize = req.Data.PackageSize;
-        // Re-derived on every update: kind, size or name may all have moved.
-        product.UnitsPerPackage = ProductUnitsResolver.Resolve(
-            req.Data.Kind, req.Data.PackageSize, req.Data.Name);
+        product.UnitsPerPackage = req.Data.UnitsPerPackage;
         product.PriceForUnitWithoutVat = req.Data.PriceForUnitWithoutVat;
         product.PriceForUnitWithVat = req.Data.PriceForUnitWithVat;
         product.PriceWithVat = req.Data.PriceWithVat;

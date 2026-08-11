@@ -35,11 +35,29 @@ public sealed class Product : PublicSoftlyDeletableEntity
     public string? Description { get; set; }
     
     /// <summary>
-    /// Kind of the product
+    /// Kind of the product. Derived from <see cref="Container"/> and <see cref="SaleUnit"/> on every
+    /// write via <see cref="ProductPackaging.DeriveKind"/> — never set directly by a caller.
     /// </summary>
+    /// <remarks>
+    /// Still a real column rather than a computed property because the reporting projections select
+    /// it inside EF queries (see <c>DeliveredLineQuery</c>), and EF cannot translate an unmapped
+    /// property to SQL. It is a denormalisation of the packaging pair, kept for those queries.
+    /// </remarks>
     [Column("kind")]
     public ProductKind Kind { get; set; }
-    
+
+    /// <summary>
+    /// The vessel the drink is in.
+    /// </summary>
+    [Column("container")]
+    public ProductContainer Container { get; set; } = ProductContainer.Other;
+
+    /// <summary>
+    /// What one sellable unit of this product is.
+    /// </summary>
+    [Column("sale_unit")]
+    public ProductSaleUnit SaleUnit { get; set; } = ProductSaleUnit.Single;
+
     /// <summary>
     /// Type of the product
     /// </summary>
@@ -70,9 +88,8 @@ public sealed class Product : PublicSoftlyDeletableEntity
     /// 0.33 l crate, 8 for an eight-pack, 1 for a keg or a single bottle.
     /// </summary>
     /// <remarks>
-    /// Needed because the count is not derivable from anything else. It used to live only in the
-    /// product name ("Prim. Premium 8x", "Svijany 6 piv + sklenička"), which is why multipacks had
-    /// no computable weight at all, and crate sizes had to be inferred from a price ratio.
+    /// Recorded, never inferred. It used to be derived from the product name and a hardcoded crate
+    /// table, which could not express that a can tray is 24 at 0.5 l but 12 at 0.33 l.
     /// </remarks>
     [Column("units_per_package")]
     public int UnitsPerPackage { get; set; } = 1;
@@ -102,6 +119,16 @@ public sealed class Product : PublicSoftlyDeletableEntity
     public decimal? PriceForUnitWithoutVat { get; set; }
     
     /// <summary>
+    /// Date the price list that set this product's prices takes effect, when they came from one.
+    /// </summary>
+    /// <remarks>
+    /// Provenance for a single row, alongside the <see cref="PriceListImport"/> that records the
+    /// whole import: it answers "which list says this price" without joining anything.
+    /// </remarks>
+    [Column("price_effective_from")]
+    public DateOnly? PriceEffectiveFrom { get; set; }
+
+    /// <summary>
     /// Related Brewery
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
@@ -115,7 +142,7 @@ public sealed class Product : PublicSoftlyDeletableEntity
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public double? Weight => ProductWeightCalculator.Compute(Kind, PackageSize, UnitsPerPackage);
+    public double? Weight => ProductWeightCalculator.Compute(Container, SaleUnit, PackageSize, UnitsPerPackage);
     
     /// <summary>
     /// Display order based on the Product kind

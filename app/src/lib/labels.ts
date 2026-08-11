@@ -4,8 +4,10 @@
 import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
-  ShipmentStartPointKind, OutgoingShipmentStopKind,
+  ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
+  PriceListChangeKind,
 } from 'src/generated/api-client';
+import { fmtLiters } from './format';
 
 export const L = {
   orderState: {
@@ -34,6 +36,30 @@ export const L = {
     Can: 'Plechovka',
     Multipack: 'Multipack',
     Other: 'Ostatní',
+  } as Record<string, string>,
+  // What the drink is in. Note "Lahev" here means one bottle — the crate is a sale
+  // unit below, which is why a 2 l džbán no longer reads as "Basa".
+  container: {
+    Keg: 'Sud',
+    Bottle: 'Lahev',
+    Can: 'Plechovka',
+    Jug: 'Džbán',
+    Other: 'Ostatní',
+  } as Record<string, string>,
+  saleUnit: {
+    Single: 'Kus',
+    Crate: 'Basa',
+    Multipack: 'Multipack',
+    Tray: 'Tray',
+  } as Record<string, string>,
+  // What an imported price list would do to one product.
+  priceListChange: {
+    Added: 'Nový',
+    Repriced: 'Nová cena',
+    Changed: 'Změna údajů',
+    Unchanged: 'Beze změny',
+    ToRemove: 'K odebrání',
+    Blocked: 'Ponecháno',
   } as Record<string, string>,
   ptype: {
     PaleDraftBeer: 'Světlé výčepní',
@@ -97,6 +123,104 @@ export function kindName(k?: ProductKind | string | number): string | undefined 
 export function kindLabel(k?: ProductKind | string | number): string | undefined {
   const name = kindName(k);
   return name ? (L.kind[name] ?? name) : undefined;
+}
+
+/** The ProductContainer member name ("Jug"), from either wire representation. */
+export function containerName(c?: ProductContainer | string | number): string | undefined {
+  return enumName(ProductContainer as unknown as Record<string, string | number>, c);
+}
+
+export function containerLabel(c?: ProductContainer | string | number): string | undefined {
+  const name = containerName(c);
+  return name ? (L.container[name] ?? name) : undefined;
+}
+
+/** The PriceListChangeKind member name ("ToRemove"), from either wire representation. */
+export function priceListChangeName(k?: PriceListChangeKind | string | number): string | undefined {
+  return enumName(PriceListChangeKind as unknown as Record<string, string | number>, k);
+}
+
+export function priceListChangeLabel(k?: PriceListChangeKind | string | number): string | undefined {
+  const name = priceListChangeName(k);
+  return name ? (L.priceListChange[name] ?? name) : undefined;
+}
+
+/** The ProductSaleUnit member name ("Crate"), from either wire representation. */
+export function saleUnitName(u?: ProductSaleUnit | string | number): string | undefined {
+  return enumName(ProductSaleUnit as unknown as Record<string, string | number>, u);
+}
+
+export function saleUnitLabel(u?: ProductSaleUnit | string | number): string | undefined {
+  const name = saleUnitName(u);
+  return name ? (L.saleUnit[name] ?? name) : undefined;
+}
+
+/**
+ * Normalize either wire representation to the numeric enum the MUI Select and write DTOs
+ * expect. Resolved through the enum object rather than a hand-written chain with a default,
+ * so every member round-trips — the same trap `addrKindValue` exists to avoid. A loaded
+ * "Jug" quietly falling back to "Bottle" here would reclassify the product as a crate the
+ * next time it was saved, without anyone touching the picker.
+ */
+function enumValue<T extends number>(
+  enumObj: Record<string, string | number>,
+  name: string | undefined,
+): T | undefined {
+  if (!name) return undefined;
+  const value = enumObj[name];
+  return typeof value === 'number' ? (value as T) : undefined;
+}
+
+export function containerValue(c?: ProductContainer | string | number): ProductContainer | undefined {
+  return enumValue<ProductContainer>(
+    ProductContainer as unknown as Record<string, string | number>, containerName(c));
+}
+
+export function saleUnitValue(u?: ProductSaleUnit | string | number): ProductSaleUnit | undefined {
+  return enumValue<ProductSaleUnit>(
+    ProductSaleUnit as unknown as Record<string, string | number>, saleUnitName(u));
+}
+
+/**
+ * What one sellable unit is, in words: "Sud 30 l", "Basa 20×0,5 l", "Tray 24×0,5 l",
+ * "Plechovka 2 l", "Džbán 2 l".
+ *
+ * Replaces reading the kind alone, which called every bottled product "Basa" — including
+ * the 2 l jugs and the loose decorative bottles, which are not crates. The count is shown
+ * whenever a unit holds more than one container, because tray and crate sizes genuinely
+ * differ by volume (24 cans at 0,5 l but 12 at 0,33 l).
+ */
+/**
+ * How much a sellable unit holds: "24×0,5 l" for a tray, "0,5 l" for a lone container.
+ *
+ * The count is what distinguishes two units of the same container volume — a 12-can and a 24-can
+ * tray are both "0,5 l" without it, and the ceník would compare their package prices side by side
+ * as though they were the same goods.
+ */
+export function packSizeLabel(volumeLiters?: number, unitsPerPackage?: number): string | undefined {
+  const vol = volumeLiters != null ? fmtLiters(volumeLiters) : undefined;
+  const units = unitsPerPackage != null && unitsPerPackage > 1 ? unitsPerPackage : undefined;
+  return units && vol ? `${units}×${vol}` : vol;
+}
+
+export function packagingLabel(
+  container?: ProductContainer | string | number,
+  saleUnit?: ProductSaleUnit | string | number,
+  volumeLiters?: number,
+  unitsPerPackage?: number,
+): string {
+  const unit = saleUnitName(saleUnit);
+  const sized = packSizeLabel(volumeLiters, unitsPerPackage);
+
+  // A multipack of two is a duopack in the brewery's own price list, so call it that.
+  const head =
+    unit === 'Crate' ? L.saleUnit.Crate
+      : unit === 'Tray' ? L.saleUnit.Tray
+        : unit === 'Multipack' ? (unitsPerPackage === 2 ? 'Duopack' : L.saleUnit.Multipack)
+          : containerLabel(container);
+
+  if (!head) return sized ?? '—';
+  return sized ? `${head} ${sized}` : head;
 }
 
 export function ptypeLabel(t?: ProductType | string | number): string | undefined {

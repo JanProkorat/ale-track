@@ -93,6 +93,17 @@ public sealed class ShipmentExportQueryTests
             Name = name,
             Description = name,
             Kind = kind,
+            // One loose container per unit, which is what this fixture has always described — it
+            // never set a pack count. Stated explicitly now that weight reads the packaging pair.
+            Container = kind switch
+            {
+                ProductKind.Keg => ProductContainer.Keg,
+                ProductKind.Can => ProductContainer.Can,
+                ProductKind.Bottle or ProductKind.Multipack => ProductContainer.Bottle,
+                _ => ProductContainer.Other,
+            },
+            SaleUnit = ProductSaleUnit.Single,
+            UnitsPerPackage = 1,
             Type = type,
             PlatoDegree = platoDegree,
             PackageSize = packageSize,

@@ -5,12 +5,14 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFileOutlined';
 import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
 import { useCurrency } from 'src/providers/CurrencyProvider';
-import { kindLabel, ptypeLabel, KIND_ORDER } from 'src/lib/labels';
-import { fmtLiters, plural } from 'src/lib/format';
+import { kindLabel, packSizeLabel, ptypeLabel, KIND_ORDER } from 'src/lib/labels';
+import { plural } from 'src/lib/format';
 import { ProductKind, type BreweryProductListItemDto } from 'src/generated/api-client';
 import { BulkPriceDrawer } from './BulkPriceDrawer';
+import { PriceListImportDrawer } from './PriceListImportDrawer';
 
 type P = BreweryProductListItemDto;
 
@@ -49,12 +51,29 @@ function PriceCell({ p, editable, onEdit }: { p: P | undefined; editable: boolea
   );
 }
 
+/** One column of a kind section: a container volume together with how many of them a unit holds. */
+type PackColumn = { volume: number | undefined; units: number };
+
+function packUnits(p: P): number {
+  return p.unitsPerPackage != null && p.unitsPerPackage > 0 ? p.unitsPerPackage : 1;
+}
+
+function packKey(volume: number | undefined, units: number): string {
+  return `${volume ?? ''}|${units}`;
+}
+
 function KindSection({ kind, items, editable, onEdit }: { kind: string; items: P[]; editable: boolean; onEdit: (p: P) => void }) {
-  // Columns = package sizes present in THIS kind (bounded, never the global set).
-  const sizes = [...new Set(items.map((p) => p.packageSize))].sort((a, b) => {
-    if (a == null) return 1;
-    if (b == null) return -1;
-    return a - b;
+  // Columns = the sellable units present in THIS kind (bounded, never the global set).
+  //
+  // Keyed on the pack, not on the container volume alone: Svijany sells 0,5 l cans as a tray of 24
+  // and, for the nealko range, as a tray of 12. Under one "0,5 l" column their package prices would
+  // sit side by side as if they were the same quantity of beer.
+  const columns: PackColumn[] = [...new Map(
+    items.map((p) => [packKey(p.packageSize, packUnits(p)), { volume: p.packageSize, units: packUnits(p) }]),
+  ).values()].sort((a, b) => {
+    if (a.volume == null) return 1;
+    if (b.volume == null) return -1;
+    return a.volume - b.volume || a.units - b.units;
   });
   // Rows = product families (by name); a family may span several sizes.
   const families = new Map<string, P[]>();
@@ -85,9 +104,9 @@ function KindSection({ kind, items, editable, onEdit }: { kind: string; items: P
             <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, fontSize: 12, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Produkt</TableCell>
-                {sizes.map((s) => (
-                  <TableCell key={String(s)} align="right" sx={{ fontWeight: 700, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    {s == null ? 'Cena' : fmtLiters(s)}
+                {columns.map((c) => (
+                  <TableCell key={packKey(c.volume, c.units)} align="right" sx={{ fontWeight: 700, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                    {packSizeLabel(c.volume, c.units) ?? 'Cena'}
                   </TableCell>
                 ))}
               </TableRow>
@@ -119,8 +138,13 @@ function KindSection({ kind, items, editable, onEdit }: { kind: string; items: P
                         )}
                       </Stack>
                     </TableCell>
-                    {sizes.map((s) => (
-                      <PriceCell key={String(s)} p={variants.find((v) => v.packageSize === s)} editable={editable} onEdit={onEdit} />
+                    {columns.map((c) => (
+                      <PriceCell
+                        key={packKey(c.volume, c.units)}
+                        p={variants.find((v) => v.packageSize === c.volume && packUnits(v) === c.units)}
+                        editable={editable}
+                        onEdit={onEdit}
+                      />
                     ))}
                   </TableRow>
                 );
@@ -148,6 +172,7 @@ export function Cenik({
   onEdit: (p: P) => void;
 }) {
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const sections = useMemo(() => {
     const groups = new Map<string, P[]>();
@@ -172,6 +197,9 @@ export function Cenik({
           >
             Hromadná úprava cen
           </Button>
+          <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)} sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
+            Import ceníku
+          </Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={onAdd} sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
             Přidat produkt
           </Button>
@@ -186,6 +214,7 @@ export function Cenik({
       ))}
 
       <BulkPriceDrawer open={bulkOpen} breweryId={breweryId} products={products} onClose={() => setBulkOpen(false)} />
+      <PriceListImportDrawer open={importOpen} breweryId={breweryId} onClose={() => setImportOpen(false)} />
     </Box>
   );
 }

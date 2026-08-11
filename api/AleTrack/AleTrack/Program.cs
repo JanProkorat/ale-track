@@ -50,6 +50,9 @@ try
     
     services.AddMemoryCache();
     services.AddHttpClient();
+    // The clock, injected rather than read statically, so anything that records a timestamp can be
+    // tested against a fixed one.
+    services.AddSingleton(TimeProvider.System);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IAppContext, AppContext>();
     
@@ -146,6 +149,9 @@ try
         .UseFastEndpoints(c =>
         {
             c.Endpoints.RoutePrefix = "ale-track";
+            // The generated client sends a date-only value as a full ISO instant outside a JSON
+            // body, which the stock parser rejects.
+            c.Binding.ValueParserFor<DateOnly>(DateOnlyValueParser.Parse);
             c.Binding.Modifier = (request, _, binderContext, _) =>
             {
                 if (request is FilterableRequest filterableRequest)

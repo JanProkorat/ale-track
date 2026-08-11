@@ -9,8 +9,9 @@ import { FormDrawer } from 'src/components/common/FormDrawer';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { apiErrorMessage } from 'src/api/errors';
 import {
-  UpdateProductDto, ProductKind, ProductType, type BreweryProductListItemDto,
+  UpdateProductDto, ProductType, type BreweryProductListItemDto,
 } from 'src/generated/api-client';
+import { containerValue, saleUnitValue } from 'src/lib/labels';
 import { useUpdateProduct } from 'src/hooks/useBreweryProducts';
 
 type P = BreweryProductListItemDto;
@@ -58,11 +59,23 @@ export function BulkPriceDrawer({
   const save = async () => {
     setBusy(true);
     let changed = 0;
+    let skipped = 0;
     try {
       for (const p of products) {
         if (!p.id) continue;
         const nv = Number(next[p.id]);
         if (!Number.isFinite(nv) || nv === p.priceWithVat) continue;
+
+        // This is a full PUT for a price-only change, so the packaging has to be carried
+        // through exactly. Defaulting an unresolvable value would silently repackage the
+        // product — across the whole ceník at once — so such a row is skipped and reported.
+        const container = containerValue(p.container);
+        const saleUnit = saleUnitValue(p.saleUnit);
+        if (container == null || saleUnit == null) {
+          skipped += 1;
+          continue;
+        }
+
         const ratio = p.priceWithVat ? nv / p.priceWithVat : 1;
         const scale = (v: number | undefined, fallback: number) =>
           v != null ? Math.round(v * ratio * 100) / 100 : fallback;
@@ -71,7 +84,9 @@ export function BulkPriceDrawer({
           data: new UpdateProductDto({
             name: p.name ?? '',
             description: p.description,
-            kind: p.kind ?? ProductKind.Other,
+            container,
+            saleUnit,
+            unitsPerPackage: p.unitsPerPackage ?? 1,
             type: p.type ?? ProductType.Other,
             alcoholPercentage: p.alcoholPercentage,
             platoDegree: p.platoDegree,
@@ -83,7 +98,12 @@ export function BulkPriceDrawer({
         });
         changed += 1;
       }
-      enqueueSnackbar(changed ? `Upraveno ${changed} cen.` : 'Žádné změny.', { variant: 'success' });
+      enqueueSnackbar(
+        skipped
+          ? `Upraveno ${changed} cen, ${skipped} přeskočeno kvůli chybějícímu balení.`
+          : changed ? `Upraveno ${changed} cen.` : 'Žádné změny.',
+        { variant: skipped ? 'warning' : 'success' },
+      );
       onClose();
     } catch (e) {
       enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });

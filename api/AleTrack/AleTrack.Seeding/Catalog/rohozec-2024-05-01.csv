@@ -1,0 +1,64 @@
+# brewery: Rohozec
+# effective_from: 2024-05-01
+# source: pivojede.cz - Ceník Rohozec od 1.05.2024 bez sl..pdf
+#
+# Transcribed from the brewery's official list, platný od 1. května 2024. It is two years
+# old and mirrored by a distributor rather than published by the brewery, so it seeds a
+# demo database and must not be applied to a production catalogue - see the price-list
+# import design. A current list has to come from pivorohozec@pivorohozec.cz.
+#
+# The list prints no without-VAT figure per 0,5 l, so unit_novat is left for the parser
+# to derive; every price it does print is carried verbatim.
+# public_id is pinned so re-seeding keeps the identities the builder handed out, and the
+# names stay in the catalogue's short form (Roh. Skalák, not ROHOZEC Skalák).
+public_id,name,type,alcohol,plato,container,volume_l,sale_unit,units,unit_novat,unit_vat,pack_novat,pack_vat
+#
+# Sudové pivo
+a0000000-0000-0000-0000-000000000001,Roh. Nealko,NonAlcoholicBeer,0.5,,Keg,30,Single,1,,16.65,825.62,999.00
+a0000000-0000-0000-0000-000000000002,Roh. Nealko Pomelo,NonAlcoholicFlavourBeer,0.5,,Keg,30,Single,1,,19.17,950.41,1150.00
+a0000000-0000-0000-0000-000000000003,Roh. Podskalák,PaleDraftBeer,4.2,10,Keg,50,Single,1,,16.70,1380.17,1670.00
+a0000000-0000-0000-0000-000000000004,Roh. Podskalák,PaleDraftBeer,4.2,10,Keg,30,Single,1,,17.00,842.98,1020.00
+a0000000-0000-0000-0000-000000000005,Roh. Y - Ypsilon,PaleDraftBeer,4.4,10,Keg,50,Single,1,,17.85,1475.21,1785.00
+a0000000-0000-0000-0000-000000000006,Roh. Y - Ypsilon,PaleDraftBeer,4.4,10,Keg,30,Single,1,,18.17,900.83,1090.00
+a0000000-0000-0000-0000-000000000007,Roh. Skalák,PaleLager,4.8,11,Keg,50,Single,1,,18.60,1537.19,1860.00
+a0000000-0000-0000-0000-000000000008,Roh. Skalák,PaleLager,4.8,11,Keg,30,Single,1,,18.83,933.88,1130.00
+a0000000-0000-0000-0000-000000000009,Roh. Skalák,PaleLager,4.8,11,Keg,15,Single,1,,19.17,475.21,575.00
+a0000000-0000-0000-0000-000000000010,Roh. Kvasničák,YeastLager,4.8,11,Keg,15,Single,1,,20.33,504.13,610.00
+a0000000-0000-0000-0000-000000000011,Roh. Kvasničák,YeastLager,4.8,11,Keg,30,Single,1,,20.00,991.74,1200.00
+a0000000-0000-0000-0000-000000000012,Roh. Dvanáctka,PaleLagerPremium,5.3,12,Keg,50,Single,1,,19.50,1611.57,1950.00
+a0000000-0000-0000-0000-000000000013,Roh. Dvanáctka,PaleLagerPremium,5.3,12,Keg,30,Single,1,,19.83,983.47,1190.00
+a0000000-0000-0000-0000-000000000014,Roh. Jedenáctka řezaná,MixedLager,4.8,11,Keg,50,Single,1,,18.60,1537.19,1860.00
+a0000000-0000-0000-0000-000000000015,Roh. Jedenáctka řezaná,MixedLager,4.8,11,Keg,30,Single,1,,18.83,933.88,1130.00
+a0000000-0000-0000-0000-000000000016,Roh. Třináctka tmavá,DarkStrong,5.9,13,Keg,30,Single,1,,21.92,1086.78,1315.00
+a0000000-0000-0000-0000-000000000017,Roh. Cherry beer,FlavoredBeer,3.9,10,Keg,30,Single,1,,26.92,1334.71,1615.00
+#
+# Sudové limo
+a0000000-0000-0000-0000-000000000018,erko ORANŽ,Lemonade,0.0,,Keg,50,Single,1,,7.00,578.51,700.00
+a0000000-0000-0000-0000-000000000019,erko ORANŽ,Lemonade,0.0,,Keg,30,Single,1,,7.42,367.77,445.00
+a0000000-0000-0000-0000-000000000020,erko MALINA,Lemonade,0.0,,Keg,50,Single,1,,7.00,578.51,700.00
+a0000000-0000-0000-0000-000000000021,erko MALINA,Lemonade,0.0,,Keg,30,Single,1,,7.42,367.77,445.00
+a0000000-0000-0000-0000-000000000022,erko KOLA,Lemonade,0.0,,Keg,50,Single,1,,7.00,578.51,700.00
+a0000000-0000-0000-0000-000000000023,erko KOLA,Lemonade,0.0,,Keg,30,Single,1,,7.42,367.77,445.00
+#
+# Lahvové pivo - přepravka = 20 ks lahev 0,5 l
+a0000000-0000-0000-0000-000000000024,Roh. Nealko,NonAlcoholicBeer,0.5,,Bottle,0.5,Crate,20,,13.30,219.83,266.00
+a0000000-0000-0000-0000-000000000025,Roh. R - MIX Pomelo,FlavoredBeer,2.2,,Bottle,0.5,Crate,20,,18.90,312.40,378.00
+a0000000-0000-0000-0000-000000000026,Roh. Skalákczech,PaleDraftBeer,3.2,,Bottle,0.5,Crate,20,,11.70,193.39,234.00
+a0000000-0000-0000-0000-000000000027,Roh. Podskalák,PaleDraftBeer,4.2,10,Bottle,0.5,Crate,20,,13.70,226.45,274.00
+a0000000-0000-0000-0000-000000000028,Roh. Y - Ypsilon,PaleDraftBeer,4.4,10,Bottle,0.5,Crate,20,,15.10,249.59,302.00
+a0000000-0000-0000-0000-000000000029,Roh. Skalák,PaleLager,4.8,11,Bottle,0.5,Crate,20,,15.70,259.50,314.00
+a0000000-0000-0000-0000-000000000030,Roh. Dvanáctka,PaleLagerPremium,5.3,12,Bottle,0.5,Crate,20,,16.70,276.03,334.00
+a0000000-0000-0000-0000-000000000031,Roh. Třináctka,PaleStrong,6.0,13,Bottle,0.5,Crate,20,,17.50,289.26,350.00
+a0000000-0000-0000-0000-000000000032,Roh. Jedenáctka řezaná,MixedLager,4.8,11,Bottle,0.5,Crate,20,,15.70,259.50,314.00
+a0000000-0000-0000-0000-000000000033,Roh. X - Iks,DarkLager,4.4,11,Bottle,0.5,Crate,20,,15.50,256.20,310.00
+a0000000-0000-0000-0000-000000000034,Roh. Třináctka tmavá,DarkStrong,5.9,13,Bottle,0.5,Crate,20,,18.10,299.17,362.00
+a0000000-0000-0000-0000-000000000035,Roh. Cherry beer,FlavoredBeer,3.9,10,Bottle,0.5,Crate,20,,22.50,371.90,450.00
+a0000000-0000-0000-0000-000000000036,Roh. Cecilia,PaleLager,4.8,11,Bottle,0.5,Crate,20,,24.50,404.96,490.00
+#
+# Lahvové limo - přepravka = 20 ks OW 0,5 l
+a0000000-0000-0000-0000-000000000037,Roh. GINGER DRINK,Lemonade,0.0,,Bottle,0.5,Crate,20,,18.50,305.79,370.00
+#
+# Plechovky - tray = 12 ks plechovek 0,5 l
+a0000000-0000-0000-0000-000000000038,Roh. Skalák,PaleLager,4.8,11,Can,0.5,Tray,12,,21.50,213.22,258.00
+d2068a30-5280-4d99-a6d0-ebc348e7b5ea,Roh. Nealko Pomelo,NonAlcoholicFlavourBeer,0.5,,Can,0.5,Tray,12,,22.00,218.18,264.00
+c4cec1e0-7128-431d-9e89-84671a1cd480,Roh. Cecilia,PaleLager,4.8,11,Can,0.5,Tray,12,,29.00,287.60,348.00

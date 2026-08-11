@@ -1485,6 +1485,70 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("outgoing_shipment_stop_items");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.PriceListImport", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AddedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("added_count");
+
+                    b.Property<long>("BreweryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("brewery_id");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<long?>("ImportedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("imported_by_user_id");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int>("RemovedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("removed_count");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_hash");
+
+                    b.Property<string>("SourceName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_name");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_count");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BreweryId");
+
+                    b.HasIndex("ImportedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("price_list_imports");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.Product", b =>
                 {
                     b.Property<long>("Id")
@@ -1501,6 +1565,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<long>("BreweryId")
                         .HasColumnType("bigint")
                         .HasColumnName("brewery_id");
+
+                    b.Property<int>("Container")
+                        .HasColumnType("integer")
+                        .HasColumnName("container");
 
                     b.Property<string>("Description")
                         .HasMaxLength(200)
@@ -1529,6 +1597,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("real")
                         .HasColumnName("plato_degree");
 
+                    b.Property<DateOnly?>("PriceEffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("price_effective_from");
+
                     b.Property<decimal?>("PriceForUnitWithVat")
                         .HasColumnType("numeric")
                         .HasColumnName("price_for_unit_with_vat");
@@ -1548,6 +1620,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
+
+                    b.Property<int>("SaleUnit")
+                        .HasColumnType("integer")
+                        .HasColumnName("sale_unit");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer")
@@ -2496,6 +2572,24 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Stop");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.PriceListImport", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Brewery", "Brewery")
+                        .WithMany()
+                        .HasForeignKey("BreweryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AleTrack.Entities.User", "ImportedByUser")
+                        .WithMany()
+                        .HasForeignKey("ImportedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Brewery");
+
+                    b.Navigation("ImportedByUser");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Product", b =>

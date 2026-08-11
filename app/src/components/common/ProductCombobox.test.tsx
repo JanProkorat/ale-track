@@ -113,7 +113,9 @@ describe('ProductCombobox', () => {
       fireEvent.click(within(listbox()).getByText('Svijany'));
       fireEvent.click(within(listbox()).getByText('Primátor'));
       await waitFor(() => expect(rowCount()).toBe(2)); // both heads, nothing else
-    });
+      // 172 rows through three animated collapse cycles is genuinely slow; it fits the 5 s default
+      // alone but not alongside the rest of the suite, where it timed out rather than failed.
+    }, 20_000);
   });
 
   it('reports the product id when a size row is picked', () => {
