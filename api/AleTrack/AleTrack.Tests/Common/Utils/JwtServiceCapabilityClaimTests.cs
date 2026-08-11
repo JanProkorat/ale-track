@@ -19,7 +19,9 @@ namespace AleTrack.Tests.Common.Utils;
 /// </summary>
 public sealed class JwtServiceCapabilityClaimTests
 {
-    private static JwtService ServiceOver(params RoleCapability[] rows)
+    private static JwtService ServiceOver(params RoleCapability[] rows) => ServiceOverWithDbContext(rows).Service;
+
+    private static (JwtService Service, Mock<AleTrackDbContext> DbContext) ServiceOverWithDbContext(params RoleCapability[] rows)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -32,9 +34,11 @@ public sealed class JwtServiceCapabilityClaimTests
         var dbContext = new Mock<AleTrackDbContext>(new DbContextOptions<AleTrackDbContext>());
         dbContext.Setup(x => x.RoleCapabilities).ReturnsDbSet(rows);
 
-        return new JwtService(
+        var service = new JwtService(
             configuration,
             new RoleCapabilityPolicy(dbContext.Object, new MemoryCache(new MemoryCacheOptions())));
+
+        return (service, dbContext);
     }
 
     private static User DriverUser() => new()
@@ -42,6 +46,20 @@ public sealed class JwtServiceCapabilityClaimTests
         UserName = "novak",
         Password = "hash",
         UserRoles = [new UserRole { Type = UserRoleType.Driver }]
+    };
+
+    private static User AdminUser() => new()
+    {
+        UserName = "spravce",
+        Password = "hash",
+        UserRoles = [new UserRole { Type = UserRoleType.Admin }]
+    };
+
+    private static User DriverAndManagerUser() => new()
+    {
+        UserName = "vedouci",
+        Password = "hash",
+        UserRoles = [new UserRole { Type = UserRoleType.Driver }, new UserRole { Type = UserRoleType.Manager }]
     };
 
     [Fact]
@@ -70,5 +88,38 @@ public sealed class JwtServiceCapabilityClaimTests
 
         new JwtSecurityTokenHandler().ReadJwtToken(token).Claims
             .Should().NotContain(c => c.Type == JwtService.CapabilityClaimType);
+    }
+
+    [Fact]
+    public async Task GenerateTokenAsync_AdminUser_EmitsNoCapClaimsAndNeverConsultsThePolicy()
+    {
+        var (service, dbContext) = ServiceOverWithDbContext(
+            new RoleCapability { Role = UserRoleType.Driver, CapabilityKey = "invoicing", IsVisible = false });
+
+        var token = await service.GenerateTokenAsync(AdminUser(), CancellationToken.None);
+
+        new JwtSecurityTokenHandler().ReadJwtToken(token).Claims
+            .Should().NotContain(c => c.Type == JwtService.CapabilityClaimType);
+
+        // Admin bypasses capabilities entirely: the table must never be queried for them, not
+        // just have its result discarded (a guard restoring the brief's "clear the set" shape
+        // would still pass the claim assertion above but fail this one).
+        dbContext.Verify(x => x.RoleCapabilities, Times.Never);
+    }
+
+    [Fact]
+    public async Task GenerateTokenAsync_UserHasMultipleRoles_EmitsUnionOfEachRolesHiddenKeys()
+    {
+        var service = ServiceOver(
+            new RoleCapability { Role = UserRoleType.Driver, CapabilityKey = "invoicing", IsVisible = false },
+            new RoleCapability { Role = UserRoleType.Manager, CapabilityKey = "money", IsVisible = false });
+
+        var token = await service.GenerateTokenAsync(DriverAndManagerUser(), CancellationToken.None);
+
+        var claims = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims
+            .Where(c => c.Type == JwtService.CapabilityClaimType)
+            .Select(c => c.Value);
+
+        claims.Should().BeEquivalentTo(["invoicing", "money"]);
     }
 }

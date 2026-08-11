@@ -45,7 +45,7 @@ internal sealed class JwtService(IConfiguration configuration, RoleCapabilityPol
         // Admin bypasses capabilities entirely, so its lookup is skipped rather than queried and discarded.
         if (!user.UserRoles.Any(r => r.Type == UserRoleType.Admin))
         {
-            var hidden = new HashSet<string>(StringComparer.Ordinal);
+            var hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var role in user.UserRoles.Select(r => r.Type))
             {
                 hidden.UnionWith(await policy.GetHiddenKeysAsync(role, ct));
