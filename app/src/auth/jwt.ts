@@ -25,7 +25,7 @@ interface JwtPayload {
   [key: string]: unknown;
 }
 
-const KNOWN_ROLES: readonly UserRole[] = ['Admin', 'User', 'Driver'];
+const KNOWN_ROLES: readonly UserRole[] = ['Admin', 'Manager', 'Driver'];
 
 function asArray(v: unknown): string[] {
   if (v == null) return [];
@@ -63,7 +63,7 @@ export function userFromToken(accessToken: string): CurrentUser | null {
   try {
     const p = jwtDecode<JwtPayload>(accessToken);
     // Every role the app knows has to be listed here. A role that falls through this
-    // filter disappears, and since the fallback below is ['User'], a restricted account
+    // filter disappears, and since the fallback below is ['Manager'], a restricted account
     // would decode as an unrestricted one — the capability layer would fail open.
     const roles = asArray(p[CLAIM.role]).filter((r): r is UserRole => KNOWN_ROLES.includes(r as UserRole));
     const isAdmin = roles.includes('Admin');
@@ -72,7 +72,7 @@ export function userFromToken(accessToken: string): CurrentUser | null {
       userName: String(p[CLAIM.name] ?? ''),
       firstName: p[CLAIM.given] ? String(p[CLAIM.given]) : undefined,
       lastName: p[CLAIM.surname] ? String(p[CLAIM.surname]) : undefined,
-      roles: roles.length ? roles : ['User'],
+      roles: roles.length ? roles : ['Manager'],
       perms: isAdmin ? allPerms('edit') : permsFromClaims(asArray(p[CLAIM.perm])),
     };
   } catch {

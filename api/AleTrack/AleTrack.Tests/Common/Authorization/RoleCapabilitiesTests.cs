@@ -22,7 +22,7 @@ public sealed class RoleCapabilitiesTests
 
     [Theory]
     [InlineData(UserRoleType.Admin)]
-    [InlineData(UserRoleType.User)]
+    [InlineData(UserRoleType.Manager)]
     public void Denies_UnrestrictedRoles_AreDeniedNothing(UserRoleType role)
     {
         foreach (var capability in Enum.GetValues<Capability>())

@@ -37,7 +37,7 @@ public sealed class LoginTests
         var user = UserBuilder.BuildEntity(
             userName: userName,
             password: hashedPassword,
-            userRoles: [new() { Type = UserRoleType.User }]
+            userRoles: [new() { Type = UserRoleType.Manager }]
         );
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(users: [user]);

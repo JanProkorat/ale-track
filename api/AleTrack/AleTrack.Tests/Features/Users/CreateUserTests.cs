@@ -25,7 +25,7 @@ public sealed class CreateUserTests
                 lastName: "User",
                 userName: "testuser",
                 password: "plainpassword",
-                userRoles: [UserRoleType.User, UserRoleType.Admin]
+                userRoles: [UserRoleType.Manager, UserRoleType.Admin]
             )
         };
 

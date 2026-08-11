@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import { useAuth } from 'src/auth/AuthProvider';
+import { roleOfRoles, ROLE_CLAIM_LABELS } from 'src/auth/capabilities';
 import { initials } from 'src/lib/format';
 
 export function AccountMenu({
@@ -43,7 +44,7 @@ export function AccountMenu({
               {user?.firstName} {user?.lastName}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              @{user?.userName} · {user?.roles.includes('Admin') ? 'Administrátor' : 'Uživatel'}
+              @{user?.userName} · {user ? ROLE_CLAIM_LABELS[roleOfRoles(user.roles)] : ''}
             </Typography>
           </Box>
         </Stack>

@@ -7635,7 +7635,7 @@ export interface ICreateVehicleDto {
 
 export enum UserRoleType {
     Admin = 0,
-    User = 1,
+    Manager = 1,
     Driver = 2,
 }
 
@@ -16749,7 +16749,7 @@ export interface IPriceListFieldChange {
 }
 
 export class PreviewPriceListRequest implements IPreviewPriceListRequest {
-    file?: string;
+    file!: string;
     effectiveFrom?: Date;
 
     constructor(data?: IPreviewPriceListRequest) {
@@ -16784,7 +16784,7 @@ export class PreviewPriceListRequest implements IPreviewPriceListRequest {
 }
 
 export interface IPreviewPriceListRequest {
-    file?: string;
+    file: string;
     effectiveFrom?: Date;
 }
 
@@ -16919,9 +16919,9 @@ export interface ICreateBreweryDto {
 }
 
 export class ApplyPriceListRequest implements IApplyPriceListRequest {
-    file?: string;
+    file!: string;
     effectiveFrom?: Date;
-    sourceHash?: string;
+    sourceHash!: string;
 
     constructor(data?: IApplyPriceListRequest) {
         if (data) {
@@ -16957,9 +16957,9 @@ export class ApplyPriceListRequest implements IApplyPriceListRequest {
 }
 
 export interface IApplyPriceListRequest {
-    file?: string;
+    file: string;
     effectiveFrom?: Date;
-    sourceHash?: string;
+    sourceHash: string;
 }
 
 function formatDate(d: Date) {

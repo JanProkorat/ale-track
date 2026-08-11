@@ -11,13 +11,13 @@ public enum UserRoleType
     Admin,
 
     /// <summary>
-    /// Represents a standard user role in the system with basic access and permissions.
+    /// Represents a standard office user with basic access and permissions.
     /// </summary>
-    User,
+    Manager,
 
     /// <summary>
     /// A driver in the field. Granted access through the same permission matrix as
-    /// <see cref="User"/>, but denied the capabilities in
+    /// <see cref="Manager"/>, but denied the capabilities in
     /// <see cref="Authorization.RoleCapabilities"/> — invoicing, the loading breakdown
     /// and money — so the shipment screen shows only what is needed on the road.
     /// </summary>

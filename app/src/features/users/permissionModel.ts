@@ -73,11 +73,11 @@ export function isAdminUser(u: Pick<UserListItemDto, 'userRoles'>): boolean {
 }
 
 /** The three assignable roles, in the order the form offers them. */
-export const ASSIGNABLE_ROLES = [UserRoleType.Admin, UserRoleType.User, UserRoleType.Driver] as const;
+export const ASSIGNABLE_ROLES = [UserRoleType.Admin, UserRoleType.Manager, UserRoleType.Driver] as const;
 
 export const ROLE_LABELS: Record<UserRoleType, string> = {
   [UserRoleType.Admin]: 'Administrátor',
-  [UserRoleType.User]: 'Uživatel',
+  [UserRoleType.Manager]: 'Manažer',
   [UserRoleType.Driver]: 'Řidič',
 };
 
@@ -90,7 +90,7 @@ export function roleOf(u: Pick<UserListItemDto, 'userRoles'>): UserRoleType {
   const roles = u.userRoles ?? [];
   if (roles.includes(UserRoleType.Admin)) return UserRoleType.Admin;
   if (roles.includes(UserRoleType.Driver)) return UserRoleType.Driver;
-  return UserRoleType.User;
+  return UserRoleType.Manager;
 }
 
 /** Counts of edit/view grants for the list summary. */

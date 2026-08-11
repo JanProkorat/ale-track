@@ -51,8 +51,8 @@ public static class AuthenticationExtensions
 
         var builder = services.AddAuthorizationBuilder()
             .AddPolicy(nameof(UserRoleType.Admin), policy => policy.RequireRole(nameof(UserRoleType.Admin)))
-            .AddPolicy(nameof(UserRoleType.User), policy =>
-                policy.RequireRole(nameof(UserRoleType.User), nameof(UserRoleType.Admin)));
+            .AddPolicy(nameof(UserRoleType.Manager), policy =>
+                policy.RequireRole(nameof(UserRoleType.Manager), nameof(UserRoleType.Admin)));
 
         // One policy per (module, level) — the gate used by every feature endpoint.
         foreach (var module in Enum.GetValues<ModuleType>())

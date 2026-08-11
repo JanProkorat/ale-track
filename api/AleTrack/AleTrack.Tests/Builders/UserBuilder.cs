@@ -25,7 +25,7 @@ public static class UserBuilder
             Password = password ?? "hashedpassword123",
             UserRoles = userRoles ?? 
             [
-                new UserRole { Type = UserRoleType.User }
+                new UserRole { Type = UserRoleType.Manager }
             ]
         };
     }
@@ -43,7 +43,7 @@ public static class UserBuilder
             LastName = lastName ?? "User",
             UserName = userName ?? "testuser",
             Password = password ?? "testpassword123",
-            UserRoles = userRoles ?? [UserRoleType.User]
+            UserRoles = userRoles ?? [UserRoleType.Manager]
         };
     }
 

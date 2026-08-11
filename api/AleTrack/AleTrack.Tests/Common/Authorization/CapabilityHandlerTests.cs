@@ -44,7 +44,7 @@ public sealed class CapabilityHandlerTests
     [InlineData(Capability.Money)]
     public async Task HandleAsync_CallerIsPlainUser_SucceedsForEveryCapability(Capability capability)
     {
-        (await SucceedsAsync(capability, UserRoleType.User)).Should().BeTrue();
+        (await SucceedsAsync(capability, UserRoleType.Manager)).Should().BeTrue();
     }
 
     [Theory]
@@ -63,10 +63,10 @@ public sealed class CapabilityHandlerTests
     [Fact]
     public async Task HandleAsync_CallerIsDriverAndUser_DenialWins()
     {
-        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Driver, UserRoleType.User))
+        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Driver, UserRoleType.Manager))
             .Should().BeFalse();
 
-        (await SucceedsAsync(Capability.Invoicing, UserRoleType.User, UserRoleType.Driver))
+        (await SucceedsAsync(Capability.Invoicing, UserRoleType.Manager, UserRoleType.Driver))
             .Should().BeFalse();
     }
 

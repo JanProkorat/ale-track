@@ -24,7 +24,7 @@ import { isAdminUser, permCounts, roleOf, ROLE_LABELS } from './permissionModel'
 const ROLE_CHIP_COLOR: Record<UserRoleType, 'primary' | 'info' | 'default'> = {
   [UserRoleType.Admin]: 'primary',
   [UserRoleType.Driver]: 'info',
-  [UserRoleType.User]: 'default',
+  [UserRoleType.Manager]: 'default',
 };
 
 function RoleChip({ user }: { user: Pick<UserListItemDto, 'userRoles'> }) {
@@ -146,8 +146,7 @@ export function UsersPage() {
     {
       key: 'roles',
       header: 'Role',
-      // Sorted by the label on screen, which under Czech collation still puts
-      // Administrátor first, then Řidič, then Uživatel.
+      // Sorted by the label on screen: Administrátor, then Manažer, then Řidič.
       sortValue: (u) => ROLE_LABELS[roleOf(u)],
       render: (u) => (
         <Stack direction="row" spacing={0.5}>

@@ -4,7 +4,7 @@ import { type UserRole } from './types';
 
 describe('capabilitiesFor', () => {
   it('allows everything for a plain user', () => {
-    const caps = capabilitiesFor(['User']);
+    const caps = capabilitiesFor(['Manager']);
     expect(CAPABILITIES.every((c) => caps[c])).toBe(true);
   });
 
@@ -23,7 +23,7 @@ describe('capabilitiesFor', () => {
 
   // Nothing on the backend enforces one role per account, so the resolver has to
   // land on the restrictive answer no matter what order the claims arrive in.
-  it.each<UserRole[][]>([[['Driver', 'User']], [['User', 'Driver']]])(
+  it.each<UserRole[][]>([[['Driver', 'Manager']], [['Manager', 'Driver']]])(
     'denies when any role denies (%j)',
     (roles) => {
       expect(capabilitiesFor(roles).invoicing).toBe(false);

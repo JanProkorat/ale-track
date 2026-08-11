@@ -28,7 +28,7 @@ const LEVELS: { value: PermissionLevel; label: string; color: 'default' | 'info'
 // the restrictions, since they are not visible anywhere else in this screen.
 const ROLE_HINTS: Record<UserRoleType, string> = {
   [UserRoleType.Admin]: 'Má vždy přístup ke všem modulům, práva se nenastavují.',
-  [UserRoleType.User]: 'Práva k jednotlivým modulům nastavíte níže.',
+  [UserRoleType.Manager]: 'Práva k jednotlivým modulům nastavíte níže.',
   [UserRoleType.Driver]: 'Jako uživatel, ale bez fakturace, cen a rozpisu nakládky — u vývozu vidí jen vykládku.',
 };
 
@@ -50,7 +50,7 @@ export function UserFormDrawer({
   const [lastName, setLastName] = useState('');
   const [userName, setUserName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRoleType>(UserRoleType.User);
+  const [role, setRole] = useState<UserRoleType>(UserRoleType.Manager);
   const [perms, setPerms] = useState<Permissions>(allPerms('none'));
   const [errors, setErrors] = useState<{ userName?: string; password?: string }>({});
 
@@ -68,7 +68,7 @@ export function UserFormDrawer({
       setFirstName('');
       setLastName('');
       setUserName('');
-      setRole(UserRoleType.User);
+      setRole(UserRoleType.Manager);
       setPerms(allPerms('none'));
     }
   }, [open, user]);

@@ -1,7 +1,7 @@
 // Client-side permission model, shaped for the redesign's granular
 // per-module rights (view / edit / none). The current backend only exposes
-// Admin/User roles; until it grows granular perms, Admin => edit-all and
-// User => whatever the users DTO carries (mocked in P1, wired in P2/P3).
+// Admin/Manager roles; until it grows granular perms, Admin => edit-all and
+// Manager => whatever the users DTO carries (mocked in P1, wired in P2/P3).
 
 export const MODULE_KEYS = [
   'dashboard',

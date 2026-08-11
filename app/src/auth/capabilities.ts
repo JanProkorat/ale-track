@@ -41,3 +41,18 @@ export function capabilitiesFor(roles: readonly UserRole[]): Capabilities {
   }
   return caps;
 }
+
+/** Most privileged of a claim's roles, matching permissionModel.roleOf for DTOs. */
+export function roleOfRoles(roles: readonly UserRole[]): UserRole {
+  if (roles.includes('Admin')) return 'Admin';
+  if (roles.includes('Driver')) return 'Driver';
+  return 'Manager';
+}
+
+/** Czech label per string-keyed UserRole, for the layout, which holds claims from the
+ * token rather than a UserListItemDto and therefore cannot use ROLE_LABELS. */
+export const ROLE_CLAIM_LABELS: Record<UserRole, string> = {
+  Admin: 'Administrátor',
+  Manager: 'Manažer',
+  Driver: 'Řidič',
+};

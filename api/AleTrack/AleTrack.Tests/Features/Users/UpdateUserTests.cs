@@ -21,7 +21,7 @@ public sealed class UpdateUserTests
             firstName: "Old",
             lastName: "Name",
             userName: "olduser",
-            userRoles: [new UserRole { Type = UserRoleType.User }]
+            userRoles: [new UserRole { Type = UserRoleType.Manager }]
         );
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(users: [user]);
@@ -33,7 +33,7 @@ public sealed class UpdateUserTests
             Data = UserBuilder.BuildUpdateDto(
                 firstName: "Updated",
                 lastName: "User",
-                userRoles: [UserRoleType.Admin, UserRoleType.User]
+                userRoles: [UserRoleType.Admin, UserRoleType.Manager]
             )
         };
 
