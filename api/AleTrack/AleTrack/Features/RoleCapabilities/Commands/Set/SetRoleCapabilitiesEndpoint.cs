@@ -31,7 +31,7 @@ public sealed class SetRoleCapabilitiesEndpoint(AleTrackDbContext dbContext, Rol
         {
             s.Summary = "Replace which components each role may see";
             s.Responses[StatusCodes.Status204NoContent] = "Saved";
-            s.Responses[StatusCodes.Status400BadRequest] = "A row targets Admin, or a key is invalid";
+            s.Responses[StatusCodes.Status400BadRequest] = "A row targets Admin, a key is invalid, or the same role/key pair is duplicated";
         });
     }
 

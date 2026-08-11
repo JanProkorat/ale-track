@@ -10,4 +10,10 @@ public static class RoleCapabilityErrorCodes
 
     /// <summary>A capability key is required and capped at 64 characters.</summary>
     public const string CapabilityKeyInvalid = "RoleCapability.CapabilityKeyInvalid";
+
+    /// <summary>
+    /// The same role/key pair (compared case-insensitively, matching how the read side folds
+    /// keys) appears more than once in the payload.
+    /// </summary>
+    public const string DuplicateCapabilityKey = "RoleCapability.DuplicateCapabilityKey";
 }
