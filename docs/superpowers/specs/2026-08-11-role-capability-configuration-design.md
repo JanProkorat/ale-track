@@ -25,12 +25,16 @@ Roles stay in code; **what a role may see becomes data**.
 CODE (typed, compile-checked)              DB (editable, no deploy)
 ─────────────────────────────              ────────────────────────
 Capability keys and their gates:           role_capabilities
-  can('invoicing') in the component          role   | capability_key    | is_visible
-  RequireCapability(...) on the endpoint      Driver | invoicing         | false
-                                              Driver | loadingBreakdown  | false
-UserRoleType enum            (unchanged)      Driver | returnsCard       | true
+  can('Invoicing') in the component           role   | capability_key    | is_visible
+  RequireCapability(...) on the endpoint      Driver | Invoicing         | false
+                                              Driver | LoadingBreakdown  | false
+UserRoleType enum            (unchanged)      Driver | ReturnsCard       | true
 UserPermission per-user matrix (unchanged)
 ```
+
+Keys are **PascalCase**, matching the `Capability` enum's member names exactly —
+`CapabilityHandler` looks up `requirement.Capability.ToString()`, so any other casing
+would need a separate mapping table instead of a direct string compare.
 
 `UserRoleType` remains an enum and the per-user module matrix is untouched, so there is no
 data migration of existing users' rights.
@@ -98,13 +102,26 @@ class is removed. `RoleCapabilitiesTests` is rewritten against the DB-backed han
 ### Claims
 
 `JwtService` gains `CapabilityClaimType = "cap"` and emits one claim per **hidden** key
-(`cap: "invoicing"`), mirroring how `PermissionClaimType = "perm"` already emits
+(`cap: "Invoicing"`), mirroring how `PermissionClaimType = "perm"` already emits
 `"Orders:Edit"`. Default-allow means only denials need carrying. `JwtService` takes the same
 cached map, so login and refresh both stamp current policy.
 
+### Deployment order
+
+Because `JwtService` now queries `role_capabilities` for every non-admin login and refresh,
+the `AddRoleCapabilities` migration must be applied to an environment **before** this code
+ships to it — this repo does not auto-apply migrations on startup. Deploying the API ahead
+of the migration turns every non-admin login and refresh into a 500 (the query fails against
+a table that does not exist yet), while `Admin` logins keep succeeding, because
+`GenerateTokenAsync` skips the lookup entirely for roles that include `Admin`. That
+asymmetry — some accounts working, others not — is exactly the shape that gets misdiagnosed
+as a permissions bug instead of a missing migration.
+
 ### Endpoints
 
-New slice `Features/RoleCapabilities/` with its own `IFeatureConfiguration` and Swagger tag:
+New slice `Features/RoleCapabilities/`. (This codebase has no `IFeatureConfiguration` /
+Swagger-tag convention — neither type exists anywhere in the API — so, unlike a generic
+vertical-slice pack might expect, the slice needs no feature-configuration file at all.)
 
 | Endpoint | Gate |
 |---|---|
@@ -122,10 +139,13 @@ code, so a client bug cannot hide something from admins.
 `src/auth/capabilityRegistry.ts` is the single frontend declaration:
 
 ```ts
-{ key: 'invoicing', label: 'Fakturace', module: 'shipments', guardsData: true }
-{ key: 'loadingBreakdown', label: 'Rozpis nakládky', module: 'shipments', guardsData: false }
-{ key: 'money', label: 'Ceny', module: null, guardsData: true }   // null = cross-application
+{ key: 'Invoicing', label: 'Fakturace', module: 'shipments', guardsData: true }
+{ key: 'LoadingBreakdown', label: 'Rozpis nakládky', module: 'shipments', guardsData: false }
+{ key: 'Money', label: 'Ceny', module: null, guardsData: true }   // null = cross-application
 ```
+
+Keys are PascalCase here too, matching the backend `Capability` enum for anything
+`guardsData: true` — a registry drift test asserts this (see Testing).
 
 The `Capability` union derives from its keys, replacing today's `CAPABILITIES` const. Czech
 labels live frontend-side, following `src/lib/labels.ts`.
@@ -195,11 +215,26 @@ there is no visible effect at all.
 - The admin screen: renders module groups with their components, greys the `Admin` column,
   and sends the full set on save.
 
+Unit-testing `JwtService`'s new claim behaviour required exposing an `internal sealed` class
+to the test assembly, so `AleTrack.csproj` gained an `<InternalsVisibleTo Include="AleTrack.Tests" />`.
+`internal` in this project no longer means "invisible outside `AleTrack.dll`": the same
+attribute also exposes `PasswordHasher`, every EF entity-type configuration, and the Swagger
+processors to `AleTrack.Tests` — worth knowing before relying on `internal` as an access
+boundary anywhere else in this codebase.
+
 ## Verification
 
 - `dotnet-verify` for `api/**`, `react-verify` for `app/**`.
-- Backend and frontend land in the same commit: `Capability` and the new DTOs cross the
-  OpenAPI boundary, so `yarn generate-api` is part of the work.
+- Backend and frontend land in the same commit, so `yarn generate-api` is part of the work.
+- `RoleCapabilityDto.CapabilityKey` is a plain `string`, deliberately — a cosmetic key has
+  no backend representation to type against — so no DTO on the wire references the
+  `Capability` enum, and nothing made it cross the OpenAPI boundary on its own. It crosses
+  via an additive `AvailableCapabilities` property on `GetRoleCapabilitiesResponse`, added
+  solely so the generated client has an enum for the registry drift test (below) to compare
+  against. Trap: it generates as the numeric array `[0, 1, 2]`, not the member names, so it
+  must never be used as a row source for the admin screen — rows come from
+  `CAPABILITY_REGISTRY`, which is why that registry stays a hand-maintained frontend file
+  rather than something derived from the generated client.
 
 ## Out of scope
 

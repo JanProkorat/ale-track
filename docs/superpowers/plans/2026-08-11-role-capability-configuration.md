@@ -233,6 +233,7 @@ git commit -m "refactor: rename the User role to Manager"
 **Interfaces:**
 - Consumes: `UserRoleType.Manager` from Task 1.
 - Produces: `RoleCapability { UserRoleType Role; string CapabilityKey; bool IsVisible; }`, `dbContext.RoleCapabilities`, and three seeded `Driver` denial rows (`invoicing`, `loadingBreakdown`, `money`).
+  Correction: these seed keys shipped as PascalCase (`Invoicing`, `LoadingBreakdown`, `Money`), matching the `Capability` enum — see Task 3's note and Task 6 Step 1.
 
 - [ ] **Step 1: Write the entity**
 
@@ -835,7 +836,10 @@ git commit -m "feat: carry denied capability keys in the access token"
 ### Task 5: Read and write the policy over HTTP
 
 **Files:**
-- Create: `api/AleTrack/AleTrack/Features/RoleCapabilities/RoleCapabilitiesFeatureConfiguration.cs`
+- ~~Create: `api/AleTrack/AleTrack/Features/RoleCapabilities/RoleCapabilitiesFeatureConfiguration.cs`~~
+  Correction: not created. `IFeatureConfiguration`/`FeatureInfo` do not exist anywhere in this
+  API — the requirement below came from a generic convention pack, not this codebase, and
+  could not have compiled. See Step 5's code block.
 - Create: `api/AleTrack/AleTrack/Features/RoleCapabilities/Shared/RoleCapabilityDto.cs`
 - Create: `api/AleTrack/AleTrack/Features/RoleCapabilities/Queries/List/GetRoleCapabilitiesEndpoint.cs`, `GetRoleCapabilitiesResponse.cs`
 - Create: `api/AleTrack/AleTrack/Features/RoleCapabilities/Commands/Set/SetRoleCapabilitiesEndpoint.cs`, `SetRoleCapabilitiesDto.cs`, `SetRoleCapabilitiesValidator.cs`
@@ -845,6 +849,7 @@ git commit -m "feat: carry denied capability keys in the access token"
 **Interfaces:**
 - Consumes: `dbContext.RoleCapabilities`, `RoleCapabilityPolicy.Invalidate()`.
 - Produces: `GET ale-track/role-capabilities` → `GetRoleCapabilitiesResponse(List<RoleCapabilityDto> Items)`; `PUT ale-track/role-capabilities` taking `SetRoleCapabilitiesDto(List<RoleCapabilityDto> Items)` → 204. `RoleCapabilityDto(UserRoleType Role, string CapabilityKey, bool IsVisible)`. Task 7 consumes both.
+  Correction: `GetRoleCapabilitiesResponse` also shipped with an `AvailableCapabilities` property (`List<Capability>`), added because `RoleCapabilityDto.CapabilityKey` being a plain `string` meant nothing else made the `Capability` enum cross the OpenAPI boundary — see Task 6 Step 4's note.
 
 - [ ] **Step 1: Write the failing validator test**
 
@@ -978,7 +983,9 @@ internal sealed class SetRoleCapabilitiesValidator : Validator<SetRoleCapabiliti
 Run: `dotnet test /Users/jan/Projects/ale-track/api/AleTrack/AleTrack.Tests/AleTrack.Tests.csproj --filter "FullyQualifiedName~SetRoleCapabilitiesTests"`
 Expected: 3 passed.
 
-- [ ] **Step 5: Write the feature configuration and both endpoints**
+- [ ] **Step 5: Write both endpoints**
+
+Correction: this step originally opened with a feature-configuration class —
 
 ```csharp
 namespace AleTrack.Features.RoleCapabilities;
@@ -1000,6 +1007,10 @@ internal sealed class RoleCapabilitiesFeatureConfiguration : IFeatureConfigurati
         => services;
 }
 ```
+
+— but `IFeatureConfiguration` and `FeatureInfo` do not exist in this API; this class was never
+written, and the slice has no feature-configuration file of any kind. Skip straight to the
+endpoints below.
 
 The `PUT` replaces the whole set inside a transaction and invalidates the cache. Follow the `Send.*` and `Configure` conventions of the existing endpoints — `Get`/`Put`, `Description(b => b.RequirePermission(...))`, `DontCatchExceptions()`, and a `Summary` documenting every status:
 
@@ -1137,6 +1148,13 @@ Expected: FAIL — `Capability` is not exported from the generated client until 
 - [ ] **Step 4: Regenerate the client**
 
 Start the backend on 8080 and run `yarn --cwd app generate-api` (see Task 1 Step 5, including the port and migration caveats). Verify `Capability` and `RoleCapabilityDto` now exist in `app/src/generated/api-client.ts`.
+
+Correction: `RoleCapabilityDto` alone does not bring `Capability` along — its `CapabilityKey` is a
+plain `string` by design, so NSwag emits nothing enum-shaped from it. `Capability` only appears
+in the generated client because `GetRoleCapabilitiesResponse` gained an additive
+`AvailableCapabilities: List<Capability>` property for exactly this purpose (see Task 5's
+correction note). It generates as the numeric array `[0, 1, 2]`, not member names — do not use
+it as a row source anywhere; `CAPABILITY_REGISTRY` remains the row source.
 
 - [ ] **Step 5: Run the drift test**
 
