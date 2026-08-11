@@ -18,6 +18,14 @@ public sealed class RoleCapabilityPolicy(AleTrackDbContext dbContext, IMemoryCac
     public const string CacheKey = "role-capabilities";
 
     /// <summary>
+    /// Absolute expiration backstop on top of <see cref="Invalidate"/>. Covers a direct database
+    /// edit (nothing calls <see cref="Invalidate"/>) and multi-instance deployments (a save on one
+    /// instance cannot clear another instance's in-process cache). The table is a handful of rows,
+    /// so a re-read every couple of minutes is free.
+    /// </summary>
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(2);
+
+    /// <summary>
     /// Capability keys <paramref name="role"/> may not see.
     /// </summary>
     public async Task<IReadOnlySet<string>> GetHiddenKeysAsync(UserRoleType role, CancellationToken ct)
@@ -45,11 +53,14 @@ public sealed class RoleCapabilityPolicy(AleTrackDbContext dbContext, IMemoryCac
             .Select(x => new { x.Role, x.CapabilityKey })
             .ToListAsync(ct);
 
+        // OrdinalIgnoreCase is deliberate: enum member names cannot collide case-insensitively,
+        // so this can only ever close the gate, never over-hide. A row saved with different
+        // casing than the enum name (e.g. by a future writer) must still match.
         var map = hiddenRows
             .GroupBy(x => x.Role)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.CapabilityKey).ToHashSet(StringComparer.Ordinal));
+            .ToDictionary(g => g.Key, g => g.Select(x => x.CapabilityKey).ToHashSet(StringComparer.OrdinalIgnoreCase));
 
-        cache.Set(CacheKey, map);
+        cache.Set(CacheKey, map, CacheDuration);
 
         return map;
     }
