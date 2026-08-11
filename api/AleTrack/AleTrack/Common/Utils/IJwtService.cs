@@ -8,11 +8,10 @@ namespace AleTrack.Common.Utils;
 public interface IJwtService
 {
     /// <summary>
-    /// Generates a JWT token for the specified user and their roles.
+    /// Issues an access token for <paramref name="user"/>, stamping the capability keys their
+    /// roles may not see.
     /// </summary>
-    /// <param name="user">The user for whom the token is to be generated.</param>
-    /// <returns>Returns a JWT token as a string.</returns>
-    string GenerateToken(User user);
+    Task<string> GenerateTokenAsync(User user, CancellationToken ct);
 
     /// <summary>
     /// Generates a cryptographically random refresh token string.

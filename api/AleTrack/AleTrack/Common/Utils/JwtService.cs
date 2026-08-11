@@ -2,21 +2,28 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using AleTrack.Common.Authorization;
+using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AleTrack.Common.Utils;
 
 /// <inheritdoc/>
-internal sealed class JwtService(IConfiguration configuration) : IJwtService
+internal sealed class JwtService(IConfiguration configuration, RoleCapabilityPolicy policy) : IJwtService
 {
     /// <summary>
     /// Claim type carrying a single "Module:Level" per-module permission.
     /// </summary>
     public const string PermissionClaimType = "perm";
 
+    /// <summary>
+    /// Claim type carrying one capability key the caller's roles may not see.
+    /// </summary>
+    public const string CapabilityClaimType = "cap";
+
     /// <inheritdoc/>
-    public string GenerateToken(User user)
+    public async Task<string> GenerateTokenAsync(User user, CancellationToken ct)
     {
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT_Key"]));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -33,6 +40,19 @@ internal sealed class JwtService(IConfiguration configuration) : IJwtService
         // Granular per-module permissions, e.g. "Orders:Edit". Admin users rely on
         // the role claim instead (the authorization handler short-circuits on Admin).
         claims.AddRange(user.Permissions.Select(p => new Claim(PermissionClaimType, $"{p.Module}:{p.Level}")));
+
+        // Capabilities the user's roles are denied. Default-allow, so only denials are carried.
+        // Admin bypasses capabilities entirely, so its lookup is skipped rather than queried and discarded.
+        if (!user.UserRoles.Any(r => r.Type == UserRoleType.Admin))
+        {
+            var hidden = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var role in user.UserRoles.Select(r => r.Type))
+            {
+                hidden.UnionWith(await policy.GetHiddenKeysAsync(role, ct));
+            }
+
+            claims.AddRange(hidden.Select(key => new Claim(CapabilityClaimType, key)));
+        }
 
         var expirationHours = configuration.GetValue("Jwt:AccessTokenExpirationHours", 1);
 

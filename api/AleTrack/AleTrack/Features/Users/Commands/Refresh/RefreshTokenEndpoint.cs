@@ -83,8 +83,8 @@ public sealed class RefreshTokenEndpoint(AleTrackDbContext dbContext, IJwtServic
         dbContext.RefreshTokens.RemoveRange(expiredTokens);
 
         // Generate new tokens
-        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
-            jwtService, dbContext, user, configuration);
+        var (accessToken, rawRefreshToken) = await RefreshTokenHelper.CreateTokensAsync(
+            jwtService, dbContext, user, configuration, ct);
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse

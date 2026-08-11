@@ -46,7 +46,7 @@ public sealed class LoginTests
         var configuration = CreateTestConfiguration();
 
         passwordHasher.Setup(p => p.VerifyPassword(password, hashedPassword)).Returns(true);
-        jwtService.Setup(j => j.GenerateToken(user)).Returns(expectedToken);
+        jwtService.Setup(j => j.GenerateTokenAsync(user, It.IsAny<CancellationToken>())).ReturnsAsync(expectedToken);
         jwtService.Setup(j => j.GenerateRefreshToken()).Returns("refresh-token");
         jwtService.Setup(j => j.HashToken("refresh-token")).Returns("hashed-refresh");
 
@@ -65,7 +65,7 @@ public sealed class LoginTests
         passwordHasher.Verify(p => p.VerifyPassword(password, hashedPassword), Times.Once);
 
         // Verify JWT token generation was called with correct user
-        jwtService.Verify(j => j.GenerateToken(user), Times.Once);
+        jwtService.Verify(j => j.GenerateTokenAsync(user, It.IsAny<CancellationToken>()), Times.Once);
         jwtService.Verify(j => j.GenerateRefreshToken(), Times.Once);
         jwtService.Verify(j => j.HashToken("refresh-token"), Times.Once);
     }
@@ -98,7 +98,7 @@ public sealed class LoginTests
 
         // Verify that password verification and token generation were not called
         passwordHasher.Verify(p => p.VerifyPassword(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        jwtService.Verify(j => j.GenerateToken(It.IsAny<Entities.User>()), Times.Never);
+        jwtService.Verify(j => j.GenerateTokenAsync(It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -140,6 +140,6 @@ public sealed class LoginTests
 
         // Verify password verification was called but token generation was not
         passwordHasher.Verify(p => p.VerifyPassword(password, hashedPassword), Times.Once);
-        jwtService.Verify(j => j.GenerateToken(It.IsAny<User>()), Times.Never);
+        jwtService.Verify(j => j.GenerateTokenAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

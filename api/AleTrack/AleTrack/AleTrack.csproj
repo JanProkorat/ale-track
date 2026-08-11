@@ -41,4 +41,8 @@
       <Folder Include="Infrastructure\Persistence\Migrations\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="AleTrack.Tests" />
+    </ItemGroup>
+
 </Project>

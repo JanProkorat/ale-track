@@ -53,7 +53,7 @@ public sealed class RefreshTokenTests
         var configuration = CreateTestConfiguration();
 
         jwtService.Setup(j => j.HashToken(rawToken)).Returns(hashedToken);
-        jwtService.Setup(j => j.GenerateToken(user)).Returns(newAccessToken);
+        jwtService.Setup(j => j.GenerateTokenAsync(user, It.IsAny<CancellationToken>())).ReturnsAsync(newAccessToken);
         jwtService.Setup(j => j.GenerateRefreshToken()).Returns(newRefreshToken);
         jwtService.Setup(j => j.HashToken(newRefreshToken)).Returns("new-hashed-token");
 
@@ -67,7 +67,7 @@ public sealed class RefreshTokenTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         jwtService.Verify(j => j.HashToken(rawToken), Times.Once);
-        jwtService.Verify(j => j.GenerateToken(user), Times.Once);
+        jwtService.Verify(j => j.GenerateTokenAsync(user, It.IsAny<CancellationToken>()), Times.Once);
         jwtService.Verify(j => j.GenerateRefreshToken(), Times.Once);
     }
 
