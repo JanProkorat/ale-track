@@ -29,11 +29,6 @@ public static class EndpointBuilder<TRequest, TEndpoint> where TEndpoint : Endpo
             context.AddTestServices(s =>
             {
                 s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
-
-                // Endpoints that take IDriverScope get an unscoped caller unless a test
-                // passes its own positionally, so tests unrelated to driver scoping need
-                // no change.
-                s.AddSingleton(DriverScopeMockFactory.Unscoped());
             });
         }, dependencies);
     }
@@ -57,11 +52,6 @@ public static class EndpointWithoutRequestBuilder<TEndpoint> where TEndpoint : E
             context.AddTestServices(s =>
             {
                 s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
-
-                // Endpoints that take IDriverScope get an unscoped caller unless a test
-                // passes its own positionally, so tests unrelated to driver scoping need
-                // no change.
-                s.AddSingleton(DriverScopeMockFactory.Unscoped());
             });
         }, dependencies);
     }
@@ -95,11 +85,6 @@ public static class EndpointWithResponseBuilder<TRequest, TResponse, TEndpoint>
             context.AddTestServices(s =>
             {
                 s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
-
-                // Endpoints that take IDriverScope get an unscoped caller unless a test
-                // passes its own positionally, so tests unrelated to driver scoping need
-                // no change.
-                s.AddSingleton(DriverScopeMockFactory.Unscoped());
             });
         }, dependencies);
     }
