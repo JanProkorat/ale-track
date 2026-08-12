@@ -187,7 +187,7 @@ public sealed class ShipmentStartPointWriteTests
         // exact seam that would silently resolve back to Official if the persisted
         // kind were ignored on read.
         var detailEndpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object, companyOptions);
+            .Create(dbContext.Object, companyOptions, DriverScopeMockFactory.Unscoped());
 
         await detailEndpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = shipment.PublicId }, CancellationToken.None);
 

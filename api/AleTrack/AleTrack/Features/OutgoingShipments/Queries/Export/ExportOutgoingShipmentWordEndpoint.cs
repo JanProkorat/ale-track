@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.Extensions.Options;
@@ -21,10 +22,12 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// </remarks>
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
+/// <param name="driverScope"></param>
 [BinaryResponse(ExportOutgoingShipmentWordEndpoint.DocumentContentType)]
 public sealed class ExportOutgoingShipmentWordEndpoint(
     AleTrackDbContext dbContext,
-    IOptions<CompanyOptions> companyOptions)
+    IOptions<CompanyOptions> companyOptions,
+    IDriverScope driverScope)
     : Endpoint<ExportOutgoingShipmentRequest>
 {
     /// <summary>
@@ -60,6 +63,8 @@ public sealed class ExportOutgoingShipmentWordEndpoint(
     /// <inheritdoc />
     public override async Task HandleAsync(ExportOutgoingShipmentRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, companyOptions.Value, ct);
         if (model is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);

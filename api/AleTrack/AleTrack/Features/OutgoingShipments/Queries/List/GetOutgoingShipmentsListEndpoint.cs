@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,9 @@ namespace AleTrack.Features.OutgoingShipments.Queries.List;
 /// Endpoint responsible for retrieving a filtered list of outgoing shipments.
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext) : Endpoint<FilterableRequest, List<OutgoingShipmentListItemDto>>
+/// <param name="driverScope"></param>
+public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<FilterableRequest, List<OutgoingShipmentListItemDto>>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -37,9 +40,19 @@ public sealed class GetOutgoingShipmentsListEndpoint(AleTrackDbContext dbContext
     {
         var planningState = req.Parameters.GetPlanningState();
 
+        IQueryable<OutgoingShipment> query = dbContext.OutgoingShipments;
+
+        // A driver sees only the shipments they are assigned to. Unlinked accounts match
+        // nothing, so they see none rather than all.
+        if (driverScope.IsScoped)
+        {
+            var scopedDriverId = await driverScope.GetDriverIdAsync(ct);
+            query = query.Where(os => os.Drivers.Any(d => d.DriverId == scopedDriverId));
+        }
+
         // Newest-created first by default; an explicit "sort" parameter still wins,
         // because ApplyFilterAndSort re-orders the query when one is supplied.
-        var outgoingShipments = await dbContext.OutgoingShipments
+        var outgoingShipments = await query
             .OrderByDescending(os => os.CreatedDate)
             .Select(os => new OutgoingShipmentListItemDto
             {

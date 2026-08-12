@@ -51,7 +51,7 @@ public sealed class GetOutgoingShipmentDetailReturnsTests
 
         var request = new GetOutgoingShipmentDetailRequest { Id = shipmentId };
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()));
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(request, CancellationToken.None);
 
