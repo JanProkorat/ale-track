@@ -9,15 +9,23 @@ describe('capabilitiesFromClaims', () => {
   });
 
   it('hides exactly the keys the token names', () => {
-    expect(capabilitiesFromClaims(['Driver'], ['Invoicing', 'Money'])).toEqual({
+    expect(capabilitiesFromClaims(['Driver'], ['Invoicing'])).toEqual({
       Invoicing: false,
       LoadingBreakdown: true,
-      Money: false,
     });
   });
 
   it('ignores an unknown claim key', () => {
     expect(capabilitiesFromClaims(['Driver'], ['Wizardry']).Invoicing).toBe(true);
+  });
+
+  // Money is in the backend Capability enum but not in the frontend registry (nothing
+  // consumes it), so a claim naming it must be ignored the same as any other unknown key.
+  it('ignores a Money claim key, since Money is not in the registry', () => {
+    expect(capabilitiesFromClaims(['Driver'], ['Money'])).toEqual({
+      Invoicing: true,
+      LoadingBreakdown: true,
+    });
   });
 
   it('lets Admin override any hidden key', () => {
@@ -30,7 +38,7 @@ describe('capabilitiesFromClaims', () => {
   // claim carries that same string verbatim, so a case-sensitive match here would silently
   // un-hide a capability the backend is actively hiding and 403ing.
   it('hides a capability whose claim key differs only in casing', () => {
-    expect(capabilitiesFromClaims(['Driver'], ['money']).Money).toBe(false);
+    expect(capabilitiesFromClaims(['Driver'], ['invoicing']).Invoicing).toBe(false);
   });
 });
 

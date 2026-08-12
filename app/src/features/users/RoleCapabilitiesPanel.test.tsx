@@ -29,12 +29,20 @@ function renderPanel() {
 }
 
 describe('RoleCapabilitiesPanel', () => {
-  it('groups capabilities under their module and names cross-application ones separately', () => {
+  it('groups capabilities under their module', () => {
     renderPanel();
 
     expect(screen.getByText('Vývozy')).toBeInTheDocument();
     expect(screen.getByText('Fakturace')).toBeInTheDocument();
-    expect(screen.getByText('Napříč aplikací')).toBeInTheDocument();
+  });
+
+  // CAPABILITY_REGISTRY currently has no module: null entry (Money was removed — nothing
+  // enforces it, see capabilityRegistry.ts), so the cross-application group must not render
+  // at all rather than show up empty. This pins the groups() conditional that skips it.
+  it('renders no cross-application heading when the registry has no cross-application entry', () => {
+    renderPanel();
+
+    expect(screen.queryByText('Napříč aplikací')).not.toBeInTheDocument();
   });
 
   it('renders the Admin column as fixed', () => {

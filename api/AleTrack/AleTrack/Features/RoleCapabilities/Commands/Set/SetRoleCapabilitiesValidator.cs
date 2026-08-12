@@ -28,12 +28,24 @@ internal sealed class SetRoleCapabilitiesValidator : Validator<SetRoleCapabiliti
                 .WithErrorCode(RoleCapabilityErrorCodes.CapabilityKeyInvalid);
         });
 
+        // An omitted items field is safe (SetRoleCapabilitiesDto.Items initializes to an empty
+        // list), but an explicit "items": null binds a null reference here — without NotNull,
+        // HaveNoDuplicateKeyPerRole throws calling GroupBy on it, turning a malformed request
+        // into a 500 instead of the intended 400.
+        //
         // The read side (RoleCapabilityPolicy) folds hidden keys case-insensitively per role, so
         // two rows differing only by key casing for the same role would insert as distinct DB
         // rows (the unique index is case-sensitive) while being indistinguishable on read - which
         // one "wins" would then depend on undefined row order and could flip across the cache's
         // 2-minute expiry. Reject that combination here instead of allowing it into the table.
+        // Cascade(Stop) is required here: FluentValidation's default per-rule cascade mode
+        // keeps running every validator in the chain even after an earlier one fails, so
+        // without it Must still runs — and throws — on a null Items even though NotNull
+        // already failed.
         RuleFor(dto => dto.Items)
+            .Cascade(CascadeMode.Stop)
+            .NotNull()
+            .WithErrorCode(RoleCapabilityErrorCodes.ItemsRequired)
             .Must(HaveNoDuplicateKeyPerRole)
             .WithErrorCode(RoleCapabilityErrorCodes.DuplicateCapabilityKey);
     }

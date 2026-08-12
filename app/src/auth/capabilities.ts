@@ -4,10 +4,14 @@
 //
 // The backend is the authority — role capability visibility is stored in the database
 // (editable via the role-capabilities admin screen) and the endpoints enforce Invoicing
-// and Money themselves (403). The backend stamps every capability the caller's roles do
-// NOT see as a "cap" claim on the access token; capabilitiesFromClaims below resolves
-// those claims into a full Capabilities map so a driver isn't shown chrome that would
-// only 403 or sit empty.
+// themselves (403). The backend stamps every capability the caller's roles do NOT see as
+// a "cap" claim on the access token; capabilitiesFromClaims below resolves those claims
+// into a full Capabilities map so a driver isn't shown chrome that would only 403 or sit
+// empty.
+//
+// Capability.Money exists on the backend enum but nothing enforces it — no endpoint
+// gates on it — so it is not offered in the registry or the admin panel (see
+// capabilityRegistry.ts).
 //
 // LoadingBreakdown has no server-side counterpart on purpose: the Vše/F1/F2 tabs
 // aggregate quantity data drivers legitimately receive for the unload view, so it is

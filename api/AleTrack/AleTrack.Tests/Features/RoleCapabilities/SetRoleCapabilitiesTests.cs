@@ -98,4 +98,23 @@ public sealed class SetRoleCapabilitiesTests
 
         result.ShouldNotHaveAnyValidationErrors();
     }
+
+    /// <summary>
+    /// An omitted <c>items</c> field is safe (<see cref="SetRoleCapabilitiesDto.Items"/>
+    /// initializes to an empty list), but an explicit <c>"items": null</c> binds a null
+    /// reference onto the DTO. Without a <c>NotNull</c> rule, <c>HaveNoDuplicateKeyPerRole</c>
+    /// throws a <see cref="NullReferenceException"/> calling <c>GroupBy</c> on it, before
+    /// <c>HandleAsync</c> ever runs — a 500 instead of the intended 400.
+    /// </summary>
+    [Fact]
+    public void Validate_NullItems_FailsWithCorrectCodeInsteadOfThrowing()
+    {
+        var result = new SetRoleCapabilitiesValidator().TestValidate(new SetRoleCapabilitiesDto
+        {
+            Items = null!
+        });
+
+        result.ShouldHaveValidationErrorFor(x => x.Items)
+            .WithErrorCode(RoleCapabilityErrorCodes.ItemsRequired);
+    }
 }

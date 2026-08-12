@@ -16,4 +16,9 @@ public static class RoleCapabilityErrorCodes
     /// keys) appears more than once in the payload.
     /// </summary>
     public const string DuplicateCapabilityKey = "RoleCapability.DuplicateCapabilityKey";
+
+    /// <summary>
+    /// The payload's <c>items</c> field is required and must not be sent as <c>null</c>.
+    /// </summary>
+    public const string ItemsRequired = "RoleCapability.ItemsRequired";
 }

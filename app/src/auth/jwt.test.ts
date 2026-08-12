@@ -30,9 +30,18 @@ describe('userFromToken', () => {
   });
 
   it('decodes cap claims onto the user', () => {
-    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Invoicing', 'Money'] }));
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Invoicing'] }));
 
-    expect(user?.caps).toEqual({ Invoicing: false, LoadingBreakdown: true, Money: false });
+    expect(user?.caps).toEqual({ Invoicing: false, LoadingBreakdown: true });
+  });
+
+  // Money is stamped as a claim by nothing today, but even if a future writer emitted one
+  // (e.g. a stale token from before the registry change), it must be ignored rather than
+  // resolved — it is not a key the frontend registry knows about.
+  it('ignores a Money claim, since Money is not in the registry', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Money'] }));
+
+    expect(user?.caps).toEqual({ Invoicing: true, LoadingBreakdown: true });
   });
 
   it('keeps multiple role claims', () => {

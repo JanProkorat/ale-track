@@ -1060,8 +1060,8 @@ export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
 export function ShipmentDetail({
   shipment,
   editable,
-  canSeeInvoicing = true,
-  canSeeLoadingBreakdown = true,
+  canSeeInvoicing = false,
+  canSeeLoadingBreakdown = false,
   onBack,
   onEdit,
   onOpenOrder,
@@ -1069,10 +1069,12 @@ export function ShipmentDetail({
   shipment: OutgoingShipmentDetailDto;
   editable: boolean;
   /** Fakturace section. Denied to drivers, and the endpoint behind it 403s for them,
-   *  so the section is dropped rather than left to fail. */
+   *  so the section is dropped rather than left to fail. Defaults closed: a call site
+   *  that forgets this prop must under-show rather than leak Fakturace to a driver. */
   canSeeInvoicing?: boolean;
   /** The Vše / F1 / F2 aggregation tabs. Denied to drivers, who get the Vykládka
-   *  view as the card's only content. */
+   *  view as the card's only content. Defaults closed for the same reason as
+   *  canSeeInvoicing above. */
   canSeeLoadingBreakdown?: boolean;
   onBack: () => void;
   onEdit: () => void;

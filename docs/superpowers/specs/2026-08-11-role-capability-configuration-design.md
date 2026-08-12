@@ -128,9 +128,13 @@ vertical-slice pack might expect, the slice needs no feature-configuration file 
 | `GET role-capabilities` | `RequirePermission(ModuleType.Users, PermissionLevel.View)` |
 | `PUT role-capabilities` | `RequirePermission(ModuleType.Users, PermissionLevel.Edit)` |
 
-`PUT` replaces the whole set — the payload is a handful of rows, so full replacement beats
-per-row diffing. Its validator rejects any row whose role is `Admin`, under its own error
-code, so a client bug cannot hide something from admins.
+`PUT` replaces only the (role, key) pairs the payload names, matched case-insensitively — a
+stored row for a pair the payload omits is left untouched. A whole-table replacement was tried
+first but rejected: it made a frontend registry change (a rename, a dropped entry) destructive,
+since the next admin save would delete that key's row and default-allow would silently reopen a
+capability an endpoint still gates on with `RequireCapability`. Its validator rejects any row
+whose role is `Admin`, under its own error code, so a client bug cannot hide something from
+admins.
 
 ## Frontend
 
@@ -141,11 +145,16 @@ code, so a client bug cannot hide something from admins.
 ```ts
 { key: 'Invoicing', label: 'Fakturace', module: 'shipments', guardsData: true }
 { key: 'LoadingBreakdown', label: 'Rozpis nakládky', module: 'shipments', guardsData: false }
-{ key: 'Money', label: 'Ceny', module: null, guardsData: true }   // null = cross-application
 ```
 
 Keys are PascalCase here too, matching the backend `Capability` enum for anything
 `guardsData: true` — a registry drift test asserts this (see Testing).
+
+`Capability.Money` exists on the backend enum as a deliberate future hook, but nothing
+enforces it and no component calls `can('Money')`. It is correspondingly **absent** from
+this registry — an entry with `guardsData: true` and no server-side gate behind it would
+lie to whoever reads the admin panel's lock icon. It ships in the registry once something
+actually consumes it.
 
 The `Capability` union derives from its keys, replacing today's `CAPABILITIES` const. Czech
 labels live frontend-side, following `src/lib/labels.ts`.
@@ -177,9 +186,10 @@ Modul / komponenta        Administrátor   Uživatel   Řidič
 ▾ Vývozy                      ✓ (grey)       ✓         ✓
     🔒 Fakturace              ✓ (grey)       ✓         ✗
        Rozpis nakládky        ✓ (grey)       ✓         ✗
-▸ Napříč aplikací
-    🔒 Ceny                   ✓ (grey)       ✓         ✗
 ```
+
+(No cross-application group renders today — it only appears once a `module: null`
+capability is actually in the registry.)
 
 The lock marks `guardsData` — server-enforced, not merely hidden — because that is exactly
 what someone toggling these needs to know. Data comes from `src/hooks/useRoleCapabilities.ts`

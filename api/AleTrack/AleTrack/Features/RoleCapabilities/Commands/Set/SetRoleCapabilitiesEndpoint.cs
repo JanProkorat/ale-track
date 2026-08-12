@@ -9,7 +9,11 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.RoleCapabilities.Commands.Set;
 
 /// <summary>
-/// Endpoint replacing the whole role capability table, for the admin editor screen.
+/// Endpoint replacing the stored visibility for exactly the (role, capability key) pairs named
+/// in the payload, for the admin editor screen. A stored row for a pair the payload does not
+/// mention is left untouched — never the whole table — so a capability the frontend registry
+/// has since forgotten about (a rename, a removed entry) keeps whatever visibility it last had
+/// instead of reverting to default-allow on the next save.
 /// </summary>
 /// <param name="dbContext"></param>
 /// <param name="policy"></param>
@@ -40,7 +44,19 @@ public sealed class SetRoleCapabilitiesEndpoint(AleTrackDbContext dbContext, Rol
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(ct);
 
-        dbContext.RoleCapabilities.RemoveRange(await dbContext.RoleCapabilities.ToListAsync(ct));
+        // Replace only the (role, key) pairs the payload actually names — never the whole
+        // table. A frontend registry that no longer knows about a stored key (e.g. after a
+        // rename) must not be able to delete that key's row just because an admin clicked
+        // Uložit: the row may still be the only thing keeping a capability an endpoint gates
+        // on via RequireCapability closed. Matched case-insensitively (OrdinalIgnoreCase),
+        // consistent with RoleCapabilityPolicy's read side and the validator's duplicate check.
+        var existingRows = await dbContext.RoleCapabilities.ToListAsync(ct);
+        var rowsToReplace = existingRows
+            .Where(row => req.Items.Any(item =>
+                item.Role == row.Role && string.Equals(item.CapabilityKey, row.CapabilityKey, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        dbContext.RoleCapabilities.RemoveRange(rowsToReplace);
         dbContext.RoleCapabilities.AddRange(req.Items.Select(item => new RoleCapability
         {
             Role = item.Role,

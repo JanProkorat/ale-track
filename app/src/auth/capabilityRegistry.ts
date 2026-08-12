@@ -13,10 +13,13 @@ export interface CapabilityMeta {
   guardsData: boolean;
 }
 
+// Capability.Money exists on the backend enum as a deliberate future hook, but nothing
+// consumes it yet: no endpoint gates on it, and no component calls can('Money'). It is
+// deliberately absent from this registry rather than listed with guardsData: false — the
+// admin panel would otherwise offer a toggle for a capability that controls nothing.
 export const CAPABILITY_REGISTRY = [
   { key: 'Invoicing', label: 'Fakturace', module: 'shipments', guardsData: true },
   { key: 'LoadingBreakdown', label: 'Rozpis nakládky', module: 'shipments', guardsData: false },
-  { key: 'Money', label: 'Ceny', module: null, guardsData: true },
 ] as const satisfies readonly CapabilityMeta[];
 
 export type Capability = (typeof CAPABILITY_REGISTRY)[number]['key'];
