@@ -22,7 +22,7 @@ public sealed record GetDriverDetailRequest
 /// <summary>
 /// Endpoint to handle requests for retrieving detailed information about a driver.
 /// </summary>
-public sealed class GetDriverDetailEndpoint(AleTrackDbContext dbContext) : Endpoint<GetDriverDetailRequest, DriverDto>
+public sealed class GetDriverDetailEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope) : Endpoint<GetDriverDetailRequest, DriverDto>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -46,6 +46,20 @@ public sealed class GetDriverDetailEndpoint(AleTrackDbContext dbContext) : Endpo
     /// <inheritdoc />
     public override async Task HandleAsync(GetDriverDetailRequest req, CancellationToken ct)
     {
+        // 404 rather than 403 so a driver cannot probe which driver ids exist.
+        if (driverScope.IsScoped)
+        {
+            var scopedDriverId = await driverScope.GetDriverIdAsync(ct);
+            var isOwnRecord = scopedDriverId is not null
+                && await dbContext.Drivers.AsNoTracking()
+                    .AnyAsync(d => d.PublicId == req.Id && d.Id == scopedDriverId, ct);
+
+            if (!isOwnRecord)
+            {
+                ThrowHelper.PublicEntityNotFound(nameof(Driver), req.Id);
+            }
+        }
+
         var breweries = await dbContext.Drivers
             .Where(c => c.PublicId == req.Id)
             .Select(c => new DriverDto

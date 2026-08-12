@@ -24,7 +24,7 @@ public sealed class DeleteDriverTests
             Id = driverId
         };
 
-        var endpoint = EndpointBuilder<DeleteDriverRequest, DeleteDriverEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeleteDriverRequest, DeleteDriverEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         dbContext.Verify(e => e.Drivers.Remove(It.IsAny<Driver>()), Times.Once);
@@ -41,7 +41,7 @@ public sealed class DeleteDriverTests
             Id = Guid.NewGuid()
         };
 
-        var endpoint = EndpointBuilder<DeleteDriverRequest, DeleteDriverEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeleteDriverRequest, DeleteDriverEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);

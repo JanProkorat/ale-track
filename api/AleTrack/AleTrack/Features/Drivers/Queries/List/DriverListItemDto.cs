@@ -35,6 +35,12 @@ public sealed record DriverListItemDto
     /// Dates when the driver is available
     /// </summary>
     public List<DriverAvailabilityListItemDto> AvailableDates { get; set; } = [];
+
+    /// <summary>
+    /// Whether this driver already signs in with a user account. A driver record belongs to
+    /// at most one account, so the user form uses this to leave claimed drivers out of its picker.
+    /// </summary>
+    public bool IsLinkedToUser { get; set; }
 }
 
 public record DriverAvailabilityListItemDto(DateTime From, DateTime Until);
