@@ -12,16 +12,21 @@ public static class DriverBuilder
         string? lastName = null,
         string? phoneNumber = null,
         string? color = null,
-        List<DriverAvailability>? availabilities = null)
+        List<DriverAvailability>? availabilities = null,
+        long? id = null,
+        User? user = null)
     {
         return new Driver
         {
+            Id = id ?? 0,
             PublicId = publicId ?? Guid.NewGuid(),
             FirstName = firstName ?? "John",
             LastName = lastName ?? "Doe",
             PhoneNumber = phoneNumber ?? "+420123456789",
             Color = color ?? "#FF5733",
-            Availabilities = availabilities ?? []
+            Availabilities = availabilities ?? [],
+            UserId = user?.Id,
+            User = user
         };
     }
 
