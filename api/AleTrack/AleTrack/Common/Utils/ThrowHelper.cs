@@ -268,4 +268,35 @@ public static class ThrowHelper
             {
                 { nameof(orderId), orderId }
             });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a driver account attempts an operation
+    /// reserved for office staff — creating or deleting driver records and shipments.
+    /// </summary>
+    /// <exception cref="AleTrackException">Thrown with 403 Forbidden.</exception>
+    /// <remarks>
+    /// Deliberately 403 rather than 404: these routes take no id whose existence could leak,
+    /// and the caller is being told the operation itself is not theirs.
+    /// </remarks>
+    [DoesNotReturn]
+    public static void DriverScopeForbidden()
+        => throw new AleTrackException(
+            StatusCodes.Status403Forbidden,
+            ErrorCodes.DriverScopeForbidden);
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a driver record is already linked to a
+    /// different user account.
+    /// </summary>
+    /// <param name="driverId">Public id of the driver already linked elsewhere.</param>
+    /// <exception cref="AleTrackException">Thrown with 400 Bad Request.</exception>
+    [DoesNotReturn]
+    public static void DriverAlreadyLinkedToUser(Guid driverId)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.DriverAlreadyLinkedToUser,
+            new Dictionary<string, object>
+            {
+                { nameof(driverId), driverId }
+            });
 }

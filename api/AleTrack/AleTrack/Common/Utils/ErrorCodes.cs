@@ -120,4 +120,14 @@ public static class ErrorCodes
     /// Error code for case when an uploaded price list cannot be read
     /// </summary>
     public const string PriceListUnreadable = "PRICE_LIST_UNREADABLE";
+
+    /// <summary>
+    /// Error code for case when a driver account attempts an operation reserved for office staff.
+    /// </summary>
+    public const string DriverScopeForbidden = "DRIVER_SCOPE_FORBIDDEN";
+
+    /// <summary>
+    /// Error code for case when a driver record is already linked to a different user account.
+    /// </summary>
+    public const string DriverAlreadyLinkedToUser = "DRIVER_ALREADY_LINKED_TO_USER";
 }
