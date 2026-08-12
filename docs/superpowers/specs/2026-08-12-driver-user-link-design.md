@@ -201,6 +201,28 @@ query filters. Tests cannot catch code that does not exist yet.
 though the loading breakdown is capability-hidden in the UI. Pre-existing, a
 different mechanism, and out of scope here — it wants its own task.
 
-**Dovozy and Reporty stay unscoped.** A driver account is expected to have those
-modules at *bez přístupu* in the permission matrix. If drivers are ever given
-access to Dovozy, that module needs the same treatment.
+**Dovozy stays unscoped.** A driver account is expected to have that module at
+*bez přístupu* in the permission matrix, which works because all six
+`ProductDeliveries` endpoints carry `RequirePermission(ModuleType.Deliveries, …)`.
+If drivers are ever given access to Dovozy, it needs the same treatment.
+
+**Reporty is not merely unscoped — it is unprotected, and this is a live data
+leak.** An earlier revision of this document claimed the permission matrix
+covered it. That was wrong, and the whole-branch review caught it. All four
+Reports endpoints — `GetOperationsEndpoint`, `GetClientVolumeEndpoint`,
+`GetDeliveryVolumeEndpoint`, `GetNumberOfRecordsInEachModuleEndpoint` — are
+`RequireAuthenticated()` only: no module permission, no capability, no driver
+scope. Setting Reporty to *bez přístupu* hides the nav item and nothing else.
+
+Any authenticated driver — **including an unlinked one, which this feature
+promises sees nothing** — can call `GET /ale-track/reports/operations` and
+receive every shipment in a date range with every assigned driver's name and
+colour, or `GET /ale-track/reports/client-volume` and receive the complete
+client book by name and region with volumes.
+
+This is pre-existing and predates this branch, which neither caused nor worsened
+it. It is left alone here deliberately: closing it is a design decision of its
+own (does Reporty get a module permission, a capability, or row-level scoping?)
+and does not belong in this change. **It is its own work item, and the feature
+should not be described as "a driver sees only their own data" until it is
+closed.**
