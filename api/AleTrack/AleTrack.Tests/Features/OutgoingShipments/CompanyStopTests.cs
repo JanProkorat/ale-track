@@ -3,6 +3,7 @@ using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
+using AleTrack.Tests.Mocks;
 using FluentAssertions;
 using FluentValidation.TestHelper;
 using Microsoft.Extensions.Options;
@@ -62,7 +63,7 @@ public sealed class CompanyStopTests
         ];
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(Company));
+            .Create(dbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(request, CancellationToken.None);
 

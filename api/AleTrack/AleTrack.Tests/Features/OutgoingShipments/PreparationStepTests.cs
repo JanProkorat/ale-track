@@ -97,7 +97,7 @@ public sealed class PreparationStepTests
     public async Task SetStep_UnknownShipment_IsNotFound()
     {
         var f = Fixture.Build();
-        var endpoint = EndpointBuilder<SetPreparationStepRequest, SetPreparationStepEndpoint>.Create(f.DbContext.Object);
+        var endpoint = EndpointBuilder<SetPreparationStepRequest, SetPreparationStepEndpoint>.Create(f.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new SetPreparationStepRequest
         {
@@ -211,7 +211,7 @@ public sealed class PreparationStepTests
 
     private static async Task Tick(Fixture f, Guid stepId, bool isDone)
     {
-        var endpoint = EndpointBuilder<SetPreparationStepRequest, SetPreparationStepEndpoint>.Create(f.DbContext.Object);
+        var endpoint = EndpointBuilder<SetPreparationStepRequest, SetPreparationStepEndpoint>.Create(f.DbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new SetPreparationStepRequest
         {
             Id = f.Shipment.PublicId,
@@ -222,7 +222,7 @@ public sealed class PreparationStepTests
 
     private static async Task Save(Fixture f, List<PreparationStepDto> steps)
     {
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
             Id = f.Shipment.PublicId,

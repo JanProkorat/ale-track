@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,8 @@ namespace AleTrack.Features.OutgoingShipments.Commands.AcknowledgeAddressChanges
 /// <c>AddPurchaseInvoiceEndpoint</c>, which hit this first.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class AcknowledgeAddressChangesEndpoint(AleTrackDbContext dbContext)
+/// <param name="driverScope"></param>
+public sealed class AcknowledgeAddressChangesEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
     : EndpointWithoutRequest
 {
     /// <inheritdoc />
@@ -51,6 +53,8 @@ public sealed class AcknowledgeAddressChangesEndpoint(AleTrackDbContext dbContex
     public override async Task HandleAsync(CancellationToken ct)
     {
         var shipmentId = Route<Guid>("Id");
+
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, shipmentId, ct);
 
         var shipment = await dbContext.OutgoingShipments
             .Include(s => s.Stops)

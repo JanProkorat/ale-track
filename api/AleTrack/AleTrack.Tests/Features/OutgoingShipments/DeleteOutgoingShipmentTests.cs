@@ -28,7 +28,7 @@ public sealed class DeleteOutgoingShipmentTests
             Id = shipmentId
         };
 
-        var endpoint = EndpointBuilder<DeleteOutgoingShipmentRequest, DeleteOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeleteOutgoingShipmentRequest, DeleteOutgoingShipmentEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         dbContext.Verify(e => e.OutgoingShipments.Remove(It.IsAny<OutgoingShipment>()), Times.Once);
@@ -45,7 +45,7 @@ public sealed class DeleteOutgoingShipmentTests
             Id = Guid.NewGuid()
         };
 
-        var endpoint = EndpointBuilder<DeleteOutgoingShipmentRequest, DeleteOutgoingShipmentEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeleteOutgoingShipmentRequest, DeleteOutgoingShipmentEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);

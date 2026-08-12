@@ -27,7 +27,9 @@ public record CreateOutgoingShipmentRequest
 /// </summary>
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
-public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+/// <param name="driverScope"></param>
+public sealed class CreateOutgoingShipmentEndpoint(
+    AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
     : Endpoint<CreateOutgoingShipmentRequest>
 {
     /// <inheritdoc />
@@ -54,6 +56,12 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
     /// <inheritdoc />
     public override async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        // Planning shipments is office work; a driver only executes the ones assigned to them.
+        if (driverScope.IsScoped)
+        {
+            ThrowHelper.DriverScopeForbidden();
+        }
+
         var company = companyOptions.Value;
 
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);

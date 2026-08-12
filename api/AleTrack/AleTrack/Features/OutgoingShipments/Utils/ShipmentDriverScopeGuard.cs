@@ -7,7 +7,7 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 
 /// <summary>
 /// Row-level guard shared by every shipment endpoint that takes a shipment id. Keeps the
-/// "assigned to me" rule in one place so the ten call sites cannot drift apart.
+/// "assigned to me" rule in one place so the seven call sites cannot drift apart.
 /// </summary>
 public static class ShipmentDriverScopeGuard
 {

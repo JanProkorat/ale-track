@@ -130,7 +130,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -195,7 +195,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -252,7 +252,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -306,7 +306,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -376,7 +376,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -429,7 +429,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         var act = () => endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -534,7 +534,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -593,7 +593,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -655,7 +655,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
             }
         };
 
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(command, CancellationToken.None);
 
@@ -707,7 +707,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
 
         // Takes no body and reads the shipment from the route — see the
         // endpoint's remarks for why — so the test has to put it there.
-        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object, DriverScopeMockFactory.Unscoped());
         endpoint.HttpContext.Request.RouteValues["Id"] = target.PublicId.ToString();
         await endpoint.HandleAsync(CancellationToken.None);
 
@@ -721,7 +721,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
     {
         var db = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: []);
 
-        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object);
+        var endpoint = EndpointWithoutRequestBuilder<AcknowledgeAddressChangesEndpoint>.Create(db.Object, DriverScopeMockFactory.Unscoped());
         endpoint.HttpContext.Request.RouteValues["Id"] = Guid.NewGuid().ToString();
         var act = () => endpoint.HandleAsync(CancellationToken.None);
 

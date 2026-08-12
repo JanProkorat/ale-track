@@ -108,7 +108,7 @@ public sealed class LoadingStateEndpointTests
     public async Task SetState_UnknownProduct_IsNotFound()
     {
         var scenario = Scenario.Build();
-        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new SetLoadingStateRequest
         {
@@ -163,7 +163,7 @@ public sealed class LoadingStateEndpointTests
 
     private static async Task Set(Scenario scenario, Mock<AleTrackDbContext> dbContext, int sequence, ShipmentLoadingState state)
     {
-        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new SetLoadingStateRequest
         {
             Id = scenario.ShipmentId,
