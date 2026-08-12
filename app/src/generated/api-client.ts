@@ -89,7 +89,7 @@ export interface IClient {
 
     /**
      * Gets number of records in each module
-     * @return Dto with number of records in each module
+     * @return Dto with number of records in each module the caller may see
      */
     getNumberOfRecordsInEachModuleEndpoint(signal?: AbortSignal): Promise<NumberOfRecordsInEachModuleDto>;
 
@@ -1420,7 +1420,7 @@ export class Client implements IClient {
 
     /**
      * Gets number of records in each module
-     * @return Dto with number of records in each module
+     * @return Dto with number of records in each module the caller may see
      */
     getNumberOfRecordsInEachModuleEndpoint(signal?: AbortSignal): Promise<NumberOfRecordsInEachModuleDto> {
         let url_ = this.baseUrl + "/ale-track/reports/number-of-records-in-each-module";
@@ -8278,15 +8278,15 @@ export interface ISetRoleCapabilitiesDto {
 }
 
 export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+    clientsCount?: number | undefined;
+    ordersCount?: number | undefined;
+    breweriesCount?: number | undefined;
+    inventoryItemsCount?: number | undefined;
+    driversCount?: number | undefined;
+    vehiclesCount?: number | undefined;
+    usersCount?: number | undefined;
+    outgoingShipmentsCount?: number | undefined;
+    productDeliveriesCount?: number | undefined;
 
     constructor(data?: INumberOfRecordsInEachModuleDto) {
         if (data) {
@@ -8334,15 +8334,15 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
 }
 
 export interface INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+    clientsCount?: number | undefined;
+    ordersCount?: number | undefined;
+    breweriesCount?: number | undefined;
+    inventoryItemsCount?: number | undefined;
+    driversCount?: number | undefined;
+    vehiclesCount?: number | undefined;
+    usersCount?: number | undefined;
+    outgoingShipmentsCount?: number | undefined;
+    productDeliveriesCount?: number | undefined;
 }
 
 export class OperationsReportDto implements IOperationsReportDto {
