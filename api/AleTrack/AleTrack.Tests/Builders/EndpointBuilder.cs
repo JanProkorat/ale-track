@@ -26,7 +26,15 @@ public static class EndpointBuilder<TRequest, TEndpoint> where TEndpoint : Endpo
     {
         return Factory.Create<TEndpoint>(context =>
         {
-            context.AddTestServices(s => s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator()));
+            context.AddTestServices(s =>
+            {
+                s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
+
+                // Endpoints that take IDriverScope get an unscoped caller unless a test
+                // passes its own positionally, so tests unrelated to driver scoping need
+                // no change.
+                s.AddSingleton(DriverScopeMockFactory.Unscoped());
+            });
         }, dependencies);
     }
 }
@@ -46,7 +54,15 @@ public static class EndpointWithoutRequestBuilder<TEndpoint> where TEndpoint : E
     {
         return Factory.Create<TEndpoint>(context =>
         {
-            context.AddTestServices(s => s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator()));
+            context.AddTestServices(s =>
+            {
+                s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
+
+                // Endpoints that take IDriverScope get an unscoped caller unless a test
+                // passes its own positionally, so tests unrelated to driver scoping need
+                // no change.
+                s.AddSingleton(DriverScopeMockFactory.Unscoped());
+            });
         }, dependencies);
     }
 }
@@ -76,7 +92,15 @@ public static class EndpointWithResponseBuilder<TRequest, TResponse, TEndpoint>
     {
         return Factory.Create<TEndpoint>(context =>
         {
-            context.AddTestServices(s => s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator()));
+            context.AddTestServices(s =>
+            {
+                s.AddSingleton(LinkGeneratorMockFactory.CreateLinkGenerator());
+
+                // Endpoints that take IDriverScope get an unscoped caller unless a test
+                // passes its own positionally, so tests unrelated to driver scoping need
+                // no change.
+                s.AddSingleton(DriverScopeMockFactory.Unscoped());
+            });
         }, dependencies);
     }
 }
