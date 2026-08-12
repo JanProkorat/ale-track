@@ -34,4 +34,14 @@ public sealed record UserListItemDto
     /// Granular per-module permissions (empty for Admin users — they have full access).
     /// </summary>
     public List<ModulePermissionDto> Permissions { get; set; } = [];
+
+    /// <summary>
+    /// Public id of the linked driver record, when this account is a driver.
+    /// </summary>
+    public Guid? DriverId { get; set; }
+
+    /// <summary>
+    /// Display name of the linked driver, so the list needs no second request.
+    /// </summary>
+    public string? DriverName { get; set; }
 }

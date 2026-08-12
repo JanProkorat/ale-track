@@ -38,4 +38,10 @@ public sealed record CreateUserDto
     /// Granular per-module permissions. Ignored for Admin-role users (they get full access).
     /// </summary>
     public List<ModulePermissionDto> Permissions { get; set; } = [];
+
+    /// <summary>
+    /// Public id of the driver record this account signs in as. Only meaningful for a user
+    /// holding the Driver role; null unlinks the account from any driver.
+    /// </summary>
+    public Guid? DriverId { get; set; }
 }

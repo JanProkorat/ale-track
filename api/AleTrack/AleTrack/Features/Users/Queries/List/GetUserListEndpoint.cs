@@ -48,7 +48,15 @@ public sealed class GetUserListEndpoint(AleTrackDbContext dbContext) : Endpoint<
                         Module = p.Module,
                         Level = p.Level
                     })
-                    .ToList()
+                    .ToList(),
+                DriverId = dbContext.Drivers
+                    .Where(d => d.UserId == u.Id)
+                    .Select(d => (Guid?)d.PublicId)
+                    .FirstOrDefault(),
+                DriverName = dbContext.Drivers
+                    .Where(d => d.UserId == u.Id)
+                    .Select(d => d.FirstName + " " + d.LastName)
+                    .FirstOrDefault()
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

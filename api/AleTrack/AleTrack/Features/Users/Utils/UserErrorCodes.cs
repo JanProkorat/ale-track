@@ -19,4 +19,9 @@ public static class UserErrorCodes
     /// Error code for case when the provided refresh token is invalid or expired.
     /// </summary>
     public const string InvalidRefreshTokenError = "INVALID_REFRESH_TOKEN";
+
+    /// <summary>
+    /// Error code for case when a driver record is linked to a user who does not hold the Driver role.
+    /// </summary>
+    public const string DriverLinkRequiresDriverRole = "DRIVER_LINK_REQUIRES_DRIVER_ROLE";
 }

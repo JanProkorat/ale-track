@@ -32,7 +32,7 @@ public sealed class CreateUserTests
         var endpoint = EndpointBuilder<CreateUserRequest, CreateUserEndpoint>.Create(dbContext.Object, passwordHasher.Object);
         await endpoint.HandleAsync(command, CancellationToken.None);
         
-        dbContext.Verify(e => e.Users.Add(It.Is<User>(u => 
+        dbContext.Verify(e => e.Users.Add(It.Is<User>(u =>
             u.FirstName == command.Data.FirstName &&
             u.LastName == command.Data.LastName &&
             u.UserName == command.Data.UserName &&
@@ -40,7 +40,7 @@ public sealed class CreateUserTests
             u.UserRoles.Count == command.Data.UserRoles.Count &&
             u.UserRoles.All(role => command.Data.UserRoles.Contains(role.Type))
         )), Times.Once);
-        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         passwordHasher.Verify(p => p.HashPassword(command.Data.Password), Times.Once);
     }
 }

@@ -3,6 +3,7 @@ using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Features.Users.Commands.Create;
 
@@ -70,7 +71,49 @@ public sealed class CreateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
         
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(ct);
-        
+        await ApplyDriverLinkAsync(user, req.Data.DriverId, ct);
+        await dbContext.SaveChangesAsync(ct);
+
         await Send.ResponseAsync(user.PublicId.ToString(), StatusCodes.Status201Created, cancellation: ct);
+    }
+
+    /// <summary>
+    /// Points <paramref name="driverPublicId"/> at <paramref name="user"/> and releases any
+    /// driver previously linked to that account, so one account never owns two driver records.
+    /// </summary>
+    /// <param name="user">Account being saved.</param>
+    /// <param name="driverPublicId">Driver to link, or null to unlink.</param>
+    /// <param name="ct">Cancellation token.</param>
+    private async Task ApplyDriverLinkAsync(User user, Guid? driverPublicId, CancellationToken ct)
+    {
+        var previous = await dbContext.Drivers.FirstOrDefaultAsync(d => d.UserId == user.Id, ct);
+
+        if (driverPublicId is null)
+        {
+            if (previous is not null)
+            {
+                previous.UserId = null;
+            }
+
+            return;
+        }
+
+        var driver = await dbContext.Drivers.FirstOrDefaultAsync(d => d.PublicId == driverPublicId, ct);
+        if (driver is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Driver), driverPublicId.Value);
+        }
+
+        if (driver!.UserId is not null && driver.UserId != user.Id)
+        {
+            ThrowHelper.DriverAlreadyLinkedToUser(driverPublicId.Value);
+        }
+
+        if (previous is not null && previous.Id != driver.Id)
+        {
+            previous.UserId = null;
+        }
+
+        driver.UserId = user.Id;
     }
 }
