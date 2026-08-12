@@ -36,7 +36,9 @@ public sealed record DeleteShipmentInvoiceRequest
 /// be billed, and reconciliation would immediately recreate it.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteShipmentInvoiceRequest>
+/// <param name="driverScope"></param>
+public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<DeleteShipmentInvoiceRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -66,6 +68,8 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext) :
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteShipmentInvoiceRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
         if (split is null)
         {

@@ -258,14 +258,14 @@ public sealed class PurchaseInvoiceEndpointsTests
     /// </summary>
     private static async Task AddById(Mock<AleTrackDbContext> dbContext, Guid shipmentId)
     {
-        var endpoint = EndpointWithoutRequestBuilder<AddPurchaseInvoiceEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointWithoutRequestBuilder<AddPurchaseInvoiceEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         endpoint.HttpContext.Request.RouteValues["Id"] = shipmentId.ToString();
         await endpoint.HandleAsync(CancellationToken.None);
     }
 
     private static async Task SetLine(Scenario scenario, Mock<AleTrackDbContext> dbContext, int sequence, int quantity)
     {
-        var endpoint = EndpointBuilder<SetPurchaseInvoiceLineRequest, SetPurchaseInvoiceLineEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<SetPurchaseInvoiceLineRequest, SetPurchaseInvoiceLineEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new SetPurchaseInvoiceLineRequest
         {
             Id = scenario.ShipmentId,
@@ -275,7 +275,7 @@ public sealed class PurchaseInvoiceEndpointsTests
 
     private static async Task Delete(Scenario scenario, Mock<AleTrackDbContext> dbContext, Guid invoiceId)
     {
-        var endpoint = EndpointBuilder<DeletePurchaseInvoiceRequest, DeletePurchaseInvoiceEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeletePurchaseInvoiceRequest, DeletePurchaseInvoiceEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new DeletePurchaseInvoiceRequest
         {
             Id = scenario.ShipmentId, InvoiceId = invoiceId

@@ -30,7 +30,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         var scenario = Scenario.Build();
         var dbContext = scenario.Mock();
 
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
         var result = endpoint.Response;
@@ -55,7 +55,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task GetInvoices_LinesCarryProductDetailAndPrice()
     {
         var scenario = Scenario.Build();
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
@@ -86,7 +86,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         scenario.Product.PriceWithVat = 99m;
         scenario.Product.Name = "Přejmenováno";
 
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
         var lines = endpoint.Response.Invoices.SelectMany(i => i.Lines)
@@ -109,7 +109,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         scenario.Materialise();
         scenario.Product.PriceWithVat = 99m;
 
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
         endpoint.Response.Invoices.SelectMany(i => i.Lines)
@@ -121,7 +121,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task GetInvoices_DeliveredShipment_IsNotEditable()
     {
         var scenario = Scenario.Build(state: OutgoingShipmentState.Delivered);
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
@@ -136,7 +136,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         scenario.Materialise();
         scenario.OrderItemA.Quantity = 6;
 
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
 
         endpoint.Response.Adjustments.Should().ContainSingle()
@@ -153,7 +153,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task GetInvoices_ShipmentNotFound()
     {
         var dbContext = AleTrackDbContextMockFactory.CreateMock();
-        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = Guid.NewGuid() }, CancellationToken.None);
 
@@ -621,7 +621,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         scenario.Materialise();
         var dbContext = scenario.Mock();
 
-        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new AddShipmentInvoiceRequest
         {
             Id = scenario.ShipmentId,
@@ -637,7 +637,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task AddInvoice_ForAClientNotOnTheShipment_IsNotFound()
     {
         var scenario = Scenario.Build();
-        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new AddShipmentInvoiceRequest
         {
@@ -665,7 +665,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         var extra = scenario.Shipment.Invoices.Single(i => i.ClientId == Scenario.ClientAId && i.Sequence == 2);
 
         var dbContext = scenario.Mock();
-        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new DeleteShipmentInvoiceRequest
         {
             Id = scenario.ShipmentId, InvoiceId = extra.PublicId
@@ -684,7 +684,7 @@ public sealed class ShipmentInvoiceEndpointsTests
         scenario.Materialise();
         var first = scenario.InvoiceOf(Scenario.ClientAId);
 
-        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
         var act = async () => await endpoint.HandleAsync(new DeleteShipmentInvoiceRequest
         {
             Id = scenario.ShipmentId, InvoiceId = first.PublicId
@@ -698,7 +698,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     public async Task DeleteInvoice_NotFound()
     {
         var scenario = Scenario.Build();
-        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(scenario.Mock().Object);
+        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new DeleteShipmentInvoiceRequest
         {
@@ -723,7 +723,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     private static async Task<Mock<DbSet<OutgoingShipmentInvoiceLine>>> MoveTracked(Scenario scenario, MoveInvoiceLineDto data)
     {
         var dbContext = scenario.Mock();
-        var endpoint = EndpointBuilder<MoveInvoiceLineRequest, MoveInvoiceLineEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<MoveInvoiceLineRequest, MoveInvoiceLineEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new MoveInvoiceLineRequest { Id = scenario.ShipmentId, Data = data }, CancellationToken.None);
         return Mock.Get(dbContext.Object.OutgoingShipmentInvoiceLines);
     }
@@ -731,7 +731,7 @@ public sealed class ShipmentInvoiceEndpointsTests
     private static async Task<ShipmentInvoicesDto> GetInvoices(Scenario scenario)
     {
         var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>
-            .Create(scenario.Mock().Object);
+            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
         return endpoint.Response;
     }

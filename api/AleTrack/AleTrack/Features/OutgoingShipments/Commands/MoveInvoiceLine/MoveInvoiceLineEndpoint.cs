@@ -36,7 +36,9 @@ public sealed record MoveInvoiceLineRequest
 /// both directions.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpoint<MoveInvoiceLineRequest>
+/// <param name="driverScope"></param>
+public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<MoveInvoiceLineRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -66,6 +68,8 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpo
     /// <inheritdoc />
     public override async Task HandleAsync(MoveInvoiceLineRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
         if (split is null)
         {

@@ -89,6 +89,21 @@ public sealed class DriverScopingTests
     }
 
     [Fact]
+    public async Task HandleAsync_ScopedUnlinkedCaller_DetailIsNotFound()
+    {
+        var mineId = Guid.NewGuid();
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            drivers: [DriverBuilder.BuildEntity(id: 1, publicId: mineId)]);
+
+        var endpoint = EndpointWithResponseBuilder<GetDriverDetailRequest, DriverDto, GetDriverDetailEndpoint>
+            .Create(dbContext.Object, DriverScopeMockFactory.ScopedUnlinked());
+
+        var act = async () => await endpoint.HandleAsync(new GetDriverDetailRequest { Id = mineId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    [Fact]
     public async Task HandleAsync_DriverScopedCaller_DeleteIsForbidden()
     {
         var mineId = Guid.NewGuid();
@@ -159,5 +174,24 @@ public sealed class DriverScopingTests
 
         driver.FirstName.Should().Be("Updated");
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ScopedUnlinkedCaller_UpdateIsNotFound()
+    {
+        var mineId = Guid.NewGuid();
+        var driver = DriverBuilder.BuildEntity(id: 1, publicId: mineId);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(drivers: [driver]);
+
+        var endpoint = EndpointBuilder<UpdateDriverRequest, UpdateDriverEndpoint>
+            .Create(dbContext.Object, DriverScopeMockFactory.ScopedUnlinked());
+
+        var command = new UpdateDriverRequest { Id = mineId, Data = DriverBuilder.BuildUpdateDto() };
+
+        var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

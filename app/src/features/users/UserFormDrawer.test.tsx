@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { UserListItemDto, UserRoleType } from 'src/generated/api-client';
 import { UserFormDrawer } from './UserFormDrawer';
 
 vi.mock('src/hooks/useDrivers', () => ({
   useDrivers: () => ({
     data: [
       { id: 'd1', firstName: 'Jan', lastName: 'Novák' },
-      { id: 'd2', firstName: 'Petr', lastName: 'Svoboda' },
+      { id: 'd2', firstName: 'Petr', lastName: 'Svoboda', isLinkedToUser: true },
     ],
     isPending: false,
     isError: false,
@@ -51,5 +52,31 @@ describe('UserFormDrawer driver link', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Řidič' }));
     expect(driverPicker()).toHaveValue('');
+  });
+
+  it('excludes a driver already linked to another account from the picker options', () => {
+    render(<UserFormDrawer open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Řidič' }));
+
+    fireEvent.mouseDown(driverPicker()!);
+
+    expect(screen.getByText('Jan Novák')).toBeInTheDocument();
+    expect(screen.queryByText('Petr Svoboda')).not.toBeInTheDocument();
+  });
+
+  it("keeps the account's own currently linked driver in the options", () => {
+    const user = new UserListItemDto({
+      id: 'u1',
+      userName: 'petrsvoboda',
+      userRoles: [UserRoleType.Driver],
+      permissions: [],
+      driverId: 'd2',
+    });
+
+    render(<UserFormDrawer open user={user} onClose={() => {}} />);
+
+    fireEvent.mouseDown(driverPicker()!);
+
+    expect(screen.getByText('Petr Svoboda')).toBeInTheDocument();
   });
 });

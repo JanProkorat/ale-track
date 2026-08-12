@@ -40,7 +40,7 @@ public sealed class CreateUserTests
             u.UserRoles.Count == command.Data.UserRoles.Count &&
             u.UserRoles.All(role => command.Data.UserRoles.Contains(role.Type))
         )), Times.Once);
-        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         passwordHasher.Verify(p => p.HashPassword(command.Data.Password), Times.Once);
     }
 }

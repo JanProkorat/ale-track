@@ -10,6 +10,7 @@ using AleTrack.Features.OutgoingShipments.Commands.SetPreparationStep;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Queries.Detail;
 using AleTrack.Features.OutgoingShipments.Queries.Export;
+using AleTrack.Features.OutgoingShipments.Queries.Invoices;
 using AleTrack.Features.OutgoingShipments.Queries.List;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
@@ -215,6 +216,21 @@ public sealed class ShipmentDriverScopingTests
 
         var act = async () => await endpoint.HandleAsync(
             new SetLoadingStateRequest { Id = theirs.PublicId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DriverScopedCallerNotAssigned_GetShipmentInvoicesIsNotFound()
+    {
+        var theirs = ShipmentAssignedTo(2, "Theirs");
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [theirs]);
+
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>
+            .Create(dbContext.Object, DriverScopeMockFactory.Scoped(1));
+
+        var act = async () => await endpoint.HandleAsync(
+            new GetShipmentInvoicesRequest { Id = theirs.PublicId }, CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }

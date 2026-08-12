@@ -38,6 +38,9 @@ vi.mock('src/hooks/useShipments', () => ({
   useShipments: () => ({ data: shipments, isLoading: false, isPending: false, isError: false }),
   useShipment: () => ({ data: undefined, isLoading: false, isPending: false, isError: false }),
 }));
+vi.mock('src/hooks/useDrivers', () => ({
+  useDrivers: () => ({ data: [], isLoading: false, isPending: false, isError: false }),
+}));
 vi.mock('src/auth/AuthProvider', () => ({
   useAuth: () => ({ canEdit: () => true, canSee: () => true, can: () => true }),
 }));
