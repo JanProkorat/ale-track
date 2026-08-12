@@ -16,9 +16,11 @@ public sealed class ModuleCountsPermissionTests
     // not from the non-generic EndpointWithoutRequest, so the with-response builder is
     // the one whose constraint it satisfies.
     private static GetNumberOfRecordsInEachModuleEndpoint CreateEndpoint(
-        Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> dbContext, Mock<IAppContext> appContext)
+        Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> dbContext,
+        Mock<IAppContext> appContext,
+        IDriverScope driverScope)
         => EndpointWithResponseBuilder<EmptyRequest, NumberOfRecordsInEachModuleDto, GetNumberOfRecordsInEachModuleEndpoint>
-            .Create(dbContext.Object, appContext.Object);
+            .Create(dbContext.Object, appContext.Object, driverScope);
 
     [Fact]
     public async Task HandleAsync_CallerHasViewOnSomeModules_ReturnsCountsOnlyForThoseModules()
@@ -36,7 +38,7 @@ public sealed class ModuleCountsPermissionTests
             [ModuleType.Drivers] = PermissionLevel.Edit
         });
 
-        var endpoint = CreateEndpoint(dbContext, appContext);
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(CancellationToken.None);
 
         var result = endpoint.Response;
@@ -71,7 +73,7 @@ public sealed class ModuleCountsPermissionTests
         appContext.Setup(a => a.Permissions).Returns(
             Enum.GetValues<ModuleType>().ToDictionary(m => m, _ => PermissionLevel.Edit));
 
-        var endpoint = CreateEndpoint(dbContext, appContext);
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(CancellationToken.None);
 
         var result = endpoint.Response;
@@ -97,7 +99,7 @@ public sealed class ModuleCountsPermissionTests
         var appContext = new Mock<IAppContext>();
         appContext.Setup(a => a.Permissions).Returns(new Dictionary<ModuleType, PermissionLevel>());
 
-        var endpoint = CreateEndpoint(dbContext, appContext);
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(CancellationToken.None);
 
         var result = endpoint.Response;
@@ -114,5 +116,111 @@ public sealed class ModuleCountsPermissionTests
 
         dbContext.VerifyGet(d => d.Clients, Times.Never);
         dbContext.VerifyGet(d => d.Drivers, Times.Never);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DriverScopedCallerLinked_CountsOwnDriverAndOnlyAssignedUnfinishedShipments()
+    {
+        var mine = DriverBuilder.BuildEntity(id: 1, firstName: "Mine");
+        var otherOne = DriverBuilder.BuildEntity(id: 2, firstName: "OtherOne");
+        var otherTwo = DriverBuilder.BuildEntity(id: 3, firstName: "OtherTwo");
+
+        var assignedToMeUnfinished = OutgoingShipmentBuilder.BuildEntity(
+            drivers: [new OutgoingShipmentDriver { DriverId = 1 }],
+            state: OutgoingShipmentState.Created);
+        var assignedToMeFinished = OutgoingShipmentBuilder.BuildEntity(
+            drivers: [new OutgoingShipmentDriver { DriverId = 1 }],
+            state: OutgoingShipmentState.Delivered);
+        var assignedToOtherUnfinished = OutgoingShipmentBuilder.BuildEntity(
+            drivers: [new OutgoingShipmentDriver { DriverId = 2 }],
+            state: OutgoingShipmentState.Created);
+        var assignedToBothUnfinished = OutgoingShipmentBuilder.BuildEntity(
+            drivers: [new OutgoingShipmentDriver { DriverId = 1 }, new OutgoingShipmentDriver { DriverId = 2 }],
+            state: OutgoingShipmentState.Created);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            drivers: [mine, otherOne, otherTwo],
+            outgoingShipments:
+            [
+                assignedToMeUnfinished, assignedToMeFinished, assignedToOtherUnfinished, assignedToBothUnfinished
+            ]);
+
+        var appContext = new Mock<IAppContext>();
+        appContext.Setup(a => a.Permissions).Returns(new Dictionary<ModuleType, PermissionLevel>
+        {
+            [ModuleType.Drivers] = PermissionLevel.View,
+            [ModuleType.Shipments] = PermissionLevel.View
+        });
+
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Scoped(1));
+        await endpoint.HandleAsync(CancellationToken.None);
+
+        var result = endpoint.Response;
+
+        result.DriversCount.Should().Be(1);
+        result.OutgoingShipmentsCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DriverScopedCallerUnlinked_CountsAreZeroNotFleetTotals()
+    {
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            drivers: [DriverBuilder.BuildEntity(id: 1), DriverBuilder.BuildEntity(id: 2), DriverBuilder.BuildEntity(id: 3)],
+            outgoingShipments:
+            [
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 1 }], state: OutgoingShipmentState.Created),
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 2 }], state: OutgoingShipmentState.Created)
+            ]);
+
+        var appContext = new Mock<IAppContext>();
+        appContext.Setup(a => a.Permissions).Returns(new Dictionary<ModuleType, PermissionLevel>
+        {
+            [ModuleType.Drivers] = PermissionLevel.View,
+            [ModuleType.Shipments] = PermissionLevel.View
+        });
+
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.ScopedUnlinked());
+        await endpoint.HandleAsync(CancellationToken.None);
+
+        var result = endpoint.Response;
+
+        result.DriversCount.Should().Be(0);
+        result.OutgoingShipmentsCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UnscopedCallerWithMultipleRecords_ReturnsFleetTotals()
+    {
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            drivers: [DriverBuilder.BuildEntity(id: 1), DriverBuilder.BuildEntity(id: 2), DriverBuilder.BuildEntity(id: 3)],
+            outgoingShipments:
+            [
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 1 }], state: OutgoingShipmentState.Created),
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 1 }], state: OutgoingShipmentState.Delivered),
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 2 }], state: OutgoingShipmentState.Created),
+                OutgoingShipmentBuilder.BuildEntity(
+                    drivers: [new OutgoingShipmentDriver { DriverId = 1 }, new OutgoingShipmentDriver { DriverId = 2 }],
+                    state: OutgoingShipmentState.Created)
+            ]);
+
+        var appContext = new Mock<IAppContext>();
+        appContext.Setup(a => a.Permissions).Returns(new Dictionary<ModuleType, PermissionLevel>
+        {
+            [ModuleType.Drivers] = PermissionLevel.View,
+            [ModuleType.Shipments] = PermissionLevel.View
+        });
+
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Unscoped());
+        await endpoint.HandleAsync(CancellationToken.None);
+
+        var result = endpoint.Response;
+
+        result.DriversCount.Should().Be(3);
+        result.OutgoingShipmentsCount.Should().Be(3);
     }
 }
