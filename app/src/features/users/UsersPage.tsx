@@ -4,6 +4,7 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlineOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
@@ -17,7 +18,21 @@ import { apiErrorMessage } from 'src/api/errors';
 import { UserRoleType, type UserListItemDto } from 'src/generated/api-client';
 import { useUsers, useDeleteUser } from 'src/hooks/useUsers';
 import { UserFormDrawer } from './UserFormDrawer';
-import { isAdminUser, permCounts } from './permissionModel';
+import { RoleCapabilitiesDrawer } from './RoleCapabilitiesDrawer';
+import { isAdminUser, permCounts, roleOf, ROLE_LABELS } from './permissionModel';
+
+// One chip per user, from the single role the form assigns. Rendered from roleOf rather
+// than by mapping userRoles, so an account carrying several does not sprout a chip each.
+const ROLE_CHIP_COLOR: Record<UserRoleType, 'primary' | 'info' | 'default'> = {
+  [UserRoleType.Admin]: 'primary',
+  [UserRoleType.Driver]: 'info',
+  [UserRoleType.Manager]: 'default',
+};
+
+function RoleChip({ user }: { user: Pick<UserListItemDto, 'userRoles'> }) {
+  const role = roleOf(user);
+  return <Chip label={ROLE_LABELS[role]} size="small" color={ROLE_CHIP_COLOR[role]} />;
+}
 
 function PermSummary({ user }: { user: UserListItemDto }) {
   if (isAdminUser(user)) return <StatusPill tone="amber" label="Plný přístup" />;
@@ -69,13 +84,7 @@ function UserCard({
         )}
       </Stack>
       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-        {(user.userRoles ?? []).map((r) =>
-          r === UserRoleType.Admin ? (
-            <Chip key="admin" label="Administrátor" size="small" color="primary" />
-          ) : (
-            <Chip key="user" label="Uživatel" size="small" />
-          )
-        )}
+        <RoleChip user={user} />
         <PermSummary user={user} />
       </Stack>
     </Stack>
@@ -92,6 +101,7 @@ export function UsersPage() {
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const [editing, setEditing] = useState<UserListItemDto | undefined>(undefined);
   const [confirm, setConfirm] = useState<UserListItemDto | null>(null);
 
@@ -139,17 +149,11 @@ export function UsersPage() {
     {
       key: 'roles',
       header: 'Role',
-      // Admins first: they are the rows worth finding, and there are only two values.
-      sortValue: (u) => ((u.userRoles ?? []).includes(UserRoleType.Admin) ? 'Administrátor' : 'Uživatel'),
+      // Sorted by the label on screen: Administrátor, then Manažer, then Řidič.
+      sortValue: (u) => ROLE_LABELS[roleOf(u)],
       render: (u) => (
         <Stack direction="row" spacing={0.5}>
-          {(u.userRoles ?? []).map((r) =>
-            r === UserRoleType.Admin ? (
-              <Chip key="admin" label="Administrátor" size="small" color="primary" />
-            ) : (
-              <Chip key="user" label="Uživatel" size="small" />
-            )
-          )}
+          <RoleChip user={u} />
         </Stack>
       ),
     },
@@ -201,6 +205,15 @@ export function UsersPage() {
               placeholder="Hledat uživatele…"
               width={{ xs: '100%', compact: 260 }}
             />
+            {editable && (
+              <Button
+                variant="outlined"
+                startIcon={<SettingsOutlinedIcon />}
+                onClick={() => setRolesOpen(true)}
+              >
+                Role a komponenty
+              </Button>
+            )}
             {editable && (
               <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
                 Přidat uživatele
@@ -267,6 +280,7 @@ export function UsersPage() {
       </Card>
 
       <UserFormDrawer open={formOpen} user={editing} onClose={() => setFormOpen(false)} />
+      <RoleCapabilitiesDrawer open={rolesOpen} onClose={() => setRolesOpen(false)} />
       <ConfirmDialog
         open={confirm !== null}
         title="Smazat uživatele?"

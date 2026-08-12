@@ -33,6 +33,7 @@ public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : En
         Post("outgoing-shipments/{Id:guid}/purchase-invoices");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
+            .RequireCapability(Capability.Invoicing)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)

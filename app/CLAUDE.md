@@ -88,7 +88,7 @@ assertion needed to compile it hides the mistake from `tsc`.
 
 `src/auth/AuthProvider.tsx` exposes `useAuth()`: `user`, `isAuthenticated`,
 `signIn(userName, password, remember)`, `signOut`, `canSee(module)`,
-`canEdit(module)`.
+`canEdit(module)`, `can(capability)`.
 
 `remember` decides the store: `localStorage` persists across browser restarts,
 `sessionStorage` only for the tab.
@@ -98,6 +98,16 @@ in `src/auth/permissions.ts`. Gate **both** the route and the controls:
 `ProtectedRoute` handles access, and screens take `editable = canEdit('module')`
 and hide or disable actions with it. Never rely on the backend alone to hide an
 action the user cannot perform.
+
+`can(capability)` gates a named slice of content that cuts across the module ×
+permission matrix — hiding the Fakturace card from a driver, say, without
+touching their `shipments` permission. Capabilities are declared in
+`src/auth/capabilityRegistry.ts` and resolved from the `cap` claims on the
+access token, so a role's visibility takes effect on the user's next sign-in
+or token refresh, not live. Role-level visibility is edited at `/users/roles`.
+A capability with `guardsData: true` is enforced by its endpoint too — a
+driver gets a 403 from the API, not just a hidden card; `guardsData: false`
+is UI-only decluttering with nothing backing it server-side.
 
 ## Screen structure
 

@@ -3,8 +3,8 @@
 // lists in this order, and these are for the screens that regroup the rows
 // themselves and so have to re-sort.
 
-import { ProductType, type ProductKind } from 'src/generated/api-client';
-import { KIND_ORDER, kindName } from './labels';
+import { type ProductType, type ProductKind } from 'src/generated/api-client';
+import { KIND_ORDER, kindName, ptypeName } from './labels';
 
 /** The bits of a product (or an inventory row) the ordering depends on. */
 export interface KindAndSize {
@@ -36,10 +36,12 @@ export interface DisplayOrderable {
  * Not beer, and therefore last: limonáda, merch, ostatní. Nealko and radler are
  * absent on purpose — they are beer, they just carry no degree.
  */
-export function isNonBeer(type?: ProductType): boolean {
-  return type === ProductType.Lemonade
-    || type === ProductType.Merchandise
-    || type === ProductType.Other;
+export function isNonBeer(type?: ProductType | string | number): boolean {
+  // Via ptypeName, not a raw `=== ProductType.Lemonade`: the backend serializes enums as
+  // strings, so a real product's `type` is "Lemonade" and never equals the numeric member.
+  // That made this always false, quietly sorting limonáda, merch and ostatní among the beers.
+  const name = ptypeName(type);
+  return name === 'Lemonade' || name === 'Merchandise' || name === 'Other';
 }
 
 /**

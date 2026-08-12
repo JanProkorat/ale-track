@@ -38,6 +38,21 @@ public static class EndpointDefinitionExtensions
     }
 
     /// <summary>
+    /// Requires that none of the caller's roles denies <paramref name="capability"/>
+    /// (Admins always pass). Stack it on top of <see cref="RequirePermission"/>: the
+    /// module permission decides whether the caller reaches the feature at all, the
+    /// capability whether this restricted part of it is theirs to see.
+    /// </summary>
+    public static RouteHandlerBuilder RequireCapability(this RouteHandlerBuilder builder, Capability capability)
+    {
+        builder.RequireAuthorization(CapabilityRequirement.PolicyName(capability));
+        builder.Produces<FailureResponse>(StatusCodes.Status403Forbidden);
+        builder.Produces<FailureResponse>(StatusCodes.Status401Unauthorized);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Requires only an authenticated user (no specific module), for cross-cutting
     /// reference endpoints (exchange rates, master data, reports, dashboard reminders).
     /// </summary>

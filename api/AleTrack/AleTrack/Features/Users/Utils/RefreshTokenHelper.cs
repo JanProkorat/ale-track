@@ -13,13 +13,14 @@ public static class RefreshTokenHelper
     /// Generates a new access token and refresh token pair, persists the hashed refresh token to the database.
     /// </summary>
     /// <returns>A tuple of (accessToken, rawRefreshToken). The raw refresh token is returned to the client; the hashed version is stored.</returns>
-    public static (string AccessToken, string RawRefreshToken) CreateTokens(
+    public static async Task<(string AccessToken, string RawRefreshToken)> CreateTokensAsync(
         IJwtService jwtService,
         AleTrackDbContext dbContext,
         User user,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        CancellationToken ct)
     {
-        var accessToken = jwtService.GenerateToken(user);
+        var accessToken = await jwtService.GenerateTokenAsync(user, ct);
         var rawRefreshToken = jwtService.GenerateRefreshToken();
         var hashedToken = jwtService.HashToken(rawRefreshToken);
 

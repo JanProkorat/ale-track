@@ -197,7 +197,15 @@ function renderDetail(
   });
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} onOpenOrder={onOpenOrder} />
+      <ShipmentDetail
+        shipment={shipment}
+        editable={false}
+        canSeeInvoicing
+        canSeeLoadingBreakdown
+        onBack={vi.fn()}
+        onEdit={vi.fn()}
+        onOpenOrder={onOpenOrder}
+      />
     </MuiThemeProvider>,
   );
 }
@@ -208,7 +216,7 @@ function renderEditableDetail(state: OutgoingShipmentState) {
   });
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+      <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
     </MuiThemeProvider>,
   );
 }
@@ -425,7 +433,7 @@ describe('ShipmentDetail — route map point resolution', () => {
     });
     render(
       <MuiThemeProvider theme={theme}>
-        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+        <ShipmentDetail shipment={shipment} editable={false} canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
       </MuiThemeProvider>,
     );
 
@@ -446,7 +454,7 @@ describe('ShipmentDetail — route map point resolution', () => {
     });
     render(
       <MuiThemeProvider theme={theme}>
-        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} onEdit={vi.fn()} />
+        <ShipmentDetail shipment={shipment} editable={false} canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
       </MuiThemeProvider>,
     );
 
@@ -549,7 +557,7 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     });
     return render(
       <MuiThemeProvider theme={theme}>
-        <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+        <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
       </MuiThemeProvider>,
     );
   }
@@ -666,7 +674,7 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     });
     return render(
       <MuiThemeProvider theme={theme}>
-        <ShipmentDetail shipment={shipment} editable onBack={vi.fn()} onEdit={vi.fn()} />
+        <ShipmentDetail shipment={shipment} editable canSeeInvoicing canSeeLoadingBreakdown onBack={vi.fn()} onEdit={vi.fn()} />
       </MuiThemeProvider>,
     );
   }

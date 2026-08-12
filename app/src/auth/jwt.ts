@@ -1,4 +1,5 @@
 import { jwtDecode } from 'jwt-decode';
+import { capabilitiesFromClaims } from './capabilities';
 import { type CurrentUser, type UserRole } from './types';
 import {
   allPerms,
@@ -9,8 +10,9 @@ import {
   type Permissions,
 } from './permissions';
 
-// The backend issues standard-URI claims plus one custom "perm" claim per
-// module carrying "Module:Level" (e.g. "Orders:Edit").
+// The backend issues standard-URI claims plus one custom "perm" claim per module carrying
+// "Module:Level" (e.g. "Orders:Edit"), and one custom "cap" claim per capability the
+// caller's roles may not see (e.g. "Invoicing").
 const CLAIM = {
   id: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
   name: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
@@ -18,12 +20,15 @@ const CLAIM = {
   surname: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname',
   role: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
   perm: 'perm',
+  cap: 'cap',
 } as const;
 
 interface JwtPayload {
   exp?: number;
   [key: string]: unknown;
 }
+
+const KNOWN_ROLES: readonly UserRole[] = ['Admin', 'Manager', 'Driver'];
 
 function asArray(v: unknown): string[] {
   if (v == null) return [];
@@ -60,15 +65,22 @@ export function isTokenExpired(accessToken: string): boolean {
 export function userFromToken(accessToken: string): CurrentUser | null {
   try {
     const p = jwtDecode<JwtPayload>(accessToken);
-    const roles = asArray(p[CLAIM.role]).filter((r): r is UserRole => r === 'Admin' || r === 'User');
+    // Every role the app knows has to be listed here. A role that falls through this filter
+    // disappears, and since the fallback below is ['Manager'], a Driver account would be
+    // mislabelled as a manager wherever the raw role list is read directly — roleOfRoles
+    // (Sidebar/AccountMenu) and the Admin short-circuit below and in capabilitiesFromClaims.
+    // Capabilities themselves are not at risk from this: they come from the token's own "cap"
+    // claims, not from this role list.
+    const roles = asArray(p[CLAIM.role]).filter((r): r is UserRole => KNOWN_ROLES.includes(r as UserRole));
     const isAdmin = roles.includes('Admin');
     return {
       id: String(p[CLAIM.id] ?? ''),
       userName: String(p[CLAIM.name] ?? ''),
       firstName: p[CLAIM.given] ? String(p[CLAIM.given]) : undefined,
       lastName: p[CLAIM.surname] ? String(p[CLAIM.surname]) : undefined,
-      roles: roles.length ? roles : ['User'],
+      roles: roles.length ? roles : ['Manager'],
       perms: isAdmin ? allPerms('edit') : permsFromClaims(asArray(p[CLAIM.perm])),
+      caps: capabilitiesFromClaims(roles.length ? roles : ['Manager'], asArray(p[CLAIM.cap])),
     };
   } catch {
     return null;

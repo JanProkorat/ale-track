@@ -1724,6 +1724,37 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.RoleCapability", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CapabilityKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("capability_key");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_visible");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer")
+                        .HasColumnName("role");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Role", "CapabilityKey")
+                        .IsUnique();
+
+                    b.ToTable("role_capabilities");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.User", b =>
                 {
                     b.Property<long>("Id")

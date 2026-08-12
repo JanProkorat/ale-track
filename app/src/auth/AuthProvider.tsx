@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { type CurrentUser } from './types';
 import { canEdit as canEditPerms, canSee as canSeePerms, type ModuleKey } from './permissions';
+import { type Capability } from './capabilityRegistry';
 import { userFromToken, isTokenExpired } from './jwt';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginUserDto } from 'src/generated/api-client';
@@ -36,6 +37,9 @@ interface AuthContextValue {
   signOut: () => void;
   canSee: (m: ModuleKey) => boolean;
   canEdit: (m: ModuleKey) => boolean;
+  /** Whether the signed-in user's roles allow a named slice of content (see
+   * capabilities.ts). Ask this rather than testing the role directly. */
+  can: (c: Capability) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -123,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       canSee: (m) => (user ? canSeePerms(user.perms, m) : false),
       canEdit: (m) => (user ? canEditPerms(user.perms, m) : false),
+      can: (c) => user?.caps[c] ?? false,
     }),
     [user, signIn, signOut]
   );

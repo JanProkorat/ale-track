@@ -10,6 +10,7 @@ import { useModuleCounts } from 'src/hooks/useReports';
 import { PATHS } from 'src/routes/paths';
 import { initials } from 'src/lib/format';
 import { type ModuleKey } from 'src/auth/permissions';
+import { roleOfRoles, ROLE_CLAIM_LABELS } from 'src/auth/capabilities';
 
 export const SIDEBAR_W = 250;
 export const SIDEBAR_W_COLLAPSED = 74;
@@ -194,7 +195,7 @@ export function Sidebar({
                 {user?.firstName} {user?.lastName}
               </Typography>
               <Typography sx={{ color: '#7c8b9e', fontSize: 11.5 }}>
-                {user?.roles.includes('Admin') ? 'Administrátor' : 'Uživatel'}
+                {user ? ROLE_CLAIM_LABELS[roleOfRoles(user.roles)] : ''}
               </Typography>
             </Box>
             <KeyboardArrowDownIcon sx={{ color: '#69788c', fontSize: 18, flex: '0 0 auto' }} />

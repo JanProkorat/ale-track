@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Box, Stack, TextField, Typography, Switch, FormControlLabel, Alert,
+  Box, Stack, TextField, Typography, FormControlLabel, Alert, RadioGroup,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Radio, Card,
 } from '@mui/material';
 import ShieldIcon from '@mui/icons-material/ShieldOutlined';
@@ -12,7 +12,9 @@ import {
   CreateUserDto, UpdateUserDto, UserRoleType, type UserListItemDto,
 } from 'src/generated/api-client';
 import { useCreateUser, useUpdateUser } from 'src/hooks/useUsers';
-import { PERM_MODULES, permsToDtos, dtosToPerms, isAdminUser } from './permissionModel';
+import {
+  PERM_MODULES, permsToDtos, dtosToPerms, roleOf, ASSIGNABLE_ROLES, ROLE_LABELS,
+} from './permissionModel';
 
 // Each access level has its own semantic colour (matching the prototype):
 // no access = neutral, read-only = blue, edit = green.
@@ -21,6 +23,14 @@ const LEVELS: { value: PermissionLevel; label: string; color: 'default' | 'info'
   { value: 'view', label: 'Jen čtení', color: 'info' },
   { value: 'edit', label: 'Úpravy', color: 'success' },
 ];
+
+// What picking each role means for the person filling the form. The driver line names
+// the restrictions, since they are not visible anywhere else in this screen.
+const ROLE_HINTS: Record<UserRoleType, string> = {
+  [UserRoleType.Admin]: 'Má vždy přístup ke všem modulům, práva se nenastavují.',
+  [UserRoleType.Manager]: 'Práva k jednotlivým modulům nastavíte níže.',
+  [UserRoleType.Driver]: 'Jako uživatel, ale bez fakturace, cen a rozpisu nakládky — u vývozu vidí jen vykládku.',
+};
 
 export function UserFormDrawer({
   open,
@@ -40,7 +50,7 @@ export function UserFormDrawer({
   const [lastName, setLastName] = useState('');
   const [userName, setUserName] = useState('');
   const [password, setPassword] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<UserRoleType>(UserRoleType.Manager);
   const [perms, setPerms] = useState<Permissions>(allPerms('none'));
   const [errors, setErrors] = useState<{ userName?: string; password?: string }>({});
 
@@ -52,13 +62,13 @@ export function UserFormDrawer({
       setFirstName(user.firstName ?? '');
       setLastName(user.lastName ?? '');
       setUserName(user.userName ?? '');
-      setIsAdmin(isAdminUser(user));
+      setRole(roleOf(user));
       setPerms(dtosToPerms(user.permissions));
     } else {
       setFirstName('');
       setLastName('');
       setUserName('');
-      setIsAdmin(false);
+      setRole(UserRoleType.Manager);
       setPerms(allPerms('none'));
     }
   }, [open, user]);
@@ -70,8 +80,10 @@ export function UserFormDrawer({
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
-    const userRoles = [isAdmin ? UserRoleType.Admin : UserRoleType.User];
-    const permissions = isAdmin ? [] : permsToDtos(perms);
+    // A driver still needs the matrix — the role only subtracts content from the
+    // modules they were granted.
+    const userRoles = [role];
+    const permissions = role === UserRoleType.Admin ? [] : permsToDtos(perms);
 
     try {
       if (user?.id) {
@@ -118,23 +130,39 @@ export function UserFormDrawer({
 
       <Box>
         <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Role</Typography>
-        <FormControlLabel
-          control={<Switch checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />}
-          label="Administrátor (plný přístup)"
-        />
+        <RadioGroup
+          row
+          value={role}
+          onChange={(e) => setRole(Number(e.target.value) as UserRoleType)}
+        >
+          {ASSIGNABLE_ROLES.map((r) => (
+            <FormControlLabel key={r} value={r} control={<Radio size="small" />} label={ROLE_LABELS[r]} />
+          ))}
+        </RadioGroup>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          Administrátor má vždy přístup ke všem modulům. Pro jemné řízení práv ponechte roli Uživatel.
+          {ROLE_HINTS[role]}
         </Typography>
       </Box>
 
       <Box>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>Práva k modulům</Typography>
-        {isAdmin && (
+        {role === UserRoleType.Admin && (
           <Alert severity="info" icon={<ShieldIcon />} sx={{ mb: 1.5 }}>
             Administrátor má automaticky úpravy ve všech modulech.
           </Alert>
         )}
-        <Card variant="outlined" sx={{ opacity: isAdmin ? 0.5 : 1, pointerEvents: isAdmin ? 'none' : 'auto' }}>
+        {role === UserRoleType.Driver && (
+          <Alert severity="info" icon={<ShieldIcon />} sx={{ mb: 1.5 }}>
+            Řidič potřebuje čtení u modulu Vývozy. I s právem úprav mu zůstane skrytá fakturace a ceny.
+          </Alert>
+        )}
+        <Card
+          variant="outlined"
+          sx={{
+            opacity: role === UserRoleType.Admin ? 0.5 : 1,
+            pointerEvents: role === UserRoleType.Admin ? 'none' : 'auto',
+          }}
+        >
           <TableContainer sx={{ overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
@@ -147,7 +175,7 @@ export function UserFormDrawer({
               </TableHead>
               <TableBody>
                 {PERM_MODULES.map((m) => {
-                  const current = isAdmin ? 'edit' : perms[m.key];
+                  const current = role === UserRoleType.Admin ? 'edit' : perms[m.key];
                   return (
                     <TableRow key={m.key}>
                       <TableCell>

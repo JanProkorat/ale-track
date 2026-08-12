@@ -41,4 +41,11 @@
       <Folder Include="Infrastructure\Persistence\Migrations\" />
     </ItemGroup>
 
+    <!-- Grants AleTrack.Tests access to internal sealed JwtService only, so its capability-claim
+         unit test can construct it directly against a stubbed policy/DbContext instead of going
+         through an integration test. Not a blanket licence to test internals generally. -->
+    <ItemGroup>
+      <InternalsVisibleTo Include="AleTrack.Tests" />
+    </ItemGroup>
+
 </Project>

@@ -76,6 +76,18 @@ export interface IClient {
     loginEndpoint(data: LoginUserDto, signal?: AbortSignal): Promise<LoginResponse>;
 
     /**
+     * Gets which components each role may see
+     * @return Role capability table
+     */
+    getRoleCapabilitiesEndpoint(signal?: AbortSignal): Promise<GetRoleCapabilitiesResponse>;
+
+    /**
+     * Replace which components each role may see
+     * @return Saved
+     */
+    setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void>;
+
+    /**
      * Gets number of records in each module
      * @return Dto with number of records in each module
      */
@@ -1294,6 +1306,116 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<LoginResponse>(null as any);
+    }
+
+    /**
+     * Gets which components each role may see
+     * @return Role capability table
+     */
+    getRoleCapabilitiesEndpoint(signal?: AbortSignal): Promise<GetRoleCapabilitiesResponse> {
+        let url_ = this.baseUrl + "/ale-track/role-capabilities";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetRoleCapabilitiesEndpoint(_response);
+        });
+    }
+
+    protected processGetRoleCapabilitiesEndpoint(response: Response): Promise<GetRoleCapabilitiesResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = GetRoleCapabilitiesResponse.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<GetRoleCapabilitiesResponse>(null as any);
+    }
+
+    /**
+     * Replace which components each role may see
+     * @return Saved
+     */
+    setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/role-capabilities";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(setRoleCapabilitiesDto);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetRoleCapabilitiesEndpoint(_response);
+        });
+    }
+
+    protected processSetRoleCapabilitiesEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("A row targets Admin, a key is invalid, or the same role/key pair is duplicated", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     /**
@@ -7635,7 +7757,7 @@ export interface ICreateVehicleDto {
 
 export enum UserRoleType {
     Admin = 0,
-    User = 1,
+    Manager = 1,
     Driver = 2,
 }
 
@@ -7911,18 +8033,11 @@ export interface ILoginUserDto {
     password: string;
 }
 
-export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+export class GetRoleCapabilitiesResponse implements IGetRoleCapabilitiesResponse {
+    items?: RoleCapabilityDto[];
+    availableCapabilities?: Capability[];
 
-    constructor(data?: INumberOfRecordsInEachModuleDto) {
+    constructor(data?: IGetRoleCapabilitiesResponse) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -7933,50 +8048,45 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
 
     init(_data?: any) {
         if (_data) {
-            this.clientsCount = _data["clientsCount"];
-            this.ordersCount = _data["ordersCount"];
-            this.breweriesCount = _data["breweriesCount"];
-            this.inventoryItemsCount = _data["inventoryItemsCount"];
-            this.driversCount = _data["driversCount"];
-            this.vehiclesCount = _data["vehiclesCount"];
-            this.usersCount = _data["usersCount"];
-            this.outgoingShipmentsCount = _data["outgoingShipmentsCount"];
-            this.productDeliveriesCount = _data["productDeliveriesCount"];
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(RoleCapabilityDto.fromJS(item));
+            }
+            if (Array.isArray(_data["availableCapabilities"])) {
+                this.availableCapabilities = [] as any;
+                for (let item of _data["availableCapabilities"])
+                    this.availableCapabilities!.push(item);
+            }
         }
     }
 
-    static fromJS(data: any): NumberOfRecordsInEachModuleDto {
+    static fromJS(data: any): GetRoleCapabilitiesResponse {
         data = typeof data === 'object' ? data : {};
-        let result = new NumberOfRecordsInEachModuleDto();
+        let result = new GetRoleCapabilitiesResponse();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["clientsCount"] = this.clientsCount;
-        data["ordersCount"] = this.ordersCount;
-        data["breweriesCount"] = this.breweriesCount;
-        data["inventoryItemsCount"] = this.inventoryItemsCount;
-        data["driversCount"] = this.driversCount;
-        data["vehiclesCount"] = this.vehiclesCount;
-        data["usersCount"] = this.usersCount;
-        data["outgoingShipmentsCount"] = this.outgoingShipmentsCount;
-        data["productDeliveriesCount"] = this.productDeliveriesCount;
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.availableCapabilities)) {
+            data["availableCapabilities"] = [];
+            for (let item of this.availableCapabilities)
+                data["availableCapabilities"].push(item);
+        }
         return data;
     }
 }
 
-export interface INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+export interface IGetRoleCapabilitiesResponse {
+    items?: RoleCapabilityDto[];
+    availableCapabilities?: Capability[];
 }
 
 export class CreateUserDto implements ICreateUserDto {
@@ -8052,6 +8162,168 @@ export interface ICreateUserDto {
     password: string;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+}
+
+export class RoleCapabilityDto implements IRoleCapabilityDto {
+    role?: UserRoleType;
+    capabilityKey?: string;
+    isVisible?: boolean;
+
+    constructor(data?: IRoleCapabilityDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.role = _data["role"];
+            this.capabilityKey = _data["capabilityKey"];
+            this.isVisible = _data["isVisible"];
+        }
+    }
+
+    static fromJS(data: any): RoleCapabilityDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new RoleCapabilityDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["role"] = this.role;
+        data["capabilityKey"] = this.capabilityKey;
+        data["isVisible"] = this.isVisible;
+        return data;
+    }
+}
+
+export interface IRoleCapabilityDto {
+    role?: UserRoleType;
+    capabilityKey?: string;
+    isVisible?: boolean;
+}
+
+export enum Capability {
+    Invoicing = 0,
+    LoadingBreakdown = 1,
+    Money = 2,
+}
+
+export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
+    items?: RoleCapabilityDto[];
+
+    constructor(data?: ISetRoleCapabilitiesDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["items"])) {
+                this.items = [] as any;
+                for (let item of _data["items"])
+                    this.items!.push(RoleCapabilityDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SetRoleCapabilitiesDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetRoleCapabilitiesDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.items)) {
+            data["items"] = [];
+            for (let item of this.items)
+                data["items"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISetRoleCapabilitiesDto {
+    items?: RoleCapabilityDto[];
+}
+
+export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachModuleDto {
+    clientsCount?: number;
+    ordersCount?: number;
+    breweriesCount?: number;
+    inventoryItemsCount?: number;
+    driversCount?: number;
+    vehiclesCount?: number;
+    usersCount?: number;
+    outgoingShipmentsCount?: number;
+    productDeliveriesCount?: number;
+
+    constructor(data?: INumberOfRecordsInEachModuleDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientsCount = _data["clientsCount"];
+            this.ordersCount = _data["ordersCount"];
+            this.breweriesCount = _data["breweriesCount"];
+            this.inventoryItemsCount = _data["inventoryItemsCount"];
+            this.driversCount = _data["driversCount"];
+            this.vehiclesCount = _data["vehiclesCount"];
+            this.usersCount = _data["usersCount"];
+            this.outgoingShipmentsCount = _data["outgoingShipmentsCount"];
+            this.productDeliveriesCount = _data["productDeliveriesCount"];
+        }
+    }
+
+    static fromJS(data: any): NumberOfRecordsInEachModuleDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new NumberOfRecordsInEachModuleDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientsCount"] = this.clientsCount;
+        data["ordersCount"] = this.ordersCount;
+        data["breweriesCount"] = this.breweriesCount;
+        data["inventoryItemsCount"] = this.inventoryItemsCount;
+        data["driversCount"] = this.driversCount;
+        data["vehiclesCount"] = this.vehiclesCount;
+        data["usersCount"] = this.usersCount;
+        data["outgoingShipmentsCount"] = this.outgoingShipmentsCount;
+        data["productDeliveriesCount"] = this.productDeliveriesCount;
+        return data;
+    }
+}
+
+export interface INumberOfRecordsInEachModuleDto {
+    clientsCount?: number;
+    ordersCount?: number;
+    breweriesCount?: number;
+    inventoryItemsCount?: number;
+    driversCount?: number;
+    vehiclesCount?: number;
+    usersCount?: number;
+    outgoingShipmentsCount?: number;
+    productDeliveriesCount?: number;
 }
 
 export class OperationsReportDto implements IOperationsReportDto {
@@ -16749,7 +17021,7 @@ export interface IPriceListFieldChange {
 }
 
 export class PreviewPriceListRequest implements IPreviewPriceListRequest {
-    file?: string;
+    file!: string;
     effectiveFrom?: Date;
 
     constructor(data?: IPreviewPriceListRequest) {
@@ -16784,7 +17056,7 @@ export class PreviewPriceListRequest implements IPreviewPriceListRequest {
 }
 
 export interface IPreviewPriceListRequest {
-    file?: string;
+    file: string;
     effectiveFrom?: Date;
 }
 
@@ -16919,9 +17191,9 @@ export interface ICreateBreweryDto {
 }
 
 export class ApplyPriceListRequest implements IApplyPriceListRequest {
-    file?: string;
+    file!: string;
     effectiveFrom?: Date;
-    sourceHash?: string;
+    sourceHash!: string;
 
     constructor(data?: IApplyPriceListRequest) {
         if (data) {
@@ -16957,9 +17229,9 @@ export class ApplyPriceListRequest implements IApplyPriceListRequest {
 }
 
 export interface IApplyPriceListRequest {
-    file?: string;
+    file: string;
     effectiveFrom?: Date;
-    sourceHash?: string;
+    sourceHash: string;
 }
 
 function formatDate(d: Date) {

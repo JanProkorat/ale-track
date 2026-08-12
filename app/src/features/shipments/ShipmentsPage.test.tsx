@@ -38,7 +38,9 @@ vi.mock('src/hooks/useShipments', () => ({
   useShipments: () => ({ data: shipments, isLoading: false, isPending: false, isError: false }),
   useShipment: () => ({ data: undefined, isLoading: false, isPending: false, isError: false }),
 }));
-vi.mock('src/auth/AuthProvider', () => ({ useAuth: () => ({ canEdit: () => true, canSee: () => true }) }));
+vi.mock('src/auth/AuthProvider', () => ({
+  useAuth: () => ({ canEdit: () => true, canSee: () => true, can: () => true }),
+}));
 
 describe('ShipmentsPage list order', () => {
   it('keeps the order the endpoint returned instead of sorting by delivery date', () => {

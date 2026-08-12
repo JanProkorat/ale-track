@@ -75,8 +75,8 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
         if (!isPasswordValid)
             UserThrowHelper.InvalidPassword();
 
-        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
-            jwtService, dbContext, user, configuration);
+        var (accessToken, rawRefreshToken) = await RefreshTokenHelper.CreateTokensAsync(
+            jwtService, dbContext, user, configuration, ct);
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse

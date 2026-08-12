@@ -11,7 +11,14 @@ public enum UserRoleType
     Admin,
 
     /// <summary>
-    /// Represents a standard user role in the system with basic access and permissions.
+    /// Represents a standard office user with basic access and permissions.
     /// </summary>
-    User
+    Manager,
+
+    /// <summary>
+    /// A driver in the field. Granted access through the same permission matrix as
+    /// <see cref="Manager"/>, but denied capabilities configured per role in the
+    /// role_capabilities table — by default invoicing, the loading breakdown and money.
+    /// </summary>
+    Driver
 }

@@ -25,6 +25,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS: 'Vývoz nelze naložit bez zastávek.',
   SHIPMENT_ALREADY_DELIVERED: 'Vývoz už byl doručen.',
   SHIPMENT_ALREADY_CANCELLED: 'Vývoz už byl zrušen.',
+  'RoleCapability.AdminIsNotConfigurable': 'Administrátorovi nelze nastavení komponent omezit.',
+  'RoleCapability.CapabilityKeyInvalid': 'Neplatný klíč komponenty.',
+  'RoleCapability.DuplicateCapabilityKey': 'Komponenta je pro tuto roli uvedena vícekrát.',
 };
 
 interface ValidationErrorDetail {
