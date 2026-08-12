@@ -25,7 +25,7 @@ import { ShipmentEditor } from './ShipmentEditor';
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
  * is URL-driven: /shipments (list), /shipments/:id (detail), /shipments/new + /:id/edit. */
 export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
-  const { canEdit, canSee, can } = useAuth();
+  const { canEdit, canSee, can, isDriverScoped } = useAuth();
   const editable = canEdit('shipments');
   const navigate = useNavigate();
   const { id } = useParams();
@@ -75,7 +75,10 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
     },
   ];
 
-  const newShipmentButton = editable && (
+  // A driver may never create a shipment — the API refuses it regardless, and the
+  // control follows so the screen matches what is possible, same as DriversPage's
+  // canManageRoster.
+  const newShipmentButton = editable && !isDriverScoped && (
     <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
       Naplánovat vývoz
     </Button>
@@ -164,8 +167,12 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
             emptyState={
               <EmptyState
                 icon={<LocalShippingOutlinedIcon />}
-                title="Zatím žádné vývozy"
-                description="Naplánujte první rozvoz objednávek ke klientům."
+                title={isDriverScoped ? 'Žádné vývozy' : 'Zatím žádné vývozy'}
+                description={
+                  isDriverScoped
+                    ? 'Účet zatím není propojen s řidičem — kontaktujte správce.'
+                    : 'Naplánujte první rozvoz objednávek ke klientům.'
+                }
                 action={newShipmentButton}
               />
             }
