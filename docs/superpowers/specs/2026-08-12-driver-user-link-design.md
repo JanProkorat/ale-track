@@ -70,14 +70,14 @@ a defect.
 - `UserListItemDto` gains `Guid? DriverId` and a `DriverName` string, so the users
   table shows the link without a second fetch.
 
-Validation on both write paths, with error codes under the existing
-`{Domain}.{ErrorName}` convention:
+Validation on both write paths. Per `rules/validation.md` the two levels stay
+separate — input shape in the validator, domain state in the endpoint:
 
-| Rule | Error code |
-|---|---|
-| `DriverId` must be null unless `UserRoles` contains `Driver` | `Users.DriverLinkRequiresDriverRole` |
-| The referenced driver must exist | `Users.DriverNotFound` |
-| The driver must not already belong to a different user | `Users.DriverAlreadyLinked` |
+| Rule | Level | Error code |
+|---|---|---|
+| `DriverId` must be null unless `UserRoles` contains `Driver` | Validator | `UserErrorCodes.DriverLinkRequiresDriverRole` |
+| The referenced driver must exist | Endpoint → 404 | `ErrorCodes.NotfoundError` |
+| The driver must not already belong to a different user | Endpoint → 400 | `ErrorCodes.DriverAlreadyLinkedToUser` |
 
 ## Backend enforcement
 
@@ -152,8 +152,13 @@ sides cannot drift.
 when the role radio is `Driver` and fed by `useDrivers()`. Switching the role away
 from Driver clears the selection, so an orphaned link cannot reach the validator.
 The hint under the role radio gains a line about the link. `UsersPage` shows the
-linked driver's name in the row. A driver already claimed by another account is
-rendered disabled rather than hidden, so it is clear why it cannot be picked.
+linked driver's name in the row.
+
+Drivers already claimed by another account are **filtered out** of the options
+(the account's own current driver always stays), with helper text under the
+picker reading *"Řidiči, kteří už mají účet, se v nabídce nezobrazují."* The
+shared `Combobox` has no per-option disabled state, and adding one would change a
+component with ~20 call sites for this feature's benefit alone.
 
 **Řidiči.** For a driver-scoped user, the "Přidat řidiče" button and every row's
 delete action are hidden. The backend 403s regardless, but `app/CLAUDE.md`
