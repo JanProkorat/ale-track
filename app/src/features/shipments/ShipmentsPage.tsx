@@ -15,6 +15,7 @@ import { fmtDate, shipmentNumber } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName } from 'src/lib/labels';
 import { type OutgoingShipmentListItemDto } from 'src/generated/api-client';
 import { useShipments, useShipment } from 'src/hooks/useShipments';
+import { useDrivers } from 'src/hooks/useDrivers';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
 import { type DetailBackState } from 'src/routes/backNav';
@@ -25,13 +26,19 @@ import { ShipmentEditor } from './ShipmentEditor';
  * planning, invoice-split nakládka and delivery-state advancement. List/detail
  * is URL-driven: /shipments (list), /shipments/:id (detail), /shipments/new + /:id/edit. */
 export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
-  const { canEdit, canSee, can } = useAuth();
+  const { canEdit, canSee, can, isDriverScoped } = useAuth();
   const editable = canEdit('shipments');
   const navigate = useNavigate();
   const { id } = useParams();
 
   const list = useShipments();
   const detail = useShipment(view ? undefined : id);
+  // A linked driver seeing no shipments is normal (their last run finished); only an
+  // unlinked account is actually broken. useDrivers() tells the two apart the same way
+  // DriversPage does — its own row shows up (or does not) for a driver-scoped caller.
+  const drivers = useDrivers();
+  const driversLoaded = drivers.data !== undefined;
+  const driverNotLinked = driversLoaded && drivers.data!.length === 0;
 
   const openCreate = () => navigate(`${PATHS.shipments}/new`);
 
@@ -75,7 +82,10 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
     },
   ];
 
-  const newShipmentButton = editable && (
+  // A driver may never create a shipment — the API refuses it regardless, and the
+  // control follows so the screen matches what is possible, same as DriversPage's
+  // canManageRoster.
+  const newShipmentButton = editable && !isDriverScoped && (
     <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
       Naplánovat vývoz
     </Button>
@@ -164,8 +174,18 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
             emptyState={
               <EmptyState
                 icon={<LocalShippingOutlinedIcon />}
-                title="Zatím žádné vývozy"
-                description="Naplánujte první rozvoz objednávek ke klientům."
+                title={isDriverScoped ? 'Žádné vývozy' : 'Zatím žádné vývozy'}
+                description={
+                  !isDriverScoped
+                    ? 'Naplánujte první rozvoz objednávek ke klientům.'
+                    // Defaults to the driver-appropriate copy while the drivers query is
+                    // still loading, so an actually-linked driver never sees the "not
+                    // linked" message flash before it — only a confirmed empty drivers
+                    // list earns that message.
+                    : driverNotLinked
+                      ? 'Účet zatím není propojen s řidičem — kontaktujte správce.'
+                      : 'Zatím vám nebyl přiřazen žádný vývoz.'
+                }
                 action={newShipmentButton}
               />
             }

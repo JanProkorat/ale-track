@@ -1,5 +1,7 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Features.Users.Commands.Update;
+using AleTrack.Features.Users.Utils;
 using FastEndpoints;
 using FluentValidation;
 
@@ -38,5 +40,12 @@ public sealed class UpdateUserDtoValidator : AbstractValidator<UpdateUserDto>
             .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         
         RuleFor(dto => dto.UserRoles).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
+
+        // Shape only — the driver's existence and availability are domain state, checked
+        // in the endpoint (rules/validation.md).
+        RuleFor(dto => dto.DriverId)
+            .Null()
+            .When(dto => !dto.UserRoles.Contains(UserRoleType.Driver))
+            .WithErrorCode(UserErrorCodes.DriverLinkRequiresDriverRole);
     }
 }

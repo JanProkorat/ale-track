@@ -19,7 +19,9 @@ import {
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
   ProductKind,
+  ShipmentDriverDto,
   ShipmentStartPointKind,
+  ShipmentVehicleDto,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -73,8 +75,6 @@ vi.mock('src/hooks/useShipments', () => ({
   // against ShipmentStartPointKind.Company directly.
   useShipmentStartPoints: () => ({ data: startPointsData.value, isPending: false, isError: false }),
 }));
-vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => ({ data: undefined, isLoading: false }) }));
-vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [], isLoading: false }) }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => ({ data: [], isLoading: false }) }));
 // The nakládka's brewery-invoice columns: the product catalogue feeds the
 // "Zboží na sklad" picker, and the split/loading writes are mutations the
@@ -486,6 +486,54 @@ describe('ShipmentDetail — address-changed banner position', () => {
   it('adds no stray gap under the map when there is nothing to announce', () => {
     renderDetail([officialStop()]);
     expect(screen.queryByText('Změna adresy doručení')).not.toBeInTheDocument();
+  });
+});
+
+// The detail DTO now resolves the vehicle and the assigned drivers server-side (the same
+// pattern the start point already used), so a driver-scoped account — which gets a 403 from
+// /vehicles/{id} and sees only itself in /drivers — still sees the full picture on its own
+// shipment. See GetOutgoingShipmentDetailVehicleAndDriversTests.cs on the backend.
+describe('ShipmentDetail — Vůz and Řidiči cards read from the inlined shipment data', () => {
+  it('shows the resolved vehicle name and max weight without a separate vehicle request', () => {
+    renderDetail({
+      stops: [officialStop()],
+      vehicleId: 'vehicle-1',
+      vehicle: new ShipmentVehicleDto({ id: 'vehicle-1', name: 'Iveco Daily', maxWeight: 3500 }),
+    });
+
+    expect(screen.getByText('Iveco Daily')).toBeInTheDocument();
+    expect(screen.getByText('Nosnost 3 500 kg')).toBeInTheDocument();
+  });
+
+  it('shows "Vůz nepřiřazen" when no vehicle is inlined', () => {
+    renderDetail({ stops: [officialStop()] });
+
+    expect(screen.getByText('Vůz nepřiřazen')).toBeInTheDocument();
+  });
+
+  // Seeds two drivers so a one-driver fixture could not coincidentally pass — the co-driver
+  // silently disappearing from a driver-scoped account's own /drivers list was the bug.
+  it('shows both assigned drivers, including the co-driver, with phone and colour', () => {
+    renderDetail({
+      stops: [officialStop()],
+      driverIds: ['driver-adamec', 'driver-novak'],
+      drivers: [
+        new ShipmentDriverDto({ id: 'driver-adamec', firstName: 'Petr', lastName: 'Adamec', phoneNumber: '+420444555666', color: '#222222' }),
+        new ShipmentDriverDto({ id: 'driver-novak', firstName: 'Jan', lastName: 'Novák', phoneNumber: '+420111222333', color: '#111111' }),
+      ],
+    });
+
+    expect(screen.getByText('Petr Adamec')).toBeInTheDocument();
+    expect(screen.getByText('+420444555666')).toBeInTheDocument();
+    // The co-driver specifically — the one that used to vanish from a driver-scoped list.
+    expect(screen.getByText('Jan Novák')).toBeInTheDocument();
+    expect(screen.getByText('+420111222333')).toBeInTheDocument();
+  });
+
+  it('shows "Bez řidiče" when no drivers are inlined', () => {
+    renderDetail({ stops: [officialStop()] });
+
+    expect(screen.getByText('Bez řidiče')).toBeInTheDocument();
   });
 });
 

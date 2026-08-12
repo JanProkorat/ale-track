@@ -42,8 +42,11 @@ function nearestAvailability(
 }
 
 export function DriversPage() {
-  const { canEdit } = useAuth();
+  const { canEdit, isDriverScoped } = useAuth();
   const editable = canEdit('drivers');
+  // A driver may edit their own record but never create or delete one; the API refuses
+  // both regardless, and the controls follow so the screen matches what is possible.
+  const canManageRoster = editable && !isDriverScoped;
   const { enqueueSnackbar } = useSnackbar();
 
   const query = useDrivers();
@@ -83,7 +86,7 @@ export function DriversPage() {
     }
   };
 
-  const newDriverButton = editable && (
+  const newDriverButton = canManageRoster && (
     <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
       Nový řidič
     </Button>
@@ -104,9 +107,13 @@ export function DriversPage() {
         emptyState={
           <EmptyState
             icon={<BadgeOutlinedIcon />}
-            title="Zatím žádní řidiči"
-            description="Přidejte prvního řidiče do evidence."
-            action={newDriverButton}
+            title={isDriverScoped ? 'Žádný záznam řidiče' : 'Zatím žádní řidiči'}
+            description={
+              isDriverScoped
+                ? 'Účet zatím není propojen s řidičem — kontaktujte správce.'
+                : 'Přidejte prvního řidiče do evidence.'
+            }
+            action={canManageRoster ? newDriverButton : undefined}
           />
         }
       >
@@ -160,6 +167,7 @@ export function DriversPage() {
                     key={d.id ?? fullName(d)}
                     driver={d}
                     editable={editable}
+                    canDelete={canManageRoster}
                     onEdit={() => openEdit(d)}
                     onDelete={() => setConfirm(d)}
                   />
@@ -193,11 +201,13 @@ export function DriversPage() {
 function DriverTile({
   driver,
   editable,
+  canDelete,
   onEdit,
   onDelete,
 }: {
   driver: DriverListItemDto;
   editable: boolean;
+  canDelete: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -259,11 +269,13 @@ function DriverTile({
           >
             Upravit
           </Button>
-          <Tooltip title="Smazat">
-            <IconButton size="small" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'text.secondary' }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {canDelete && (
+            <Tooltip title="Smazat">
+              <IconButton size="small" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'text.secondary' }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       )}
     </Card>

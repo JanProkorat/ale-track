@@ -130,7 +130,7 @@ public sealed class OrderItemInventorySourcingTests
     }
 
     private static UpdateOutgoingShipmentEndpoint Endpoint(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db) =>
-        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
     [Fact]
     public async Task Update_RecordsHowManyPiecesCameFromStock()
@@ -243,7 +243,7 @@ public sealed class OrderItemInventorySourcingTests
         f.Item.InventoryItemId = f.Stock.Id;
 
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(MockFor(f).Object, Options.Create(new CompanyOptions()));
+            .Create(MockFor(f).Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = f.Shipment.PublicId }, CancellationToken.None);
 
         var row = endpoint.Response.Stops.Single(s => s.OrderId == f.Order.PublicId).Products.Should().ContainSingle().Subject;

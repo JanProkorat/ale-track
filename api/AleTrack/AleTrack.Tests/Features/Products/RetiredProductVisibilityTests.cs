@@ -107,7 +107,7 @@ public sealed class RetiredProductVisibilityTests
             orders: [order],
             outgoingShipments: [shipment]);
 
-        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<SetLoadingStateRequest, SetLoadingStateEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         var act = async () => await endpoint.HandleAsync(new SetLoadingStateRequest
         {

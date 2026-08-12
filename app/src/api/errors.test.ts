@@ -61,6 +61,15 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(err)).toBe('Request validation failed');
   });
 
+  it('translates the driver-link and driver-scope domain error codes', () => {
+    expect(apiErrorMessage(apiError(400, { error_code: 'DRIVER_ALREADY_LINKED_TO_USER' })))
+      .toBe('Tento řidič už je propojen s jiným účtem.');
+    expect(apiErrorMessage(apiError(400, { error_code: 'DRIVER_LINK_REQUIRES_DRIVER_ROLE' })))
+      .toBe('Propojit řidiče lze jen u účtu s rolí Řidič.');
+    expect(apiErrorMessage(apiError(403, { error_code: 'DRIVER_SCOPE_FORBIDDEN' })))
+      .toBe('Tuto akci může provést jen správce.');
+  });
+
   it('falls back to the status message when the body carries nothing usable', () => {
     expect(apiErrorMessage(apiError(403, {}))).toBe('K této akci nemáte oprávnění.');
   });

@@ -28,7 +28,7 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
     {
         Get("reports/operations");
         Description(b => b
-            .RequireAuthenticated()
+            .RequirePermission(ModuleType.Reports, PermissionLevel.View)
             .WithName(nameof(GetOperationsEndpoint)));
 
         DontCatchExceptions();

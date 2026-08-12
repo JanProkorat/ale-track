@@ -59,7 +59,9 @@ public sealed class AddShipmentInvoiceValidator : Validator<AddShipmentInvoiceRe
 /// it is either filled or deleted.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : Endpoint<AddShipmentInvoiceRequest>
+/// <param name="driverScope"></param>
+public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<AddShipmentInvoiceRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -89,6 +91,8 @@ public sealed class AddShipmentInvoiceEndpoint(AleTrackDbContext dbContext) : En
     /// <inheritdoc />
     public override async Task HandleAsync(AddShipmentInvoiceRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
         if (split is null)
         {

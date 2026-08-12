@@ -40,7 +40,19 @@ public sealed class Driver : PublicEntity
     [MaxLength(20)]
     [Column("color")]
     public string Color { get; set; } = null!;
-    
+
+    /// <summary>
+    /// Account this driver signs in with, when one has been linked. Null for a driver
+    /// with no app access. Unique — a user account owns at most one driver record.
+    /// </summary>
+    [Column("user_id")]
+    public long? UserId { get; set; }
+
+    /// <summary>
+    /// Account this driver signs in with, when one has been linked.
+    /// </summary>
+    public User? User { get; set; }
+
     /// <summary>
     /// List of deliveries which the current user is related to
     /// </summary>

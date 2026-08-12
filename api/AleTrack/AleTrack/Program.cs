@@ -55,7 +55,8 @@ try
     services.AddSingleton(TimeProvider.System);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<IAppContext, AppContext>();
-    
+    builder.Services.AddScoped<IDriverScope, DriverScope>();
+
     services.AddFastEndpoints()
         .SwaggerDocument(o =>
         {

@@ -35,7 +35,8 @@ public sealed record GetShipmentInvoicesRequest
 /// different audiences and answer different questions, so they load independently.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext)
+/// <param name="driverScope"></param>
+public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
     : Endpoint<GetShipmentInvoicesRequest, ShipmentInvoicesDto>
 {
     /// <inheritdoc />
@@ -63,6 +64,8 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetShipmentInvoicesRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
         if (split is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);

@@ -34,7 +34,7 @@ public sealed class GetOutgoingShipmentsListTests
             outgoingShipments: [middle, oldest, newest]);
 
         var endpoint = EndpointWithResponseBuilder<FilterableRequest, List<OutgoingShipmentListItemDto>, GetOutgoingShipmentsListEndpoint>
-            .Create(dbContext.Object);
+            .Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new FilterableRequest(), CancellationToken.None);
 
@@ -55,7 +55,7 @@ public sealed class GetOutgoingShipmentsListTests
             outgoingShipments: [second, first]);
 
         var endpoint = EndpointWithResponseBuilder<FilterableRequest, List<OutgoingShipmentListItemDto>, GetOutgoingShipmentsListEndpoint>
-            .Create(dbContext.Object);
+            .Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         var request = new FilterableRequest
         {

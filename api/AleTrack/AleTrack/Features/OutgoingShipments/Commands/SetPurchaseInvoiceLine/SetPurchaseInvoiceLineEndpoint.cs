@@ -84,7 +84,9 @@ public sealed class SetPurchaseInvoiceLineValidator : Validator<SetPurchaseInvoi
 /// claims, so the remainder can never be driven negative by a too-large entry.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) : Endpoint<SetPurchaseInvoiceLineRequest>
+/// <param name="driverScope"></param>
+public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<SetPurchaseInvoiceLineRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -114,6 +116,8 @@ public sealed class SetPurchaseInvoiceLineEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(SetPurchaseInvoiceLineRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var shipment = await PurchaseInvoiceSplit.LoadAsync(dbContext, req.Id, ct);
         if (shipment is null)
         {

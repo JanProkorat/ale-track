@@ -82,14 +82,14 @@ export interface IClient {
     getRoleCapabilitiesEndpoint(signal?: AbortSignal): Promise<GetRoleCapabilitiesResponse>;
 
     /**
-     * Replace which components each role may see
+     * Set which components each role may see
      * @return Saved
      */
     setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void>;
 
     /**
      * Gets number of records in each module
-     * @return Dto with number of records in each module
+     * @return Dto with number of records in each module the caller may see
      */
     getNumberOfRecordsInEachModuleEndpoint(signal?: AbortSignal): Promise<NumberOfRecordsInEachModuleDto>;
 
@@ -1362,7 +1362,7 @@ export class Client implements IClient {
     }
 
     /**
-     * Replace which components each role may see
+     * Set which components each role may see
      * @return Saved
      */
     setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void> {
@@ -1394,7 +1394,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("A row targets Admin, a key is invalid, or the same role/key pair is duplicated", status, _responseText, _headers);
+            return throwException("Items is null, a row targets Admin, a key is invalid, or the same role/key pair is duplicated", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -1420,7 +1420,7 @@ export class Client implements IClient {
 
     /**
      * Gets number of records in each module
-     * @return Dto with number of records in each module
+     * @return Dto with number of records in each module the caller may see
      */
     getNumberOfRecordsInEachModuleEndpoint(signal?: AbortSignal): Promise<NumberOfRecordsInEachModuleDto> {
         let url_ = this.baseUrl + "/ale-track/reports/number-of-records-in-each-module";
@@ -7650,6 +7650,8 @@ export class UserListItemDto implements IUserListItemDto {
     userName?: string;
     userRoles?: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+    driverName?: string | undefined;
 
     constructor(data?: IUserListItemDto) {
         if (data) {
@@ -7676,6 +7678,8 @@ export class UserListItemDto implements IUserListItemDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
+            this.driverName = _data["driverName"];
         }
     }
 
@@ -7702,6 +7706,8 @@ export class UserListItemDto implements IUserListItemDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
+        data["driverName"] = this.driverName;
         return data;
     }
 }
@@ -7713,6 +7719,8 @@ export interface IUserListItemDto {
     userName?: string;
     userRoles?: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+    driverName?: string | undefined;
 }
 
 export class CreateVehicleDto implements ICreateVehicleDto {
@@ -7865,6 +7873,7 @@ export class UpdateUserDto implements IUpdateUserDto {
     lastName?: string | undefined;
     userRoles!: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 
     constructor(data?: IUpdateUserDto) {
         if (data) {
@@ -7892,6 +7901,7 @@ export class UpdateUserDto implements IUpdateUserDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
         }
     }
 
@@ -7916,6 +7926,7 @@ export class UpdateUserDto implements IUpdateUserDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
         return data;
     }
 }
@@ -7925,6 +7936,7 @@ export interface IUpdateUserDto {
     lastName?: string | undefined;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 }
 
 export class DeleteUserRequest implements IDeleteUserRequest {
@@ -8096,6 +8108,7 @@ export class CreateUserDto implements ICreateUserDto {
     password!: string;
     userRoles!: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 
     constructor(data?: ICreateUserDto) {
         if (data) {
@@ -8125,6 +8138,7 @@ export class CreateUserDto implements ICreateUserDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
         }
     }
 
@@ -8151,6 +8165,7 @@ export class CreateUserDto implements ICreateUserDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
         return data;
     }
 }
@@ -8162,6 +8177,7 @@ export interface ICreateUserDto {
     password: string;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 }
 
 export class RoleCapabilityDto implements IRoleCapabilityDto {
@@ -8215,7 +8231,7 @@ export enum Capability {
 }
 
 export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
-    items?: RoleCapabilityDto[];
+    items!: RoleCapabilityDto[];
 
     constructor(data?: ISetRoleCapabilitiesDto) {
         if (data) {
@@ -8223,6 +8239,9 @@ export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
                 if (data.hasOwnProperty(property))
                     (this as any)[property] = (data as any)[property];
             }
+        }
+        if (!data) {
+            this.items = [];
         }
     }
 
@@ -8255,19 +8274,19 @@ export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
 }
 
 export interface ISetRoleCapabilitiesDto {
-    items?: RoleCapabilityDto[];
+    items: RoleCapabilityDto[];
 }
 
 export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+    clientsCount?: number | undefined;
+    ordersCount?: number | undefined;
+    breweriesCount?: number | undefined;
+    inventoryItemsCount?: number | undefined;
+    driversCount?: number | undefined;
+    vehiclesCount?: number | undefined;
+    usersCount?: number | undefined;
+    outgoingShipmentsCount?: number | undefined;
+    productDeliveriesCount?: number | undefined;
 
     constructor(data?: INumberOfRecordsInEachModuleDto) {
         if (data) {
@@ -8315,15 +8334,15 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
 }
 
 export interface INumberOfRecordsInEachModuleDto {
-    clientsCount?: number;
-    ordersCount?: number;
-    breweriesCount?: number;
-    inventoryItemsCount?: number;
-    driversCount?: number;
-    vehiclesCount?: number;
-    usersCount?: number;
-    outgoingShipmentsCount?: number;
-    productDeliveriesCount?: number;
+    clientsCount?: number | undefined;
+    ordersCount?: number | undefined;
+    breweriesCount?: number | undefined;
+    inventoryItemsCount?: number | undefined;
+    driversCount?: number | undefined;
+    vehiclesCount?: number | undefined;
+    usersCount?: number | undefined;
+    outgoingShipmentsCount?: number | undefined;
+    productDeliveriesCount?: number | undefined;
 }
 
 export class OperationsReportDto implements IOperationsReportDto {
@@ -11986,6 +12005,8 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     startPointLongitude?: number | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
+    vehicle?: ShipmentVehicleDto | undefined;
+    drivers?: ShipmentDriverDto[];
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
@@ -12020,6 +12041,12 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.driverIds = [] as any;
                 for (let item of _data["driverIds"])
                     this.driverIds!.push(item);
+            }
+            this.vehicle = _data["vehicle"] ? ShipmentVehicleDto.fromJS(_data["vehicle"]) : undefined as any;
+            if (Array.isArray(_data["drivers"])) {
+                this.drivers = [] as any;
+                for (let item of _data["drivers"])
+                    this.drivers!.push(ShipmentDriverDto.fromJS(item));
             }
             if (Array.isArray(_data["stops"])) {
                 this.stops = [] as any;
@@ -12080,6 +12107,12 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.driverIds)
                 data["driverIds"].push(item);
         }
+        data["vehicle"] = this.vehicle ? this.vehicle.toJSON() : undefined as any;
+        if (Array.isArray(this.drivers)) {
+            data["drivers"] = [];
+            for (let item of this.drivers)
+                data["drivers"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.stops)) {
             data["stops"] = [];
             for (let item of this.stops)
@@ -12128,12 +12161,110 @@ export interface IOutgoingShipmentDetailDto {
     startPointLongitude?: number | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
+    vehicle?: ShipmentVehicleDto | undefined;
+    drivers?: ShipmentDriverDto[];
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
+}
+
+export class ShipmentVehicleDto implements IShipmentVehicleDto {
+    id?: string;
+    name?: string;
+    maxWeight?: number;
+
+    constructor(data?: IShipmentVehicleDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.maxWeight = _data["maxWeight"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentVehicleDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentVehicleDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["maxWeight"] = this.maxWeight;
+        return data;
+    }
+}
+
+export interface IShipmentVehicleDto {
+    id?: string;
+    name?: string;
+    maxWeight?: number;
+}
+
+export class ShipmentDriverDto implements IShipmentDriverDto {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string | undefined;
+    color?: string;
+
+    constructor(data?: IShipmentDriverDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.firstName = _data["firstName"];
+            this.lastName = _data["lastName"];
+            this.phoneNumber = _data["phoneNumber"];
+            this.color = _data["color"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentDriverDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentDriverDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["firstName"] = this.firstName;
+        data["lastName"] = this.lastName;
+        data["phoneNumber"] = this.phoneNumber;
+        data["color"] = this.color;
+        return data;
+    }
+}
+
+export interface IShipmentDriverDto {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string | undefined;
+    color?: string;
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
@@ -15437,6 +15568,7 @@ export class DriverListItemDto implements IDriverListItemDto {
     phoneNumber?: string | undefined;
     color?: string;
     availableDates?: DriverAvailabilityListItemDto[];
+    isLinkedToUser?: boolean;
 
     constructor(data?: IDriverListItemDto) {
         if (data) {
@@ -15459,6 +15591,7 @@ export class DriverListItemDto implements IDriverListItemDto {
                 for (let item of _data["availableDates"])
                     this.availableDates!.push(DriverAvailabilityListItemDto.fromJS(item));
             }
+            this.isLinkedToUser = _data["isLinkedToUser"];
         }
     }
 
@@ -15481,6 +15614,7 @@ export class DriverListItemDto implements IDriverListItemDto {
             for (let item of this.availableDates)
                 data["availableDates"].push(item ? item.toJSON() : undefined as any);
         }
+        data["isLinkedToUser"] = this.isLinkedToUser;
         return data;
     }
 }
@@ -15492,6 +15626,7 @@ export interface IDriverListItemDto {
     phoneNumber?: string | undefined;
     color?: string;
     availableDates?: DriverAvailabilityListItemDto[];
+    isLinkedToUser?: boolean;
 }
 
 export class DriverAvailabilityListItemDto implements IDriverAvailabilityListItemDto {

@@ -21,7 +21,7 @@ public sealed record DeleteDriverRequest
 /// <summary>
 /// Handles the endpoint responsible for deleting driver entities.
 /// </summary>
-public sealed class DeleteDriverEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteDriverRequest>
+public sealed class DeleteDriverEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope) : Endpoint<DeleteDriverRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -46,6 +46,12 @@ public sealed class DeleteDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteDriverRequest req, CancellationToken ct)
     {
+        // Drivers do not manage the fleet roster — office staff do.
+        if (driverScope.IsScoped)
+        {
+            ThrowHelper.DriverScopeForbidden();
+        }
+
         var driver = await dbContext.Drivers.FirstOrDefaultAsync(d => d.PublicId == req.Id, ct);
         if (driver is null)
             ThrowHelper.PublicEntityNotFound(nameof(Driver), req.Id);

@@ -77,7 +77,9 @@ public sealed class SetLoadingStateValidator : Validator<SetLoadingStateRequest>
 /// dictated. Other screens (the order detail) read that flag and keep working unchanged.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class SetLoadingStateEndpoint(AleTrackDbContext dbContext) : Endpoint<SetLoadingStateRequest>
+/// <param name="driverScope"></param>
+public sealed class SetLoadingStateEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<SetLoadingStateRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -106,6 +108,8 @@ public sealed class SetLoadingStateEndpoint(AleTrackDbContext dbContext) : Endpo
     /// <inheritdoc />
     public override async Task HandleAsync(SetLoadingStateRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var shipment = await dbContext.OutgoingShipments
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems)
             .Include(s => s.StockPurchases)

@@ -29,7 +29,11 @@ public sealed record GetOutgoingShipmentDetailRequest
 /// </summary>
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
-public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+/// <param name="driverScope"></param>
+public sealed class GetOutgoingShipmentDetailEndpoint(
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions,
+    IDriverScope driverScope)
     : Endpoint<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto>
 {
     /// <inheritdoc />
@@ -56,6 +60,8 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
     /// <inheritdoc />
     public override async Task HandleAsync(GetOutgoingShipmentDetailRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var company = companyOptions.Value;
         var companyAddress = company.FormatAddress();
 
@@ -94,6 +100,28 @@ public sealed class GetOutgoingShipmentDetailEndpoint(AleTrackDbContext dbContex
                     : company.Longitude,
                 DriverIds = os.Drivers
                     .Select(d => d.Driver.PublicId)
+                    .ToList(),
+                Vehicle = os.Vehicle != null
+                    ? new ShipmentVehicleDto
+                    {
+                        Id = os.Vehicle.PublicId,
+                        Name = os.Vehicle.Name,
+                        MaxWeight = os.Vehicle.MaxWeight
+                    }
+                    : null,
+                // Ordered by last name then first name, matching ShipmentExportQuery's own
+                // driver ordering, so the same run reads the same driver order everywhere.
+                Drivers = os.Drivers
+                    .OrderBy(d => d.Driver.LastName)
+                    .ThenBy(d => d.Driver.FirstName)
+                    .Select(d => new ShipmentDriverDto
+                    {
+                        Id = d.Driver.PublicId,
+                        FirstName = d.Driver.FirstName,
+                        LastName = d.Driver.LastName,
+                        PhoneNumber = d.Driver.PhoneNumber,
+                        Color = d.Driver.Color
+                    })
                     .ToList(),
                 Stops = os.Stops
                     .Select(s => new OutgoingShipmentStopDto

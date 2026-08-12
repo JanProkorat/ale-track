@@ -110,7 +110,7 @@ public sealed class GetOutgoingShipmentDetailStartPointTests
             breweries: breweries ?? []);
 
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object, Options.Create(Company));
+            .Create(dbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = shipment.PublicId }, CancellationToken.None);
 

@@ -61,7 +61,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         dbContext.Verify(e => e.OutgoingShipments.Add(It.Is<OutgoingShipment>(os =>
@@ -110,7 +110,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -150,7 +150,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -189,7 +189,7 @@ public sealed class CreateOutgoingShipmentTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<CreateOutgoingShipmentRequest, CreateOutgoingShipmentEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);

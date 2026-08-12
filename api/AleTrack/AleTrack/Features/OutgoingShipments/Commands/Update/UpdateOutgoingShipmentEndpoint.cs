@@ -32,7 +32,9 @@ public sealed record UpdateOutgoingShipmentRequest
 /// </summary>
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
-public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions)
+/// <param name="driverScope"></param>
+public sealed class UpdateOutgoingShipmentEndpoint(
+    AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
     : Endpoint<UpdateOutgoingShipmentRequest>
 {
     /// <summary>
@@ -68,6 +70,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext, 
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var outgoingShipment = await dbContext.OutgoingShipments
         .Include(os => os.Drivers)
             .ThenInclude(od => od.Driver)

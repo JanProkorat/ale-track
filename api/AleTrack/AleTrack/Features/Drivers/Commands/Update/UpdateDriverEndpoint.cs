@@ -30,7 +30,7 @@ public sealed record UpdateDriverRequest
 /// It processes the incoming request to update an existing driver's details
 /// and ensures the driver record is persisted with the updated data in the database.
 /// </summary>
-public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateDriverRequest>
+public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope) : Endpoint<UpdateDriverRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -55,6 +55,20 @@ public sealed class UpdateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateDriverRequest req, CancellationToken ct)
     {
+        // 404 rather than 403 so a driver cannot probe which driver ids exist.
+        if (driverScope.IsScoped)
+        {
+            var scopedDriverId = await driverScope.GetDriverIdAsync(ct);
+            var isOwnRecord = scopedDriverId is not null
+                && await dbContext.Drivers.AsNoTracking()
+                    .AnyAsync(d => d.PublicId == req.Id && d.Id == scopedDriverId, ct);
+
+            if (!isOwnRecord)
+            {
+                ThrowHelper.PublicEntityNotFound(nameof(Driver), req.Id);
+            }
+        }
+
         var driver = await dbContext.Drivers
             .Where(d => d.PublicId == req.Id)
             .Include(d => d.Availabilities)

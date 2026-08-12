@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Features.Reports.Utils;
 using AleTrack.Infrastructure.Persistence;
@@ -25,7 +26,7 @@ public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext)
     {
         Get("reports/client-volume");
         Description(b => b
-            .RequireAuthenticated()
+            .RequirePermission(ModuleType.Reports, PermissionLevel.View)
             .WithName(nameof(GetClientVolumeEndpoint)));
 
         DontCatchExceptions();

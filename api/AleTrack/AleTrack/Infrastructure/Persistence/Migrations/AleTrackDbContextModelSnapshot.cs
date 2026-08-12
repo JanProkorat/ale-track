@@ -533,9 +533,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("public_id");
 
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("drivers");
@@ -2280,6 +2287,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Brewery");
 
                     b.Navigation("Delivery");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.Driver", b =>
+                {
+                    b.HasOne("AleTrack.Entities.User", "User")
+                        .WithOne()
+                        .HasForeignKey("AleTrack.Entities.Driver", "UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.DriverAvailability", b =>

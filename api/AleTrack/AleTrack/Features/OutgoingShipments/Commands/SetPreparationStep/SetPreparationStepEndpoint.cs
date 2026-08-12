@@ -68,7 +68,9 @@ public sealed class SetPreparationStepValidator : Validator<SetPreparationStepRe
 /// Loaded and InTransit, and stops once the shipment is delivered or cancelled.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class SetPreparationStepEndpoint(AleTrackDbContext dbContext) : Endpoint<SetPreparationStepRequest>
+/// <param name="driverScope"></param>
+public sealed class SetPreparationStepEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<SetPreparationStepRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -97,6 +99,8 @@ public sealed class SetPreparationStepEndpoint(AleTrackDbContext dbContext) : En
     /// <inheritdoc />
     public override async Task HandleAsync(SetPreparationStepRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var shipment = await dbContext.OutgoingShipments
             .Include(s => s.PreparationSteps)
             .FirstOrDefaultAsync(s => s.PublicId == req.Id, ct);

@@ -52,7 +52,7 @@ public sealed class GetOutgoingShipmentDetailBreweryTests
             outgoingShipments: [shipment]);
 
         var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()));
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetOutgoingShipmentDetailRequest { Id = shipmentId }, CancellationToken.None);
 

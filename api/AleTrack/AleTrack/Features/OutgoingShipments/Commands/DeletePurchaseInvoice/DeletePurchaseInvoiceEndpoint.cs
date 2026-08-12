@@ -36,7 +36,9 @@ public sealed record DeletePurchaseInvoiceRequest
 /// surviving invoices are compacted so they stay 1..N.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class DeletePurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : Endpoint<DeletePurchaseInvoiceRequest>
+/// <param name="driverScope"></param>
+public sealed class DeletePurchaseInvoiceEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<DeletePurchaseInvoiceRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -66,6 +68,8 @@ public sealed class DeletePurchaseInvoiceEndpoint(AleTrackDbContext dbContext) :
     /// <inheritdoc />
     public override async Task HandleAsync(DeletePurchaseInvoiceRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var shipment = await PurchaseInvoiceSplit.LoadAsync(dbContext, req.Id, ct);
         if (shipment is null)
         {

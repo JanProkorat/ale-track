@@ -25,7 +25,9 @@ namespace AleTrack.Features.OutgoingShipments.Commands.AddPurchaseInvoice;
 /// request body in the OpenAPI document. Nothing about this call needs a body.
 /// </remarks>
 /// <param name="dbContext"></param>
-public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : EndpointWithoutRequest
+/// <param name="driverScope"></param>
+public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : EndpointWithoutRequest
 {
     /// <inheritdoc />
     public override void Configure()
@@ -56,6 +58,8 @@ public sealed class AddPurchaseInvoiceEndpoint(AleTrackDbContext dbContext) : En
     public override async Task HandleAsync(CancellationToken ct)
     {
         var shipmentId = Route<Guid>("Id");
+
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, shipmentId, ct);
 
         var shipment = await PurchaseInvoiceSplit.LoadAsync(dbContext, shipmentId, ct);
         if (shipment is null)

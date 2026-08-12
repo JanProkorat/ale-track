@@ -152,8 +152,11 @@ export function UsersPage() {
       // Sorted by the label on screen: Administrátor, then Manažer, then Řidič.
       sortValue: (u) => ROLE_LABELS[roleOf(u)],
       render: (u) => (
-        <Stack direction="row" spacing={0.5}>
+        <Stack direction="row" spacing={0.5} alignItems="center">
           <RoleChip user={u} />
+          {u.driverName && (
+            <Chip size="small" variant="outlined" label={u.driverName} />
+          )}
         </Stack>
       ),
     },

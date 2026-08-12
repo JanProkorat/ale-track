@@ -32,7 +32,7 @@ public sealed class CreateUserTests
         var endpoint = EndpointBuilder<CreateUserRequest, CreateUserEndpoint>.Create(dbContext.Object, passwordHasher.Object);
         await endpoint.HandleAsync(command, CancellationToken.None);
         
-        dbContext.Verify(e => e.Users.Add(It.Is<User>(u => 
+        dbContext.Verify(e => e.Users.Add(It.Is<User>(u =>
             u.FirstName == command.Data.FirstName &&
             u.LastName == command.Data.LastName &&
             u.UserName == command.Data.UserName &&
