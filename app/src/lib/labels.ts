@@ -5,7 +5,7 @@ import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
-  PriceListChangeKind,
+  PriceListChangeKind, InvoiceAdjustmentKind,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -223,8 +223,16 @@ export function packagingLabel(
   return sized ? `${head} ${sized}` : head;
 }
 
+/** The ProductType member name (e.g. "Lemonade"), from either wire form. Sorting and
+ *  classification must key off this rather than comparing the raw field to a numeric member —
+ *  see `addrKindValue`'s note; a `=== ProductType.Lemonade` against real API data is always
+ *  false, which silently sorts non-beer as beer. */
+export function ptypeName(t?: ProductType | string | number): string | undefined {
+  return enumName(ProductType as unknown as Record<string, string | number>, t);
+}
+
 export function ptypeLabel(t?: ProductType | string | number): string | undefined {
-  const name = enumName(ProductType as unknown as Record<string, string | number>, t);
+  const name = ptypeName(t);
   return name ? (L.ptype[name] ?? name) : undefined;
 }
 
@@ -351,6 +359,15 @@ export function startPointKindName(k?: ShipmentStartPointKind | string | number)
  * live (string-serialized) data. */
 export function stopKindName(k?: OutgoingShipmentStopKind | string | number): string | undefined {
   return enumName(OutgoingShipmentStopKind as unknown as Record<string, string | number>, k);
+}
+
+/** The InvoiceAdjustmentKind member name, from either wire form — the shipment's drift banner
+ * picks its sentence off this. Comparing the raw field against the numeric member matched
+ * nothing, so every adjustment described itself as the third case. */
+export function invoiceAdjustmentKindName(
+  k?: InvoiceAdjustmentKind | string | number,
+): string | undefined {
+  return enumName(InvoiceAdjustmentKind as unknown as Record<string, string | number>, k);
 }
 
 export const KIND_ORDER: Record<string, number> = {

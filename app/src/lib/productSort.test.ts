@@ -35,6 +35,18 @@ describe('compareProductsForDisplay', () => {
     ])).toEqual(['Dvanáctka', 'Nealko', 'Radler', 'Limonáda']);
   });
 
+  // Real products carry `type` as the enum's string name, because the backend serializes enums
+  // as strings. While isNonBeer compared that to the numeric member it was always false, so
+  // limonáda and merch sorted among the beers on every screen that regroups rows itself — the
+  // nakládka table, the order catalogue, inventory, the product combos.
+  it('sorts non-beer last when the type arrives as a string', () => {
+    expect(sorted([
+      { name: 'Limonáda', type: 'Lemonade' as unknown as ProductType },
+      { name: 'Merch', type: 'Merchandise' as unknown as ProductType },
+      { name: 'Dvanáctka', type: 'PaleLager' as unknown as ProductType, platoDegree: 12 },
+    ])).toEqual(['Dvanáctka', 'Limonáda', 'Merch']);
+  });
+
   it('breaks a degree tie by package size', () => {
     expect(sorted([
       { name: 'Sud 50', type: ProductType.PaleLager, platoDegree: 11, packageSize: 50 },
@@ -70,6 +82,21 @@ describe('isNonBeer', () => {
   ])('classifies %s', (type, expected) => {
     expect(isNonBeer(type)).toBe(expected);
   });
+
+  // The regression this guards: real products carry `type` as the enum's *string* name, because
+  // the backend serializes enums as strings. Comparing that to the numeric member was always
+  // false, so limonáda, merch and ostatní sorted among the beers on every screen that regroups
+  // rows itself — the nakládka table, the order catalogue, inventory, the product combos.
+  it.each([
+    ['Lemonade', true],
+    ['Merchandise', true],
+    ['Other', true],
+    ['NonAlcoholicBeer', false],
+    ['PaleLager', false],
+  ])('classifies %s when it arrives as a string', (type, expected) => {
+    expect(isNonBeer(type)).toBe(expected);
+  });
+
 });
 
 describe('compareKindThenSize', () => {

@@ -56,7 +56,7 @@ import {
   type ClientBand,
   type LineGroup,
 } from './shipmentInvoiceModel';
-import { kindLabel } from 'src/lib/labels';
+import { kindLabel, invoiceAdjustmentKindName } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
 
@@ -226,10 +226,14 @@ function DriftBanner({ data, onDismiss }: { data: ShipmentInvoicesDto; onDismiss
 
   const describe = (kind: InvoiceAdjustmentKind | undefined, name: string | undefined, qty: number) => {
     const label = name ?? 'položka';
-    if (kind === InvoiceAdjustmentKind.SourceRemoved) {
+    // Keyed off the member name, not a raw `=== InvoiceAdjustmentKind.X`: enums arrive as
+    // strings, so both comparisons were always false and every adjustment — removals and
+    // additions alike — described itself with the fallback sentence below.
+    const kindName = invoiceAdjustmentKindName(kind);
+    if (kindName === 'SourceRemoved') {
       return `${label} — odebrána z nakládky, řádky faktur zrušeny (${qty} ks)`;
     }
-    if (kind === InvoiceAdjustmentKind.QuantityAdded) {
+    if (kindName === 'QuantityAdded') {
       return `${label} — přidáno ${qty} ks na 1. fakturu objednavatele`;
     }
     return `${label} — odebráno ${qty} ks (nejdřív ze soukromých, pak z přefakturovaných)`;
