@@ -68,8 +68,28 @@ export function dtosToPerms(dtos: ModulePermissionDto[] | undefined): Permission
   return makePerms(overrides);
 }
 
+/**
+ * Resolve one role to the numeric enum. Same wire caveat as `moduleToKey` above: the generated
+ * client types `userRoles` as `UserRoleType[]`, but the API serializes enums as strings
+ * (`JsonStringEnumConverter`), so what actually arrives is `['Driver']`. Comparing those against
+ * the numeric members silently never matches — every user then reads as the fallback role.
+ */
+export function roleFromApi(role: UserRoleType | string | number | undefined): UserRoleType | undefined {
+  if (role == null) return undefined;
+  if (typeof role === 'number') return role;
+  const resolved = UserRoleType[role as keyof typeof UserRoleType];
+  return typeof resolved === 'number' ? resolved : undefined;
+}
+
+/** The caller's roles as numeric enum members, with anything unrecognised dropped. */
+function rolesOf(u: Pick<UserListItemDto, 'userRoles'>): UserRoleType[] {
+  return (u.userRoles ?? [])
+    .map(roleFromApi)
+    .filter((role): role is UserRoleType => role !== undefined);
+}
+
 export function isAdminUser(u: Pick<UserListItemDto, 'userRoles'>): boolean {
-  return (u.userRoles ?? []).includes(UserRoleType.Admin);
+  return rolesOf(u).includes(UserRoleType.Admin);
 }
 
 /** The three assignable roles, in the order the form offers them. */
@@ -87,7 +107,7 @@ export const ROLE_LABELS: Record<UserRoleType, string> = {
  * — matching how the backend's capability check lets an Admin claim win.
  */
 export function roleOf(u: Pick<UserListItemDto, 'userRoles'>): UserRoleType {
-  const roles = u.userRoles ?? [];
+  const roles = rolesOf(u);
   if (roles.includes(UserRoleType.Admin)) return UserRoleType.Admin;
   if (roles.includes(UserRoleType.Driver)) return UserRoleType.Driver;
   return UserRoleType.Manager;

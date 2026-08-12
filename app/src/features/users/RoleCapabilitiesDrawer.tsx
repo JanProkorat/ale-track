@@ -27,7 +27,7 @@ import { RoleCapabilityDto, UserRoleType } from 'src/generated/api-client';
 import { CAPABILITY_REGISTRY, type CapabilityMeta } from 'src/auth/capabilityRegistry';
 import { NAV_GROUPS } from 'src/layout/nav-config';
 import { useRoleCapabilities, useSetRoleCapabilities } from 'src/hooks/useRoleCapabilities';
-import { ASSIGNABLE_ROLES, ROLE_LABELS } from './permissionModel';
+import { ASSIGNABLE_ROLES, ROLE_LABELS, roleFromApi } from './permissionModel';
 
 /** Editable roles: Admin bypasses capabilities entirely, so its column is fixed. */
 const EDITABLE_ROLES = ASSIGNABLE_ROLES.filter((role) => role !== UserRoleType.Admin);
@@ -50,17 +50,6 @@ function groups(): { heading: string; items: CapabilityMeta[] }[] {
 
 /** Key for the local edit map. */
 const cellKey = (role: UserRoleType, capabilityKey: string) => `${role}:${capabilityKey}`;
-
-// Enums are numeric in the generated client but arrive as strings on the wire (Program.cs
-// registers JsonStringEnumConverter) — resolve both, the same way permissionModel.ts does for
-// ModuleType. Skipping this is silent: the row keys simply never match the cell keys, every cell
-// falls back to default-allow, and a saved denial looks like it was never saved.
-function roleFromApi(role: UserRoleType | string | number | undefined): UserRoleType | undefined {
-  if (role == null) return undefined;
-  if (typeof role === 'number') return role;
-  const parsed = UserRoleType[role as keyof typeof UserRoleType];
-  return typeof parsed === 'number' ? parsed : undefined;
-}
 
 /** The registry key matching `stored`, ignoring case — the backend compares keys
  *  case-insensitively, so a row saved with different casing must still be read here. */
