@@ -6,12 +6,14 @@ import {
 import ShieldIcon from '@mui/icons-material/ShieldOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
+import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { allPerms, type PermissionLevel, type Permissions } from 'src/auth/permissions';
 import {
   CreateUserDto, UpdateUserDto, UserRoleType, type UserListItemDto,
 } from 'src/generated/api-client';
 import { useCreateUser, useUpdateUser } from 'src/hooks/useUsers';
+import { useDrivers } from 'src/hooks/useDrivers';
 import {
   PERM_MODULES, permsToDtos, dtosToPerms, roleOf, ASSIGNABLE_ROLES, ROLE_LABELS,
 } from './permissionModel';
@@ -52,7 +54,16 @@ export function UserFormDrawer({
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRoleType>(UserRoleType.Manager);
   const [perms, setPerms] = useState<Permissions>(allPerms('none'));
+  const [driverId, setDriverId] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ userName?: string; password?: string }>({});
+
+  const drivers = useDrivers();
+
+  // A driver record belongs to at most one account, so anything already claimed by someone
+  // else is not offerable. The account's own current driver always stays in the list.
+  const driverOptions = (drivers.data ?? [])
+    .filter((d) => d.id === driverId || !d.isLinkedToUser)
+    .map((d) => ({ value: d.id ?? '', label: `${d.firstName ?? ''} ${d.lastName ?? ''}`.trim() }));
 
   useEffect(() => {
     if (!open) return;
@@ -64,12 +75,14 @@ export function UserFormDrawer({
       setUserName(user.userName ?? '');
       setRole(roleOf(user));
       setPerms(dtosToPerms(user.permissions));
+      setDriverId(user.driverId ?? null);
     } else {
       setFirstName('');
       setLastName('');
       setUserName('');
       setRole(UserRoleType.Manager);
       setPerms(allPerms('none'));
+      setDriverId(null);
     }
   }, [open, user]);
 
@@ -89,12 +102,16 @@ export function UserFormDrawer({
       if (user?.id) {
         await update.mutateAsync({
           id: user.id,
-          data: new UpdateUserDto({ firstName: firstName || undefined, lastName: lastName || undefined, userRoles, permissions }),
+          data: new UpdateUserDto({
+            firstName: firstName || undefined, lastName: lastName || undefined, userRoles, permissions, driverId: driverId ?? undefined,
+          }),
         });
         enqueueSnackbar('Uživatel upraven.', { variant: 'success' });
       } else {
         await create.mutateAsync(
-          new CreateUserDto({ firstName: firstName || undefined, lastName: lastName || undefined, userName, password, userRoles, permissions })
+          new CreateUserDto({
+            firstName: firstName || undefined, lastName: lastName || undefined, userName, password, userRoles, permissions, driverId: driverId ?? undefined,
+          })
         );
         enqueueSnackbar('Uživatel přidán.', { variant: 'success' });
       }
@@ -133,7 +150,11 @@ export function UserFormDrawer({
         <RadioGroup
           row
           value={role}
-          onChange={(e) => setRole(Number(e.target.value) as UserRoleType)}
+          onChange={(e) => {
+            const next = Number(e.target.value) as UserRoleType;
+            setRole(next);
+            if (next !== UserRoleType.Driver) setDriverId(null);
+          }}
         >
           {ASSIGNABLE_ROLES.map((r) => (
             <FormControlLabel key={r} value={r} control={<Radio size="small" />} label={ROLE_LABELS[r]} />
@@ -142,6 +163,18 @@ export function UserFormDrawer({
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
           {ROLE_HINTS[role]}
         </Typography>
+        {role === UserRoleType.Driver && (
+          <Box sx={{ mt: 1.5 }}>
+            <Combobox
+              label="Řidič"
+              value={driverId}
+              onChange={setDriverId}
+              options={driverOptions}
+              placeholder="Vyberte řidiče"
+              helperText="Řidiči, kteří už mají účet, se v nabídce nezobrazují."
+            />
+          </Box>
+        )}
       </Box>
 
       <Box>
