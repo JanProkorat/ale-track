@@ -82,7 +82,7 @@ export interface IClient {
     getRoleCapabilitiesEndpoint(signal?: AbortSignal): Promise<GetRoleCapabilitiesResponse>;
 
     /**
-     * Replace which components each role may see
+     * Set which components each role may see
      * @return Saved
      */
     setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void>;
@@ -1362,7 +1362,7 @@ export class Client implements IClient {
     }
 
     /**
-     * Replace which components each role may see
+     * Set which components each role may see
      * @return Saved
      */
     setRoleCapabilitiesEndpoint(setRoleCapabilitiesDto: SetRoleCapabilitiesDto, signal?: AbortSignal): Promise<void> {
@@ -1394,7 +1394,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("A row targets Admin, a key is invalid, or the same role/key pair is duplicated", status, _responseText, _headers);
+            return throwException("Items is null, a row targets Admin, a key is invalid, or the same role/key pair is duplicated", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -7650,6 +7650,8 @@ export class UserListItemDto implements IUserListItemDto {
     userName?: string;
     userRoles?: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+    driverName?: string | undefined;
 
     constructor(data?: IUserListItemDto) {
         if (data) {
@@ -7676,6 +7678,8 @@ export class UserListItemDto implements IUserListItemDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
+            this.driverName = _data["driverName"];
         }
     }
 
@@ -7702,6 +7706,8 @@ export class UserListItemDto implements IUserListItemDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
+        data["driverName"] = this.driverName;
         return data;
     }
 }
@@ -7713,6 +7719,8 @@ export interface IUserListItemDto {
     userName?: string;
     userRoles?: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+    driverName?: string | undefined;
 }
 
 export class CreateVehicleDto implements ICreateVehicleDto {
@@ -7865,6 +7873,7 @@ export class UpdateUserDto implements IUpdateUserDto {
     lastName?: string | undefined;
     userRoles!: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 
     constructor(data?: IUpdateUserDto) {
         if (data) {
@@ -7892,6 +7901,7 @@ export class UpdateUserDto implements IUpdateUserDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
         }
     }
 
@@ -7916,6 +7926,7 @@ export class UpdateUserDto implements IUpdateUserDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
         return data;
     }
 }
@@ -7925,6 +7936,7 @@ export interface IUpdateUserDto {
     lastName?: string | undefined;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 }
 
 export class DeleteUserRequest implements IDeleteUserRequest {
@@ -8096,6 +8108,7 @@ export class CreateUserDto implements ICreateUserDto {
     password!: string;
     userRoles!: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 
     constructor(data?: ICreateUserDto) {
         if (data) {
@@ -8125,6 +8138,7 @@ export class CreateUserDto implements ICreateUserDto {
                 for (let item of _data["permissions"])
                     this.permissions!.push(ModulePermissionDto.fromJS(item));
             }
+            this.driverId = _data["driverId"];
         }
     }
 
@@ -8151,6 +8165,7 @@ export class CreateUserDto implements ICreateUserDto {
             for (let item of this.permissions)
                 data["permissions"].push(item ? item.toJSON() : undefined as any);
         }
+        data["driverId"] = this.driverId;
         return data;
     }
 }
@@ -8162,6 +8177,7 @@ export interface ICreateUserDto {
     password: string;
     userRoles: UserRoleType[];
     permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
 }
 
 export class RoleCapabilityDto implements IRoleCapabilityDto {
@@ -8215,7 +8231,7 @@ export enum Capability {
 }
 
 export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
-    items?: RoleCapabilityDto[];
+    items!: RoleCapabilityDto[];
 
     constructor(data?: ISetRoleCapabilitiesDto) {
         if (data) {
@@ -8223,6 +8239,9 @@ export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
                 if (data.hasOwnProperty(property))
                     (this as any)[property] = (data as any)[property];
             }
+        }
+        if (!data) {
+            this.items = [];
         }
     }
 
@@ -8255,7 +8274,7 @@ export class SetRoleCapabilitiesDto implements ISetRoleCapabilitiesDto {
 }
 
 export interface ISetRoleCapabilitiesDto {
-    items?: RoleCapabilityDto[];
+    items: RoleCapabilityDto[];
 }
 
 export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachModuleDto {
@@ -15437,6 +15456,7 @@ export class DriverListItemDto implements IDriverListItemDto {
     phoneNumber?: string | undefined;
     color?: string;
     availableDates?: DriverAvailabilityListItemDto[];
+    isLinkedToUser?: boolean;
 
     constructor(data?: IDriverListItemDto) {
         if (data) {
@@ -15459,6 +15479,7 @@ export class DriverListItemDto implements IDriverListItemDto {
                 for (let item of _data["availableDates"])
                     this.availableDates!.push(DriverAvailabilityListItemDto.fromJS(item));
             }
+            this.isLinkedToUser = _data["isLinkedToUser"];
         }
     }
 
@@ -15481,6 +15502,7 @@ export class DriverListItemDto implements IDriverListItemDto {
             for (let item of this.availableDates)
                 data["availableDates"].push(item ? item.toJSON() : undefined as any);
         }
+        data["isLinkedToUser"] = this.isLinkedToUser;
         return data;
     }
 }
@@ -15492,6 +15514,7 @@ export interface IDriverListItemDto {
     phoneNumber?: string | undefined;
     color?: string;
     availableDates?: DriverAvailabilityListItemDto[];
+    isLinkedToUser?: boolean;
 }
 
 export class DriverAvailabilityListItemDto implements IDriverAvailabilityListItemDto {

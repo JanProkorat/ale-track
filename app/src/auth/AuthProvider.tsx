@@ -10,6 +10,7 @@ import {
 import { type CurrentUser } from './types';
 import { canEdit as canEditPerms, canSee as canSeePerms, type ModuleKey } from './permissions';
 import { type Capability } from './capabilityRegistry';
+import { roleOfRoles } from './capabilities';
 import { userFromToken, isTokenExpired } from './jwt';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoginUserDto } from 'src/generated/api-client';
@@ -40,6 +41,8 @@ interface AuthContextValue {
   /** Whether the signed-in user's roles allow a named slice of content (see
    * capabilities.ts). Ask this rather than testing the role directly. */
   can: (c: Capability) => boolean;
+  /** True when the account is restricted to its own driver record and assigned shipments. */
+  isDriverScoped: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -128,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canSee: (m) => (user ? canSeePerms(user.perms, m) : false),
       canEdit: (m) => (user ? canEditPerms(user.perms, m) : false),
       can: (c) => user?.caps[c] ?? false,
+      isDriverScoped: user ? roleOfRoles(user.roles) === 'Driver' : false,
     }),
     [user, signIn, signOut]
   );

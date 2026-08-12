@@ -79,3 +79,13 @@ describe('ROLE_CLAIM_LABELS', () => {
     expect(ROLE_CLAIM_LABELS[role]).toBe(label);
   });
 });
+
+describe('driver scoping', () => {
+  it('treats a Driver-only account as scoped', () => {
+    expect(roleOfRoles(['Driver']) === 'Driver').toBe(true);
+  });
+
+  it('does not scope an admin who also holds Driver', () => {
+    expect(roleOfRoles(['Driver', 'Admin']) === 'Driver').toBe(false);
+  });
+});
