@@ -12005,6 +12005,8 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     startPointLongitude?: number | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
+    vehicle?: ShipmentVehicleDto | undefined;
+    drivers?: ShipmentDriverDto[];
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
@@ -12039,6 +12041,12 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.driverIds = [] as any;
                 for (let item of _data["driverIds"])
                     this.driverIds!.push(item);
+            }
+            this.vehicle = _data["vehicle"] ? ShipmentVehicleDto.fromJS(_data["vehicle"]) : undefined as any;
+            if (Array.isArray(_data["drivers"])) {
+                this.drivers = [] as any;
+                for (let item of _data["drivers"])
+                    this.drivers!.push(ShipmentDriverDto.fromJS(item));
             }
             if (Array.isArray(_data["stops"])) {
                 this.stops = [] as any;
@@ -12099,6 +12107,12 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.driverIds)
                 data["driverIds"].push(item);
         }
+        data["vehicle"] = this.vehicle ? this.vehicle.toJSON() : undefined as any;
+        if (Array.isArray(this.drivers)) {
+            data["drivers"] = [];
+            for (let item of this.drivers)
+                data["drivers"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.stops)) {
             data["stops"] = [];
             for (let item of this.stops)
@@ -12147,12 +12161,110 @@ export interface IOutgoingShipmentDetailDto {
     startPointLongitude?: number | undefined;
     vehicleId?: string | undefined;
     driverIds?: string[];
+    vehicle?: ShipmentVehicleDto | undefined;
+    drivers?: ShipmentDriverDto[];
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
+}
+
+export class ShipmentVehicleDto implements IShipmentVehicleDto {
+    id?: string;
+    name?: string;
+    maxWeight?: number;
+
+    constructor(data?: IShipmentVehicleDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.maxWeight = _data["maxWeight"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentVehicleDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentVehicleDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["maxWeight"] = this.maxWeight;
+        return data;
+    }
+}
+
+export interface IShipmentVehicleDto {
+    id?: string;
+    name?: string;
+    maxWeight?: number;
+}
+
+export class ShipmentDriverDto implements IShipmentDriverDto {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string | undefined;
+    color?: string;
+
+    constructor(data?: IShipmentDriverDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.firstName = _data["firstName"];
+            this.lastName = _data["lastName"];
+            this.phoneNumber = _data["phoneNumber"];
+            this.color = _data["color"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentDriverDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentDriverDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["firstName"] = this.firstName;
+        data["lastName"] = this.lastName;
+        data["phoneNumber"] = this.phoneNumber;
+        data["color"] = this.color;
+        return data;
+    }
+}
+
+export interface IShipmentDriverDto {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string | undefined;
+    color?: string;
 }
 
 export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {

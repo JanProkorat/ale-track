@@ -101,6 +101,28 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                 DriverIds = os.Drivers
                     .Select(d => d.Driver.PublicId)
                     .ToList(),
+                Vehicle = os.Vehicle != null
+                    ? new ShipmentVehicleDto
+                    {
+                        Id = os.Vehicle.PublicId,
+                        Name = os.Vehicle.Name,
+                        MaxWeight = os.Vehicle.MaxWeight
+                    }
+                    : null,
+                // Ordered by last name then first name, matching ShipmentExportQuery's own
+                // driver ordering, so the same run reads the same driver order everywhere.
+                Drivers = os.Drivers
+                    .OrderBy(d => d.Driver.LastName)
+                    .ThenBy(d => d.Driver.FirstName)
+                    .Select(d => new ShipmentDriverDto
+                    {
+                        Id = d.Driver.PublicId,
+                        FirstName = d.Driver.FirstName,
+                        LastName = d.Driver.LastName,
+                        PhoneNumber = d.Driver.PhoneNumber,
+                        Color = d.Driver.Color
+                    })
+                    .ToList(),
                 Stops = os.Stops
                     .Select(s => new OutgoingShipmentStopDto
                     {

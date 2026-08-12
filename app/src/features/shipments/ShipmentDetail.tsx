@@ -50,8 +50,6 @@ import {
   type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
-import { useVehicle } from 'src/hooks/useVehicles';
-import { useDrivers } from 'src/hooks/useDrivers';
 import { useInventory } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
 import { useBreweryColors } from 'src/hooks/useBreweries';
@@ -1085,8 +1083,6 @@ export function ShipmentDetail({
   const { enqueueSnackbar } = useSnackbar();
   const updateShipment = useUpdateShipment();
   const startPoints = useShipmentStartPoints();
-  const vehicleQuery = useVehicle(shipment.vehicleId ?? undefined);
-  const driversQuery = useDrivers();
   const inventoryQuery = useInventory();
   const productsQuery = useProducts();
   const addPurchaseInvoice = useAddPurchaseInvoice(shipment.id);
@@ -1227,9 +1223,9 @@ export function ShipmentDetail({
   const sections = useMemo(() => groupByBreweryThenKind(visibleRows), [visibleRows]);
   const totalWeight = combinedRows.reduce((sum, r) => sum + r.weight * r.quantity, 0);
 
-  const vehicle = vehicleQuery.data;
+  const vehicle = shipment.vehicle;
   const overloaded = Boolean(vehicle?.maxWeight != null && totalWeight > vehicle.maxWeight);
-  const assignedDrivers = (driversQuery.data ?? []).filter((d) => (shipment.driverIds ?? []).includes(d.id ?? ''));
+  const assignedDrivers = shipment.drivers ?? [];
 
   const stateName = shipStateName(shipment.state);
   const status = SHIP_STATUS[stateName ?? 'Created'] ?? SHIP_STATUS.Created;
@@ -1703,11 +1699,7 @@ export function ShipmentDetail({
                 <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Vůz</Typography>
               </Stack>
               <Box sx={{ p: 2 }}>
-                {!shipment.vehicleId ? (
-                  <Typography variant="body2" color="text.secondary">Vůz nepřiřazen</Typography>
-                ) : vehicleQuery.isLoading ? (
-                  <CircularProgress size={20} />
-                ) : vehicle ? (
+                {vehicle ? (
                   <Stack spacing={1.25}>
                     <Stack direction="row" spacing={1.25} alignItems="center">
                       <Box sx={{ width: 32, height: 32, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: 'action.hover' }}>
@@ -1727,7 +1719,9 @@ export function ShipmentDetail({
                     </Stack>
                     {overloaded && <StatusPill tone="crit" label="Překročena nosnost!" />}
                   </Stack>
-                ) : null}
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Vůz nepřiřazen</Typography>
+                )}
               </Box>
             </Card>
 

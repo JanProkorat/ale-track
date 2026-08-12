@@ -67,6 +67,20 @@ public sealed record OutgoingShipmentDetailDto
     public List<Guid> DriverIds { get; set; } = [];
 
     /// <summary>
+    /// Resolved vehicle assigned to the shipment, so a caller with no Vehicles module
+    /// permission (e.g. a driver) does not have to look it up separately. Null when no
+    /// vehicle is assigned.
+    /// </summary>
+    public ShipmentVehicleDto? Vehicle { get; set; }
+
+    /// <summary>
+    /// Resolved drivers assigned to the shipment, so a caller with a driver-scoped account
+    /// sees every driver on the run — not just themselves — without a second, permission-gated
+    /// request. Empty when no driver is assigned.
+    /// </summary>
+    public List<ShipmentDriverDto> Drivers { get; set; } = [];
+
+    /// <summary>
     /// List of stops during the shipment
     /// </summary>
     public List<OutgoingShipmentStopDto> Stops { get; set; } = [];
@@ -123,6 +137,58 @@ public sealed record OutgoingShipmentPreparationStepDto
     /// Whether it has been done
     /// </summary>
     public bool IsDone { get; set; }
+}
+
+/// <summary>
+/// Resolved vehicle assigned to a shipment.
+/// </summary>
+public sealed record ShipmentVehicleDto
+{
+    /// <summary>
+    /// Public ID of the vehicle
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Name of the vehicle
+    /// </summary>
+    public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Max weight the vehicle can carry, in kilograms
+    /// </summary>
+    public double MaxWeight { get; set; }
+}
+
+/// <summary>
+/// Resolved driver assigned to a shipment.
+/// </summary>
+public sealed record ShipmentDriverDto
+{
+    /// <summary>
+    /// Public ID of the driver
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// First name of the driver
+    /// </summary>
+    public string FirstName { get; set; } = null!;
+
+    /// <summary>
+    /// Last name of the driver
+    /// </summary>
+    public string LastName { get; set; } = null!;
+
+    /// <summary>
+    /// Phone number of the driver
+    /// </summary>
+    public string? PhoneNumber { get; set; }
+
+    /// <summary>
+    /// Color of the driver, used for the left-border marker
+    /// </summary>
+    public string Color { get; set; } = null!;
 }
 
 /// <summary>

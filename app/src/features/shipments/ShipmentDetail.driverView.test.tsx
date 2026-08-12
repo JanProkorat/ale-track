@@ -14,7 +14,6 @@ import {
 import { theme } from 'src/theme/theme';
 import { ShipmentDetail } from './ShipmentDetail';
 
-const noQuery = { data: undefined, isLoading: false, isPending: false, isError: false };
 const listQuery = { data: [], isLoading: false, isPending: false, isError: false };
 const noMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 
@@ -26,8 +25,6 @@ vi.mock('src/hooks/useShipments', () => ({
   // Reached through AddressChangedBanner rather than the detail itself.
   useAcknowledgeAddressChanges: () => noMutation,
 }));
-vi.mock('src/hooks/useVehicles', () => ({ useVehicle: () => noQuery }));
-vi.mock('src/hooks/useDrivers', () => ({ useDrivers: () => listQuery }));
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => listQuery }));
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => listQuery }));
 vi.mock('src/hooks/useBreweries', () => ({ useBreweryColors: () => ({}) }));
