@@ -33,39 +33,52 @@ public sealed class SetRoleCapabilitiesEndpoint(AleTrackDbContext dbContext, Rol
 
         Summary(s =>
         {
-            s.Summary = "Replace which components each role may see";
+            s.Summary = "Set which components each role may see";
             s.Responses[StatusCodes.Status204NoContent] = "Saved";
-            s.Responses[StatusCodes.Status400BadRequest] = "A row targets Admin, a key is invalid, or the same role/key pair is duplicated";
+            s.Responses[StatusCodes.Status400BadRequest] = "Items is null, a row targets Admin, a key is invalid, or the same role/key pair is duplicated";
         });
     }
 
     /// <inheritdoc />
     public override async Task HandleAsync(SetRoleCapabilitiesDto req, CancellationToken ct)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(ct);
-
-        // Replace only the (role, key) pairs the payload actually names — never the whole
-        // table. A frontend registry that no longer knows about a stored key (e.g. after a
-        // rename) must not be able to delete that key's row just because an admin clicked
-        // Uložit: the row may still be the only thing keeping a capability an endpoint gates
-        // on via RequireCapability closed. Matched case-insensitively (OrdinalIgnoreCase),
-        // consistent with RoleCapabilityPolicy's read side and the validator's duplicate check.
+        // Upsert only the (role, key) pairs the payload actually names — never the whole table.
+        // A frontend registry that no longer knows about a stored key (e.g. after a rename) must
+        // not be able to drop that key's row just because an admin clicked Uložit: the row may
+        // still be the only thing keeping a capability an endpoint gates on via RequireCapability
+        // closed. Matched case-insensitively (OrdinalIgnoreCase), consistent with
+        // RoleCapabilityPolicy's read side and the validator's duplicate check.
+        //
+        // Updating in place rather than delete-then-insert is deliberate. It keeps this to a
+        // single SaveChangesAsync, which EF already makes atomic, so no explicit transaction is
+        // needed — and this DbContext registers a retrying execution strategy
+        // (BrokenConnectionRetryStrategy), which refuses user-initiated transactions outright.
+        // It also avoids churning the identity sequence and can never trip the unique index on
+        // (role, capability_key) by inserting a replacement before its predecessor is gone.
         var existingRows = await dbContext.RoleCapabilities.ToListAsync(ct);
-        var rowsToReplace = existingRows
-            .Where(row => req.Items.Any(item =>
-                item.Role == row.Role && string.Equals(item.CapabilityKey, row.CapabilityKey, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
 
-        dbContext.RoleCapabilities.RemoveRange(rowsToReplace);
-        dbContext.RoleCapabilities.AddRange(req.Items.Select(item => new RoleCapability
+        foreach (var item in req.Items)
         {
-            Role = item.Role,
-            CapabilityKey = item.CapabilityKey,
-            IsVisible = item.IsVisible
-        }));
+            var existing = existingRows.FirstOrDefault(row =>
+                row.Role == item.Role
+                && string.Equals(row.CapabilityKey, item.CapabilityKey, StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
+            {
+                dbContext.RoleCapabilities.Add(new RoleCapability
+                {
+                    Role = item.Role,
+                    CapabilityKey = item.CapabilityKey,
+                    IsVisible = item.IsVisible
+                });
+
+                continue;
+            }
+
+            existing.IsVisible = item.IsVisible;
+        }
 
         await dbContext.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
 
         // Next request must see the saved policy, not the map cached before this write.
         policy.Invalidate();

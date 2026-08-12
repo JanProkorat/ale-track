@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -18,9 +17,8 @@ import { useAuth } from 'src/auth/AuthProvider';
 import { apiErrorMessage } from 'src/api/errors';
 import { UserRoleType, type UserListItemDto } from 'src/generated/api-client';
 import { useUsers, useDeleteUser } from 'src/hooks/useUsers';
-import { PATHS } from 'src/routes/paths';
 import { UserFormDrawer } from './UserFormDrawer';
-import { RoleCapabilitiesPanel } from './RoleCapabilitiesPanel';
+import { RoleCapabilitiesDrawer } from './RoleCapabilitiesDrawer';
 import { isAdminUser, permCounts, roleOf, ROLE_LABELS } from './permissionModel';
 
 // One chip per user, from the single role the form assigns. Rendered from roleOf rather
@@ -93,19 +91,17 @@ function UserCard({
   );
 }
 
-export function UsersPage({ view }: { view?: 'roles' }) {
+export function UsersPage() {
   const { canEdit } = useAuth();
   const editable = canEdit('users');
   const { enqueueSnackbar } = useSnackbar();
-  const navigate = useNavigate();
 
-  // Always called regardless of `view` — same dispatch pattern as ShipmentsPage —
-  // so the list stays warm in cache when an admin bounces back from the roles screen.
   const query = useUsers();
   const del = useDeleteUser();
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const [editing, setEditing] = useState<UserListItemDto | undefined>(undefined);
   const [confirm, setConfirm] = useState<UserListItemDto | null>(null);
 
@@ -193,19 +189,6 @@ export function UsersPage({ view }: { view?: 'roles' }) {
       : []),
   ];
 
-  if (view === 'roles') {
-    return (
-      <PageContainer>
-        <PageHeader
-          eyebrow="Správa"
-          title="Role a komponenty"
-          subtitle="Nastavte, které části aplikace jednotlivé role vidí."
-        />
-        <RoleCapabilitiesPanel />
-      </PageContainer>
-    );
-  }
-
   return (
     <PageContainer>
       <PageHeader
@@ -226,7 +209,7 @@ export function UsersPage({ view }: { view?: 'roles' }) {
               <Button
                 variant="outlined"
                 startIcon={<SettingsOutlinedIcon />}
-                onClick={() => navigate(PATHS.userRoles)}
+                onClick={() => setRolesOpen(true)}
               >
                 Role a komponenty
               </Button>
@@ -297,6 +280,7 @@ export function UsersPage({ view }: { view?: 'roles' }) {
       </Card>
 
       <UserFormDrawer open={formOpen} user={editing} onClose={() => setFormOpen(false)} />
+      <RoleCapabilitiesDrawer open={rolesOpen} onClose={() => setRolesOpen(false)} />
       <ConfirmDialog
         open={confirm !== null}
         title="Smazat uživatele?"

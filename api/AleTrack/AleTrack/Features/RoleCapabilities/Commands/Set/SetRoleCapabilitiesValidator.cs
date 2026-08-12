@@ -7,7 +7,8 @@ using FluentValidation;
 namespace AleTrack.Features.RoleCapabilities.Commands.Set;
 
 /// <summary>
-/// Validates a full replacement of the role capability table.
+/// Validates an upsert of role capability visibility: only the (role, key) pairs the payload
+/// names are written, so rows for keys it does not mention are left alone.
 /// </summary>
 internal sealed class SetRoleCapabilitiesValidator : Validator<SetRoleCapabilitiesDto>
 {

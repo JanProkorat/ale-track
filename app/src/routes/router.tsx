@@ -43,7 +43,6 @@ export const router = createBrowserRouter([
           { path: `${PATHS.clients}/:id`, element: <ClientsPage /> },
           { path: PATHS.drivers, element: <DriversPage /> },
           { path: PATHS.vehicles, element: <VehiclesPage /> },
-          { path: PATHS.userRoles, element: <UsersPage view="roles" /> },
           { path: PATHS.users, element: <UsersPage /> },
           { path: PATHS.reports, element: <ReportsPage /> },
         ],
