@@ -5,21 +5,29 @@
 // button, so a broken seed would silently show default-allow for everything.
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserRoleType } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 import { RoleCapabilitiesDrawer } from './RoleCapabilitiesDrawer';
 
 const save = vi.fn();
 
+// The rows the query hands back. Typed loosely on purpose: the generated client declares `role`
+// as the numeric UserRoleType, but the API serializes enums as strings (Program.cs registers
+// JsonStringEnumConverter), so what actually arrives at runtime is 'Driver'. The default below is
+// that real shape — a mock using the numeric form hid a bug where stored rows never matched the
+// checkbox cells and every saved denial read back as default-allow.
+let rows: { role: UserRoleType | string; capabilityKey: string; isVisible: boolean }[] = [];
+
 vi.mock('src/hooks/useRoleCapabilities', () => ({
-  useRoleCapabilities: () => ({
-    data: [{ role: UserRoleType.Driver, capabilityKey: 'Invoicing', isVisible: false }],
-    isPending: false,
-    isError: false,
-  }),
+  useRoleCapabilities: () => ({ data: rows, isPending: false, isError: false }),
   useSetRoleCapabilities: () => ({ mutate: save, isPending: false }),
 }));
+
+beforeEach(() => {
+  save.mockClear();
+  rows = [{ role: 'Driver', capabilityKey: 'Invoicing', isVisible: false }];
+});
 
 function renderDrawer(open = true) {
   return render(
@@ -54,14 +62,30 @@ describe('RoleCapabilitiesDrawer', () => {
     expect(adminBoxes.every((box) => box.hasAttribute('disabled'))).toBe(true);
   });
 
-  // The seeding guard: the mocked rows hide Invoicing from Driver, so that one box must start
-  // unchecked while an unstored pair starts checked under default-allow. A seed that ignored
-  // the query data would leave both checked and still pass every other test here.
-  it('seeds the checkboxes from the stored rows', () => {
+  // The regression that shipped: rows arrive with `role` as the string 'Driver', while the cells
+  // are keyed by the numeric enum. Keying stored rows without resolving that meant every saved
+  // denial read back as default-allow — the UI looked as though nothing had been saved.
+  it('reads stored rows whose role arrives as a string, not the numeric enum', () => {
     renderDrawer();
 
     expect(screen.getByRole('checkbox', { name: 'Fakturace – Řidič' })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Rozpis nakládky – Řidič' })).toBeChecked();
+  });
+
+  it('reads stored rows whose role arrives as the numeric enum', () => {
+    rows = [{ role: UserRoleType.Driver, capabilityKey: 'Invoicing', isVisible: false }];
+    renderDrawer();
+
+    expect(screen.getByRole('checkbox', { name: 'Fakturace – Řidič' })).not.toBeChecked();
+  });
+
+  // The backend matches capability keys case-insensitively, so a row stored with different
+  // casing must still be reflected here rather than silently reading as visible.
+  it('reads a stored row whose capability key differs only by case', () => {
+    rows = [{ role: 'Driver', capabilityKey: 'invoicing', isVisible: false }];
+    renderDrawer();
+
+    expect(screen.getByRole('checkbox', { name: 'Fakturace – Řidič' })).not.toBeChecked();
   });
 
   it('sends the whole set on save, including rows left untouched', () => {

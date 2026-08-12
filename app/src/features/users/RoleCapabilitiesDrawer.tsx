@@ -51,12 +51,33 @@ function groups(): { heading: string; items: CapabilityMeta[] }[] {
 /** Key for the local edit map. */
 const cellKey = (role: UserRoleType, capabilityKey: string) => `${role}:${capabilityKey}`;
 
+// Enums are numeric in the generated client but arrive as strings on the wire (Program.cs
+// registers JsonStringEnumConverter) — resolve both, the same way permissionModel.ts does for
+// ModuleType. Skipping this is silent: the row keys simply never match the cell keys, every cell
+// falls back to default-allow, and a saved denial looks like it was never saved.
+function roleFromApi(role: UserRoleType | string | number | undefined): UserRoleType | undefined {
+  if (role == null) return undefined;
+  if (typeof role === 'number') return role;
+  const parsed = UserRoleType[role as keyof typeof UserRoleType];
+  return typeof parsed === 'number' ? parsed : undefined;
+}
+
+/** The registry key matching `stored`, ignoring case — the backend compares keys
+ *  case-insensitively, so a row saved with different casing must still be read here. */
+function registryKeyOf(storedKey: string): string | undefined {
+  return CAPABILITY_REGISTRY.find(
+    (capability) => capability.key.toLowerCase() === storedKey.toLowerCase(),
+  )?.key;
+}
+
 /** Visibility as stored, keyed per cell. Absent means default-allow, i.e. visible. */
 function storedVisibility(rows: RoleCapabilityDto[]): Map<string, boolean> {
   const map = new Map<string, boolean>();
   for (const row of rows) {
-    if (row.capabilityKey && row.role !== undefined) {
-      map.set(cellKey(row.role, row.capabilityKey), row.isVisible ?? true);
+    const role = roleFromApi(row.role);
+    const key = row.capabilityKey ? registryKeyOf(row.capabilityKey) : undefined;
+    if (role !== undefined && key) {
+      map.set(cellKey(role, key), row.isVisible ?? true);
     }
   }
   return map;
