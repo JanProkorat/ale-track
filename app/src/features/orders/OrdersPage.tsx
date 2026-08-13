@@ -26,9 +26,9 @@ import { OrderDetail } from './OrderDetail';
 import { sortOrdersNewestFirst } from './orderSort';
 import { OrderEditor } from './OrderEditor';
 
-// Hash-based avatar tint per client name (OrderListItemDto has no client id,
-// only a denormalized name) — same deterministic-hash approach ClientsPage
-// uses so a client's color stays stable across renders.
+// Hash-based avatar tint per client name — same deterministic-hash approach
+// ClientsPage uses, so a client's color stays stable across renders and matches
+// what the clients list shows for the same name.
 const AVATAR_COLORS = ['#F08C00', '#0E7C9B', '#7C3AED', '#15873F', '#C22A2A', '#B4620A', '#0891B2', '#DB2777'];
 function colorFor(str: string): string {
   let h = 0;

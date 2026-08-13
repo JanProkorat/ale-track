@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import {
   Box, Card, Stack, Typography, Button, IconButton, Chip, Tabs, Tab,
 } from '@mui/material';
@@ -15,15 +15,15 @@ import PhoneIcon from '@mui/icons-material/PhoneOutlined';
 import { PointMap } from 'src/components/common/PointMap';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
-import { EmptyState } from 'src/components/common/EmptyState';
-import { countryLabel, regionLabel, contactTypeLabel, isEmailContact } from 'src/lib/labels';
+import { countryLabel, regionLabel, contactTypeLabel, isEmailContact, orderStateName } from 'src/lib/labels';
 import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/generated/api-client';
 import { useClientReminders } from 'src/hooks/useClientReminders';
+import { useClientOrders } from 'src/hooks/useOrders';
+import { type SubTab } from './clientDetailTab';
+import { ClientOrdersPanel } from './ClientOrdersPanel';
 import { RemindersPanel } from './RemindersPanel';
 import { NotesPanel } from './NotesPanel';
 import { DeliveryPlacesPanel } from './DeliveryPlacesPanel';
-
-type SubTab = 'info' | 'orders' | 'reminders' | 'notes';
 
 function formatZip(zip?: string): string {
   const z = (zip ?? '').replace(/\s/g, '');
@@ -106,12 +106,23 @@ function ContactTile({ c }: { c: ClientContactDto }) {
 export function ClientDetail({
   client,
   editable,
+  canSeeOrders,
+  tab,
+  onTabChange,
   onBack,
   onEdit,
   onDelete,
 }: {
   client: ClientDto;
   editable: boolean;
+  /** Resolved by the page, same as `editable`, so the detail stays renderable
+   * without an auth provider. Gates the Objednávky tab and its query — the
+   * orders endpoint answers 403 to a caller without the module. */
+  canSeeOrders: boolean;
+  /** Which sub-tab is open. Lifted to the page so it lives in the URL: an order
+   * opened from the Objednávky tab returns to that tab, not to Info. */
+  tab: SubTab;
+  onTabChange: (tab: SubTab) => void;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -119,8 +130,16 @@ export function ClientDetail({
   const clientId = client.id!;
   const reminders = useClientReminders(clientId);
   const reminderRows = reminders.data ?? [];
+  const orders = useClientOrders(canSeeOrders ? clientId : undefined);
+  const orderRows = orders.data ?? [];
+  const openOrderCount = orderRows.filter((o) => {
+    const state = orderStateName(o.state);
+    return state !== 'Finished' && state !== 'Cancelled';
+  }).length;
 
-  const [tab, setTab] = useState<SubTab>('info');
+  // A `?tab=orders` URL from a caller without the Objednávky module has no tab
+  // to open — fall back rather than leaving Tabs pointed at a missing value.
+  const activeTab = tab === 'orders' && !canSeeOrders ? 'info' : tab;
 
   const contacts = client.contacts ?? [];
   const contactSame = !client.contactAddress || addressesEqual(client.officialAddress, client.contactAddress);
@@ -150,15 +169,17 @@ export function ClientDetail({
       />
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tab} onChange={(_e, v: SubTab) => setTab(v)} variant="scrollable" scrollButtons="auto">
+        <Tabs value={activeTab} onChange={(_e, v: SubTab) => onTabChange(v)} variant="scrollable" scrollButtons="auto">
           <Tab value="info" iconPosition="start" icon={<InfoIcon fontSize="small" />} label="Info a kontakty" sx={{ minHeight: 48 }} />
-          <Tab value="orders" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Objednávky', 0)} sx={{ minHeight: 48 }} />
+          {canSeeOrders && (
+            <Tab value="orders" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Objednávky', orderRows.length)} sx={{ minHeight: 48 }} />
+          )}
           <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
         </Tabs>
       </Box>
 
-      {tab === 'info' && (
+      {activeTab === 'info' && (
         <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
           <TitledCard
             title="Fakturační adresa"
@@ -207,8 +228,10 @@ export function ClientDetail({
 
           <TitledCard title="Aktivita">
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-              <PrehledTile label="Objednávek" value={0} icon={<ReceiptIcon />} />
-              <PrehledTile label="Otevřených" value={0} icon={<ScheduleIcon />} />
+              {/* Dashes rather than zeros without the Objednávky module: the counts
+                  are unknown to this caller, not empty. */}
+              <PrehledTile label="Objednávek" value={canSeeOrders ? orderRows.length : '—'} icon={<ReceiptIcon />} />
+              <PrehledTile label="Otevřených" value={canSeeOrders ? openOrderCount : '—'} icon={<ScheduleIcon />} />
             </Stack>
           </TitledCard>
 
@@ -240,13 +263,11 @@ export function ClientDetail({
         </Box>
       )}
 
-      {tab === 'orders' && (
-        <EmptyState icon={<ReceiptIcon />} title="Objednávky" description="Modul objednávek se připravuje." />
-      )}
+      {activeTab === 'orders' && canSeeOrders && <ClientOrdersPanel clientId={clientId} />}
 
-      {tab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
+      {activeTab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
 
-      {tab === 'notes' && <NotesPanel clientId={clientId} editable={editable} />}
+      {activeTab === 'notes' && <NotesPanel clientId={clientId} editable={editable} />}
     </Box>
   );
 }

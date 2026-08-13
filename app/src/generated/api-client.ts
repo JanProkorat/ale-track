@@ -14352,6 +14352,7 @@ export class OrderListItemDto implements IOrderListItemDto {
     createdDate?: Date;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
+    clientId?: string;
     clientName?: string;
     planningState?: PlanningState;
 
@@ -14371,6 +14372,7 @@ export class OrderListItemDto implements IOrderListItemDto {
             this.createdDate = _data["createdDate"] ? new Date(_data["createdDate"].toString()) : undefined as any;
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
+            this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
             this.planningState = _data["planningState"];
         }
@@ -14390,6 +14392,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data["createdDate"] = this.createdDate ? this.createdDate.toISOString() : undefined as any;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
+        data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
         data["planningState"] = this.planningState;
         return data;
@@ -14402,6 +14405,7 @@ export interface IOrderListItemDto {
     createdDate?: Date;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
+    clientId?: string;
     clientName?: string;
     planningState?: PlanningState;
 }
