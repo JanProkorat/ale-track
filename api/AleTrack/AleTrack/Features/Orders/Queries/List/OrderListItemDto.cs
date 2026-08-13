@@ -34,6 +34,12 @@ public sealed record OrderListItemDto
     public DateOnly? ActualDeliveryDate { get; set; }
 
     /// <summary>
+    /// Public ID of the related client — lets the list be filtered down to one
+    /// client (the client detail's order tab) without matching on the name.
+    /// </summary>
+    public Guid ClientId { get; set; }
+
+    /// <summary>
     /// Name of the related client
     /// </summary>
     public string ClientName { get; set; } = null!;

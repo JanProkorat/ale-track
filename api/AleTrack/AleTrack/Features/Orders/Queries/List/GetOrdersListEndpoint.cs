@@ -52,6 +52,7 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
                 CreatedDate = o.CreatedDate,
                 RequiredDeliveryDate = o.RequiredDeliveryDate,
                 ActualDeliveryDate = o.ActualDeliveryDate,
+                ClientId = o.Client.PublicId,
                 ClientName = o.Client.Name,
                 PlanningState = o.PlanningState
             })

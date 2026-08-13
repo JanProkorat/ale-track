@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Card, Chip, Stack, Typography } from '@mui/material';
 import { useQueries } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -27,6 +27,7 @@ import { type AddressDto, type ClientDto, type ClientListItemDto } from 'src/gen
 import { useClients, useClient, useDeleteClient } from 'src/hooks/useClients';
 import { PATHS } from 'src/routes/paths';
 import { ClientDetail } from './ClientDetail';
+import { clientDetailTab, type SubTab } from './clientDetailTab';
 import { ClientFormDrawer } from './ClientFormDrawer';
 
 // Hash-based avatar tint per client id (matches the prototype's `colorFor`) —
@@ -52,12 +53,28 @@ function addrOneLine(a?: AddressDto): string {
 }
 
 export function ClientsPage() {
-  const { canEdit } = useAuth();
+  const { canEdit, canSee } = useAuth();
   const editable = canEdit('clients');
   const { enqueueSnackbar } = useSnackbar();
   const ds = useDataSource();
   const navigate = useNavigate();
   const { id: selectedId } = useParams();
+
+  // The detail's open sub-tab lives in the URL (`?tab=orders`, as the prototype
+  // has it), so a detour into an order detail can come back to the tab it left
+  // from and a bookmarked tab survives a refresh. Replace, not push: switching
+  // tabs should not put a step between the detail and the list for the back arrow.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailTab = clientDetailTab(searchParams.get('tab'));
+  const selectTab = (next: SubTab) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'info') {
+      params.delete('tab');
+    } else {
+      params.set('tab', next);
+    }
+    setSearchParams(params, { replace: true });
+  };
 
   const list = useClients();
   const clients = useMemo(() => list.data ?? [], [list.data]);
@@ -270,6 +287,9 @@ export function ClientsPage() {
             <ClientDetail
               client={client}
               editable={editable}
+              canSeeOrders={canSee('orders')}
+              tab={detailTab}
+              onTabChange={selectTab}
               onBack={() => navigate(PATHS.clients)}
               onEdit={openEdit}
               onDelete={() => setConfirmDelete(true)}
