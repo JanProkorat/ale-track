@@ -1,10 +1,10 @@
 // Header and card composition of the order detail: which date the header shows
 // at each stage, and which cards exist now that Klient and Doručení are gone.
 
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderReturnDto, OrderState } from 'src/generated/api-client';
+import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OutgoingShipmentState } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -30,10 +30,32 @@ function order(over: Partial<OrderDto> = {}): OrderDto {
   });
 }
 
-function renderDetail(o: OrderDto, backLabel?: string) {
+function shipment(over: Partial<OrderOutgoingShipmentDto> = {}): OrderOutgoingShipmentDto {
+  return new OrderOutgoingShipmentDto({
+    id: 'ship-0000-0000-0000-00002a',
+    name: 'Severní trasa',
+    state: OutgoingShipmentState.InTransit,
+    deliveryDate: new Date('2026-08-12T00:00:00Z'),
+    stopOrder: 3,
+    stopCount: 7,
+    vehicleName: '3A2 1234',
+    driverNames: ['Jan Novák'],
+    ...over,
+  });
+}
+
+function renderDetail(o: OrderDto, backLabel?: string, onOpenShipment?: (id: string) => void) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <OrderDetail order={o} editable onBack={vi.fn()} backLabel={backLabel} onEdit={vi.fn()} onDelete={vi.fn()} />
+      <OrderDetail
+        order={o}
+        editable
+        onBack={vi.fn()}
+        backLabel={backLabel}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenShipment={onOpenShipment}
+      />
     </MuiThemeProvider>,
   );
 }
@@ -59,7 +81,7 @@ describe('OrderDetail — the back arrow', () => {
 function cardTitles(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('.MuiCard-root'))
     .map((card) => card.querySelector('p, h6')?.textContent ?? '')
-    .filter((t) => ['Položky', 'Vratky', 'Položky navíc', 'Poznámky', 'Doručení', 'Klient'].includes(t));
+    .filter((t) => ['Položky', 'Vratky', 'Položky navíc', 'Poznámky', 'Doručení', 'Klient', 'Vývoz'].includes(t));
 }
 
 /** The two-column grid wrapping the items card and the sidebar. */
@@ -201,6 +223,66 @@ describe('OrderDetail', () => {
       } as unknown as OrderDeliveryAddressDto,
     }));
     expect(screen.getByText(/Hlavní 1/)).toBeInTheDocument();
+  });
+
+  it('shows the shipment card and header chip when the order is on a vývoz', () => {
+    const { container } = renderDetail(order({ outgoingShipment: shipment() }), undefined, vi.fn());
+
+    expect(cardTitles(container)).toContain('Vývoz');
+    expect(screen.getByText('Severní trasa')).toBeInTheDocument();
+    expect(screen.getByText(/12\. 8\. 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/Jan Novák · 3A2 1234/)).toBeInTheDocument();
+    expect(screen.getByText('Zastávka 3 z 7')).toBeInTheDocument();
+    // The chip repeats the run number in the header, where the rest of the
+    // order's identity sits.
+    const header = screen.getByTestId('detail-header');
+    expect(within(header).getByText('Vývoz #00002A')).toBeInTheDocument();
+  });
+
+  it('opens the vývoz from both the card button and the header chip', () => {
+    const onOpenShipment = vi.fn();
+    renderDetail(order({ outgoingShipment: shipment() }), undefined, onOpenShipment);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Otevřít vývoz' }));
+    fireEvent.click(within(screen.getByTestId('detail-header')).getByText('Vývoz #00002A'));
+
+    expect(onOpenShipment).toHaveBeenCalledTimes(2);
+    expect(onOpenShipment).toHaveBeenNthCalledWith(1, 'ship-0000-0000-0000-00002a');
+    expect(onOpenShipment).toHaveBeenNthCalledWith(2, 'ship-0000-0000-0000-00002a');
+  });
+
+  it('says nothing about vývozy when the order is not planned onto one', () => {
+    const { container } = renderDetail(order({ outgoingShipment: undefined }), undefined, vi.fn());
+
+    expect(cardTitles(container)).not.toContain('Vývoz');
+    expect(screen.queryByRole('button', { name: 'Otevřít vývoz' })).not.toBeInTheDocument();
+  });
+
+  // The page leaves the handler out for a user who cannot see the Vývozy
+  // module, and that is what hides the link — not a separate flag.
+  it('hides card and chip when the user may not open vývozy', () => {
+    const { container } = renderDetail(order({ outgoingShipment: shipment() }));
+
+    expect(cardTitles(container)).not.toContain('Vývoz');
+    expect(screen.queryByText('Severní trasa')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('detail-header')).queryByText(/Vývoz #/)).not.toBeInTheDocument();
+  });
+
+  it('counts the shipment toward the sidebar, so the grid keeps two columns', () => {
+    const { container } = renderDetail(order({ outgoingShipment: shipment() }), undefined, vi.fn());
+
+    expect(gridCss(container)).toContain('1.5fr 1fr');
+  });
+
+  it('tolerates a run with no date and no crew assigned yet', () => {
+    renderDetail(
+      order({ outgoingShipment: shipment({ deliveryDate: undefined, driverNames: [], vehicleName: undefined }) }),
+      undefined,
+      vi.fn(),
+    );
+
+    expect(screen.getByText('termín neurčen')).toBeInTheDocument();
+    expect(screen.getByText('Zastávka 3 z 7')).toBeInTheDocument();
   });
 
   it('shows the place name and driver note for a delivery place', () => {

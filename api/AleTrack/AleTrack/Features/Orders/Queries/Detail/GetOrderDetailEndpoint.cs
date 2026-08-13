@@ -133,7 +133,29 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         Note = e.Note,
                         IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                     })
-                    .ToList()
+                    .ToList(),
+                // Shipments carry no global soft-delete filter, so a cancelled run
+                // has to be excluded here — an order whose run was cancelled is
+                // back to being unplanned and shows no shipment at all.
+                OutgoingShipment =
+                    o.OutgoingShipmentStop == null
+                    || o.OutgoingShipmentStop.OutgoingShipment.State == OutgoingShipmentState.Cancelled
+                        ? null
+                        : new OrderOutgoingShipmentDto
+                        {
+                            Id = o.OutgoingShipmentStop.OutgoingShipment.PublicId,
+                            Name = o.OutgoingShipmentStop.OutgoingShipment.Name,
+                            State = o.OutgoingShipmentStop.OutgoingShipment.State,
+                            DeliveryDate = o.OutgoingShipmentStop.OutgoingShipment.DeliveryDate,
+                            StopOrder = o.OutgoingShipmentStop.Order,
+                            StopCount = o.OutgoingShipmentStop.OutgoingShipment.Stops.Count,
+                            VehicleName = o.OutgoingShipmentStop.OutgoingShipment.Vehicle != null
+                                ? o.OutgoingShipmentStop.OutgoingShipment.Vehicle.Name
+                                : null,
+                            DriverNames = o.OutgoingShipmentStop.OutgoingShipment.Drivers
+                                .Select(d => d.Driver.FirstName + " " + d.Driver.LastName)
+                                .ToList()
+                        }
             })
             .FirstOrDefaultAsync(ct);
         

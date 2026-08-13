@@ -14430,6 +14430,7 @@ export class OrderDto implements IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
         if (data) {
@@ -14469,6 +14470,7 @@ export class OrderDto implements IOrderDto {
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
             }
+            this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
     }
 
@@ -14508,6 +14510,7 @@ export class OrderDto implements IOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
 }
@@ -14524,6 +14527,7 @@ export interface IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 
 export class ClientInfoDto implements IClientInfoDto {
@@ -14637,6 +14641,78 @@ export interface IOrderItemDto {
 export enum OrderItemReminderState {
     Added = 0,
     Resolved = 1,
+}
+
+export class OrderOutgoingShipmentDto implements IOrderOutgoingShipmentDto {
+    id?: string;
+    name?: string;
+    state?: OutgoingShipmentState;
+    deliveryDate?: Date | undefined;
+    stopOrder?: number;
+    stopCount?: number;
+    vehicleName?: string | undefined;
+    driverNames?: string[];
+
+    constructor(data?: IOrderOutgoingShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.state = _data["state"];
+            this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
+            this.stopOrder = _data["stopOrder"];
+            this.stopCount = _data["stopCount"];
+            this.vehicleName = _data["vehicleName"];
+            if (Array.isArray(_data["driverNames"])) {
+                this.driverNames = [] as any;
+                for (let item of _data["driverNames"])
+                    this.driverNames!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): OrderOutgoingShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderOutgoingShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["state"] = this.state;
+        data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
+        data["stopOrder"] = this.stopOrder;
+        data["stopCount"] = this.stopCount;
+        data["vehicleName"] = this.vehicleName;
+        if (Array.isArray(this.driverNames)) {
+            data["driverNames"] = [];
+            for (let item of this.driverNames)
+                data["driverNames"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface IOrderOutgoingShipmentDto {
+    id?: string;
+    name?: string;
+    state?: OutgoingShipmentState;
+    deliveryDate?: Date | undefined;
+    stopOrder?: number;
+    stopCount?: number;
+    vehicleName?: string | undefined;
+    driverNames?: string[];
 }
 
 export class GetOrderDetailRequest implements IGetOrderDetailRequest {

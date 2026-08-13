@@ -953,3 +953,32 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getAllByTestId('nakladka-row').length).toBeGreaterThan(0);
   });
 });
+
+describe('ShipmentDetail — the back arrow', () => {
+  function renderWithBackLabel(backLabel?: string) {
+    const shipment = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [], stops: [],
+    });
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentDetail shipment={shipment} editable={false} onBack={vi.fn()} backLabel={backLabel} onEdit={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  it('goes back to the vývozy list by default', () => {
+    renderWithBackLabel();
+
+    expect(screen.getByRole('button', { name: 'Zpět na vývozy' })).toBeInTheDocument();
+  });
+
+  // A vývoz opened from an order's Vývoz card returns to that order, so the
+  // arrow has to say so — on a phone its label is the only cue for where Back
+  // leads. Hardcoding "Zpět na vývozy" here dropped the caller silently.
+  it('names the caller screen when one was passed', () => {
+    renderWithBackLabel('Zpět na objednávku');
+
+    expect(screen.getByRole('button', { name: 'Zpět na objednávku' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zpět na vývozy' })).not.toBeInTheDocument();
+  });
+});
