@@ -25,7 +25,7 @@ public sealed class DeliveredLineQueryTests
             lines: [new(ProductKind.Bottle, ProductType.PaleLager, 0.5, quantity: 20)]);
 
         var before = await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync();
 
         var product = f.OrderItems.Single().Product;
@@ -34,7 +34,7 @@ public sealed class DeliveredLineQueryTests
         product.PriceWithVat = 99m;
 
         var after = await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync();
 
         after.Should().BeEquivalentTo(before, "a product edit must not restate delivered history");
@@ -54,7 +54,7 @@ public sealed class DeliveredLineQueryTests
         f.Client.Region = Region.Berlin;
 
         var rows = await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync();
 
         rows.Single().ClientName.Should().Be("Hospoda U Kotvy");
@@ -77,7 +77,7 @@ public sealed class DeliveredLineQueryTests
         f.Brewery.Name = "Přejmenovaný pivovar";
 
         var row = (await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync()).Single();
 
         row.BreweryColor.Should().Be("#123456", "colour is presentation and follows the brewery");
@@ -97,7 +97,7 @@ public sealed class DeliveredLineQueryTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, 50, quantity: 2)]);
 
         var row = (await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync()).Single();
 
         row.WeightKg.Should().BeGreaterThan(0m);
@@ -112,7 +112,7 @@ public sealed class DeliveredLineQueryTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, 50, quantity: 2)]);
 
         var rows = await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync();
 
         rows.Should().BeEmpty();
@@ -127,7 +127,7 @@ public sealed class DeliveredLineQueryTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, 50, quantity: 2)]);
 
         var rows = await DeliveredLineQuery
-            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31))
+            .Project(f.DbContext.Object, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), DriverReportScope.Unscoped)
             .ToListAsync();
 
         rows.Should().BeEmpty();

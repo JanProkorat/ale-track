@@ -18,7 +18,7 @@ public sealed record GetClientVolumeRequest : ReportWindowRequest;
 /// the unmapped <c>Product.Weight</c> equivalent, so only the row projection runs in SQL.
 /// v1 counts order-line products only — client/custom extra items are out of scope (see spec).
 /// </remarks>
-public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext)
+public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
     : Endpoint<GetClientVolumeRequest, ClientVolumeReportDto>
 {
     /// <inheritdoc />
@@ -41,7 +41,13 @@ public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetClientVolumeRequest req, CancellationToken ct)
     {
-        var rows = await DeliveredLineQuery.Project(dbContext, req.From, req.To).ToListAsync(ct);
+        // A driver's report is restricted to their own delivered work; office staff and admins
+        // are unrestricted, so the driver id is resolved only when scoping actually applies.
+        var scope = driverScope.IsScoped
+            ? new DriverReportScope(true, await driverScope.GetDriverIdAsync(ct))
+            : DriverReportScope.Unscoped;
+
+        var rows = await DeliveredLineQuery.Project(dbContext, req.From, req.To, scope).ToListAsync(ct);
 
         var topClients = rows
             .GroupBy(r => new { r.ClientPublicId, r.ClientName, r.ClientRegion })

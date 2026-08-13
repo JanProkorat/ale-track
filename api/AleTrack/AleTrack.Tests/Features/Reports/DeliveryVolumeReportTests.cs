@@ -67,7 +67,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             ]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         // Act
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
@@ -112,7 +112,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
@@ -135,7 +135,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
@@ -158,7 +158,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
@@ -179,7 +179,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 1)]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
@@ -201,7 +201,7 @@ public sealed class GetDeliveryVolumeEndpointTests
             lines: [new(ProductKind.Multipack, ProductType.Mix, packageSize: 6, quantity: 4)]);
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
@@ -220,7 +220,7 @@ public sealed class GetDeliveryVolumeEndpointTests
         var dbContext = AleTrackDbContextMockFactory.CreateMock();
 
         var endpoint = EndpointWithResponseBuilder<GetDeliveryVolumeRequest,
-            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(dbContext.Object);
+            DeliveryVolumeReportDto, GetDeliveryVolumeEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(new GetDeliveryVolumeRequest
         {
