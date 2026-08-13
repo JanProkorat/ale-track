@@ -1061,6 +1061,7 @@ export function ShipmentDetail({
   canSeeInvoicing = false,
   canSeeLoadingBreakdown = false,
   onBack,
+  backLabel = 'Zpět na vývozy',
   onEdit,
   onOpenOrder,
 }: {
@@ -1075,6 +1076,9 @@ export function ShipmentDetail({
    *  canSeeInvoicing above. */
   canSeeLoadingBreakdown?: boolean;
   onBack: () => void;
+  /** Overridden when the vývoz was opened from another screen and Back returns
+   *  there — see `DetailBackState`. */
+  backLabel?: string;
   onEdit: () => void;
   /** Navigates to a stop's source order. Left out when the user has no access
    *  to the Objednávky module, which hides the affordance entirely. */
@@ -1421,7 +1425,7 @@ export function ShipmentDetail({
     <Box>
       <DetailHeader
         onBack={onBack}
-        backLabel="Zpět na vývozy"
+        backLabel={backLabel}
         title={shipment.name}
         lead={shipmentNumber(shipment.id)}
         leadMono

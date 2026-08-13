@@ -21,7 +21,7 @@ import { type OrderListItemDto } from 'src/generated/api-client';
 import { useOrders, useOrder, useDeleteOrder } from 'src/hooks/useOrders';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
-import { detailBackState } from 'src/routes/backNav';
+import { detailBackState, type DetailBackState } from 'src/routes/backNav';
 import { OrderDetail } from './OrderDetail';
 import { sortOrdersNewestFirst } from './orderSort';
 import { OrderEditor } from './OrderEditor';
@@ -51,7 +51,7 @@ const SEGMENTS: [StatusFilter, string][] = [
 ];
 
 export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
-  const { canEdit } = useAuth();
+  const { canEdit, canSee } = useAuth();
   const editable = canEdit('orders');
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
@@ -238,6 +238,16 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
               backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.orders}/${id}/edit`)}
               onDelete={() => setConfirmCancelId(id)}
+              // The vývoz is opened as a detour from this order, so it carries
+              // the way back — the mirror of how a vývoz opens its orders.
+              onOpenShipment={canSee('shipments')
+                ? (shipmentId) => navigate(`${PATHS.shipments}/${shipmentId}`, {
+                  state: {
+                    backTo: `${PATHS.orders}/${id}`,
+                    backLabel: 'Zpět na objednávku',
+                  } satisfies DetailBackState,
+                })
+                : undefined}
             />
           )}
         </QueryBoundary>

@@ -11,14 +11,16 @@ import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForwardOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtDate, orderNumber } from 'src/lib/format';
-import { ORDER_STATUS, orderStateName, reminderStateName, reminderStateValue } from 'src/lib/labels';
-import { OrderItemReminderState, type OrderDto } from 'src/generated/api-client';
+import { fmtDate, orderNumber, shipmentNumber } from 'src/lib/format';
+import { ORDER_STATUS, SHIP_STATUS, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
+import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
 import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
 
@@ -50,6 +52,52 @@ function StatusFlow({ stateName }: { stateName: string }) {
   );
 }
 
+/** The vývoz carrying this order: which run, when it goes, who drives it, and
+ *  where in the route this stop sits. Mirrors the shipment detail's order list,
+ *  which links the other way. */
+function ShipmentCard({ shipment, onOpen }: { shipment: OrderOutgoingShipmentDto; onOpen: () => void }) {
+  const status = SHIP_STATUS[shipStateName(shipment.state) ?? 'Created'] ?? SHIP_STATUS.Created;
+  const drivers = shipment.driverNames ?? [];
+  // Crew and vehicle are both assigned late, so either can still be missing.
+  const crew = [drivers.join(', '), shipment.vehicleName].filter(Boolean).join(' · ');
+
+  return (
+    <CollapsibleCard
+      title="Vývoz"
+      icon={<LocalShippingOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
+    >
+      <Box sx={{ px: 2.5, py: 2 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+          <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14 }}>
+            {shipmentNumber(shipment.id)}
+          </Typography>
+          <StatusPill tone={status.tone} label={status.label} />
+        </Stack>
+
+        <Typography sx={{ fontWeight: 700 }}>{shipment.name}</Typography>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          {shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen'}
+          {crew && ` · ${crew}`}
+        </Typography>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          Zastávka {shipment.stopOrder} z {shipment.stopCount}
+        </Typography>
+
+        <Button
+          variant="outlined"
+          endIcon={<ArrowForwardIcon />}
+          onClick={onOpen}
+          sx={{ mt: 1.5, color: 'text.primary', borderColor: 'divider', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+        >
+          Otevřít vývoz
+        </Button>
+      </Box>
+    </CollapsibleCard>
+  );
+}
+
 export function OrderDetail({
   order,
   editable,
@@ -57,6 +105,7 @@ export function OrderDetail({
   backLabel = 'Zpět na objednávky',
   onEdit,
   onDelete,
+  onOpenShipment,
 }: {
   order: OrderDto;
   editable: boolean;
@@ -66,6 +115,11 @@ export function OrderDetail({
   backLabel?: string;
   onEdit: () => void;
   onDelete: () => void;
+  /** Opens the vývoz carrying this order. Left undefined when the user cannot
+   *  see the Vývozy module, which hides the shipment chip and card outright —
+   *  resolved by the page, like `editable`, so the detail stays renderable
+   *  without an auth provider. */
+  onOpenShipment?: (shipmentId: string) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const setReminderState = useSetOrderItemReminderState();
@@ -101,8 +155,14 @@ export function OrderDetail({
 
   const menuState = menu ? reminderStateName(effState(menu.itemId, items.find((x) => x.id === menu.itemId)?.reminderState)) : 'None';
 
-  // Both sidebar cards hide when empty, so the whole column can be absent.
-  const hasSidebar = returns.length > 0 || extras.length > 0 || notes.length > 0;
+  // Shown only when the order is actually on a run and the user may open it;
+  // an unplanned order (or a cancelled run, which the API projects as none)
+  // says nothing about vývozy at all.
+  const shipment = order.outgoingShipment && onOpenShipment ? order.outgoingShipment : undefined;
+  const openShipment = () => shipment?.id && onOpenShipment?.(shipment.id);
+
+  // Every sidebar card hides when empty, so the whole column can be absent.
+  const hasSidebar = returns.length > 0 || extras.length > 0 || notes.length > 0 || shipment !== undefined;
 
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
@@ -138,6 +198,16 @@ export function OrderDetail({
             <Chip size="small" label={order.deliveryAddress.placeName} sx={{ fontWeight: 700, height: 20 }} />
           ),
           order.deliveryAddress?.placeNote,
+          shipment && (
+            <Chip
+              size="small"
+              clickable
+              onClick={openShipment}
+              icon={<LocalShippingOutlinedIcon sx={{ fontSize: 15 }} />}
+              label={`Vývoz ${shipmentNumber(shipment.id)}`}
+              sx={{ fontWeight: 700, height: 20 }}
+            />
+          ),
         ]}
         actions={(
           <>
@@ -205,6 +275,8 @@ export function OrderDetail({
 
         {hasSidebar && (
         <Stack spacing={2}>
+          {shipment && <ShipmentCard shipment={shipment} onOpen={openShipment} />}
+
           {returns.length > 0 && (
             <CollapsibleCard
               title="Vratky"

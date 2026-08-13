@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Box, Card, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
@@ -18,7 +18,7 @@ import { useShipments, useShipment } from 'src/hooks/useShipments';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { PATHS } from 'src/routes/paths';
 import { backOrReplace } from 'src/routes/editorNav';
-import { type DetailBackState } from 'src/routes/backNav';
+import { detailBackState, type DetailBackState } from 'src/routes/backNav';
 import { ShipmentDetail } from './ShipmentDetail';
 import { ShipmentEditor } from './ShipmentEditor';
 
@@ -29,7 +29,12 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
   const { canEdit, canSee, can, isDriverScoped } = useAuth();
   const editable = canEdit('shipments');
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+
+  // Set when the detail was opened from another screen (an order's vývoz card)
+  // — that screen, not the vývozy list, is where Back belongs.
+  const backTarget = detailBackState(location.state);
 
   const list = useShipments();
   const detail = useShipment(view ? undefined : id);
@@ -143,7 +148,8 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               // the screen stays renderable without an auth provider.
               canSeeInvoicing={can('Invoicing')}
               canSeeLoadingBreakdown={can('LoadingBreakdown')}
-              onBack={() => navigate(PATHS.shipments)}
+              onBack={() => navigate(backTarget?.backTo ?? PATHS.shipments)}
+              backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
               // The order is opened as a detour from this vývoz, so it carries
               // the way back with it — its own back arrow returns here rather

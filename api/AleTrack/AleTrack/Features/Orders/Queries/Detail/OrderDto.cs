@@ -65,6 +65,12 @@ public sealed record OrderDto
     /// Items the client wants that no brewery supplies
     /// </summary>
     public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// The outgoing shipment carrying this order. Null when the order is not
+    /// planned onto a run, or when the run it was on has been cancelled.
+    /// </summary>
+    public OrderOutgoingShipmentDto? OutgoingShipment { get; set; }
 }
 
 /// <summary>
