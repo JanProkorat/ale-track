@@ -15,6 +15,19 @@ export function useOrders(params: Record<string, string> = {}) {
   });
 }
 
+/** Orders of a single client — the client detail's Objednávky tab. Filters
+ * server-side on the client's public id rather than the denormalized name,
+ * which two clients are free to share. */
+export function useClientOrders(clientId: string | undefined) {
+  const ds = useDataSource();
+  const params = { clientId: `eq:${clientId}` };
+  return useQuery({
+    queryKey: qk.orders.list(params),
+    queryFn: ({ signal }) => ds.getOrdersListEndpoint(params, signal),
+    enabled: Boolean(clientId),
+  });
+}
+
 export function useOrder(id: string | undefined) {
   const ds = useDataSource();
   return useQuery({
