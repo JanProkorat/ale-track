@@ -29,10 +29,6 @@ function formatZip(zip?: string): string {
   const z = (zip ?? '').replace(/\s/g, '');
   return /^\d{5}$/.test(z) ? `${z.slice(0, 3)} ${z.slice(3)}` : (zip ?? '');
 }
-function addressesEqual(a?: AddressDto, b?: AddressDto): boolean {
-  if (!a || !b) return false;
-  return a.streetName === b.streetName && a.streetNumber === b.streetNumber && a.city === b.city && a.zip === b.zip && a.country === b.country;
-}
 
 /** Titled card matching the prototype: header band + padded body. Owns only the
  * body padding; CollapsibleCard supplies the band and the collapse behaviour. */
@@ -142,7 +138,6 @@ export function ClientDetail({
   const activeTab = tab === 'orders' && !canSeeOrders ? 'info' : tab;
 
   const contacts = client.contacts ?? [];
-  const contactSame = !client.contactAddress || addressesEqual(client.officialAddress, client.contactAddress);
 
   return (
     <Box>
@@ -195,17 +190,20 @@ export function ClientDetail({
             )}
           </TitledCard>
 
+          {/* The fallback text stands in only when there is no contact address at
+              all (prototype `addrCard`). One that happens to repeat the billing
+              address is still an address of its own, and gets its own map. */}
           <TitledCard
             title="Kontaktní adresa"
-            action={!contactSame && client.contactAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
+            action={client.contactAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
           >
-            {contactSame ? (
-              <Typography color="text.secondary">Shodná s fakturační adresou.</Typography>
-            ) : (
+            {client.contactAddress ? (
               <Stack spacing={1.5}>
-                <AddressBody a={client.contactAddress!} />
-                <PointMap lat={client.contactAddress!.latitude} lng={client.contactAddress!.longitude} color="#0E7C9B" />
+                <AddressBody a={client.contactAddress} />
+                <PointMap lat={client.contactAddress.latitude} lng={client.contactAddress.longitude} color="#0E7C9B" />
               </Stack>
+            ) : (
+              <Typography color="text.secondary">Shodná s fakturační adresou.</Typography>
             )}
           </TitledCard>
 
