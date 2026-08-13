@@ -24,7 +24,7 @@ public sealed record GetDeliveryVolumeRequest : ReportWindowRequest
 /// <c>Product.Weight</c> property, so it cannot be summed in SQL. Only the row projection runs
 /// on the server; the windows involved are small enough for this to be cheap.
 /// </remarks>
-public sealed class GetDeliveryVolumeEndpoint(AleTrackDbContext dbContext)
+public sealed class GetDeliveryVolumeEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
     : Endpoint<GetDeliveryVolumeRequest, DeliveryVolumeReportDto>
 {
     /// <inheritdoc />
@@ -47,7 +47,13 @@ public sealed class GetDeliveryVolumeEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetDeliveryVolumeRequest req, CancellationToken ct)
     {
-        var rows = await DeliveredLineQuery.Project(dbContext, req.From, req.To).ToListAsync(ct);
+        // A driver's report is restricted to their own delivered work; office staff and admins
+        // are unrestricted, so the driver id is resolved only when scoping actually applies.
+        var scope = driverScope.IsScoped
+            ? new DriverReportScope(true, await driverScope.GetDriverIdAsync(ct))
+            : DriverReportScope.Unscoped;
+
+        var rows = await DeliveredLineQuery.Project(dbContext, req.From, req.To, scope).ToListAsync(ct);
 
         var result = new DeliveryVolumeReportDto
         {

@@ -5,6 +5,19 @@ using AleTrack.Infrastructure.Persistence;
 namespace AleTrack.Features.Reports.Utils;
 
 /// <summary>
+/// Whether a report query is restricted to one driver's own work, and which driver. A scoped
+/// filter whose <see cref="DriverId"/> is null matches nothing — an account with the Driver
+/// role but no linked driver record sees an empty report, never the company's.
+/// </summary>
+/// <param name="IsScoped">True when the caller is a driver restricted to their own work.</param>
+/// <param name="DriverId">The caller's linked driver id, or null when unlinked.</param>
+public readonly record struct DriverReportScope(bool IsScoped, long? DriverId)
+{
+    /// <summary>Office staff and admins — no restriction.</summary>
+    public static DriverReportScope Unscoped => new(false, null);
+}
+
+/// <summary>
 /// One delivered order line, flattened. <see cref="PackageSize"/> travels instead of a weight
 /// because <c>Product.Weight</c> is an unmapped computed property — see <see cref="WeightKg"/>.
 /// </summary>
@@ -66,18 +79,29 @@ public static class DeliveredLineQuery
     /// untranslatable-property bug. <c>Moq.EntityFrameworkCore</c> mocks LINQ-to-objects, so this mistake
     /// passes tests and only fails against a real Npgsql provider.
     /// </remarks>
-    public static IQueryable<DeliveredLineRow> Project(AleTrackDbContext dbContext, DateOnly from, DateOnly to)
+    public static IQueryable<DeliveredLineRow> Project(
+        AleTrackDbContext dbContext, DateOnly from, DateOnly to, DriverReportScope scope)
     {
         // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
         var fromDate = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toDate = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        return dbContext.OutgoingShipmentStopItems
+        var query = dbContext.OutgoingShipmentStopItems
             .Where(si => si.Stop.Kind == OutgoingShipmentStopKind.Order
                          && si.Stop.OutgoingShipment.State == OutgoingShipmentState.Delivered
                          && si.Stop.OutgoingShipment.DeliveryDate != null
                          && si.Stop.OutgoingShipment.DeliveryDate >= fromDate
-                         && si.Stop.OutgoingShipment.DeliveryDate <= toDate)
+                         && si.Stop.OutgoingShipment.DeliveryDate <= toDate);
+
+        // A driver sees only lines carried on their own shipments. An unlinked driver's DriverId
+        // is null, which matches nothing — Drivers.DriverId is a non-nullable long, so
+        // comparing it against a null scope value can never match a row.
+        if (scope.IsScoped)
+        {
+            query = query.Where(si => si.Stop.OutgoingShipment.Drivers.Any(d => d.DriverId == scope.DriverId));
+        }
+
+        return query
             .Select(si => new DeliveredLineRow
             {
                 DeliveredAtUtc = si.Stop.OutgoingShipment.DeliveryDate!.Value,

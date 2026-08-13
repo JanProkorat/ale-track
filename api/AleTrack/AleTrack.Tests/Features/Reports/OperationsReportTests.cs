@@ -18,7 +18,7 @@ public sealed class GetOperationsEndpointTests
 
     private static GetOperationsEndpoint Endpoint(DeliveredShipmentFixture fixture) =>
         EndpointWithResponseBuilder<GetOperationsRequest, OperationsReportDto, GetOperationsEndpoint>
-            .Create(fixture.DbContext.Object);
+            .Create(fixture.DbContext.Object, DriverScopeMockFactory.Unscoped());
 
     [Fact]
     public async Task HandleAsync_CountsShipmentsByStateStopsAndDrivers()
@@ -268,7 +268,7 @@ public sealed class GetOperationsEndpointTests
         var dbContext = AleTrackDbContextMockFactory.CreateMock();
 
         var endpoint = EndpointWithResponseBuilder<GetOperationsRequest,
-            OperationsReportDto, GetOperationsEndpoint>.Create(dbContext.Object);
+            OperationsReportDto, GetOperationsEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         await endpoint.HandleAsync(Window(), CancellationToken.None);
 

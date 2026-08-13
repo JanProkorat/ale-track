@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Features.Products.Utils;
 using AleTrack.Features.Reports.Utils;
 using AleTrack.Infrastructure.Persistence;
@@ -20,7 +21,7 @@ public sealed record GetOperationsRequest : ReportWindowRequest;
 /// figure comes from <see cref="ProductWeightCalculator"/>, which EF Core cannot translate.
 /// v1 counts order-line products only on the outgoing side.
 /// </remarks>
-public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
+public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
     : Endpoint<GetOperationsRequest, OperationsReportDto>
 {
     /// <inheritdoc />
@@ -43,13 +44,28 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
     /// <inheritdoc />
     public override async Task HandleAsync(GetOperationsRequest req, CancellationToken ct)
     {
+        // A driver's report is restricted to their own delivered work; office staff and admins
+        // are unrestricted, so the driver id is resolved only when scoping actually applies.
+        var scope = driverScope.IsScoped
+            ? new DriverReportScope(true, await driverScope.GetDriverIdAsync(ct))
+            : DriverReportScope.Unscoped;
+
         // Kind=Utc is mandatory: DeliveryDate is timestamptz and Npgsql rejects Unspecified.
         var fromDate = req.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toDate = req.To.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         // Shipment-level facts. Projected flat so nothing computed leaks into SQL.
-        var shipments = await dbContext.OutgoingShipments
-            .Where(s => s.DeliveryDate != null && s.DeliveryDate >= fromDate && s.DeliveryDate <= toDate)
+        IQueryable<OutgoingShipment> shipmentsQuery = dbContext.OutgoingShipments
+            .Where(s => s.DeliveryDate != null && s.DeliveryDate >= fromDate && s.DeliveryDate <= toDate);
+
+        // A driver sees only the shipments they are assigned to. Drivers.DriverId is a
+        // non-nullable long, so an unlinked driver's null scope id matches nothing.
+        if (scope.IsScoped)
+        {
+            shipmentsQuery = shipmentsQuery.Where(s => s.Drivers.Any(d => d.DriverId == scope.DriverId));
+        }
+
+        var shipments = await shipmentsQuery
             .Select(s => new
             {
                 s.State,
@@ -74,12 +90,23 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
         var delivered = shipments.Where(s => s.State == OutgoingShipmentState.Delivered).ToList();
 
         // Punctuality over finished orders that actually carry a required date.
-        var punctuality = await dbContext.Orders
+        IQueryable<AleTrack.Entities.Order> punctualityQuery = dbContext.Orders
             .Where(o => o.State == OrderState.Finished
                         && o.RequiredDeliveryDate != null
                         && o.ActualDeliveryDate != null
                         && o.ActualDeliveryDate >= req.From
-                        && o.ActualDeliveryDate <= req.To)
+                        && o.ActualDeliveryDate <= req.To);
+
+        // A driver's punctuality figure counts only orders carried on their own shipments — an
+        // order qualifies when its stop belongs to a shipment the caller is assigned to.
+        if (scope.IsScoped)
+        {
+            punctualityQuery = punctualityQuery.Where(o =>
+                o.OutgoingShipmentStop != null
+                && o.OutgoingShipmentStop.OutgoingShipment.Drivers.Any(d => d.DriverId == scope.DriverId));
+        }
+
+        var punctuality = await punctualityQuery
             .Select(o => new { Required = o.RequiredDeliveryDate!.Value, Actual = o.ActualDeliveryDate!.Value })
             .ToListAsync(ct);
 
@@ -88,7 +115,7 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
             : Math.Round(punctuality.Count(p => p.Actual <= p.Required) * 100m / punctuality.Count, 1);
 
         // Outgoing weight per month, from the shared delivered-line projection.
-        var outgoingRows = await DeliveredLineQuery.Project(dbContext, req.From, req.To).ToListAsync(ct);
+        var outgoingRows = await DeliveredLineQuery.Project(dbContext, req.From, req.To, scope).ToListAsync(ct);
         var outgoingByMonth = outgoingRows
             .GroupBy(r => ReportBucketing.BucketStart(r.Date, ReportGranularity.Month))
             .ToDictionary(g => g.Key, g => g.Sum(r => r.WeightKg));
@@ -99,14 +126,25 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext)
         // matching the outgoing half above: DeliveredLineQuery reads the run's snapshot. Leaving
         // this side live left one series moving under a product edit while the other stayed put.
         // The formula stays live on both sides, so correcting it still reaches history.
-        var incomingRows = await dbContext.DeliveryItems
+        IQueryable<DeliveryItem> incomingRowsQuery = dbContext.DeliveryItems
             // Finished only, mirroring the outgoing side's delivered-only rule. The spec's
             // "delivered = actuals, not plans" principle applies to both sides of this chart:
             // counting planned or cancelled Dovozy against delivered Vyvozy would compare
             // unlike quantities on a shared axis.
             .Where(di => di.DeliveryStop.Delivery.State == ProductDeliveryState.Finished
                          && di.DeliveryStop.Delivery.Date >= req.From
-                         && di.DeliveryStop.Delivery.Date <= req.To)
+                         && di.DeliveryStop.Delivery.Date <= req.To);
+
+        // A driver's incoming series counts only deliveries they actually drove. ProductDelivery's
+        // Drivers navigation is a direct many-to-many to Driver, so the comparison is on Driver.Id
+        // — not Driver.DriverId, which does not exist on this side.
+        if (scope.IsScoped)
+        {
+            incomingRowsQuery = incomingRowsQuery.Where(di =>
+                di.DeliveryStop.Delivery.Drivers.Any(d => d.Id == scope.DriverId));
+        }
+
+        var incomingRows = await incomingRowsQuery
             .Select(di => new
             {
                 di.DeliveryStop.Delivery.Date,
