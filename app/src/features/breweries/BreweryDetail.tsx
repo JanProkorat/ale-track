@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import {
-  Box, Card, Stack, Typography, Button, Tabs, Tab,
+  Box, Card, Chip, Stack, Typography, Button, Tabs, Tab,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
+import LocationOnIcon from '@mui/icons-material/LocationOnOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
@@ -10,6 +11,7 @@ import StickyNote2Icon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
 import SportsBarIcon from '@mui/icons-material/SportsBarOutlined';
 import { useSnackbar } from 'notistack';
+import { PointMap } from 'src/components/common/PointMap';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { EmptyState } from 'src/components/common/EmptyState';
@@ -29,10 +31,6 @@ type SubTab = 'info' | 'cenik' | 'reminders' | 'notes';
 function formatZip(zip?: string): string {
   const z = (zip ?? '').replace(/\s/g, '');
   return /^\d{5}$/.test(z) ? `${z.slice(0, 3)} ${z.slice(3)}` : (zip ?? '');
-}
-function addressesEqual(a?: AddressDto, b?: AddressDto): boolean {
-  if (!a || !b) return false;
-  return a.streetName === b.streetName && a.streetNumber === b.streetNumber && a.city === b.city && a.zip === b.zip && a.country === b.country;
 }
 
 /** Titled card matching the prototype: header band + body. */
@@ -113,8 +111,6 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
     }
   };
 
-  const contactSame = !brewery.contactAddress || addressesEqual(brewery.officialAddress, brewery.contactAddress);
-
   return (
     <Box>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -129,14 +125,35 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
       {tab === 'info' && (
         <Stack spacing={2.5}>
           <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
-            <TitledCard title="Fakturační adresa">
-              {brewery.officialAddress ? <AddressBody a={brewery.officialAddress} /> : <Typography color="text.secondary">Bez adresy</Typography>}
-            </TitledCard>
-            <TitledCard title="Kontaktní adresa">
-              {contactSame ? (
-                <Typography color="text.secondary">Shodná s fakturační</Typography>
+            {/* Deviation from the prototype, which prints brewery addresses as
+                text only: the same address cards as the client detail, map
+                included, since a brewery is a pickup point a driver navigates to. */}
+            <TitledCard
+              title="Fakturační adresa"
+              action={brewery.officialAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
+            >
+              {brewery.officialAddress ? (
+                <Stack spacing={1.5}>
+                  <AddressBody a={brewery.officialAddress} />
+                  <PointMap lat={brewery.officialAddress.latitude} lng={brewery.officialAddress.longitude} color="#0E7C9B" />
+                </Stack>
               ) : (
-                <AddressBody a={brewery.contactAddress!} />
+                <Typography color="text.secondary">Bez adresy</Typography>
+              )}
+            </TitledCard>
+            {/* Fallback text only when there is no contact address at all, same
+                rule as the client detail. */}
+            <TitledCard
+              title="Kontaktní adresa"
+              action={brewery.contactAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
+            >
+              {brewery.contactAddress ? (
+                <Stack spacing={1.5}>
+                  <AddressBody a={brewery.contactAddress} />
+                  <PointMap lat={brewery.contactAddress.latitude} lng={brewery.contactAddress.longitude} color="#0E7C9B" />
+                </Stack>
+              ) : (
+                <Typography color="text.secondary">Shodná s fakturační</Typography>
               )}
             </TitledCard>
           </Box>
