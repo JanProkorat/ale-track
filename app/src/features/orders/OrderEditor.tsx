@@ -19,7 +19,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
-import { clientComboOptions } from './clientOptions';
+import { clientComboOptions } from 'src/features/clients/clientOptions';
 import { groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';

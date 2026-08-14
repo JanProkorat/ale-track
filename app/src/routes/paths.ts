@@ -7,6 +7,7 @@ export const PATHS: Record<ModuleKey, string> = {
   shipments: '/shipments',
   deliveries: '/deliveries',
   inventory: '/inventory',
+  sales: '/sales',
   breweries: '/breweries',
   clients: '/clients',
   drivers: '/drivers',

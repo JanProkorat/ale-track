@@ -130,4 +130,39 @@ public static class ErrorCodes
     /// Error code for case when a driver record is already linked to a different user account.
     /// </summary>
     public const string DriverAlreadyLinkedToUser = "DRIVER_ALREADY_LINKED_TO_USER";
+
+    /// <summary>
+    /// Error code for case when a sale's buyer fields do not match its declared buyer kind.
+    /// </summary>
+    public const string SaleBuyerFieldsMismatch = "SALE_BUYER_FIELDS_MISMATCH";
+
+    /// <summary>
+    /// Error code for case when a sale paid by invoice has no billing name.
+    /// </summary>
+    public const string SaleBillingNameRequired = "SALE_BILLING_NAME_REQUIRED";
+
+    /// <summary>
+    /// Error code for case when an already completed sale would be changed.
+    /// </summary>
+    public const string SaleAlreadyCompleted = "SALE_ALREADY_COMPLETED";
+
+    /// <summary>
+    /// Error code for case when a sale line has no price and the sale cannot be completed.
+    /// </summary>
+    public const string SaleLinePriceMissing = "SALE_LINE_PRICE_MISSING";
+
+    /// <summary>
+    /// Error code for case when there is not enough stock to complete a sale.
+    /// </summary>
+    public const string SaleInsufficientStock = "SALE_INSUFFICIENT_STOCK";
+
+    /// <summary>
+    /// Error code for case when a payment state is set on a sale that is not invoiced.
+    /// </summary>
+    public const string SaleNotInvoiced = "SALE_NOT_INVOICED";
+
+    /// <summary>
+    /// Error code for case when payment is confirmed on a sale that is not awaiting one.
+    /// </summary>
+    public const string SaleNotAwaitingPayment = "SALE_NOT_AWAITING_PAYMENT";
 }

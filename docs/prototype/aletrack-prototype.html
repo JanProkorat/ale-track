@@ -429,6 +429,9 @@ const IC = {
   history:'<path d="M3 3v6h6M3 9a9 9 0 1 1-1 5"/><path d="M12 8v4l3 2"/>',
   moveTo:'<path d="M3 12h11M11 8l4 4-4 4M20 4v16"/>',
   chart:'<path d="M3 3v18h18M7 15l3-4 3 3 4-6"/>',
+  cart:'<path d="M3 4h2.2l2.3 11.1a1.8 1.8 0 0 0 1.8 1.4h8a1.8 1.8 0 0 0 1.8-1.4L21 8H6.2"/><circle cx="10" cy="20" r="1.4"/><circle cx="17.5" cy="20" r="1.4"/>',
+  cash:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
+  invoice:'<path d="M5 3h11l3 3v15l-2.5-1.5L14 21l-2.5-1.5L9 21l-2.5-1.5L5 21zM8 8h7M8 12h7M8 16h4"/>',
 };
 function icon(name, size=18, sw=1.9){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${IC[name]||''}</svg>`;
@@ -478,11 +481,14 @@ const L = {
   contact:{ Email:'E-mail', Phone:'Telefon' },
   country:{ Czechia:'Česko', Germany:'Německo' },
   addrKind:{ Official:'Fakturační', Contact:'Kontaktní', Place:'Vlastní místo' },
+  saleState:{ Draft:'Rozpracovaný', Completed:'Dokončený' },
+  payment:{ Cash:'Hotově', Invoice:'Faktura' },
 };
 const STATUS = {
   order:{ New:['s-grey','Nová'], Planning:['s-info','Plánuje se'], Delivering:['s-amber','Rozváží se'], Finished:['s-ok','Dokončeno'], Cancelled:['s-grey','Zrušeno'] },
   ship:{ Created:['s-grey','Vytvořeno'], Loaded:['s-info','Naloženo'], InTransit:['s-amber','Na cestě'], Delivered:['s-ok','Doručeno'], Cancelled:['s-grey','Zrušeno'] },
   delivery:{ InPlanning:['s-info','Plánuje se'], OnTheWay:['s-amber','Na cestě'], Finished:['s-ok','Dokončeno'], Cancelled:['s-grey','Zrušeno'] },
+  sale:{ Draft:['s-amber','Rozpracovaný'], Completed:['s-ok','Dokončený'] },
 };
 function pill(kind,state){ const m=(STATUS[kind]||{})[state]||['s-grey',state]; return `<span class="pill ${m[0]}"><span class="d"></span>${esc(m[1])}</span>`; }
 const KIND_ORDER={Keg:1,Bottle:2,Can:3,Multipack:4,Other:5};
@@ -497,7 +503,7 @@ function dp(id,name,note,address){ return { id, name, note:note||'', address, de
 function pinAddr(lat,lng){ return {streetName:'',streetNumber:'',city:'',zip:'',country:'Czechia',latitude:lat,longitude:lng}; }
 // Warehouse (company depot) — Žitava
 const DEPOT = { name:'Sklad AleTrack', lat:50.897, lng:14.807 };
-const MODULES=['dashboard','reports','breweries','clients','orders','shipments','deliveries','inventory','drivers','vehicles','users'];
+const MODULES=['dashboard','reports','breweries','clients','orders','shipments','deliveries','inventory','sales','drivers','vehicles','users'];
 function allPerms(v){ const o={}; MODULES.forEach(m=>o[m]=v?'edit':'none'); return o; }
 function makePerms(map){ const o={}; MODULES.forEach(m=>o[m]=map[m]||'none'); o.dashboard='view'; return o; }
 
@@ -562,7 +568,7 @@ const DB = {
       null, [ dp('dp-farma-stodola','Stodola u silnice','Bez adresy — sjezd z hlavní, 300 m za mostem',
         pinAddr(50.8171,14.9602)) ]),
   ],
-  orders:[], shipments:[], deliveries:[], inventory:[], reminders:[],
+  orders:[], shipments:[], deliveries:[], inventory:[], sales:[], reminders:[],
   exchangeRates:[{ currencyCode:'EUR', rate:25.30, updatedDate:SEED_TODAY }],
   drivers:[
     { id:'dr-novak', firstName:'Petr', lastName:'Novák', phoneNumber:'+420 602 100 200', color:'#F08C00',
@@ -583,9 +589,9 @@ const DB = {
     { id:'u-admin', firstName:'Jan', lastName:'Prokorát', userName:'admin', roles:['Admin'],
       perms:allPerms(true) },
     { id:'u-dispecer', firstName:'Eva', lastName:'Dvořáková', userName:'dispecer', roles:['User'],
-      perms:makePerms({orders:'edit',shipments:'edit',deliveries:'edit',clients:'edit',inventory:'edit',breweries:'view',drivers:'view',vehicles:'view',users:'none'}) },
+      perms:makePerms({orders:'edit',shipments:'edit',deliveries:'edit',clients:'edit',inventory:'edit',sales:'edit',breweries:'view',drivers:'view',vehicles:'view',users:'none'}) },
     { id:'u-sklad', firstName:'Martin', lastName:'Kolář', userName:'sklad', roles:['User'],
-      perms:makePerms({inventory:'edit',deliveries:'edit',breweries:'view',orders:'view',shipments:'view',clients:'none',drivers:'none',vehicles:'view',users:'none'}) },
+      perms:makePerms({inventory:'edit',deliveries:'edit',sales:'edit',breweries:'view',orders:'view',shipments:'view',clients:'none',drivers:'none',vehicles:'view',users:'none'}) },
   ],
 };
 
@@ -676,6 +682,30 @@ function productsOf(bId){ return DB.products.filter(x=>x.breweryId===bId).sort((
     { id:'inv-free2', productId:null, name:'CO₂ bomba 10 kg', quantity:5, note:null },
     { id:'inv-free3', productId:null, name:'Výčepní stojan (zápůjčka)', quantity:3, note:'Majetek firmy' },
   ];
+  // Garážový prodej (walk-in sales off the warehouse shelf)
+  const invOf=n=>DB.inventory.find(i=>i.productId&&prodById(i.productId).name.startsWith(n));
+  const invFree=n=>DB.inventory.find(i=>!i.productId&&i.name.startsWith(n));
+  DB.sales=[
+    { id:'s-1', number:'PRO-2026-018', date:daysFromNow(0), state:'Draft', buyerKind:'Walkin', clientId:null,
+      buyerName:'', payment:'Cash', invoice:null, soldBy:'u-sklad', completedAt:null, note:'',
+      items:[ saleLine(invOf('Albrecht 12° Světlý'),4), saleLine(invFree('Vratné basy'),2,200) ] },
+    { id:'s-2', number:'PRO-2026-017', date:daysFromNow(0), state:'Completed', buyerKind:'Walkin', clientId:null,
+      buyerName:'Josef Vrána', payment:'Cash', invoice:null, soldBy:'u-sklad', completedAt:daysFromNow(0), note:'Soused, bere pravidelně',
+      items:[ saleLine(invOf('Svijanský Máz'),2), saleLine(invOf('Albrecht Nealko'),1) ] },
+    { id:'s-3', number:'PRO-2026-016', date:daysFromNow(-2), state:'Completed', buyerKind:'Client', clientId:'cl-pivnice',
+      buyerName:'', payment:'Invoice', soldBy:'u-dispecer', completedAt:daysFromNow(-2), note:'Doplnění před víkendem',
+      invoice:{ name:'Na Rohu gastro s.r.o.', ico:'27412885', dic:'CZ27412885', street:'Liberecká', no:'88', city:'Hrádek nad Nisou', zip:'463 34',
+        dueDate:daysFromNow(-3), paid:false, paidDate:null },
+      items:[ saleLine(invOf('Landskron Pilsner'),3), saleLine(invOf('Svijany 450'),2) ] },
+    { id:'s-4', number:'PRO-2026-015', date:daysFromNow(-5), state:'Completed', buyerKind:'Walkin', clientId:null,
+      buyerName:'Penzion Jitřenka', payment:'Invoice', soldBy:'u-sklad', completedAt:daysFromNow(-5), note:'',
+      invoice:{ name:'Penzion Jitřenka s.r.o.', ico:'06559214', dic:'', street:'Horní', no:'41', city:'Jablonné v Podještědí', zip:'471 25',
+        dueDate:daysFromNow(9), paid:true, paidDate:daysFromNow(-4) },
+      items:[ saleLine(invOf('Albrecht 12° Světlý'),2,1200), saleLine(invOf('Landskron Radler'),4) ] },
+    { id:'s-5', number:'PRO-2026-014', date:daysFromNow(-9), state:'Completed', buyerKind:'Walkin', clientId:null,
+      buyerName:'', payment:'Cash', invoice:null, soldBy:'u-sklad', completedAt:daysFromNow(-9), note:'',
+      items:[ saleLine(invOf('Svijanský Rytíř'),1) ] },
+  ];
   // Reminders (brewery + client) + order-item reminders derive from orders with reminderState
   DB.reminders=[
     { id:'r-1', kind:'Client', sectionId:'cl-uzsklep', sectionName:'Hospoda U Zeleného stromu', name:'Podepsat novou smlouvu',
@@ -699,13 +729,13 @@ let AUTH = false; // authenticated? (prototype gate — shows the login screen f
 const NAV=[
   { group:null, items:[ ['dashboard','dash','Nástěnka'] ] },
   { group:'Prodej', items:[ ['orders','order','Objednávky'], ['shipments','ship','Vývozy'] ] },
-  { group:'Sklad', items:[ ['deliveries','import','Dovozy zboží'], ['inventory','stock','Sklad'] ] },
+  { group:'Garážový prodej', items:[ ['deliveries','import','Dovozy zboží'], ['inventory','stock','Sklad'], ['sales','cart','Prodeje'] ] },
   { group:'Analýza', items:[ ['reports','chart','Reporty'] ] },
   { group:'Evidence', items:[ ['breweries','brewery','Pivovary'], ['clients','client','Klienti'], ['drivers','driver','Řidiči'], ['vehicles','vehicle','Vozy'] ] },
   { group:'Správa', items:[ ['users','users','Uživatelé'] ] },
 ];
 function moduleCount(m){ return ({ orders:DB.orders.length, shipments:DB.shipments.length, deliveries:DB.deliveries.length,
-  inventory:DB.inventory.length, breweries:DB.breweries.length, clients:DB.clients.length, drivers:DB.drivers.length,
+  inventory:DB.inventory.length, sales:DB.sales.length, breweries:DB.breweries.length, clients:DB.clients.length, drivers:DB.drivers.length,
   vehicles:DB.vehicles.length, users:DB.users.length })[m]; }
 
 /* ============ SHELL ============ */
@@ -1005,6 +1035,10 @@ const ROUTES=[
   [/^deliveries\/(.+)\/edit$/, m=>viewDeliveryEditor(m[1])],
   [/^deliveries\/(.+)$/, m=>viewDeliveryDetail(m[1])],
   [/^inventory$/, ()=>viewInventory()],
+  [/^sales$/, ()=>viewSales()],
+  [/^sales\/new$/, ()=>viewSaleEditor(null)],
+  [/^sales\/(.+)\/edit$/, m=>viewSaleEditor(m[1])],
+  [/^sales\/(.+)$/, m=>viewSaleDetail(m[1])],
   [/^drivers$/, ()=>viewDrivers()],
   [/^vehicles$/, ()=>viewVehicles()],
   [/^users$/, ()=>viewUsers()],
@@ -1042,7 +1076,7 @@ function guidNote(id){ return `<span class="mono t-mut" title="PublicId (GUID)">
 /* ============ DASHBOARD ============ */
 const TILE_META={
   orders:['order','#F08C00','Objednávky'], shipments:['ship','#0E7C9B','Vývozy'], deliveries:['import','#7C3AED','Dovozy'],
-  inventory:['stock','#15873F','Skladem'], breweries:['brewery','#B4620A','Pivovary'], clients:['client','#0891B2','Klienti'],
+  inventory:['stock','#15873F','Skladem'], sales:['cart','#C22A2A','Prodeje'], breweries:['brewery','#B4620A','Pivovary'], clients:['client','#0891B2','Klienti'],
   drivers:['driver','#DB2777','Řidiči'], vehicles:['vehicle','#5A6675','Vozy'], users:['users','#7C3AED','Uživatelé'],
 };
 function viewDashboard(){
@@ -1053,12 +1087,14 @@ function viewDashboard(){
   const weekShip=DB.shipments.filter(s=>s.deliveryDate&&s.deliveryDate.slice(0,10)>=SEED_TODAY).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate));
   const weekDeliv=DB.deliveries.filter(d=>d.date>=SEED_TODAY&&d.state!=='Cancelled').sort((a,b)=>a.date.localeCompare(b.date));
 
-  const tiles=['orders','shipments','deliveries','inventory','clients','breweries','drivers','vehicles'].filter(canSee).map(m=>{
+  const unpaidSales=DB.sales.filter(saleUnpaid);
+  const tiles=['orders','shipments','deliveries','inventory','sales','clients','breweries','drivers','vehicles'].filter(canSee).map(m=>{
     const [ic,col,lbl]=TILE_META[m];
     return `<a class="tile" href="#/${m}">
       <div class="ti-top"><div class="ti-ico" style="background:${col}1a;color:${col}">${icon(ic,20)}</div>
       ${m==='orders'&&openOrders?`<span class="pill s-amber"><span class="d"></span>${openOrders} otevřených</span>`:''}
       ${m==='inventory'&&lowStock.length?`<span class="pill s-crit"><span class="d"></span>${lowStock.length} nízká</span>`:''}
+      ${m==='sales'&&unpaidSales.length?`<span class="pill s-crit"><span class="d"></span>${unpaidSales.length} nezaplaceno</span>`:''}
       </div>
       <div><div class="ti-val tnum">${moduleCount(m)}</div><div class="ti-lbl">${lbl}</div></div></a>`;
   }).join('');
@@ -2969,6 +3005,387 @@ function invForm(id){
 function invFormTab(t){ window._ivTab=t; $('#iv-p').style.display=t==='p'?'block':'none'; $('#iv-f').style.display=t==='f'?'block':'none';
   $('#iv-tab-p').classList.toggle('on',t==='p'); $('#iv-tab-f').classList.toggle('on',t==='f'); }
 
+/* ============ MODULE: GARÁŽOVÝ PRODEJ (SALES) ============
+   Walk-in counter sales straight off the warehouse shelf. A sale stays a draft
+   (stock untouched) until it is completed — completing deducts the sold pieces
+   from Sklad and freezes the record. Mirrors Dovozy' "Dokončit → naskladnit",
+   run in the opposite direction. */
+function saleLine(inv,qty,unitPrice){
+  const pr=inv.productId?prodById(inv.productId):null;
+  return { id:'sl-'+Math.random().toString(36).slice(2,7), inventoryId:inv.id, productId:inv.productId||null,
+    name:pr?pr.name+(pr.packageSize!=null?' ('+fmtLiters(pr.packageSize)+')':''):inv.name,
+    quantity:qty, unitPrice:unitPrice!=null?unitPrice:(pr?pr.priceWithVat:null), listPrice:pr?pr.priceWithVat:null };
+}
+function saleTotals(s){ let items=0,total=0; s.items.forEach(it=>{ items+=(it.quantity||0); total+=(it.quantity||0)*(it.unitPrice||0); }); return {items,total}; }
+function saleBuyer(s){ if(s.buyerKind==='Client'){ const c=clientById(s.clientId); return c?c.name:'— smazaný klient —'; }
+  return (s.buyerName||'').trim()||'Neuvedený kupující'; }
+function saleNamed(s){ return s.buyerKind==='Client'?!!clientById(s.clientId):!!(s.buyerName||'').trim(); }
+function saleAvatar(s){
+  if(!saleNamed(s)) return `<span class="av" style="background:var(--surface-3);color:var(--text-3)">${icon('cart',15)}</span>`;
+  const parts=saleBuyer(s).split(' '); return avatar(s.id,initials(parts[0],parts[1]));
+}
+function saleUnpaid(s){ return s.state==='Completed'&&s.payment==='Invoice'&&!!s.invoice&&!s.invoice.paid; }
+function saleOverdueDays(s){ if(!saleUnpaid(s)||!s.invoice.dueDate) return 0;
+  const d=Math.floor((new Date(SEED_TODAY)-new Date(s.invoice.dueDate))/86400000); return d>0?d:0; }
+function saleStock(invId){ const i=DB.inventory.find(x=>x.id===invId); return i?i.quantity:0; }
+function salePayChip(s){
+  if(s.payment==='Cash') return `<span class="tag">${icon('cash',12)}Hotově</span>`;
+  if(s.state==='Draft') return `<span class="tag">${icon('invoice',12)}Faktura</span>`;
+  const paid=s.invoice&&s.invoice.paid;
+  return `<span class="tag" style="color:${paid?'var(--ok)':'var(--crit)'}">${icon('invoice',12)}Faktura · ${paid?'zaplaceno':'nezaplaceno'}</span>`;
+}
+function nextSaleNumber(){ const n=DB.sales.reduce((m,s)=>{ const v=parseInt((s.number||'').split('-').pop()); return isNaN(v)?m:Math.max(m,v); },0);
+  return 'PRO-2026-'+String(n+1).padStart(3,'0'); }
+
+/* ---- list ---- */
+let SAL_FILTER='all';
+function viewSales(){
+  const ed=canEdit('sales');
+  const all=DB.sales.slice().sort((a,b)=>(b.number||'').localeCompare(a.number||''));
+  const drafts=all.filter(s=>s.state==='Draft'), done=all.filter(s=>s.state==='Completed'), unpaid=all.filter(saleUnpaid);
+  const monthDone=done.filter(s=>(s.completedAt||s.date).slice(0,7)===SEED_TODAY.slice(0,7));
+  const revenue=monthDone.reduce((a,s)=>a+saleTotals(s).total,0);
+  const unpaidSum=unpaid.reduce((a,s)=>a+saleTotals(s).total,0);
+  const counts={all:all.length,Draft:drafts.length,Completed:done.length,unpaid:unpaid.length};
+  const list=SAL_FILTER==='Draft'?drafts:SAL_FILTER==='Completed'?done:SAL_FILTER==='unpaid'?unpaid:all;
+  const seg=[['all','Vše'],['Draft','Rozpracované'],['Completed','Dokončené'],['unpaid','Nezaplacené']]
+    .map(([v,l])=>`<button class="${SAL_FILTER===v?'on':''}" onclick="SAL_FILTER='${v}';renderRoute()">${l}${counts[v]?` <span style="opacity:.6">${counts[v]}</span>`:''}</button>`).join('');
+  return `<div class="page">
+    ${pageHead('Garážový prodej','Prodeje','Prodej zboží ze skladu zákazníkovi na místě — hotově nebo na fakturu.',
+      ed?addBtn('Nový prodej','sales/new'):'')}
+    <div class="card" style="margin-bottom:16px"><div style="display:flex;flex-wrap:wrap;align-items:stretch">
+      ${invStat('Prodejů tento měsíc',monthDone.length,'cart',false,true)}
+      ${invStat('Obrat tento měsíc',money(revenue),'wallet',false,false)}
+      ${invStat('Rozpracované',drafts.length,'edit',false,false)}
+      ${invStat('Nezaplaceno',unpaid.length?money(unpaidSum):'—','invoice',unpaid.length>0,false)}
+    </div></div>
+    <div class="toolbar"><div class="seg">${seg}</div><span class="count-note">${list.length} z ${all.length}</span></div>
+    ${list.length?salesTable(list):`<div class="empty"><div>${icon('cart',36)}</div><div class="t">Žádné prodeje</div>
+      <div>${SAL_FILTER==='all'?'Zatím se ze skladu nic neprodalo.':'V tomto filtru nic není.'}</div>
+      ${SAL_FILTER!=='all'?`<button class="btn btn-sm btn-ghost" style="margin-top:12px" onclick="SAL_FILTER='all';renderRoute()">Zobrazit vše</button>`:''}</div>`}</div>`;
+}
+function salesTable(list){
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Datum</th><th>Kupující</th><th>Platba</th>
+    <th style="text-align:right">Kusů</th><th style="text-align:right">Celkem</th><th>Stav</th><th></th></tr></thead>
+    <tbody>${list.map(s=>{ const t=saleTotals(s); const od=saleOverdueDays(s);
+      return `<tr class="clickable" onclick="go('sales/${s.id}')">
+        <td><span class="mono t-strong">${s.number}</span></td>
+        <td>${fdate(s.date)}</td>
+        <td><div class="row-lead">${saleAvatar(s)}<span class="t-strong">${esc(saleBuyer(s))}</span></div></td>
+        <td>${salePayChip(s)}</td>
+        <td class="num tnum">${t.items}</td>
+        <td class="num tnum t-strong">${money(t.total)}</td>
+        <td><div class="row gap8 wrap">${pill('sale',s.state)}
+          ${od?`<span class="pill s-crit"><span class="d"></span>po splatnosti ${od} ${plural(od,'den','dny','dní')}</span>`:''}</div></td>
+        <td style="text-align:right">${icon('chevR',16)}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+
+/* ---- detail ---- */
+function viewSaleDetail(id){
+  id=id.split('?')[0]; const s=DB.sales.find(x=>x.id===id); if(!s) return notFound('Prodej');
+  const ed=canEdit('sales'); const t=saleTotals(s); const draft=s.state==='Draft'; const od=saleOverdueDays(s);
+  const cl=s.buyerKind==='Client'?clientById(s.clientId):null;
+  const seller=DB.users.find(u=>u.id===s.soldBy);
+  const rows=s.items.map(it=>`<tr>
+    <td><div class="t-strong">${esc(it.name)}</div>
+      ${it.listPrice!=null&&it.unitPrice!=null&&it.unitPrice!==it.listPrice
+        ? `<div class="t-mut" style="font-size:11.5px">ceník ${money(it.listPrice)} · ${it.unitPrice<it.listPrice?'sleva':'příplatek'} ${money(Math.abs(it.listPrice-it.unitPrice))}</div>`:''}</td>
+    <td class="num tnum">${it.quantity} ks</td><td class="num tnum">${money(it.unitPrice)}</td>
+    <td class="num tnum t-strong">${money((it.quantity||0)*(it.unitPrice||0))}</td></tr>`).join('');
+  return `<div class="page">
+    ${crumbs([{t:'Prodeje',href:'#/sales'},{t:s.number}])}
+    <div class="page-head"><div class="titles"><div class="eyebrow">Garážový prodej</div><h1>${s.number}</h1>
+      <div class="sub">${fdate(s.date)} · ${esc(saleBuyer(s))} · ${t.items} ${plural(t.items,'kus','kusy','kusů')}</div></div>
+      <div class="actions">${pill('sale',s.state)}
+        ${ed&&draft?`<button class="btn btn-primary" onclick="completeSale('${s.id}')">${icon('check',16)}Dokončit prodej</button>`:''}
+        ${ed&&draft?`<a class="btn btn-ghost" href="#/sales/${s.id}/edit">${icon('edit',16)}Upravit</a>`:''}
+        ${ed&&draft?`<button class="btn btn-ghost" style="color:var(--crit)" onclick="deleteSale('${s.id}')">${icon('trash',15)}Smazat</button>`:''}
+        ${ed&&saleUnpaid(s)?`<button class="btn btn-soft" onclick="markSalePaid('${s.id}')">${icon('wallet',16)}Označit jako zaplaceno</button>`:''}</div></div>
+    ${draft?`<div class="card" style="margin-bottom:16px;background:var(--amber-soft);border-color:var(--amber-tint)"><div class="card-pad row gap12">
+      <span style="color:var(--amber-700)">${icon('warnTri',20)}</span><div><div class="t-strong">Rozpracovaný prodej</div>
+      <div class="t-mut" style="font-size:13px">Zboží zatím nebylo odečteno ze skladu. Odečte se až dokončením prodeje.</div></div></div></div>`
+    :`<div class="card" style="margin-bottom:16px;background:var(--ok-tint);border-color:transparent"><div class="card-pad row gap12">
+      <span style="color:var(--ok)">${icon('check',20)}</span><div><div class="t-strong">Vyskladněno</div>
+      <div class="t-mut" style="font-size:13px">${t.items} ${plural(t.items,'kus byl','kusy byly','kusů bylo')} odečteno ze skladu.</div></div>
+      <a class="btn btn-sm btn-ghost" href="#/inventory" style="margin-left:auto">Zobrazit sklad</a></div></div>`}
+    ${od?`<div class="card" style="margin-bottom:16px;background:var(--crit-tint);border-color:transparent"><div class="card-pad row gap12">
+      <span style="color:var(--crit)">${icon('invoice',20)}</span><div><div class="t-strong">Faktura po splatnosti</div>
+      <div class="t-mut" style="font-size:13px">Splatnost byla ${fdate(s.invoice.dueDate)} — ${od} ${plural(od,'den','dny','dní')} po termínu, ${money(t.total)} neuhrazeno.</div></div></div></div>`:''}
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
+      <div class="stack" style="gap:14px">
+        <div class="card"><div class="card-head">${icon('cart',16)}<h3>Prodané zboží</h3>
+          <span class="tag" style="margin-left:auto">${s.items.length} ${plural(s.items.length,'položka','položky','položek')}</span></div>
+          <div class="tbl-wrap" style="border:0"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th>
+            <th style="text-align:right">Počet</th><th style="text-align:right">Cena/ks</th><th style="text-align:right">Celkem</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot><tr style="border-top:2px solid var(--border-2)"><td class="t-strong">Celkem</td>
+              <td class="num tnum t-strong">${t.items} ks</td><td></td>
+              <td class="num tnum t-strong" style="font-size:16px">${money(t.total)}</td></tr></tfoot></table></div></div>
+        ${s.note?`<div class="card"><div class="card-head">${icon('note',16)}<h3>Poznámka</h3></div><div class="card-pad addr">${esc(s.note)}</div></div>`:''}
+      </div>
+      <div class="stack" style="gap:14px">
+        <div class="card"><div class="card-head">${icon('client',16)}<h3>Kupující</h3></div><div class="card-pad stack" style="gap:11px">
+          <div class="kv"><span class="k">Typ</span><span class="v">${s.buyerKind==='Client'?'Klient z evidence':'Jednorázový kupující'}</span></div>
+          <div class="kv"><span class="k">Jméno</span><span class="v">${cl?`<a href="#/clients/${cl.id}">${esc(cl.name)}</a>`:esc(saleBuyer(s))}</span></div>
+          <div class="kv"><span class="k">Platba</span><span class="v">${salePayChip(s)}</span></div>
+          <div class="kv"><span class="k">Prodal</span><span class="v">${seller?esc(seller.firstName+' '+seller.lastName):'—'}</span></div>
+        </div></div>
+        ${s.payment==='Invoice'&&s.invoice?`<div class="card"><div class="card-head">${icon('invoice',16)}<h3>Fakturační údaje</h3>
+          ${s.invoice.paid?`<span class="pill s-ok" style="margin-left:auto"><span class="d"></span>zaplaceno</span>`
+            :`<span class="pill s-crit" style="margin-left:auto"><span class="d"></span>nezaplaceno</span>`}</div>
+          <div class="card-pad stack" style="gap:11px">
+            <div class="kv"><span class="k">Název</span><span class="v">${esc(s.invoice.name||'—')}</span></div>
+            <div class="kv"><span class="k">IČO</span><span class="v mono">${esc(s.invoice.ico||'—')}</span></div>
+            <div class="kv"><span class="k">DIČ</span><span class="v mono">${esc(s.invoice.dic||'—')}</span></div>
+            <div class="kv"><span class="k">Adresa</span><span class="v">${esc([[s.invoice.street,s.invoice.no].filter(Boolean).join(' '),[s.invoice.zip,s.invoice.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')||'—')}</span></div>
+            <div class="kv"><span class="k">Splatnost</span><span class="v">${fdate(s.invoice.dueDate)}</span></div>
+            ${s.invoice.paid?`<div class="kv"><span class="k">Zaplaceno</span><span class="v">${fdate(s.invoice.paidDate)}</span></div>`:''}
+          </div></div>`:''}
+        <div class="card"><div class="card-head"><h3>Souhrn</h3></div><div class="card-pad"><div class="tiles" style="grid-template-columns:1fr 1fr">
+          ${miniStat('Kusů',t.items,'box')}${miniStat('Celkem',money(t.total),'wallet')}</div></div></div>
+      </div></div></div>`;
+}
+function markSalePaid(id){ const s=DB.sales.find(x=>x.id===id); if(!s||!s.invoice)return;
+  s.invoice.paid=true; s.invoice.paidDate=SEED_TODAY; toast('Faktura označena jako zaplacená','wallet'); renderRoute(); }
+function deleteSale(id){ const s=DB.sales.find(x=>x.id===id); if(!s)return;
+  confirmDialog('Smazat prodej?','Opravdu smazat rozpracovaný prodej '+s.number+'? Skladu se to nedotkne.',()=>{
+    DB.sales=DB.sales.filter(x=>x.id!==id); toast('Prodej smazán','trash'); go('sales'); }); }
+function completeSale(id,onDone){
+  const s=DB.sales.find(x=>x.id===id); if(!s)return;
+  const preview=s.items.map(it=>{ const before=saleStock(it.inventoryId);
+    return { name:it.name, qty:it.quantity, before, after:Math.max(0,before-it.quantity), short:before<it.quantity }; });
+  const short=preview.filter(p=>p.short);
+  openOverlay(`<div class="modal-head">${icon('cart',20)}<h3>Dokončit prodej ${s.number}</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><p style="margin:0 0 14px;color:var(--text-2)">Dokončením se toto zboží odečte ze skladu a záznam se uzamkne:</p>
+      <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th><th style="text-align:right">Skladem</th>
+        <th style="text-align:right">Prodej</th><th style="text-align:right">Zůstane</th></tr></thead>
+      <tbody>${preview.map(r=>`<tr><td class="t-strong">${esc(r.name)}</td><td class="num tnum t-mut">${r.before}</td>
+        <td class="num tnum" style="color:var(--crit)">−${r.qty}</td>
+        <td class="num tnum t-strong" ${r.short?'style="color:var(--crit)"':''}>${r.short?'nedostatek':r.after}</td></tr>`).join('')}</tbody></table></div>
+      ${short.length?`<div class="hint" style="margin-top:12px;color:var(--crit)">Na skladě není dost kusů — upravte počty v prodeji.</div>`:''}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="sale-fin" ${short.length?'disabled':''}>${icon('check',16)}Dokončit a vyskladnit</button></div>`,{center:true});
+  const yes=$('#sale-fin');
+  if(yes) yes.onclick=()=>{
+    s.items.forEach(it=>{ const inv=DB.inventory.find(i=>i.id===it.inventoryId); if(inv) inv.quantity=Math.max(0,inv.quantity-it.quantity); });
+    s.state='Completed'; s.completedAt=SEED_TODAY; closeOverlay();
+    const t=saleTotals(s); toast(`Prodej dokončen · ${t.items} ks odečteno ze skladu`,'cart');
+    if(onDone) onDone(); else renderRoute(); };
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+
+/* ---- editor (the till) ---- */
+let SE={ draft:null };
+function blankSaleInvoice(){ return { name:'',ico:'',dic:'',street:'',no:'',city:'',zip:'',dueDate:daysFromNow(14),paid:false,paidDate:null }; }
+function viewSaleEditor(id){
+  if(id){ const s=DB.sales.find(x=>x.id===id); if(!s) return notFound('Prodej');
+    if(s.state!=='Draft'){ setTimeout(()=>go('sales/'+s.id),0);
+      return `<div class="page"><div class="empty"><div>${icon('shield',36)}</div><div class="t">Dokončený prodej nelze upravovat</div>
+        <div>Zboží už bylo odečteno ze skladu.</div></div></div>`; }
+    SE.draft={ ...s, invoice:s.invoice?{...s.invoice}:blankSaleInvoice(), items:s.items.map(i=>({...i})) };
+  } else {
+    SE.draft={ id:null, number:null, date:SEED_TODAY, state:'Draft', buyerKind:'Walkin', clientId:null, buyerName:'',
+      payment:'Cash', invoice:blankSaleInvoice(), items:[], note:'', soldBy:ME.id, completedAt:null };
+  }
+  AFTER=seWire; return seHTML();
+}
+function seWire(){
+  const c=$('#se-client'); if(c) c.onchange=()=>{ SE.draft.clientId=c.value||null; sePrefillFromClient(); seRerender(); };
+}
+function seRerender(){ seSync(); $('#view').innerHTML=seHTML(); seWire(); }
+function seSync(){
+  const d=SE.draft; if(!d) return;
+  if($('#se-date')) d.date=$('#se-date').value;
+  if($('#se-client')) d.clientId=$('#se-client').value||null;
+  if($('#se-buyer')) d.buyerName=$('#se-buyer').value;
+  if($('#se-note')) d.note=$('#se-note').value;
+  ['name','ico','dic','street','no','city','zip'].forEach(k=>{ const el=$('#se-inv-'+k); if(el) d.invoice[k]=el.value; });
+  if($('#se-due')) d.invoice.dueDate=$('#se-due').value;
+  d.items.forEach(it=>{
+    const q=$('#se-q-'+it.id); if(q){ const v=parseInt(q.value); it.quantity=isNaN(v)?0:v; }
+    const p=$('#se-p-'+it.id); if(p){ const v=parseFloat((p.value||'').replace(',','.')); it.unitPrice=(p.value===''||isNaN(v))?null:v; }
+  });
+}
+function sePrefillFromClient(){
+  const d=SE.draft; const c=clientById(d.clientId); if(!c) return;
+  const a=c.officialAddress||{};
+  d.invoice.name=c.businessName||c.name; d.invoice.street=a.streetName||''; d.invoice.no=a.streetNumber||'';
+  d.invoice.city=a.city||''; d.invoice.zip=a.zip||'';
+  if(d.payment==='Invoice') toast('Fakturační údaje předvyplněny z klienta','copy');
+}
+function seSetBuyerKind(k){ seSync(); SE.draft.buyerKind=k; seRerender(); }
+function seSetPayment(p){ seSync(); SE.draft.payment=p;
+  if(p==='Invoice'&&SE.draft.buyerKind==='Client'&&SE.draft.clientId&&!SE.draft.invoice.name) sePrefillFromClient();
+  seRerender(); }
+function seHTML(){
+  const d=SE.draft;
+  return `<div class="page">
+    ${crumbs([{t:'Prodeje',href:'#/sales'},{t:d.id?('Úprava '+d.number):'Nový prodej'}])}
+    ${pageHead('Garážový prodej', d.id?'Úprava prodeje':'Nový prodej',
+      'Zákazník stojí u pultu — vyberte zboží ze skladu, kupujícího a způsob platby.',
+      `<button class="btn btn-ghost" onclick="history.back()">Zrušit</button>`)}
+    <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
+      <div class="stack" style="gap:14px">${seItemsCard()}${seBuyerCard()}${sePaymentCard()}</div>
+      <div style="position:sticky;top:16px">${seSummaryCard()}</div>
+    </div></div>`;
+}
+function seBuyerCard(){
+  const d=SE.draft;
+  const clientOpts=[['','— vyberte klienta —'],...DB.clients.map(c=>[c.id,c.name+(c.businessName?' · '+c.businessName:'')])];
+  return `<div class="card"><div class="card-head">${icon('client',16)}<h3>Kupující</h3></div>
+    <div class="card-pad stack" style="gap:12px">
+      <div class="seg"><button class="${d.buyerKind==='Client'?'on':''}" onclick="seSetBuyerKind('Client')">Klient z evidence</button>
+        <button class="${d.buyerKind==='Walkin'?'on':''}" onclick="seSetBuyerKind('Walkin')">Jednorázový kupující</button></div>
+      ${d.buyerKind==='Client'
+        ? `<div class="form-grid" style="grid-template-columns:1fr">${field('Klient',sel('se-client',clientOpts,d.clientId||''))}</div>
+           ${d.clientId?`<div class="row gap8" style="font-size:12.5px;color:var(--text-2)">${icon('pin',14)}${fmtAddr((clientById(d.clientId)||{}).officialAddress)}</div>`
+             :`<div class="hint">Po výběru klienta se jeho fakturační adresa předvyplní do faktury.</div>`}`
+        : `<div class="form-grid" style="grid-template-columns:1fr">
+             ${field('Jméno kupujícího',inp('se-buyer',d.buyerName||'','Josef Vrána'),{hint:'U hotovostního prodeje nepovinné.'})}</div>`}
+    </div></div>`;
+}
+function sePaymentCard(){
+  const d=SE.draft;
+  return `<div class="card"><div class="card-head">${icon('wallet',16)}<h3>Platba</h3></div>
+    <div class="card-pad stack" style="gap:12px">
+      <div class="seg"><button class="${d.payment==='Cash'?'on':''}" onclick="seSetPayment('Cash')">Hotově</button>
+        <button class="${d.payment==='Invoice'?'on':''}" onclick="seSetPayment('Invoice')">Faktura</button></div>
+      ${d.payment==='Cash'
+        ? `<div class="hint">Placeno na místě — fakturační údaje nejsou potřeba.</div>`
+        : `<div class="section-label" style="margin:2px 0 0">Fakturační údaje</div>
+           <div class="form-grid">
+             ${field('Název / jméno',inp('se-inv-name',d.invoice.name,'Na Rohu gastro s.r.o.'),{req:true,col2:true})}
+             ${field('IČO',inp('se-inv-ico',d.invoice.ico,'27412885'))}
+             ${field('DIČ',inp('se-inv-dic',d.invoice.dic,'CZ27412885'))}
+             ${field('Ulice',inp('se-inv-street',d.invoice.street,'Liberecká'))}
+             ${field('Číslo',inp('se-inv-no',d.invoice.no,'88'))}
+             ${field('Město',inp('se-inv-city',d.invoice.city,'Hrádek nad Nisou'))}
+             ${field('PSČ',inp('se-inv-zip',d.invoice.zip,'463 34'))}
+             ${field('Splatnost',`<input class="input" type="date" id="se-due" value="${d.invoice.dueDate||''}">`,{col2:true})}
+           </div>`}
+    </div></div>`;
+}
+function seItemsCard(){
+  const d=SE.draft;
+  return `<div class="card"><div class="card-head">${icon('cart',16)}<h3>Položky</h3>
+      <span class="tag" style="margin-left:auto">${d.items.length} ${plural(d.items.length,'položka','položky','položek')}</span></div>
+    <div class="card-pad stack" style="gap:12px">
+      ${d.items.length
+        ? `<div class="tbl-wrap" style="border:0"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th>
+            <th style="text-align:right">Skladem</th><th style="text-align:right;width:108px">Počet</th>
+            <th style="text-align:right;width:130px">Cena/ks (Kč)</th><th style="text-align:right;white-space:nowrap">Celkem</th><th></th></tr></thead>
+            <tbody>${d.items.map(seItemRow).join('')}</tbody></table></div>`
+        : `<div class="empty" style="padding:26px;background:var(--surface);border:1px dashed var(--border-2);border-radius:var(--r-lg)">
+             <div>${icon('cart',32)}</div><div class="t">Zatím žádné zboží</div><div>Nabízí se jen to, co je fyzicky skladem.</div></div>`}
+      <div><button class="btn btn-soft" onclick="seOpenPicker()">${icon('plus',15)}Přidat položku ze skladu</button></div>
+    </div></div>`;
+}
+function seItemRow(it){
+  const avail=saleStock(it.inventoryId);
+  const sub=it.listPrice==null ? 'ruční položka — cena není v ceníku'
+    : (it.unitPrice!=null&&it.unitPrice!==it.listPrice
+        ? `ceník ${money(it.listPrice)} · ${it.unitPrice<it.listPrice?'sleva':'příplatek'} ${money(Math.abs(it.listPrice-it.unitPrice))}`
+        : `ceník ${money(it.listPrice)}`);
+  return `<tr><td><div class="t-strong">${esc(it.name)}</div><div class="t-mut" style="font-size:11.5px">${sub}</div></td>
+    <td class="num tnum t-mut">${avail}</td>
+    <td class="num"><input class="input tnum" id="se-q-${it.id}" type="number" min="0" max="${avail}" value="${it.quantity}"
+      style="text-align:right;height:34px;padding:0 9px" oninput="seQty('${it.id}')"></td>
+    <td class="num"><input class="input tnum" id="se-p-${it.id}" type="number" min="0" step="1" value="${it.unitPrice!=null?it.unitPrice:''}"
+      placeholder="—" style="text-align:right;height:34px;padding:0 9px" oninput="sePrice('${it.id}')"></td>
+    <td class="num tnum t-strong" style="white-space:nowrap" id="se-lt-${it.id}">${money((it.quantity||0)*(it.unitPrice||0))}</td>
+    <td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="seRemove('${it.id}')">${icon('trash',13)}</button></td></tr>`;
+}
+function seSummaryCard(){
+  const d=SE.draft; const t=saleTotals(d);
+  return `<div class="card"><div class="card-head">${icon('wallet',16)}<h3>Souhrn</h3></div>
+    <div class="card-pad stack" style="gap:14px">
+      <div><div class="eyebrow" style="margin:0">Celkem k úhradě</div>
+        <div class="tnum" id="se-sum-total" style="font-size:31px;font-weight:800;letter-spacing:-.7px;line-height:1.15">${money(t.total)}</div>
+        <div class="t-mut" style="font-size:12.5px" id="se-sum-count">${t.items} ${plural(t.items,'kus','kusy','kusů')}</div></div>
+      <div class="divider" style="margin:0"></div>
+      <div class="stack" style="gap:9px">
+        <div class="kv"><span class="k">Kupující</span><span class="v">${esc(saleBuyer(d))}</span></div>
+        <div class="kv"><span class="k">Platba</span><span class="v">${L.payment[d.payment]}</span></div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr">
+        ${field('Datum prodeje',`<input class="input" type="date" id="se-date" value="${d.date}">`)}
+        ${field('Poznámka',txta('se-note',d.note||'','Např. soused, bere pravidelně…'))}
+      </div>
+      <div class="stack" style="gap:8px">
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="seSave(true)">${icon('check',16)}Dokončit prodej</button>
+        <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="seSave(false)">Uložit rozpracovaný</button>
+      </div>
+      <div class="hint">Dokončením se zboží odečte ze skladu a záznam se uzamkne.</div>
+    </div></div>`;
+}
+function seQty(id){
+  const it=SE.draft.items.find(x=>x.id===id); const el=$('#se-q-'+id); if(!it||!el) return;
+  const avail=saleStock(it.inventoryId);
+  let v=parseInt(el.value); if(isNaN(v)) v=0;
+  if(v>avail){ v=avail; el.value=avail; toast('Na skladě je jen '+avail+' ks','warnTri'); }
+  if(v<0){ v=0; el.value=0; }
+  it.quantity=v; seRefreshTotals();
+}
+function sePrice(id){
+  const it=SE.draft.items.find(x=>x.id===id); const el=$('#se-p-'+id); if(!it||!el) return;
+  const v=parseFloat((el.value||'').replace(',','.'));
+  it.unitPrice=(el.value===''||isNaN(v))?null:v; seRefreshTotals();
+}
+function seRefreshTotals(){
+  SE.draft.items.forEach(it=>{ const el=$('#se-lt-'+it.id); if(el) el.textContent=money((it.quantity||0)*(it.unitPrice||0)); });
+  const t=saleTotals(SE.draft);
+  const c=$('#se-sum-count'); if(c) c.textContent=t.items+' '+plural(t.items,'kus','kusy','kusů');
+  const m=$('#se-sum-total'); if(m) m.textContent=money(t.total);
+}
+function seRemove(id){ seSync(); SE.draft.items=SE.draft.items.filter(x=>x.id!==id); seRerender(); }
+function seOpenPicker(){
+  seSync();
+  const used=new Set(SE.draft.items.map(i=>i.inventoryId));
+  const avail=DB.inventory.filter(i=>i.quantity>0&&!used.has(i.id));
+  if(!avail.length) return toast('Na skladě není nic dalšího k prodeji','warnTri');
+  const linked=avail.filter(i=>i.productId), free=avail.filter(i=>!i.productId);
+  const byBrew={}; linked.forEach(i=>{ const p=prodById(i.productId); (byBrew[p.breweryId]=byBrew[p.breweryId]||[]).push(i); });
+  const row=i=>{ const p=i.productId?prodById(i.productId):null;
+    return `<button type="button" class="row gap12" style="width:100%;text-align:left;border:1px solid var(--border);background:var(--surface);padding:9px 11px;border-radius:var(--r);margin-bottom:7px" onclick="sePick('${i.id}')">
+      <div style="flex:1;min-width:0"><div class="t-strong" style="font-size:13px">${esc(p?p.name:i.name)}</div>
+        <div class="t-mut" style="font-size:11.5px">${p?`${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''} · ${money(p.priceWithVat)}`:'ruční položka — cena se zadává'}</div></div>
+      <span class="tag">skladem ${i.quantity} ks</span><span style="color:var(--text-3);flex:0 0 auto">${icon('plus',15)}</span></button>`; };
+  const sections=DB.breweries.filter(b=>byBrew[b.id]).map(b=>
+      `<div class="section-label" style="display:flex;align-items:center;gap:8px;margin:14px 0 8px">
+        <span class="dotc" style="width:11px;height:11px;border-radius:3px;background:${b.color}"></span>${esc(b.name)}</div>${byBrew[b.id].map(row).join('')}`).join('')
+    +(free.length?`<div class="section-label" style="margin:14px 0 8px">${icon('box',14)} Ostatní</div>${free.map(row).join('')}`:'');
+  openOverlay(`<div class="modal-head">${icon('cart',20)}<h3>Přidat položku ze skladu</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><p style="margin:0;color:var(--text-2);font-size:13px">Nabízí se jen zboží, které je fyzicky skladem. Cena se předvyplní z ceníku a jde přepsat.</p>${sections}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zavřít</button></div>`,{center:true});
+  $$('[data-scrim-close]').forEach(x=>x.onclick=closeOverlay);
+}
+function sePick(invId){
+  const inv=DB.inventory.find(i=>i.id===invId); if(!inv) return;
+  SE.draft.items.push(saleLine(inv,1)); closeOverlay(); seRerender();
+}
+function seSave(complete){
+  seSync(); const d=SE.draft;
+  if(!d.items.length) return toast('Přidejte alespoň jednu položku','warnTri');
+  if(d.buyerKind==='Client'&&!d.clientId) return toast('Vyberte klienta','warnTri');
+  if(d.items.some(i=>!i.quantity)) return toast('Každá položka musí mít počet větší než 0','warnTri');
+  if(complete){
+    if(d.payment==='Invoice'&&!(d.invoice.name||'').trim()) return toast('Vyplňte název pro fakturu','warnTri');
+    if(d.items.some(i=>i.unitPrice==null)) return toast('Doplňte cenu u všech položek','warnTri');
+    const over=d.items.find(i=>i.quantity>saleStock(i.inventoryId));
+    if(over) return toast('Na skladě není dost kusů: '+over.name,'warnTri');
+  }
+  const payload={ date:d.date, buyerKind:d.buyerKind, clientId:d.buyerKind==='Client'?d.clientId:null,
+    buyerName:d.buyerKind==='Walkin'?d.buyerName:'', payment:d.payment,
+    invoice:d.payment==='Invoice'?{...d.invoice}:null, items:d.items.map(i=>({...i})), note:d.note };
+  let sale;
+  if(d.id){ sale=DB.sales.find(x=>x.id===d.id); Object.assign(sale,payload); }
+  else { sale={ id:'s-'+Math.random().toString(36).slice(2,7), number:nextSaleNumber(), state:'Draft',
+      soldBy:ME.id, completedAt:null, ...payload };
+    DB.sales.push(sale); d.id=sale.id; d.number=sale.number; }
+  if(complete) completeSale(sale.id,()=>go('sales/'+sale.id));
+  else { toast('Prodej uložen jako rozpracovaný'); go('sales/'+sale.id); }
+}
+
 /* ============ MODULE: ŘIDIČI (DRIVERS) ============ */
 let DRV_VIEW='list';
 function viewDrivers(){
@@ -3083,7 +3500,7 @@ function delVehicle(id){ confirmDialog('Smazat vůz?','Vůz bude odstraněn z vo
 
 /* ============ MODULE: UŽIVATELÉ (USERS) — permission matrix ============ */
 const PERM_MODULES=[['orders','Objednávky','order'],['shipments','Vývozy','ship'],['deliveries','Dovozy zboží','import'],
-  ['inventory','Sklad','stock'],['breweries','Pivovary','brewery'],['clients','Klienti','client'],
+  ['inventory','Sklad','stock'],['sales','Prodeje','cart'],['breweries','Pivovary','brewery'],['clients','Klienti','client'],
   ['drivers','Řidiči','driver'],['vehicles','Vozy','vehicle'],['users','Uživatelé','users']];
 function permSummary(u){ if(u.roles.includes('Admin')) return '<span class="pill s-amber"><span class="d"></span>Plný přístup</span>';
   const edit=PERM_MODULES.filter(([m])=>u.perms[m]==='edit').length, view=PERM_MODULES.filter(([m])=>u.perms[m]==='view').length;
@@ -3165,6 +3582,8 @@ function cmdkSearch(q){
     res.push({ic:'ship',title:s.name,sub:s.number+' · '+(L.shipState[s.state]||''),path:'shipments/'+s.id,kind:'Vývoz'}); });
   if(canSee('deliveries')) DB.deliveries.forEach(d=>{ if((d.number||'').toLowerCase().includes(q))
     res.push({ic:'import',title:d.number,sub:'Dovoz · '+(L.deliveryState[d.state]||''),path:'deliveries/'+d.id,kind:'Dovoz'}); });
+  if(canSee('sales')) DB.sales.forEach(s=>{ if((s.number||'').toLowerCase().includes(q)||saleBuyer(s).toLowerCase().includes(q))
+    res.push({ic:'cart',title:s.number,sub:saleBuyer(s)+' · '+(L.saleState[s.state]||''),path:'sales/'+s.id,kind:'Prodej'}); });
   return res.slice(0,10);
 }
 function openCommandPalette(){

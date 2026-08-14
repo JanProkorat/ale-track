@@ -74,7 +74,17 @@ public class AleTrackDbContext : DbContext
     /// DbSet of <see cref="InventoryItem"/>
     /// </summary>
     public virtual DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
-    
+
+    /// <summary>
+    /// DbSet of <see cref="Sale"/>
+    /// </summary>
+    public virtual DbSet<Sale> Sales => Set<Sale>();
+
+    /// <summary>
+    /// DbSet of <see cref="SaleItem"/>
+    /// </summary>
+    public virtual DbSet<SaleItem> SaleItems => Set<SaleItem>();
+
     /// <summary>
     /// DbSet of <see cref="ExchangeRate"/>
     /// </summary>

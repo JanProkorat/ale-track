@@ -16,6 +16,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { type Theme } from '@mui/material/styles';
+import { type SystemStyleObject } from '@mui/system';
 import { EmptyState } from './EmptyState';
 import {
   DEFAULT_PAGE_SIZE,
@@ -63,6 +64,7 @@ export function DataTable<T>({
   emptyState,
   dense = false,
   mobileCard,
+  rowSx,
   paginated = false,
   pageSizeKey,
   defaultSort,
@@ -77,6 +79,10 @@ export function DataTable<T>({
   emptyState?: ReactNode;
   dense?: boolean;
   mobileCard?: (row: T) => ReactNode;
+  /** Per-row styling, for a row whose whole record needs flagging rather than one cell — an
+   * overdue sale, say. Returning `undefined` leaves the row at its default. Applied to the
+   * table row and to the compact list block, so the flag survives the mobile layout. */
+  rowSx?: (row: T) => SystemStyleObject<Theme> | undefined;
   /** Show a rows-per-page pager and render only the current page. */
   paginated?: boolean;
   /** Identifies this list for the remembered rows-per-page, e.g. 'orders'. Each list keeps
@@ -221,7 +227,7 @@ export function DataTable<T>({
               direction="row"
               alignItems="center"
               spacing={0.5}
-              sx={{ px: 1.75, py: 1.5 }}
+              sx={{ px: 1.75, py: 1.5, ...rowSx?.(row) }}
             >
               {onRowClick ? (
                 <ButtonBase
@@ -315,6 +321,7 @@ export function DataTable<T>({
               sx={{
                 ...(onRowClick && { cursor: 'pointer' }),
                 '&:last-child td': { borderBottom: 0 },
+                ...rowSx?.(row),
               }}
             >
               {columns.map((c) => (

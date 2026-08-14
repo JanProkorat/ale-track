@@ -65,4 +65,15 @@ public sealed record NumberOfRecordsInEachModuleDto
     /// has no access to the Deliveries module.
     /// </summary>
     public int? ProductDeliveriesCount { get; set; }
+
+    /// <summary>
+    /// Total count of unfinished garage sales in the database, or null when the caller has no
+    /// access to the Sales module.
+    /// </summary>
+    /// <remarks>
+    /// Unfinished means anything not yet <see cref="Common.Enums.SaleState.Completed"/> — a draft
+    /// still being written at the counter as well as an invoiced sale waiting for its payment.
+    /// Both are open work for the person watching the badge.
+    /// </remarks>
+    public int? SalesCount { get; set; }
 }

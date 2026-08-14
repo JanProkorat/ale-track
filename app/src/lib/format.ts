@@ -60,3 +60,11 @@ export function shipmentNumber(id?: string): string {
   if (!id) return '—';
   return `#${id.slice(-6).toUpperCase()}`;
 }
+
+/** Short display number for a garage sale, derived from its id — same convention as
+ * orderNumber/deliveryNumber/shipmentNumber. The API stores no sale number; if this module ever
+ * issues its own invoices it will need a real sequential series instead. */
+export function saleNumber(id?: string): string {
+  if (!id) return '—';
+  return `#${id.slice(-6).toUpperCase()}`;
+}

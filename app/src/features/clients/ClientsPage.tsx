@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Box, Button, Card, Chip, Stack, Typography } from '@mui/material';
 import { useQueries } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/AddOutlined';
@@ -9,6 +9,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import MailIcon from '@mui/icons-material/MailOutlineOutlined';
 import PhoneIcon from '@mui/icons-material/PhoneOutlined';
 import { useSnackbar } from 'notistack';
+import { detailBackState } from 'src/routes/backNav';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
@@ -58,6 +59,8 @@ export function ClientsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const ds = useDataSource();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTarget = detailBackState(location.state);
   const { id: selectedId } = useParams();
 
   // The detail's open sub-tab lives in the URL (`?tab=orders`, as the prototype
@@ -290,7 +293,10 @@ export function ClientsPage() {
               canSeeOrders={canSee('orders')}
               tab={detailTab}
               onTabChange={selectTab}
-              onBack={() => navigate(PATHS.clients)}
+              // A client opened as a detour from elsewhere (a garage sale, say) carries the way
+              // back with it, so the arrow returns there instead of the clients list.
+              onBack={() => navigate(backTarget?.backTo ?? PATHS.clients)}
+              backLabel={backTarget?.backLabel}
               onEdit={openEdit}
               onDelete={() => setConfirmDelete(true)}
             />

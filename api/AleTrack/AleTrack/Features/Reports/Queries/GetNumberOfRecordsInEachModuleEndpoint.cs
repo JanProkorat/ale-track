@@ -94,6 +94,11 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(
                 : null,
             ProductDeliveriesCount = CanSee(ModuleType.Deliveries)
                 ? await dbContext.ProductDeliveries.CountAsync(o => !_finishedProductDeliveryStates.Contains(o.State), ct)
+                : null,
+            // Completed is the only terminal sale state — there is no storno — so "unfinished"
+            // covers both a draft and a sale still waiting for its invoice to be paid.
+            SalesCount = CanSee(ModuleType.Sales)
+                ? await dbContext.Sales.CountAsync(s => s.State != SaleState.Completed, ct)
                 : null
         };
 
