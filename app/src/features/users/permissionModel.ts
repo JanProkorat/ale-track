@@ -15,7 +15,7 @@ import {
   type UserListItemDto,
 } from 'src/generated/api-client';
 
-/** The 9 permissionable modules (dashboard is always visible, excluded). */
+/** The permissionable modules (dashboard is always visible, excluded). */
 export const PERM_MODULES = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.key !== 'dashboard');
 
 const KEY_TO_MODULE: Record<string, ModuleType> = {
@@ -24,6 +24,7 @@ const KEY_TO_MODULE: Record<string, ModuleType> = {
   shipments: ModuleType.Shipments,
   deliveries: ModuleType.Deliveries,
   inventory: ModuleType.Inventory,
+  sales: ModuleType.Sales,
   breweries: ModuleType.Breweries,
   clients: ModuleType.Clients,
   drivers: ModuleType.Drivers,

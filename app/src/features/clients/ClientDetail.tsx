@@ -106,6 +106,7 @@ export function ClientDetail({
   tab,
   onTabChange,
   onBack,
+  backLabel = 'Zpět na klienty',
   onEdit,
   onDelete,
 }: {
@@ -120,6 +121,9 @@ export function ClientDetail({
   tab: SubTab;
   onTabChange: (tab: SubTab) => void;
   onBack: () => void;
+  /** Overridden when the client was opened from elsewhere — e.g. from a garage sale, whose back
+   *  arrow returns to that sale rather than dropping the user on the clients list. */
+  backLabel?: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -143,7 +147,7 @@ export function ClientDetail({
     <Box>
       <DetailHeader
         onBack={onBack}
-        backLabel="Zpět na klienty"
+        backLabel={backLabel}
         title={client.name}
         meta={[client.businessName, regionLabel(client.region)]}
         actions={editable && (

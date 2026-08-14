@@ -44,6 +44,10 @@ export const qk = {
   deliveries: resource('deliveries'),
   deliveryStates: ['deliveries', 'states'] as const,
   inventory: resource('inventory'),
+  sales: resource('sales'),
+  // Nested under sales so invalidating qk.sales.all also refreshes a client's purchase history —
+  // completing a sale changes what that client has bought before.
+  saleClientHistory: (clientId: string) => ['sales', 'client-history', clientId] as const,
   drivers: resource('drivers'),
   vehicles: resource('vehicles'),
   users: resource('users'),

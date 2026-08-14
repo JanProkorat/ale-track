@@ -21,6 +21,7 @@ const COUNT_FIELD: Partial<Record<ModuleKey, string>> = {
   shipments: 'outgoingShipmentsCount',
   deliveries: 'productDeliveriesCount',
   inventory: 'inventoryItemsCount',
+  sales: 'salesCount',
   breweries: 'breweriesCount',
   clients: 'clientsCount',
   drivers: 'driversCount',

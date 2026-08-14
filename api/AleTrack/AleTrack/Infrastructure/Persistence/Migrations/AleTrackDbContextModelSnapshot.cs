@@ -1762,6 +1762,143 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("role_capabilities");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.Sale", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("BuyerKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("buyer_kind");
+
+                    b.Property<string>("BuyerName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("buyer_name");
+
+                    b.Property<long?>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<int>("Payment")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<DateOnly>("SaleDate")
+                        .HasColumnType("date")
+                        .HasColumnName("sale_date");
+
+                    b.Property<long?>("SoldByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sold_by_user_id");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer")
+                        .HasColumnName("state");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SaleDate");
+
+                    b.HasIndex("SoldByUserId");
+
+                    b.HasIndex("State");
+
+                    b.ToTable("sales");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SaleItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("InventoryItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("inventory_item_id");
+
+                    b.Property<int?>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<decimal?>("ListPriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("list_price_with_vat");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<double?>("PackageSize")
+                        .HasColumnType("double precision")
+                        .HasColumnName("package_size");
+
+                    b.Property<long?>("ProductId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("product_id");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<long>("SaleId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sale_id");
+
+                    b.Property<decimal>("UnitPriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("unit_price_with_vat");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("sale_items");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.User", b =>
                 {
                     b.Property<long>("Id")
@@ -2672,6 +2809,106 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.Sale", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AleTrack.Entities.User", "SoldByUser")
+                        .WithMany()
+                        .HasForeignKey("SoldByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.OwnsOne("AleTrack.Entities.SaleBillingDetails", "Billing", b1 =>
+                        {
+                            b1.Property<long>("SaleId")
+                                .HasColumnType("bigint");
+
+                            b1.Property<string>("City")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("billing_city");
+
+                            b1.Property<string>("CompanyId")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("billing_company_id");
+
+                            b1.Property<DateOnly?>("DueDate")
+                                .HasColumnType("date")
+                                .HasColumnName("billing_due_date");
+
+                            b1.Property<string>("Name")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("billing_name");
+
+                            b1.Property<DateOnly?>("PaidDate")
+                                .HasColumnType("date")
+                                .HasColumnName("billing_paid_date");
+
+                            b1.Property<string>("StreetName")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("billing_street_name");
+
+                            b1.Property<string>("StreetNumber")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("billing_street_number");
+
+                            b1.Property<string>("VatId")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("billing_vat_id");
+
+                            b1.Property<string>("Zip")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("billing_zip");
+
+                            b1.HasKey("SaleId");
+
+                            b1.ToTable("sales");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SaleId");
+                        });
+
+                    b.Navigation("Billing");
+
+                    b.Navigation("Client");
+
+                    b.Navigation("SoldByUser");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SaleItem", b =>
+                {
+                    b.HasOne("AleTrack.Entities.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AleTrack.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AleTrack.Entities.Sale", "Sale")
+                        .WithMany("Items")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Sale");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.UserPermission", b =>
                 {
                     b.HasOne("AleTrack.Entities.User", "User")
@@ -2800,6 +3037,11 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("AleTrack.Entities.ProductDelivery", b =>
                 {
                     b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.Sale", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.User", b =>

@@ -299,4 +299,98 @@ public static class ThrowHelper
             {
                 { nameof(driverId), driverId }
             });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an already completed sale would be changed.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// Completing a sale deducts its pieces from inventory, so editing, re-completing or deleting
+    /// it afterwards would desynchronise the stock ledger from what actually left the shelf.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleAlreadyCompleted(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleAlreadyCompleted,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a sale cannot be completed because a line
+    /// has no price.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// A draft may be saved before the price is agreed — free-form stock has no ceník entry to
+    /// fall back on — but it must not be handed over unpriced.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleLinePriceMissing(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleLinePriceMissing,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when there is not enough stock to complete a sale.
+    /// </summary>
+    /// <param name="items">Names of the lines that exceed what is on the shelf.</param>
+    /// <remarks>
+    /// Carries the offending line names so the UI can say which item is short rather than only
+    /// that something is.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleInsufficientStock(IReadOnlyCollection<string> items)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleInsufficientStock,
+            new Dictionary<string, object>
+            {
+                { nameof(items), string.Join(", ", items) }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a payment state is set on a sale that is not
+    /// paid by invoice.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleNotInvoiced(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleNotInvoiced,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when payment is confirmed on a sale that is not
+    /// waiting for one.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// Guards both directions: a draft has not been handed over yet, and an already completed sale
+    /// would have its settlement date overwritten.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleNotAwaitingPayment(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleNotAwaitingPayment,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
 }

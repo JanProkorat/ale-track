@@ -4,6 +4,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import MoveToInboxOutlinedIcon from '@mui/icons-material/MoveToInboxOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import SportsBarOutlinedIcon from '@mui/icons-material/SportsBarOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
@@ -42,10 +43,11 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    heading: 'Sklad',
+    heading: 'Garážový prodej',
     items: [
       { key: 'deliveries', label: 'Dovozy zboží', path: PATHS.deliveries, icon: icon(<MoveToInboxOutlinedIcon fontSize="small" />) },
       { key: 'inventory', label: 'Sklad', path: PATHS.inventory, icon: icon(<Inventory2OutlinedIcon fontSize="small" />) },
+      { key: 'sales', label: 'Prodeje', path: PATHS.sales, icon: icon(<ShoppingCartOutlinedIcon fontSize="small" />) },
     ],
   },
   {

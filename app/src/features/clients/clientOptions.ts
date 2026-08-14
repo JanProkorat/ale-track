@@ -1,6 +1,18 @@
-import type { ClientDto } from 'src/generated/api-client';
+import type { Region } from 'src/generated/api-client';
 import type { ComboOption } from 'src/components/common/Combobox';
 import { L, regionLabel } from 'src/lib/labels';
+
+/**
+ * The three fields a picker option needs from a client.
+ *
+ * Structural rather than `ClientDto`, because the detail DTO and the list DTO both satisfy it — the
+ * order editor holds the former, the sale editor the latter, and neither should have to cast.
+ */
+export interface ClientOptionSource {
+  id?: string;
+  name?: string;
+  region?: Region;
+}
 
 const COLLATOR = new Intl.Collator('cs');
 
@@ -13,7 +25,7 @@ const OTHER = L.region.Other;
  * with "Ostatní" last, clients inside each region by name. The `group` label is
  * what the collapsible header shows, so it is the Czech label, not the enum
  * member name. */
-export function clientComboOptions(clients: readonly ClientDto[]): ComboOption[] {
+export function clientComboOptions(clients: readonly ClientOptionSource[]): ComboOption[] {
   return clients
     .map((c) => ({ value: c.id ?? '', label: c.name ?? '', group: regionLabel(c.region) ?? OTHER }))
     .sort((a, b) => {

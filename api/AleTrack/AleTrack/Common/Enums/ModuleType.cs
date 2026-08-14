@@ -34,5 +34,14 @@ public enum ModuleType
     Users,
 
     /// <summary>Reporty (read-only analytics).</summary>
-    Reports
+    Reports,
+
+    /// <summary>
+    /// Garážový prodej (walk-in counter sales off the warehouse shelf).
+    /// </summary>
+    /// <remarks>
+    /// Appended deliberately: these values are persisted in user_module_permissions, so
+    /// reordering them would rewrite the meaning of every existing row.
+    /// </remarks>
+    Sales
 }

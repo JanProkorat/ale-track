@@ -22,6 +22,16 @@ public sealed class ModuleCountsPermissionTests
         => EndpointWithResponseBuilder<EmptyRequest, NumberOfRecordsInEachModuleDto, GetNumberOfRecordsInEachModuleEndpoint>
             .Create(dbContext.Object, appContext.Object, driverScope);
 
+    /// <summary>A garage sale in the given state — only the state matters to the count.</summary>
+    private static Sale Sale(SaleState state) => new()
+    {
+        PublicId = Guid.NewGuid(),
+        SaleDate = new DateOnly(2026, 8, 14),
+        State = state,
+        BuyerKind = SaleBuyerKind.Walkin,
+        Payment = SalePaymentMethod.Cash
+    };
+
     [Fact]
     public async Task HandleAsync_CallerHasViewOnSomeModules_ReturnsCountsOnlyForThoseModules()
     {
@@ -53,6 +63,7 @@ public sealed class ModuleCountsPermissionTests
         result.UsersCount.Should().BeNull();
         result.OutgoingShipmentsCount.Should().BeNull();
         result.ProductDeliveriesCount.Should().BeNull();
+        result.SalesCount.Should().BeNull();
     }
 
     [Fact]
@@ -67,7 +78,8 @@ public sealed class ModuleCountsPermissionTests
             users: [UserBuilder.BuildEntity()],
             outgoingShipments: [OutgoingShipmentBuilder.BuildEntity()],
             productDeliveries: [ProductDeliveryBuilder.BuildEntity()],
-            inventoryItems: [new InventoryItem { Quantity = 3 }]);
+            inventoryItems: [new InventoryItem { Quantity = 3 }],
+            sales: [Sale(SaleState.Draft)]);
 
         var appContext = new Mock<IAppContext>();
         appContext.Setup(a => a.Permissions).Returns(
@@ -87,6 +99,33 @@ public sealed class ModuleCountsPermissionTests
         result.OutgoingShipmentsCount.Should().Be(1);
         result.ProductDeliveriesCount.Should().Be(1);
         result.InventoryItemsCount.Should().Be(3);
+        result.SalesCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SalesInEveryState_CountsOnlyTheUnfinishedOnes()
+    {
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            sales:
+            [
+                Sale(SaleState.Draft),
+                Sale(SaleState.AwaitingPayment),
+                Sale(SaleState.Completed),
+                Sale(SaleState.Completed)
+            ]);
+
+        var appContext = new Mock<IAppContext>();
+        appContext.Setup(a => a.Permissions).Returns(new Dictionary<ModuleType, PermissionLevel>
+        {
+            [ModuleType.Sales] = PermissionLevel.View
+        });
+
+        var endpoint = CreateEndpoint(dbContext, appContext, DriverScopeMockFactory.Unscoped());
+        await endpoint.HandleAsync(CancellationToken.None);
+
+        // A sale handed over on an invoice is still open work, so it belongs in the badge next to
+        // the drafts; only a settled sale drops out.
+        endpoint.Response.SalesCount.Should().Be(2);
     }
 
     [Fact]

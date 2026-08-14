@@ -113,6 +113,44 @@ describe('DataTable mobile fallback', () => {
   });
 });
 
+describe('DataTable rowSx', () => {
+  const flagRows: Row[] = [
+    { id: '1', name: 'Po splatnosti', secret: '—' },
+    { id: '2', name: 'V pořádku', secret: '—' },
+  ];
+  const flagged = (r: Row) => (r.id === '1' ? { bgcolor: 'brand.critTint' } : undefined);
+
+  it('styles only the rows the callback flags', () => {
+    setCompact(false);
+    renderTable(<DataTable columns={columns} rows={flagRows} getRowKey={(r) => r.id} rowSx={flagged} />);
+
+    const flaggedRow = screen.getByText('Po splatnosti').closest('tr') as HTMLElement;
+    const plainRow = screen.getByText('V pořádku').closest('tr') as HTMLElement;
+
+    expect(getComputedStyle(flaggedRow).backgroundColor).toBeTruthy();
+    expect(getComputedStyle(plainRow).backgroundColor).toBeFalsy();
+  });
+
+  it('carries the flag into the compact layout, where the table is gone', () => {
+    setCompact(true);
+    renderTable(
+      <DataTable
+        columns={columns}
+        rows={flagRows}
+        getRowKey={(r) => r.id}
+        rowSx={flagged}
+        mobileCard={(r) => <span>{r.name}</span>}
+      />,
+    );
+
+    // The block, not the clickable inner region — that is where the row's sx lands.
+    const [flaggedBlock, plainBlock] = screen.getAllByTestId('list-row').map((el) => el.parentElement!);
+
+    expect(getComputedStyle(flaggedBlock).backgroundColor).toBeTruthy();
+    expect(getComputedStyle(plainBlock).backgroundColor).toBeFalsy();
+  });
+});
+
 type SortRow = { id: string; name: string; count: number };
 
 const sortColumns: Column<SortRow>[] = [

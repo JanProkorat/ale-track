@@ -5,7 +5,7 @@ import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
-  PriceListChangeKind, InvoiceAdjustmentKind,
+  PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -29,6 +29,15 @@ export const L = {
     OnTheWay: 'Na cestě',
     Finished: 'Dokončeno',
     Cancelled: 'Zrušeno',
+  } as Record<string, string>,
+  saleState: {
+    Draft: 'Rozpracovaný',
+    AwaitingPayment: 'Čeká na platbu',
+    Completed: 'Dokončený',
+  } as Record<string, string>,
+  salePayment: {
+    Cash: 'Hotově',
+    Invoice: 'Faktura',
   } as Record<string, string>,
   kind: {
     Keg: 'Sud',
@@ -404,3 +413,19 @@ export const DELIVERY_STATUS: StatusMap = {
   Finished: { tone: 'ok', label: 'Dokončeno' },
   Cancelled: { tone: 'grey', label: 'Zrušeno' },
 };
+
+export const SALE_STATUS: StatusMap = {
+  Draft: { tone: 'amber', label: 'Rozpracovaný' },
+  AwaitingPayment: { tone: 'info', label: 'Čeká na platbu' },
+  Completed: { tone: 'ok', label: 'Dokončený' },
+};
+
+/** The SaleState enum's member name ("Draft" / "Completed"), from either wire representation. */
+export function saleStateName(s?: SaleState | string | number): string {
+  return enumName(SaleState as unknown as Record<string, string | number>, s) ?? 'Draft';
+}
+
+/** The SalePaymentMethod enum's member name ("Cash" / "Invoice"), from either representation. */
+export function salePaymentName(p?: SalePaymentMethod | string | number): string {
+  return enumName(SalePaymentMethod as unknown as Record<string, string | number>, p) ?? 'Cash';
+}

@@ -37,6 +37,8 @@ public static class AleTrackDbContextMockFactory
     /// <param name="refreshTokens">The collection of RefreshToken entities to include in the mocked DbContext.</param>
     /// <param name="clientDeliveryPlaces">The collection of ClientDeliveryPlace entities to include in the mocked DbContext.</param>
     /// <param name="outgoingShipmentStopItems">The collection of OutgoingShipmentStopItem entities to include in the mocked DbContext.</param>
+    /// <param name="sales">The collection of Sale entities to include in the mocked DbContext.</param>
+    /// <param name="saleItems">The collection of SaleItem entities to include in the mocked DbContext.</param>
     /// <returns>A mock of the AleTrackDbContext configured with the provided entity data.</returns>
     public static Mock<AleTrackDbContext> CreateMock(
         ICollection<Client>? clients = null,
@@ -61,7 +63,9 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipmentLoadingState>? outgoingShipmentLoadingStates = null,
         ICollection<RefreshToken>? refreshTokens = null,
         ICollection<ClientDeliveryPlace>? clientDeliveryPlaces = null,
-        ICollection<PriceListImport>? priceListImports = null)
+        ICollection<PriceListImport>? priceListImports = null,
+        ICollection<Sale>? sales = null,
+        ICollection<SaleItem>? saleItems = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -88,7 +92,9 @@ public static class AleTrackDbContextMockFactory
             outgoingShipmentLoadingStates ?? [],
             refreshTokens ?? [],
             clientDeliveryPlaces ?? [],
-            priceListImports ?? []);
+            priceListImports ?? [],
+            sales ?? [],
+            saleItems ?? []);
     }
 
     /// <summary>
@@ -132,7 +138,9 @@ public static class AleTrackDbContextMockFactory
         ICollection<OutgoingShipmentLoadingState> outgoingShipmentLoadingStates,
         ICollection<RefreshToken> refreshTokens,
         ICollection<ClientDeliveryPlace> clientDeliveryPlaces,
-        ICollection<PriceListImport> priceListImports)
+        ICollection<PriceListImport> priceListImports,
+        ICollection<Sale> sales,
+        ICollection<SaleItem> saleItems)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -157,6 +165,8 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<RefreshToken>>(x => x.RefreshTokens).ReturnsDbSet(refreshTokens);
         dbContextMock.Setup<DbSet<ClientDeliveryPlace>>(x => x.ClientDeliveryPlaces).ReturnsDbSet(clientDeliveryPlaces);
         dbContextMock.Setup<DbSet<PriceListImport>>(x => x.PriceListImports).ReturnsDbSet(priceListImports);
+        dbContextMock.Setup<DbSet<Sale>>(x => x.Sales).ReturnsDbSet(sales);
+        dbContextMock.Setup<DbSet<SaleItem>>(x => x.SaleItems).ReturnsDbSet(saleItems);
 
         return dbContextMock;
     }

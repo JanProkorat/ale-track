@@ -13,6 +13,7 @@ import { ClientsPage } from 'src/features/clients/ClientsPage';
 import { OrdersPage } from 'src/features/orders/OrdersPage';
 import { ShipmentsPage } from 'src/features/shipments/ShipmentsPage';
 import { DeliveriesPage } from 'src/features/deliveries/DeliveriesPage';
+import { SalesPage } from 'src/features/sales/SalesPage';
 import { LOGIN_PATH, PATHS } from './paths';
 
 export const router = createBrowserRouter([
@@ -37,6 +38,10 @@ export const router = createBrowserRouter([
           { path: `${PATHS.deliveries}/:id`, element: <DeliveriesPage /> },
           { path: `${PATHS.deliveries}/:id/edit`, element: <DeliveriesPage view="edit" /> },
           { path: PATHS.inventory, element: <InventoryPage /> },
+          { path: PATHS.sales, element: <SalesPage /> },
+          { path: `${PATHS.sales}/new`, element: <SalesPage view="create" /> },
+          { path: `${PATHS.sales}/:id`, element: <SalesPage /> },
+          { path: `${PATHS.sales}/:id/edit`, element: <SalesPage view="edit" /> },
           { path: PATHS.breweries, element: <BreweriesPage /> },
           { path: `${PATHS.breweries}/:id`, element: <BreweriesPage /> },
           { path: PATHS.clients, element: <ClientsPage /> },
