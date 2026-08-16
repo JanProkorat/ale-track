@@ -20,7 +20,7 @@ import {
  * The permissionable modules (dashboard is always visible, excluded), in nav order.
  *
  * Deduped by module rather than taken straight from the nav: several items may gate on one
- * module (Reporty prodejny gates on `sales`, like Prodeje), and a duplicated row would let the
+ * module (the garage-sale Reporty gates on `sales`, like Prodeje), and a duplicated row lets the
  * two halves of the permission form disagree about the same module. The first item wins, so the
  * label stays the one for the module's primary screen.
  */

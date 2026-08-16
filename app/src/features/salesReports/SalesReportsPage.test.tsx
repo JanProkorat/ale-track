@@ -54,7 +54,7 @@ describe('SalesReportsPage', () => {
   it('opens on Tržby with the 90-day preset and only fetches the active tab', () => {
     renderPage();
 
-    expect(screen.getByText('Reporty prodejny')).toBeInTheDocument();
+    expect(screen.getByText('Reporty')).toBeInTheDocument();
     expect(screen.getByText('Garážový prodej')).toBeInTheDocument();
 
     expect(useGarageSalesRevenue.mock.calls[0][3]).toBe(true);

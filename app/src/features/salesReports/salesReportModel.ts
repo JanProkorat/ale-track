@@ -1,4 +1,4 @@
-// Pure shaping for the Reporty prodejny screens: the tab and period tables plus the
+// Pure shaping for the Garážový prodej report screens: the tab and period tables plus the
 // formatting the tabs share. Kept out of the components so the arithmetic is testable
 // without rendering — same convention as reports/reportModel.ts and shipmentInvoiceModel.ts.
 import { L, salePaymentName, saleBuyerKindName, type StatusTone } from 'src/lib/labels';

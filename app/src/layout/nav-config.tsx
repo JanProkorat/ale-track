@@ -30,6 +30,18 @@ export function navPermModule(item: Pick<NavItem, 'key' | 'permModule'>): Module
   return item.permModule ?? (item.key as ModuleKey);
 }
 
+/**
+ * Whether a nav item covers the current route — its own path, or anything nested under it.
+ *
+ * The boundary matters: a bare `startsWith` makes `/sales-reports` match `/sales`, which lit
+ * up two nav items at once. Only a full path segment counts as being inside a module. The
+ * dashboard matches exactly, since `/` is a prefix of every route.
+ */
+export function isNavPathActive(pathname: string, path: string): boolean {
+  if (path === PATHS.dashboard) return pathname === path;
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 export interface NavGroup {
   heading: string | null;
   items: NavItem[];
@@ -62,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         key: 'salesReports',
         // Whoever runs the counter sees its numbers — no separate analytics permission.
         permModule: 'sales',
-        label: 'Reporty prodejny',
+        label: 'Reporty',
         path: PATHS.salesReports,
         icon: icon(<QueryStatsOutlinedIcon fontSize="small" />),
       },

@@ -140,7 +140,7 @@ export function DashboardPage() {
   const today = useMemo(() => dayjs().startOf('day'), []);
 
   const tiles = NAV_GROUPS.flatMap((g) => g.items).filter(
-    // Keyed by nav key, not by module: Reporty prodejny gates on `sales` but has no tile.
+    // Keyed by nav key, not by module: the garage-sale Reporty gates on `sales` but has no tile.
     (it) => TILE_CONFIG[it.key] !== undefined && canSee(navPermModule(it))
   );
 

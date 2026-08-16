@@ -52,7 +52,7 @@ describe('roleOf', () => {
 
 /**
  * The permission matrix is derived from the nav, so a nav item that gates on a module another
- * item already covers (Reporty prodejny gates on `sales`, like Prodeje) must not add a second
+ * item already covers (the garage-sale Reporty gates on `sales`, like Prodeje) must not add a second
  * row — a duplicated row would let the two halves of the form disagree about one module.
  */
 describe('PERM_MODULES', () => {

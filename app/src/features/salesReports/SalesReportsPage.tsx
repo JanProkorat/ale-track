@@ -25,7 +25,7 @@ import { ProductsTab } from './ProductsTab';
 import { BuyersTab } from './BuyersTab';
 
 /**
- * Reporty prodejny — one page, three tabs, a shared period preset.
+ * Reporty (Garážový prodej) — one page, three tabs, a shared period preset.
  *
  * Same shape as the shipment Reporty page: only the active tab's query runs, and the tabs
  * take loaded data as a plain prop rather than calling a hook on data that may be missing.
@@ -47,7 +47,7 @@ export function SalesReportsPage() {
     <PageContainer>
       <PageHeader
         eyebrow="Garážový prodej"
-        title="Reporty prodejny"
+        title="Reporty"
         subtitle={`Dokončené prodeje · ${SALES_PERIOD_LABEL[period]}.`}
       />
 
