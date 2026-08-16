@@ -20,7 +20,7 @@ import { useDrivers } from 'src/hooks/useDrivers';
 import { useShipments } from 'src/hooks/useShipments';
 import { useDeliveries } from 'src/hooks/useDeliveries';
 import { useInventory } from 'src/hooks/useInventory';
-import { NAV_GROUPS } from 'src/layout/nav-config';
+import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
 import { PATHS } from 'src/routes/paths';
 import { num, fmtDateShort, plural } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName, DELIVERY_STATUS, deliveryStateName, type StatusTone } from 'src/lib/labels';
@@ -89,7 +89,8 @@ type ModuleCountField =
 
 // Which count field on the reports DTO backs each module's KPI tile, and the
 // tile's tone. Tones are varied for visual rhythm, not semantic meaning.
-const TILE_CONFIG: Partial<Record<ModuleKey, { field: ModuleCountField; tone: StatusTone }>> = {
+// Keyed by nav key rather than by ModuleKey: a nav item may gate on a module it does not name.
+const TILE_CONFIG: Partial<Record<string, { field: ModuleCountField; tone: StatusTone }>> = {
   orders: { field: 'ordersCount', tone: 'amber' },
   shipments: { field: 'outgoingShipmentsCount', tone: 'amber' },
   deliveries: { field: 'productDeliveriesCount', tone: 'info' },
@@ -140,7 +141,8 @@ export function DashboardPage() {
   const today = useMemo(() => dayjs().startOf('day'), []);
 
   const tiles = NAV_GROUPS.flatMap((g) => g.items).filter(
-    (it) => TILE_CONFIG[it.key] !== undefined && canSee(it.key)
+    // Keyed by nav key, not by module: Reporty prodejny gates on `sales` but has no tile.
+    (it) => TILE_CONFIG[it.key] !== undefined && canSee(navPermModule(it))
   );
 
   // This week's 7 days, starting today (matching the prototype's availability grid).

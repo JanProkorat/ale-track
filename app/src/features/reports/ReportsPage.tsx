@@ -34,7 +34,7 @@ export function ReportsPage() {
   return (
     <PageContainer>
       <PageHeader
-        eyebrow="Analýza"
+        eyebrow="Prodej"
         title="Reporty"
         subtitle={`Dokončené vývozy · ${PERIOD_LABEL[period]}.`}
       />

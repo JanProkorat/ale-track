@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { UserListItemDto, UserRoleType } from 'src/generated/api-client';
-import { roleOf, isAdminUser, ROLE_LABELS, ASSIGNABLE_ROLES } from './permissionModel';
+import { MODULE_KEYS } from 'src/auth/permissions';
+import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
+import { roleOf, isAdminUser, ROLE_LABELS, ASSIGNABLE_ROLES, PERM_MODULES } from './permissionModel';
 
 const withRoles = (userRoles: UserRoleType[]) => new UserListItemDto({ userRoles });
 
@@ -45,6 +47,40 @@ describe('roleOf', () => {
 
   it('drops an unrecognised role rather than treating it as privileged', () => {
     expect(roleOf(withWireRoles(['Wizard']))).toBe(UserRoleType.Manager);
+  });
+});
+
+/**
+ * The permission matrix is derived from the nav, so a nav item that gates on a module another
+ * item already covers (Reporty prodejny gates on `sales`, like Prodeje) must not add a second
+ * row — a duplicated row would let the two halves of the form disagree about one module.
+ */
+describe('PERM_MODULES', () => {
+  it('has exactly one row per permissionable module', () => {
+    const keys = PERM_MODULES.map((m) => m.key);
+
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).toHaveLength(MODULE_KEYS.length - 1); // every module but dashboard
+    expect(keys).not.toContain('dashboard');
+  });
+
+  it('keeps a row for a module whose nav item is not the only one gating on it', () => {
+    const salesItems = NAV_GROUPS.flatMap((g) => g.items).filter((i) => navPermModule(i) === 'sales');
+
+    expect(salesItems.length).toBeGreaterThan(1);
+    expect(PERM_MODULES.filter((m) => m.key === 'sales')).toHaveLength(1);
+  });
+});
+
+describe('navPermModule', () => {
+  it('falls back to the nav key when no permission module is declared', () => {
+    expect(navPermModule({ key: 'orders', label: 'Objednávky', path: '/orders', icon: null })).toBe('orders');
+  });
+
+  it('prefers the declared permission module over the nav key', () => {
+    expect(
+      navPermModule({ key: 'salesReports', permModule: 'sales', label: 'Reporty prodejny', path: '/sales-reports', icon: null })
+    ).toBe('sales');
   });
 });
 

@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
 import { CurrencyMenu } from './CurrencyMenu';
-import { NAV_GROUPS } from './nav-config';
+import { NAV_GROUPS, navPermModule } from './nav-config';
 import { useAuth } from 'src/auth/AuthProvider';
 import { PATHS } from 'src/routes/paths';
 import { type ModuleKey } from 'src/auth/permissions';
@@ -17,7 +17,7 @@ function moduleForPath(pathname: string): ModuleKey | null {
     .flatMap((g) => g.items)
     .filter((it) => it.path !== PATHS.dashboard && (pathname === it.path || pathname.startsWith(`${it.path}/`)))
     .sort((a, b) => b.path.length - a.path.length)[0];
-  return match ? match.key : null;
+  return match ? navPermModule(match) : null;
 }
 
 export function AppShell() {

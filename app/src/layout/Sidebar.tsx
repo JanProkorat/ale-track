@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Box, Drawer, Stack, Typography, ButtonBase, Avatar } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import { NAV_GROUPS } from './nav-config';
+import { NAV_GROUPS, navPermModule } from './nav-config';
 import { AccountMenu } from './AccountMenu';
 import { Logo } from 'src/components/common/Logo';
 import { useAuth } from 'src/auth/AuthProvider';
@@ -16,7 +16,8 @@ export const SIDEBAR_W = 250;
 export const SIDEBAR_W_COLLAPSED = 74;
 
 // Which module-counts field backs each nav item's badge (dashboard has none).
-const COUNT_FIELD: Partial<Record<ModuleKey, string>> = {
+// Keyed by nav key: Reporty prodejny gates on `sales` but carries no record count of its own.
+const COUNT_FIELD: Partial<Record<string, string>> = {
   orders: 'ordersCount',
   shipments: 'outgoingShipmentsCount',
   deliveries: 'productDeliveriesCount',
@@ -70,7 +71,7 @@ export function Sidebar({
       {/* Nav */}
       <Box sx={{ flex: '1 1 auto', overflowY: 'auto', px: 1.5, pb: 2.5 }}>
         {NAV_GROUPS.map((group, gi) => {
-          const items = group.items.filter((it) => canSee(it.key));
+          const items = group.items.filter((it) => canSee(navPermModule(it)));
           if (!items.length) return null;
           return (
             <Box key={gi}>

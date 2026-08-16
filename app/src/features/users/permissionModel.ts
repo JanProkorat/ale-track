@@ -1,6 +1,6 @@
 // Bridges the client permission model (permissions.ts: ModuleKey × 'none'|'view'
 // |'edit') and the API's ModulePermissionDto (ModuleType × PermissionLevel).
-import { NAV_GROUPS } from 'src/layout/nav-config';
+import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
 import {
   makePerms,
   type ModuleKey,
@@ -15,8 +15,19 @@ import {
   type UserListItemDto,
 } from 'src/generated/api-client';
 
-/** The permissionable modules (dashboard is always visible, excluded). */
-export const PERM_MODULES = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.key !== 'dashboard');
+/**
+ * The permissionable modules (dashboard is always visible, excluded), in nav order.
+ *
+ * Deduped by module rather than taken straight from the nav: several items may gate on one
+ * module (Reporty prodejny gates on `sales`, like Prodeje), and a duplicated row would let the
+ * two halves of the permission form disagree about the same module. The first item wins, so the
+ * label stays the one for the module's primary screen.
+ */
+export const PERM_MODULES: { key: ModuleKey; label: string }[] = NAV_GROUPS.flatMap((g) => g.items)
+  .map((item) => ({ key: navPermModule(item), label: item.label }))
+  .filter((module, index, all) =>
+    module.key !== 'dashboard' && all.findIndex((m) => m.key === module.key) === index
+  );
 
 const KEY_TO_MODULE: Record<string, ModuleType> = {
   reports: ModuleType.Reports,

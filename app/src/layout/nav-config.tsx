@@ -11,14 +11,23 @@ import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import AirportShuttleOutlinedIcon from '@mui/icons-material/AirportShuttleOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import QueryStatsOutlinedIcon from '@mui/icons-material/QueryStatsOutlined';
 import { type ModuleKey } from 'src/auth/permissions';
 import { PATHS } from 'src/routes/paths';
 
 export interface NavItem {
-  key: ModuleKey;
+  /** Unique per nav item — not a `ModuleKey`, because two items may gate on one module. */
+  key: string;
+  /** Module whose permission gates this item. Defaults to `key` when the two coincide. */
+  permModule?: ModuleKey;
   label: string;
   path: string;
   icon: ReactNode;
+}
+
+/** The module a nav item is gated by. Every permission check goes through this, never `key`. */
+export function navPermModule(item: Pick<NavItem, 'key' | 'permModule'>): ModuleKey {
+  return item.permModule ?? (item.key as ModuleKey);
 }
 
 export interface NavGroup {
@@ -40,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'orders', label: 'Objednávky', path: PATHS.orders, icon: icon(<ReceiptLongOutlinedIcon fontSize="small" />) },
       { key: 'shipments', label: 'Vývozy', path: PATHS.shipments, icon: icon(<LocalShippingOutlinedIcon fontSize="small" />) },
+      { key: 'reports', label: 'Reporty', path: PATHS.reports, icon: icon(<InsightsOutlinedIcon fontSize="small" />) },
     ],
   },
   {
@@ -48,12 +58,14 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'deliveries', label: 'Dovozy zboží', path: PATHS.deliveries, icon: icon(<MoveToInboxOutlinedIcon fontSize="small" />) },
       { key: 'inventory', label: 'Sklad', path: PATHS.inventory, icon: icon(<Inventory2OutlinedIcon fontSize="small" />) },
       { key: 'sales', label: 'Prodeje', path: PATHS.sales, icon: icon(<ShoppingCartOutlinedIcon fontSize="small" />) },
-    ],
-  },
-  {
-    heading: 'Analýza',
-    items: [
-      { key: 'reports', label: 'Reporty', path: PATHS.reports, icon: icon(<InsightsOutlinedIcon fontSize="small" />) },
+      {
+        key: 'salesReports',
+        // Whoever runs the counter sees its numbers — no separate analytics permission.
+        permModule: 'sales',
+        label: 'Reporty prodejny',
+        path: PATHS.salesReports,
+        icon: icon(<QueryStatsOutlinedIcon fontSize="small" />),
+      },
     ],
   },
   {
