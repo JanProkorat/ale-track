@@ -24,7 +24,7 @@ public sealed class GetClientVolumeEndpoint(AleTrackDbContext dbContext, IDriver
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("reports/client-volume");
+        Get("reports/shipments/client-volume");
         Description(b => b
             .RequirePermission(ModuleType.Reports, PermissionLevel.View)
             .WithName(nameof(GetClientVolumeEndpoint)));

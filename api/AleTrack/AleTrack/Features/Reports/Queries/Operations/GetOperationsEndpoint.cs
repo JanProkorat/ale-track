@@ -27,7 +27,7 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext, IDriverSc
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("reports/operations");
+        Get("reports/shipments/operations");
         Description(b => b
             .RequirePermission(ModuleType.Reports, PermissionLevel.View)
             .WithName(nameof(GetOperationsEndpoint)));
