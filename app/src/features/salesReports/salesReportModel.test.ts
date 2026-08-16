@@ -34,13 +34,13 @@ describe('fmtDaysOfCover', () => {
 
 describe('overdueTone', () => {
   it('is neutral while the invoice is within terms', () => {
-    expect(overdueTone(-5)).toBe('none');
-    expect(overdueTone(0)).toBe('none');
+    expect(overdueTone(-5)).toBe('grey');
+    expect(overdueTone(0)).toBe('grey');
   });
 
   it('warns from the first day past due', () => {
-    expect(overdueTone(1)).toBe('warn');
-    expect(overdueTone(30)).toBe('warn');
+    expect(overdueTone(1)).toBe('amber');
+    expect(overdueTone(30)).toBe('amber');
   });
 
   it('escalates past a month overdue', () => {
@@ -48,7 +48,7 @@ describe('overdueTone', () => {
   });
 
   it('is neutral when no due date was agreed', () => {
-    expect(overdueTone(null)).toBe('none');
+    expect(overdueTone(null)).toBe('grey');
   });
 });
 

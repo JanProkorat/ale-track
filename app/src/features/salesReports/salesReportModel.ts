@@ -1,7 +1,7 @@
 // Pure shaping for the Reporty prodejny screens: the tab and period tables plus the
 // formatting the tabs share. Kept out of the components so the arithmetic is testable
 // without rendering — same convention as reports/reportModel.ts and shipmentInvoiceModel.ts.
-import { L, salePaymentName, saleBuyerKindName } from 'src/lib/labels';
+import { L, salePaymentName, saleBuyerKindName, type StatusTone } from 'src/lib/labels';
 import { plural } from 'src/lib/format';
 import type { SaleBuyerKind, SalePaymentMethod } from 'src/generated/api-client';
 
@@ -22,16 +22,14 @@ export const SALES_PERIOD_LABEL: Record<SalesReportPeriod, string> = {
   '180': 'posledních 6 měsíců',
 };
 
-/** Chip tone for an outstanding invoice, from its days past due. */
-export type OverdueTone = 'none' | 'warn' | 'crit';
-
 /**
- * How overdue an invoice reads. Null days means no due date was agreed, so there is nothing
- * to be late against — neutral, not alarming.
+ * How overdue an invoice reads, in the theme's own status tones so the pill matches every
+ * other status in the app. Null days means no due date was agreed, so there is nothing to be
+ * late against — neutral, not alarming.
  */
-export function overdueTone(daysOverdue: number | null | undefined): OverdueTone {
-  if (daysOverdue == null || daysOverdue <= 0) return 'none';
-  return daysOverdue > 30 ? 'crit' : 'warn';
+export function overdueTone(daysOverdue: number | null | undefined): StatusTone {
+  if (daysOverdue == null || daysOverdue <= 0) return 'grey';
+  return daysOverdue > 30 ? 'crit' : 'amber';
 }
 
 /**

@@ -74,13 +74,11 @@ describe('PERM_MODULES', () => {
 
 describe('navPermModule', () => {
   it('falls back to the nav key when no permission module is declared', () => {
-    expect(navPermModule({ key: 'orders', label: 'Objednávky', path: '/orders', icon: null })).toBe('orders');
+    expect(navPermModule({ key: 'orders' })).toBe('orders');
   });
 
   it('prefers the declared permission module over the nav key', () => {
-    expect(
-      navPermModule({ key: 'salesReports', permModule: 'sales', label: 'Reporty prodejny', path: '/sales-reports', icon: null })
-    ).toBe('sales');
+    expect(navPermModule({ key: 'salesReports', permModule: 'sales' })).toBe('sales');
   });
 });
 

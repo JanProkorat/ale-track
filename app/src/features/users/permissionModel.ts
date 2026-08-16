@@ -1,5 +1,6 @@
 // Bridges the client permission model (permissions.ts: ModuleKey × 'none'|'view'
 // |'edit') and the API's ModulePermissionDto (ModuleType × PermissionLevel).
+import { type ReactNode } from 'react';
 import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
 import {
   makePerms,
@@ -23,8 +24,8 @@ import {
  * two halves of the permission form disagree about the same module. The first item wins, so the
  * label stays the one for the module's primary screen.
  */
-export const PERM_MODULES: { key: ModuleKey; label: string }[] = NAV_GROUPS.flatMap((g) => g.items)
-  .map((item) => ({ key: navPermModule(item), label: item.label }))
+export const PERM_MODULES: { key: ModuleKey; label: string; icon: ReactNode }[] = NAV_GROUPS.flatMap((g) => g.items)
+  .map((item) => ({ key: navPermModule(item), label: item.label, icon: item.icon }))
   .filter((module, index, all) =>
     module.key !== 'dashboard' && all.findIndex((m) => m.key === module.key) === index
   );

@@ -9,7 +9,6 @@ import { useAuth } from 'src/auth/AuthProvider';
 import { useModuleCounts } from 'src/hooks/useReports';
 import { PATHS } from 'src/routes/paths';
 import { initials } from 'src/lib/format';
-import { type ModuleKey } from 'src/auth/permissions';
 import { roleOfRoles, ROLE_CLAIM_LABELS } from 'src/auth/capabilities';
 
 export const SIDEBAR_W = 250;

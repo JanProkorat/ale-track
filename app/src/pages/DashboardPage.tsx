@@ -24,7 +24,6 @@ import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
 import { PATHS } from 'src/routes/paths';
 import { num, fmtDateShort, plural } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName, DELIVERY_STATUS, deliveryStateName, type StatusTone } from 'src/lib/labels';
-import { type ModuleKey } from 'src/auth/permissions';
 import { SectionType, type DriverListItemDto } from 'src/generated/api-client';
 
 const MONTHS_CS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
