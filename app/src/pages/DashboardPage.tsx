@@ -84,7 +84,8 @@ type ModuleCountField =
   | 'vehiclesCount'
   | 'usersCount'
   | 'outgoingShipmentsCount'
-  | 'productDeliveriesCount';
+  | 'productDeliveriesCount'
+  | 'salesCount';
 
 // Which count field on the reports DTO backs each module's KPI tile, and the
 // tile's tone. Tones are varied for visual rhythm, not semantic meaning.
@@ -94,6 +95,9 @@ const TILE_CONFIG: Partial<Record<string, { field: ModuleCountField; tone: Statu
   shipments: { field: 'outgoingShipmentsCount', tone: 'amber' },
   deliveries: { field: 'productDeliveriesCount', tone: 'info' },
   inventory: { field: 'inventoryItemsCount', tone: 'info' },
+  // Like the sidebar badge, this counts sales still open — the endpoint excludes completed
+  // ones, so a quiet counter reads 0 rather than every sale ever rung up.
+  sales: { field: 'salesCount', tone: 'ok' },
   breweries: { field: 'breweriesCount', tone: 'ok' },
   clients: { field: 'clientsCount', tone: 'ok' },
   drivers: { field: 'driversCount', tone: 'grey' },
