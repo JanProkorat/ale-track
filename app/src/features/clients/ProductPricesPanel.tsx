@@ -201,10 +201,11 @@ function ProductPricesTable({
  * one price and writing another, which the trash action already does more
  * clearly. */
 function PriceFormDrawer({
-  open, clientId, editingPrice, takenProductIds, onClose,
+  open, clientId, clientName, editingPrice, takenProductIds, onClose,
 }: {
   open: boolean;
   clientId: string;
+  clientName?: string;
   editingPrice: ClientProductPriceDto | undefined;
   takenProductIds: string[];
   onClose: () => void;
@@ -254,6 +255,7 @@ function PriceFormDrawer({
     <FormDrawer
       open={open}
       title={editingPrice ? 'Upravit cenu' : 'Vlastní cena'}
+      subtitle={clientName}
       onClose={onClose}
       onSubmit={submit}
       busy={save.isPending}
@@ -300,7 +302,13 @@ function PriceFormDrawer({
 /** Ceník tab of the client detail: the client's own product-price overrides.
  * Applies to every order and counter sale for this client; an already-loaded
  * invoice keeps whatever price it froze at loading time. */
-export function ProductPricesPanel({ clientId, editable }: { clientId: string; editable: boolean }) {
+export function ProductPricesPanel({
+  clientId, clientName, editable,
+}: {
+  clientId: string;
+  clientName?: string;
+  editable: boolean;
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const { formatMoney } = useCurrency();
   const query = useClientProductPrices(clientId);
@@ -364,6 +372,7 @@ export function ProductPricesPanel({ clientId, editable }: { clientId: string; e
       <PriceFormDrawer
         open={formOpen}
         clientId={clientId}
+        clientName={clientName}
         editingPrice={editingPrice}
         takenProductIds={takenProductIds}
         onClose={() => setFormOpen(false)}

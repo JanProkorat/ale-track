@@ -273,7 +273,7 @@ export function ClientDetail({
 
       {activeTab === 'orders' && canSeeOrders && <ClientOrdersPanel clientId={clientId} />}
 
-      {activeTab === 'prices' && <ProductPricesPanel clientId={clientId} editable={editable} />}
+      {activeTab === 'prices' && <ProductPricesPanel clientId={clientId} clientName={client.name} editable={editable} />}
 
       {activeTab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
 

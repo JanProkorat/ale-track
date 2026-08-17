@@ -57,10 +57,10 @@ function price(over: Partial<ClientProductPriceDto> = {}): ClientProductPriceDto
   });
 }
 
-function renderPanel(editable: boolean) {
+function renderPanel(editable: boolean, clientName?: string) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <ProductPricesPanel clientId="client-1" editable={editable} />
+      <ProductPricesPanel clientId="client-1" clientName={clientName} editable={editable} />
     </MuiThemeProvider>,
   );
 }
@@ -178,6 +178,27 @@ describe('ProductPricesPanel query states', () => {
     renderPanel(true);
     expect(screen.getByText('Nelze se připojit')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Zkusit znovu' })).toBeInTheDocument();
+  });
+});
+
+describe('ProductPricesPanel price drawer', () => {
+  it('shows the client name in the drawer so it is clear whose price this is', () => {
+    queryState = { data: [], isLoading: false, isError: false };
+    renderPanel(true, 'Hospoda U Netopýra');
+
+    fireEvent.click(screen.getByRole('button', { name: /Přidat cenu/ }));
+
+    expect(screen.getByText('Hospoda U Netopýra')).toBeInTheDocument();
+  });
+
+  it('still shows the client name when editing an existing price', () => {
+    const target = price({ productId: 'product-1', productName: 'Ležák 12°' });
+    queryState = { data: [target], isLoading: false, isError: false };
+    renderPanel(true, 'Hospoda U Netopýra');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upravit cenu' }));
+
+    expect(screen.getByText('Hospoda U Netopýra')).toBeInTheDocument();
   });
 });
 
