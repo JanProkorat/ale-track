@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Box, Button, Card, Chip, Collapse, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
@@ -8,6 +8,7 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import { useSnackbar } from 'notistack';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { SearchField } from 'src/components/common/SearchField';
+import { StatCell } from 'src/components/common/StatCell';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { ViewToggle, type ViewMode } from 'src/components/common/ViewToggle';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
@@ -111,61 +112,6 @@ function BrewerySection({
         </Stack>
       </Collapse>
     </Card>
-  );
-}
-
-/** One stat cell inside the shared stat bar — plain inline cell (not its own
- * floating Card), separated from its neighbour by a left border. */
-function StatCell({
-  icon,
-  label,
-  value,
-  critical,
-  first,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-  critical?: boolean;
-  first?: boolean;
-}) {
-  return (
-    <Box
-      sx={{
-        flex: '0 1 auto',
-        minWidth: 112,
-        px: 1.875,
-        py: 1.375,
-        ...(!first && { borderLeft: '1px solid', borderColor: 'divider' }),
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.25,
-      }}
-    >
-      <Box
-        sx={{
-          width: 32,
-          height: 32,
-          borderRadius: 1.5,
-          display: 'grid',
-          placeItems: 'center',
-          flexShrink: 0,
-          bgcolor: (t) => (critical ? t.vars!.palette.brand.critTint : t.vars!.palette.brand.greyTint),
-          color: critical ? 'error.main' : 'text.secondary',
-          '& svg': { fontSize: 18 },
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-          {label}
-        </Typography>
-        <Typography sx={{ fontSize: 19, fontWeight: 800, lineHeight: 1.2, ...(critical && { color: 'error.main' }) }}>
-          {value}
-        </Typography>
-      </Box>
-    </Box>
   );
 }
 

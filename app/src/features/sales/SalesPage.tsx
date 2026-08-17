@@ -14,6 +14,7 @@ import { EmptyState } from 'src/components/common/EmptyState';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { SegControl } from 'src/components/common/SegControl';
 import { SearchField } from 'src/components/common/SearchField';
+import { StatCell } from 'src/components/common/StatCell';
 import { useAuth } from 'src/auth/AuthProvider';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { fmtDate, saleNumber } from 'src/lib/format';
@@ -202,41 +203,6 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
     );
   };
 
-  const stat = (label: string, value: string, icon: React.ReactNode, critical = false) => (
-    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 1.75, py: 1.25, minWidth: 140 }}>
-      <Box
-        sx={{
-          width: 32,
-          height: 32,
-          borderRadius: 1.25,
-          display: 'grid',
-          placeItems: 'center',
-          flexShrink: 0,
-          bgcolor: critical ? 'brand.critTint' : 'brand.surface2',
-          color: critical ? 'error.main' : 'text.secondary',
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.disabled', whiteSpace: 'nowrap' }}>
-          {label}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: 19,
-            fontWeight: 800,
-            lineHeight: 1.2,
-            fontVariantNumeric: 'tabular-nums',
-            color: critical ? 'error.main' : 'text.primary',
-          }}
-        >
-          {value}
-        </Typography>
-      </Box>
-    </Stack>
-  );
-
   if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
@@ -276,34 +242,41 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
       >
         {() => (
           <>
-            {/* Stats, segments and search share one row on a wide screen and stack on a narrow
-                one. `useFlexGap` rather than `spacing`, so a wrapped row keeps its gaps. */}
-            <Card variant="outlined" sx={{ mb: 2, px: 0.5, py: 0.75 }}>
-              <Stack
-                direction="row"
-                alignItems="center"
-                flexWrap="wrap"
-                useFlexGap
-                sx={{ gap: 1.5 }}
-              >
-                {stat('Prodejů tento měsíc', String(summary.completedThisMonth), <ShoppingCartOutlinedIcon fontSize="small" />)}
-                {stat('Obrat tento měsíc', formatMoney(summary.revenueThisMonth), <PaymentsOutlinedIcon fontSize="small" />)}
-                {stat('Rozpracované', String(summary.drafts), <EditOutlinedIcon fontSize="small" />)}
-                {stat(
-                  'Nezaplaceno',
-                  summary.unpaid > 0 ? formatMoney(summary.unpaidTotal) : '—',
-                  <ReceiptOutlinedIcon fontSize="small" />,
-                  summary.unpaid > 0
-                )}
-
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  flexWrap="wrap"
-                  useFlexGap
-                  // Pushed to the trailing edge on a wide screen; on a wrapped row the auto
-                  // margin collapses and the controls sit under the stats instead.
-                  sx={{ gap: 1.5, ml: { compact: 'auto' }, px: 1.25 }}
+            {/* Same strip as Sklad: bordered stat cells, then the filters in a cell of their
+                own that takes the leftover width. */}
+            <Card sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                <StatCell
+                  first
+                  icon={<ShoppingCartOutlinedIcon />}
+                  label="Prodejů tento měsíc"
+                  value={summary.completedThisMonth}
+                />
+                <StatCell
+                  icon={<PaymentsOutlinedIcon />}
+                  label="Obrat tento měsíc"
+                  value={formatMoney(summary.revenueThisMonth)}
+                />
+                <StatCell icon={<EditOutlinedIcon />} label="Rozpracované" value={summary.drafts} />
+                <StatCell
+                  icon={<ReceiptOutlinedIcon />}
+                  label="Nezaplaceno"
+                  value={summary.unpaid > 0 ? formatMoney(summary.unpaidTotal) : '—'}
+                  critical={summary.unpaid > 0}
+                />
+                <Box
+                  sx={{
+                    flex: '1 1 340px',
+                    minWidth: 300,
+                    borderLeft: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.125,
+                    px: 1.75,
+                    py: 1.375,
+                    flexWrap: 'wrap',
+                  }}
                 >
                   <SegControl
                     value={filter}
@@ -322,14 +295,16 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
                       ),
                     }))}
                   />
-                  <SearchField
-                    value={search}
-                    onChange={setSearch}
-                    placeholder="Hledat kupujícího…"
-                    width={{ xs: '100%', compact: 220 }}
-                  />
-                </Stack>
-              </Stack>
+                  <Box sx={{ flex: '1 1 auto', minWidth: 120 }}>
+                    <SearchField
+                      value={search}
+                      onChange={setSearch}
+                      placeholder="Hledat kupujícího…"
+                      width="100%"
+                    />
+                  </Box>
+                </Box>
+              </Box>
             </Card>
 
             <Typography
