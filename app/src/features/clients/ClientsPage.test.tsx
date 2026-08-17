@@ -53,6 +53,11 @@ vi.mock('src/hooks/useDeliveryPlaces', () => ({
   useUpdateDeliveryPlace: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useDeleteDeliveryPlace: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock('src/hooks/useClientProductPrices', () => ({
+  useClientProductPrices: () => ({ data: [], isPending: false, isError: false }),
+  useSaveClientProductPrice: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientProductPrice: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('src/auth/AuthProvider', () => ({
   useAuth: () => ({ canEdit: () => true, canSee: () => true, can: () => true }),
 }));

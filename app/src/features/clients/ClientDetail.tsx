@@ -6,6 +6,7 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
+import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import StickyNote2Icon from '@mui/icons-material/StickyNote2Outlined';
 import LocationOnIcon from '@mui/icons-material/LocationOnOutlined';
@@ -19,11 +20,13 @@ import { countryLabel, regionLabel, contactTypeLabel, isEmailContact, orderState
 import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/generated/api-client';
 import { useClientReminders } from 'src/hooks/useClientReminders';
 import { useClientOrders } from 'src/hooks/useOrders';
+import { useClientProductPrices } from 'src/hooks/useClientProductPrices';
 import { type SubTab } from './clientDetailTab';
 import { ClientOrdersPanel } from './ClientOrdersPanel';
 import { RemindersPanel } from './RemindersPanel';
 import { NotesPanel } from './NotesPanel';
 import { DeliveryPlacesPanel } from './DeliveryPlacesPanel';
+import { ProductPricesPanel } from './ProductPricesPanel';
 
 function formatZip(zip?: string): string {
   const z = (zip ?? '').replace(/\s/g, '');
@@ -132,6 +135,8 @@ export function ClientDetail({
   const reminderRows = reminders.data ?? [];
   const orders = useClientOrders(canSeeOrders ? clientId : undefined);
   const orderRows = orders.data ?? [];
+  const prices = useClientProductPrices(clientId);
+  const priceRows = prices.data ?? [];
   const openOrderCount = orderRows.filter((o) => {
     const state = orderStateName(o.state);
     return state !== 'Finished' && state !== 'Cancelled';
@@ -173,6 +178,7 @@ export function ClientDetail({
           {canSeeOrders && (
             <Tab value="orders" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Objednávky', orderRows.length)} sx={{ minHeight: 48 }} />
           )}
+          <Tab value="prices" iconPosition="start" icon={<WalletIcon fontSize="small" />} label={tabLabel('Ceník', priceRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
         </Tabs>
@@ -266,6 +272,8 @@ export function ClientDetail({
       )}
 
       {activeTab === 'orders' && canSeeOrders && <ClientOrdersPanel clientId={clientId} />}
+
+      {activeTab === 'prices' && <ProductPricesPanel clientId={clientId} editable={editable} />}
 
       {activeTab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
 
