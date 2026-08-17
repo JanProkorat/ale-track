@@ -633,6 +633,30 @@ export interface IClient {
     deleteClientEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets a client's own product prices
+     * @return The client's price list
+     */
+    getClientProductPricesEndpoint(clientId: string, signal?: AbortSignal): Promise<ClientProductPriceDto[]>;
+
+    /**
+     * Replaces a client's whole price list
+     * @return Price list saved
+     */
+    replaceClientProductPricesEndpoint(clientId: string, data: ClientProductPriceEntryDto[], signal?: AbortSignal): Promise<void>;
+
+    /**
+     * Sets the price a client pays for one product
+     * @return Price saved
+     */
+    saveClientProductPriceEndpoint(clientId: string, productId: string, data: SaveClientProductPriceDto, signal?: AbortSignal): Promise<void>;
+
+    /**
+     * Reverts a client to the ceník price for one product
+     * @return Price removed
+     */
+    deleteClientProductPriceEndpoint(clientId: string, productId: string, signal?: AbortSignal): Promise<void>;
+
+    /**
      * Gets a client's delivery places
      * @return List of delivery places
      */
@@ -7265,6 +7289,247 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets a client's own product prices
+     * @return The client's price list
+     */
+    getClientProductPricesEndpoint(clientId: string, signal?: AbortSignal): Promise<ClientProductPriceDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{clientId}/product-prices";
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{clientId}", encodeURIComponent("" + clientId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientProductPricesEndpoint(_response);
+        });
+    }
+
+    protected processGetClientProductPricesEndpoint(response: Response): Promise<ClientProductPriceDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ClientProductPriceDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientProductPriceDto[]>(null as any);
+    }
+
+    /**
+     * Replaces a client's whole price list
+     * @return Price list saved
+     */
+    replaceClientProductPricesEndpoint(clientId: string, data: ClientProductPriceEntryDto[], signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/clients/{clientId}/product-prices";
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{clientId}", encodeURIComponent("" + clientId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processReplaceClientProductPricesEndpoint(_response);
+        });
+    }
+
+    protected processReplaceClientProductPricesEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * Sets the price a client pays for one product
+     * @return Price saved
+     */
+    saveClientProductPriceEndpoint(clientId: string, productId: string, data: SaveClientProductPriceDto, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/clients/{clientId}/product-prices/{productId}";
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{clientId}", encodeURIComponent("" + clientId));
+        if (productId === undefined || productId === null)
+            throw new globalThis.Error("The parameter 'productId' must be defined.");
+        url_ = url_.replace("{productId}", encodeURIComponent("" + productId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSaveClientProductPriceEndpoint(_response);
+        });
+    }
+
+    protected processSaveClientProductPriceEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
+     * Reverts a client to the ceník price for one product
+     * @return Price removed
+     */
+    deleteClientProductPriceEndpoint(clientId: string, productId: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/ale-track/clients/{clientId}/product-prices/{productId}";
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{clientId}", encodeURIComponent("" + clientId));
+        if (productId === undefined || productId === null)
+            throw new globalThis.Error("The parameter 'productId' must be defined.");
+        url_ = url_.replace("{productId}", encodeURIComponent("" + productId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientProductPriceEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientProductPriceEndpoint(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    /**
      * Gets a client's delivery places
      * @return List of delivery places
      */
@@ -12088,6 +12353,7 @@ export class ProductListItemDto implements IProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
+    listPriceWithVat?: number | undefined;
     weight?: number | undefined;
     breweryName?: string;
     breweryId?: string;
@@ -12119,6 +12385,7 @@ export class ProductListItemDto implements IProductListItemDto {
             this.priceWithVat = _data["priceWithVat"];
             this.priceForUnitWithVat = _data["priceForUnitWithVat"];
             this.priceForUnitWithoutVat = _data["priceForUnitWithoutVat"];
+            this.listPriceWithVat = _data["listPriceWithVat"];
             this.weight = _data["weight"];
             this.breweryName = _data["breweryName"];
             this.breweryId = _data["breweryId"];
@@ -12150,6 +12417,7 @@ export class ProductListItemDto implements IProductListItemDto {
         data["priceWithVat"] = this.priceWithVat;
         data["priceForUnitWithVat"] = this.priceForUnitWithVat;
         data["priceForUnitWithoutVat"] = this.priceForUnitWithoutVat;
+        data["listPriceWithVat"] = this.listPriceWithVat;
         data["weight"] = this.weight;
         data["breweryName"] = this.breweryName;
         data["breweryId"] = this.breweryId;
@@ -12174,6 +12442,7 @@ export interface IProductListItemDto {
     priceWithVat?: number;
     priceForUnitWithVat?: number | undefined;
     priceForUnitWithoutVat?: number | undefined;
+    listPriceWithVat?: number | undefined;
     weight?: number | undefined;
     breweryName?: string;
     breweryId?: string;
@@ -16744,6 +17013,8 @@ export class OrderItemDto implements IOrderItemDto {
     productId?: string;
     productName?: string;
     quantity?: number;
+    unitPriceWithVat?: number;
+    listPriceWithVat?: number | undefined;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -16765,6 +17036,8 @@ export class OrderItemDto implements IOrderItemDto {
             this.productId = _data["productId"];
             this.productName = _data["productName"];
             this.quantity = _data["quantity"];
+            this.unitPriceWithVat = _data["unitPriceWithVat"];
+            this.listPriceWithVat = _data["listPriceWithVat"];
             this.reminderState = _data["reminderState"];
             this.note = _data["note"];
             this.breweryDisplayOrder = _data["breweryDisplayOrder"];
@@ -16786,6 +17059,8 @@ export class OrderItemDto implements IOrderItemDto {
         data["productId"] = this.productId;
         data["productName"] = this.productName;
         data["quantity"] = this.quantity;
+        data["unitPriceWithVat"] = this.unitPriceWithVat;
+        data["listPriceWithVat"] = this.listPriceWithVat;
         data["reminderState"] = this.reminderState;
         data["note"] = this.note;
         data["breweryDisplayOrder"] = this.breweryDisplayOrder;
@@ -16800,6 +17075,8 @@ export interface IOrderItemDto {
     productId?: string;
     productName?: string;
     quantity?: number;
+    unitPriceWithVat?: number;
+    listPriceWithVat?: number | undefined;
     reminderState?: OrderItemReminderState | undefined;
     note?: string | undefined;
     breweryDisplayOrder?: number;
@@ -18610,9 +18887,18 @@ export interface IUpdateClientContactDto {
     value?: string;
 }
 
-export class GetClientDeliveryPlacesRequest implements IGetClientDeliveryPlacesRequest {
+export class ClientProductPriceDto implements IClientProductPriceDto {
+    productId?: string;
+    productName?: string;
+    kind?: ProductKind;
+    packageSize?: number | undefined;
+    breweryId?: string;
+    breweryName?: string;
+    priceWithVat?: number;
+    listPriceWithVat?: number;
+    setOn?: Date;
 
-    constructor(data?: IGetClientDeliveryPlacesRequest) {
+    constructor(data?: IClientProductPriceDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -18622,22 +18908,51 @@ export class GetClientDeliveryPlacesRequest implements IGetClientDeliveryPlacesR
     }
 
     init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.productName = _data["productName"];
+            this.kind = _data["kind"];
+            this.packageSize = _data["packageSize"];
+            this.breweryId = _data["breweryId"];
+            this.breweryName = _data["breweryName"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.listPriceWithVat = _data["listPriceWithVat"];
+            this.setOn = _data["setOn"] ? new Date(_data["setOn"].toString()) : undefined as any;
+        }
     }
 
-    static fromJS(data: any): GetClientDeliveryPlacesRequest {
+    static fromJS(data: any): ClientProductPriceDto {
         data = typeof data === 'object' ? data : {};
-        let result = new GetClientDeliveryPlacesRequest();
+        let result = new ClientProductPriceDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["productName"] = this.productName;
+        data["kind"] = this.kind;
+        data["packageSize"] = this.packageSize;
+        data["breweryId"] = this.breweryId;
+        data["breweryName"] = this.breweryName;
+        data["priceWithVat"] = this.priceWithVat;
+        data["listPriceWithVat"] = this.listPriceWithVat;
+        data["setOn"] = this.setOn ? formatDate(this.setOn) : undefined as any;
         return data;
     }
 }
 
-export interface IGetClientDeliveryPlacesRequest {
+export interface IClientProductPriceDto {
+    productId?: string;
+    productName?: string;
+    kind?: ProductKind;
+    packageSize?: number | undefined;
+    breweryId?: string;
+    breweryName?: string;
+    priceWithVat?: number;
+    listPriceWithVat?: number;
+    setOn?: Date;
 }
 
 export class CreateClientDto implements ICreateClientDto {
@@ -18746,6 +19061,172 @@ export interface ICreateClientContactDto {
     type?: ContactType;
     description?: string | undefined;
     value?: string;
+}
+
+export class GetClientProductPricesRequest implements IGetClientProductPricesRequest {
+
+    constructor(data?: IGetClientProductPricesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetClientProductPricesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientProductPricesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetClientProductPricesRequest {
+}
+
+export class DeleteClientProductPriceRequest implements IDeleteClientProductPriceRequest {
+
+    constructor(data?: IDeleteClientProductPriceRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientProductPriceRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientProductPriceRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientProductPriceRequest {
+}
+
+export class SaveClientProductPriceDto implements ISaveClientProductPriceDto {
+    priceWithVat?: number;
+
+    constructor(data?: ISaveClientProductPriceDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.priceWithVat = _data["priceWithVat"];
+        }
+    }
+
+    static fromJS(data: any): SaveClientProductPriceDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaveClientProductPriceDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["priceWithVat"] = this.priceWithVat;
+        return data;
+    }
+}
+
+export interface ISaveClientProductPriceDto {
+    priceWithVat?: number;
+}
+
+export class ClientProductPriceEntryDto implements IClientProductPriceEntryDto {
+    productId?: string;
+    priceWithVat?: number;
+
+    constructor(data?: IClientProductPriceEntryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.priceWithVat = _data["priceWithVat"];
+        }
+    }
+
+    static fromJS(data: any): ClientProductPriceEntryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientProductPriceEntryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["priceWithVat"] = this.priceWithVat;
+        return data;
+    }
+}
+
+export interface IClientProductPriceEntryDto {
+    productId?: string;
+    priceWithVat?: number;
+}
+
+export class GetClientDeliveryPlacesRequest implements IGetClientDeliveryPlacesRequest {
+
+    constructor(data?: IGetClientDeliveryPlacesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetClientDeliveryPlacesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientDeliveryPlacesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetClientDeliveryPlacesRequest {
 }
 
 export class DeleteClientDeliveryPlaceRequest implements IDeleteClientDeliveryPlaceRequest {
