@@ -61,6 +61,16 @@ try
         await seeder.InsertHistoryAsync(today.AddDays(-days), today.AddDays(-1));
         Log.Information("History top-up finished");
     }
+    // `dotnet run -- sales [days]` tops up counter sales only, for the Garážový prodej reports.
+    else if (args.Length > 0 && args[0].Equals("sales", StringComparison.OrdinalIgnoreCase))
+    {
+        var days = args.Length > 1 && int.TryParse(args[1], out var parsed) ? parsed : 208;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        Log.Information("Sales top-up started ({Days} days)", days);
+        await seeder.InsertSalesHistoryAsync(today.AddDays(-days), today.AddDays(-1));
+        Log.Information("Sales top-up finished");
+    }
     else
     {
         Log.Information("Seeding started");
