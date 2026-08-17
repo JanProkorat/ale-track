@@ -143,7 +143,11 @@ public sealed class ShipmentContentSnapshotWriterTests
 
         ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
 
-        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(1190m);
+        var item = f.Shipment.Stops.Single().Items.Single();
+        item.UnitPriceWithVat.Should().Be(1190m);
+        // The net price is scaled by the same ratio, not left at the catalog's own net price —
+        // the classic invoice bug is a gross/net pair that stops agreeing with each other.
+        item.UnitPriceWithoutVat.Should().Be(983.90m);
     }
 
     [Fact]
@@ -158,23 +162,31 @@ public sealed class ShipmentContentSnapshotWriterTests
 
     /// <summary>
     /// The freeze: re-running Apply is how a run rebuilds its snapshot, but a shipment that is
-    /// already Loaded is never re-applied, so the billed number cannot move.
+    /// already Loaded is never re-applied, so the billed number cannot move even when the source
+    /// price does.
     /// </summary>
     [Fact]
     public void Apply_RepricedAfterLoading_LeavesTheSnapshotAlone()
     {
         var f = Fixture();
-
-        ShipmentContentSnapshotWriter.Apply(f.Shipment, new Dictionary<long, ClientPriceList>
+        var overridesByProductId = new Dictionary<long, decimal> { [f.Product.Id] = 1190m };
+        var priceLists = new Dictionary<long, ClientPriceList>
         {
-            [f.Client.Id] = new(new Dictionary<long, decimal> { [f.Product.Id] = 1190m })
-        });
+            [f.Client.Id] = new(overridesByProductId)
+        };
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
 
         var billed = f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat;
-
-        // Someone reprices the client afterwards; the snapshot row is untouched because nothing
-        // re-reads the rule for a loaded run.
         billed.Should().Be(1190m);
+
+        // The client is repriced afterwards — the source dictionary backing the price list
+        // changes — but nothing re-applies for an already-loaded run, so the snapshot row must
+        // not move.
+        overridesByProductId[f.Product.Id] = 1350m;
+
+        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(billed,
+            "the snapshot was written once and nothing re-reads the price list afterwards");
     }
 
     private sealed record Graph(

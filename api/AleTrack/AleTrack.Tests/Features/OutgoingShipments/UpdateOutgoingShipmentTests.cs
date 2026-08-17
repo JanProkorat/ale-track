@@ -650,6 +650,141 @@ public sealed class UpdateOutgoingShipmentTests
     }
 
     /// <summary>
+    /// Pins the grouping in the price-loading query end to end. A wrongly-keyed dictionary (say,
+    /// grouped by ProductId instead of ClientId) would still compile and pass a single-client
+    /// test, since there would be only one entry to find either way. Two clients on the same
+    /// shipment — one with an override, one without — is what actually exercises the keying.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_TransitionToLoaded_BillsEachClientsOwnPriceOrTheCatalogPrice()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Created);
+        f.Order.Client.Id = 7;
+
+        var brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau");
+        var productA = ProductBuilder.BuildEntity(name: "Albrecht 12°", priceWithVat: 11.49m);
+        productA.Id = 41;
+        productA.Brewery = brewery;
+        f.Order.OrderItems =
+        [
+            new OrderItem { Id = 51, PublicId = Guid.NewGuid(), Product = productA, ProductId = productA.Id, Quantity = 6 }
+        ];
+
+        var clientB = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
+        clientB.Id = 8;
+        var productB = ProductBuilder.BuildEntity(name: "Ležák 11°", priceWithVat: 9.90m);
+        productB.Id = 42;
+        productB.Brewery = brewery;
+        var orderB = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: clientB, state: OrderState.Planning);
+        orderB.OrderItems =
+        [
+            new OrderItem { Id = 52, PublicId = Guid.NewGuid(), Product = productB, ProductId = productB.Id, Quantity = 3 }
+        ];
+
+        // Only client A has an override; client B is deliberately left out of this list so its
+        // stop must fall back to the catalog price.
+        var overrideForClientA = new ClientProductPrice
+        {
+            PublicId = Guid.NewGuid(),
+            ClientId = f.Order.Client.Id,
+            ProductId = productA.Id,
+            Client = f.Order.Client,
+            Product = productA,
+            PriceWithVat = 1190m,
+            SetOn = new DateOnly(2026, 1, 1)
+        };
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [f.Shipment],
+            orders: [f.Order, orderB],
+            vehicles: [f.Vehicle],
+            drivers: [f.Driver, f.SpareDriver],
+            clientProductPrices: [overrideForClientA]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var data = EchoDto(f, OutgoingShipmentState.Loaded);
+        data.ClientOrderShipments.Add(new ClientOrderShipmentDto { ClientOrderId = orderB.PublicId, Order = 2 });
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = data
+        }, CancellationToken.None);
+
+        var stopA = f.Shipment.Stops.Single(s => s.ClientOrder == f.Order);
+        stopA.Items.Should().ContainSingle().Which.UnitPriceWithVat.Should()
+            .Be(1190m, "client A has its own price override for this product");
+
+        var stopB = f.Shipment.Stops.Single(s => s.ClientOrder == orderB);
+        stopB.Items.Should().ContainSingle().Which.UnitPriceWithVat.Should()
+            .Be(9.90m, "client B has no override, so it is billed the catalog price");
+    }
+
+    /// <summary>
+    /// The freeze property that actually protects billed revenue: saving an already-Loaded run
+    /// again — even to the same state, as the drivers/name/date edit test above does — must not
+    /// re-run the snapshot writer, so a client's price changing afterwards cannot reach what was
+    /// already billed.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_LoadedToLoadedSave_LeavesTheBilledPriceAlone()
+    {
+        var f = BuildFreezeFixture(OutgoingShipmentState.Loaded);
+        f.Order.Client.Id = 7;
+
+        var product = ProductBuilder.BuildEntity(name: "Albrecht 12°", priceWithVat: 11.49m);
+        product.Id = 41;
+
+        var stop = f.Shipment.Stops.Single();
+        stop.Items =
+        [
+            new OutgoingShipmentStopItem
+            {
+                PublicId = Guid.NewGuid(),
+                Product = product,
+                ProductId = product.Id,
+                ProductName = "Albrecht 12°",
+                Quantity = 6,
+                UnitPriceWithVat = 1190m
+            }
+        ];
+
+        // The client's price has since changed — a real system would have a ClientProductPrice
+        // row reflecting the new number by the time this save runs.
+        var changedPrice = new ClientProductPrice
+        {
+            PublicId = Guid.NewGuid(),
+            ClientId = f.Order.Client.Id,
+            ProductId = product.Id,
+            Client = f.Order.Client,
+            Product = product,
+            PriceWithVat = 1350m,
+            SetOn = new DateOnly(2026, 8, 1)
+        };
+
+        var db = AleTrackDbContextMockFactory.CreateMock(
+            outgoingShipments: [f.Shipment],
+            orders: [f.Order],
+            vehicles: [f.Vehicle],
+            drivers: [f.Driver, f.SpareDriver],
+            clientProductPrices: [changedPrice]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
+        {
+            Id = f.Shipment.PublicId,
+            Data = EchoDto(f, OutgoingShipmentState.Loaded)
+        }, CancellationToken.None);
+
+        stop.Items.Single().UnitPriceWithVat.Should().Be(1190m,
+            "a Loaded run is never re-applied, so the client's later price change cannot reach the billed number");
+    }
+
+    /// <summary>
     /// Reverting reopens the content for editing, so the snapshot must go rather than go stale.
     /// </summary>
     [Fact]
