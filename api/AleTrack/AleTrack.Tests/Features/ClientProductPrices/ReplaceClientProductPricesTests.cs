@@ -52,6 +52,40 @@ public sealed class ReplaceClientProductPricesTests
     }
 
     [Fact]
+    public async Task HandleAsync_UnchangedPrice_LeavesPriceAndSetOnUntouched()
+    {
+        // The guard that skips a restamp when the number did not move is the other load-bearing
+        // half of replace semantics: a no-op save must not rewrite "when was this price decided."
+        var clientId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var product = new Product { Id = 11, PublicId = productId, Name = "P", PriceWithVat = 1290m };
+        var seededSetOn = new DateOnly(2020, 1, 1);
+        var unchangedPrice = new ClientProductPrice
+        {
+            Id = 1, PublicId = Guid.NewGuid(), ClientId = 7, Client = client,
+            ProductId = 11, Product = product, PriceWithVat = 1190m, SetOn = seededSetOn
+        };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [product], clientProductPrices: [unchangedPrice]);
+
+        var endpoint = EndpointBuilder<ReplaceClientProductPricesRequest, ReplaceClientProductPricesEndpoint>
+            .Create(dbContext.Object, TimeProvider.System);
+        await endpoint.HandleAsync(new ReplaceClientProductPricesRequest
+        {
+            ClientId = clientId,
+            Data = [new ClientProductPriceEntryDto { ProductId = productId, PriceWithVat = 1190m }]
+        }, CancellationToken.None);
+
+        unchangedPrice.PriceWithVat.Should().Be(1190m);
+        unchangedPrice.SetOn.Should().Be(seededSetOn);
+        dbContext.Verify(e => e.ClientProductPrices.Remove(unchangedPrice), Times.Never);
+        dbContext.Verify(e => e.ClientProductPrices.Add(It.IsAny<ClientProductPrice>()), Times.Never);
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_EmptyList_RevertsTheClientToCatalogPrices()
     {
         // Vyprázdnit vše then save. The symmetry with one click creating a whole
