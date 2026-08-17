@@ -30,7 +30,7 @@ public sealed class GetDeliveryVolumeEndpoint(AleTrackDbContext dbContext, IDriv
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("reports/delivery-volume");
+        Get("reports/shipments/delivery-volume");
         Description(b => b
             .RequirePermission(ModuleType.Reports, PermissionLevel.View)
             .WithName(nameof(GetDeliveryVolumeEndpoint)));

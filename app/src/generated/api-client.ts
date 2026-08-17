@@ -76,6 +76,24 @@ export interface IClient {
     loginEndpoint(data: LoginUserDto, signal?: AbortSignal): Promise<LoginResponse>;
 
     /**
+     * Gets garage-sale revenue over a date window
+     * @return Revenue totals, trend, payment split and outstanding invoices
+     */
+    getGarageSalesRevenueEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesRevenueReportDto>;
+
+    /**
+     * Gets garage-sale product movement over a date window
+     * @return Top products, packaging split, discounts and stock coverage
+     */
+    getGarageSalesProductsEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesProductsReportDto>;
+
+    /**
+     * Gets the garage-sale buyer mix over a date window
+     * @return Buyer-kind split, top clients and repeat-buyer counts
+     */
+    getGarageSalesBuyersEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesBuyersReportDto>;
+
+    /**
      * Gets filtered garage sales list
      * @return List of garage sales
      */
@@ -1357,6 +1375,193 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets garage-sale revenue over a date window
+     * @return Revenue totals, trend, payment split and outstanding invoices
+     */
+    getGarageSalesRevenueEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesRevenueReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/garage-sales/revenue?";
+        if (granularity === undefined || granularity === null)
+            throw new globalThis.Error("The parameter 'granularity' must be defined and cannot be null.");
+        else
+            url_ += "Granularity=" + encodeURIComponent("" + granularity) + "&";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetGarageSalesRevenueEndpoint(_response);
+        });
+    }
+
+    protected processGetGarageSalesRevenueEndpoint(response: Response): Promise<GarageSalesRevenueReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = GarageSalesRevenueReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<GarageSalesRevenueReportDto>(null as any);
+    }
+
+    /**
+     * Gets garage-sale product movement over a date window
+     * @return Top products, packaging split, discounts and stock coverage
+     */
+    getGarageSalesProductsEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesProductsReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/garage-sales/products?";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetGarageSalesProductsEndpoint(_response);
+        });
+    }
+
+    protected processGetGarageSalesProductsEndpoint(response: Response): Promise<GarageSalesProductsReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = GarageSalesProductsReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<GarageSalesProductsReportDto>(null as any);
+    }
+
+    /**
+     * Gets the garage-sale buyer mix over a date window
+     * @return Buyer-kind split, top clients and repeat-buyer counts
+     */
+    getGarageSalesBuyersEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<GarageSalesBuyersReportDto> {
+        let url_ = this.baseUrl + "/ale-track/reports/garage-sales/buyers?";
+        if (from === undefined || from === null)
+            throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
+        else
+            url_ += "From=" + encodeURIComponent(from ? "" + from.toISOString() : "") + "&";
+        if (to === undefined || to === null)
+            throw new globalThis.Error("The parameter 'to' must be defined and cannot be null.");
+        else
+            url_ += "To=" + encodeURIComponent(to ? "" + to.toISOString() : "") + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetGarageSalesBuyersEndpoint(_response);
+        });
+    }
+
+    protected processGetGarageSalesBuyersEndpoint(response: Response): Promise<GarageSalesBuyersReportDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = GarageSalesBuyersReportDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<GarageSalesBuyersReportDto>(null as any);
+    }
+
+    /**
      * Gets filtered garage sales list
      * @return List of garage sales
      */
@@ -1985,7 +2190,7 @@ export class Client implements IClient {
      * @return Shipment states, punctuality, returns and driver throughput
      */
     getOperationsEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<OperationsReportDto> {
-        let url_ = this.baseUrl + "/ale-track/reports/operations?";
+        let url_ = this.baseUrl + "/ale-track/reports/shipments/operations?";
         if (from === undefined || from === null)
             throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
         else
@@ -2046,7 +2251,7 @@ export class Client implements IClient {
      * @return Delivered volume totals, breakdowns and trend series
      */
     getDeliveryVolumeEndpoint(granularity: ReportGranularity, from: Date, to: Date, signal?: AbortSignal): Promise<DeliveryVolumeReportDto> {
-        let url_ = this.baseUrl + "/ale-track/reports/delivery-volume?";
+        let url_ = this.baseUrl + "/ale-track/reports/shipments/delivery-volume?";
         if (granularity === undefined || granularity === null)
             throw new globalThis.Error("The parameter 'granularity' must be defined and cannot be null.");
         else
@@ -2111,7 +2316,7 @@ export class Client implements IClient {
      * @return Per-client and per-region delivered volume
      */
     getClientVolumeEndpoint(from: Date, to: Date, signal?: AbortSignal): Promise<ClientVolumeReportDto> {
-        let url_ = this.baseUrl + "/ale-track/reports/client-volume?";
+        let url_ = this.baseUrl + "/ale-track/reports/shipments/client-volume?";
         if (from === undefined || from === null)
             throw new globalThis.Error("The parameter 'from' must be defined and cannot be null.");
         else
@@ -8555,20 +8760,18 @@ export interface ILoginUserDto {
     password: string;
 }
 
-export class SaleListItemDto implements ISaleListItemDto {
-    id?: string;
-    saleDate?: Date;
-    state?: SaleState;
-    buyerKind?: SaleBuyerKind;
-    buyerName?: string | undefined;
-    clientId?: string | undefined;
-    clientName?: string | undefined;
-    payment?: SalePaymentMethod;
-    dueDate?: Date | undefined;
-    totalQuantity?: number;
-    totalPrice?: number;
+export class GarageSalesRevenueReportDto implements IGarageSalesRevenueReportDto {
+    totalRevenue?: number;
+    salesCount?: number;
+    averageSale?: number;
+    totalUnits?: number;
+    totalLitres?: number;
+    trend?: RevenueSeriesPointDto[];
+    byPayment?: RevenueByPaymentDto[];
+    unpaidInvoices?: UnpaidInvoiceRowDto[];
+    unpaidTotal?: number;
 
-    constructor(data?: ISaleListItemDto) {
+    constructor(data?: IGarageSalesRevenueReportDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -8579,56 +8782,74 @@ export class SaleListItemDto implements ISaleListItemDto {
 
     init(_data?: any) {
         if (_data) {
-            this.id = _data["id"];
-            this.saleDate = _data["saleDate"] ? new Date(_data["saleDate"].toString()) : undefined as any;
-            this.state = _data["state"];
-            this.buyerKind = _data["buyerKind"];
-            this.buyerName = _data["buyerName"];
-            this.clientId = _data["clientId"];
-            this.clientName = _data["clientName"];
-            this.payment = _data["payment"];
-            this.dueDate = _data["dueDate"] ? new Date(_data["dueDate"].toString()) : undefined as any;
-            this.totalQuantity = _data["totalQuantity"];
-            this.totalPrice = _data["totalPrice"];
+            this.totalRevenue = _data["totalRevenue"];
+            this.salesCount = _data["salesCount"];
+            this.averageSale = _data["averageSale"];
+            this.totalUnits = _data["totalUnits"];
+            this.totalLitres = _data["totalLitres"];
+            if (Array.isArray(_data["trend"])) {
+                this.trend = [] as any;
+                for (let item of _data["trend"])
+                    this.trend!.push(RevenueSeriesPointDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byPayment"])) {
+                this.byPayment = [] as any;
+                for (let item of _data["byPayment"])
+                    this.byPayment!.push(RevenueByPaymentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["unpaidInvoices"])) {
+                this.unpaidInvoices = [] as any;
+                for (let item of _data["unpaidInvoices"])
+                    this.unpaidInvoices!.push(UnpaidInvoiceRowDto.fromJS(item));
+            }
+            this.unpaidTotal = _data["unpaidTotal"];
         }
     }
 
-    static fromJS(data: any): SaleListItemDto {
+    static fromJS(data: any): GarageSalesRevenueReportDto {
         data = typeof data === 'object' ? data : {};
-        let result = new SaleListItemDto();
+        let result = new GarageSalesRevenueReportDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        data["saleDate"] = this.saleDate ? formatDate(this.saleDate) : undefined as any;
-        data["state"] = this.state;
-        data["buyerKind"] = this.buyerKind;
-        data["buyerName"] = this.buyerName;
-        data["clientId"] = this.clientId;
-        data["clientName"] = this.clientName;
-        data["payment"] = this.payment;
-        data["dueDate"] = this.dueDate ? formatDate(this.dueDate) : undefined as any;
-        data["totalQuantity"] = this.totalQuantity;
-        data["totalPrice"] = this.totalPrice;
+        data["totalRevenue"] = this.totalRevenue;
+        data["salesCount"] = this.salesCount;
+        data["averageSale"] = this.averageSale;
+        data["totalUnits"] = this.totalUnits;
+        data["totalLitres"] = this.totalLitres;
+        if (Array.isArray(this.trend)) {
+            data["trend"] = [];
+            for (let item of this.trend)
+                data["trend"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byPayment)) {
+            data["byPayment"] = [];
+            for (let item of this.byPayment)
+                data["byPayment"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.unpaidInvoices)) {
+            data["unpaidInvoices"] = [];
+            for (let item of this.unpaidInvoices)
+                data["unpaidInvoices"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["unpaidTotal"] = this.unpaidTotal;
         return data;
     }
 }
 
-export interface ISaleListItemDto {
-    id?: string;
-    saleDate?: Date;
-    state?: SaleState;
-    buyerKind?: SaleBuyerKind;
-    buyerName?: string | undefined;
-    clientId?: string | undefined;
-    clientName?: string | undefined;
-    payment?: SalePaymentMethod;
-    dueDate?: Date | undefined;
-    totalQuantity?: number;
-    totalPrice?: number;
+export interface IGarageSalesRevenueReportDto {
+    totalRevenue?: number;
+    salesCount?: number;
+    averageSale?: number;
+    totalUnits?: number;
+    totalLitres?: number;
+    trend?: RevenueSeriesPointDto[];
+    byPayment?: RevenueByPaymentDto[];
+    unpaidInvoices?: UnpaidInvoiceRowDto[];
+    unpaidTotal?: number;
 }
 
 export class CreateUserDto implements ICreateUserDto {
@@ -8710,10 +8931,597 @@ export interface ICreateUserDto {
     driverId?: string | undefined;
 }
 
-export enum SaleState {
-    Draft = 0,
-    Completed = 1,
-    AwaitingPayment = 2,
+export class RevenueSeriesPointDto implements IRevenueSeriesPointDto {
+    bucketStart?: Date;
+    revenue?: number;
+    salesCount?: number;
+
+    constructor(data?: IRevenueSeriesPointDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.bucketStart = _data["bucketStart"] ? new Date(_data["bucketStart"].toString()) : undefined as any;
+            this.revenue = _data["revenue"];
+            this.salesCount = _data["salesCount"];
+        }
+    }
+
+    static fromJS(data: any): RevenueSeriesPointDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new RevenueSeriesPointDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["bucketStart"] = this.bucketStart ? formatDate(this.bucketStart) : undefined as any;
+        data["revenue"] = this.revenue;
+        data["salesCount"] = this.salesCount;
+        return data;
+    }
+}
+
+export interface IRevenueSeriesPointDto {
+    bucketStart?: Date;
+    revenue?: number;
+    salesCount?: number;
+}
+
+export class RevenueByPaymentDto implements IRevenueByPaymentDto {
+    payment?: SalePaymentMethod;
+    revenue?: number;
+    salesCount?: number;
+
+    constructor(data?: IRevenueByPaymentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.payment = _data["payment"];
+            this.revenue = _data["revenue"];
+            this.salesCount = _data["salesCount"];
+        }
+    }
+
+    static fromJS(data: any): RevenueByPaymentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new RevenueByPaymentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["payment"] = this.payment;
+        data["revenue"] = this.revenue;
+        data["salesCount"] = this.salesCount;
+        return data;
+    }
+}
+
+export interface IRevenueByPaymentDto {
+    payment?: SalePaymentMethod;
+    revenue?: number;
+    salesCount?: number;
+}
+
+export enum SalePaymentMethod {
+    Cash = 0,
+    Invoice = 1,
+}
+
+export class UnpaidInvoiceRowDto implements IUnpaidInvoiceRowDto {
+    saleId?: string;
+    saleDate?: Date;
+    dueDate?: Date | undefined;
+    clientId?: string | undefined;
+    buyerLabel?: string | undefined;
+    amount?: number;
+    daysOverdue?: number | undefined;
+
+    constructor(data?: IUnpaidInvoiceRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.saleId = _data["saleId"];
+            this.saleDate = _data["saleDate"] ? new Date(_data["saleDate"].toString()) : undefined as any;
+            this.dueDate = _data["dueDate"] ? new Date(_data["dueDate"].toString()) : undefined as any;
+            this.clientId = _data["clientId"];
+            this.buyerLabel = _data["buyerLabel"];
+            this.amount = _data["amount"];
+            this.daysOverdue = _data["daysOverdue"];
+        }
+    }
+
+    static fromJS(data: any): UnpaidInvoiceRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UnpaidInvoiceRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["saleId"] = this.saleId;
+        data["saleDate"] = this.saleDate ? formatDate(this.saleDate) : undefined as any;
+        data["dueDate"] = this.dueDate ? formatDate(this.dueDate) : undefined as any;
+        data["clientId"] = this.clientId;
+        data["buyerLabel"] = this.buyerLabel;
+        data["amount"] = this.amount;
+        data["daysOverdue"] = this.daysOverdue;
+        return data;
+    }
+}
+
+export interface IUnpaidInvoiceRowDto {
+    saleId?: string;
+    saleDate?: Date;
+    dueDate?: Date | undefined;
+    clientId?: string | undefined;
+    buyerLabel?: string | undefined;
+    amount?: number;
+    daysOverdue?: number | undefined;
+}
+
+export abstract class ReportWindowRequest implements IReportWindowRequest {
+
+    constructor(data?: IReportWindowRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): ReportWindowRequest {
+        data = typeof data === 'object' ? data : {};
+        throw new Error("The abstract class 'ReportWindowRequest' cannot be instantiated.");
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IReportWindowRequest {
+}
+
+export class GetGarageSalesRevenueRequest extends ReportWindowRequest implements IGetGarageSalesRevenueRequest {
+
+    constructor(data?: IGetGarageSalesRevenueRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetGarageSalesRevenueRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetGarageSalesRevenueRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetGarageSalesRevenueRequest extends IReportWindowRequest {
+}
+
+export enum ReportGranularity {
+    Day = 0,
+    Week = 1,
+    Month = 2,
+}
+
+export class GarageSalesProductsReportDto implements IGarageSalesProductsReportDto {
+    topProducts?: ProductSalesRowDto[];
+    byKind?: SalesByKindDto[];
+    discountTotal?: number;
+    discountedRevenueShare?: number;
+    stockCoverage?: StockCoverageRowDto[];
+
+    constructor(data?: IGarageSalesProductsReportDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["topProducts"])) {
+                this.topProducts = [] as any;
+                for (let item of _data["topProducts"])
+                    this.topProducts!.push(ProductSalesRowDto.fromJS(item));
+            }
+            if (Array.isArray(_data["byKind"])) {
+                this.byKind = [] as any;
+                for (let item of _data["byKind"])
+                    this.byKind!.push(SalesByKindDto.fromJS(item));
+            }
+            this.discountTotal = _data["discountTotal"];
+            this.discountedRevenueShare = _data["discountedRevenueShare"];
+            if (Array.isArray(_data["stockCoverage"])) {
+                this.stockCoverage = [] as any;
+                for (let item of _data["stockCoverage"])
+                    this.stockCoverage!.push(StockCoverageRowDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): GarageSalesProductsReportDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new GarageSalesProductsReportDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.topProducts)) {
+            data["topProducts"] = [];
+            for (let item of this.topProducts)
+                data["topProducts"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.byKind)) {
+            data["byKind"] = [];
+            for (let item of this.byKind)
+                data["byKind"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["discountTotal"] = this.discountTotal;
+        data["discountedRevenueShare"] = this.discountedRevenueShare;
+        if (Array.isArray(this.stockCoverage)) {
+            data["stockCoverage"] = [];
+            for (let item of this.stockCoverage)
+                data["stockCoverage"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IGarageSalesProductsReportDto {
+    topProducts?: ProductSalesRowDto[];
+    byKind?: SalesByKindDto[];
+    discountTotal?: number;
+    discountedRevenueShare?: number;
+    stockCoverage?: StockCoverageRowDto[];
+}
+
+export class ProductSalesRowDto implements IProductSalesRowDto {
+    productId?: string | undefined;
+    name?: string;
+    kind?: ProductKind | undefined;
+    units?: number;
+    litres?: number;
+    revenue?: number;
+    discountTotal?: number;
+
+    constructor(data?: IProductSalesRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.name = _data["name"];
+            this.kind = _data["kind"];
+            this.units = _data["units"];
+            this.litres = _data["litres"];
+            this.revenue = _data["revenue"];
+            this.discountTotal = _data["discountTotal"];
+        }
+    }
+
+    static fromJS(data: any): ProductSalesRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ProductSalesRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["name"] = this.name;
+        data["kind"] = this.kind;
+        data["units"] = this.units;
+        data["litres"] = this.litres;
+        data["revenue"] = this.revenue;
+        data["discountTotal"] = this.discountTotal;
+        return data;
+    }
+}
+
+export interface IProductSalesRowDto {
+    productId?: string | undefined;
+    name?: string;
+    kind?: ProductKind | undefined;
+    units?: number;
+    litres?: number;
+    revenue?: number;
+    discountTotal?: number;
+}
+
+export enum ProductKind {
+    Keg = 1,
+    Bottle = 2,
+    Can = 3,
+    Multipack = 4,
+    Other = 5,
+}
+
+export class SalesByKindDto implements ISalesByKindDto {
+    kind?: ProductKind | undefined;
+    units?: number;
+    litres?: number;
+    revenue?: number;
+
+    constructor(data?: ISalesByKindDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.units = _data["units"];
+            this.litres = _data["litres"];
+            this.revenue = _data["revenue"];
+        }
+    }
+
+    static fromJS(data: any): SalesByKindDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SalesByKindDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["units"] = this.units;
+        data["litres"] = this.litres;
+        data["revenue"] = this.revenue;
+        return data;
+    }
+}
+
+export interface ISalesByKindDto {
+    kind?: ProductKind | undefined;
+    units?: number;
+    litres?: number;
+    revenue?: number;
+}
+
+export class StockCoverageRowDto implements IStockCoverageRowDto {
+    inventoryItemId?: string;
+    name?: string;
+    quantity?: number;
+    unitsSold?: number;
+    daysOfCover?: number | undefined;
+
+    constructor(data?: IStockCoverageRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.inventoryItemId = _data["inventoryItemId"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.unitsSold = _data["unitsSold"];
+            this.daysOfCover = _data["daysOfCover"];
+        }
+    }
+
+    static fromJS(data: any): StockCoverageRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new StockCoverageRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["inventoryItemId"] = this.inventoryItemId;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["unitsSold"] = this.unitsSold;
+        data["daysOfCover"] = this.daysOfCover;
+        return data;
+    }
+}
+
+export interface IStockCoverageRowDto {
+    inventoryItemId?: string;
+    name?: string;
+    quantity?: number;
+    unitsSold?: number;
+    daysOfCover?: number | undefined;
+}
+
+export class GetGarageSalesProductsRequest extends ReportWindowRequest implements IGetGarageSalesProductsRequest {
+
+    constructor(data?: IGetGarageSalesProductsRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetGarageSalesProductsRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetGarageSalesProductsRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetGarageSalesProductsRequest extends IReportWindowRequest {
+}
+
+export class GarageSalesBuyersReportDto implements IGarageSalesBuyersReportDto {
+    byBuyerKind?: BuyerKindRowDto[];
+    topClients?: BuyerClientRowDto[];
+    repeatBuyers?: number;
+    oneTimeBuyers?: number;
+
+    constructor(data?: IGarageSalesBuyersReportDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["byBuyerKind"])) {
+                this.byBuyerKind = [] as any;
+                for (let item of _data["byBuyerKind"])
+                    this.byBuyerKind!.push(BuyerKindRowDto.fromJS(item));
+            }
+            if (Array.isArray(_data["topClients"])) {
+                this.topClients = [] as any;
+                for (let item of _data["topClients"])
+                    this.topClients!.push(BuyerClientRowDto.fromJS(item));
+            }
+            this.repeatBuyers = _data["repeatBuyers"];
+            this.oneTimeBuyers = _data["oneTimeBuyers"];
+        }
+    }
+
+    static fromJS(data: any): GarageSalesBuyersReportDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new GarageSalesBuyersReportDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.byBuyerKind)) {
+            data["byBuyerKind"] = [];
+            for (let item of this.byBuyerKind)
+                data["byBuyerKind"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.topClients)) {
+            data["topClients"] = [];
+            for (let item of this.topClients)
+                data["topClients"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["repeatBuyers"] = this.repeatBuyers;
+        data["oneTimeBuyers"] = this.oneTimeBuyers;
+        return data;
+    }
+}
+
+export interface IGarageSalesBuyersReportDto {
+    byBuyerKind?: BuyerKindRowDto[];
+    topClients?: BuyerClientRowDto[];
+    repeatBuyers?: number;
+    oneTimeBuyers?: number;
+}
+
+export class BuyerKindRowDto implements IBuyerKindRowDto {
+    buyerKind?: SaleBuyerKind;
+    revenue?: number;
+    salesCount?: number;
+
+    constructor(data?: IBuyerKindRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.buyerKind = _data["buyerKind"];
+            this.revenue = _data["revenue"];
+            this.salesCount = _data["salesCount"];
+        }
+    }
+
+    static fromJS(data: any): BuyerKindRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new BuyerKindRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["buyerKind"] = this.buyerKind;
+        data["revenue"] = this.revenue;
+        data["salesCount"] = this.salesCount;
+        return data;
+    }
+}
+
+export interface IBuyerKindRowDto {
+    buyerKind?: SaleBuyerKind;
+    revenue?: number;
+    salesCount?: number;
 }
 
 export enum SaleBuyerKind {
@@ -8721,9 +9529,165 @@ export enum SaleBuyerKind {
     Walkin = 1,
 }
 
-export enum SalePaymentMethod {
-    Cash = 0,
-    Invoice = 1,
+export class BuyerClientRowDto implements IBuyerClientRowDto {
+    clientId?: string;
+    clientName?: string;
+    salesCount?: number;
+    revenue?: number;
+    lastPurchase?: Date;
+
+    constructor(data?: IBuyerClientRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.salesCount = _data["salesCount"];
+            this.revenue = _data["revenue"];
+            this.lastPurchase = _data["lastPurchase"] ? new Date(_data["lastPurchase"].toString()) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): BuyerClientRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new BuyerClientRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["salesCount"] = this.salesCount;
+        data["revenue"] = this.revenue;
+        data["lastPurchase"] = this.lastPurchase ? formatDate(this.lastPurchase) : undefined as any;
+        return data;
+    }
+}
+
+export interface IBuyerClientRowDto {
+    clientId?: string;
+    clientName?: string;
+    salesCount?: number;
+    revenue?: number;
+    lastPurchase?: Date;
+}
+
+export class GetGarageSalesBuyersRequest extends ReportWindowRequest implements IGetGarageSalesBuyersRequest {
+
+    constructor(data?: IGetGarageSalesBuyersRequest) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+    }
+
+    static override fromJS(data: any): GetGarageSalesBuyersRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetGarageSalesBuyersRequest();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        super.toJSON(data);
+        return data;
+    }
+}
+
+export interface IGetGarageSalesBuyersRequest extends IReportWindowRequest {
+}
+
+export class SaleListItemDto implements ISaleListItemDto {
+    id?: string;
+    saleDate?: Date;
+    state?: SaleState;
+    buyerKind?: SaleBuyerKind;
+    buyerName?: string | undefined;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    payment?: SalePaymentMethod;
+    dueDate?: Date | undefined;
+    totalQuantity?: number;
+    totalPrice?: number;
+
+    constructor(data?: ISaleListItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.saleDate = _data["saleDate"] ? new Date(_data["saleDate"].toString()) : undefined as any;
+            this.state = _data["state"];
+            this.buyerKind = _data["buyerKind"];
+            this.buyerName = _data["buyerName"];
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.payment = _data["payment"];
+            this.dueDate = _data["dueDate"] ? new Date(_data["dueDate"].toString()) : undefined as any;
+            this.totalQuantity = _data["totalQuantity"];
+            this.totalPrice = _data["totalPrice"];
+        }
+    }
+
+    static fromJS(data: any): SaleListItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaleListItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["saleDate"] = this.saleDate ? formatDate(this.saleDate) : undefined as any;
+        data["state"] = this.state;
+        data["buyerKind"] = this.buyerKind;
+        data["buyerName"] = this.buyerName;
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["payment"] = this.payment;
+        data["dueDate"] = this.dueDate ? formatDate(this.dueDate) : undefined as any;
+        data["totalQuantity"] = this.totalQuantity;
+        data["totalPrice"] = this.totalPrice;
+        return data;
+    }
+}
+
+export interface ISaleListItemDto {
+    id?: string;
+    saleDate?: Date;
+    state?: SaleState;
+    buyerKind?: SaleBuyerKind;
+    buyerName?: string | undefined;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    payment?: SalePaymentMethod;
+    dueDate?: Date | undefined;
+    totalQuantity?: number;
+    totalPrice?: number;
+}
+
+export enum SaleState {
+    Draft = 0,
+    Completed = 1,
+    AwaitingPayment = 2,
 }
 
 export class SaleDto implements ISaleDto {
@@ -8952,14 +9916,6 @@ export interface ISaleItemDetailDto {
     unitPriceWithVat?: number;
     listPriceWithVat?: number | undefined;
     note?: string | undefined;
-}
-
-export enum ProductKind {
-    Keg = 1,
-    Bottle = 2,
-    Can = 3,
-    Multipack = 4,
-    Other = 5,
 }
 
 export class GetSaleDetailRequest implements IGetSaleDetailRequest {
@@ -9827,34 +10783,6 @@ export interface IDriverShipmentsDto {
     deliveredShipments?: number;
 }
 
-export abstract class ReportWindowRequest implements IReportWindowRequest {
-
-    constructor(data?: IReportWindowRequest) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-    }
-
-    static fromJS(data: any): ReportWindowRequest {
-        data = typeof data === 'object' ? data : {};
-        throw new Error("The abstract class 'ReportWindowRequest' cannot be instantiated.");
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        return data;
-    }
-}
-
-export interface IReportWindowRequest {
-}
-
 export class GetOperationsRequest extends ReportWindowRequest implements IGetOperationsRequest {
 
     constructor(data?: IGetOperationsRequest) {
@@ -10210,12 +11138,6 @@ export class GetDeliveryVolumeRequest extends ReportWindowRequest implements IGe
 }
 
 export interface IGetDeliveryVolumeRequest extends IReportWindowRequest {
-}
-
-export enum ReportGranularity {
-    Day = 0,
-    Week = 1,
-    Month = 2,
 }
 
 export class ClientVolumeReportDto implements IClientVolumeReportDto {

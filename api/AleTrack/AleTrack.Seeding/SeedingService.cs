@@ -84,6 +84,34 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
     }
 
     /// <summary>
+    /// Adds counter-sale history to an already-seeded database, leaving every other module's
+    /// data untouched. This is the path used to give an existing environment something for the
+    /// Garážový prodej reports to draw.
+    /// </summary>
+    public async Task InsertSalesHistoryAsync(DateOnly from, DateOnly to)
+    {
+        var clients = await dbContext.Clients.ToListAsync();
+        // The stock rows are what a sale line draws its pieces from, and the line snapshots the
+        // product's name, packaging and ceník price — so the product has to come with them.
+        var inventory = await dbContext.InventoryItems.Include(i => i.Product).ToListAsync();
+
+        var sales = SaleHistoryBuilder.CreateSales(clients, inventory, from, to);
+        dbContext.Sales.AddRange(sales);
+
+        await dbContext.SaveChangesAsync();
+
+        var completed = sales.Where(s => s.State == SaleState.Completed).ToList();
+        var unpaid = completed.Count(s => s.Payment == SalePaymentMethod.Invoice && s.Billing?.PaidDate is null);
+
+        Console.WriteLine(
+            $"Sales {from:yyyy-MM-dd}..{to:yyyy-MM-dd}: "
+            + $"{sales.Count} sales ({completed.Count} completed, {sales.Count - completed.Count} open), "
+            + $"{sales.Sum(s => s.Items.Count)} lines, "
+            + $"{completed.Sum(s => s.Items.Sum(i => i.Quantity * i.UnitPriceWithVat)):N0} Kč turnover, "
+            + $"{unpaid} unpaid invoices.");
+    }
+
+    /// <summary>
     /// Seeds demo operational data (clients, vehicles, drivers, inventory, orders,
     /// outgoing shipments and incoming deliveries) referencing the freshly-built
     /// breweries/products, so every module has representative data to work with.
@@ -136,6 +164,10 @@ internal sealed class SeedingService(AleTrackDbContext dbContext)
         dbContext.Orders.AddRange(history.Orders);
         dbContext.OutgoingShipments.AddRange(history.Shipments);
         dbContext.ProductDeliveries.AddRange(history.Deliveries);
+
+        // Counter sales over the same window, so the Garážový prodej reports have a trend too.
+        dbContext.Sales.AddRange(
+            SaleHistoryBuilder.CreateSales(clients, inventory, today.AddDays(-208), today.AddDays(-1)));
     }
 
     /// <summary>

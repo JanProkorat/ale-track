@@ -14,6 +14,7 @@ import { OrdersPage } from 'src/features/orders/OrdersPage';
 import { ShipmentsPage } from 'src/features/shipments/ShipmentsPage';
 import { DeliveriesPage } from 'src/features/deliveries/DeliveriesPage';
 import { SalesPage } from 'src/features/sales/SalesPage';
+import { SalesReportsPage } from 'src/features/salesReports/SalesReportsPage';
 import { LOGIN_PATH, PATHS } from './paths';
 
 export const router = createBrowserRouter([
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
           { path: PATHS.vehicles, element: <VehiclesPage /> },
           { path: PATHS.users, element: <UsersPage /> },
           { path: PATHS.reports, element: <ReportsPage /> },
+          { path: PATHS.salesReports, element: <SalesReportsPage /> },
         ],
       },
     ],

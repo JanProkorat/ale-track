@@ -6,6 +6,7 @@ import {
   isAwaitingPayment,
   isUnpaid,
   overdueDays,
+  searchSalesByBuyer,
   shortRows,
   stockLevels,
   summariseSales,
@@ -134,6 +135,50 @@ describe('filterSales', () => {
   it('does not mutate the input', () => {
     const input = [...all];
     filterSales(input, 'draft');
+    expect(input).toHaveLength(3);
+  });
+});
+
+describe('searchSalesByBuyer', () => {
+  const kucerova = { clientName: undefined, buyerName: 'Jana Kučerová' };
+  const kotva = { clientName: 'Hospoda U Kotvy', buyerName: undefined };
+  const anonymous = { clientName: undefined, buyerName: undefined };
+  const all = [kucerova, kotva, anonymous];
+
+  it('returns everything for an empty or whitespace query', () => {
+    expect(searchSalesByBuyer(all, '')).toHaveLength(3);
+    expect(searchSalesByBuyer(all, '   ')).toHaveLength(3);
+  });
+
+  it('matches a client from the book', () => {
+    expect(searchSalesByBuyer(all, 'kotvy')).toEqual([kotva]);
+  });
+
+  it('matches a walk-in typed onto the sale', () => {
+    expect(searchSalesByBuyer(all, 'jana')).toEqual([kucerova]);
+  });
+
+  // The counter types fast, and a Czech keyboard is not always at hand.
+  it('ignores diacritics in both the query and the name', () => {
+    expect(searchSalesByBuyer(all, 'kucerova')).toEqual([kucerova]);
+    expect(searchSalesByBuyer(all, 'KUČEROVÁ')).toEqual([kucerova]);
+  });
+
+  it('matches a surname inside a full name, not just a prefix', () => {
+    expect(searchSalesByBuyer(all, 'čerov')).toEqual([kucerova]);
+  });
+
+  it('never matches an anonymous sale, which names nobody', () => {
+    expect(searchSalesByBuyer(all, 'a')).not.toContain(anonymous);
+  });
+
+  it('returns nothing when no buyer matches', () => {
+    expect(searchSalesByBuyer(all, 'novotny')).toEqual([]);
+  });
+
+  it('does not mutate the input', () => {
+    const input = [...all];
+    searchSalesByBuyer(input, 'kotvy');
     expect(input).toHaveLength(3);
   });
 });

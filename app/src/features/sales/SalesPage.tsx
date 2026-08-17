@@ -13,6 +13,8 @@ import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { SegControl } from 'src/components/common/SegControl';
+import { SearchField } from 'src/components/common/SearchField';
+import { StatCell } from 'src/components/common/StatCell';
 import { useAuth } from 'src/auth/AuthProvider';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { fmtDate, saleNumber } from 'src/lib/format';
@@ -21,7 +23,10 @@ import { plural } from 'src/lib/format';
 import { type SaleListItemDto } from 'src/generated/api-client';
 import { useSales } from 'src/hooks/useSales';
 import { PATHS } from 'src/routes/paths';
-import { filterSales, isCompleted, isUnpaid, overdueDays, summariseSales, type SaleFilter } from './salesModel';
+import {
+  filterSales, isCompleted, isUnpaid, overdueDays, searchSalesByBuyer, summariseSales,
+  type SaleFilter,
+} from './salesModel';
 import { SaleDetail } from './SaleDetail';
 import { SaleEditor } from './SaleEditor';
 
@@ -42,6 +47,7 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
   const { id } = useParams();
   const { formatMoney } = useCurrency();
   const [filter, setFilter] = useState<SaleFilter>('all');
+  const [search, setSearch] = useState('');
 
   const list = useSales();
   const all = useMemo(() => list.data ?? [], [list.data]);
@@ -50,7 +56,12 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
   // is measured against the same day.
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const summary = useMemo(() => summariseSales(all, today.slice(0, 7)), [all, today]);
-  const rows = useMemo(() => filterSales(all, filter), [all, filter]);
+  // Segment first, then buyer: the segment counts describe the whole list, so a search must not
+  // change the numbers on the tabs — only which rows survive into the table.
+  const rows = useMemo(
+    () => searchSalesByBuyer(filterSales(all, filter), search),
+    [all, filter, search]
+  );
 
   // Counted, not derived by subtraction: with a third state in play, "everything that is not a
   // draft" is no longer the same set as "completed".
@@ -192,41 +203,6 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
     );
   };
 
-  const stat = (label: string, value: string, icon: React.ReactNode, critical = false) => (
-    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 1.75, py: 1.25, minWidth: 140 }}>
-      <Box
-        sx={{
-          width: 32,
-          height: 32,
-          borderRadius: 1.25,
-          display: 'grid',
-          placeItems: 'center',
-          flexShrink: 0,
-          bgcolor: critical ? 'brand.critTint' : 'brand.surface2',
-          color: critical ? 'error.main' : 'text.secondary',
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.disabled', whiteSpace: 'nowrap' }}>
-          {label}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: 19,
-            fontWeight: 800,
-            lineHeight: 1.2,
-            fontVariantNumeric: 'tabular-nums',
-            color: critical ? 'error.main' : 'text.primary',
-          }}
-        >
-          {value}
-        </Typography>
-      </Box>
-    </Stack>
-  );
-
   if (view === 'create' || view === 'edit') {
     return (
       <PageContainer>
@@ -266,51 +242,78 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
       >
         {() => (
           <>
-            <Card variant="outlined" sx={{ mb: 2 }}>
-              <Stack direction="row" flexWrap="wrap" divider={undefined}>
-                {stat('Prodejů tento měsíc', String(summary.completedThisMonth), <ShoppingCartOutlinedIcon fontSize="small" />)}
-                {stat('Obrat tento měsíc', formatMoney(summary.revenueThisMonth), <PaymentsOutlinedIcon fontSize="small" />)}
-                {stat('Rozpracované', String(summary.drafts), <EditOutlinedIcon fontSize="small" />)}
-                {stat(
-                  'Nezaplaceno',
-                  summary.unpaid > 0 ? formatMoney(summary.unpaidTotal) : '—',
-                  <ReceiptOutlinedIcon fontSize="small" />,
-                  summary.unpaid > 0
-                )}
-              </Stack>
+            {/* Same strip as Sklad: bordered stat cells, then the filters in a cell of their
+                own that takes the leftover width. */}
+            <Card sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch' }}>
+                <StatCell
+                  first
+                  icon={<ShoppingCartOutlinedIcon />}
+                  label="Prodejů tento měsíc"
+                  value={summary.completedThisMonth}
+                />
+                <StatCell
+                  icon={<PaymentsOutlinedIcon />}
+                  label="Obrat tento měsíc"
+                  value={formatMoney(summary.revenueThisMonth)}
+                />
+                <StatCell icon={<EditOutlinedIcon />} label="Rozpracované" value={summary.drafts} />
+                <StatCell
+                  icon={<ReceiptOutlinedIcon />}
+                  label="Nezaplaceno"
+                  value={summary.unpaid > 0 ? formatMoney(summary.unpaidTotal) : '—'}
+                  critical={summary.unpaid > 0}
+                />
+                <Box
+                  sx={{
+                    flex: '1 1 340px',
+                    minWidth: 300,
+                    borderLeft: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.125,
+                    px: 1.75,
+                    py: 1.375,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  {/* The search takes the middle, growing into whatever the stats and the
+                      segments leave; the segments trail it, as the filters do in Sklad. */}
+                  <Box sx={{ flex: '1 1 auto', minWidth: 120 }}>
+                    <SearchField
+                      value={search}
+                      onChange={setSearch}
+                      placeholder="Hledat kupujícího…"
+                      width="100%"
+                    />
+                  </Box>
+                  <SegControl
+                    value={filter}
+                    onChange={setFilter}
+                    options={SEGMENTS.map(([value, label]) => ({
+                      value,
+                      label: (
+                        <Box component="span">
+                          {label}
+                          {counts[value] ? (
+                            <Box component="span" sx={{ ml: 0.5, opacity: 0.55 }}>
+                              {counts[value]}
+                            </Box>
+                          ) : null}
+                        </Box>
+                      ),
+                    }))}
+                  />
+                </Box>
+              </Box>
             </Card>
 
-            <Stack
-              direction={{ xs: 'column', compact: 'row' }}
-              spacing={1.5}
-              alignItems={{ xs: 'stretch', compact: 'center' }}
-              flexWrap="wrap"
-              useFlexGap
-              sx={{ mb: 2 }}
+            <Typography
+              sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled', mb: 1, textAlign: 'right' }}
             >
-              <SegControl
-                value={filter}
-                onChange={setFilter}
-                options={SEGMENTS.map(([value, label]) => ({
-                  value,
-                  label: (
-                    <Box component="span">
-                      {label}
-                      {counts[value] ? (
-                        <Box component="span" sx={{ ml: 0.5, opacity: 0.55 }}>
-                          {counts[value]}
-                        </Box>
-                      ) : null}
-                    </Box>
-                  ),
-                }))}
-              />
-              <Typography
-                sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled', ml: { compact: 'auto' } }}
-              >
-                {rows.length} z {all.length}
-              </Typography>
-            </Stack>
+              {rows.length} z {all.length}
+            </Typography>
 
             <Card variant="outlined">
               <DataTable

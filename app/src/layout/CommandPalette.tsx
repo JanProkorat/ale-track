@@ -6,7 +6,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SportsBarOutlinedIcon from '@mui/icons-material/SportsBarOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import { NAV_GROUPS } from './nav-config';
+import { NAV_GROUPS, navPermModule } from './nav-config';
 import { useAuth } from 'src/auth/AuthProvider';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
@@ -53,7 +53,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const items = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
     const modules: Result[] = NAV_GROUPS.flatMap((g) => g.items)
-      .filter((it) => canSee(it.key) && (!q || it.label.toLowerCase().includes(q)))
+      .filter((it) => canSee(navPermModule(it)) && (!q || it.label.toLowerCase().includes(q)))
       .map((it) => ({ key: `m-${it.key}`, icon: it.icon, primary: it.label, secondary: 'Modul', path: it.path }));
 
     // Records only surface once there's a query — otherwise show just the modules.

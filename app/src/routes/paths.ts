@@ -1,6 +1,11 @@
 import { type ModuleKey } from 'src/auth/permissions';
 
-export const PATHS: Record<ModuleKey, string> = {
+/**
+ * One path per module, plus the screens that live inside a module's permission but need a route
+ * of their own. `/sales-reports` deliberately sits beside `/sales` rather than under it — the
+ * `/sales/:id` detail route already owns that segment.
+ */
+export const PATHS: Record<ModuleKey, string> & { salesReports: string } = {
   dashboard: '/',
   reports: '/reports',
   orders: '/orders',
@@ -8,6 +13,7 @@ export const PATHS: Record<ModuleKey, string> = {
   deliveries: '/deliveries',
   inventory: '/inventory',
   sales: '/sales',
+  salesReports: '/sales-reports',
   breweries: '/breweries',
   clients: '/clients',
   drivers: '/drivers',

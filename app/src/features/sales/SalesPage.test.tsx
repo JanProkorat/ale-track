@@ -3,7 +3,7 @@
 // than only the pill in the last column.
 // fireEvent rather than user-event — not a dependency of this project.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { SaleListItemDto, SalePaymentMethod, SaleState } from 'src/generated/api-client';
@@ -111,5 +111,44 @@ describe('SalesPage list', () => {
     expect(screen.getByText('Po splatnosti')).toBeInTheDocument();
     expect(screen.getByText('Ještě má čas')).toBeInTheDocument();
     expect(screen.queryByText('Zaplaceno')).not.toBeInTheDocument();
+  });
+
+  /** The field debounces, so every search assertion has to let its timer run. */
+  function searchFor(term: string) {
+    fireEvent.change(screen.getByPlaceholderText('Hledat kupujícího…'), { target: { value: term } });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+  }
+
+  it('filters the table by buyer', () => {
+    renderList([overdue, inTime, settled]);
+
+    searchFor('Zaplaceno');
+
+    expect(screen.getByText('Zaplaceno')).toBeInTheDocument();
+    expect(screen.queryByText('Po splatnosti')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ještě má čas')).not.toBeInTheDocument();
+  });
+
+  it('searches within the active segment rather than across the whole list', () => {
+    renderList([overdue, inTime, settled]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Nezaplacené/ }));
+    searchFor('Zaplaceno');
+
+    // "Zaplaceno" is a completed sale, so it stays out of the Nezaplacené segment even though
+    // the term matches its buyer.
+    expect(screen.queryByText('Zaplaceno')).not.toBeInTheDocument();
+  });
+
+  it('leaves the segment counts alone while a search is active', () => {
+    renderList([overdue, inTime, settled]);
+
+    searchFor('Zaplaceno');
+
+    // The tabs describe the whole list; only the table narrows.
+    expect(screen.getByRole('button', { name: /Nezaplacené 2/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Vše 3/ })).toBeInTheDocument();
   });
 });

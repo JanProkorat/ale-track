@@ -17,6 +17,8 @@ export interface SaleRowLike {
   saleDate?: string | Date;
   totalQuantity?: number;
   totalPrice?: number;
+  clientName?: string;
+  buyerName?: string;
 }
 
 /**
@@ -107,6 +109,35 @@ export function filterSales<T extends SaleRowLike>(sales: readonly T[], filter: 
     default:
       return [...sales];
   }
+}
+
+/**
+ * Filters by buyer — a client from the book or a walk-in's typed name, whichever the sale
+ * carries.
+ *
+ * Diacritics are stripped from both sides, so "kucerova" finds "Kučerová": the counter types
+ * fast and Czech keyboards are not always at hand. Matching is a substring rather than a prefix
+ * so a surname finds a sale recorded under a full name.
+ */
+export function searchSalesByBuyer<T extends SaleRowLike>(sales: readonly T[], query: string): T[] {
+  const needle = normalizeForSearch(query);
+  if (!needle) return [...sales];
+
+  return sales.filter((sale) => {
+    const buyer = normalizeForSearch(`${sale.clientName ?? ''} ${sale.buyerName ?? ''}`);
+    return buyer.includes(needle);
+  });
+}
+
+/** Lower-cased and stripped of diacritics, for accent-insensitive matching. */
+function normalizeForSearch(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase('cs')
+    // NFD splits an accented letter into its base plus a combining mark; U+0300-U+036F is the
+    // block those marks live in, so stripping it leaves the bare letter behind.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 /** The shape this module needs from a sale's line. */

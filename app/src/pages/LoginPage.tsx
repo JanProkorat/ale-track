@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
 import {
   Box,
   Stack,
   TextField,
   Button,
   Typography,
-  Alert,
   IconButton,
   InputAdornment,
   FormControlLabel,
@@ -35,6 +35,7 @@ const FEATURES = [
 
 export function LoginPage() {
   const { signIn } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const location = useLocation();
   const { resolved, toggle } = useThemeMode();
@@ -44,17 +45,17 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    setError(null);
     setBusy(true);
     try {
       await signIn(userName, password, remember);
       navigate(from, { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Přihlášení selhalo.');
+      // signIn already translates the failure through apiErrorMessage; the fallback covers
+      // the non-API failures it raises itself (a missing or unreadable token).
+      enqueueSnackbar(e instanceof Error ? e.message : 'Přihlášení selhalo.', { variant: 'error' });
     } finally {
       setBusy(false);
     }
@@ -135,12 +136,6 @@ export function LoginPage() {
           <Typography color="text.secondary" sx={{ mb: 2.75 }}>
             Zadejte přihlašovací údaje pro vstup do aplikace.
           </Typography>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
 
           <Stack
             component="form"

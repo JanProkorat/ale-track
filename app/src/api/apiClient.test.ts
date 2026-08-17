@@ -13,20 +13,20 @@ beforeAll(async () => {
 
 describe('fixDateOnlyParams', () => {
   it('trims a full ISO instant on From to the calendar day', () => {
-    const url = 'http://localhost:8080/ale-track/reports/operations?From=2026-07-25T00%3A00%3A00.000Z';
-    expect(fixDateOnlyParams(url)).toBe('http://localhost:8080/ale-track/reports/operations?From=2026-07-25');
+    const url = 'http://localhost:8080/ale-track/reports/shipments/operations?From=2026-07-25T00%3A00%3A00.000Z';
+    expect(fixDateOnlyParams(url)).toBe('http://localhost:8080/ale-track/reports/shipments/operations?From=2026-07-25');
   });
 
   it('leaves a bare YYYY-MM-DD value alone', () => {
-    const url = 'http://localhost:8080/ale-track/reports/operations?From=2026-07-25';
+    const url = 'http://localhost:8080/ale-track/reports/shipments/operations?From=2026-07-25';
     expect(fixDateOnlyParams(url)).toBe(url);
   });
 
   it('trims both From and To in the same URL', () => {
     const url =
-      'http://localhost:8080/ale-track/reports/client-volume?From=2026-04-26T00%3A00%3A00.000Z&To=2026-07-25T00%3A00%3A00.000Z';
+      'http://localhost:8080/ale-track/reports/shipments/client-volume?From=2026-04-26T00%3A00%3A00.000Z&To=2026-07-25T00%3A00%3A00.000Z';
     expect(fixDateOnlyParams(url)).toBe(
-      'http://localhost:8080/ale-track/reports/client-volume?From=2026-04-26&To=2026-07-25'
+      'http://localhost:8080/ale-track/reports/shipments/client-volume?From=2026-04-26&To=2026-07-25'
     );
   });
 

@@ -2,21 +2,20 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Box, Drawer, Stack, Typography, ButtonBase, Avatar } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import { NAV_GROUPS } from './nav-config';
+import { NAV_GROUPS, isNavPathActive, navPermModule } from './nav-config';
 import { AccountMenu } from './AccountMenu';
 import { Logo } from 'src/components/common/Logo';
 import { useAuth } from 'src/auth/AuthProvider';
 import { useModuleCounts } from 'src/hooks/useReports';
-import { PATHS } from 'src/routes/paths';
 import { initials } from 'src/lib/format';
-import { type ModuleKey } from 'src/auth/permissions';
 import { roleOfRoles, ROLE_CLAIM_LABELS } from 'src/auth/capabilities';
 
 export const SIDEBAR_W = 250;
 export const SIDEBAR_W_COLLAPSED = 74;
 
 // Which module-counts field backs each nav item's badge (dashboard has none).
-const COUNT_FIELD: Partial<Record<ModuleKey, string>> = {
+// Keyed by nav key: the garage-sale Reporty item gates on `sales` but carries no record count.
+const COUNT_FIELD: Partial<Record<string, string>> = {
   orders: 'ordersCount',
   shipments: 'outgoingShipmentsCount',
   deliveries: 'productDeliveriesCount',
@@ -47,8 +46,7 @@ export function Sidebar({
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const counts = useModuleCounts().data as Record<string, number | undefined> | undefined;
 
-  const isActive = (path: string) =>
-    path === PATHS.dashboard ? pathname === path : pathname.startsWith(path);
+  const isActive = (path: string) => isNavPathActive(pathname, path);
 
   // The overlay always shows the full-width sidebar: the prototype resets
   // `.sidebar.collapsed` back to the full width below 860px, so the desktop
@@ -70,7 +68,7 @@ export function Sidebar({
       {/* Nav */}
       <Box sx={{ flex: '1 1 auto', overflowY: 'auto', px: 1.5, pb: 2.5 }}>
         {NAV_GROUPS.map((group, gi) => {
-          const items = group.items.filter((it) => canSee(it.key));
+          const items = group.items.filter((it) => canSee(navPermModule(it)));
           if (!items.length) return null;
           return (
             <Box key={gi}>

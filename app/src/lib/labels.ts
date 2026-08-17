@@ -5,7 +5,7 @@ import {
   ProductKind, ProductType, Country, Region, ContactType, OrderState, OrderItemReminderState,
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
-  PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod,
+  PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -38,6 +38,12 @@ export const L = {
   salePayment: {
     Cash: 'Hotově',
     Invoice: 'Faktura',
+  } as Record<string, string>,
+  // Same wording the sale editor offers for the buyer choice, so a report bucket and the
+  // form that produced it read the same.
+  saleBuyerKind: {
+    Client: 'Klient',
+    Walkin: 'Jednorázový kupující',
   } as Record<string, string>,
   kind: {
     Keg: 'Sud',
@@ -428,4 +434,9 @@ export function saleStateName(s?: SaleState | string | number): string {
 /** The SalePaymentMethod enum's member name ("Cash" / "Invoice"), from either representation. */
 export function salePaymentName(p?: SalePaymentMethod | string | number): string {
   return enumName(SalePaymentMethod as unknown as Record<string, string | number>, p) ?? 'Cash';
+}
+
+/** The SaleBuyerKind enum's member name ("Client" / "Walkin"), from either representation. */
+export function saleBuyerKindName(b?: SaleBuyerKind | string | number): string {
+  return enumName(SaleBuyerKind as unknown as Record<string, string | number>, b) ?? 'Walkin';
 }

@@ -45,6 +45,11 @@ export const qk = {
   deliveryStates: ['deliveries', 'states'] as const,
   inventory: resource('inventory'),
   sales: resource('sales'),
+  // Nested under sales so completing a sale — which invalidates qk.sales.all — also refreshes
+  // the counter's reports, since a completed sale is exactly what they aggregate.
+  salesReportRevenue: (params: Params = {}) => ['sales', 'reports', 'revenue', params] as const,
+  salesReportProducts: (params: Params = {}) => ['sales', 'reports', 'products', params] as const,
+  salesReportBuyers: (params: Params = {}) => ['sales', 'reports', 'buyers', params] as const,
   // Nested under sales so invalidating qk.sales.all also refreshes a client's purchase history —
   // completing a sale changes what that client has bought before.
   saleClientHistory: (clientId: string) => ['sales', 'client-history', clientId] as const,
