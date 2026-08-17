@@ -30,14 +30,18 @@ vi.mock('src/hooks/useProducts', () => ({
 
 const saveMutateAsync = vi.fn().mockResolvedValue(undefined);
 const deleteMutateAsync = vi.fn().mockResolvedValue(undefined);
+const replaceMutateAsync = vi.fn().mockResolvedValue(undefined);
 const refetch = vi.fn();
 let queryState: { data: ClientProductPriceDto[] | undefined; isLoading: boolean; isError: boolean; error?: unknown } =
   { data: [], isLoading: false, isError: false };
 
+// The bulk-edit drawer (Task 10) is always mounted, just closed, alongside the
+// add/edit drawer — so its hooks need a usable answer here too.
 vi.mock('src/hooks/useClientProductPrices', () => ({
   useClientProductPrices: () => ({ ...queryState, refetch }),
   useSaveClientProductPrice: () => ({ mutateAsync: saveMutateAsync, isPending: false }),
   useDeleteClientProductPrice: () => ({ mutateAsync: deleteMutateAsync, isPending: false }),
+  useReplaceClientProductPrices: () => ({ mutateAsync: replaceMutateAsync, isPending: false }),
 }));
 
 const { ProductPricesPanel, computePriceDiff } = await import('./ProductPricesPanel');
@@ -87,22 +91,24 @@ describe('computePriceDiff', () => {
 });
 
 describe('ProductPricesPanel editable gating', () => {
-  it('hides the add button and every row action when not editable', () => {
+  it('hides the add button, the bulk-edit button and every row action when not editable', () => {
     queryState = { data: [price()], isLoading: false, isError: false };
     renderPanel(false);
 
     expect(screen.queryByRole('button', { name: /Přidat cenu/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Hromadná úprava cen/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Upravit cenu' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Vrátit na ceník' })).not.toBeInTheDocument();
     // The row itself is still shown — only the actions are gated.
     expect(screen.getByText('Ležák 12°')).toBeInTheDocument();
   });
 
-  it('shows the add button and per-row edit/delete actions when editable', () => {
+  it('shows the add button, the bulk-edit button and per-row edit/delete actions when editable', () => {
     queryState = { data: [price()], isLoading: false, isError: false };
     renderPanel(true);
 
     expect(screen.getByRole('button', { name: /Přidat cenu/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Hromadná úprava cen/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Upravit cenu' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vrátit na ceník' })).toBeInTheDocument();
   });
@@ -199,6 +205,15 @@ describe('ProductPricesPanel price drawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upravit cenu' }));
 
     expect(screen.getByText('Hospoda U Netopýra')).toBeInTheDocument();
+  });
+
+  it('opens the bulk catalog editor from the toolbar button', () => {
+    queryState = { data: [], isLoading: false, isError: false };
+    renderPanel(true, 'Hospoda U Netopýra');
+
+    fireEvent.click(screen.getByRole('button', { name: /Hromadná úprava cen/ }));
+
+    expect(screen.getByLabelText('Změna proti ceníku (%)')).toBeInTheDocument();
   });
 });
 

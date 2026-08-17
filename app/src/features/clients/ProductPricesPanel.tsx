@@ -1,7 +1,6 @@
 // Ceník tab of the client detail: the client's own product-price overrides,
 // grouped by brewery — ports the prototype's `clCenikView`/`clPriceForm`/
-// `clPriceDelete`. The prototype's `clBulkPriceForm` (Hromadná úprava cen) is
-// deliberately out of scope here; it lands with its own drawer in Task 10.
+// `clPriceDelete`/`clBulkPriceForm`.
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -31,6 +30,7 @@ import {
   useSaveClientProductPrice,
   useDeleteClientProductPrice,
 } from 'src/hooks/useClientProductPrices';
+import { BulkClientPricesDrawer } from './BulkClientPricesDrawer';
 
 /** A struck-through client price says a price is special but not by how much —
  * the pill in the Rozdíl column is the amount someone is actually checking.
@@ -315,6 +315,7 @@ export function ProductPricesPanel({
   const del = useDeleteClientProductPrice();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<ClientProductPriceDto | undefined>(undefined);
   const [confirmPrice, setConfirmPrice] = useState<ClientProductPriceDto | null>(null);
 
@@ -340,6 +341,13 @@ export function ProductPricesPanel({
     <Box>
       {editable && (
         <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          <Button
+            startIcon={<WalletIcon />}
+            onClick={() => setBulkOpen(true)}
+            sx={{ bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint } }}
+          >
+            Hromadná úprava cen
+          </Button>
           <Button
             variant="outlined"
             startIcon={<AddIcon />}
@@ -376,6 +384,13 @@ export function ProductPricesPanel({
         editingPrice={editingPrice}
         takenProductIds={takenProductIds}
         onClose={() => setFormOpen(false)}
+      />
+
+      <BulkClientPricesDrawer
+        open={bulkOpen}
+        clientId={clientId}
+        clientName={clientName}
+        onClose={() => setBulkOpen(false)}
       />
 
       <ConfirmDialog
