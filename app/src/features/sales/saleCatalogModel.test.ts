@@ -5,7 +5,14 @@ import {
   ProductKind,
   ProductType,
 } from 'src/generated/api-client';
-import { bySection, groupRowsByName, historyRows, searchRows, sellableRows } from './saleCatalogModel';
+import {
+  bySection,
+  groupRowsByName,
+  historyAddPrice,
+  historyRows,
+  searchRows,
+  sellableRows,
+} from './saleCatalogModel';
 
 const item = (
   id: string,
@@ -55,6 +62,37 @@ describe('sellableRows', () => {
 
   it('returns an empty list for missing data rather than throwing', () => {
     expect(sellableRows(undefined)).toEqual([]);
+  });
+});
+
+describe('sellableRows client pricing', () => {
+  it('offers the client price as the line default on the browse segment, marking the ceník beside it', () => {
+    const rows = sellableRows(
+      sections({ name: 'Svijany', items: [item('a', 'Máz', 5, { productId: 'p-maz', priceWithVat: 1290 } as never)] }),
+      { 'p-maz': 1190 }
+    );
+
+    expect(rows[0].priceWithVat).toBe(1190);
+    expect(rows[0].listPriceWithVat).toBe(1290);
+  });
+
+  it('leaves a walk-in on the ceník price — there is no client, so nothing to resolve', () => {
+    const rows = sellableRows(
+      sections({ name: 'Svijany', items: [item('a', 'Máz', 5, { productId: 'p-maz', priceWithVat: 1290 } as never)] })
+    );
+
+    expect(rows[0].priceWithVat).toBe(1290);
+    expect(rows[0].listPriceWithVat).toBeUndefined();
+  });
+
+  it('leaves a product with no override of its own on the ceník price, even with other overrides in scope', () => {
+    const rows = sellableRows(
+      sections({ name: 'Svijany', items: [item('a', 'Máz', 5, { productId: 'p-maz', priceWithVat: 1290 } as never)] }),
+      { 'p-other': 999 }
+    );
+
+    expect(rows[0].priceWithVat).toBe(1290);
+    expect(rows[0].listPriceWithVat).toBeUndefined();
   });
 });
 
@@ -154,5 +192,52 @@ describe('historyRows', () => {
   it('returns an empty list when the client has no history', () => {
     expect(historyRows(undefined, stock)).toEqual([]);
     expect(historyRows([], stock)).toEqual([]);
+  });
+});
+
+describe('historyAddPrice', () => {
+  // Three distinguishable numbers so no assertion here can pass by coincidence: ceník 1290,
+  // override 1190, last-paid 999.
+  const stockWithOverride = sellableRows(
+    sections({
+      name: 'Svijany',
+      items: [item('in-maz', 'Svijanský Máz', 9, { productId: 'p-maz', priceWithVat: 1290 } as never)],
+    }),
+    { 'p-maz': 1190 }
+  );
+  const stockWithoutOverride = sellableRows(
+    sections({
+      name: 'Svijany',
+      items: [item('in-maz', 'Svijanský Máz', 9, { productId: 'p-maz', priceWithVat: 1290 } as never)],
+    })
+  );
+
+  it('lets the client price win over what the client last paid, while the row keeps the last-paid figure', () => {
+    const rows = historyRows(
+      [{ inventoryItemId: 'in-maz', lastUnitPriceWithVat: 999, lastQuantity: 3 }],
+      stockWithOverride
+    );
+    const row = rows[0];
+
+    // A decision (the override) outranks an observation (the last price paid).
+    expect(historyAddPrice(row)).toBe(1190);
+    // The segment's whole point: it keeps showing what was actually paid, even though the
+    // suggested add price above is the override.
+    expect(row.lastUnitPriceWithVat).toBe(999);
+  });
+
+  it('falls back to the last-paid price when there is no override', () => {
+    const rows = historyRows(
+      [{ inventoryItemId: 'in-maz', lastUnitPriceWithVat: 999, lastQuantity: 3 }],
+      stockWithoutOverride
+    );
+
+    expect(historyAddPrice(rows[0])).toBe(999);
+  });
+
+  it('suggests nothing when neither an override nor a last price exists, leaving the ceník to apply', () => {
+    const rows = historyRows([{ inventoryItemId: 'in-maz' }], stockWithoutOverride);
+
+    expect(historyAddPrice(rows[0])).toBeUndefined();
   });
 });

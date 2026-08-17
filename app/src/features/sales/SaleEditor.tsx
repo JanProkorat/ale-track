@@ -39,6 +39,7 @@ import {
   useUpdateSale,
 } from 'src/hooks/useSales';
 import { useInventory } from 'src/hooks/useInventory';
+import { useClientProductPrices } from 'src/hooks/useClientProductPrices';
 import { PATHS } from 'src/routes/paths';
 import { SaleCatalog } from './SaleCatalog';
 import { SaleCartLine } from './SaleCartLine';
@@ -163,6 +164,23 @@ function SaleForm({ mode, sale }: { mode: 'create' | 'edit'; sale?: SaleDto }) {
   const showHistory = buyerKind === 'Client' && Boolean(clientId);
   const history = useSaleClientHistory(showHistory ? (clientId ?? undefined) : undefined);
 
+  // Whose prices apply at the counter: a walk-in has none, so the query is disabled and the map
+  // below stays empty by construction — the same reasoning as `showHistory` just above. Gated
+  // explicitly on `buyerKind` here too, rather than only on the query being disabled, so a buyer
+  // switch re-resolves the catalog immediately rather than trailing a stale client's overrides for
+  // one render.
+  const clientPrices = useClientProductPrices(buyerKind === 'Client' && clientId ? clientId : undefined);
+  const clientPriceByProductId = useMemo(() => {
+    if (buyerKind !== 'Client' || !clientId) return {};
+    const map: Record<string, number> = {};
+    for (const entry of clientPrices.data ?? []) {
+      if (entry.productId && entry.priceWithVat != null) {
+        map[entry.productId] = entry.priceWithVat;
+      }
+    }
+    return map;
+  }, [buyerKind, clientId, clientPrices.data]);
+
   // Reconcile each line's stock ceiling with what the catalog reports. An edited draft seeds its
   // ceiling from its own quantity, which would otherwise pin the stepper at what was already taken.
   const liveStock = useMemo(() => {
@@ -210,8 +228,15 @@ function SaleForm({ mode, sale }: { mode: 'create' | 'edit'; sale?: SaleDto }) {
   /**
    * Adds a stock row to the sale, or raises an existing line for it.
    *
-   * The history tab passes the price and amount from last time, so re-adding a regular's usual crate
-   * lands already priced as they last paid rather than at today's ceník.
+   * The history tab passes the price and amount from last time (with the client's own price already
+   * substituted for it — see `historyAddPrice`), so re-adding a regular's usual crate lands already
+   * priced right rather than at today's ceník. The browse tab passes no price at all, so it falls
+   * back to `row.priceWithVat`, which `SaleCatalog` has already resolved against the buyer's own
+   * overrides — a client price wins on both segments this way, with no special-casing here.
+   *
+   * `row.listPriceWithVat` (present only when `row.priceWithVat` is itself an override) is what the
+   * cart line's "ceník" hint must show — not the resolved price, which would otherwise show the
+   * override as if it were the catalog price.
    */
   const addLine = (row: StockRow, suggestedPrice?: number, suggestedQuantity?: number) => {
     const stock = row.quantity ?? 0;
@@ -231,7 +256,7 @@ function SaleForm({ mode, sale }: { mode: 'create' | 'edit'; sale?: SaleDto }) {
           inventoryItemId: row.id ?? '',
           name: row.name ?? '',
           packageSize: row.packageSize,
-          listPrice: row.priceWithVat,
+          listPrice: row.listPriceWithVat ?? row.priceWithVat,
           quantity: Math.min(Math.max(suggestedQuantity ?? 1, 1), stock),
           unitPrice: suggestedPrice ?? row.priceWithVat ?? null,
           note: '',
@@ -607,6 +632,7 @@ function SaleForm({ mode, sale }: { mode: 'create' | 'edit'; sale?: SaleDto }) {
                 sections={inventory.data}
                 history={history.data}
                 showHistory={showHistory}
+                clientPriceByProductId={clientPriceByProductId}
                 qtyOf={qtyOf}
                 onAdd={addLine}
                 onChange={changeQuantity}

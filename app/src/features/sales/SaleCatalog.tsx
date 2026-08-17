@@ -5,12 +5,14 @@ import RemoveIcon from '@mui/icons-material/RemoveOutlined';
 import SearchIcon from '@mui/icons-material/SearchOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import { SegControl } from 'src/components/common/SegControl';
+import { PriceWithList } from 'src/components/common/PriceWithList';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { useBreweryColors } from 'src/hooks/useBreweries';
 import { fmtDate, fmtLiters, plural } from 'src/lib/format';
 import { kindLabel } from 'src/lib/labels';
 import {
   bySection,
+  historyAddPrice,
   historyRows,
   searchRows,
   sellableRows,
@@ -106,8 +108,13 @@ function QtyControl({
  * Deliberately no price: it is rendered by the row itself, right-aligned beside the stepper, so a
  * single item and a size variant put their price in the same column. Inlining it here — which is what
  * the order editor's ProductRow does — is what made the two shapes disagree.
+ *
+ * The "naposled" note carries what the client actually paid last time — that stays visible here even
+ * when the row's own price cell now shows an agreed price instead: the history segment exists to show
+ * what was paid, the primary cell shows what adding it today would suggest, and the two intentionally
+ * disagree when an override has been set since.
  */
-function RowMeta({ row }: { row: HistoryRow }) {
+function RowMeta({ row, formatMoney }: { row: HistoryRow; formatMoney: (v?: number) => string }) {
   return (
     <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
       {row.kind != null && <Chip size="small" label={kindLabel(row.kind)} sx={{ height: 20, fontSize: 11 }} />}
@@ -120,6 +127,7 @@ function RowMeta({ row }: { row: HistoryRow }) {
       {row.lastSoldDate != null && (
         <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>
           dříve prodáno · naposled {fmtDate(row.lastSoldDate)}
+          {row.lastUnitPriceWithVat != null && ` za ${formatMoney(row.lastUnitPriceWithVat)}`}
         </Typography>
       )}
     </Stack>
@@ -132,18 +140,6 @@ function Swatch({ color }: { color?: string }) {
     <Box
       sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }}
     />
-  );
-}
-
-/** The price cell both row shapes use, so the column lines up. */
-function PriceCell({ value, formatMoney }: { value?: number; formatMoney: (v?: number) => string }) {
-  if (value == null) return null;
-  return (
-    <Typography
-      sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-    >
-      {formatMoney(value)}
-    </Typography>
   );
 }
 
@@ -180,9 +176,9 @@ function StockItemRow({
         <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>
           {row.name}
         </Typography>
-        <RowMeta row={row} />
+        <RowMeta row={row} formatMoney={formatMoney} />
       </Box>
-      <PriceCell value={row.priceWithVat} formatMoney={formatMoney} />
+      {row.priceWithVat != null && <PriceWithList price={row.priceWithVat} listPrice={row.listPriceWithVat} />}
       <QtyControl
         qty={qty}
         max={row.quantity ?? 0}
@@ -198,14 +194,12 @@ function VariantCard({
   group,
   qtyOf,
   color,
-  formatMoney,
   onAdd,
   onChange,
 }: {
   group: StockGroup;
   qtyOf: (id: string) => number;
   color?: string;
-  formatMoney: (v?: number) => string;
   onAdd: (row: StockRow) => void;
   onChange: (id: string, delta: number) => void;
 }) {
@@ -251,7 +245,9 @@ function VariantCard({
               <Typography variant="caption" color="text.disabled" sx={{ flex: 1, minWidth: 0 }} noWrap>
                 skladem {variant.quantity ?? 0}
               </Typography>
-              <PriceCell value={variant.priceWithVat} formatMoney={formatMoney} />
+              {variant.priceWithVat != null && (
+                <PriceWithList price={variant.priceWithVat} listPrice={variant.listPriceWithVat} />
+              )}
               <QtyControl
                 qty={qty}
                 max={variant.quantity ?? 0}
@@ -345,7 +341,6 @@ function BrewerySectionPanel({
                   group={group}
                   qtyOf={qtyOf}
                   color={color}
-                  formatMoney={formatMoney}
                   onAdd={onAdd}
                   onChange={onChange}
                 />
@@ -379,6 +374,7 @@ export function SaleCatalog({
   sections,
   history,
   showHistory,
+  clientPriceByProductId,
   qtyOf,
   onAdd,
   onChange,
@@ -386,6 +382,9 @@ export function SaleCatalog({
   sections: InventorySectionDto[] | undefined;
   history: HistoryEntry[] | undefined;
   showHistory: boolean;
+  /** The buyer's own product prices, resolved at the till boundary (`SaleEditor`) from
+   *  `useClientProductPrices` — absent for a walk-in, who has no overrides to apply. */
+  clientPriceByProductId?: Record<string, number>;
   qtyOf: (inventoryItemId: string) => number;
   onAdd: (row: StockRow, suggestedPrice?: number, suggestedQuantity?: number) => void;
   onChange: (inventoryItemId: string, delta: number) => void;
@@ -398,10 +397,15 @@ export function SaleCatalog({
   // refetch starts open rather than hidden.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
-  const stock = useMemo(() => sellableRows(sections), [sections]);
+  const stock = useMemo(
+    () => sellableRows(sections, clientPriceByProductId),
+    [sections, clientPriceByProductId]
+  );
   const matching = useMemo(() => searchRows(stock, search), [stock, search]);
   const sectioned = useMemo(() => bySection(matching), [matching]);
 
+  // historyRows needs no client-price lookup of its own: `stock` above already carries each row's
+  // resolved price, so a history row inherits the same override its browse-segment twin shows.
   const remembered = useMemo(() => historyRows(history, stock), [history, stock]);
   const rememberedMatching = useMemo(() => searchRows(remembered, search) as HistoryRow[], [remembered, search]);
 
@@ -459,7 +463,7 @@ export function SaleCatalog({
                 row={row}
                 qty={qtyOf(row.id ?? '')}
                 formatMoney={formatMoney}
-                onAdd={() => onAdd(row, row.lastUnitPriceWithVat, row.lastQuantity)}
+                onAdd={() => onAdd(row, historyAddPrice(row), row.lastQuantity)}
                 onChange={(delta) => onChange(row.id ?? '', delta)}
               />
             ))}
