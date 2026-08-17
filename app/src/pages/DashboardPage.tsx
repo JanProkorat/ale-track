@@ -1,13 +1,13 @@
 import { Fragment, useMemo, type ReactNode } from 'react';
-import { Box, Button, Card, Chip, Stack, Typography } from '@mui/material';
+import { Box, Button, Card, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
-import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
 import { StatCard } from 'src/components/common/StatCard';
@@ -15,16 +15,21 @@ import { StatusPill } from 'src/components/common/StatusPill';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { useAuth } from 'src/auth/AuthProvider';
-import { useModuleCounts, useUpcomingReminders } from 'src/hooks/useReports';
+import { useModuleCounts } from 'src/hooks/useReports';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useShipments } from 'src/hooks/useShipments';
 import { useDeliveries } from 'src/hooks/useDeliveries';
 import { useInventory } from 'src/hooks/useInventory';
+import { useSales } from 'src/hooks/useSales';
+import { useCurrency } from 'src/providers/CurrencyProvider';
 import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
 import { PATHS } from 'src/routes/paths';
-import { num, fmtDateShort, plural } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, DELIVERY_STATUS, deliveryStateName, type StatusTone } from 'src/lib/labels';
-import { SectionType, type DriverListItemDto } from 'src/generated/api-client';
+import { num, plural } from 'src/lib/format';
+import {
+  SHIP_STATUS, shipStateName, DELIVERY_STATUS, deliveryStateName, SALE_STATUS, saleStateName,
+  type StatusTone,
+} from 'src/lib/labels';
+import { type DriverListItemDto } from 'src/generated/api-client';
 
 const MONTHS_CS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
 const LOW_STOCK_THRESHOLD = 3;
@@ -134,12 +139,13 @@ export function DashboardPage() {
 
   const showWeek = canSee('shipments') || canSee('deliveries');
   const showLowStock = canSee('inventory');
-  const showReminders = canSee('breweries') || canSee('clients');
+  const showSales = canSee('sales');
 
   const shipmentsQuery = useShipments();
   const deliveriesQuery = useDeliveries();
   const inventoryQuery = useInventory();
-  const remindersQuery = useUpcomingReminders();
+  const salesQuery = useSales();
+  const { formatMoney } = useCurrency();
 
   const today = useMemo(() => dayjs().startOf('day'), []);
 
@@ -169,6 +175,29 @@ export function DashboardPage() {
     return [...ships, ...delivs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [shipmentsQuery.data, deliveriesQuery.data, today]);
 
+  // "Rozpracované prodeje" — counter sales that have not been completed yet, so the stock is
+  // still on the shelf and the money has not arrived. Oldest first: a draft left open for
+  // weeks is the one worth chasing, unlike the week card, where the nearest date leads.
+  const salesRows = useMemo(() => {
+    return (salesQuery.data ?? [])
+      .filter((s) => s.saleDate && saleStateName(s.state) !== 'Completed')
+      .map((s) => {
+        const status = SALE_STATUS[saleStateName(s.state) ?? 'Draft'] ?? SALE_STATUS.Draft;
+        const quantity = s.totalQuantity ?? 0;
+        return {
+          key: `sale-${s.id}`,
+          date: s.saleDate!,
+          // A walk-in may be recorded with no name at all — an anonymous cash sale needs none.
+          title: s.clientName || s.buyerName || 'Anonymní prodej',
+          meta: `${num(quantity)} ${plural(quantity, 'kus', 'kusy', 'kusů')} · ${formatMoney(s.totalPrice ?? 0)}`,
+          href: `${PATHS.sales}/${s.id}`,
+          tone: status.tone,
+          label: status.label,
+        };
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [salesQuery.data, formatMoney]);
+
   // "Nízká zásoba" — inventory items at or below the low-stock threshold.
   const lowStock = useMemo(() => {
     const out: { key: string; name: string; section: string; quantity: number }[] = [];
@@ -181,18 +210,6 @@ export function DashboardPage() {
     }
     return out.sort((a, b) => a.quantity - b.quantity);
   }, [inventoryQuery.data]);
-
-  // "Připomínky" — upcoming reminders flattened across sections, by date.
-  const reminders = useMemo(() => {
-    const out: { key: string; name: string; sectionName: string; href: string; date?: Date }[] = [];
-    for (const sec of remindersQuery.data ?? []) {
-      const href = sec.sectionType === SectionType.Client ? `${PATHS.clients}/${sec.sectionId}` : `${PATHS.breweries}/${sec.sectionId}`;
-      for (const r of sec.reminders ?? []) {
-        out.push({ key: r.id ?? `${sec.sectionId}-${r.name}`, name: r.name ?? '—', sectionName: sec.sectionName ?? '', href, date: r.occurrenceDate });
-      }
-    }
-    return out.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
-  }, [remindersQuery.data]);
 
   return (
     <PageContainer>
@@ -231,111 +248,76 @@ export function DashboardPage() {
         </QueryBoundary>
       </Box>
 
-      {/* Driver availability is pulled above the grid (order: -1) so it sits
-          above the low-stock card, while staying full-width. */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {(showWeek || showLowStock || showReminders) && (
+      {(showSales || showWeek) && (
         <Box sx={{
+          // The pair share a row on desktop. `alignItems: start` rather than the default
+          // stretch: these two cards list independent things, so the shorter one should end
+          // where its content ends instead of trailing empty space to match its neighbour.
           display: 'grid', gap: 2, alignItems: 'start',
-          gridTemplateColumns: { xs: '1fr', md: showReminders && (showWeek || showLowStock) ? '1.4fr 1fr' : '1fr' },
+          gridTemplateColumns: { xs: '1fr', md: showSales && showWeek ? '1fr 1fr' : '1fr' },
         }}>
-          {(showWeek || showLowStock) && (
-            <Stack spacing={2}>
-              {showWeek && (
-                <DashCard
-                  icon={<RouteOutlinedIcon />}
-                  iconColor="warning.main"
-                  title="Tento týden — rozvozy a dovozy"
-                  action={<Button component={RouterLink} to={PATHS.shipments} size="small">Vše</Button>}
-                >
-                  {weekRows.length > 0 ? (
-                    <Stack spacing={1}>
-                      {weekRows.map((r) => (
-                        <ScheduleRow
-                          key={r.key}
-                          date={r.date}
-                          icon={r.kind === 'ship' ? <LocalShippingOutlinedIcon /> : <WarehouseOutlinedIcon />}
-                          title={r.title}
-                          meta={r.meta}
-                          href={r.href}
-                          tone={r.tone}
-                          label={r.label}
-                        />
-                      ))}
-                    </Stack>
-                  ) : (
-                    <EmptyState title="Nic naplánováno" description="Tento týden nejsou žádné rozvozy ani dovozy." dense />
-                  )}
-                </DashCard>
-              )}
-
-              {showLowStock && (
-                <DashCard
-                  icon={<ReportProblemOutlinedIcon />}
-                  iconColor="error.main"
-                  title="Nízká zásoba"
-                  action={<Button component={RouterLink} to={PATHS.inventory} size="small">Sklad</Button>}
-                >
-                  {lowStock.length > 0 ? (
-                    <Stack spacing={1}>
-                      {lowStock.map((i) => (
-                        <Stack key={i.key} direction="row" alignItems="center" spacing={1} justifyContent="space-between">
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{i.name}</Typography>
-                            {i.section && <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{i.section}</Typography>}
-                          </Box>
-                          <StatusPill tone="crit" label={`${i.quantity} ks skladem`} />
-                        </Stack>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography color="text.secondary" sx={{ fontSize: 13.5 }}>Vše dostatečně naskladněno.</Typography>
-                  )}
-                </DashCard>
-              )}
-            </Stack>
-          )}
-
-          {showReminders && (
+          {showSales && (
             <DashCard
-              icon={<NotificationsNoneOutlinedIcon />}
-              iconColor="info.main"
-              title="Připomínky"
-              action={<Chip size="small" label={reminders.length} />}
+              icon={<ShoppingCartOutlinedIcon />}
+              iconColor="success.main"
+              title="Rozpracované prodeje"
+              action={<Button component={RouterLink} to={PATHS.sales} size="small">Vše</Button>}
             >
-              {reminders.length > 0 ? (
-                <Stack spacing={0.25}>
-                  {reminders.map((r) => {
-                    const d = r.date ? dayjs(r.date).startOf('day') : null;
-                    const overdue = d ? d.isBefore(today) : false;
-                    const isToday = d ? d.isSame(today, 'day') : false;
-                    const dotColor = overdue ? 'error.main' : isToday ? 'warning.main' : 'info.main';
-                    return (
-                      <Box key={r.key} component={RouterLink} to={r.href} sx={{
-                        display: 'flex', alignItems: 'flex-start', gap: 1.25, p: 1, borderRadius: 1.5,
-                        textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.hover' },
-                      }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', mt: 0.75, flexShrink: 0, bgcolor: dotColor }} />
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{r.name}</Typography>
-                          <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{r.sectionName}</Typography>
-                        </Box>
-                        <Typography sx={{ fontSize: 12, fontWeight: 700, flexShrink: 0, color: overdue ? 'error.main' : isToday ? 'warning.dark' : 'text.secondary' }}>
-                          {isToday ? 'dnes' : r.date ? fmtDateShort(r.date) : ''}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
+              {salesRows.length > 0 ? (
+                <Stack spacing={1}>
+                  {salesRows.map((r) => (
+                    <ScheduleRow
+                      key={r.key}
+                      date={r.date}
+                      icon={<ShoppingCartOutlinedIcon />}
+                      title={r.title}
+                      meta={r.meta}
+                      href={r.href}
+                      tone={r.tone}
+                      label={r.label}
+                    />
+                  ))}
                 </Stack>
               ) : (
-                <Typography color="text.secondary" sx={{ fontSize: 13.5 }}>Žádné aktivní připomínky.</Typography>
+                <EmptyState title="Nic rozpracovaného" description="Všechny prodeje jsou dokončené." dense />
+              )}
+            </DashCard>
+          )}
+
+          {showWeek && (
+            <DashCard
+              icon={<RouteOutlinedIcon />}
+              iconColor="warning.main"
+              title="Tento týden — rozvozy a dovozy"
+              action={<Button component={RouterLink} to={PATHS.shipments} size="small">Vše</Button>}
+            >
+              {weekRows.length > 0 ? (
+                <Stack spacing={1}>
+                  {weekRows.map((r) => (
+                    <ScheduleRow
+                      key={r.key}
+                      date={r.date}
+                      icon={r.kind === 'ship' ? <LocalShippingOutlinedIcon /> : <WarehouseOutlinedIcon />}
+                      title={r.title}
+                      meta={r.meta}
+                      href={r.href}
+                      tone={r.tone}
+                      label={r.label}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState title="Nic naplánováno" description="Tento týden nejsou žádné rozvozy ani dovozy." dense />
               )}
             </DashCard>
           )}
         </Box>
       )}
 
-      <Card sx={{ p: { xs: 2, sm: 2.5 }, order: -1 }}>
+      {/* Full width rather than beside another card: the grid below is 720px wide before it
+          starts scrolling, which a half-width column cannot give it on most screens. */}
+      <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
         <Stack direction="row" alignItems="center" spacing={1.25} flexWrap="wrap" sx={{ mb: 2 }}>
           <CalendarMonthOutlinedIcon sx={{ color: 'primary.main' }} />
           <Typography variant="h6" sx={{ flex: 1 }}>Dostupnost řidičů tento týden</Typography>
@@ -418,6 +400,31 @@ export function DashboardPage() {
           )}
         </QueryBoundary>
       </Card>
+
+      {showLowStock && (
+        <DashCard
+          icon={<ReportProblemOutlinedIcon />}
+          iconColor="error.main"
+          title="Nízká zásoba"
+          action={<Button component={RouterLink} to={PATHS.inventory} size="small">Sklad</Button>}
+        >
+          {lowStock.length > 0 ? (
+            <Stack spacing={1}>
+              {lowStock.map((i) => (
+                <Stack key={i.key} direction="row" alignItems="center" spacing={1} justifyContent="space-between">
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{i.name}</Typography>
+                    {i.section && <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{i.section}</Typography>}
+                  </Box>
+                  <StatusPill tone="crit" label={`${i.quantity} ks skladem`} />
+                </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary" sx={{ fontSize: 13.5 }}>Vše dostatečně naskladněno.</Typography>
+          )}
+        </DashCard>
+      )}
       </Box>
     </PageContainer>
   );
