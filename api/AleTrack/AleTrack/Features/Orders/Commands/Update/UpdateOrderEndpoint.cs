@@ -107,8 +107,10 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             // containing a since-retired one.
             var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
 
-            order.ActualDeliveryDate = req.Data.ActualDeliveryDate;
-            order.State = req.Data.State;
+            // Both are optional patches: omitted means "leave as stored". They belong to the
+            // shipment's lifecycle, and the order editor sends neither.
+            order.ActualDeliveryDate = req.Data.ActualDeliveryDate ?? order.ActualDeliveryDate;
+            order.State = req.Data.State ?? order.State;
 
             var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
                 dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
@@ -156,9 +158,11 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     /// </remarks>
     private static bool RequestChangesFrozenContent(Order order, UpdateOrderDto data)
     {
+        // State and ActualDeliveryDate are compared only when the request carries them:
+        // omitted means "leave as stored", which is by definition not a change.
         if (data.ClientId != order.Client.PublicId
-            || data.State != order.State
-            || data.ActualDeliveryDate != order.ActualDeliveryDate
+            || (data.State is not null && data.State != order.State)
+            || (data.ActualDeliveryDate is not null && data.ActualDeliveryDate != order.ActualDeliveryDate)
             || data.DeliveryAddressKind != order.DeliveryAddressKind
             || data.ClientDeliveryPlaceId != order.ClientDeliveryPlace?.PublicId)
             return true;

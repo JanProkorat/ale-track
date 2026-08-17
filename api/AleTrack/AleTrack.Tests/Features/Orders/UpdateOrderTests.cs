@@ -90,6 +90,104 @@ public sealed class UpdateOrderTests
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // ---------------------------------------------------------------------------------
+    // State and ActualDeliveryDate are optional patches.
+    //
+    // The order editor is a content editor: it sends items, notes, returns, extras and the
+    // required date, and nothing about the lifecycle — that is the shipment's. While both
+    // fields were non-nullable, an editor save posted the CLR defaults, so editing a
+    // "plánuje se" order and pressing Uložit knocked it back to "nová" and wiped the
+    // delivered date.
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// What the order editor actually posts: content only, no state, no delivered date.
+    /// </summary>
+    private static UpdateOrderDto ContentOnlyDto(Guid clientId, List<UpdateOrderItemDto> items) =>
+        OrderBuilder.BuildUpdateDto(clientId: clientId, state: null, actualDeliveryDate: null, orderItems: items);
+
+    [Fact]
+    public async Task ProcessAsync_UpdateWithoutState_KeepsTheStoredStateAndDeliveredDate()
+    {
+        var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: OrderState.Planning);
+        order.ActualDeliveryDate = new DateOnly(2026, 8, 14);
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], products: [product], orders: [order]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var data = ContentOnlyDto(client.PublicId,
+            [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 4 }]);
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
+
+        order.State.Should().Be(OrderState.Planning, "the editor edits content, not the lifecycle");
+        order.ActualDeliveryDate.Should().Be(new DateOnly(2026, 8, 14));
+        order.OrderItems.Should().ContainSingle().Which.Quantity.Should().Be(4);
+    }
+
+    /// <summary>
+    /// The same omission must not read as a change on a frozen order either, or a note-only
+    /// save on a delivered order would 400.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_UpdateNotesOfFinishedOrderWithoutState_Succeeds()
+    {
+        var f = BuildFreezeFixture(OrderState.Finished, OutgoingShipmentState.Delivered);
+        f.Order.ActualDeliveryDate = new DateOnly(2026, 8, 10);
+        var db = MockForFreeze(f);
+
+        var data = OrderBuilder.BuildUpdateDto(
+            clientId: f.Client.PublicId,
+            state: null,
+            actualDeliveryDate: null,
+            orderItems:
+            [
+                new UpdateOrderItemDto
+                {
+                    ProductId = f.Product.PublicId,
+                    Quantity = f.Item.Quantity,
+                    ReminderState = f.Item.ReminderState
+                }
+            ],
+            notes: [new OrderNoteDto { Text = "Reklamace vyřízena." }]);
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.State.Should().Be(OrderState.Finished);
+        f.Order.ActualDeliveryDate.Should().Be(new DateOnly(2026, 8, 10));
+        f.Order.Notes.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// A caller that does send a state still drives it — the freeze guard included.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_UpdateWithExplicitState_StillApplies()
+    {
+        var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: OrderState.Planning);
+
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], products: [product], orders: [order]);
+        db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        var data = OrderBuilder.BuildUpdateDto(
+            clientId: client.PublicId,
+            state: OrderState.Cancelled,
+            orderItems: [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
+
+        order.State.Should().Be(OrderState.Cancelled);
+    }
+
     [Fact]
     public async Task ProcessAsync_UpdateOrder_NotFound()
     {

@@ -394,6 +394,18 @@ export interface IClient {
     deleteOutgoingShipmentEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Sets how many pieces of a product the run buys for our warehouse
+     * @return Stock purchase stored
+     */
+    setStockPurchaseEndpoint(id: string, data: SetStockPurchaseDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Moves an outgoing shipment to a new state
+     * @return State changed
+     */
+    setShipmentStateEndpoint(id: string, data: SetShipmentStateDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets a product's quantity on a brewery invoice
      * @return Quantity stored
      */
@@ -404,6 +416,12 @@ export interface IClient {
      * @return Step stored
      */
     setPreparationStepEndpoint(id: string, stepId: string, data: SetPreparationStepDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Sets how many of an order line's pieces come from our own stock
+     * @return Sourcing stored
+     */
+    setOrderItemSourcingEndpoint(id: string, orderItemId: string, data: SetOrderItemSourcingDto, signal?: AbortSignal): Promise<string>;
 
     /**
      * Sets how far a product has got through loading in one invoice column
@@ -4732,6 +4750,150 @@ export class Client implements IClient {
     }
 
     /**
+     * Sets how many pieces of a product the run buys for our warehouse
+     * @return Stock purchase stored
+     */
+    setStockPurchaseEndpoint(id: string, data: SetStockPurchaseDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/stock-purchases";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetStockPurchaseEndpoint(_response);
+        });
+    }
+
+    protected processSetStockPurchaseEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The run\'s content is frozen", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Moves an outgoing shipment to a new state
+     * @return State changed
+     */
+    setShipmentStateEndpoint(id: string, data: SetShipmentStateDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/state";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetShipmentStateEndpoint(_response);
+        });
+    }
+
+    protected processSetShipmentStateEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Illegal transition, or the run is not ready for it", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Sets a product's quantity on a brewery invoice
      * @return Quantity stored
      */
@@ -4869,6 +5031,81 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment or step not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets how many of an order line's pieces come from our own stock
+     * @return Sourcing stored
+     */
+    setOrderItemSourcingEndpoint(id: string, orderItemId: string, data: SetOrderItemSourcingDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/order-items/{OrderItemId}/sourcing";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (orderItemId === undefined || orderItemId === null)
+            throw new globalThis.Error("The parameter 'orderItemId' must be defined.");
+        url_ = url_.replace("{OrderItemId}", encodeURIComponent("" + orderItemId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetOrderItemSourcingEndpoint(_response);
+        });
+    }
+
+    protected processSetOrderItemSourcingEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("More than was ordered, or the run is no longer editable", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Shipment, order item or stock entry not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -16189,6 +16426,82 @@ export interface IPreparationStepDto {
     label: string;
 }
 
+export class SetStockPurchaseDto implements ISetStockPurchaseDto {
+    productId?: string;
+    quantity?: number;
+
+    constructor(data?: ISetStockPurchaseDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.productId = _data["productId"];
+            this.quantity = _data["quantity"];
+        }
+    }
+
+    static fromJS(data: any): SetStockPurchaseDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetStockPurchaseDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["productId"] = this.productId;
+        data["quantity"] = this.quantity;
+        return data;
+    }
+}
+
+export interface ISetStockPurchaseDto {
+    productId?: string;
+    quantity?: number;
+}
+
+export class SetShipmentStateDto implements ISetShipmentStateDto {
+    state?: OutgoingShipmentState;
+
+    constructor(data?: ISetShipmentStateDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.state = _data["state"];
+        }
+    }
+
+    static fromJS(data: any): SetShipmentStateDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetShipmentStateDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["state"] = this.state;
+        return data;
+    }
+}
+
+export interface ISetShipmentStateDto {
+    state?: OutgoingShipmentState;
+}
+
 export class SetPurchaseInvoiceLineDto implements ISetPurchaseInvoiceLineDto {
     sequence?: number;
     productId?: string;
@@ -16267,6 +16580,46 @@ export class SetPreparationStepDto implements ISetPreparationStepDto {
 
 export interface ISetPreparationStepDto {
     isDone?: boolean;
+}
+
+export class SetOrderItemSourcingDto implements ISetOrderItemSourcingDto {
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
+
+    constructor(data?: ISetOrderItemSourcingDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.quantityFromInventory = _data["quantityFromInventory"];
+            this.inventoryItemId = _data["inventoryItemId"];
+        }
+    }
+
+    static fromJS(data: any): SetOrderItemSourcingDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetOrderItemSourcingDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["quantityFromInventory"] = this.quantityFromInventory;
+        data["inventoryItemId"] = this.inventoryItemId;
+        return data;
+    }
+}
+
+export interface ISetOrderItemSourcingDto {
+    quantityFromInventory?: number;
+    inventoryItemId?: string | undefined;
 }
 
 export class SetLoadingStateDto implements ISetLoadingStateDto {
@@ -17226,7 +17579,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     clientDeliveryPlaceId?: string | undefined;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
-    state?: OrderState;
+    state?: OrderState | undefined;
     notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
@@ -17317,7 +17670,7 @@ export interface IUpdateOrderDto {
     clientDeliveryPlaceId?: string | undefined;
     requiredDeliveryDate?: Date | undefined;
     actualDeliveryDate?: Date | undefined;
-    state?: OrderState;
+    state?: OrderState | undefined;
     notes?: OrderNoteDto[];
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];

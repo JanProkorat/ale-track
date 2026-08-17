@@ -20,6 +20,9 @@ const noMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 vi.mock('src/hooks/useShipments', () => ({
   useUpdateShipment: () => noMutation,
   useSetPreparationStep: () => noMutation,
+  useSetShipmentState: () => noMutation,
+  useSetOrderItemSourcing: () => noMutation,
+  useSetStockPurchase: () => noMutation,
   useExportShipment: () => noMutation,
   useShipmentStartPoints: () => listQuery,
   // Reached through AddressChangedBanner rather than the detail itself.
