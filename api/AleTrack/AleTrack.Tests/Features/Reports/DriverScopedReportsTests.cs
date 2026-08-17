@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ProductDeliveries.Utils;
 using AleTrack.Features.Reports.Queries.ClientVolume;
@@ -161,8 +162,8 @@ public sealed class DriverScopedReportsTests
         orderB.OutgoingShipmentStop = stopB;
         orderB.OutgoingShipmentStopId = stopB.Id;
 
-        ShipmentContentSnapshotWriter.Apply(shipmentA);
-        ShipmentContentSnapshotWriter.Apply(shipmentB);
+        ShipmentContentSnapshotWriter.Apply(shipmentA, new Dictionary<long, ClientPriceList>());
+        ShipmentContentSnapshotWriter.Apply(shipmentB, new Dictionary<long, ClientPriceList>());
 
         var stopItems = shipmentA.Stops.SelectMany(s => s.Items)
             .Concat(shipmentB.Stops.SelectMany(s => s.Items))

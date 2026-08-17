@@ -293,7 +293,27 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // Snapshot at the same boundary that freezes content, so the two cannot diverge. The
         // reports read nothing else from here on.
         if (isTransitioningToLoaded)
-            ShipmentContentSnapshotWriter.Apply(outgoingShipment);
+        {
+            var clientIds = outgoingShipment.Stops
+                .Where(s => s.ClientOrder?.Client is not null)
+                .Select(s => s.ClientOrder!.Client!.Id)
+                .Distinct()
+                .ToList();
+
+            var priceRows = await dbContext.ClientProductPrices
+                .AsNoTracking()
+                .Where(p => clientIds.Contains(p.ClientId))
+                .Select(p => new { p.ClientId, p.ProductId, p.PriceWithVat })
+                .ToListAsync(ct);
+
+            var priceListsByClientId = priceRows
+                .GroupBy(p => p.ClientId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new ClientPriceList(g.ToDictionary(p => p.ProductId, p => p.PriceWithVat)));
+
+            ShipmentContentSnapshotWriter.Apply(outgoingShipment, priceListsByClientId);
+        }
 
         // Reverting reopens the content for editing, so a kept snapshot would go stale. It is
         // rebuilt on the next transition into Loaded.

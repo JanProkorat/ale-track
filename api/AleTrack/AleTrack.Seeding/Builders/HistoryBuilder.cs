@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 
@@ -136,8 +137,9 @@ internal static class HistoryBuilder
 
                 // Every generated run is Delivered, so it must carry the snapshot a real run gets
                 // on its transition into Loaded. The volume reports read nothing else, so without
-                // this the seeded history renders as empty.
-                ShipmentContentSnapshotWriter.Apply(shipment);
+                // this the seeded history renders as empty. Seeded history has no client-specific
+                // prices of its own, so it bills the catalog price like any client with no override.
+                ShipmentContentSnapshotWriter.Apply(shipment, new Dictionary<long, ClientPriceList>());
 
                 bundle.Shipments.Add(shipment);
             }

@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Features.ProductDeliveries.Utils;
@@ -410,7 +411,7 @@ public static class DeliveredShipmentBuilder
 
         foreach (var shipment in shipments)
         {
-            ShipmentContentSnapshotWriter.Apply(shipment);
+            ShipmentContentSnapshotWriter.Apply(shipment, new Dictionary<long, ClientPriceList>());
             items.AddRange(shipment.Stops.SelectMany(s => s.Items));
         }
 
