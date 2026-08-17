@@ -11,6 +11,9 @@ vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) 
 vi.mock('src/hooks/useReminders', () => ({
   useSetOrderItemReminderState: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock('src/providers/CurrencyProvider', () => ({
+  useCurrency: () => ({ formatMoney: (v?: number | null) => (v == null ? '—' : `${v} Kč`) }),
+}));
 
 const { OrderDetail } = await import('./OrderDetail');
 
@@ -187,6 +190,35 @@ describe('OrderDetail', () => {
     expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
     expect(screen.getByText('Volat na vrátnici')).toBeInTheDocument();
     expect(screen.getByText('Dovézt dopoledne')).toHaveStyle({ whiteSpace: 'pre-wrap' });
+  });
+
+  // The client-price mark is item-level: an order in progress can freely mix
+  // lines a client price applies to with lines that still ride the ceník, and
+  // once the whole order has been loaded onto a run every line drops the mark
+  // regardless, because the snapshot never recorded that day's ceník price.
+  it('shows the client-price mark on a still-composing line and drops it once loaded', () => {
+    renderDetail(order({
+      orderItems: [
+        new OrderItemDto({
+          id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Composing item',
+          quantity: 2, unitPriceWithVat: 1190, listPriceWithVat: 1290,
+        }),
+        new OrderItemDto({
+          id: 'item-2', orderId: 'o1', productId: 'p2', productName: 'Loaded item',
+          quantity: 3, unitPriceWithVat: 980, listPriceWithVat: undefined,
+        }),
+      ],
+    }));
+
+    // Still composing: the client's price and the ceník price both render,
+    // the ceník one struck through — and only one line has the mark at all,
+    // which `getByTestId` (as opposed to `getAllByTestId`) already asserts.
+    expect(screen.getByText('1190 Kč')).toBeInTheDocument();
+    expect(screen.getByTestId('list-price')).toHaveTextContent('1290 Kč');
+
+    // Loaded: the frozen unit price renders alone — no ceník price beside it,
+    // because the order has no live ceník price to compare it against.
+    expect(screen.getByText('980 Kč')).toBeInTheDocument();
   });
 
   it('hides the Poznámky card when the order has none', () => {

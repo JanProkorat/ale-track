@@ -14,11 +14,13 @@ import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
+import { PriceWithList } from 'src/components/common/PriceWithList';
 import { clientComboOptions } from 'src/features/clients/clientOptions';
 import { groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
 import { SearchField } from 'src/components/common/SearchField';
@@ -97,6 +99,25 @@ function clientInitials(name?: string): string {
   return initials(a, b);
 }
 
+/** Says out loud what the struck-through ceník price beside it only implies —
+ *  ports the prototype's `specialPriceTag`. */
+function ClientPriceChip() {
+  return (
+    <Chip
+      size="small"
+      icon={<WalletIcon sx={{ fontSize: '13px !important' }} />}
+      label="vlastní cena"
+      sx={{
+        height: 20,
+        fontSize: 11,
+        fontWeight: 700,
+        color: (t) => t.vars!.palette.brand.amberStrong,
+        '& .MuiChip-icon': { color: 'inherit' },
+      }}
+    />
+  );
+}
+
 function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; onChange: (delta: number) => void }) {
   if (qty <= 0) {
     return (
@@ -125,13 +146,12 @@ function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; 
 }
 
 function ProductRow({
-  product, qty, historyBadge, color, formatMoney, onAdd, onChange,
+  product, qty, historyBadge, color, onAdd, onChange,
 }: {
   product: ProductListItemDto;
   qty: number;
   historyBadge: boolean;
   color?: string;
-  formatMoney: (v?: number) => string;
   onAdd: () => void;
   onChange: (delta: number) => void;
 }) {
@@ -148,7 +168,8 @@ function ProductRow({
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
           <Chip size="small" label={kindLabel(product.kind)} sx={{ height: 20, fontSize: 11 }} />
           {product.packageSize != null && <Chip size="small" label={fmtLiters(product.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
-          <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(product.priceWithVat)}</Typography>
+          <PriceWithList price={product.priceWithVat} listPrice={product.listPriceWithVat} />
+          {product.listPriceWithVat != null && <ClientPriceChip />}
           {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
         </Stack>
       </Box>
@@ -158,13 +179,12 @@ function ProductRow({
 }
 
 function VariantCard({
-  group, historyBadge, color, cartMap, formatMoney, onAdd, onChange,
+  group, historyBadge, color, cartMap, onAdd, onChange,
 }: {
   group: NameGroup;
   historyBadge: boolean;
   color?: string;
   cartMap: Map<string, CartLine>;
-  formatMoney: (v?: number) => string;
   onAdd: (productId: string) => void;
   onChange: (productId: string, delta: number) => void;
 }) {
@@ -191,7 +211,8 @@ function VariantCard({
               <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
               <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
               <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>{v.description ?? ''}</Typography>
-              <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(v.priceWithVat)}</Typography>
+              {v.listPriceWithVat != null && <ClientPriceChip />}
+              <PriceWithList price={v.priceWithVat} listPrice={v.listPriceWithVat} />
               <QtyControl qty={qty} onAdd={() => onAdd(v.id ?? '')} onChange={(d) => onChange(v.id ?? '', d)} />
             </Stack>
           );
@@ -202,13 +223,12 @@ function VariantCard({
 }
 
 function CatalogGroupList({
-  products, historyBadge, cartMap, colorForBrewery, formatMoney, onAdd, onChange,
+  products, historyBadge, cartMap, colorForBrewery, onAdd, onChange,
 }: {
   products: ProductListItemDto[];
   historyBadge: boolean;
   cartMap: Map<string, CartLine>;
   colorForBrewery: (breweryId?: string) => string | undefined;
-  formatMoney: (v?: number) => string;
   onAdd: (productId: string) => void;
   onChange: (productId: string, delta: number) => void;
 }) {
@@ -222,7 +242,6 @@ function CatalogGroupList({
           historyBadge={historyBadge}
           color={colorForBrewery(g.items[0].breweryId)}
           cartMap={cartMap}
-          formatMoney={formatMoney}
           onAdd={onAdd}
           onChange={onChange}
         />
@@ -233,7 +252,6 @@ function CatalogGroupList({
           qty={cartMap.get(g.items[0].id ?? '')?.quantity ?? 0}
           historyBadge={historyBadge}
           color={colorForBrewery(g.items[0].breweryId)}
-          formatMoney={formatMoney}
           onAdd={() => onAdd(g.items[0].id ?? '')}
           onChange={(d) => onChange(g.items[0].id ?? '', d)}
         />
@@ -243,7 +261,7 @@ function CatalogGroupList({
 }
 
 function BreweryGroupPanel({
-  brewery, products, color, open, onToggle, cartMap, formatMoney, onAdd, onChange,
+  brewery, products, color, open, onToggle, cartMap, onAdd, onChange,
 }: {
   brewery: BreweryGroupDto;
   products: ProductListItemDto[];
@@ -251,7 +269,6 @@ function BreweryGroupPanel({
   open: boolean;
   onToggle: () => void;
   cartMap: Map<string, CartLine>;
-  formatMoney: (v?: number) => string;
   onAdd: (productId: string) => void;
   onChange: (productId: string, delta: number) => void;
 }) {
@@ -282,7 +299,6 @@ function BreweryGroupPanel({
             historyBadge={false}
             cartMap={cartMap}
             colorForBrewery={() => color}
-            formatMoney={formatMoney}
             onAdd={onAdd}
             onChange={onChange}
           />
@@ -694,7 +710,6 @@ export function OrderEditor({
                   historyBadge
                   cartMap={cartMap}
                   colorForBrewery={(id) => (id ? colorByBreweryId.get(id) : undefined)}
-                  formatMoney={formatMoney}
                   onAdd={addProduct}
                   onChange={changeQty}
                 />
@@ -737,7 +752,6 @@ export function OrderEditor({
                       open={brewOpen[brewery.breweryId ?? ''] !== false}
                       onToggle={() => setBrewOpen((prev) => ({ ...prev, [brewery.breweryId ?? '']: prev[brewery.breweryId ?? ''] === false }))}
                       cartMap={cartMap}
-                      formatMoney={formatMoney}
                       onAdd={addProduct}
                       onChange={changeQty}
                     />
@@ -787,6 +801,9 @@ export function OrderEditor({
                             <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
                             <Typography variant="caption" color="text.secondary">
                               {[kindLabel(p?.kind), p?.packageSize != null ? fmtLiters(p.packageSize) : undefined, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
+                              {p?.listPriceWithVat != null && (
+                                <Box component="span" sx={{ color: (t) => t.vars!.palette.brand.amberStrong }}> · vlastní cena</Box>
+                              )}
                             </Typography>
                           </Box>
                           <IconButton size="small" onClick={() => changeQty(c.productId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
