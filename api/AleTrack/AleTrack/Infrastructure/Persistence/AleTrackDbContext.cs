@@ -175,6 +175,11 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<RoleCapability> RoleCapabilities => Set<RoleCapability>();
 
+    /// <summary>
+    /// Client-specific product prices
+    /// </summary>
+    public virtual DbSet<ClientProductPrice> ClientProductPrices => Set<ClientProductPrice>();
+
     // /// <summary>
     // /// DbSet of <see cref="Ean"/>
     // /// </summary>
