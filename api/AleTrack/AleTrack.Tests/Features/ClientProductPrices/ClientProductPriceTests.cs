@@ -111,6 +111,7 @@ public sealed class ClientProductPriceTests
 
         var endpoint = EndpointBuilder<SaveClientProductPriceRequest, SaveClientProductPriceEndpoint>
             .Create(dbContext.Object, TimeProvider.System);
+        var today = DateOnly.FromDateTime(TimeProvider.System.GetUtcNow().UtcDateTime);
         await endpoint.HandleAsync(new SaveClientProductPriceRequest
         {
             ClientId = clientId,
@@ -118,6 +119,11 @@ public sealed class ClientProductPriceTests
             Data = new SaveClientProductPriceDto { PriceWithVat = 1190m }
         }, CancellationToken.None);
 
+        dbContext.Verify(e => e.ClientProductPrices.Add(It.Is<ClientProductPrice>(p =>
+            p.ClientId == client.Id &&
+            p.ProductId == product.Id &&
+            p.PriceWithVat == 1190m &&
+            p.SetOn == today)), Times.Once);
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -197,6 +203,7 @@ public sealed class ClientProductPriceTests
             ProductId = productId
         }, CancellationToken.None);
 
+        dbContext.Verify(e => e.ClientProductPrices.Remove(existing), Times.Once);
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 

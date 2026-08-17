@@ -27,6 +27,12 @@ public sealed record DeleteClientProductPriceRequest
 /// deliberately not softly deletable, because the row carries no information once the client is
 /// back on the ceník price, and it cannot rewrite history — every invoice line froze its own
 /// charged price at billing time.
+///
+/// Same compound (client, product) route as <c>SaveClientProductPriceEndpoint</c>, for the same
+/// deviation from how <c>ClientDeliveryPlaces</c> keys its writes off the row's own <c>PublicId</c>.
+/// Unlike the upsert, the row already exists by the time a delete runs, so this endpoint could have
+/// addressed it by <c>PublicId</c> instead — it uses the pair for symmetry with the endpoint it
+/// undoes, not because addressing by row id was unavailable here.
 /// </remarks>
 internal sealed class DeleteClientProductPriceEndpoint(AleTrackDbContext dbContext)
     : Endpoint<DeleteClientProductPriceRequest>

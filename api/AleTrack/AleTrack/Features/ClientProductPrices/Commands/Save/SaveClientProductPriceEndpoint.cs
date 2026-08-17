@@ -31,6 +31,14 @@ public sealed record SaveClientProductPriceRequest
 /// own public id, which is how <c>ClientDeliveryPlaces</c> does it: there the row's <c>PublicId</c>
 /// already exists before any edit, but here the (client, product) pair *is* the key, and an
 /// upsert has no row id to address before the row exists.
+///
+/// Known, accepted race: the create path is check-then-act — it reads <c>existing</c>, then
+/// <c>Add</c>s when it is null. Two concurrent first-time PUTs for the same (client, product) can
+/// both observe a null <c>existing</c> and both attempt to insert; the loser's <c>SaveChangesAsync</c>
+/// surfaces the table's unique index on (client_id, product_id) as an unhandled 500 rather than an
+/// idempotent 204. This is accepted, not fixed: the unique index is the backstop, so data integrity
+/// is never at risk, and every other create endpoint in this codebase follows the same check-then-act
+/// shape without a transaction or retry around it.
 /// </remarks>
 internal sealed class SaveClientProductPriceEndpoint(AleTrackDbContext dbContext, TimeProvider timeProvider)
     : Endpoint<SaveClientProductPriceRequest>
@@ -59,6 +67,7 @@ internal sealed class SaveClientProductPriceEndpoint(AleTrackDbContext dbContext
     public override async Task HandleAsync(SaveClientProductPriceRequest req, CancellationToken ct)
     {
         var client = await dbContext.Clients
+            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.PublicId == req.ClientId && !c.IsDeleted, ct);
 
         if (client is null)
@@ -67,6 +76,7 @@ internal sealed class SaveClientProductPriceEndpoint(AleTrackDbContext dbContext
         }
 
         var product = await dbContext.Products
+            .AsNoTracking()
             .FirstOrDefaultAsync(p => p.PublicId == req.ProductId && !p.IsDeleted, ct);
 
         if (product is null)
