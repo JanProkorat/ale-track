@@ -4,7 +4,9 @@
 // this drawer opens the whole catalog at once, grouped by brewery, with a
 // percentage shortcut and per-row overrides.
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  memo, useCallback, useEffect, useMemo, useRef, useState,
+} from 'react';
 import {
   Box, Stack, Typography, Button, Chip, TextField, InputAdornment, Alert, CircularProgress,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Card,
@@ -24,7 +26,9 @@ import { useClientProductPrices, useReplaceClientProductPrices } from 'src/hooks
 import { fmtLiters, plural } from 'src/lib/format';
 import { kindLabel } from 'src/lib/labels';
 import { type ProductListItemDto } from 'src/generated/api-client';
-import { fillFromPercent, rowState, toReplacePayload, type BulkPriceProduct } from './bulkClientPricesModel';
+import {
+  countReplaceEntries, fillFromPercent, rowState, toReplacePayload, type BulkPriceProduct,
+} from './bulkClientPricesModel';
 
 /** A catalog product with the fields the editor actually needs guaranteed
  * present — the generated DTO marks both optional. */
@@ -77,13 +81,19 @@ function buildSaveSummary(
   return parts.length ? parts.join(', ') : 'Beze změn.';
 }
 
-function CatalogRow({
+/** Memoized so a keystroke in one row only re-renders that row — the catalog
+ * is unpaged and unvirtualized (~230 products in production), so without
+ * this every row's TextField, chips and `useCurrency()` call would re-render
+ * on every other row's keystroke. Needs `onChange` to be the same function
+ * reference across renders (see `setDraftValue`'s `useCallback` below) —
+ * memo only helps if the props it compares are actually stable. */
+const CatalogRow = memo(function CatalogRow({
   product, draftValue, currentPrice, onChange,
 }: {
   product: CatalogEntry;
   draftValue: string;
   currentPrice: number | undefined;
-  onChange: (value: string) => void;
+  onChange: (productId: string, value: string) => void;
 }) {
   const { formatMoney } = useCurrency();
   const marks = rowState(product, draftValue, currentPrice);
@@ -128,7 +138,7 @@ function CatalogRow({
           type="number"
           size="small"
           value={draftValue}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(product.id, e.target.value)}
           placeholder="ceník"
           slotProps={{ htmlInput: { style: { textAlign: 'right' } } }}
           sx={{ width: 110 }}
@@ -136,7 +146,7 @@ function CatalogRow({
       </TableCell>
     </TableRow>
   );
-}
+});
 
 function CatalogSection({
   breweryName, color, products, draft, currentByProduct, onChange,
@@ -149,7 +159,7 @@ function CatalogSection({
   onChange: (productId: string, value: string) => void;
 }) {
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
         <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
         <Typography sx={{ fontWeight: 700 }}>{breweryName}</Typography>
@@ -175,7 +185,7 @@ function CatalogSection({
                   product={product}
                   draftValue={draft[product.id] ?? ''}
                   currentPrice={currentByProduct.get(product.id)}
-                  onChange={(value) => onChange(product.id, value)}
+                  onChange={onChange}
                 />
               ))}
             </TableBody>
@@ -208,13 +218,26 @@ export function BulkClientPricesDrawer({
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState<Record<string, string>>({});
 
-  // Re-seeds whenever the drawer opens or the client's saved prices refresh —
-  // not on every keystroke, since `pricesQuery.data` only changes on an
-  // actual (re)fetch.
+  // Seeds exactly once per open, not on every change of `pricesQuery.data`.
+  // That distinction matters: NSwag DTOs are class instances, so TanStack's
+  // structural sharing (which only walks plain objects/arrays) never
+  // recognises a byte-identical refetch as "the same" array — a background
+  // refetch (retry, `refetchOnReconnect`/`refetchOnMount`, or an invalidation
+  // fired from elsewhere) hands back a brand-new array of brand-new DTOs
+  // every time. Reseeding on every such change would silently discard
+  // whatever the operator had typed, the same class of bug the draft-in-
+  // state design already guards against for search.
+  const seededForOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seededForOpenRef.current = false;
+      return;
+    }
+    if (seededForOpenRef.current || !pricesQuery.data) {
+      return;
+    }
     const seed: Record<string, string> = {};
-    for (const price of pricesQuery.data ?? []) {
+    for (const price of pricesQuery.data) {
       if (price.productId && price.priceWithVat != null) {
         seed[price.productId] = String(price.priceWithVat);
       }
@@ -222,6 +245,7 @@ export function BulkClientPricesDrawer({
     setDraft(seed);
     setPct('');
     setSearch('');
+    seededForOpenRef.current = true;
   }, [open, pricesQuery.data]);
 
   const catalogProducts = useMemo(
@@ -255,7 +279,10 @@ export function BulkClientPricesDrawer({
     );
   }, [catalogProducts, search]);
 
-  const setDraftValue = (productId: string, value: string) => {
+  // Stable across renders — it only ever uses the functional updater form,
+  // never closes over `draft` itself — so `CatalogRow` below can be memoized
+  // and skip re-rendering every other row on a single keystroke.
+  const setDraftValue = useCallback((productId: string, value: string) => {
     setDraft((prev) => {
       if (value.trim() === '') {
         const next = { ...prev };
@@ -264,7 +291,7 @@ export function BulkClientPricesDrawer({
       }
       return { ...prev, [productId]: value };
     });
-  };
+  }, []);
 
   const applyPercent = () => {
     const parsed = parseFloat(pct);
@@ -272,7 +299,12 @@ export function BulkClientPricesDrawer({
       enqueueSnackbar('Zadejte procenta', { variant: 'warning' });
       return;
     }
-    setDraft(fillFromPercent(catalogProducts, parsed));
+    // Merges over the existing draft rather than replacing it: a client
+    // price for a product no longer in the catalog (soft-deleted) has no
+    // entry in `catalogProducts` and so no entry from `fillFromPercent`
+    // either — replacing the draft outright would silently drop it instead
+    // of leaving it untouched.
+    setDraft((prev) => ({ ...prev, ...fillFromPercent(catalogProducts, parsed) }));
     enqueueSnackbar('Náhled přepočítán.', { variant: 'info' });
   };
 
@@ -281,7 +313,9 @@ export function BulkClientPricesDrawer({
     enqueueSnackbar('Všechny ceny vyprázdněny.', { variant: 'info' });
   };
 
-  const savedCount = useMemo(() => toReplacePayload(draft).length, [draft]);
+  // Counts rather than builds the payload: the catalog is unpaged, so this
+  // recomputes on every keystroke and should not allocate a DTO per row.
+  const savedCount = useMemo(() => countReplaceEntries(draft), [draft]);
 
   const save = async () => {
     try {

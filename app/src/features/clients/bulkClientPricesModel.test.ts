@@ -4,7 +4,9 @@
 // replace-payload shaping are provable without a rendering harness.
 
 import { describe, expect, it } from 'vitest';
-import { fillFromPercent, rowState, toReplacePayload } from './bulkClientPricesModel';
+import {
+  countReplaceEntries, fillFromPercent, rowState, toReplacePayload,
+} from './bulkClientPricesModel';
 
 describe('fillFromPercent', () => {
   it('fills every product from its ceník price, not from the client price', () => {
@@ -68,5 +70,17 @@ describe('toReplacePayload', () => {
       { productId: 'a', priceWithVat: 100 },
       { productId: 'b', priceWithVat: 200 },
     ]);
+  });
+});
+
+describe('countReplaceEntries', () => {
+  it('agrees with toReplacePayload\'s length for the same draft', () => {
+    const draft = { a: '1226', b: '', c: '0', d: '-5', e: 'abc', f: '300' };
+    expect(countReplaceEntries(draft)).toBe(toReplacePayload(draft).length);
+  });
+
+  it('counts zero for an empty or all-invalid draft', () => {
+    expect(countReplaceEntries({})).toBe(0);
+    expect(countReplaceEntries({ a: '', b: '0', c: 'abc' })).toBe(0);
   });
 });

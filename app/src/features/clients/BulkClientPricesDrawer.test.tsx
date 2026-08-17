@@ -247,6 +247,128 @@ describe('BulkClientPricesDrawer save payload', () => {
 
     expect(replaceMutateAsync).toHaveBeenCalledWith({ clientId: 'client-1', data: [] });
   });
+
+  it('fills the percentage from the ceník price, not the client\'s current price', () => {
+    // Ceník 1000, client already pays 900. A -10% fill from the ceník lands on
+    // 900 (1000 * 0.9) — a fill that (wrongly) based itself on the client's
+    // current price instead would land on 810 (900 * 0.9). The two happen to
+    // be distinguishable here on purpose, so a regression to the wrong base
+    // fails loudly instead of coincidentally matching.
+    productsState = {
+      data: [product({ id: 'product-1', name: 'Ležák 12°', priceWithVat: 1000 })],
+      isLoading: false,
+      isError: false,
+    };
+    pricesState = { data: [clientPrice({ productId: 'product-1', priceWithVat: 900 })], isLoading: false, isError: false };
+    renderDrawer();
+
+    fireEvent.change(screen.getByLabelText('Změna proti ceníku (%)'), { target: { value: '-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Přepočítat náhled' }));
+    save();
+
+    expect(replaceMutateAsync).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      data: [{ productId: 'product-1', priceWithVat: 900 }],
+    });
+  });
+
+  it('applying the percentage fill twice in a row is idempotent, not compounding', () => {
+    // The property under test: fillFromPercent always starts from the ceník,
+    // never from whatever is already in the draft. An implementation that
+    // recomputed from the current draft instead would compound the second
+    // click (1290 -> 1226 -> 1165), which this catches.
+    productsState = {
+      data: [
+        product({ id: 'product-1', name: 'Ležák 12°', priceWithVat: 1290 }),
+        product({ id: 'product-2', name: 'Desítka', priceWithVat: 480 }),
+      ],
+      isLoading: false,
+      isError: false,
+    };
+    pricesState = { data: [], isLoading: false, isError: false };
+    renderDrawer();
+
+    fireEvent.change(screen.getByLabelText('Změna proti ceníku (%)'), { target: { value: '-5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Přepočítat náhled' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Přepočítat náhled' }));
+    save();
+
+    expect(replaceMutateAsync).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      data: expect.arrayContaining([
+        { productId: 'product-1', priceWithVat: 1226 },
+        { productId: 'product-2', priceWithVat: 456 },
+      ]),
+    });
+    const call = replaceMutateAsync.mock.calls[0][0];
+    expect(call.data).toHaveLength(2);
+  });
+
+  it('keeps a client price for a product no longer in the catalog after a percentage fill', () => {
+    // A price for a soft-deleted product is in `pricesQuery.data` but absent
+    // from the products endpoint (which filters !IsDeleted), so it has no
+    // entry in `catalogProducts` and none from fillFromPercent either. The
+    // fill must merge over the existing draft, not replace it, or this price
+    // vanishes with no warning the moment someone runs a percentage fill.
+    productsState = {
+      data: [product({ id: 'product-1', name: 'Ležák 12°', priceWithVat: 1000 })],
+      isLoading: false,
+      isError: false,
+    };
+    pricesState = {
+      data: [
+        clientPrice({ productId: 'product-1', priceWithVat: 900 }),
+        clientPrice({ productId: 'product-deleted', priceWithVat: 555 }),
+      ],
+      isLoading: false,
+      isError: false,
+    };
+    renderDrawer();
+
+    fireEvent.change(screen.getByLabelText('Změna proti ceníku (%)'), { target: { value: '-10' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Přepočítat náhled' }));
+    save();
+
+    expect(replaceMutateAsync).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      data: expect.arrayContaining([
+        { productId: 'product-1', priceWithVat: 900 },
+        { productId: 'product-deleted', priceWithVat: 555 },
+      ]),
+    });
+  });
+});
+
+describe('BulkClientPricesDrawer background refetch', () => {
+  it('does not wipe a typed draft when the price-list query resolves to a new-but-equivalent array', () => {
+    // Regression this guards: NSwag DTOs are class instances, so TanStack's
+    // structural sharing never recognises a byte-identical refetch as "the
+    // same" array. Re-seeding on every `pricesQuery.data` change (rather than
+    // once per open) would discard whatever was just typed the moment a
+    // background refetch — a reconnect, a retry, an invalidation fired from
+    // elsewhere — resolves.
+    productsState = {
+      data: [product({ id: 'product-1', name: 'Ležák 12°', priceWithVat: 1000 })],
+      isLoading: false,
+      isError: false,
+    };
+    pricesState = { data: [clientPrice({ productId: 'product-1', priceWithVat: 900 })], isLoading: false, isError: false };
+    const { rerender } = renderDrawer();
+
+    fireEvent.change(rowInput('Ležák 12°'), { target: { value: '850' } });
+    expect(rowInput('Ležák 12°')).toHaveValue(850);
+
+    // A brand-new array of brand-new DTO instances carrying the same data —
+    // exactly what a background refetch hands back.
+    pricesState = { data: [clientPrice({ productId: 'product-1', priceWithVat: 900 })], isLoading: false, isError: false };
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <BulkClientPricesDrawer open clientId="client-1" onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(rowInput('Ležák 12°')).toHaveValue(850);
+  });
 });
 
 describe('BulkClientPricesDrawer row marks', () => {

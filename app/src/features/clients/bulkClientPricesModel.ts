@@ -63,6 +63,18 @@ export function rowState(
   };
 }
 
+/** A draft cell is only ever one of: blank (no override), or a parseable,
+ * positive amount. Shared by {@link toReplacePayload} and
+ * {@link countReplaceEntries} so the two can never disagree about which
+ * entries count. */
+function parsePositivePrice(raw: string): number | undefined {
+  if (raw.trim() === '') {
+    return undefined;
+  }
+  const price = parseFloat(raw);
+  return Number.isFinite(price) && price > 0 ? price : undefined;
+}
+
 /**
  * The complete desired list for the replace endpoint: one entry per product
  * with a valid, positive draft price. A blank field means the client pays
@@ -75,14 +87,26 @@ export function rowState(
 export function toReplacePayload(draft: Record<string, string>): ClientProductPriceEntryDto[] {
   const entries: ClientProductPriceEntryDto[] = [];
   for (const [productId, raw] of Object.entries(draft)) {
-    if (raw.trim() === '') {
-      continue;
+    const price = parsePositivePrice(raw);
+    if (price != null) {
+      entries.push(new ClientProductPriceEntryDto({ productId, priceWithVat: price }));
     }
-    const price = parseFloat(raw);
-    if (!Number.isFinite(price) || price <= 0) {
-      continue;
-    }
-    entries.push(new ClientProductPriceEntryDto({ productId, priceWithVat: price }));
   }
   return entries;
+}
+
+/**
+ * The count {@link toReplacePayload} would produce, without allocating a DTO
+ * per row. The drawer's live "N k uložení" count recomputes on every
+ * keystroke across the whole catalog, so it counts rather than builds and
+ * measures the payload.
+ */
+export function countReplaceEntries(draft: Record<string, string>): number {
+  let count = 0;
+  for (const raw of Object.values(draft)) {
+    if (parsePositivePrice(raw) != null) {
+      count += 1;
+    }
+  }
+  return count;
 }
