@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Queries.Detail;
 using AleTrack.Infrastructure.Persistence;
@@ -61,6 +62,29 @@ public sealed class OrderItemPricingTests
         item.ListPriceWithVat.Should().BeNull();
     }
 
+    /// <summary>
+    /// A cancelled run never produced an invoice, so its snapshot must not outlive the
+    /// cancellation — the order is editable again (<c>OrderMutability</c> excludes
+    /// Cancelled from frozen) and the price shown must go back to live resolution,
+    /// special-price marker included.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SnapshotBelongsToCancelledShipment_ResolvesLiveAndReportsListPrice()
+    {
+        var f = BuildFixture(overridePrice: 1190m, snapshotPrice: 1150m, stopShipmentState: OutgoingShipmentState.Cancelled);
+        var dbContext = MockFor(f);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(dbContext.Object);
+        await endpoint.HandleAsync(new GetOrderDetailRequest { Id = f.Order.PublicId }, CancellationToken.None);
+
+        var item = endpoint.Response.OrderItems.Should().ContainSingle().Subject;
+        // Not the cancelled run's frozen 1150 — the client's live price is the whole truth
+        // once the run that would have billed 1150 no longer exists to bill anything.
+        item.UnitPriceWithVat.Should().Be(1190m);
+        item.ListPriceWithVat.Should().Be(1290m);
+    }
+
     private sealed record Fixture(
         Order Order,
         Client Client,
@@ -69,7 +93,8 @@ public sealed class OrderItemPricingTests
         ClientProductPrice? ClientPrice,
         OutgoingShipmentStopItem? StopItem);
 
-    private static Fixture BuildFixture(decimal? overridePrice, decimal? snapshotPrice)
+    private static Fixture BuildFixture(
+        decimal? overridePrice, decimal? snapshotPrice, OutgoingShipmentState stopShipmentState = OutgoingShipmentState.Loaded)
     {
         var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
         client.Id = 1;
@@ -107,13 +132,23 @@ public sealed class OrderItemPricingTests
                 SetOn = DateOnly.FromDateTime(DateTime.UtcNow)
             };
 
+        // The snapshot-state guard reads i.Stop.OutgoingShipment.State, so the chain has to
+        // be wired all the way up even in these unit fixtures — a bare StopItem would throw
+        // a NullReferenceException under the mocked (LINQ-to-Objects) query evaluation.
         var stopItem = snapshotPrice is null
             ? null
             : new OutgoingShipmentStopItem
             {
                 PublicId = Guid.NewGuid(),
                 OrderItemId = item.Id,
-                UnitPriceWithVat = snapshotPrice.Value
+                UnitPriceWithVat = snapshotPrice.Value,
+                Stop = new OutgoingShipmentStop
+                {
+                    PublicId = Guid.NewGuid(),
+                    Kind = OutgoingShipmentStopKind.Order,
+                    Order = 1,
+                    OutgoingShipment = OutgoingShipmentBuilder.BuildEntity(state: stopShipmentState)
+                }
             };
 
         return new Fixture(order, client, product, item, clientPrice, stopItem);

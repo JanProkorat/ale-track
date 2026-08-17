@@ -392,21 +392,41 @@ public sealed class GetProductsByClientHistoryTests
     [Fact]
     public async Task HandleAsync_ClientHistoryForClientWithoutOwnPrice_LeavesListPriceNull()
     {
-        // Arrange
+        // One client, two products: an override on A, none on B, in the same response.
+        // A version asserting only "no override -> null" would also pass if resolution
+        // were applied to the wrong row, or applied to every row unconditionally — this
+        // one fails in both of those cases, since B must keep its catalog price untouched
+        // while A visibly changes.
         var clientId = Guid.NewGuid();
         var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
         client.Id = 1;
 
         var brewery = BreweryBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
 
-        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Albrecht 12°", priceWithVat: 1290m);
-        product.Id = 1;
-        product.Brewery = brewery;
+        var productA = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Albrecht 12°", priceWithVat: 1290m);
+        productA.Id = 1;
+        productA.Brewery = brewery;
+
+        var productB = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Bernard 10°", priceWithVat: 890m);
+        productB.Id = 2;
+        productB.Brewery = brewery;
+
+        var clientPriceForA = new ClientProductPrice
+        {
+            PublicId = Guid.NewGuid(),
+            Client = client,
+            ClientId = client.Id,
+            Product = productA,
+            ProductId = productA.Id,
+            PriceWithVat = 1190m,
+            SetOn = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client],
             breweries: [brewery],
-            products: [product]
+            products: [productA, productB],
+            clientProductPrices: [clientPriceForA]
         );
 
         var request = new GetProductsByClientHistoryRequest { ClientId = clientId };
@@ -417,14 +437,22 @@ public sealed class GetProductsByClientHistoryTests
         // Act
         await endpoint.HandleAsync(request, CancellationToken.None);
 
-        // Assert — catalog price stands, and the null list price is itself the assertion:
-        // it is the signal the UI reads to decide whether to show a special-price marker.
-        var item = endpoint.Response.Breweries
+        // Assert
+        var items = endpoint.Response.Breweries
             .SelectMany(b => b.Kinds)
             .SelectMany(k => k.PackageSizes)
             .SelectMany(ps => ps.Items)
-            .Should().ContainSingle().Subject;
-        item.PriceWithVat.Should().Be(1290m);
-        item.ListPriceWithVat.Should().BeNull();
+            .ToList();
+        items.Should().HaveCount(2);
+
+        var itemA = items.Should().ContainSingle(i => i.Name == "Albrecht 12°").Subject;
+        itemA.PriceWithVat.Should().Be(1190m);
+        itemA.ListPriceWithVat.Should().Be(1290m);
+
+        // The null list price on B is itself the assertion: it is the signal the UI
+        // reads to decide whether to show a special-price marker.
+        var itemB = items.Should().ContainSingle(i => i.Name == "Bernard 10°").Subject;
+        itemB.PriceWithVat.Should().Be(890m);
+        itemB.ListPriceWithVat.Should().BeNull();
     }
 }
