@@ -6,6 +6,17 @@
 
 import type { OutgoingShipmentStopDto } from 'src/generated/api-client';
 
+/**
+ * Whether a shipment in this state has already taken its sourced pieces off the shelf.
+ *
+ * The backend draws stock down on the transition into Loaded and puts it back on every
+ * transition out of the drawn set, so the state alone answers the question — mirrors
+ * `ShipmentStateTransition.IsStockDrawn` on the API side.
+ */
+export function isStockDrawn(stateName?: string): boolean {
+  return stateName === 'Loaded' || stateName === 'InTransit' || stateName === 'Delivered';
+}
+
 export interface OverdrawnStock {
   /** Display name of the stock entry. */
   name: string;
@@ -16,12 +27,21 @@ export interface OverdrawnStock {
 }
 
 /**
- * Stock entries whose drawn total exceeds what is on hand, in first-seen order.
+ * Stock entries whose planned draw exceeds what is on hand, in first-seen order.
  *
  * Being over-drawn is deliberately not an error: a booked delivery may still land
  * before the truck is loaded. The caller warns rather than blocks.
+ *
+ * Only meaningful while the draw is still a *reservation*. Past the Loaded boundary the
+ * pieces are off the shelf and the on-hand figure no longer contains them, so the same
+ * comparison reads every loaded run as over-drawn — 40 on hand, 30 loaded, 10 left, and a
+ * banner announcing that 30 were taken against a stock of 10. Hence the `stateName` guard:
+ * once the goods have moved there is nothing left to warn about, because the warning was
+ * only ever about a plan that stock might not cover.
  */
-export function overdrawnStock(stops: OutgoingShipmentStopDto[]): OverdrawnStock[] {
+export function overdrawnStock(stops: OutgoingShipmentStopDto[], stateName?: string): OverdrawnStock[] {
+  if (isStockDrawn(stateName)) return [];
+
   const drawn = new Map<string, OverdrawnStock>();
 
   for (const stop of stops) {

@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  Backdrop,
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, ListItemIcon, ListItemText,
   Menu, MenuItem, Stack,
@@ -42,11 +43,10 @@ import {
   type ProductType,
   type ProductListItemDto,
   OutgoingShipmentState,
-  StockPurchaseDto,
-  UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 import {
-  useUpdateShipment, useSetPreparationStep, useExportShipment, useShipmentStartPoints,
+  useSetPreparationStep, useExportShipment, useShipmentStartPoints,
+  useSetShipmentState, useSetOrderItemSourcing, useSetStockPurchase,
   type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
@@ -67,9 +67,9 @@ import {
 import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
-import { draftFromShipment, type ShipmentDraft } from './shipmentDraft';
 import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
+import { stateChangeProgress, type StateChangeProgress } from './shipmentStateProgress';
 import { resolveDetailStopAddress } from './stopAddress';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
@@ -1085,7 +1085,6 @@ export function ShipmentDetail({
   onOpenOrder?: (orderId: string) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
-  const updateShipment = useUpdateShipment();
   const startPoints = useShipmentStartPoints();
   const inventoryQuery = useInventory();
   const productsQuery = useProducts();
@@ -1094,7 +1093,16 @@ export function ShipmentDetail({
   const setPurchaseInvoiceLine = useSetPurchaseInvoiceLine(shipment.id);
   const setLoadingState = useSetLoadingState(shipment.id);
   const setPreparationStep = useSetPreparationStep(shipment.id);
+  const setShipmentState = useSetShipmentState(shipment.id);
+  const setOrderItemSourcing = useSetOrderItemSourcing(shipment.id);
+  const setStockPurchase = useSetStockPurchase(shipment.id);
   const exportShipment = useExportShipment();
+
+  // Which state a transition is on its way to, or null when none is running. Drives the
+  // overlay that says what is happening — a transition moves stock, rewrites the orders'
+  // states and freezes prices, so it is the one action here that is worth waiting on
+  // rather than pretending has already happened.
+  const [stateChange, setStateChange] = useState<OutgoingShipmentState | null>(null);
 
   const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -1159,8 +1167,13 @@ export function ShipmentDetail({
     [stopsSorted],
   );
 
-  // Warned about rather than blocked: a booked delivery may still land in time.
-  const overdrawn = useMemo(() => overdrawnStock(stopsSorted), [stopsSorted]);
+  // Warned about rather than blocked: a booked delivery may still land in time. Only while
+  // the draw is still a plan — once the run is loaded the pieces are off the shelf and the
+  // comparison no longer has two comparable sides (see overdrawnStock).
+  const overdrawn = useMemo(
+    () => overdrawnStock(stopsSorted, shipStateName(shipment.state)),
+    [stopsSorted, shipment.state],
+  );
   const combinedRows = useMemo(
     () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
     [stopsSorted, extraRows],
@@ -1232,6 +1245,12 @@ export function ShipmentDetail({
   const assignedDrivers = shipment.drivers ?? [];
 
   const stateName = shipStateName(shipment.state);
+  // "Do garáže" is content, not loading progress: goods bought and put on the truck, which
+  // freeze when the truck is packed. Narrower than nakladkaEditable, which stays true through
+  // Loaded and InTransit for the steppers and tick boxes that really are progress. The API has
+  // always drawn the line here (ShipmentContentGuard counts stock purchases as frozen content);
+  // the buttons were offered past it regardless and could only produce a 400.
+  const stockPurchaseEditable = editable && stateName === 'Created';
   const status = SHIP_STATUS[stateName ?? 'Created'] ?? SHIP_STATUS.Created;
 
   // Lifecycle transitions from the current state. The backend serializes the
@@ -1254,27 +1273,20 @@ export function ShipmentDetail({
   } as Record<string, OutgoingShipmentState>)[stateName ?? ''];
   const ghostBtnSx = { color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } } as const;
 
-  async function save(draft: ShipmentDraft, nextState?: OutgoingShipmentState) {
-    try {
-      await updateShipment.mutateAsync({
-        id: shipment.id ?? '',
-        data: new UpdateOutgoingShipmentDto({
-          name: shipment.name ?? '',
-          deliveryDate: shipment.deliveryDate,
-          vehicleId: shipment.vehicleId,
-          driverIds: shipment.driverIds,
-          state: nextState ?? shipment.state ?? OutgoingShipmentState.Created,
-          ...draft,
-        }),
-      });
-      if (nextState != null) enqueueSnackbar('Stav vývozu aktualizován.', { variant: 'success' });
-    } catch (e) {
-      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
-    }
-  }
+  // Every write this screen makes now has its own narrow endpoint — the state, the sourcing
+  // stepper, the "Do garáže" stepper, the loading ticks, the checklist, the invoice split. The
+  // full-object PUT it used to funnel all of them through belongs to the editor, which really
+  // does rewrite the whole run; sending it from here meant a whole-shipment diff and rebuild
+  // per click.
 
+  // A transition sends the state and nothing else.
   function advance(next: OutgoingShipmentState) {
-    void save(draftFromShipment(shipment), next);
+    setStateChange(next);
+    setShipmentState.mutate(next, {
+      onSuccess: () => enqueueSnackbar('Stav vývozu aktualizován.', { variant: 'success' }),
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+      onSettled: () => setStateChange(null),
+    });
   }
 
   // The server names the file (`vyvoz-<date>-<name>.xlsx`/`.docx`) and the generated client reads
@@ -1301,21 +1313,23 @@ export function ShipmentDetail({
   // warehouse and are added to inventory when the shipment is delivered. Capping
   // them at what we already hold was the old "dokládka ze skladu" reading of this
   // feature, and it was backwards.
+  //
+  // Its own endpoint, keyed by product and taking an absolute quantity: the nakládka keeps one
+  // line per product, so the product is the identity the screen already works in, and an
+  // absolute write means a double-fired click lands on the same number rather than buying twice.
   function adjustStockPurchase(agg: AggRow, delta: number) {
-    const extra = agg.sources.find((r) => r.extraId);
-    if (!extra) return;
-    const draft = draftFromShipment(shipment);
-    const item = draft.stockPurchases.find((e) => e.id === extra.extraId);
-    if (!item) return;
+    if (!agg.productId) return;
 
-    const next = (item.quantity ?? 0) + delta;
-    if (next <= 0) {
-      draft.stockPurchases = draft.stockPurchases.filter((e) => e.id !== extra.extraId);
-      enqueueSnackbar('Zboží na sklad odebráno.', { variant: 'success' });
-    } else {
-      item.quantity = next;
-    }
-    void save(draft);
+    const quantity = Math.max(0, agg.stockPurchaseQuantity + delta);
+    commitStockPurchase(agg.productId, quantity, quantity === 0 ? 'Zboží na sklad odebráno.' : undefined);
+  }
+
+  /** The one write behind both "Do garáže" controls — the row stepper and the add dialog. */
+  function commitStockPurchase(productId: string, quantity: number, successMessage?: string) {
+    setStockPurchase.mutate({ productId, quantity }, {
+      onSuccess: () => { if (successMessage) enqueueSnackbar(successMessage, { variant: 'success' }); },
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zboží na sklad se nepodařilo uložit'), { variant: 'error' }),
+    });
   }
 
   /** The stock entry holding this product, if any. */
@@ -1345,19 +1359,21 @@ export function ShipmentDetail({
       return;
     }
 
-    const draft = draftFromShipment(shipment);
-    const item = draft.clientOrderShipments
-      .flatMap((cos) => cos.orderItems ?? [])
-      .find((i) => i.orderItemId === target.orderItemId);
-    if (!item) return;
-
-    const next = (item.quantityFromInventory ?? 0) + delta;
-    item.quantityFromInventory = Math.max(0, Math.min(next, target.quantity));
-    item.inventoryItemId = item.quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined;
+    const quantityFromInventory = Math.max(0, Math.min(target.fromInventory + delta, target.quantity));
 
     // Deliberately no stock cap here: drawing more than is on hand is allowed and
     // surfaced by the banner, because a booked delivery may still arrive in time.
-    void save(draft);
+    //
+    // One narrow write on its own endpoint, optimistic in the cache: the stepper is clicked
+    // once per piece, and re-posting the whole run per click made each one wait on a
+    // whole-shipment rebuild.
+    setOrderItemSourcing.mutate({
+      orderItemId: target.orderItemId!,
+      quantityFromInventory,
+      inventoryItemId: quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined,
+    }, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
+    });
   }
 
   // The brewery's catalogue, not our stock: this buys goods we do not have yet.
@@ -1385,26 +1401,18 @@ export function ShipmentDetail({
     setStockPurchaseOpen(true);
   }
 
-  async function saveStockPurchase() {
+  function saveStockPurchase() {
     const qty = parseInt(stockPurchaseQty, 10) || 0;
     if (!stockPurchaseProductId) { enqueueSnackbar('Vyberte produkt', { variant: 'warning' }); return; }
     if (qty <= 0) { enqueueSnackbar('Zadejte počet kusů', { variant: 'warning' }); return; }
 
-    const draft = draftFromShipment(shipment);
-    const existing = draft.stockPurchases.find((e) => e.productId === stockPurchaseProductId);
-    if (existing) {
-      existing.quantity = (existing.quantity ?? 0) + qty;
-    } else {
-      const dto = new StockPurchaseDto({
-        quantity: qty, isLoadingConfirmed: false,
-      });
-      // Assign the derived-class field after construction (see shipmentDraft.ts).
-      dto.productId = stockPurchaseProductId!;
-      draft.stockPurchases.push(dto);
-    }
-    await save(draft);
+    // The dialog tops an existing line up rather than opening a second one for the same
+    // product — the endpoint takes an absolute quantity, so the sum is worked out here.
+    const already = (shipment.stockPurchases ?? [])
+      .find((p) => p.productId === stockPurchaseProductId)?.quantity ?? 0;
+
+    commitStockPurchase(stockPurchaseProductId, already + qty, 'Zboží na sklad přidáno do nakládky.');
     setStockPurchaseOpen(false);
-    enqueueSnackbar('Zboží na sklad přidáno do nakládky.', { variant: 'success' });
   }
 
   // Both nakládka layouts commit through these — the table cells and the stacked
@@ -1468,23 +1476,56 @@ export function ShipmentDetail({
                 <ListItemText primary="Word" secondary="Stránka pro každého klienta" />
               </MenuItem>
             </Menu>
+            {/* Every lifecycle button is disabled while a transition runs: they all post to the
+                same endpoint, and a second click during the first would race the first one's
+                own state change. The clicked button carries the spinner so it is obvious which
+                one is working. */}
             {editable && forwardStep && (
-              <Button variant={forwardStep.primary ? 'contained' : 'outlined'} startIcon={forwardStep.icon} onClick={() => advance(forwardStep.to)}>
+              <Button
+                variant={forwardStep.primary ? 'contained' : 'outlined'}
+                startIcon={stateChange === forwardStep.to
+                  ? <CircularProgress size={16} color="inherit" />
+                  : forwardStep.icon}
+                onClick={() => advance(forwardStep.to)}
+                disabled={stateChange !== null}
+              >
                 {forwardStep.label}
               </Button>
             )}
             {editable && revertTo !== undefined && (
-              <Button variant="outlined" startIcon={<UndoIcon />} onClick={() => advance(revertTo)} sx={ghostBtnSx}>
+              <Button
+                variant="outlined"
+                startIcon={stateChange === revertTo ? <CircularProgress size={16} color="inherit" /> : <UndoIcon />}
+                onClick={() => advance(revertTo)}
+                disabled={stateChange !== null}
+                sx={ghostBtnSx}
+              >
                 Vrátit
               </Button>
             )}
             {editable && shipmentActive && (
-              <Button variant="outlined" color="error" startIcon={<BlockIcon />} onClick={() => setConfirmCancel(true)}>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={stateChange === OutgoingShipmentState.Cancelled
+                  ? <CircularProgress size={16} color="inherit" />
+                  : <BlockIcon />}
+                onClick={() => setConfirmCancel(true)}
+                disabled={stateChange !== null}
+              >
                 Zrušit vývoz
               </Button>
             )}
             {editable && stateName === 'Cancelled' && (
-              <Button variant="outlined" startIcon={<ReplayIcon />} onClick={() => advance(OutgoingShipmentState.Created)} sx={ghostBtnSx}>
+              <Button
+                variant="outlined"
+                startIcon={stateChange === OutgoingShipmentState.Created
+                  ? <CircularProgress size={16} color="inherit" />
+                  : <ReplayIcon />}
+                onClick={() => advance(OutgoingShipmentState.Created)}
+                disabled={stateChange !== null}
+                sx={ghostBtnSx}
+              >
                 Znovu otevřít
               </Button>
             )}
@@ -1542,10 +1583,12 @@ export function ShipmentDetail({
               <Box sx={{ flex: 1 }} />
               {nakladkaEditable && (
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
-                    sx={ghostBtnSx}>
-                    Zboží na sklad
-                  </Button>
+                  {stockPurchaseEditable && (
+                    <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
+                      sx={ghostBtnSx}>
+                      Zboží na sklad
+                    </Button>
+                  )}
                   <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
                     disabled={addPurchaseInvoice.isPending}
                     onClick={() => addPurchaseInvoice.mutate(undefined, {
@@ -1603,7 +1646,7 @@ export function ShipmentDetail({
                       key={agg.key}
                       agg={agg}
                       editable={nakladkaEditable}
-                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 && stockPurchaseEditable ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                       onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
                       invoiceCells={(
                         <PurchaseInvoiceRowCells
@@ -1622,7 +1665,7 @@ export function ShipmentDetail({
                       key={agg.key}
                       agg={agg}
                       editable={nakladkaEditable}
-                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 ? (delta) => adjustStockPurchase(agg, delta) : undefined}
+                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 && stockPurchaseEditable ? (delta) => adjustStockPurchase(agg, delta) : undefined}
                       onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
                       invoiceMetrics={(
                         <PurchaseInvoiceRowMetrics
@@ -1843,10 +1886,47 @@ export function ShipmentDetail({
           </>
         }
         confirmLabel="Zrušit vývoz"
-        busy={updateShipment.isPending}
+        busy={stateChange !== null}
         onConfirm={() => { setConfirmCancel(false); advance(OutgoingShipmentState.Cancelled); }}
         onClose={() => setConfirmCancel(false)}
       />
+
+      <StateChangeOverlay state={stateChange} />
     </Box>
+  );
+}
+
+/**
+ * What is happening while a shipment transition is in flight.
+ *
+ * A modal backdrop rather than an inline spinner: the transition rewrites things spread across
+ * the whole screen — the run's state, its orders, the stock figures — so there is no one place
+ * an inline indicator would belong, and blocking the screen also stops a second lifecycle
+ * action being started against a shipment that is mid-move.
+ */
+function StateChangeOverlay({ state }: { state: OutgoingShipmentState | null }) {
+  // Held so the wording does not blank out during the backdrop's fade-out.
+  const [shown, setShown] = useState<StateChangeProgress | null>(null);
+  useEffect(() => {
+    if (state !== null) setShown(stateChangeProgress(state));
+  }, [state]);
+
+  return (
+    <Backdrop
+      open={state !== null}
+      sx={(t) => ({ zIndex: t.zIndex.modal + 1, color: 'text.primary' })}
+    >
+      <Card sx={{ px: 3, py: 2.5, maxWidth: 380 }}>
+        <Stack direction="row" spacing={2} alignItems="flex-start">
+          <CircularProgress size={22} sx={{ mt: 0.25, flexShrink: 0 }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{shown?.title}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+              {shown?.detail}
+            </Typography>
+          </Box>
+        </Stack>
+      </Card>
+    </Backdrop>
   );
 }
