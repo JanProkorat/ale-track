@@ -278,6 +278,16 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
                     flexWrap: 'wrap',
                   }}
                 >
+                  {/* The search takes the middle, growing into whatever the stats and the
+                      segments leave; the segments trail it, as the filters do in Sklad. */}
+                  <Box sx={{ flex: '1 1 auto', minWidth: 120 }}>
+                    <SearchField
+                      value={search}
+                      onChange={setSearch}
+                      placeholder="Hledat kupujícího…"
+                      width="100%"
+                    />
+                  </Box>
                   <SegControl
                     value={filter}
                     onChange={setFilter}
@@ -295,14 +305,6 @@ export function SalesPage({ view }: { view?: 'create' | 'edit' }) {
                       ),
                     }))}
                   />
-                  <Box sx={{ flex: '1 1 auto', minWidth: 120 }}>
-                    <SearchField
-                      value={search}
-                      onChange={setSearch}
-                      placeholder="Hledat kupujícího…"
-                      width="100%"
-                    />
-                  </Box>
                 </Box>
               </Box>
             </Card>
