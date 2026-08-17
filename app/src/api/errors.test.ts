@@ -70,6 +70,38 @@ describe('apiErrorMessage', () => {
       .toBe('Tuto akci může provést jen správce.');
   });
 
+  /**
+   * The regression this guards: `AleTrackException` carries a code rather than prose, so its
+   * `message` is .NET's placeholder naming the exception type. It used to win over both the
+   * code map and the caller's fallback, and the login form showed
+   * "Exception of type 'AleTrack.Common.Models.AleTrackException' was thrown."
+   */
+  it('translates a failed sign-in instead of leaking the exception type', () => {
+    const invalidPassword = apiError(401, {
+      error_code: 'INVALID_PASSWORD',
+      message: "Exception of type 'AleTrack.Common.Models.AleTrackException' was thrown.",
+    });
+    const unknownUser = apiError(401, {
+      error_code: 'USER_NOT_FOUND',
+      message: "Exception of type 'AleTrack.Common.Models.AleTrackException' was thrown.",
+      error_properties: { userName: { error_code: 'admin' } },
+    });
+
+    // Identical text for both: a different message per case would let the form be used to
+    // discover which user names exist.
+    expect(apiErrorMessage(invalidPassword)).toBe('Nesprávné uživatelské jméno nebo heslo.');
+    expect(apiErrorMessage(unknownUser)).toBe('Nesprávné uživatelské jméno nebo heslo.');
+  });
+
+  it('never shows the .NET placeholder message, even for an unmapped code', () => {
+    const err = apiError(409, {
+      error_code: 'SOME_CODE_WE_HAVE_NOT_TRANSLATED_YET',
+      message: "Exception of type 'AleTrack.Common.Models.AleTrackException' was thrown.",
+    });
+
+    expect(apiErrorMessage(err)).toBe('Konflikt — záznam byl mezitím změněn.');
+  });
+
   it('falls back to the status message when the body carries nothing usable', () => {
     expect(apiErrorMessage(apiError(403, {}))).toBe('K této akci nemáte oprávnění.');
   });

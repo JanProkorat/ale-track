@@ -17,6 +17,11 @@ const STATUS_MESSAGES: Record<number, string> = {
  * Keys mirror `AleTrack.Common.Utils.ErrorCodes`.
  */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
+  // Both sign-in failures read the same on purpose: telling the visitor which half they got
+  // right turns the login form into a way to discover valid user names.
+  USER_NOT_FOUND: 'Nesprávné uživatelské jméno nebo heslo.',
+  INVALID_PASSWORD: 'Nesprávné uživatelské jméno nebo heslo.',
+  INVALID_REFRESH_TOKEN: 'Přihlášení vypršelo. Přihlaste se prosím znovu.',
   DELIVERY_DATE_IN_PAST: 'Termín dodání musí být v budoucnosti.',
   ENTITY_NOT_FOUND: 'Záznam nebyl nalezen.',
   ENTITY_ALREADY_EXISTS: 'Takový záznam už existuje.',
@@ -32,6 +37,14 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   'RoleCapability.CapabilityKeyInvalid': 'Neplatný klíč komponenty.',
   'RoleCapability.DuplicateCapabilityKey': 'Komponenta je pro tuto roli uvedena vícekrát.',
 };
+
+/**
+ * `Exception of type 'X' was thrown.` — what .NET generates when an exception carries no
+ * message of its own. `AleTrackException` is exactly that: it carries a code, not prose, so
+ * its `message` is this placeholder naming an internal type. Never show it; fall through to
+ * the code's translation or the status message instead.
+ */
+const DOTNET_PLACEHOLDER_MESSAGE = /^Exception of type '.+' was thrown\.$/;
 
 interface ValidationErrorDetail {
   error_code?: string;
@@ -75,8 +88,8 @@ export function apiErrorMessage(err: unknown, fallback = 'Něco se pokazilo.'): 
         const byProperty = messageFromProperties(body);
         if (byProperty) return byProperty;
 
-        if (body.message) return body.message;
-        if (body.detail) return body.detail;
+        if (body.message && !DOTNET_PLACEHOLDER_MESSAGE.test(body.message)) return body.message;
+        if (body.detail && !DOTNET_PLACEHOLDER_MESSAGE.test(body.detail)) return body.detail;
       }
     } catch {
       /* not JSON */
