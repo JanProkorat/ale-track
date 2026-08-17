@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -160,8 +161,75 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
             .FirstOrDefaultAsync(ct);
         
         if (order is null)
-            ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(AleTrack.Entities.Order), req.Id);
+
+        await FillItemPricesAsync(order, ct);
 
         await Send.OkAsync(order, cancellation: ct);
+    }
+
+    /// <summary>
+    /// Fills each item's price: the frozen snapshot once <see cref="OutgoingShipmentStopItem"/>
+    /// rows exist for it (a loaded run's invoice is the only truth at that point, so
+    /// <see cref="OrderItemDto.ListPriceWithVat"/> is left null — the snapshot never recorded
+    /// what the ceník said, and showing today's beside a frozen number would mislead), otherwise
+    /// the client's live-resolved price.
+    /// </summary>
+    private async Task FillItemPricesAsync(OrderDto order, CancellationToken ct)
+    {
+        if (order.OrderItems.Count == 0)
+        {
+            return;
+        }
+
+        var itemPublicIds = order.OrderItems.Select(i => i.Id).ToList();
+
+        // The projection above only carries the public ids the UI needs, so the internal
+        // OrderItem id (the snapshot's provenance key) and the product's catalog price
+        // (what Resolve needs) are loaded here in one query, keyed by the item's public id.
+        var pricingByItemPublicId = await dbContext.OrderItems
+            .AsNoTracking()
+            .Where(i => itemPublicIds.Contains(i.PublicId))
+            .Select(i => new
+            {
+                i.PublicId,
+                i.Id,
+                ProductId = i.Product.Id,
+                ProductPriceWithVat = i.Product.PriceWithVat
+            })
+            .ToDictionaryAsync(i => i.PublicId, i => i, ct);
+
+        var orderItemIds = pricingByItemPublicId.Values.Select(i => i.Id).ToList();
+
+        var frozenPriceByOrderItemId = await dbContext.OutgoingShipmentStopItems
+            .AsNoTracking()
+            .Where(i => i.OrderItemId != null && orderItemIds.Contains(i.OrderItemId.Value))
+            .Select(i => new { OrderItemId = i.OrderItemId!.Value, i.UnitPriceWithVat })
+            .ToDictionaryAsync(i => i.OrderItemId, i => i.UnitPriceWithVat, ct);
+
+        var priceList = await ClientPriceResolver.LoadByPublicIdAsync(dbContext, order.Client.Id, ct);
+
+        foreach (var item in order.OrderItems)
+        {
+            if (!pricingByItemPublicId.TryGetValue(item.Id, out var pricing))
+            {
+                continue;
+            }
+
+            if (frozenPriceByOrderItemId.TryGetValue(pricing.Id, out var frozenPrice))
+            {
+                item.UnitPriceWithVat = frozenPrice;
+                continue;
+            }
+
+            var resolved = priceList.Resolve(new Product
+            {
+                Id = pricing.ProductId,
+                PriceWithVat = pricing.ProductPriceWithVat
+            });
+
+            item.UnitPriceWithVat = resolved.PriceWithVat;
+            item.ListPriceWithVat = resolved.ListPriceWithVat;
+        }
     }
 }

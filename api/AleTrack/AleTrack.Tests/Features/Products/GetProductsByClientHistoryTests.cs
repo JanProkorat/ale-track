@@ -338,4 +338,93 @@ public sealed class GetProductsByClientHistoryTests
 
         allProductsInBreweries.Should().OnlyContain(p => p.Kind == ProductKind.Bottle);
     }
+
+    [Fact]
+    public async Task HandleAsync_ClientHistoryForClientWithOwnPrice_ReturnsItWithListPriceBeside()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        client.Id = 1;
+
+        var brewery = BreweryBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Albrecht 12°", priceWithVat: 1290m);
+        product.Id = 1;
+        product.Brewery = brewery;
+
+        var clientPrice = new ClientProductPrice
+        {
+            PublicId = Guid.NewGuid(),
+            Client = client,
+            ClientId = client.Id,
+            Product = product,
+            ProductId = product.Id,
+            PriceWithVat = 1190m,
+            SetOn = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            breweries: [brewery],
+            products: [product],
+            clientProductPrices: [clientPrice]
+        );
+
+        var request = new GetProductsByClientHistoryRequest { ClientId = clientId };
+        var endpoint = EndpointWithResponseBuilder<GetProductsByClientHistoryRequest,
+            GroupedProductHistoryDto, GetProductsByClientHistoryEndpoint>
+            .Create(dbContext.Object);
+
+        // Act
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        // Assert — the client's own price shows, with the ceník price beside it as the marker
+        var item = endpoint.Response.Breweries
+            .SelectMany(b => b.Kinds)
+            .SelectMany(k => k.PackageSizes)
+            .SelectMany(ps => ps.Items)
+            .Should().ContainSingle().Subject;
+        item.PriceWithVat.Should().Be(1190m);
+        item.ListPriceWithVat.Should().Be(1290m);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ClientHistoryForClientWithoutOwnPrice_LeavesListPriceNull()
+    {
+        // Arrange
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        client.Id = 1;
+
+        var brewery = BreweryBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Albrecht 12°", priceWithVat: 1290m);
+        product.Id = 1;
+        product.Brewery = brewery;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            breweries: [brewery],
+            products: [product]
+        );
+
+        var request = new GetProductsByClientHistoryRequest { ClientId = clientId };
+        var endpoint = EndpointWithResponseBuilder<GetProductsByClientHistoryRequest,
+            GroupedProductHistoryDto, GetProductsByClientHistoryEndpoint>
+            .Create(dbContext.Object);
+
+        // Act
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        // Assert — catalog price stands, and the null list price is itself the assertion:
+        // it is the signal the UI reads to decide whether to show a special-price marker.
+        var item = endpoint.Response.Breweries
+            .SelectMany(b => b.Kinds)
+            .SelectMany(k => k.PackageSizes)
+            .SelectMany(ps => ps.Items)
+            .Should().ContainSingle().Subject;
+        item.PriceWithVat.Should().Be(1290m);
+        item.ListPriceWithVat.Should().BeNull();
+    }
 }
