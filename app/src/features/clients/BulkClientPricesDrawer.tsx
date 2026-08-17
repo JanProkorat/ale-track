@@ -299,11 +299,13 @@ export function BulkClientPricesDrawer({
       enqueueSnackbar('Zadejte procenta', { variant: 'warning' });
       return;
     }
-    // Merges over the existing draft rather than replacing it: a client
-    // price for a product no longer in the catalog (soft-deleted) has no
-    // entry in `catalogProducts` and so no entry from `fillFromPercent`
-    // either — replacing the draft outright would silently drop it instead
-    // of leaving it untouched.
+    // Merges over the existing draft rather than replacing it. Note this does
+    // not actually guard a soft-deleted product's price: GetClientProductPricesEndpoint
+    // already filters those out, so such a price is never in `pricesQuery.data` and
+    // therefore never seeded into `draft` to begin with — there is nothing here to
+    // preserve. The merge is harmless (every key `draft` can hold is also a key
+    // `fillFromPercent` produces, since both derive from the same catalog), so it
+    // is left as-is rather than changed as a drive-by.
     setDraft((prev) => ({ ...prev, ...fillFromPercent(catalogProducts, parsed) }));
     enqueueSnackbar('Náhled přepočítán.', { variant: 'info' });
   };

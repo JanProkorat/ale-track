@@ -304,39 +304,14 @@ describe('BulkClientPricesDrawer save payload', () => {
     expect(call.data).toHaveLength(2);
   });
 
-  it('keeps a client price for a product no longer in the catalog after a percentage fill', () => {
-    // A price for a soft-deleted product is in `pricesQuery.data` but absent
-    // from the products endpoint (which filters !IsDeleted), so it has no
-    // entry in `catalogProducts` and none from fillFromPercent either. The
-    // fill must merge over the existing draft, not replace it, or this price
-    // vanishes with no warning the moment someone runs a percentage fill.
-    productsState = {
-      data: [product({ id: 'product-1', name: 'Ležák 12°', priceWithVat: 1000 })],
-      isLoading: false,
-      isError: false,
-    };
-    pricesState = {
-      data: [
-        clientPrice({ productId: 'product-1', priceWithVat: 900 }),
-        clientPrice({ productId: 'product-deleted', priceWithVat: 555 }),
-      ],
-      isLoading: false,
-      isError: false,
-    };
-    renderDrawer();
-
-    fireEvent.change(screen.getByLabelText('Změna proti ceníku (%)'), { target: { value: '-10' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Přepočítat náhled' }));
-    save();
-
-    expect(replaceMutateAsync).toHaveBeenCalledWith({
-      clientId: 'client-1',
-      data: expect.arrayContaining([
-        { productId: 'product-1', priceWithVat: 900 },
-        { productId: 'product-deleted', priceWithVat: 555 },
-      ]),
-    });
-  });
+  // A test used to live here asserting that a percentage fill preserves a
+  // soft-deleted product's client price in the draft. It constructed
+  // `pricesState.data` with an entry for a product absent from the catalog —
+  // but GetClientProductPricesEndpoint filters `!p.Product.IsDeleted`, so the
+  // real endpoint can never return such a row, and the draft is never seeded
+  // with it in the first place. The scenario that matters — the row surviving
+  // a bulk save the operator never saw it in — is a backend guarantee now:
+  // see ReplaceClientProductPricesEndpointTests (backend) for the real guard.
 });
 
 describe('BulkClientPricesDrawer background refetch', () => {

@@ -3,7 +3,11 @@
 // useDeliveryPlaces.ts's shape. Every mutation here also invalidates
 // `qk.orders.all`: an order's displayed line prices come from whatever price
 // applies to the client at read time, so a price change has to bust that
-// cache too, not just this client's own price list.
+// cache too, not just this client's own price list. It also invalidates
+// `qk.productHistory(clientId)`: the OrderEditor's entire product catalog
+// (history segment and brewery browse) is fetched under that key, not
+// `qk.clientProductPrices`, so a price edit must bust it too or the editor
+// keeps composing against the stale price for up to the 30s staleTime.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
@@ -28,6 +32,10 @@ export function useSaveClientProductPrice() {
     onSuccess: (_res, { clientId }) => {
       qc.invalidateQueries({ queryKey: qk.clientProductPrices(clientId) });
       qc.invalidateQueries({ queryKey: qk.orders.all });
+      // The OrderEditor's whole catalog (history segment and brewery browse alike) prices from
+      // this key, not from qk.clientProductPrices — without busting it, an editor opened right
+      // after this save still shows the pre-edit price for up to the 30s staleTime.
+      qc.invalidateQueries({ queryKey: qk.productHistory(clientId) });
     },
   });
 }
@@ -41,6 +49,8 @@ export function useDeleteClientProductPrice() {
     onSuccess: (_res, { clientId }) => {
       qc.invalidateQueries({ queryKey: qk.clientProductPrices(clientId) });
       qc.invalidateQueries({ queryKey: qk.orders.all });
+      // See useSaveClientProductPrice — the OrderEditor prices from this key, not clientProductPrices.
+      qc.invalidateQueries({ queryKey: qk.productHistory(clientId) });
     },
   });
 }
@@ -57,6 +67,8 @@ export function useReplaceClientProductPrices() {
     onSuccess: (_res, { clientId }) => {
       qc.invalidateQueries({ queryKey: qk.clientProductPrices(clientId) });
       qc.invalidateQueries({ queryKey: qk.orders.all });
+      // See useSaveClientProductPrice — the OrderEditor prices from this key, not clientProductPrices.
+      qc.invalidateQueries({ queryKey: qk.productHistory(clientId) });
     },
   });
 }

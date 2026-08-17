@@ -205,13 +205,23 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
         // carries no soft-delete filter, ResetOrderItemsForReuse never clears the rows on
         // Loaded -> Cancelled, and OrderMutability deliberately leaves Cancelled editable
         // again — the same exclusion the shipment-link projection above already applies.
-        var frozenPriceByOrderItemId = await dbContext.OutgoingShipmentStopItems
-            .AsNoTracking()
-            .Where(i => i.OrderItemId != null
-                     && orderItemIds.Contains(i.OrderItemId.Value)
-                     && i.Stop.OutgoingShipment.State != OutgoingShipmentState.Cancelled)
-            .Select(i => new { OrderItemId = i.OrderItemId!.Value, i.UnitPriceWithVat })
-            .ToDictionaryAsync(i => i.OrderItemId, i => i.UnitPriceWithVat, ct);
+        //
+        // Grouped rather than a straight ToDictionaryAsync: Cancelled -> Created is an allowed
+        // shipment transition, so one order can end up carried by two runs that are both
+        // non-Cancelled and both loaded, leaving two live snapshot rows for the same order item.
+        // A duplicate key would otherwise throw here and 500 the order detail page. These rows
+        // are only ever freshly inserted (never updated) at the moment a run transitions into
+        // Loaded, so the highest internal Id is the most recently loaded run's price — the best
+        // available proxy for "the run whose snapshot the caller actually wants to see."
+        var frozenPriceByOrderItemId = (await dbContext.OutgoingShipmentStopItems
+                .AsNoTracking()
+                .Where(i => i.OrderItemId != null
+                         && orderItemIds.Contains(i.OrderItemId.Value)
+                         && i.Stop.OutgoingShipment.State != OutgoingShipmentState.Cancelled)
+                .Select(i => new { OrderItemId = i.OrderItemId!.Value, i.Id, i.UnitPriceWithVat })
+                .ToListAsync(ct))
+            .GroupBy(i => i.OrderItemId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.Id).First().UnitPriceWithVat);
 
         var priceList = await ClientPriceResolver.LoadByPublicIdAsync(dbContext, order.Client.Id, ct);
 

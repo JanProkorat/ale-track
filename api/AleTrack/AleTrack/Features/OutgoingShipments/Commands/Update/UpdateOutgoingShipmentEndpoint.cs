@@ -277,9 +277,19 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // Add new orders
         if (newOrderIds.Count > 0)
         {
+            // ShipmentContentSnapshotWriter.Apply runs on these same order entities when the
+            // shipment transitions into Loaded within this same request (e.g. attaching an order
+            // and setting the new state in one PUT) — it reads order.Client (for the client's own
+            // price list and the ClientName/ClientPublicId snapshot fields) and
+            // OrderItem.Product.Brewery (for BreweryName/BreweryPublicId). Without these includes
+            // both navigations come back null (no lazy-loading proxies here), so the writer
+            // silently degrades to ClientPriceList.Empty and bills the catalog price instead of
+            // the client's own.
             var fetchedOrders = await dbContext.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p.Brewery)
+                .Include(o => o.Client)
                 .Where(o => newOrderIds.Contains(o.PublicId))
                 .ToListAsync(ct);
 

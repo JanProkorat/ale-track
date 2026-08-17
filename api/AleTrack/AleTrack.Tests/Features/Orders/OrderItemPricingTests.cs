@@ -85,6 +85,92 @@ public sealed class OrderItemPricingTests
         item.ListPriceWithVat.Should().Be(1290m);
     }
 
+    /// <summary>
+    /// Cancelled -> Created is an allowed shipment transition, so an order can end up carried by
+    /// two runs that are both non-Cancelled and both loaded — two live snapshot rows for the
+    /// same order item. Before the group-and-pick fix, <c>ToDictionaryAsync</c> threw on the
+    /// duplicate key and 500'd the order detail page; this asserts it instead resolves, and
+    /// resolves to the higher-Id (most recently loaded) row.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_TwoLiveSnapshotRowsForSameOrderItem_ResolvesWithoutThrowingAndPrefersMostRecentlyLoaded()
+    {
+        var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+        client.Id = 1;
+
+        var brewery = BreweryBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
+        brewery.Id = 1;
+
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid(), name: "Albrecht 12°", priceWithVat: 1290m);
+        product.Id = 41;
+        product.Brewery = brewery;
+
+        var item = new OrderItem
+        {
+            Id = 51,
+            PublicId = Guid.NewGuid(),
+            Product = product,
+            ProductId = product.Id,
+            Quantity = 6
+        };
+
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, orderItems: [item]);
+        item.Order = order;
+
+        // The older of the two runs — loaded first, then (per the reachable bug) dropped and
+        // somehow left live rather than cancelled.
+        var olderStopItem = new OutgoingShipmentStopItem
+        {
+            Id = 100,
+            PublicId = Guid.NewGuid(),
+            OrderItemId = item.Id,
+            UnitPriceWithVat = 1150m,
+            Stop = new OutgoingShipmentStop
+            {
+                PublicId = Guid.NewGuid(),
+                Kind = OutgoingShipmentStopKind.Order,
+                Order = 1,
+                OutgoingShipment = OutgoingShipmentBuilder.BuildEntity(state: OutgoingShipmentState.Loaded)
+            }
+        };
+
+        // The newer run — the one that actually carries the order today.
+        var newerStopItem = new OutgoingShipmentStopItem
+        {
+            Id = 200,
+            PublicId = Guid.NewGuid(),
+            OrderItemId = item.Id,
+            UnitPriceWithVat = 1250m,
+            Stop = new OutgoingShipmentStop
+            {
+                PublicId = Guid.NewGuid(),
+                Kind = OutgoingShipmentStopKind.Order,
+                Order = 1,
+                OutgoingShipment = OutgoingShipmentBuilder.BuildEntity(state: OutgoingShipmentState.InTransit)
+            }
+        };
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            products: [product],
+            orders: [order],
+            orderItems: [item],
+            clientProductPrices: [],
+            outgoingShipmentStopItems: [olderStopItem, newerStopItem]);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(dbContext.Object);
+
+        var act = async () =>
+            await endpoint.HandleAsync(new GetOrderDetailRequest { Id = order.PublicId }, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+
+        var responseItem = endpoint.Response.OrderItems.Should().ContainSingle().Subject;
+        responseItem.UnitPriceWithVat.Should().Be(1250m);
+        responseItem.ListPriceWithVat.Should().BeNull();
+    }
+
     private sealed record Fixture(
         Order Order,
         Client Client,

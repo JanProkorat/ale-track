@@ -115,6 +115,40 @@ public sealed class ReplaceClientProductPricesTests
     }
 
     [Fact]
+    public async Task HandleAsync_SoftDeletedProductPriceOmittedFromBody_Survives()
+    {
+        // GetClientProductPricesEndpoint filters !p.Product.IsDeleted, so a price whose product
+        // has been soft-deleted never reaches the bulk editor and can never be in its draft —
+        // its absence from the body cannot mean "the operator cleared this". Replace semantics
+        // (delete-on-omission) apply only to what the operator could actually see and clear.
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var retiredProduct = new Product
+        {
+            Id = 11, PublicId = Guid.NewGuid(), Name = "Retired", PriceWithVat = 1290m, IsDeleted = true
+        };
+        var priceForRetiredProduct = new ClientProductPrice
+        {
+            Id = 1, PublicId = Guid.NewGuid(), ClientId = 7, Client = client,
+            ProductId = 11, Product = retiredProduct, PriceWithVat = 1190m, SetOn = new DateOnly(2020, 1, 1)
+        };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [retiredProduct], clientProductPrices: [priceForRetiredProduct]);
+
+        var endpoint = EndpointBuilder<ReplaceClientProductPricesRequest, ReplaceClientProductPricesEndpoint>
+            .Create(dbContext.Object, TimeProvider.System);
+        await endpoint.HandleAsync(new ReplaceClientProductPricesRequest
+        {
+            ClientId = clientId,
+            Data = []
+        }, CancellationToken.None);
+
+        dbContext.Verify(e => e.ClientProductPrices.Remove(priceForRetiredProduct), Times.Never);
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_UnknownProductInBody_Throws404()
     {
         var clientId = Guid.NewGuid();

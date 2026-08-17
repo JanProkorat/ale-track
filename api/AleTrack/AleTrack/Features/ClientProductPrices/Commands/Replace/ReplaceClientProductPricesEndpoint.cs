@@ -37,10 +37,12 @@ public sealed record ReplaceClientProductPricesRequest
 /// </summary>
 /// <remarks>
 /// Replace, not merge: entries in the body are upserted and any price the body omits is
-/// deleted. That is what backs the bulk editor's rule that an empty input means the
-/// client pays the ceník, and it keeps one screenful of edits as one call rather than a
-/// few hundred requests that can half-fail and leave the client's list in a state nobody
-/// chose.
+/// deleted — except a price whose product is soft-deleted, which the list endpoint never
+/// shows the operator in the first place, so its absence from the body cannot mean "clear
+/// this". That row survives untouched. Otherwise this is what backs the bulk editor's rule
+/// that an empty input means the client pays the ceník, and it keeps one screenful of edits
+/// as one call rather than a few hundred requests that can half-fail and leave the client's
+/// list in a state nobody chose.
 ///
 /// Known, accepted race, inherited from <c>SaveClientProductPriceEndpoint</c>: the upsert
 /// half of this endpoint is check-then-act — it loads <c>existing</c> rows, then adds new
@@ -102,6 +104,7 @@ internal sealed class ReplaceClientProductPricesEndpoint(
         }
 
         var existingPrices = await dbContext.ClientProductPrices
+            .Include(p => p.Product)
             .Where(p => p.ClientId == client!.Id)
             .ToListAsync(ct);
 
@@ -123,8 +126,13 @@ internal sealed class ReplaceClientProductPricesEndpoint(
 
                 desiredPriceByProductId.Remove(existingPrice.ProductId);
             }
-            else
+            else if (!existingPrice.Product.IsDeleted)
             {
+                // Omission from the body means "the operator cleared this row" — but
+                // GetClientProductPricesEndpoint filters out a soft-deleted product's price, so
+                // the bulk editor never showed it and the operator cannot have intended to clear
+                // it. The row survives (Product is Restrict, and the spec is explicit that
+                // nothing benefits from deleting it); it just stays hidden from the Ceník tab.
                 dbContext.ClientProductPrices.Remove(existingPrice);
             }
         }
