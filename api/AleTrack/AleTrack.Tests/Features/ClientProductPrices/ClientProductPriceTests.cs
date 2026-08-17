@@ -1,11 +1,17 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientProductPrices;
+using AleTrack.Features.ClientProductPrices.Commands;
+using AleTrack.Features.ClientProductPrices.Commands.Delete;
+using AleTrack.Features.ClientProductPrices.Commands.Save;
 using AleTrack.Features.ClientProductPrices.Queries.List;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using FluentValidation.TestHelper;
+using Moq;
 
 namespace AleTrack.Tests.Features.ClientProductPrices;
 
@@ -90,5 +96,121 @@ public sealed class ClientProductPriceTests
             new GetClientProductPricesRequest { ClientId = Guid.NewGuid() }, CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>();
+    }
+
+    [Fact]
+    public async Task HandleAsync_SaveNewPrice_CreatesRowStampedToday()
+    {
+        var clientId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var product = new Product { Id = 11, PublicId = productId, Name = "P", PriceWithVat = 1290m };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [product], clientProductPrices: []);
+
+        var endpoint = EndpointBuilder<SaveClientProductPriceRequest, SaveClientProductPriceEndpoint>
+            .Create(dbContext.Object, TimeProvider.System);
+        await endpoint.HandleAsync(new SaveClientProductPriceRequest
+        {
+            ClientId = clientId,
+            ProductId = productId,
+            Data = new SaveClientProductPriceDto { PriceWithVat = 1190m }
+        }, CancellationToken.None);
+
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SaveExistingPrice_OverwritesItAndRestampsSetOn()
+    {
+        var clientId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var product = new Product { Id = 11, PublicId = productId, Name = "P", PriceWithVat = 1290m };
+        var existing = new ClientProductPrice
+        {
+            Id = 1, PublicId = Guid.NewGuid(), ClientId = 7, Client = client,
+            ProductId = 11, Product = product, PriceWithVat = 1190m,
+            SetOn = new DateOnly(2020, 1, 1)
+        };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [product], clientProductPrices: [existing]);
+
+        var endpoint = EndpointBuilder<SaveClientProductPriceRequest, SaveClientProductPriceEndpoint>
+            .Create(dbContext.Object, TimeProvider.System);
+        await endpoint.HandleAsync(new SaveClientProductPriceRequest
+        {
+            ClientId = clientId,
+            ProductId = productId,
+            Data = new SaveClientProductPriceDto { PriceWithVat = 1150m }
+        }, CancellationToken.None);
+
+        existing.PriceWithVat.Should().Be(1150m);
+        existing.SetOn.Should().NotBe(new DateOnly(2020, 1, 1));
+    }
+
+    [Fact]
+    public async Task HandleAsync_SaveForUnknownProduct_Throws404()
+    {
+        var clientId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [], clientProductPrices: []);
+
+        var endpoint = EndpointBuilder<SaveClientProductPriceRequest, SaveClientProductPriceEndpoint>
+            .Create(dbContext.Object, TimeProvider.System);
+
+        var act = async () => await endpoint.HandleAsync(new SaveClientProductPriceRequest
+        {
+            ClientId = clientId,
+            ProductId = Guid.NewGuid(),
+            Data = new SaveClientProductPriceDto { PriceWithVat = 1m }
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DeletePrice_RemovesTheRow()
+    {
+        var clientId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(publicId: clientId);
+        client.Id = 7;
+        var product = new Product { Id = 11, PublicId = productId, Name = "P", PriceWithVat = 1290m };
+        var existing = new ClientProductPrice
+        {
+            Id = 1, PublicId = Guid.NewGuid(), ClientId = 7, Client = client,
+            ProductId = 11, Product = product, PriceWithVat = 1190m, SetOn = new DateOnly(2026, 1, 1)
+        };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], products: [product], clientProductPrices: [existing]);
+
+        var endpoint = EndpointBuilder<DeleteClientProductPriceRequest, DeleteClientProductPriceEndpoint>
+            .Create(dbContext.Object);
+        await endpoint.HandleAsync(new DeleteClientProductPriceRequest
+        {
+            ClientId = clientId,
+            ProductId = productId
+        }, CancellationToken.None);
+
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void Validate_NonPositivePrice_FailsWithCorrectCode()
+    {
+        var result = new SaveClientProductPriceValidator().TestValidate(new SaveClientProductPriceRequest
+        {
+            ClientId = Guid.NewGuid(),
+            ProductId = Guid.NewGuid(),
+            Data = new SaveClientProductPriceDto { PriceWithVat = 0m }
+        });
+
+        result.ShouldHaveValidationErrorFor(x => x.Data.PriceWithVat)
+            .WithErrorCode(ErrorCodes.ClientProductPriceMustBePositive);
     }
 }

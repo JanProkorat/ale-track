@@ -165,4 +165,10 @@ public static class ErrorCodes
     /// Error code for case when payment is confirmed on a sale that is not awaiting one.
     /// </summary>
     public const string SaleNotAwaitingPayment = "SALE_NOT_AWAITING_PAYMENT";
+
+    /// <summary>
+    /// Error code for case when a client's own product price is zero or negative.
+    /// Distinct from the generic min-value code so clients can show a precise message.
+    /// </summary>
+    public const string ClientProductPriceMustBePositive = "CLIENT_PRODUCT_PRICE_MUST_BE_POSITIVE";
 }
