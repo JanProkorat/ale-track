@@ -1,9 +1,10 @@
-// What ShipmentDetail decides about the stop header on "Přehled objednávek":
+// What ShipmentDetail decides about the stop header on "Přehled zastávek":
 // a stop delivering to a client's saved place shows a small chip with the
 // place name and its formatted address below (never repeating the name); any
 // other stop keeps the plain `address · kind` line unchanged. The pure
 // resolution behind both is covered directly in stopAddress.test.ts.
 
+import { type ReactNode } from 'react';
 import { render, screen, within, fireEvent, waitForElementToBeRemoved, act } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,9 +43,13 @@ vi.mock('src/lib/download', () => ({ downloadBlob }));
 // actually catch a regression on it.
 const routeMapProps = vi.fn();
 vi.mock('src/components/common/RouteMap', () => ({
-  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[] }) => {
+  // The stub renders `overlay`, because on md+ (happy-dom's viewport is 1024 wide)
+  // that docked copy is the *only* rendered "Přehled zastávek" — the page-flow copy
+  // is display:none there. A stub that dropped the prop hid the card from every
+  // role-based query in this file.
+  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[]; overlay?: ReactNode }) => {
     routeMapProps(props);
-    return <div data-testid="route-map-stub" />;
+    return <div data-testid="route-map-stub">{props.overlay}</div>;
   },
 }));
 
@@ -366,7 +371,7 @@ describe('ShipmentDetail — export', () => {
   });
 });
 
-describe('ShipmentDetail — stop header on Přehled objednávek', () => {
+describe('ShipmentDetail — stop header on Přehled zastávek', () => {
   it('shows the place chip and its formatted address for a DeliveryPlace stop', () => {
     renderDetail([placeStop()]);
 
@@ -378,51 +383,100 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
     expect(within(row).queryByText(/Letní zahrádka ·/)).not.toBeInTheDocument();
   });
 
-  it('keeps the plain address · kind line, and no chip, for a stop on the official address', () => {
+  // The address alone, with no "· Fakturační" tail: which of a client's addresses a stop
+  // uses only matters where it can be changed, and that is the shipment editor — which
+  // still shows the kind on its own rows.
+  it('shows the address without its kind label, and no chip, for a stop on the official address', () => {
     renderDetail([officialStop()]);
 
     const row = screen.getByTestId('overview-row');
-    expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
+    expect(within(row).getByText('Náměstí 14, 02763 Žitava')).toBeInTheDocument();
+    expect(within(row).queryByText(/Fakturační/)).not.toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
 
   // Regression guard: the branch this review's fix replaced compared
   // `selectedAddressKind` directly against the numeric Contact member, which
   // never matches the server's string wire form and fell through to the
-  // official address instead — pinning and displaying the wrong stop.
-  it('shows the contact address · kind line, and no place chip, for a Contact stop', () => {
+  // official address instead — pinning and displaying the wrong stop. Still worth
+  // asserting now that the label is gone: the resolved *address* is the tell.
+  it('resolves a Contact stop to the contact address, and shows no place chip', () => {
     renderDetail([contactStop()]);
 
     const row = screen.getByTestId('overview-row');
-    expect(within(row).getByText('Dvůr 2a, 02763 Žitava · Kontaktní')).toBeInTheDocument();
+    expect(within(row).getByText('Dvůr 2a, 02763 Žitava')).toBeInTheDocument();
+    expect(within(row).queryByText(/Kontaktní/)).not.toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
 });
 
+// Where "Přehled zastávek" lives: handed to the route map, which folds it away behind
+// the trip stats' chevron. That folding is RouteMap's own business and is covered in
+// RouteMap.test.tsx — the stub here renders the panel outright, so what these assert is
+// that the screen hands the map a populated list and keeps no second copy of it.
+/** The "Přehled zastávek" card, wherever it is currently placed. */
+function stopsOverviewCard(): HTMLElement {
+  return screen.getByText('Přehled zastávek').closest('.MuiCard-root') as HTMLElement;
+}
+
+describe('ShipmentDetail — where Přehled zastávek is placed', () => {
+  it('hands the stop list to the route map', () => {
+    renderDetail([officialStop()]);
+
+    const map = screen.getByTestId('route-map-stub');
+    expect(within(map).getByText('Přehled zastávek')).toBeInTheDocument();
+    // The rows come with it, rather than the heading alone.
+    expect(within(map).getByText('Restaurace B')).toBeInTheDocument();
+  });
+
+  it('keeps no second copy of the card outside the map', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.getAllByText('Přehled zastávek')).toHaveLength(1);
+  });
+
+  it('counts stops, not orders, beside the heading', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.getByText('1 zastávka')).toBeInTheDocument();
+  });
+
+  it('reports an empty run as having no stops', () => {
+    renderDetail([]);
+
+    expect(screen.getByText('Žádné zastávky.')).toBeInTheDocument();
+  });
+});
+
 describe('ShipmentDetail — opening a stop\'s order', () => {
-  it('opens the order from the client name, without expanding the row', () => {
+  it('opens the order from the client name', () => {
     const onOpenOrder = vi.fn();
     renderDetail([officialStop()], onOpenOrder);
 
     fireEvent.click(screen.getByRole('button', { name: 'Restaurace B' }));
 
     expect(onOpenOrder).toHaveBeenCalledWith('order-2');
-    // The name sits inside the row's click target, so following the link must
-    // not also toggle the products underneath it.
-    expect(screen.queryByText('Žádné položky.')).not.toBeInTheDocument();
   });
 
-  it('still expands the row from the chevron and from the rest of the header', () => {
+  // Opening the order is the row's only action now that it no longer expands, so the
+  // whole row is the mouse target — not just the name inside it.
+  it('opens the order from anywhere in the row, including the address line', () => {
     const onOpenOrder = vi.fn();
     renderDetail([officialStop()], onOpenOrder);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rozbalit Restaurace B' }));
-    expect(screen.getByText('Žádné položky.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava'));
 
-    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava · Fakturační'));
-    expect(screen.getByRole('button', { name: 'Rozbalit Restaurace B' })).toBeInTheDocument();
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+  });
 
-    expect(onOpenOrder).not.toHaveBeenCalled();
+  // The chevron and the per-row item count are gone: what is loaded for a stop is the
+  // nakládka's account, and repeating it here left two places to read it from.
+  it('offers no expander and no item count', () => {
+    renderDetail([officialStop()], vi.fn());
+
+    expect(screen.queryByRole('button', { name: /Rozbalit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sbalit/ })).not.toBeInTheDocument();
+    expect(within(stopsOverviewCard()).queryByText(/položk/)).not.toBeInTheDocument();
   });
 
   // The page omits the callback for a user who cannot see the Objednávky

@@ -15,16 +15,22 @@ import { addrKindLabel } from 'src/lib/labels';
  * legitimately differ: the editor prefixes the place's name (it has no
  * separate chip to carry it), the detail is address-only (its chip already
  * shows the name). Kept as one function so a wording/separator/fallback
- * change can't land on only one of the two screens the same stop renders on. */
+ * change can't land on only one of the two screens the same stop renders on.
+ *
+ * `addressText` is the same address without the ` · kind` tail, for the screens
+ * that only need to say *where* — returned alongside rather than as a flag, so the
+ * two can never be formatted from different address fields. */
 export function resolveFromAddresses(
   kind: DeliveryAddressKind,
   official: AddressDto | undefined,
   contact: AddressDto | undefined,
-): { lat?: number; lng?: number; text: string } {
+): { lat?: number; lng?: number; text: string; addressText: string } {
   if (kind === DeliveryAddressKind.Contact && contact) {
-    return { lat: contact.latitude, lng: contact.longitude, text: `${formatStreetAddress(contact)} · ${addrKindLabel(DeliveryAddressKind.Contact)}` };
+    const addressText = formatStreetAddress(contact);
+    return { lat: contact.latitude, lng: contact.longitude, text: `${addressText} · ${addrKindLabel(DeliveryAddressKind.Contact)}`, addressText };
   }
-  return { lat: official?.latitude, lng: official?.longitude, text: `${formatStreetAddress(official)} · ${addrKindLabel(DeliveryAddressKind.Official)}` };
+  const addressText = formatStreetAddress(official);
+  return { lat: official?.latitude, lng: official?.longitude, text: `${addressText} · ${addrKindLabel(DeliveryAddressKind.Official)}`, addressText };
 }
 
 /** Sentinel <Select> value for "+ Nové místo…". Every place id is encoded as

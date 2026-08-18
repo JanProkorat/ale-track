@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Box, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
+import { Box, Collapse, IconButton, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -10,6 +10,7 @@ import FullscreenIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import { haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
 import { RouteNavButton } from 'src/components/common/RouteNavButton';
 
@@ -81,6 +82,8 @@ function depotIcon(): L.DivIcon {
  * located. */
 export function RouteMap({
   stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
+  overlay, overlayWidth = 340,
+  overlayShowLabel = 'Zobrazit seznam', overlayHideLabel = 'Skrýt seznam',
 }: {
   stops: RouteStop[];
   /** Where the van is loaded — a brewery or the company, resolved by the caller. */
@@ -94,12 +97,33 @@ export function RouteMap({
   /** Adds a control that hands the route to Mapy.cz / Google / Apple Maps.
    * Opt-in so it appears on the screens a driver actually navigates from. */
   navigable?: boolean;
+  /** Panel that unfolds from the trip stats, capped to the map's height and scrolling
+   * internally past that. Collapsed until asked for, so the default view is still the
+   * route; passing one puts a chevron on the stats bar. */
+  overlay?: ReactNode;
+  /** Width of the stats bar and the panel below it — they share one. */
+  overlayWidth?: number;
+  /** Labels for the chevron, so it can name what it actually unfolds. */
+  overlayShowLabel?: string;
+  overlayHideLabel?: string;
 }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
   // Callers pass 280–360px, which eats most of a phone screen. Cap on mobile
   // rather than taking a responsive prop, so every call site benefits as-is.
   const mapHeight = { xs: Math.min(height, 260), mobile: height };
+
+  // How tall the unfolded panel may get: the map, less the 12px inset at each end, the
+  // stats bar it hangs off, and the gap between the two. Given to the panel rather than
+  // enforced by bounding the column — see the note at the render site. A rounded-up bar
+  // height is the one estimate here; erring high only ever leaves a little slack at the
+  // bottom of the map, never a panel hanging over its edge.
+  const STATS_BAR_H = 62;
+  const overlayInset = 24 + STATS_BAR_H + 8;
+  const overlayMaxHeight = {
+    xs: Math.max(Math.min(height, 260) - overlayInset, 120),
+    mobile: Math.max(height - overlayInset, 120),
+  };
 
   // Base trip: the run's start -> each located stop (in order) -> its end.
   // Usually a brewery pickup and the company, but a run that both loads and
@@ -154,6 +178,9 @@ export function RouteMap({
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const [isFull, setIsFull] = useState(false);
+  // Closed to begin with: the map is opened to see the route, and a panel covering it
+  // by default would answer a question nobody asked yet.
+  const [overlayOpen, setOverlayOpen] = useState(false);
   // Track native fullscreen and re-measure the map so tiles fill the new size.
   useEffect(() => {
     const onChange = () => {
@@ -351,27 +378,91 @@ export function RouteMap({
       </Stack>
 
       {stats && (
+        // Top-left column: the trip stats, and — when the caller hands one over — the
+        // panel that slides out from under them.
+        //
+        // Top-anchored, with the panel capping its own height (see overlayMaxHeight)
+        // rather than the column pinning `bottom`. A bounded column would make the
+        // panel a shrinkable flex item, and flexbox re-measuring it every frame fights
+        // the height the slide is animating.
+        //
+        // pointerEvents off on the column, back on for its children, so the empty
+        // space beside a short panel still drags the map underneath.
         <Stack
-          direction="row"
-          spacing={2.5}
           sx={{
             position: 'absolute', top: 12, left: 12, zIndex: 1000,
-            bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
-            px: 1.75, py: 1.1, boxShadow: 2,
+            // One width for both, so unfolding the panel does not resize the bar above
+            // it. Without a panel the bar stays content-sized, as on every other map.
+            width: overlay ? overlayWidth : undefined,
+            maxWidth: 'calc(100% - 24px)',
+            alignItems: overlay ? 'stretch' : 'flex-start',
+            gap: 1, pointerEvents: 'none',
+            '& > *': { pointerEvents: 'auto' },
           }}
         >
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>VZDÁLENOST</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{stats.km} km</Typography>
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
-          </Box>
+          <Stack
+            direction="row"
+            spacing={2.5}
+            alignItems="center"
+            sx={{
+              flex: '0 0 auto',
+              bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
+              px: 1.75, py: 1.1, boxShadow: 2,
+              // Spread within the fixed width rather than overflow it: `spacing` is the
+              // minimum gap, and a long distance ("1 234.5 km") just closes it up.
+              justifyContent: overlay ? 'space-between' : 'flex-start',
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>VZDÁLENOST</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{stats.km} km</Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
+            </Box>
+            {overlay && (
+              <MuiTooltip title={overlayOpen ? overlayHideLabel : overlayShowLabel}>
+                <IconButton
+                  size="small"
+                  onClick={() => setOverlayOpen((v) => !v)}
+                  aria-label={overlayOpen ? overlayHideLabel : overlayShowLabel}
+                  aria-expanded={overlayOpen}
+                  sx={{ ml: -0.5, flexShrink: 0 }}
+                >
+                  <ExpandMoreIcon
+                    sx={{ color: 'text.secondary', transition: 'transform .15s', transform: overlayOpen ? 'rotate(180deg)' : 'none' }}
+                  />
+                </IconButton>
+              </MuiTooltip>
+            )}
+          </Stack>
+
+          {overlay && (
+            // Collapse animates the height between 0 and the child's own — and the child
+            // caps itself at overlayMaxHeight, so a long list animates to exactly the room
+            // it is allowed and scrolls the rest. unmountOnExit keeps a closed panel out of
+            // the DOM (and the a11y tree) rather than merely invisible.
+            <Collapse in={overlayOpen} unmountOnExit sx={{ flex: '0 0 auto' }}>
+              <Box
+                sx={{
+                  maxHeight: overlayMaxHeight,
+                  // contain, so hitting the panel's end does not chain the scroll on to the
+                  // document — the nested-pane trap app/CLAUDE.md warns about.
+                  overflowY: 'auto',
+                  overscrollBehavior: 'contain',
+                  boxShadow: 2,
+                  borderRadius: 1.5,
+                }}
+              >
+                {overlay}
+              </Box>
+            </Collapse>
+          )}
         </Stack>
       )}
     </Box>

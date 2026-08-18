@@ -777,56 +777,38 @@ function AggLoadingTable({
   }
 }
 
-function ProductLine({ row }: { row: NakladkaRow }) {
-  const chipText = kindSizeChipText(row.kind, row.packageSize);
-  return (
-    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{row.name}</Typography>
-        {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600, mt: 0.25 }} />}
-        {/* The instruction the loader needs; owned and edited by the order. */}
-        {row.note && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{row.note}</Typography>
-        )}
-      </Box>
-      <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
-    </Stack>
-  );
-}
-
-/** One expandable line in the orders overview: a collapsed header (avatar +
- * title, optionally a place chip beside it, plus a destination address line)
- * that reveals its product list on click. The item count that used to be the
- * sole subtitle moved to a trailing badge — see {@link OrdersOverviewCard} —
- * to make room for the destination address without losing it. */
-function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, onOpen }: {
+/** One line in the stops overview: avatar + client name, optionally a place chip
+ * beside it, and the destination address below.
+ *
+ * Flat, not expandable: what is on the truck for this stop is the nakládka's job, and
+ * repeating it here behind a chevron gave two places to read the same numbers from.
+ * The row's only action is opening its order. */
+function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
    *  client's saved place (see `DeliveryAddressKind.DeliveryPlace`). */
   chip?: ReactNode;
   /** The destination line below the title: the place's formatted address, or
-   *  the `address · kind` line for the two standard address kinds. Omitted
-   *  for the dokládka pseudo-row, which has no destination of its own. */
+   *  the `address · kind` line for the two standard address kinds. */
   addressLine?: string;
-  rows: NakladkaRow[];
-  open: boolean;
-  onToggle: () => void;
   /** Opens the row's source order — makes the client name a link. Omitted for
-   *  rows with no order behind them (the dokládka pseudo-row) and for users who
-   *  cannot see the Objednávky module, who then get the plain name back. */
+   *  users who cannot see the Objednávky module, who then get the plain name back. */
   onOpen?: () => void;
 }) {
   return (
     <Box data-testid="overview-row" sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
-      {/* The header expands the row, but it is a plain Box rather than a
-          ButtonBase: the client name inside it is its own control, and a
-          button (or link) nested in a button is invalid markup. Keyboard users
-          reach the expander through the chevron's IconButton; the surrounding
-          click target is a mouse convenience on top of it. */}
+      {/* A plain Box rather than a ButtonBase even now that opening the order is the
+          only action: the client name inside it is its own control, and a button
+          nested in a button is invalid markup. The name carries the keyboard path;
+          the surrounding click target is a mouse convenience on top of it. */}
       <Box
-        onClick={onToggle}
-        sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+        onClick={onOpen}
+        sx={{
+          px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
+          cursor: onOpen ? 'pointer' : 'default',
+          '&:hover': onOpen ? { bgcolor: 'action.hover' } : undefined,
+        }}
       >
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -850,44 +832,21 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, o
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{addressLine}</Typography>
           )}
         </Box>
-        <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: 'text.disabled', flexShrink: 0 }}>
-          {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
-        </Typography>
-        <IconButton
-          size="small"
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          aria-label={`${open ? 'Sbalit' : 'Rozbalit'} ${title}`}
-          sx={{ flexShrink: 0 }}
-        >
-          <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
-        </IconButton>
       </Box>
-      <Collapse in={open} unmountOnExit>
-        <Box sx={{ pb: 0.75 }}>
-          {rows.length > 0
-            ? rows.map((r) => <ProductLine key={r.key} row={r} />)
-            : <Typography color="text.secondary" sx={{ fontSize: 12, px: 2.5, py: 1 }}>Žádné položky.</Typography>}
-        </Box>
-      </Collapse>
     </Box>
   );
 }
 
-/** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
- * row per client, expandable to its products), plus a stock-purchase row listing all
- * stock extras when present. Read-only; the loading workflow lives elsewhere. */
-function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
+/** "Přehled zastávek" card — a flat list of the shipment's stops in route order, one
+ * row per client order, each opening that order. Read-only; what is loaded for each
+ * stop belongs to the nakládka.
+ *
+ * Lives in the route map, folded away behind the trip stats' chevron — the route is
+ * what the map is looked at for, and the stop list is the follow-up question. */
+function OrdersOverviewCard({ stops, onOpenOrder }: {
   stops: OutgoingShipmentStopDto[];
-  extraRows: NakladkaRow[];
   onOpenOrder?: (orderId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (key: string) => setExpanded((prev) => {
-    const n = new Set(prev);
-    if (n.has(key)) n.delete(key); else n.add(key);
-    return n;
-  });
-
   const numberAvatar = (color: string, n: number): ReactNode => (
     <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
   );
@@ -896,13 +855,13 @@ function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
     <Card sx={{ overflow: 'hidden' }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
         <ReceiptLongOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled objednávek</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled zastávek</Typography>
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled' }}>
-          {stops.length} {plural(stops.length, 'objednávka', 'objednávky', 'objednávek')}
+          {stops.length} {plural(stops.length, 'zastávka', 'zastávky', 'zastávek')}
         </Typography>
       </Stack>
-      {stops.length > 0 || extraRows.length > 0 ? (
+      {stops.length > 0 ? (
         <Box>
           {stops.map((stop, i) => {
             const key = stop.orderId ?? `stop-${i}`;
@@ -928,30 +887,16 @@ function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
                     sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
                   />
                 ) : undefined}
-                addressLine={detailAddress.text}
-                rows={(stop.products ?? []).map(productRowFrom)}
-                open={expanded.has(key)}
-                onToggle={() => toggle(key)}
+                // Address only, no "· Fakturační" tail: which of the client's addresses
+                // it is only matters where it can be changed, and that is the editor.
+                addressLine={detailAddress.addressText}
                 onOpen={onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined}
               />
             );
           })}
-          {extraRows.length > 0 && (
-            <OverviewRow
-              avatar={
-                <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: '#1A2B4C', color: '#fff', '& svg': { fontSize: 15 } }}>
-                  <WarehouseOutlinedIcon />
-                </Box>
-              }
-              title="Zboží na sklad"
-              rows={extraRows}
-              open={expanded.has('stockPurchase')}
-              onToggle={() => toggle('stockPurchase')}
-            />
-          )}
         </Box>
       ) : (
-        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné objednávky.</Typography>
+        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné zastávky.</Typography>
       )}
     </Card>
   );
@@ -1179,6 +1124,8 @@ export function ShipmentDetail({
     [stopsSorted, extraRows],
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
+
+
 
   // Two brewery-invoice columns are always on screen; the second usually has no
   // invoice behind it until a number is typed into it, which the server then
@@ -1546,6 +1493,14 @@ export function ShipmentDetail({
           viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
           height={360}
           navigable
+          overlay={(
+            <OrdersOverviewCard
+              stops={stopsSorted.filter((st) => st.orderId != null)}
+              onOpenOrder={onOpenOrder}
+            />
+          )}
+          overlayShowLabel="Zobrazit zastávky"
+          overlayHideLabel="Skrýt zastávky"
         />
       ) : (
         // Same dashed placeholder ShipmentEditor draws while it has no locatable
@@ -1810,12 +1765,6 @@ export function ShipmentDetail({
             rows={aggRows}
             quantityOf={(row) => row.fromInventory}
             emptyText="Nic se z garáže nenakládá."
-          />
-
-          <OrdersOverviewCard
-            stops={stopsSorted.filter((st) => st.orderId != null)}
-            extraRows={extraRows}
-            onOpenOrder={onOpenOrder}
           />
 
           <ReturnsCard stops={stopsSorted} />
