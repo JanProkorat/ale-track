@@ -9,9 +9,9 @@ import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { L, chargeKindName } from 'src/lib/labels';
+import { L, chargeKindName, pickupSourceName } from 'src/lib/labels';
 import {
-  SupplierChargeKind, SupplierGoodPriceUpsertDto, SupplierGoodUpsertDto,
+  SupplierChargeKind, SupplierGoodPickupSource, SupplierGoodPriceUpsertDto, SupplierGoodUpsertDto,
   type SupplierGoodDto,
 } from 'src/generated/api-client';
 import { useCreateSupplierGood, useUpdateSupplierGood } from 'src/hooks/useSuppliers';
@@ -21,6 +21,12 @@ import { CHARGE_ORDER } from './supplierGoods';
 const CHARGE_OPTIONS = CHARGE_ORDER.map((k) => ({
   value: SupplierChargeKind[k],
   label: L.chargeKind[SupplierChargeKind[k]] ?? SupplierChargeKind[k],
+}));
+
+/** Where the good is collected from. Keyed by enum member name, like the charge kinds. */
+const PICKUP_OPTIONS = [SupplierGoodPickupSource.Garage, SupplierGoodPickupSource.Supplier].map((k) => ({
+  value: SupplierGoodPickupSource[k],
+  label: L.pickupSource[SupplierGoodPickupSource[k]] ?? SupplierGoodPickupSource[k],
 }));
 
 const priceSchema = z.object({
@@ -37,6 +43,7 @@ const schema = z
     name: z.string().trim().min(1, 'Zadejte název'),
     size: z.string().optional(),
     description: z.string().optional(),
+    pickupSource: z.string().min(1),
     prices: z.array(priceSchema).min(1, 'Zadejte alespoň jednu cenu'),
   })
   .superRefine((val, ctx) => {
@@ -67,7 +74,15 @@ const emptyPrice = {
   priceWithoutVat: '',
   note: '',
 };
-const empty: FormValues = { name: '', size: '', description: '', prices: [emptyPrice] };
+const empty: FormValues = {
+  name: '',
+  size: '',
+  description: '',
+  // Garage by default, matching the column's own default: the other value makes runs grow a
+  // stop, which should be a deliberate choice rather than what you get by not looking.
+  pickupSource: SupplierGoodPickupSource[SupplierGoodPickupSource.Garage],
+  prices: [emptyPrice],
+};
 
 /** A price-list item and its charge kinds, edited as one thing and saved in one call. */
 export function SupplierGoodDrawer({
@@ -101,6 +116,9 @@ export function SupplierGoodDrawer({
             name: good.name ?? '',
             size: good.size ?? '',
             description: good.description ?? '',
+            // Member name on the wire, same as the charge kinds above.
+            pickupSource: pickupSourceName(good.pickupSource)
+              ?? SupplierGoodPickupSource[SupplierGoodPickupSource.Garage],
             prices: (good.prices ?? []).map((p) => ({
               // Arrives as the member name ("Fill"), so indexing the enum with it would
               // yield the number and never match an option's value.
@@ -119,6 +137,7 @@ export function SupplierGoodDrawer({
       name: v.name.trim(),
       size: v.size?.trim() || undefined,
       description: v.description?.trim() || undefined,
+      pickupSource: SupplierGoodPickupSource[v.pickupSource as keyof typeof SupplierGoodPickupSource],
       prices: v.prices.map(
         (p) =>
           new SupplierGoodPriceUpsertDto({
@@ -193,6 +212,26 @@ export function SupplierGoodDrawer({
           <TextField {...field} label="Popis" fullWidth placeholder="Potravinářský CO₂ E290, závit W21,8" />
         )}
       />
+
+      {/* Decides which stop a vývoz carrying this good grows: the garage it is already in,
+          or a trip to the supplier. */}
+      <Box sx={{ maxWidth: 260 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          Zdroj při vývozu
+        </Typography>
+        <Controller
+          control={control}
+          name="pickupSource"
+          render={({ field }) => (
+            <Combobox
+              value={field.value || null}
+              onChange={(v) => field.onChange(v ?? SupplierGoodPickupSource[SupplierGoodPickupSource.Garage])}
+              options={PICKUP_OPTIONS}
+              clearable={false}
+            />
+          )}
+        />
+      </Box>
 
       <Typography variant="subtitle2" sx={{ mt: 1 }}>Ceny</Typography>
       {errors.prices?.message && (

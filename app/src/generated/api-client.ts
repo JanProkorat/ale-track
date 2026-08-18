@@ -10571,6 +10571,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
     name?: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices?: SupplierGoodPriceDto[];
 
     constructor(data?: ISupplierGoodDto) {
@@ -10588,6 +10589,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
             this.name = _data["name"];
             this.size = _data["size"];
             this.description = _data["description"];
+            this.pickupSource = _data["pickupSource"];
             if (Array.isArray(_data["prices"])) {
                 this.prices = [] as any;
                 for (let item of _data["prices"])
@@ -10609,6 +10611,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
         data["name"] = this.name;
         data["size"] = this.size;
         data["description"] = this.description;
+        data["pickupSource"] = this.pickupSource;
         if (Array.isArray(this.prices)) {
             data["prices"] = [];
             for (let item of this.prices)
@@ -10623,7 +10626,13 @@ export interface ISupplierGoodDto {
     name?: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices?: SupplierGoodPriceDto[];
+}
+
+export enum SupplierGoodPickupSource {
+    Garage = 0,
+    Supplier = 1,
 }
 
 export class SupplierGoodPriceDto implements ISupplierGoodPriceDto {
@@ -10942,6 +10951,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
     name!: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices!: SupplierGoodPriceUpsertDto[];
 
     constructor(data?: ISupplierGoodUpsertDto) {
@@ -10961,6 +10971,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
             this.name = _data["name"];
             this.size = _data["size"];
             this.description = _data["description"];
+            this.pickupSource = _data["pickupSource"];
             if (Array.isArray(_data["prices"])) {
                 this.prices = [] as any;
                 for (let item of _data["prices"])
@@ -10981,6 +10992,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
         data["name"] = this.name;
         data["size"] = this.size;
         data["description"] = this.description;
+        data["pickupSource"] = this.pickupSource;
         if (Array.isArray(this.prices)) {
             data["prices"] = [];
             for (let item of this.prices)
@@ -10994,6 +11006,7 @@ export interface ISupplierGoodUpsertDto {
     name: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices: SupplierGoodPriceUpsertDto[];
 }
 
@@ -16565,6 +16578,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
+    supplierGoods?: OutgoingShipmentSupplierGoodDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
@@ -16617,6 +16631,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.stockPurchases = [] as any;
                 for (let item of _data["stockPurchases"])
                     this.stockPurchases!.push(OutgoingShipmentStockPurchaseItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoods"])) {
+                this.supplierGoods = [] as any;
+                for (let item of _data["supplierGoods"])
+                    this.supplierGoods!.push(OutgoingShipmentSupplierGoodDto.fromJS(item));
             }
             if (Array.isArray(_data["purchaseInvoices"])) {
                 this.purchaseInvoices = [] as any;
@@ -16683,6 +16702,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.stockPurchases)
                 data["stockPurchases"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoods)) {
+            data["supplierGoods"] = [];
+            for (let item of this.supplierGoods)
+                data["supplierGoods"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.purchaseInvoices)) {
             data["purchaseInvoices"] = [];
             for (let item of this.purchaseInvoices)
@@ -16721,6 +16745,7 @@ export interface IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
+    supplierGoods?: OutgoingShipmentSupplierGoodDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
@@ -16831,6 +16856,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
+    supplierId?: string | undefined;
+    supplierAddress?: AddressDto | undefined;
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
@@ -16864,6 +16891,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
             this.orderId = _data["orderId"];
+            this.supplierId = _data["supplierId"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
             this.selectedAddressKind = _data["selectedAddressKind"];
             this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.isAddressOverridden = _data["isAddressOverridden"];
@@ -16913,6 +16942,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
         data["orderId"] = this.orderId;
+        data["supplierId"] = this.supplierId;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
         data["selectedAddressKind"] = this.selectedAddressKind;
         data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["isAddressOverridden"] = this.isAddressOverridden;
@@ -16955,6 +16986,8 @@ export interface IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
+    supplierId?: string | undefined;
+    supplierAddress?: AddressDto | undefined;
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
@@ -16974,6 +17007,7 @@ export enum OutgoingShipmentStopKind {
     Order = 0,
     Custom = 1,
     Company = 2,
+    Supplier = 3,
 }
 
 export class ClientDeliveryPlaceDto implements IClientDeliveryPlaceDto {
@@ -17424,6 +17458,86 @@ export class OutgoingShipmentStockPurchaseItemDto extends OutgoingShipmentProduc
 
 export interface IOutgoingShipmentStockPurchaseItemDto extends IOutgoingShipmentProductDto {
     productId?: string;
+}
+
+export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplierGoodDto {
+    id?: string;
+    supplierGoodId?: string;
+    name?: string;
+    size?: string | undefined;
+    quantity?: number;
+    pickupSource?: SupplierGoodPickupSource;
+    supplierId?: string;
+    supplierName?: string;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    orderId?: string | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IOutgoingShipmentSupplierGoodDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.name = _data["name"];
+            this.size = _data["size"];
+            this.quantity = _data["quantity"];
+            this.pickupSource = _data["pickupSource"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.orderId = _data["orderId"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentSupplierGoodDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentSupplierGoodDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["name"] = this.name;
+        data["size"] = this.size;
+        data["quantity"] = this.quantity;
+        data["pickupSource"] = this.pickupSource;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["orderId"] = this.orderId;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentSupplierGoodDto {
+    id?: string;
+    supplierGoodId?: string;
+    name?: string;
+    size?: string | undefined;
+    quantity?: number;
+    pickupSource?: SupplierGoodPickupSource;
+    supplierId?: string;
+    supplierName?: string;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    orderId?: string | undefined;
+    note?: string | undefined;
 }
 
 export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurchaseInvoiceDto {

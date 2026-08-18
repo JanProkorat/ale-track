@@ -644,6 +644,36 @@ describe('ShipmentEditor — company stop round-trip', () => {
   });
 });
 
+describe('ShipmentEditor — supplier pickup stops', () => {
+  // These are derived by the server from what the orders ask for, and it carries them across
+  // a save itself. The editor classifies every non-order stop as Company or Custom, so
+  // loading one would echo it back as a custom stop: the server would keep its own copy AND
+  // create this one, duplicating the stop, and the planner could rename a stop it does not own.
+  it('does not echo a loaded Supplier stop back as a custom stop', async () => {
+    shipmentResponse!.stops = [
+      ...(shipmentResponse!.stops ?? []),
+      new OutgoingShipmentStopDto({
+        id: 'supplier-stop-1',
+        order: 2,
+        // The wire form, as the real backend sends this enum.
+        kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+        label: 'Linde Gas',
+        latitude: 50.77,
+        longitude: 15.05,
+      }),
+    ];
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+
+    const { customStops } = updateMutateAsync.mock.calls.at(-1)![0].data;
+    expect(customStops).not.toContainEqual(expect.objectContaining({ id: 'supplier-stop-1' }));
+    expect(customStops).not.toContainEqual(expect.objectContaining({ label: 'Linde Gas' }));
+  });
+});
+
 describe('ShipmentEditor — non-happy query states', () => {
   it('does not crash while the available-orders query is still loading, falling back to a placeholder client name', () => {
     // orderById is built purely from useAvailableOrders' data — while it's

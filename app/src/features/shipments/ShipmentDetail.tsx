@@ -22,6 +22,7 @@ import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
@@ -33,10 +34,11 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName, pickupSourceName, pickupSourceLabel } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
+  type OutgoingShipmentSupplierGoodDto,
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
@@ -959,6 +961,95 @@ export function GarageCard({
   );
 }
 
+/**
+ * Supplier goods the run has to bring — gas, packaging, sanitation — across every order on
+ * it, grouped by where each is collected from.
+ *
+ * Read-only, like the two garage cards: the quantities belong to the orders that asked for
+ * them. Its own card rather than rows in the nakládka because these are not brewery products
+ * — they have no brewery to section under, and the loading list is organised by brewery.
+ *
+ * Grouped by pickup source rather than by supplier, because that is the order they are
+ * actually gathered in: everything out of the garage before the van leaves, then a call at
+ * each supplier. The route grows a stop per group — see the backend's two reconcilers.
+ */
+export function SupplierGoodsCard({ goods, onOpenOrder }: {
+  goods: OutgoingShipmentSupplierGoodDto[];
+  onOpenOrder?: (orderId: string) => void;
+}) {
+  if (goods.length === 0) return null;
+
+  const total = goods.reduce((sum, g) => sum + (g.quantity ?? 0), 0);
+
+  // Source order is the backend's (Garage first), preserved rather than re-derived so the
+  // card and the picking order it describes cannot disagree.
+  const groups: { source: string; label: string; rows: OutgoingShipmentSupplierGoodDto[] }[] = [];
+  for (const g of goods) {
+    const source = pickupSourceName(g.pickupSource) ?? 'Garage';
+    const existing = groups.find((x) => x.source === source);
+    if (existing) existing.rows.push(g);
+    else groups.push({ source, label: pickupSourceLabel(g.pickupSource) ?? source, rows: [g] });
+  }
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        <PropaneOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Zboží od dodavatelů</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+          {total} ks
+        </Typography>
+      </Stack>
+
+      <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
+        {groups.map((group) => (
+          <Box key={group.source} sx={{ px: 2.5, py: 1.5 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, color: 'text.secondary', textTransform: 'uppercase', mb: 1 }}>
+              {group.label}
+            </Typography>
+            <Stack spacing={1}>
+              {group.rows.map((g) => (
+                <Stack key={g.id} direction="row" alignItems="flex-start" spacing={1}>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 13.5, fontWeight: 600 }} noWrap>{g.name}</Typography>
+                      {g.size && <Chip size="small" label={g.size} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {g.supplierName}
+                      {g.clientName ? ' · ' : ''}
+                      {/* The client is the reason the good is on the run, so it links to the
+                          order the way the stop list does. */}
+                      {g.clientName && (onOpenOrder && g.orderId ? (
+                        <Link
+                          component="button"
+                          type="button"
+                          underline="hover"
+                          onClick={() => onOpenOrder(g.orderId!)}
+                          sx={{ font: 'inherit', color: 'primary.dark', verticalAlign: 'baseline' }}
+                        >
+                          {g.clientName}
+                        </Link>
+                      ) : <Box component="span">{g.clientName}</Box>)}
+                    </Typography>
+                    {g.note && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{g.note}</Typography>
+                    )}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {g.quantity} ks
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
 /** Vratky the driver collects on this route. Returns belong to the orders, not
  * to the shipment, so this is read-only and grouped per stop — two orders for
  * one client read as two groups, which is what the driver actually walks. */
@@ -1747,6 +1838,11 @@ export function ShipmentDetail({
               </Stack>
             </Card>
           </Box>
+
+          {/* Directly under "kdo a čím": these are collected before or on the way round,
+              so they are read before the garage exchange further down. Renders nothing when
+              no order on the run asks for any. */}
+          <SupplierGoodsCard goods={shipment.supplierGoods ?? []} onOpenOrder={onOpenOrder} />
 
           {/* Deliberately the whole loading list, not the invoice-filtered view: what
               the garage gives and takes has nothing to do with which brewery invoice

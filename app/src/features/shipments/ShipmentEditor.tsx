@@ -309,6 +309,10 @@ export function ShipmentEditor({
     const loadedDrivers = s.driverIds ?? [];
     const loadedStops: DraftStop[] = (s.stops ?? [])
       .slice()
+      // Supplier pickup stops are derived by the server from what the orders ask for, and it
+      // carries them across a save itself. Loading them here would echo them back as custom
+      // stops — duplicating each one and letting the planner rename a stop it does not own.
+      .filter((st) => stopKindName(st.kind) !== 'Supplier')
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st, i): DraftStop => st.orderId != null
         ? {
