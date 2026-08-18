@@ -37,6 +37,14 @@ vi.mock('src/hooks/useBreweries', () => ({
   useBreweries: () => ({ data: [], isLoading: false }),
 }));
 
+// Read by the catalog's "Další zboží" tab. Mocked empty: this file exercises vratky,
+// poznámky and položky navíc, none of which touch the supplier picker — but the real
+// hooks need a QueryClient, so leaving them unmocked crashes the editor on render.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliers: () => ({ data: [], isLoading: false }),
+  useSuppliersMany: () => ({ bySupplier: new Map(), loading: new Set() }),
+}));
+
 vi.mock('src/hooks/useDeliveryPlaces', () => ({
   useClientDeliveryPlaces: () => ({ data: [], isLoading: false }),
   useCreateDeliveryPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),

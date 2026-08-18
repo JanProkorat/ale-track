@@ -20,7 +20,7 @@ import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { PriceWithList } from 'src/components/common/PriceWithList';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, orderNumber, shipmentNumber } from 'src/lib/format';
-import { ORDER_STATUS, SHIP_STATUS, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
+import { ORDER_STATUS, SHIP_STATUS, chargeKindLabel, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
 import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
 import { useCurrency } from 'src/providers/CurrencyProvider';
@@ -130,6 +130,7 @@ export function OrderDetail({
   const returns = order.returns ?? [];
   const notes = order.notes ?? [];
   const extras = order.customExtraItems ?? [];
+  const goodItems = order.supplierGoodItems ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
@@ -239,9 +240,9 @@ export function OrderDetail({
           With nothing to put in the sidebar the second column is dropped
           entirely rather than left as dead space beside the items. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: hasSidebar ? '1.5fr 1fr' : '1fr' }, alignItems: 'start' }}>
-        <CollapsibleCard title="Položky" count={items.length}>
+        <CollapsibleCard title="Položky" count={items.length + goodItems.length}>
           <Box sx={{ px: 2.5, py: 1 }}>
-            {items.length === 0 ? (
+            {items.length === 0 && goodItems.length === 0 ? (
               <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>Objednávka nemá žádné položky.</Typography>
             ) : (
               <Box sx={{ '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
@@ -277,6 +278,26 @@ export function OrderDetail({
                     </Box>
                   );
                 })}
+                {/* Supplier goods — same table, below the beer. No reminder control:
+                    hlídání watches a brewery's stock, which these do not come from. */}
+                {goodItems.map((g) => (
+                  <Box key={g.id}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{g.goodName}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {[g.supplierName, g.goodSize, chargeKindLabel(g.chargeKind)].filter(Boolean).join(' · ')}
+                      </Typography>
+                      {g.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{g.note}</Typography>}
+                    </Box>
+                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity} ks</Typography>
+                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                      <PriceWithList price={g.unitPriceWithVat} />
+                    </Box>
+                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatMoney((g.unitPriceWithVat ?? 0) * (g.quantity ?? 0))}
+                    </Typography>
+                  </Box>
+                ))}
               </Box>
             )}
           </Box>

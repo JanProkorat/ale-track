@@ -19036,6 +19036,7 @@ export class OrderDto implements IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
@@ -19075,6 +19076,11 @@ export class OrderDto implements IOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
             this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
@@ -19116,6 +19122,11 @@ export class OrderDto implements IOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
@@ -19133,6 +19144,7 @@ export interface IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 
@@ -19255,6 +19267,78 @@ export interface IOrderItemDto {
 export enum OrderItemReminderState {
     Added = 0,
     Resolved = 1,
+}
+
+export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
+    id?: string | undefined;
+    supplierGoodId?: string;
+    quantity?: number;
+    note?: string | undefined;
+    goodName?: string | undefined;
+    goodSize?: string | undefined;
+    supplierId?: string | undefined;
+    supplierName?: string | undefined;
+    unitPriceWithVat?: number | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
+
+    constructor(data?: IOrderSupplierGoodItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.quantity = _data["quantity"];
+            this.note = _data["note"];
+            this.goodName = _data["goodName"];
+            this.goodSize = _data["goodSize"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.unitPriceWithVat = _data["unitPriceWithVat"];
+            this.chargeKind = _data["chargeKind"];
+        }
+    }
+
+    static fromJS(data: any): OrderSupplierGoodItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderSupplierGoodItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["quantity"] = this.quantity;
+        data["note"] = this.note;
+        data["goodName"] = this.goodName;
+        data["goodSize"] = this.goodSize;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["unitPriceWithVat"] = this.unitPriceWithVat;
+        data["chargeKind"] = this.chargeKind;
+        return data;
+    }
+}
+
+export interface IOrderSupplierGoodItemDto {
+    id?: string | undefined;
+    supplierGoodId?: string;
+    quantity?: number;
+    note?: string | undefined;
+    goodName?: string | undefined;
+    goodSize?: string | undefined;
+    supplierId?: string | undefined;
+    supplierName?: string | undefined;
+    unitPriceWithVat?: number | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
 }
 
 export class OrderOutgoingShipmentDto implements IOrderOutgoingShipmentDto {
@@ -19400,6 +19484,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -19437,6 +19522,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
         }
     }
@@ -19476,6 +19566,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -19491,6 +19586,7 @@ export interface IUpdateOrderDto {
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
@@ -19626,6 +19722,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -19661,6 +19758,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
         }
     }
@@ -19698,6 +19800,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -19711,6 +19818,7 @@ export interface ICreateOrderDto {
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {

@@ -4,7 +4,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OutgoingShipmentState } from 'src/generated/api-client';
+import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OrderSupplierGoodItemDto, OutgoingShipmentState, SupplierChargeKind } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -328,5 +328,63 @@ describe('OrderDetail', () => {
     }));
     expect(screen.getByText('Letní zahrádka')).toBeInTheDocument();
     expect(screen.getByText('Vjezd zezadu')).toBeInTheDocument();
+  });
+});
+
+// Supplier-good lines share the Polozky card with the beer, priced off the good's own
+// list. They are the only order content the nakladka never shows, so the order detail
+// is where they have to be visible.
+describe('OrderDetail — supplier goods', () => {
+  const goodLine = (over: Partial<OrderSupplierGoodItemDto> = {}) => new OrderSupplierGoodItemDto({
+    id: 'line-1',
+    supplierGoodId: 'g-co2',
+    quantity: 2,
+    goodName: 'CO₂ láhev',
+    goodSize: '10 kg',
+    supplierName: 'Linde Gas',
+    unitPriceWithVat: 450,
+    chargeKind: SupplierChargeKind.Fill,
+    ...over,
+  });
+
+  function itemsCard(): HTMLElement {
+    return screen.getByText('Položky').closest('.MuiCard-root') as HTMLElement;
+  }
+
+  it('lists a good beside the beer, with its supplier, size, charge kind and line total', () => {
+    renderDetail(order({ supplierGoodItems: [goodLine()] }));
+
+    const card = within(itemsCard());
+    expect(card.getByText('CO₂ láhev')).toBeInTheDocument();
+    expect(card.getByText('Svijanela Herbal Cola')).toBeInTheDocument();
+    expect(card.getByText('Linde Gas · 10 kg · Plnění')).toBeInTheDocument();
+    // 2 x 450
+    expect(card.getByText('900 Kč')).toBeInTheDocument();
+  });
+
+  it('counts good lines in the card count alongside the products', () => {
+    renderDetail(order({ supplierGoodItems: [goodLine(), goodLine({ id: 'line-2', supplierGoodId: 'g-n2', goodName: 'Dusík láhev' })] }));
+
+    // one product + two goods
+    expect(within(itemsCard()).getByText('3')).toBeInTheDocument();
+  });
+
+  it('renders an order that is nothing but supplier goods, without the empty-items message', () => {
+    renderDetail(order({ orderItems: [], supplierGoodItems: [goodLine()] }));
+
+    expect(within(itemsCard()).getByText('CO₂ láhev')).toBeInTheDocument();
+    expect(screen.queryByText('Objednávka nemá žádné položky.')).not.toBeInTheDocument();
+  });
+
+  it('still reports an empty order when it has neither products nor goods', () => {
+    renderDetail(order({ orderItems: [], supplierGoodItems: [] }));
+
+    expect(screen.getByText('Objednávka nemá žádné položky.')).toBeInTheDocument();
+  });
+
+  it('shows a line note when the good carries one', () => {
+    renderDetail(order({ supplierGoodItems: [goodLine({ note: 'Výměnou za prázdné' })] }));
+
+    expect(within(itemsCard()).getByText('Výměnou za prázdné')).toBeInTheDocument();
   });
 });
