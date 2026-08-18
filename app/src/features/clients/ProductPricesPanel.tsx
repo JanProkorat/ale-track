@@ -31,18 +31,7 @@ import {
   useDeleteClientProductPrice,
 } from 'src/hooks/useClientProductPrices';
 import { BulkClientPricesDrawer } from './BulkClientPricesDrawer';
-
-/** A struck-through client price says a price is special but not by how much —
- * the pill in the Rozdíl column is the amount someone is actually checking.
- * Exported so the three outcomes (lower/higher/equal) are covered as pure
- * logic rather than only through a rendered row. */
-export type PriceDiff = { amount: number; direction: 'lower' | 'higher' | 'equal' };
-
-export function computePriceDiff(clientPrice: number, listPrice: number): PriceDiff {
-  const amount = clientPrice - listPrice;
-  if (amount === 0) return { amount: 0, direction: 'equal' };
-  return { amount: Math.abs(amount), direction: amount < 0 ? 'lower' : 'higher' };
-}
+import { computePriceDiff } from './productPriceDiff';
 
 function DiffCell({ clientPrice, listPrice }: { clientPrice: number; listPrice: number }) {
   const { formatMoney } = useCurrency();

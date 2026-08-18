@@ -44,7 +44,8 @@ vi.mock('src/hooks/useClientProductPrices', () => ({
   useReplaceClientProductPrices: () => ({ mutateAsync: replaceMutateAsync, isPending: false }),
 }));
 
-const { ProductPricesPanel, computePriceDiff } = await import('./ProductPricesPanel');
+const { ProductPricesPanel } = await import('./ProductPricesPanel');
+const { computePriceDiff } = await import('./productPriceDiff');
 
 function price(over: Partial<ClientProductPriceDto> = {}): ClientProductPriceDto {
   return new ClientProductPriceDto({
