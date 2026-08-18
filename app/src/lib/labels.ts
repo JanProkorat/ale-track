@@ -6,7 +6,7 @@ import {
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
-  SupplierChargeKind,
+  SupplierChargeKind, DayOfWeek,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -291,6 +291,12 @@ export function regionLabel(r?: Region | string | number): string | undefined {
 export function contactTypeLabel(t?: ContactType | string | number): string | undefined {
   const name = enumName(ContactType as unknown as Record<string, string | number>, t);
   return name ? (L.contact[name] ?? name) : undefined;
+}
+
+/** The DayOfWeek member name (e.g. "Monday"), resolved from either wire representation.
+ * The API serializes enums as strings, so opening hours arrive as "Monday", never as 1. */
+export function dayOfWeekName(d?: DayOfWeek | string | number): string | undefined {
+  return enumName(DayOfWeek as unknown as Record<string, string | number>, d);
 }
 
 /** Resolves either wire representation of SupplierChargeKind to its Czech label. */

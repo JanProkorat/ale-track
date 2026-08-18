@@ -56,8 +56,14 @@ vi.mock('src/providers/CurrencyProvider', () => ({
 const addr = (city: string) =>
   new AddressDto({ streetName: 'Londýnská', streetNumber: '564', city, zip: '46011', country: Country.Czechia });
 
+// Enum names, not numbers: that is what the API sends, and the numeric fixtures this
+// started with hid a bug that rendered every supplier as closed.
 const hours = (day: DayOfWeek, from: string, to: string) =>
-  new SupplierOpeningHoursDto({ dayOfWeek: day, from: `${from}:00`, to: `${to}:00` });
+  new SupplierOpeningHoursDto({
+    dayOfWeek: DayOfWeek[day] as unknown as DayOfWeek,
+    from: `${from}:00`,
+    to: `${to}:00`,
+  });
 
 const LINDE = new SupplierListItemDto({
   id: 'sp-linde',

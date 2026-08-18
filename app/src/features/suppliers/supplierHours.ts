@@ -14,6 +14,7 @@
 //      how that pair is rendered, and `isNonstop` is what decides it.
 
 import { DayOfWeek, type SupplierOpeningHoursDto } from 'src/generated/api-client';
+import { dayOfWeekName } from 'src/lib/labels';
 
 /** Monday-first weekday labels — the order Czech schedules are read in. */
 export const WEEKDAYS_SHORT = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'] as const;
@@ -32,9 +33,18 @@ export function weekdayIdx(d: Date): number {
   return (d.getDay() + 6) % 7;
 }
 
-/** Monday-first index of a wire `DayOfWeek`, which counts Sunday as 0. */
-export function dayIdx(day: DayOfWeek | number | undefined): number {
-  return ((Number(day ?? 0) + 6) % 7);
+/**
+ * Monday-first index (0–6) of a wire `DayOfWeek`.
+ *
+ * The API serializes enums as strings (`JsonStringEnumConverter`), so this receives
+ * "Monday", not 1 — coercing it with `Number()` yields NaN, which matches no weekday and
+ * silently renders a supplier with a full schedule as closed all week. Resolved through
+ * the shared `dayOfWeekName`, which handles the string and the numeric form alike.
+ */
+export function dayIdx(day: DayOfWeek | string | number | undefined): number {
+  const name = dayOfWeekName(day);
+  const index = WEEK_ORDER.findIndex((d) => DayOfWeek[d] === name);
+  return index === -1 ? -1 : index;
 }
 
 /** Minutes since midnight for a `TimeOnly` string ("07:00:00", "7:00", "23:59"). */

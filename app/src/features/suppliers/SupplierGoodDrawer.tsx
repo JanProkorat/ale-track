@@ -9,7 +9,7 @@ import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { L } from 'src/lib/labels';
+import { L, chargeKindName } from 'src/lib/labels';
 import {
   SupplierChargeKind, SupplierGoodPriceUpsertDto, SupplierGoodUpsertDto,
   type SupplierGoodDto,
@@ -102,7 +102,9 @@ export function SupplierGoodDrawer({
             size: good.size ?? '',
             description: good.description ?? '',
             prices: (good.prices ?? []).map((p) => ({
-              kind: p.kind != null ? SupplierChargeKind[p.kind] : SupplierChargeKind[SupplierChargeKind.Fill],
+              // Arrives as the member name ("Fill"), so indexing the enum with it would
+              // yield the number and never match an option's value.
+              kind: chargeKindName(p.kind) ?? SupplierChargeKind[SupplierChargeKind.Fill],
               priceWithVat: p.priceWithVat != null ? String(p.priceWithVat) : '',
               priceWithoutVat: p.priceWithoutVat != null ? String(p.priceWithoutVat) : '',
               note: p.note ?? '',

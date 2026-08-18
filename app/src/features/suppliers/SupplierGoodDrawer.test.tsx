@@ -22,9 +22,14 @@ const EXISTING = new SupplierGoodDto({
   name: 'CO₂ láhev',
   size: '10 kg',
   description: 'Potravinářský CO₂ E290',
+  // Kinds as the API sends them — member names, not numbers.
   prices: [
-    new SupplierGoodPriceDto({ kind: SupplierChargeKind.Fill, priceWithVat: 450, priceWithoutVat: 372 }),
-    new SupplierGoodPriceDto({ kind: SupplierChargeKind.Deposit, priceWithVat: 1200, note: 'vratná' }),
+    new SupplierGoodPriceDto({
+      kind: 'Fill' as unknown as SupplierChargeKind, priceWithVat: 450, priceWithoutVat: 372,
+    }),
+    new SupplierGoodPriceDto({
+      kind: 'Deposit' as unknown as SupplierChargeKind, priceWithVat: 1200, note: 'vratná',
+    }),
   ],
 } as never);
 

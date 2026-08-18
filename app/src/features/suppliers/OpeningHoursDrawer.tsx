@@ -12,6 +12,7 @@ import {
   type SupplierOpeningHoursDto,
 } from 'src/generated/api-client';
 import { useReplaceOpeningHours } from 'src/hooks/useSuppliers';
+import { dayOfWeekName } from 'src/lib/labels';
 import { WEEKDAYS_LONG, WEEK_ORDER } from './supplierHours';
 import { validateWeek, type WeekRow } from './openingHoursWeek';
 
@@ -51,7 +52,9 @@ export function OpeningHoursDrawer({
     if (!open) return;
     reset({
       rows: hours.map((h) => ({
-        day: DayOfWeek[Number(h.dayOfWeek ?? 0)],
+        // The wire form is the member name already; DayOfWeek[Number(...)] would be
+        // undefined and leave the picker blank on every reopen.
+        day: dayOfWeekName(h.dayOfWeek) ?? DayOfWeek[DayOfWeek.Monday],
         from: toTimeInput(h.from),
         to: toTimeInput(h.to),
       })),
