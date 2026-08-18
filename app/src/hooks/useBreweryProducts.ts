@@ -1,7 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
+  type BreweryProductListItemDto,
   type CreateProductsDto, type FileParameter, type UpdateProductDto,
 } from 'src/generated/api-client';
 
@@ -13,6 +14,37 @@ export function useBreweryProducts(breweryId: string | undefined, params: Record
     queryFn: ({ signal }) => ds.getBreweryProductsListEndpoint(breweryId!, params, signal),
     enabled: Boolean(breweryId),
   });
+}
+
+/**
+ * The ceníky of several breweries at once, keyed by brewery id.
+ *
+ * For a screen that has to price lines from more than one brewery — the dovoz editor's cart adds
+ * up every stop's items — a hook per stop cannot work, since the number of stops changes as the
+ * user edits. Shares the cache with {@link useBreweryProducts}, so a stop card and the cart read
+ * one fetch per brewery between them rather than one each.
+ *
+ * Returns a fresh Map per render on purpose: memoising it would need a dependency describing
+ * every query's data, and the maps are small enough that recomputing beats getting that wrong.
+ */
+export function useBreweryProductsMany(breweryIds: string[]) {
+  const ds = useDataSource();
+  const results = useQueries({
+    queries: breweryIds.map((id) => ({
+      queryKey: qk.breweryProducts(id),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => ds.getBreweryProductsListEndpoint(id, {}, signal),
+    })),
+  });
+
+  const byBrewery = new Map<string, BreweryProductListItemDto[]>();
+  const loading = new Set<string>();
+  breweryIds.forEach((id, i) => {
+    const r = results[i];
+    if (r?.data) byBrewery.set(id, r.data);
+    if (r?.isLoading) loading.add(id);
+  });
+
+  return { byBrewery, loading };
 }
 
 /** Create one or more products under a brewery (the API takes a batch). */

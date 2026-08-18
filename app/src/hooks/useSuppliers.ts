@@ -6,22 +6,27 @@
 // renders the "Dnes" column from the week and a goods count, so both change when either is
 // edited.
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
   type CreateNoteDto,
   type CreateSupplierDto,
   type ReplaceSupplierOpeningHoursDto,
+  type SupplierDto,
   type SupplierGoodUpsertDto,
   type UpdateSupplierDto,
 } from 'src/generated/api-client';
 
-export function useSuppliers(params: Record<string, string> = {}) {
+/** `enabled` is for callers outside the Dodavatelé module — the dovoz editor offers suppliers as
+ * stops only to a user who may read them, and firing a query the API will refuse achieves nothing
+ * but a retry. */
+export function useSuppliers(params: Record<string, string> = {}, options: { enabled?: boolean } = {}) {
   const ds = useDataSource();
   return useQuery({
     queryKey: qk.suppliers.list(params),
     queryFn: ({ signal }) => ds.getSupplierListEndpoint(params, signal),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -32,6 +37,34 @@ export function useSupplier(id: string | undefined) {
     queryFn: ({ signal }) => ds.getSupplierDetailEndpoint(id!, signal),
     enabled: Boolean(id),
   });
+}
+
+/**
+ * Several suppliers' details at once, keyed by id — each one carrying its price list, which is
+ * what a dovoz stop picks its goods from.
+ *
+ * The counterpart of useBreweryProductsMany, and there for the same reason: the dovoz editor's
+ * stop count changes as the user edits, so it cannot call useSupplier per stop. Shares the cache
+ * with {@link useSupplier}. Returns a fresh Map per render, as that hook's note explains.
+ */
+export function useSuppliersMany(ids: string[]) {
+  const ds = useDataSource();
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: qk.suppliers.detail(id),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => ds.getSupplierDetailEndpoint(id, signal),
+    })),
+  });
+
+  const bySupplier = new Map<string, SupplierDto>();
+  const loading = new Set<string>();
+  ids.forEach((id, i) => {
+    const r = results[i];
+    if (r?.data) bySupplier.set(id, r.data);
+    if (r?.isLoading) loading.add(id);
+  });
+
+  return { bySupplier, loading };
 }
 
 export function useCreateSupplier() {
