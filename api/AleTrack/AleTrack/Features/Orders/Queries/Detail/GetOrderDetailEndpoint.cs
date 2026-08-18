@@ -135,6 +135,32 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                         IsLoadingConfirmed = e.IsShipmentLoadingConfirmed
                     })
                     .ToList(),
+                // Priced live off the good's own list: its Fill price when it has one, else the
+                // first. No client-specific override and no snapshot — a supplier charges every
+                // client the same, and these lines never reach the shipment content snapshot.
+                SupplierGoodItems = o.SupplierGoodItems
+                    .OrderBy(i => i.SupplierGood.Supplier.Name)
+                    .ThenBy(i => i.SupplierGood.Name)
+                    .Select(i => new OrderSupplierGoodItemDto
+                    {
+                        Id = i.PublicId,
+                        SupplierGoodId = i.SupplierGood.PublicId,
+                        Quantity = i.Quantity,
+                        Note = i.Note,
+                        GoodName = i.SupplierGood.Name,
+                        GoodSize = i.SupplierGood.Size,
+                        SupplierId = i.SupplierGood.Supplier.PublicId,
+                        SupplierName = i.SupplierGood.Supplier.Name,
+                        UnitPriceWithVat = i.SupplierGood.Prices
+                            .OrderBy(p => p.Kind == SupplierChargeKind.Fill ? 0 : 1)
+                            .Select(p => (decimal?)p.PriceWithVat)
+                            .FirstOrDefault(),
+                        ChargeKind = i.SupplierGood.Prices
+                            .OrderBy(p => p.Kind == SupplierChargeKind.Fill ? 0 : 1)
+                            .Select(p => (SupplierChargeKind?)p.Kind)
+                            .FirstOrDefault()
+                    })
+                    .ToList(),
                 // Shipments carry no global soft-delete filter, so a cancelled run
                 // has to be excluded here — an order whose run was cancelled is
                 // back to being unplanned and shows no shipment at all.

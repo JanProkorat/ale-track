@@ -103,6 +103,22 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             });
         }
 
+        var supplierGoods = await GetExistingSupplierGoodsAsync(req.Data.SupplierGoodItems, ct);
+
+        foreach (var item in req.Data.SupplierGoodItems)
+        {
+            var relatedGood = supplierGoods.FirstOrDefault(g => g.PublicId == item.SupplierGoodId);
+            if (relatedGood is null)
+                ThrowHelper.PublicEntityNotFound(nameof(SupplierGood), item.SupplierGoodId);
+
+            order.SupplierGoodItems.Add(new OrderSupplierGoodItem
+            {
+                SupplierGood = relatedGood!,
+                Quantity = item.Quantity,
+                Note = item.Note
+            });
+        }
+
         await OrderDeliveryAddressWriter.ApplyAsync(
             dbContext, order, client!, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
 
@@ -122,6 +138,18 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         // product taken off the price list must not enter a new order.
         return await dbContext.Products
             .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
+            .ToListAsync(ct);
+    }
+
+    private async Task<List<SupplierGood>> GetExistingSupplierGoodsAsync(
+        List<OrderSupplierGoodItemDto> items, CancellationToken ct)
+    {
+        var goodIds = items
+            .Select(i => i.SupplierGoodId)
+            .ToList();
+
+        return await dbContext.SupplierGoods
+            .Where(g => goodIds.Contains(g.PublicId))
             .ToListAsync(ct);
     }
 }

@@ -49,7 +49,12 @@ public class AleTrackDbContext : DbContext
     /// DbSet of <see cref="OrderItem"/>
     /// </summary>
     public virtual DbSet<OrderItem> OrderItems => Set<OrderItem>();
-    
+
+    /// <summary>
+    /// DbSet of <see cref="OrderSupplierGoodItem"/>
+    /// </summary>
+    public virtual DbSet<OrderSupplierGoodItem> OrderSupplierGoodItems => Set<OrderSupplierGoodItem>();
+
     /// <summary>
     /// DbSet of <see cref="Vehicle"/>
     /// </summary>

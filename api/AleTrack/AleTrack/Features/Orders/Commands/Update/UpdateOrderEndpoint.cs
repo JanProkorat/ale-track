@@ -69,6 +69,8 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Include(o => o.Returns)
             .Include(o => o.Notes)
             .Include(o => o.CustomExtraItems)
+            .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
             // The freeze follows the shipment carrying the order, not only the order's own
             // state — order items are the shipment's content.
             .Include(o => o.OutgoingShipmentStop)
@@ -143,6 +145,7 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
         order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
+        order.SupplierGoodItems = await GetSupplierGoodItemsAsync(req.Data.SupplierGoodItems, order, ct);
         ApplyItemNotes(req.Data.OrderItems, order);
 
         await dbContext.SaveChangesAsync(ct);
@@ -246,6 +249,55 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;
             existing.Note = e.Note;
+            result.Add(existing);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Diffs posted supplier-good lines against the persisted ones, like the custom extras.
+    /// </summary>
+    /// <remarks>
+    /// Merged rather than rebuilt, and deliberately outside the <c>contentEditable</c> branch
+    /// and <see cref="RequestChangesFrozenContent"/> — the same treatment custom extras get.
+    /// These lines are not part of the shipment's frozen content: they never reach the
+    /// nakládka or the content snapshot, so there is nothing a late edit could contradict.
+    /// </remarks>
+    private async Task<List<OrderSupplierGoodItem>> GetSupplierGoodItemsAsync(
+        List<OrderSupplierGoodItemDto> items, Order order, CancellationToken ct)
+    {
+        var newRows = items.Where(i => i.Id is null).ToList();
+
+        var goodIds = newRows.Select(i => i.SupplierGoodId).ToList();
+        var goods = goodIds.Count > 0
+            ? await dbContext.SupplierGoods.Where(g => goodIds.Contains(g.PublicId)).ToListAsync(ct)
+            : [];
+
+        var result = new List<OrderSupplierGoodItem>();
+
+        foreach (var i in newRows)
+        {
+            var good = goods.FirstOrDefault(g => g.PublicId == i.SupplierGoodId);
+            if (good is null)
+                ThrowHelper.PublicEntityNotFound(nameof(SupplierGood), i.SupplierGoodId);
+
+            result.Add(new OrderSupplierGoodItem
+            {
+                SupplierGood = good!,
+                Quantity = i.Quantity,
+                Note = i.Note
+            });
+        }
+
+        // An existing row keeps its identity and its good; only the quantity and note are
+        // patchable. Swapping the good on a line would be indistinguishable from removing
+        // one line and adding another, which is what the editor actually does.
+        foreach (var i in items.Where(i => i.Id is not null && order.SupplierGoodItems.Any(x => x.PublicId == i.Id!.Value)))
+        {
+            var existing = order.SupplierGoodItems.First(x => x.PublicId == i.Id!.Value);
+            existing.Quantity = i.Quantity;
+            existing.Note = i.Note;
             result.Add(existing);
         }
 
