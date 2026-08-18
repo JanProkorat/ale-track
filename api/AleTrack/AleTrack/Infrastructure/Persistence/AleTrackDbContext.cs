@@ -175,6 +175,36 @@ public class AleTrackDbContext : DbContext
     /// </summary>
     public virtual DbSet<RoleCapability> RoleCapabilities => Set<RoleCapability>();
 
+    /// <summary>
+    /// DbSet of <see cref="Supplier"/>
+    /// </summary>
+    public virtual DbSet<Supplier> Suppliers => Set<Supplier>();
+
+    /// <summary>
+    /// DbSet of <see cref="SupplierContact"/>
+    /// </summary>
+    public virtual DbSet<SupplierContact> SupplierContacts => Set<SupplierContact>();
+
+    /// <summary>
+    /// DbSet of <see cref="SupplierOpeningHours"/>
+    /// </summary>
+    public virtual DbSet<SupplierOpeningHours> SupplierOpeningHours => Set<SupplierOpeningHours>();
+
+    /// <summary>
+    /// DbSet of <see cref="SupplierGood"/>
+    /// </summary>
+    public virtual DbSet<SupplierGood> SupplierGoods => Set<SupplierGood>();
+
+    /// <summary>
+    /// DbSet of <see cref="SupplierGoodPrice"/>
+    /// </summary>
+    public virtual DbSet<SupplierGoodPrice> SupplierGoodPrices => Set<SupplierGoodPrice>();
+
+    /// <summary>
+    /// DbSet of <see cref="SupplierNote"/>
+    /// </summary>
+    public virtual DbSet<SupplierNote> SupplierNotes => Set<SupplierNote>();
+
     // /// <summary>
     // /// DbSet of <see cref="Ean"/>
     // /// </summary>

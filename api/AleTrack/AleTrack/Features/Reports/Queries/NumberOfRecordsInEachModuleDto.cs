@@ -76,4 +76,12 @@ public sealed record NumberOfRecordsInEachModuleDto
     /// Both are open work for the person watching the badge.
     /// </remarks>
     public int? SalesCount { get; set; }
+
+    /// <summary>
+    /// Number of suppliers, or null when the caller cannot see the module.
+    /// </summary>
+    /// <remarks>
+    /// A plain total, like breweries and clients: a registry has no unfinished work to count.
+    /// </remarks>
+    public int? SuppliersCount { get; set; }
 }

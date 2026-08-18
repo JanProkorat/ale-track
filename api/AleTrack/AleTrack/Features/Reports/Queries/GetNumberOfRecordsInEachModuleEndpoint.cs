@@ -99,6 +99,9 @@ public sealed class GetNumberOfRecordsInEachModuleEndpoint(
             // covers both a draft and a sale still waiting for its invoice to be paid.
             SalesCount = CanSee(ModuleType.Sales)
                 ? await dbContext.Sales.CountAsync(s => s.State != SaleState.Completed, ct)
+                : null,
+            SuppliersCount = CanSee(ModuleType.Suppliers)
+                ? await dbContext.Suppliers.CountAsync(ct)
                 : null
         };
 
