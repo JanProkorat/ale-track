@@ -51,6 +51,9 @@ vi.mock('src/components/common/RouteMap', () => ({
 // Hoisted so the export tests below can assert what the button fired and drive the mutation's
 // callbacks; a fresh vi.fn() per hook call would hand each re-render a different spy.
 const exportShipmentMutate = vi.hoisted(() => vi.fn());
+const setShipmentStateMutate = vi.hoisted(() => vi.fn());
+const setOrderItemSourcingMutate = vi.hoisted(() => vi.fn());
+const setStockPurchaseMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 // Mutable so the start-point test below can assert against a specific company
 // entry without every other test in this file having to know about it — the
@@ -67,6 +70,12 @@ vi.mock('src/hooks/useShipments', () => ({
   // Ticking a preparation step is a mutation the screen only fires on click; the checklist card
   // has its own tests (PreparationStepsCard.test.tsx).
   useSetPreparationStep: () => ({ mutate: vi.fn(), isPending: false }),
+  // The two one-field nakládka writes. Both are fired on click only, and both have their
+  // behaviour covered where it lives: the state transition on the API side
+  // (ShipmentStateEndpointTests), the sourcing stepper in nakladkaSourcing.test.ts.
+  useSetShipmentState: () => ({ mutate: setShipmentStateMutate, isPending: false }),
+  useSetOrderItemSourcing: () => ({ mutate: setOrderItemSourcingMutate, isPending: false }),
+  useSetStockPurchase: () => ({ mutate: setStockPurchaseMutate, isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
   // String "kind" here, deliberately not the numeric enum member — the real
   // backend serializes every enum as its string name (JsonStringEnumConverter,
@@ -235,6 +244,27 @@ describe('ShipmentDetail — lifecycle affordances', () => {
     renderEditableDetail(OutgoingShipmentState.InTransit);
 
     expect(screen.getByRole('button', { name: 'Vrátit' })).toBeInTheDocument();
+  });
+
+  // "Do garáže" is content — goods bought and put on the truck — so it freezes when the truck
+  // does, one state earlier than the loading ticks and the sourcing stepper beside it. The API
+  // has always drawn the line there (stock purchases are frozen content); the button was
+  // offered past it regardless and could only produce a 400.
+  it('offers "Zboží na sklad" while the run is still being planned', () => {
+    renderEditableDetail(OutgoingShipmentState.Created);
+
+    expect(screen.getByRole('button', { name: 'Zboží na sklad' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['loaded', OutgoingShipmentState.Loaded],
+    ['in transit', OutgoingShipmentState.InTransit],
+  ])('withdraws "Zboží na sklad" once the content is frozen (%s)', (_label, state) => {
+    renderEditableDetail(state);
+
+    expect(screen.queryByRole('button', { name: 'Zboží na sklad' })).not.toBeInTheDocument();
+    // The rest of the nakládka header stays live: the freeze is about content, not progress.
+    expect(screen.getByRole('button', { name: 'Faktura pivovaru' })).toBeInTheDocument();
   });
 });
 

@@ -17,11 +17,13 @@ import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
+import { PriceWithList } from 'src/components/common/PriceWithList';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, orderNumber, shipmentNumber } from 'src/lib/format';
 import { ORDER_STATUS, SHIP_STATUS, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
 import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
+import { useCurrency } from 'src/providers/CurrencyProvider';
 import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
@@ -122,6 +124,7 @@ export function OrderDetail({
   onOpenShipment?: (shipmentId: string) => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
+  const { formatMoney } = useCurrency();
   const setReminderState = useSetOrderItemReminderState();
   const items = order.orderItems ?? [];
   const returns = order.returns ?? [];
@@ -253,6 +256,12 @@ export function OrderDetail({
                         {it.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{it.note}</Typography>}
                       </Box>
                       <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>
+                      <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                        <PriceWithList price={it.unitPriceWithVat} listPrice={it.listPriceWithVat} size={13} />
+                      </Box>
+                      <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        {formatMoney((it.unitPriceWithVat ?? 0) * (it.quantity ?? 0))}
+                      </Typography>
                       {editable && canEditOrder && (
                         <Tooltip title="Hlídání položky">
                           <IconButton

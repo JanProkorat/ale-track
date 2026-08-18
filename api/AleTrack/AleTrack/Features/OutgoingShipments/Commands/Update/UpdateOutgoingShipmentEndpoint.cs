@@ -37,14 +37,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(
     AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
     : Endpoint<UpdateOutgoingShipmentRequest>
 {
-    /// <summary>
-    /// States in which the OutgoingShipment has to have filled all data
-    /// </summary>
-    private readonly OutgoingShipmentState[] _statesWithFilledData = [
-        OutgoingShipmentState.Delivered, 
-        OutgoingShipmentState.InTransit
-    ];
-
     /// <inheritdoc />
     public override void Configure()
     {
@@ -119,8 +111,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // Both guards run before anything touches the entity: GetOrderStopsAsync below
         // mutates existing stops in place, which would make the stored side of the content
         // diff reflect the request instead of the database.
-        if (!ShipmentMutability.IsTransitionAllowed(outgoingShipment!.State, req.Data.State))
-            ThrowHelper.ShipmentTransitionNotAllowed(outgoingShipment.State, req.Data.State);
+        ShipmentStateTransition.EnsureAllowed(outgoingShipment!, req.Data.State);
 
         if (!ShipmentMutability.IsContentEditable(outgoingShipment.State))
         {
@@ -175,25 +166,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(
             CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
         }
 
-        if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
-            ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
-
-        if (_statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
-            ThrowHelper.ShipmentNotPrepared(req.Data.State);
-        
-        // Both checks must be taken before the new state is assigned below.
-        // isTransitioningToLoaded used to be computed after that assignment, so it was
-        // always false and inventory was never actually drawn down.
-        var isTransitioningToDelivered = outgoingShipment.State != OutgoingShipmentState.Delivered
-                                        && req.Data.State == OutgoingShipmentState.Delivered;
-
-        var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
-                                      && req.Data.State == OutgoingShipmentState.Loaded;
-
-        var isRevertingToCreated = outgoingShipment.State != OutgoingShipmentState.Created
-                                   && req.Data.State == OutgoingShipmentState.Created;
-
-        outgoingShipment.State = req.Data.State;
+        ShipmentStateTransition.EnsureReady(outgoingShipment, req.Data.State);
 
         var requestedInventoryIds = req.Data.ClientOrderShipments
             .SelectMany(cos => cos.OrderItems)
@@ -249,59 +222,19 @@ public sealed class UpdateOutgoingShipmentEndpoint(
             }
         }
         
-        // Order lifecycle follows the shipment: added → Planning, InTransit →
-        // Delivering, Delivered → Finished (+ actual delivery date), Cancelled or
-        // removed → back to New (freed for reuse).
-        var currentStopOrders = outgoingShipment.Stops
+        // An order dropped from the run is freed for reuse. Only this endpoint can drop one,
+        // so it stays here rather than in the shared transition.
+        var currentOrderIds = outgoingShipment.Stops
             .Where(s => s.ClientOrder != null)
-            .Select(s => s.ClientOrder!)
-            .ToList();
-        var currentOrderIds = currentStopOrders.Select(o => o.PublicId).ToHashSet();
+            .Select(s => s.ClientOrder!.PublicId)
+            .ToHashSet();
 
         foreach (var removed in previousStopOrders.Where(o => !currentOrderIds.Contains(o.PublicId)))
             removed.State = OrderState.New;
 
-        foreach (var order in currentStopOrders)
-        {
-            switch (req.Data.State)
-            {
-                case OutgoingShipmentState.Cancelled:
-                    order.State = OrderState.New;
-                    break;
-                case OutgoingShipmentState.Delivered:
-                    order.State = OrderState.Finished;
-                    order.ActualDeliveryDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
-                    break;
-                case OutgoingShipmentState.InTransit:
-                    order.State = OrderState.Delivering;
-                    break;
-                default: // Created / Loaded
-                    // New orders enter planning; reverting a shipment from InTransit
-                    // back to Loaded pulls its orders out of Delivering too.
-                    if (order.State is OrderState.New or OrderState.Delivering)
-                        order.State = OrderState.Planning;
-                    break;
-            }
-        }
-
-        if (req.Data.State == OutgoingShipmentState.Cancelled)
-            ResetOrderItemsForReuse(outgoingShipment);
-
-        if (isTransitioningToLoaded)
-            SubtractFromInventory(outgoingShipment);
-
-        // Snapshot at the same boundary that freezes content, so the two cannot diverge. The
-        // reports read nothing else from here on.
-        if (isTransitioningToLoaded)
-            ShipmentContentSnapshotWriter.Apply(outgoingShipment);
-
-        // Reverting reopens the content for editing, so a kept snapshot would go stale. It is
-        // rebuilt on the next transition into Loaded.
-        if (isRevertingToCreated)
-            ShipmentContentSnapshotWriter.Clear(outgoingShipment);
-
-        if (isTransitioningToDelivered && outgoingShipment.StockPurchases.Count > 0)
-            await AddStockPurchasesToInventoryAsync(outgoingShipment.StockPurchases, ct);
+        // Assigns the state and applies every consequence — orders, stock, snapshot. Shared
+        // with SetShipmentStateEndpoint so the two cannot drift.
+        await ShipmentStateTransition.ApplyAsync(dbContext, outgoingShipment, req.Data.State, ct);
 
         await dbContext.SaveChangesAsync(ct);
 
@@ -344,9 +277,19 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // Add new orders
         if (newOrderIds.Count > 0)
         {
+            // ShipmentContentSnapshotWriter.Apply runs on these same order entities when the
+            // shipment transitions into Loaded within this same request (e.g. attaching an order
+            // and setting the new state in one PUT) — it reads order.Client (for the client's own
+            // price list and the ClientName/ClientPublicId snapshot fields) and
+            // OrderItem.Product.Brewery (for BreweryName/BreweryPublicId). Without these includes
+            // both navigations come back null (no lazy-loading proxies here), so the writer
+            // silently degrades to ClientPriceList.Empty and bills the catalog price instead of
+            // the client's own.
             var fetchedOrders = await dbContext.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p.Brewery)
+                .Include(o => o.Client)
                 .Where(o => newOrderIds.Contains(o.PublicId))
                 .ToListAsync(ct);
 
@@ -591,79 +534,6 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         return brewery;
     }
 
-    /// <summary>
-    /// Takes the inventory-sourced pieces of each order item out of stock. Runs on the
-    /// transition to Loaded — stock is consumed when the truck is packed.
-    /// </summary>
-    /// <remarks>
-    /// Stock is allowed to go negative: the depot may knowingly load against a delivery
-    /// that has not been booked in yet, and the nakládka warns about it rather than
-    /// blocking the load.
-    /// </remarks>
-    private static void SubtractFromInventory(OutgoingShipment outgoingShipment)
-    {
-        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder is not null))
-        foreach (var item in stop.ClientOrder!.OrderItems.Where(i => i.QuantityFromInventory > 0 && i.InventoryItem is not null))
-            item.InventoryItem!.Quantity -= item.QuantityFromInventory;
-    }
-
-    /// <summary>
-    /// Clears the shipment-scoped fields on a freed order so it can be planned onto
-    /// another loading. Null-guarded: a custom stop has no order, and the previous
-    /// version dereferenced ClientOrder unconditionally.
-    /// </summary>
-    private static void ResetOrderItemsForReuse(OutgoingShipment outgoingShipment)
-    {
-        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder is not null))
-        {
-            foreach (var orderItem in stop.ClientOrder!.OrderItems)
-            {
-                orderItem.IsShipmentLoadingConfirmed = false;
-                orderItem.QuantityFromInventory = 0;
-                orderItem.InventoryItem = null;
-                orderItem.InventoryItemId = null;
-            }
-
-            foreach (var extra in stop.ClientOrder.CustomExtraItems)
-                extra.IsShipmentLoadingConfirmed = false;
-        }
-    }
-
-    private async Task AddStockPurchasesToInventoryAsync(ICollection<OutgoingShipmentStockPurchaseItem> stockPurchases, CancellationToken ct)
-    {
-        var newInventoryItems = new List<InventoryItem>();
-        // Match product-linked extra items to existing inventory
-        
-        var productIds = stockPurchases
-            .Select(ei => ei.Product.Id)
-            .ToList();
-        
-        var existingInventory = await dbContext.InventoryItems
-            .Where(i => i.ProductId != null && productIds.Contains(i.ProductId.Value))
-            .ToListAsync(ct);
-
-        var inventoryByProductId = existingInventory.ToDictionary(i => i.ProductId!.Value);
-
-        foreach (var item in stockPurchases)
-        {
-            if (inventoryByProductId.TryGetValue(item.Product.Id, out var existing))
-                existing.Quantity += item.Quantity;
-            else
-            {
-                newInventoryItems.Add(new InventoryItem
-                {
-                    PublicId = Guid.NewGuid(),
-                    ProductId = item.Product.Id,
-                    Quantity = item.Quantity
-                });
-            }
-        }
-        
-        if (newInventoryItems.Count > 0)
-            dbContext.InventoryItems.AddRange(newInventoryItems);
-    }
-
-    
     private async Task<List<OutgoingShipmentStockPurchaseItem>> GetStockPurchasesAsync(List<StockPurchaseDto> stockPurchaseDtos, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
         if (stockPurchaseDtos.Count == 0)

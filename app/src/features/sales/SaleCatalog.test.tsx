@@ -250,3 +250,102 @@ describe('SaleCatalog history tab', () => {
     expect(screen.getByText('2 velikosti')).toBeInTheDocument();
   });
 });
+
+describe('SaleCatalog client pricing', () => {
+  // A lone product (no size siblings) so it renders as a StockItemRow rather than a VariantCard —
+  // the shape both the browse and history segments share.
+  const sectionsWithOverride = [
+    new InventorySectionDto({
+      id: 'b1',
+      name: 'Svijany',
+      items: [stockItem('in-maz', 'Svijanský Máz', 9, { productId: 'p-maz', priceWithVat: 1290 })],
+    } as never),
+  ];
+
+  it('offers the client override as the browse-tab default, marking the ceník beside it', () => {
+    renderCatalog({ sections: sectionsWithOverride, clientPriceByProductId: { 'p-maz': 1190 } });
+
+    // Primary price is the override; the ceník sits struck through beside it — PriceWithList's mark.
+    expect(screen.getByText('1190 Kč')).toBeInTheDocument();
+    expect(screen.getByTestId('list-price')).toHaveTextContent('1290 Kč');
+
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+
+    // The browse path still suggests no price of its own — SaleEditor.addLine falls back to the
+    // row's own priceWithVat, which is why the row itself must already carry the override.
+    expect(added[0].price).toBeUndefined();
+    expect(added[0].row.priceWithVat).toBe(1190);
+  });
+
+  it('lets the override win over the last-paid price on the history segment, while the row keeps showing what was paid', () => {
+    // Three distinguishable numbers so no assertion here can pass by coincidence: ceník 1290,
+    // override 1190, last-paid 999.
+    const history = [
+      { inventoryItemId: 'in-maz', lastSoldDate: '2026-08-02', lastUnitPriceWithVat: 999, lastQuantity: 4 },
+    ];
+    renderCatalog({
+      sections: sectionsWithOverride,
+      history,
+      showHistory: true,
+      clientPriceByProductId: { 'p-maz': 1190 },
+    });
+    fireEvent.click(screen.getByText('Dříve prodané'));
+
+    expect(screen.getByText('1190 Kč')).toBeInTheDocument();
+    expect(screen.getByTestId('list-price')).toHaveTextContent('1290 Kč');
+    // The last-paid figure is still on the row, distinct from the override above it.
+    expect(screen.getByText(/999 Kč/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+
+    expect(added[0].price).toBe(1190);
+    // Quantity still comes from history, unaffected by which price won.
+    expect(added[0].quantity).toBe(4);
+  });
+
+  it('falls back to the last-paid price on the history segment when there is no override', () => {
+    const history = [{ inventoryItemId: 'in-maz', lastUnitPriceWithVat: 999, lastQuantity: 4 }];
+    renderCatalog({ sections: sectionsWithOverride, history, showHistory: true });
+    fireEvent.click(screen.getByText('Dříve prodané'));
+
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+    expect(added[0].price).toBe(999);
+  });
+
+  it('leaves a walk-in on the ceník price, with no override anywhere in the catalog', () => {
+    renderCatalog({ sections: sectionsWithOverride });
+
+    expect(screen.getByText('1290 Kč')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-price')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+    expect(added[0].row.priceWithVat).toBe(1290);
+    expect(added[0].row.listPriceWithVat).toBeUndefined();
+  });
+
+  it('re-resolves the catalog rather than leaving a stale override once the client price disappears', () => {
+    const { rerender } = renderCatalog({
+      sections: sectionsWithOverride,
+      clientPriceByProductId: { 'p-maz': 1190 },
+    });
+    expect(screen.getByText('1190 Kč')).toBeInTheDocument();
+
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <SaleCatalog
+          sections={sectionsWithOverride}
+          history={[]}
+          showHistory={false}
+          qtyOf={() => 0}
+          onAdd={(row, price, quantity) => added.push({ row, price, quantity })}
+          onChange={() => {}}
+          // clientPriceByProductId omitted entirely — the walk-in fallback.
+        />
+      </MuiThemeProvider>
+    );
+
+    expect(screen.queryByText('1190 Kč')).not.toBeInTheDocument();
+    expect(screen.getByText('1290 Kč')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-price')).not.toBeInTheDocument();
+  });
+});

@@ -36,16 +36,26 @@ public sealed record UpdateOrderDto
     public DateOnly? RequiredDeliveryDate { get; set; }
     
     /// <summary>
-    /// Date when the order was actually delivered to the client
-    /// Null if order has not been delivered yet
+    /// Date when the order was actually delivered to the client.
     /// </summary>
+    /// <remarks>
+    /// Omitting it leaves the stored date alone — see <see cref="State"/>. It is stamped
+    /// by the shipment on delivery, so a content save that left it out used to clear it.
+    /// </remarks>
     public DateOnly? ActualDeliveryDate { get; set; }
-    
+
     /// <summary>
-    /// State of the order
+    /// State of the order. Omitting it leaves the stored state alone.
     /// </summary>
-    public OrderState State { get; set; }
-    
+    /// <remarks>
+    /// Optional because the order lifecycle is driven by the shipment carrying the order,
+    /// not by the order editor: added to a run → Planning, in transit → Delivering,
+    /// delivered → Finished. The editor is a *content* editor and sends no state, so a
+    /// non-nullable field here defaulted to <see cref="OrderState.New"/> and every save
+    /// silently knocked a planned order back to new.
+    /// </remarks>
+    public OrderState? State { get; set; }
+
     
     /// <summary>
     /// Free-form notes about the order.

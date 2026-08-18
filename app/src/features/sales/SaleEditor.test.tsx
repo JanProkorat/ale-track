@@ -27,9 +27,15 @@ interface HistoryEntry {
   lastQuantity?: number;
 }
 
+interface ClientPriceEntry {
+  productId?: string;
+  priceWithVat?: number;
+}
+
 let inventoryResponse: InventorySectionDto[] = [];
 let historyResponse: HistoryEntry[] = [];
 let clientsResponse: ClientListItemDto[] = [];
+let clientPricesResponse: ClientPriceEntry[] = [];
 let saleResponse: { data?: SaleDto; isPending: boolean; isError: boolean } = {
   data: undefined,
   isPending: false,
@@ -52,6 +58,9 @@ vi.mock('src/hooks/useClients', () => ({
 }));
 vi.mock('src/hooks/useInventory', () => ({
   useInventory: () => ({ data: inventoryResponse, isPending: false, isSuccess: true }),
+}));
+vi.mock('src/hooks/useClientProductPrices', () => ({
+  useClientProductPrices: () => ({ data: clientPricesResponse, isPending: false, isError: false }),
 }));
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: snackbarMock }) }));
 vi.mock('src/hooks/useBreweries', () => ({
@@ -93,6 +102,7 @@ beforeEach(() => {
     } as never),
   ];
   historyResponse = [];
+  clientPricesResponse = [];
   clientsResponse = [
     new ClientListItemDto({ id: 'cl-1', name: 'Pivnice Na Rohu', region: Region.ZittauRegion } as never),
     new ClientListItemDto({ id: 'cl-2', name: 'Anke Kirstein', region: Region.Berlin } as never),
@@ -422,5 +432,51 @@ describe('SaleEditor client picker', () => {
     const anke = screen.getByText('Anke Kirstein');
     const zdenek = screen.getByText('Zdenek Adamec');
     expect(anke.compareDocumentPosition(zdenek) & 4).toBeTruthy();
+  });
+});
+
+describe('SaleEditor client pricing', () => {
+  /** Picks the one saved client this suite seeds — same combobox interaction the client-picker
+   *  suite above already exercises. */
+  function pickClient() {
+    fireEvent.click(screen.getByText('Klient z evidence'));
+    fireEvent.mouseDown(screen.getByLabelText(/Klient/));
+    fireEvent.click(screen.getByText('Pivnice Na Rohu'));
+  }
+
+  it('offers the client override as the line default once a client with one is chosen', () => {
+    inventoryResponse = [
+      new InventorySectionDto({
+        id: 'b1',
+        name: 'Svijany',
+        items: [stockItem('in-maz', 'Svijanský Máz', 9, { productId: 'p-maz' })],
+      } as never),
+    ];
+    clientPricesResponse = [{ productId: 'p-maz', priceWithVat: 1190 }];
+    renderEditor();
+
+    pickClient();
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+
+    expect(screen.getByLabelText('Cena za kus Svijanský Máz')).toHaveValue(1190);
+  });
+
+  it('re-resolves to the ceník once the buyer switches back to a walk-in mid-edit', () => {
+    inventoryResponse = [
+      new InventorySectionDto({
+        id: 'b1',
+        name: 'Svijany',
+        items: [stockItem('in-maz', 'Svijanský Máz', 9, { productId: 'p-maz' })],
+      } as never),
+    ];
+    clientPricesResponse = [{ productId: 'p-maz', priceWithVat: 1190 }];
+    renderEditor();
+
+    pickClient();
+    // Back to a walk-in before anything is added — the override must not linger on screen.
+    fireEvent.click(screen.getByText('Jednorázový kupující'));
+    fireEvent.click(screen.getByLabelText('Přidat Svijanský Máz'));
+
+    expect(screen.getByLabelText('Cena za kus Svijanský Máz')).toHaveValue(1290);
   });
 });

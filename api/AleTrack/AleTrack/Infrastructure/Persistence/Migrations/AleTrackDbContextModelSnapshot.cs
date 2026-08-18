@@ -321,6 +321,48 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("client_notes");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.ClientProductPrice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<decimal>("PriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("price_with_vat");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("product_id");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<DateOnly>("SetOn")
+                        .HasColumnType("date")
+                        .HasColumnName("set_on");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ClientId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("client_product_prices");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.ClientReminder", b =>
                 {
                     b.Property<long>("Id")
@@ -2378,6 +2420,25 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Client");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.ClientProductPrice", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Client", "Client")
+                        .WithMany("ProductPrices")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AleTrack.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.ClientReminder", b =>
                 {
                     b.HasOne("AleTrack.Entities.Client", "Client")
@@ -2966,6 +3027,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Notes");
 
                     b.Navigation("Orders");
+
+                    b.Navigation("ProductPrices");
 
                     b.Navigation("Reminders");
                 });

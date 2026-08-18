@@ -19,12 +19,19 @@ import {
 export interface StockRow {
   id?: string;
   name?: string;
+  productId?: string;
   quantity?: number;
   kind?: ProductKind;
   type?: ProductType;
   platoDegree?: number;
   packageSize?: number;
+  /** The price that counts — the client's own price when one applies, the brewery's ceník
+   *  otherwise. See {@link listPriceWithVat}. */
   priceWithVat?: number;
+  /** The ceník price, present only when {@link priceWithVat} reflects a client override —
+   *  mirrors `ProductListItemDto.listPriceWithVat` from the order catalog, and drives the same
+   *  struck-through mark via `PriceWithList`. */
+  listPriceWithVat?: number;
   /** Brewery public id, or empty for hand-kept rows — resolves the section's colour swatch. */
   sectionId: string;
   /** Brewery name, or "Ostatní" for hand-kept rows — the section heading it renders under. */
@@ -42,13 +49,29 @@ export interface StockGroup {
  *
  * Rows at zero are dropped rather than shown disabled: the catalog exists to add goods to a sale,
  * and an item that cannot be sold is noise in it. Sklad is where out-of-stock rows belong.
+ *
+ * `clientPriceByProductId` resolves each row's price against the buyer's own overrides — passed in
+ * from the till boundary (`SaleEditor`) rather than looked up here, so this stays a pure function
+ * of its arguments. A walk-in (or any caller with nothing to resolve) simply omits it and every row
+ * keeps its ceník price, which is what makes a client-to-walk-in switch re-resolve for free: the
+ * caller just stops passing a map, it never has to be cleared.
  */
-export function sellableRows(sections: InventorySectionDto[] | undefined): StockRow[] {
+export function sellableRows(
+  sections: InventorySectionDto[] | undefined,
+  clientPriceByProductId?: Record<string, number>
+): StockRow[] {
   const rows: StockRow[] = [];
   for (const section of sections ?? []) {
     for (const item of section.items ?? []) {
       if (!item.id || (item.quantity ?? 0) <= 0) continue;
-      rows.push({ ...item, sectionId: section.id ?? '', sectionName: section.name ?? 'Ostatní' });
+      const override = item.productId ? clientPriceByProductId?.[item.productId] : undefined;
+      rows.push({
+        ...item,
+        sectionId: section.id ?? '',
+        sectionName: section.name ?? 'Ostatní',
+        priceWithVat: override ?? item.priceWithVat,
+        listPriceWithVat: override != null ? item.priceWithVat : undefined,
+      });
     }
   }
   return rows;
@@ -126,6 +149,12 @@ export interface HistoryRow extends StockRow {
  * so a remembered item whose stock ran out simply is not suggested. Re-sorted into display order
  * because the endpoint returns it newest-first, which would otherwise make the two tabs disagree on
  * where the same beer sits.
+ *
+ * Takes no `clientPriceByProductId` of its own: `stock` is expected to already carry each row's
+ * resolved `priceWithVat`/`listPriceWithVat` from {@link sellableRows}, so a history row inherits
+ * the same override its browse-segment twin shows — one product cannot carry two prices depending
+ * on which tab it was added from. `lastUnitPriceWithVat` rides along unchanged; it is a historical
+ * fact this join must not touch, only join.
  */
 export function historyRows(
   history: { inventoryItemId?: string; lastSoldDate?: string | Date; lastUnitPriceWithVat?: number; lastQuantity?: number }[] | undefined,
@@ -146,4 +175,17 @@ export function historyRows(
   }
 
   return joined.sort(compareProductsForDisplay);
+}
+
+/**
+ * The price to suggest when re-adding a remembered item from "Dříve prodané".
+ *
+ * A client's own price wins over what they last paid — a negotiated price is a decision, the last
+ * price paid is only an observation. `listPriceWithVat` being non-null is the signal that
+ * `priceWithVat` is an override (set by {@link sellableRows}), so no separate client-price lookup
+ * is needed here. Falls through to the last-paid price, then to nothing — leaving the caller's own
+ * ceník fallback (`row.priceWithVat` with no override) to apply, exactly as the browse segment does.
+ */
+export function historyAddPrice(row: HistoryRow): number | undefined {
+  return row.listPriceWithVat != null ? row.priceWithVat : row.lastUnitPriceWithVat;
 }
