@@ -14,8 +14,13 @@ export function isLow(item: InventoryItemListItemDto): boolean {
   return Boolean(item.productId) && (item.quantity ?? 0) <= 3;
 }
 
-/** Kind + package size, the line that tells two variants of a product apart. */
+/** Kind + package size, the line that tells two variants of a product apart.
+ *
+ * A supplier's goods have neither: no ProductKind, and a size the supplier states as free text
+ * ("10 kg", "20 ks") rather than a litre volume. They read by that size instead, so the line is
+ * never blank on a row the warehouse actually holds. */
 export function itemSubtitle(item: InventoryItemListItemDto): string {
+  if (item.supplierGoodId) return item.size ?? '';
   return [kindLabel(item.kind), fmtLiters(item.packageSize)].filter(Boolean).join(' · ');
 }
 

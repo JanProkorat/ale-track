@@ -22,6 +22,17 @@ public sealed record InventoryItemListItemDto
     /// Public ID of related product
     /// </summary>
     public Guid? ProductId { get; set; }
+
+    /// <summary>
+    /// Public ID of the related supplier good, when this row is stock booked in from a supplier
+    /// </summary>
+    public Guid? SupplierGoodId { get; set; }
+
+    /// <summary>
+    /// Size as the supplier states it — "10 kg", "50 l". Supplier goods only; a product's size is
+    /// its container volume in <see cref="PackageSize"/>.
+    /// </summary>
+    public string? Size { get; set; }
     
     /// <summary>
     /// Amount of products currently in inventory

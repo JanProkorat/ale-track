@@ -2,7 +2,7 @@
 // the API keeps one row per product and rejects a second one.
 // fireEvent rather than user-event — not a dependency of this project.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import {
   InventorySectionDto,
@@ -15,12 +15,14 @@ import { InventoryItemFormDrawer } from './InventoryItemFormDrawer';
 
 let productsResponse: { data?: ProductListItemDto[]; isLoading: boolean };
 let inventoryResponse: { data?: InventorySectionDto[]; isLoading: boolean };
+// Hoisted rather than created per render, so a test can read what was actually sent.
+const updateMutate = vi.fn();
 
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => productsResponse }));
 vi.mock('src/hooks/useInventory', () => ({
   useInventory: () => inventoryResponse,
   useCreateInventoryItem: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateInventoryItem: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateInventoryItem: () => ({ mutateAsync: updateMutate, isPending: false }),
 }));
 vi.mock('src/hooks/useBreweries', () => ({ useBreweryColors: () => () => '#F08C00' }));
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -116,5 +118,79 @@ describe('InventoryItemFormDrawer', () => {
     fireEvent.click(screen.getByTitle('Open'));
 
     expect(screen.getByText('Nic nenalezeno')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Editing a stock row: quantity and note are the point, and the row's identity has to survive it.
+ */
+describe('InventoryItemFormDrawer — editing', () => {
+  beforeEach(() => {
+    productsResponse = { data: products, isLoading: false };
+    inventoryResponse = { data: [], isLoading: false };
+    updateMutate.mockClear();
+  });
+
+  function renderEditing(item: InventoryItemListItemDto) {
+    render(
+      <MuiThemeProvider theme={theme}>
+        <InventoryItemFormDrawer open item={item} onClose={() => {}} />
+      </MuiThemeProvider>,
+    );
+  }
+
+  async function save() {
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+    // The submit is async through react-hook-form's resolver.
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+    return updateMutate.mock.calls[0][0].data;
+  }
+
+  /** A good's row cannot be repointed at a product, so the picker must not be offered at all. */
+  it('offers no product picker for a supplier good row', () => {
+    renderEditing(new InventoryItemListItemDto({
+      id: 'g1', supplierGoodId: 'sg1', name: 'CO₂ láhev', size: '10 kg', quantity: 3,
+    }));
+
+    expect(screen.queryByTitle('Open')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The name belongs to the ceník entry. Echoing the displayed one back would store a copy that
+   * goes stale the moment the good is renamed — the very thing the reference exists to avoid.
+   */
+  it('does not send a name back for a supplier good row', async () => {
+    renderEditing(new InventoryItemListItemDto({
+      id: 'g1', supplierGoodId: 'sg1', name: 'CO₂ láhev', size: '10 kg', quantity: 3,
+    }));
+
+    fireEvent.change(screen.getByLabelText('Množství'), { target: { value: '5' } });
+    const sent = await save();
+
+    expect(sent.quantity).toBe(5);
+    expect(sent.name).toBeUndefined();
+    expect(sent.productId).toBeUndefined();
+  });
+
+  it('does not send a name back for a product row either', async () => {
+    renderEditing(new InventoryItemListItemDto({
+      id: 'p1', productId: 'p-rytir', name: 'Svijanský Rytíř', quantity: 8,
+    }));
+
+    const sent = await save();
+
+    expect(sent.productId).toBe('p-rytir');
+    expect(sent.name).toBeUndefined();
+  });
+
+  /** A hand-written row owns its name, so that one has to keep being sent. */
+  it('keeps sending the name of a hand-written row', async () => {
+    renderEditing(new InventoryItemListItemDto({
+      id: 'm1', name: 'Ucho soudku', quantity: 4,
+    }));
+
+    const sent = await save();
+
+    expect(sent.name).toBe('Ucho soudku');
   });
 });

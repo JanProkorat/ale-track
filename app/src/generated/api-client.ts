@@ -20069,6 +20069,8 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
     id?: string;
     name?: string | undefined;
     productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    size?: string | undefined;
     quantity?: number;
     kind?: ProductKind | undefined;
     type?: ProductType | undefined;
@@ -20094,6 +20096,8 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
             this.id = _data["id"];
             this.name = _data["name"];
             this.productId = _data["productId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.size = _data["size"];
             this.quantity = _data["quantity"];
             this.kind = _data["kind"];
             this.type = _data["type"];
@@ -20119,6 +20123,8 @@ export class InventoryItemListItemDto implements IInventoryItemListItemDto {
         data["id"] = this.id;
         data["name"] = this.name;
         data["productId"] = this.productId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["size"] = this.size;
         data["quantity"] = this.quantity;
         data["kind"] = this.kind;
         data["type"] = this.type;
@@ -20137,6 +20143,8 @@ export interface IInventoryItemListItemDto {
     id?: string;
     name?: string | undefined;
     productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    size?: string | undefined;
     quantity?: number;
     kind?: ProductKind | undefined;
     type?: ProductType | undefined;

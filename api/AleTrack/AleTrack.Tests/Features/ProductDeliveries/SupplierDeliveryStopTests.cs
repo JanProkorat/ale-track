@@ -344,11 +344,11 @@ public sealed class SupplierDeliveryStopTests
     }
 
     /// <summary>
-    /// Inventory is a stock of products. Finishing a dovoz stocks the beer it brought and leaves the
-    /// goods alone — there is nowhere to put a CO₂ bottle, and inventing somewhere is separate work.
+    /// Finishing a dovoz books everything it brought back into stock — the beer from the brewery and
+    /// the goods from the supplier alike.
     /// </summary>
     [Fact]
-    public async Task Update_FinishingADeliveryWithGoods_StocksOnlyTheProducts()
+    public async Task Update_FinishingADeliveryWithGoods_StocksTheProductsAndTheGoods()
     {
         var deliveryId = Guid.NewGuid();
         var breweryStopId = Guid.NewGuid();
@@ -401,7 +401,9 @@ public sealed class SupplierDeliveryStopTests
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         dbContext.Verify(e => e.InventoryItems.AddRange(It.Is<IEnumerable<InventoryItem>>(items =>
-            items.Count() == 1 && items.All(i => i.Product == product))), Times.Once);
+            items.Count() == 2
+            && items.Any(i => i.Product == product && i.SupplierGood == null && i.Quantity == 4)
+            && items.Any(i => i.SupplierGood == good && i.Product == null && i.Quantity == 2))), Times.Once);
     }
 
     [Fact]

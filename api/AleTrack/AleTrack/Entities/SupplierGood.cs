@@ -59,4 +59,15 @@ public sealed class SupplierGood : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public Supplier Supplier { get; set; } = null!;
+
+    /// <summary>
+    /// The stock of this goods, once a dovoz has booked some in.
+    /// </summary>
+    /// <remarks>
+    /// A reference rather than a collection, mirroring <see cref="Product.InventoryItem"/>: the
+    /// warehouse holds one row per thing and a dovoz increments it, so one-to-one is the shape — and
+    /// it is what makes the index on inventory_items.supplier_good_id unique, putting that invariant
+    /// in the schema instead of trusting every caller to look before inserting.
+    /// </remarks>
+    public InventoryItem? InventoryItem { get; set; }
 }

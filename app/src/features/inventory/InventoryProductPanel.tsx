@@ -132,9 +132,20 @@ export function InventoryProductPanel({
               </>
             )}
             <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexShrink: 0 }}>
-              <Chip size="small" label={kindLabel(item.kind) ?? 'Ostatní'} sx={{ height: 20, fontSize: 11 }} />
+              {/* A supplier's goods have no ProductKind, so the kind chip would read "Ostatní" for
+                  every gas bottle and crate. Naming the supplier's stock for what it is says more. */}
+              <Chip
+                size="small"
+                label={kindLabel(item.kind) ?? (item.supplierGoodId ? 'Dodavatel' : 'Ostatní')}
+                sx={{ height: 20, fontSize: 11 }}
+              />
               {item.packageSize != null && (
                 <Chip size="small" label={fmtLiters(item.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
+              )}
+              {/* The supplier states a size as free text — "10 kg", "20 ks" — so it is not a litre
+                  volume and cannot go through fmtLiters. */}
+              {item.size && (
+                <Chip size="small" label={item.size} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
               )}
             </Stack>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>
