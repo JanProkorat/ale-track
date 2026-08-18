@@ -22,6 +22,7 @@ const COUNT_FIELD: Partial<Record<string, string>> = {
   inventory: 'inventoryItemsCount',
   sales: 'salesCount',
   breweries: 'breweriesCount',
+  suppliers: 'suppliersCount',
   clients: 'clientsCount',
   drivers: 'driversCount',
   vehicles: 'vehiclesCount',

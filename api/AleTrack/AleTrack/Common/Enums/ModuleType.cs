@@ -43,5 +43,14 @@ public enum ModuleType
     /// Appended deliberately: these values are persisted in user_module_permissions, so
     /// reordering them would rewrite the meaning of every existing row.
     /// </remarks>
-    Sales
+    Sales,
+
+    /// <summary>
+    /// Dodavatelé — companies we buy everything but beer from, with their opening hours
+    /// and price lists.
+    /// </summary>
+    /// <remarks>
+    /// Appended for the same reason as <see cref="Sales"/>: the numeric value is persisted.
+    /// </remarks>
+    Suppliers
 }

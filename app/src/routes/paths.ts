@@ -15,6 +15,7 @@ export const PATHS: Record<ModuleKey, string> & { salesReports: string } = {
   sales: '/sales',
   salesReports: '/sales-reports',
   breweries: '/breweries',
+  suppliers: '/suppliers',
   clients: '/clients',
   drivers: '/drivers',
   vehicles: '/vehicles',

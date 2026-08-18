@@ -38,6 +38,7 @@ const KEY_TO_MODULE: Record<string, ModuleType> = {
   inventory: ModuleType.Inventory,
   sales: ModuleType.Sales,
   breweries: ModuleType.Breweries,
+  suppliers: ModuleType.Suppliers,
   clients: ModuleType.Clients,
   drivers: ModuleType.Drivers,
   vehicles: ModuleType.Vehicles,

@@ -7,6 +7,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import SportsBarOutlinedIcon from '@mui/icons-material/SportsBarOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import FactoryOutlinedIcon from '@mui/icons-material/FactoryOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import AirportShuttleOutlinedIcon from '@mui/icons-material/AirportShuttleOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
@@ -87,6 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'clients', label: 'Klienti', path: PATHS.clients, icon: icon(<StorefrontOutlinedIcon fontSize="small" />) },
       { key: 'drivers', label: 'Řidiči', path: PATHS.drivers, icon: icon(<BadgeOutlinedIcon fontSize="small" />) },
       { key: 'vehicles', label: 'Vozy', path: PATHS.vehicles, icon: icon(<AirportShuttleOutlinedIcon fontSize="small" />) },
+      { key: 'suppliers', label: 'Dodavatelé', path: PATHS.suppliers, icon: icon(<FactoryOutlinedIcon fontSize="small" />) },
     ],
   },
   {

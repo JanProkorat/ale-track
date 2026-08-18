@@ -1941,6 +1941,232 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("sale_items");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.Supplier", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BusinessName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("business_name");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("suppliers");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierContact", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("description");
+
+                    b.Property<long>("SupplierId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasColumnName("type");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("supplier_contacts");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierGood", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<string>("Size")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("size");
+
+                    b.Property<long>("SupplierId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("supplier_goods");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierGoodPrice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal>("PriceWithVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("price_with_vat");
+
+                    b.Property<decimal?>("PriceWithoutVat")
+                        .HasColumnType("numeric")
+                        .HasColumnName("price_without_vat");
+
+                    b.Property<long>("SupplierGoodId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_good_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierGoodId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("supplier_good_prices");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierNote", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_created");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<long>("SupplierId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("supplier_notes");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierOpeningHours", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_of_week");
+
+                    b.Property<TimeOnly>("From")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("from_time");
+
+                    b.Property<long>("SupplierId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<TimeOnly>("To")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("to_time");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId", "DayOfWeek");
+
+                    b.ToTable("supplier_opening_hours");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.User", b =>
                 {
                     b.Property<long>("Id")
@@ -2970,6 +3196,167 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Sale");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.Supplier", b =>
+                {
+                    b.OwnsOne("AleTrack.Entities.Address", "ContactAddress", b1 =>
+                        {
+                            b1.Property<long>("SupplierId")
+                                .HasColumnType("bigint");
+
+                            b1.Property<string>("City")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("contact_address_city");
+
+                            b1.Property<int>("Country")
+                                .HasColumnType("integer")
+                                .HasColumnName("contact_address_country");
+
+                            b1.Property<decimal?>("Latitude")
+                                .HasColumnType("numeric")
+                                .HasColumnName("contact_address_latitude");
+
+                            b1.Property<decimal?>("Longitude")
+                                .HasColumnType("numeric")
+                                .HasColumnName("contact_address_longitude");
+
+                            b1.Property<string>("StreetName")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("contact_address_street_name");
+
+                            b1.Property<string>("StreetNumber")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("contact_address_street_number");
+
+                            b1.Property<string>("Zip")
+                                .IsRequired()
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("contact_address_zip");
+
+                            b1.HasKey("SupplierId");
+
+                            b1.ToTable("suppliers");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SupplierId");
+                        });
+
+                    b.OwnsOne("AleTrack.Entities.Address", "OfficialAddress", b1 =>
+                        {
+                            b1.Property<long>("SupplierId")
+                                .HasColumnType("bigint");
+
+                            b1.Property<string>("City")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("official_address_city");
+
+                            b1.Property<int>("Country")
+                                .HasColumnType("integer")
+                                .HasColumnName("official_address_country");
+
+                            b1.Property<decimal?>("Latitude")
+                                .HasColumnType("numeric")
+                                .HasColumnName("official_address_latitude");
+
+                            b1.Property<decimal?>("Longitude")
+                                .HasColumnType("numeric")
+                                .HasColumnName("official_address_longitude");
+
+                            b1.Property<string>("StreetName")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("official_address_street_name");
+
+                            b1.Property<string>("StreetNumber")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("official_address_street_number");
+
+                            b1.Property<string>("Zip")
+                                .IsRequired()
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("official_address_zip");
+
+                            b1.HasKey("SupplierId");
+
+                            b1.ToTable("suppliers");
+
+                            b1.WithOwner()
+                                .HasForeignKey("SupplierId");
+                        });
+
+                    b.Navigation("ContactAddress");
+
+                    b.Navigation("OfficialAddress")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierContact", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Supplier", "Supplier")
+                        .WithMany("Contacts")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierGood", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Supplier", "Supplier")
+                        .WithMany("Goods")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierGoodPrice", b =>
+                {
+                    b.HasOne("AleTrack.Entities.SupplierGood", "SupplierGood")
+                        .WithMany("Prices")
+                        .HasForeignKey("SupplierGoodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SupplierGood");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierNote", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Supplier", "Supplier")
+                        .WithMany("Notes")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierOpeningHours", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Supplier", "Supplier")
+                        .WithMany("OpeningHours")
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Supplier");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.UserPermission", b =>
                 {
                     b.HasOne("AleTrack.Entities.User", "User")
@@ -3105,6 +3492,22 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("AleTrack.Entities.Sale", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.Supplier", b =>
+                {
+                    b.Navigation("Contacts");
+
+                    b.Navigation("Goods");
+
+                    b.Navigation("Notes");
+
+                    b.Navigation("OpeningHours");
+                });
+
+            modelBuilder.Entity("AleTrack.Entities.SupplierGood", b =>
+                {
+                    b.Navigation("Prices");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.User", b =>

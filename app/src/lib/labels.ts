@@ -6,6 +6,7 @@ import {
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
+  SupplierChargeKind, DayOfWeek,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -114,6 +115,15 @@ export const L = {
     Other: 'Ostatní',
   } as Record<string, string>,
   contact: { Email: 'E-mail', Phone: 'Telefon' } as Record<string, string>,
+  // What a supplier's price row charges for. The same bottle is priced several ways at
+  // once, so a good carries one price per kind rather than a single number.
+  chargeKind: {
+    Fill: 'Plnění',
+    Purchase: 'Nákup',
+    Deposit: 'Záloha',
+    Rent: 'Nájem',
+    Other: 'Ostatní',
+  } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
   addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
 } as const;
@@ -281,6 +291,22 @@ export function regionLabel(r?: Region | string | number): string | undefined {
 export function contactTypeLabel(t?: ContactType | string | number): string | undefined {
   const name = enumName(ContactType as unknown as Record<string, string | number>, t);
   return name ? (L.contact[name] ?? name) : undefined;
+}
+
+/** The DayOfWeek member name (e.g. "Monday"), resolved from either wire representation.
+ * The API serializes enums as strings, so opening hours arrive as "Monday", never as 1. */
+export function dayOfWeekName(d?: DayOfWeek | string | number): string | undefined {
+  return enumName(DayOfWeek as unknown as Record<string, string | number>, d);
+}
+
+/** Resolves either wire representation of SupplierChargeKind to its Czech label. */
+export function chargeKindName(k?: SupplierChargeKind | string | number): string | undefined {
+  return enumName(SupplierChargeKind as unknown as Record<string, string | number>, k);
+}
+
+export function chargeKindLabel(k?: SupplierChargeKind | string | number): string | undefined {
+  const name = chargeKindName(k);
+  return name ? (L.chargeKind[name] ?? name) : undefined;
 }
 
 export function isEmailContact(t?: ContactType | string | number): boolean {

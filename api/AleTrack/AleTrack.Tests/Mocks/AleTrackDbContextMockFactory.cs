@@ -67,7 +67,10 @@ public static class AleTrackDbContextMockFactory
         ICollection<PriceListImport>? priceListImports = null,
         ICollection<Sale>? sales = null,
         ICollection<SaleItem>? saleItems = null,
-        ICollection<ClientProductPrice>? clientProductPrices = null)
+        ICollection<ClientProductPrice>? clientProductPrices = null,
+        ICollection<Supplier>? suppliers = null,
+        ICollection<SupplierGood>? supplierGoods = null,
+        ICollection<SupplierNote>? supplierNotes = null)
     {
         var dbContextMock = new Mock<AleTrackDbContext>();
 
@@ -97,7 +100,10 @@ public static class AleTrackDbContextMockFactory
             priceListImports ?? [],
             sales ?? [],
             saleItems ?? [],
-            clientProductPrices ?? []);
+            clientProductPrices ?? [],
+            suppliers ?? [],
+            supplierGoods ?? [],
+            supplierNotes ?? []);
     }
 
     /// <summary>
@@ -144,7 +150,10 @@ public static class AleTrackDbContextMockFactory
         ICollection<PriceListImport> priceListImports,
         ICollection<Sale> sales,
         ICollection<SaleItem> saleItems,
-        ICollection<ClientProductPrice> clientProductPrices)
+        ICollection<ClientProductPrice> clientProductPrices,
+        ICollection<Supplier> suppliers,
+        ICollection<SupplierGood> supplierGoods,
+        ICollection<SupplierNote> supplierNotes)
     {
         dbContextMock.Setup<DbSet<Client>>(x => x.Clients).ReturnsDbSet(clients);
         dbContextMock.Setup<DbSet<Brewery>>(x => x.Breweries).ReturnsDbSet(breweries);
@@ -172,6 +181,9 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<Sale>>(x => x.Sales).ReturnsDbSet(sales);
         dbContextMock.Setup<DbSet<SaleItem>>(x => x.SaleItems).ReturnsDbSet(saleItems);
         dbContextMock.Setup<DbSet<ClientProductPrice>>(x => x.ClientProductPrices).ReturnsDbSet(clientProductPrices);
+        dbContextMock.Setup<DbSet<Supplier>>(x => x.Suppliers).ReturnsDbSet(suppliers);
+        dbContextMock.Setup<DbSet<SupplierGood>>(x => x.SupplierGoods).ReturnsDbSet(supplierGoods);
+        dbContextMock.Setup<DbSet<SupplierNote>>(x => x.SupplierNotes).ReturnsDbSet(supplierNotes);
 
         return dbContextMock;
     }
