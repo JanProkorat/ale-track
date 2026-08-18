@@ -49,17 +49,22 @@ public sealed record UpdateProductDeliveryStopDto
     public Guid? PublicId { get; set; }
 
     /// <summary>
-    /// Whether this stop is a brewery or a custom waypoint.
+    /// Whether this stop is a brewery, a supplier or a custom waypoint.
     /// </summary>
     public DeliveryStopKind Kind { get; set; }
 
     /// <summary>
-    /// ID of the related brewery. Required for brewery stops, null for custom stops.
+    /// ID of the related brewery. Required for brewery stops, null otherwise.
     /// </summary>
     public Guid? BreweryId { get; set; }
 
     /// <summary>
-    /// Display name of a custom stop. Required for custom stops, null for brewery stops.
+    /// ID of the related supplier. Required for supplier stops, null otherwise.
+    /// </summary>
+    public Guid? SupplierId { get; set; }
+
+    /// <summary>
+    /// Display name of a custom stop. Required for custom stops, null otherwise.
     /// </summary>
     public string? Label { get; set; }
 
@@ -79,26 +84,39 @@ public sealed record UpdateProductDeliveryStopDto
     public string? Note { get; set; }
 
     /// <summary>
-    /// Products to be delivered (brewery stops only)
+    /// Items to be collected here — products at a brewery stop, goods at a supplier stop,
+    /// empty at a custom one.
     /// </summary>
     public List<UpdateProductDeliveryItemDto> Products { get; set; } = [];
 }
 
 /// <summary>
-/// Data transfer object representing the details of an individual product item included in a delivery.
+/// Data transfer object representing one line of a delivery stop: either a brewery product or one
+/// charge kind of a supplier's good.
 /// </summary>
 public sealed record UpdateProductDeliveryItemDto
 {
     /// <summary>
-    /// ID of related product
+    /// ID of related product. Required on a brewery stop's lines, null on a supplier stop's.
     /// </summary>
-    public Guid ProductId { get; set; }
-    
+    public Guid? ProductId { get; set; }
+
+    /// <summary>
+    /// ID of the related supplier good. Required on a supplier stop's lines, null on a brewery's.
+    /// </summary>
+    public Guid? SupplierGoodId { get; set; }
+
+    /// <summary>
+    /// Which of the good's prices this line is for. Required alongside
+    /// <see cref="SupplierGoodId"/>, null without it.
+    /// </summary>
+    public SupplierChargeKind? ChargeKind { get; set; }
+
     /// <summary>
     /// Quantity to be delivered
     /// </summary>
     public int Quantity { get; set; }
-    
+
     /// <summary>
     /// Note to delivery of this particular product
     /// </summary>

@@ -15403,6 +15403,7 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
     order?: number;
     kind?: DeliveryStopKind;
     brewery?: BreweryInfoDto | undefined;
+    supplier?: SupplierInfoDto | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -15424,6 +15425,7 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
             this.order = _data["order"];
             this.kind = _data["kind"];
             this.brewery = _data["brewery"] ? BreweryInfoDto.fromJS(_data["brewery"]) : undefined as any;
+            this.supplier = _data["supplier"] ? SupplierInfoDto.fromJS(_data["supplier"]) : undefined as any;
             this.label = _data["label"];
             this.latitude = _data["latitude"];
             this.longitude = _data["longitude"];
@@ -15449,6 +15451,7 @@ export class ProductDeliveryStopDto implements IProductDeliveryStopDto {
         data["order"] = this.order;
         data["kind"] = this.kind;
         data["brewery"] = this.brewery ? this.brewery.toJSON() : undefined as any;
+        data["supplier"] = this.supplier ? this.supplier.toJSON() : undefined as any;
         data["label"] = this.label;
         data["latitude"] = this.latitude;
         data["longitude"] = this.longitude;
@@ -15467,6 +15470,7 @@ export interface IProductDeliveryStopDto {
     order?: number;
     kind?: DeliveryStopKind;
     brewery?: BreweryInfoDto | undefined;
+    supplier?: SupplierInfoDto | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -15477,6 +15481,7 @@ export interface IProductDeliveryStopDto {
 export enum DeliveryStopKind {
     Brewery = 0,
     Custom = 1,
+    Supplier = 2,
 }
 
 export class BreweryInfoDto implements IBreweryInfoDto {
@@ -15519,9 +15524,60 @@ export interface IBreweryInfoDto {
     name?: string;
 }
 
-export class ProductDeliveryItemDto implements IProductDeliveryItemDto {
-    productId?: string;
+export class SupplierInfoDto implements ISupplierInfoDto {
+    id?: string;
     name?: string;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+
+    constructor(data?: ISupplierInfoDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
+        }
+    }
+
+    static fromJS(data: any): SupplierInfoDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierInfoDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
+        return data;
+    }
+}
+
+export interface ISupplierInfoDto {
+    id?: string;
+    name?: string;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+}
+
+export class ProductDeliveryItemDto implements IProductDeliveryItemDto {
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
+    name?: string;
+    size?: string | undefined;
     quantity?: number;
     note?: string | undefined;
 
@@ -15537,7 +15593,10 @@ export class ProductDeliveryItemDto implements IProductDeliveryItemDto {
     init(_data?: any) {
         if (_data) {
             this.productId = _data["productId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.chargeKind = _data["chargeKind"];
             this.name = _data["name"];
+            this.size = _data["size"];
             this.quantity = _data["quantity"];
             this.note = _data["note"];
         }
@@ -15553,7 +15612,10 @@ export class ProductDeliveryItemDto implements IProductDeliveryItemDto {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["chargeKind"] = this.chargeKind;
         data["name"] = this.name;
+        data["size"] = this.size;
         data["quantity"] = this.quantity;
         data["note"] = this.note;
         return data;
@@ -15561,8 +15623,11 @@ export class ProductDeliveryItemDto implements IProductDeliveryItemDto {
 }
 
 export interface IProductDeliveryItemDto {
-    productId?: string;
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
     name?: string;
+    size?: string | undefined;
     quantity?: number;
     note?: string | undefined;
 }
@@ -15703,6 +15768,7 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
     publicId?: string | undefined;
     kind?: DeliveryStopKind;
     breweryId?: string | undefined;
+    supplierId?: string | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -15723,6 +15789,7 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
             this.publicId = _data["publicId"];
             this.kind = _data["kind"];
             this.breweryId = _data["breweryId"];
+            this.supplierId = _data["supplierId"];
             this.label = _data["label"];
             this.latitude = _data["latitude"];
             this.longitude = _data["longitude"];
@@ -15747,6 +15814,7 @@ export class UpdateProductDeliveryStopDto implements IUpdateProductDeliveryStopD
         data["publicId"] = this.publicId;
         data["kind"] = this.kind;
         data["breweryId"] = this.breweryId;
+        data["supplierId"] = this.supplierId;
         data["label"] = this.label;
         data["latitude"] = this.latitude;
         data["longitude"] = this.longitude;
@@ -15764,6 +15832,7 @@ export interface IUpdateProductDeliveryStopDto {
     publicId?: string | undefined;
     kind?: DeliveryStopKind;
     breweryId?: string | undefined;
+    supplierId?: string | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -15772,7 +15841,9 @@ export interface IUpdateProductDeliveryStopDto {
 }
 
 export class UpdateProductDeliveryItemDto implements IUpdateProductDeliveryItemDto {
-    productId?: string;
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
     quantity?: number;
     note?: string | undefined;
 
@@ -15788,6 +15859,8 @@ export class UpdateProductDeliveryItemDto implements IUpdateProductDeliveryItemD
     init(_data?: any) {
         if (_data) {
             this.productId = _data["productId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.chargeKind = _data["chargeKind"];
             this.quantity = _data["quantity"];
             this.note = _data["note"];
         }
@@ -15803,6 +15876,8 @@ export class UpdateProductDeliveryItemDto implements IUpdateProductDeliveryItemD
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["chargeKind"] = this.chargeKind;
         data["quantity"] = this.quantity;
         data["note"] = this.note;
         return data;
@@ -15810,7 +15885,9 @@ export class UpdateProductDeliveryItemDto implements IUpdateProductDeliveryItemD
 }
 
 export interface IUpdateProductDeliveryItemDto {
-    productId?: string;
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
     quantity?: number;
     note?: string | undefined;
 }
@@ -15946,6 +16023,7 @@ export interface ICreateProductsDeliveryDto {
 export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopDto {
     kind?: DeliveryStopKind;
     breweryId?: string | undefined;
+    supplierId?: string | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -15965,6 +16043,7 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
         if (_data) {
             this.kind = _data["kind"];
             this.breweryId = _data["breweryId"];
+            this.supplierId = _data["supplierId"];
             this.label = _data["label"];
             this.latitude = _data["latitude"];
             this.longitude = _data["longitude"];
@@ -15988,6 +16067,7 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
         data = typeof data === 'object' ? data : {};
         data["kind"] = this.kind;
         data["breweryId"] = this.breweryId;
+        data["supplierId"] = this.supplierId;
         data["label"] = this.label;
         data["latitude"] = this.latitude;
         data["longitude"] = this.longitude;
@@ -16004,6 +16084,7 @@ export class CreateProductDeliveryStopDto implements ICreateProductDeliveryStopD
 export interface ICreateProductDeliveryStopDto {
     kind?: DeliveryStopKind;
     breweryId?: string | undefined;
+    supplierId?: string | undefined;
     label?: string | undefined;
     latitude?: number | undefined;
     longitude?: number | undefined;
@@ -16012,7 +16093,9 @@ export interface ICreateProductDeliveryStopDto {
 }
 
 export class CreateProductDeliveryItemDto implements ICreateProductDeliveryItemDto {
-    productId?: string;
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
     quantity?: number;
     note?: string | undefined;
 
@@ -16028,6 +16111,8 @@ export class CreateProductDeliveryItemDto implements ICreateProductDeliveryItemD
     init(_data?: any) {
         if (_data) {
             this.productId = _data["productId"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.chargeKind = _data["chargeKind"];
             this.quantity = _data["quantity"];
             this.note = _data["note"];
         }
@@ -16043,6 +16128,8 @@ export class CreateProductDeliveryItemDto implements ICreateProductDeliveryItemD
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["productId"] = this.productId;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["chargeKind"] = this.chargeKind;
         data["quantity"] = this.quantity;
         data["note"] = this.note;
         return data;
@@ -16050,7 +16137,9 @@ export class CreateProductDeliveryItemDto implements ICreateProductDeliveryItemD
 }
 
 export interface ICreateProductDeliveryItemDto {
-    productId?: string;
+    productId?: string | undefined;
+    supplierGoodId?: string | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
     quantity?: number;
     note?: string | undefined;
 }
