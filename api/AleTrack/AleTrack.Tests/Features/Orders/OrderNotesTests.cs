@@ -1,3 +1,4 @@
+using AleTrack.Common.Options;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Commands.Create;
 using AleTrack.Features.Orders.Commands.Update;
@@ -6,6 +7,7 @@ using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.Orders;
@@ -81,7 +83,7 @@ public sealed class OrderNotesTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Notes.Should().HaveCount(2);
@@ -114,7 +116,7 @@ public sealed class OrderNotesTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Notes.Should().ContainSingle().Which.DateCreated.Should().BeOnOrAfter(before);

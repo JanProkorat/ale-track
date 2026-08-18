@@ -169,6 +169,8 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                         Note = s.Note,
                         Latitude = s.Latitude,
                         Longitude = s.Longitude,
+                        SupplierId = s.Supplier != null ? s.Supplier.PublicId : null,
+                        SupplierAddress = s.Supplier != null ? s.Supplier.OfficialAddress.ToDto() : null,
                         // Product order per ProductOrdering.
                         Products = s.ClientOrder != null
                             ? s.ClientOrder.OrderItems
@@ -270,6 +272,35 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                         ProductId = ei.Product.PublicId,
                         Name = ei.Product.Name
                     })
+                    .ToList(),
+                // Flattened across the stops: the card is one picking list for the whole run.
+                // Sorted so the rows group by where they are collected and then by supplier —
+                // the order they will actually be gathered in.
+                //
+                // Client and order come from the stop being walked, not from the line's own
+                // Order back-reference: the stop already has them, and reading them off the
+                // child would make this depend on a navigation nothing else here needs.
+                SupplierGoods = os.Stops
+                    .Where(s => s.ClientOrder != null)
+                    .SelectMany(s => s.ClientOrder!.SupplierGoodItems
+                        .Select(i => new OutgoingShipmentSupplierGoodDto
+                        {
+                            Id = i.PublicId,
+                            SupplierGoodId = i.SupplierGood.PublicId,
+                            Name = i.SupplierGood.Name,
+                            Size = i.SupplierGood.Size,
+                            Quantity = i.Quantity,
+                            PickupSource = i.SupplierGood.PickupSource,
+                            SupplierId = i.SupplierGood.Supplier.PublicId,
+                            SupplierName = i.SupplierGood.Supplier.Name,
+                            ClientId = s.ClientOrder!.Client.PublicId,
+                            ClientName = s.ClientOrder!.Client.Name,
+                            OrderId = s.ClientOrder!.PublicId,
+                            Note = i.Note
+                        }))
+                    .OrderBy(g => g.PickupSource)
+                    .ThenBy(g => g.SupplierName)
+                    .ThenBy(g => g.Name)
                     .ToList(),
                 PurchaseInvoices = os.PurchaseInvoices
                     .OrderBy(pi => pi.Sequence)

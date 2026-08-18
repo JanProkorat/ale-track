@@ -89,6 +89,7 @@ public sealed class GetSupplierDetailEndpoint(AleTrackDbContext dbContext)
                         Name = g.Name,
                         Size = g.Size,
                         Description = g.Description,
+                        PickupSource = g.PickupSource,
                         Prices = g.Prices
                             .OrderBy(p => p.Kind)
                             .Select(p => new SupplierGoodPriceDto

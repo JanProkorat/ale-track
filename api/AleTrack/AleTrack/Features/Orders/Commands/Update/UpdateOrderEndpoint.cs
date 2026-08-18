@@ -1,11 +1,14 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Common.Options;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Utils;
+using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Order = AleTrack.Entities.Order;
 
 namespace AleTrack.Features.Orders.Commands.Update;
@@ -33,7 +36,9 @@ public sealed record UpdateOrderRequest
 /// <remarks>
 /// Processes an HTTP PUT request to update the specified order's delivery date and state.
 /// </remarks>
-public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOrderRequest>
+public sealed class UpdateOrderEndpoint(
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions) : Endpoint<UpdateOrderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -147,6 +152,11 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
         order.SupplierGoodItems = await GetSupplierGoodItemsAsync(req.Data.SupplierGoodItems, order, ct);
         ApplyItemNotes(req.Data.OrderItems, order);
+
+        // After the lines are settled, before the save: a supplier good added to (or dropped
+        // from) an order already sitting on a planned run changes which pickup stops that run
+        // needs, and nothing else would tell it.
+        await PickupStopSync.ForOrderAsync(dbContext, order.PublicId, companyOptions.Value, ct);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);

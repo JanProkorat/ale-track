@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,6 +48,17 @@ public sealed class SupplierGood : PublicEntity
     [MaxLength(200)]
     [Column("description")]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Where a run collects this good — our own warehouse, or the supplier.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see cref="SupplierGoodPickupSource.Garage"/>, which is also what every
+    /// good that predates the column reads as. Deliberate: the other value makes runs grow a
+    /// stop, and a migration must not put unannounced stops on shipments already planned.
+    /// </remarks>
+    [Column("pickup_source")]
+    public SupplierGoodPickupSource PickupSource { get; set; } = SupplierGoodPickupSource.Garage;
 
     /// <summary>
     /// One price per charge kind. Never empty — a good with no price is not a price list

@@ -141,6 +141,12 @@ public sealed class CreateOutgoingShipmentEndpoint(
 
         // A created shipment is always Created, so the content is always open —
         // no mutability gate needed here.
+        //
+        // Supplier stops first: it may add stops, and the company reconciler reads the same
+        // orders to decide whether the warehouse is also needed. Order between them does not
+        // actually matter today (neither looks at the other's stops), but running the one that
+        // can grow the route first keeps the resulting numbering readable.
+        SupplierPickupStopReconciler.Apply(outgoingShipment);
         CompanyStopReconciler.Apply(outgoingShipment, company);
 
         dbContext.OutgoingShipments.Add(outgoingShipment);
@@ -160,6 +166,11 @@ public sealed class CreateOutgoingShipmentEndpoint(
         var orders = await dbContext.Orders
             .Where(o => orderIds.Contains(o.PublicId))
             .Include(o => o.OutgoingShipmentStop)
+            // The two stop reconcilers below decide which pickup stops the run needs from
+            // these lines; without the goods and their suppliers they read an empty set.
+            .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
+                .ThenInclude(g => g.Supplier)
             .ToListAsync(ct);
 
         if (orders.Count != orderIds.Count)

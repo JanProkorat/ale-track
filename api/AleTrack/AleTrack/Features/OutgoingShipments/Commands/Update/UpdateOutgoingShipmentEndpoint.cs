@@ -81,6 +81,12 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         .Include(os => os.Stops)
             .ThenInclude(s => s.ClientOrder!)
                 .ThenInclude(o => o.CustomExtraItems)
+        // What the two pickup-stop reconcilers read to decide which stops the run needs.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.SupplierGoodItems)
+                    .ThenInclude(i => i.SupplierGood)
+                        .ThenInclude(g => g.Supplier)
         .Include(os => os.RouteViaPoints)
         // Needed by ShipmentContentGuard, which compares the stop's delivery place by
         // public ID — without this the diff would read every place as removed.
@@ -152,7 +158,15 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         outgoingShipment.StartBrewery = startBrewery;
         outgoingShipment.StartBreweryId = startBrewery?.Id;
         outgoingShipment.StartBreweryAddressKind = req.Data.StartBreweryAddressKind;
-        outgoingShipment.Stops = [.. stops, .. customStops];
+        // Supplier stops are entirely derived from what the orders ask for, so — unlike the
+        // company stop — the client does not round-trip them in CustomStops. Carried across
+        // the wholesale replacement here so they keep their row identity and their place in
+        // the route; the reconciler below then adds or removes them.
+        var supplierStops = outgoingShipment.Stops
+            .Where(s => s.Kind == OutgoingShipmentStopKind.Supplier)
+            .ToList();
+
+        outgoingShipment.Stops = [.. stops, .. customStops, .. supplierStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
         outgoingShipment.StockPurchases = stockPurchases;
@@ -163,6 +177,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // stops would be a bug.
         if (ShipmentMutability.IsContentEditable(outgoingShipment.State))
         {
+            SupplierPickupStopReconciler.Apply(outgoingShipment);
             CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
         }
 

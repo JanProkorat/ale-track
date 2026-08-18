@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Commands.Create;
@@ -9,6 +10,7 @@ using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.Orders;
@@ -65,7 +67,7 @@ public sealed class OrderItemAndExtraNotesTests
         data.OrderItems[0].Quantity = 20;
         data.OrderItems[0].Note = "Vyložit jako první";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -89,7 +91,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = "Klient si stěžoval na teplotu";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -111,7 +113,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = "Vyložit u rampy";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -133,7 +135,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = null;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -154,7 +156,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = null;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -174,7 +176,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].ProductId = Guid.NewGuid();
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
@@ -209,7 +211,7 @@ public sealed class OrderItemAndExtraNotesTests
             new OrderCustomExtraItemDto { Description = "Otvírák", Quantity = 2, Note = "Nový" }
         ];
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
