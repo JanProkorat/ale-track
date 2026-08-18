@@ -12,6 +12,7 @@ export const MODULE_KEYS = [
   'inventory',
   'sales',
   'breweries',
+  'suppliers',
   'clients',
   'drivers',
   'vehicles',

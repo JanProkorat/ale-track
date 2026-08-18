@@ -48,6 +48,16 @@ public sealed record SupplierListItemDto
     public int GoodsCount { get; set; }
 
     /// <summary>
+    /// Names of the goods, so the list can be searched by what a supplier sells.
+    /// </summary>
+    /// <remarks>
+    /// "Who refills Biogon" is how the question actually arrives, and a supplier's own name
+    /// never contains it. Names only — the list needs no prices, and sending them would put
+    /// the whole price list on a screen that shows none of it.
+    /// </remarks>
+    public List<string> GoodNames { get; set; } = [];
+
+    /// <summary>
     /// The whole weekly schedule, from which the client computes open/closed against the
     /// viewer's own clock. Not a server-computed flag: it would be stale as soon as the
     /// response is cached, and it would answer a question about the viewer's time zone

@@ -76,6 +76,60 @@ export interface IClient {
     loginEndpoint(data: LoginUserDto, signal?: AbortSignal): Promise<LoginResponse>;
 
     /**
+     * Gets filtered supplier list
+     * @return List of suppliers
+     */
+    getSupplierListEndpoint(parameters: { [key: string]: string; }, signal?: AbortSignal): Promise<SupplierListItemDto[]>;
+
+    /**
+     * Creates supplier
+     * @return Supplier created
+     */
+    createSupplierEndpoint(data: CreateSupplierDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Gets supplier detail
+     * @return Detail of supplier
+     */
+    getSupplierDetailEndpoint(id: string, signal?: AbortSignal): Promise<SupplierDto>;
+
+    /**
+     * Updates supplier
+     * @return Supplier updated
+     */
+    updateSupplierEndpoint(id: string, data: UpdateSupplierDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes supplier
+     * @return Supplier deleted
+     */
+    deleteSupplierEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Replaces supplier opening hours
+     * @return Opening hours replaced
+     */
+    replaceSupplierOpeningHoursEndpoint(id: string, data: ReplaceSupplierOpeningHoursDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Adds goods to a supplier price list
+     * @return Goods created
+     */
+    createSupplierGoodEndpoint(id: string, data: SupplierGoodUpsertDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Removes goods from a supplier price list
+     * @return Goods deleted
+     */
+    deleteSupplierGoodEndpoint(goodId: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Updates goods on a supplier price list
+     * @return Goods updated
+     */
+    updateSupplierGoodEndpoint(goodId: string, data: SupplierGoodUpsertDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Gets garage-sale revenue over a date window
      * @return Revenue totals, trend, payment split and outstanding invoices
      */
@@ -509,6 +563,18 @@ export interface IClient {
     createClientNoteEndpoint(id: string, data: CreateNoteDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets supplier notes list
+     * @return List of notes for a supplier
+     */
+    getSupplierNotesEndpoint(id: string, signal?: AbortSignal): Promise<NoteDto[]>;
+
+    /**
+     * Creates a supplier note
+     * @return Note created
+     */
+    createSupplierNoteEndpoint(id: string, data: CreateNoteDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Updates a client note
      * @return Note updated
      */
@@ -519,6 +585,12 @@ export interface IClient {
      * @return Note deleted
      */
     deleteClientNoteEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a supplier note
+     * @return Note deleted
+     */
+    deleteSupplierNoteEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
      * Deletes a brewery note
@@ -1372,6 +1444,611 @@ export class Client implements IClient {
             });
         }
         return Promise.resolve<LoginResponse>(null as any);
+    }
+
+    /**
+     * Gets filtered supplier list
+     * @return List of suppliers
+     */
+    getSupplierListEndpoint(parameters: { [key: string]: string; }, signal?: AbortSignal): Promise<SupplierListItemDto[]> {
+        let url_ = this.baseUrl + "/ale-track/suppliers?";
+        if (parameters === undefined || parameters === null)
+            throw new globalThis.Error("The parameter 'parameters' must be defined and cannot be null.");
+        else
+            url_ += "Parameters=" + encodeURIComponent("" + parameters) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetSupplierListEndpoint(_response);
+        });
+    }
+
+    protected processGetSupplierListEndpoint(response: Response): Promise<SupplierListItemDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(SupplierListItemDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<SupplierListItemDto[]>(null as any);
+    }
+
+    /**
+     * Creates supplier
+     * @return Supplier created
+     */
+    createSupplierEndpoint(data: CreateSupplierDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateSupplierEndpoint(_response);
+        });
+    }
+
+    protected processCreateSupplierEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : null as any;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Gets supplier detail
+     * @return Detail of supplier
+     */
+    getSupplierDetailEndpoint(id: string, signal?: AbortSignal): Promise<SupplierDto> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetSupplierDetailEndpoint(_response);
+        });
+    }
+
+    protected processGetSupplierDetailEndpoint(response: Response): Promise<SupplierDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = SupplierDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<SupplierDto>(null as any);
+    }
+
+    /**
+     * Updates supplier
+     * @return Supplier updated
+     */
+    updateSupplierEndpoint(id: string, data: UpdateSupplierDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateSupplierEndpoint(_response);
+        });
+    }
+
+    protected processUpdateSupplierEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes supplier
+     * @return Supplier deleted
+     */
+    deleteSupplierEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteSupplierEndpoint(_response);
+        });
+    }
+
+    protected processDeleteSupplierEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Replaces supplier opening hours
+     * @return Opening hours replaced
+     */
+    replaceSupplierOpeningHoursEndpoint(id: string, data: ReplaceSupplierOpeningHoursDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}/opening-hours";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processReplaceSupplierOpeningHoursEndpoint(_response);
+        });
+    }
+
+    protected processReplaceSupplierOpeningHoursEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Adds goods to a supplier price list
+     * @return Goods created
+     */
+    createSupplierGoodEndpoint(id: string, data: SupplierGoodUpsertDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}/goods";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateSupplierGoodEndpoint(_response);
+        });
+    }
+
+    protected processCreateSupplierGoodEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : null as any;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Removes goods from a supplier price list
+     * @return Goods deleted
+     */
+    deleteSupplierGoodEndpoint(goodId: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/goods/{goodId}";
+        if (goodId === undefined || goodId === null)
+            throw new globalThis.Error("The parameter 'goodId' must be defined.");
+        url_ = url_.replace("{goodId}", encodeURIComponent("" + goodId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteSupplierGoodEndpoint(_response);
+        });
+    }
+
+    protected processDeleteSupplierGoodEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("SupplierGood not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Updates goods on a supplier price list
+     * @return Goods updated
+     */
+    updateSupplierGoodEndpoint(goodId: string, data: SupplierGoodUpsertDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/goods/{goodId}";
+        if (goodId === undefined || goodId === null)
+            throw new globalThis.Error("The parameter 'goodId' must be defined.");
+        url_ = url_.replace("{goodId}", encodeURIComponent("" + goodId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateSupplierGoodEndpoint(_response);
+        });
+    }
+
+    protected processUpdateSupplierGoodEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("SupplierGood not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
     }
 
     /**
@@ -6003,6 +6680,141 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets supplier notes list
+     * @return List of notes for a supplier
+     */
+    getSupplierNotesEndpoint(id: string, signal?: AbortSignal): Promise<NoteDto[]> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}/notes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetSupplierNotesEndpoint(_response);
+        });
+    }
+
+    protected processGetSupplierNotesEndpoint(response: Response): Promise<NoteDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(NoteDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<NoteDto[]>(null as any);
+    }
+
+    /**
+     * Creates a supplier note
+     * @return Note created
+     */
+    createSupplierNoteEndpoint(id: string, data: CreateNoteDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/{id}/notes";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processCreateSupplierNoteEndpoint(_response);
+        });
+    }
+
+    protected processCreateSupplierNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 201) {
+            return response.text().then((_responseText) => {
+            let result201: any = null;
+            let resultData201 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result201 = resultData201 !== undefined ? resultData201 : null as any;
+    
+            return result201;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Supplier not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Updates a client note
      * @return Note updated
      */
@@ -6099,6 +6911,70 @@ export class Client implements IClient {
     }
 
     protected processDeleteClientNoteEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 202) {
+            return response.text().then((_responseText) => {
+            let result202: any = null;
+            let resultData202 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result202 = resultData202 !== undefined ? resultData202 : null as any;
+    
+            return result202;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Note not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a supplier note
+     * @return Note deleted
+     */
+    deleteSupplierNoteEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/suppliers/notes/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteSupplierNoteEndpoint(_response);
+        });
+    }
+
+    protected processDeleteSupplierNoteEndpoint(response: Response): Promise<string> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 202) {
@@ -8535,6 +9411,7 @@ export enum ModuleType {
     Users = 8,
     Reports = 9,
     Sales = 10,
+    Suppliers = 11,
 }
 
 export enum PermissionLevel {
@@ -8760,6 +9637,942 @@ export interface ILoginUserDto {
     password: string;
 }
 
+export class SupplierListItemDto implements ISupplierListItemDto {
+    id?: string;
+    name?: string;
+    businessName?: string | undefined;
+    officialAddress?: AddressDto;
+    contacts?: SupplierContactDto[];
+    goodsCount?: number;
+    goodNames?: string[];
+    openingHours?: SupplierOpeningHoursDto[];
+
+    constructor(data?: ISupplierListItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(SupplierContactDto.fromJS(item));
+            }
+            this.goodsCount = _data["goodsCount"];
+            if (Array.isArray(_data["goodNames"])) {
+                this.goodNames = [] as any;
+                for (let item of _data["goodNames"])
+                    this.goodNames!.push(item);
+            }
+            if (Array.isArray(_data["openingHours"])) {
+                this.openingHours = [] as any;
+                for (let item of _data["openingHours"])
+                    this.openingHours!.push(SupplierOpeningHoursDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SupplierListItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierListItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["goodsCount"] = this.goodsCount;
+        if (Array.isArray(this.goodNames)) {
+            data["goodNames"] = [];
+            for (let item of this.goodNames)
+                data["goodNames"].push(item);
+        }
+        if (Array.isArray(this.openingHours)) {
+            data["openingHours"] = [];
+            for (let item of this.openingHours)
+                data["openingHours"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISupplierListItemDto {
+    id?: string;
+    name?: string;
+    businessName?: string | undefined;
+    officialAddress?: AddressDto;
+    contacts?: SupplierContactDto[];
+    goodsCount?: number;
+    goodNames?: string[];
+    openingHours?: SupplierOpeningHoursDto[];
+}
+
+export class CreateUserDto implements ICreateUserDto {
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    userName!: string;
+    password!: string;
+    userRoles!: UserRoleType[];
+    permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+
+    constructor(data?: ICreateUserDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.userRoles = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.firstName = _data["firstName"];
+            this.lastName = _data["lastName"];
+            this.userName = _data["userName"];
+            this.password = _data["password"];
+            if (Array.isArray(_data["userRoles"])) {
+                this.userRoles = [] as any;
+                for (let item of _data["userRoles"])
+                    this.userRoles!.push(item);
+            }
+            if (Array.isArray(_data["permissions"])) {
+                this.permissions = [] as any;
+                for (let item of _data["permissions"])
+                    this.permissions!.push(ModulePermissionDto.fromJS(item));
+            }
+            this.driverId = _data["driverId"];
+        }
+    }
+
+    static fromJS(data: any): CreateUserDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new CreateUserDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["firstName"] = this.firstName;
+        data["lastName"] = this.lastName;
+        data["userName"] = this.userName;
+        data["password"] = this.password;
+        if (Array.isArray(this.userRoles)) {
+            data["userRoles"] = [];
+            for (let item of this.userRoles)
+                data["userRoles"].push(item);
+        }
+        if (Array.isArray(this.permissions)) {
+            data["permissions"] = [];
+            for (let item of this.permissions)
+                data["permissions"].push(item ? item.toJSON() : undefined as any);
+        }
+        data["driverId"] = this.driverId;
+        return data;
+    }
+}
+
+export interface ICreateUserDto {
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    userName: string;
+    password: string;
+    userRoles: UserRoleType[];
+    permissions?: ModulePermissionDto[];
+    driverId?: string | undefined;
+}
+
+export class AddressDto implements IAddressDto {
+    streetName!: string;
+    streetNumber!: string;
+    city!: string;
+    zip!: string;
+    country!: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+
+    constructor(data?: IAddressDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.streetName = _data["streetName"];
+            this.streetNumber = _data["streetNumber"];
+            this.city = _data["city"];
+            this.zip = _data["zip"];
+            this.country = _data["country"];
+            this.latitude = _data["latitude"];
+            this.longitude = _data["longitude"];
+        }
+    }
+
+    static fromJS(data: any): AddressDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new AddressDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["streetName"] = this.streetName;
+        data["streetNumber"] = this.streetNumber;
+        data["city"] = this.city;
+        data["zip"] = this.zip;
+        data["country"] = this.country;
+        data["latitude"] = this.latitude;
+        data["longitude"] = this.longitude;
+        return data;
+    }
+}
+
+export interface IAddressDto {
+    streetName: string;
+    streetNumber: string;
+    city: string;
+    zip: string;
+    country: Country;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+}
+
+export enum Country {
+    Czechia = 1,
+    Germany = 2,
+}
+
+export class SupplierContactDto implements ISupplierContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+
+    constructor(data?: ISupplierContactDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.description = _data["description"];
+            this.value = _data["value"];
+        }
+    }
+
+    static fromJS(data: any): SupplierContactDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierContactDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["description"] = this.description;
+        data["value"] = this.value;
+        return data;
+    }
+}
+
+export interface ISupplierContactDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+}
+
+export enum ContactType {
+    Email = 0,
+    Phone = 1,
+}
+
+export class SupplierOpeningHoursDto implements ISupplierOpeningHoursDto {
+    dayOfWeek?: DayOfWeek;
+    from?: string;
+    to?: string;
+
+    constructor(data?: ISupplierOpeningHoursDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.dayOfWeek = _data["dayOfWeek"];
+            this.from = _data["from"];
+            this.to = _data["to"];
+        }
+    }
+
+    static fromJS(data: any): SupplierOpeningHoursDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierOpeningHoursDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["dayOfWeek"] = this.dayOfWeek;
+        data["from"] = this.from;
+        data["to"] = this.to;
+        return data;
+    }
+}
+
+export interface ISupplierOpeningHoursDto {
+    dayOfWeek?: DayOfWeek;
+    from?: string;
+    to?: string;
+}
+
+export enum DayOfWeek {
+    Sunday = 0,
+    Monday = 1,
+    Tuesday = 2,
+    Wednesday = 3,
+    Thursday = 4,
+    Friday = 5,
+    Saturday = 6,
+}
+
+export class SupplierDto implements ISupplierDto {
+    id?: string;
+    name?: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactDto[];
+    openingHours?: SupplierOpeningHoursDto[];
+    goods?: SupplierGoodDto[];
+
+    constructor(data?: ISupplierDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.note = _data["note"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
+            this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(SupplierContactDto.fromJS(item));
+            }
+            if (Array.isArray(_data["openingHours"])) {
+                this.openingHours = [] as any;
+                for (let item of _data["openingHours"])
+                    this.openingHours!.push(SupplierOpeningHoursDto.fromJS(item));
+            }
+            if (Array.isArray(_data["goods"])) {
+                this.goods = [] as any;
+                for (let item of _data["goods"])
+                    this.goods!.push(SupplierGoodDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SupplierDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["note"] = this.note;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
+        data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.openingHours)) {
+            data["openingHours"] = [];
+            for (let item of this.openingHours)
+                data["openingHours"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.goods)) {
+            data["goods"] = [];
+            for (let item of this.goods)
+                data["goods"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISupplierDto {
+    id?: string;
+    name?: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactDto[];
+    openingHours?: SupplierOpeningHoursDto[];
+    goods?: SupplierGoodDto[];
+}
+
+export class SupplierGoodDto implements ISupplierGoodDto {
+    id?: string;
+    name?: string;
+    size?: string | undefined;
+    description?: string | undefined;
+    prices?: SupplierGoodPriceDto[];
+
+    constructor(data?: ISupplierGoodDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.size = _data["size"];
+            this.description = _data["description"];
+            if (Array.isArray(_data["prices"])) {
+                this.prices = [] as any;
+                for (let item of _data["prices"])
+                    this.prices!.push(SupplierGoodPriceDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SupplierGoodDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierGoodDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["size"] = this.size;
+        data["description"] = this.description;
+        if (Array.isArray(this.prices)) {
+            data["prices"] = [];
+            for (let item of this.prices)
+                data["prices"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISupplierGoodDto {
+    id?: string;
+    name?: string;
+    size?: string | undefined;
+    description?: string | undefined;
+    prices?: SupplierGoodPriceDto[];
+}
+
+export class SupplierGoodPriceDto implements ISupplierGoodPriceDto {
+    kind?: SupplierChargeKind;
+    priceWithVat?: number;
+    priceWithoutVat?: number | undefined;
+    note?: string | undefined;
+
+    constructor(data?: ISupplierGoodPriceDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.priceWithoutVat = _data["priceWithoutVat"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): SupplierGoodPriceDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierGoodPriceDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["priceWithVat"] = this.priceWithVat;
+        data["priceWithoutVat"] = this.priceWithoutVat;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface ISupplierGoodPriceDto {
+    kind?: SupplierChargeKind;
+    priceWithVat?: number;
+    priceWithoutVat?: number | undefined;
+    note?: string | undefined;
+}
+
+export enum SupplierChargeKind {
+    Fill = 0,
+    Purchase = 1,
+    Deposit = 2,
+    Rent = 3,
+    Other = 4,
+}
+
+export class GetSupplierDetailRequest implements IGetSupplierDetailRequest {
+
+    constructor(data?: IGetSupplierDetailRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetSupplierDetailRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetSupplierDetailRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetSupplierDetailRequest {
+}
+
+export class DeleteSupplierGoodRequest implements IDeleteSupplierGoodRequest {
+
+    constructor(data?: IDeleteSupplierGoodRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteSupplierGoodRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteSupplierGoodRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteSupplierGoodRequest {
+}
+
+export class UpdateSupplierDto implements IUpdateSupplierDto {
+    name!: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactUpsertDto[];
+
+    constructor(data?: IUpdateSupplierDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.note = _data["note"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
+            this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(SupplierContactUpsertDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): UpdateSupplierDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateSupplierDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["note"] = this.note;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
+        data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IUpdateSupplierDto {
+    name: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactUpsertDto[];
+}
+
+export class SupplierContactUpsertDto implements ISupplierContactUpsertDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+
+    constructor(data?: ISupplierContactUpsertDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.description = _data["description"];
+            this.value = _data["value"];
+        }
+    }
+
+    static fromJS(data: any): SupplierContactUpsertDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierContactUpsertDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["description"] = this.description;
+        data["value"] = this.value;
+        return data;
+    }
+}
+
+export interface ISupplierContactUpsertDto {
+    type?: ContactType;
+    description?: string | undefined;
+    value?: string;
+}
+
+export class ReplaceSupplierOpeningHoursDto implements IReplaceSupplierOpeningHoursDto {
+    openingHours?: SupplierOpeningHoursUpsertDto[];
+
+    constructor(data?: IReplaceSupplierOpeningHoursDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["openingHours"])) {
+                this.openingHours = [] as any;
+                for (let item of _data["openingHours"])
+                    this.openingHours!.push(SupplierOpeningHoursUpsertDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): ReplaceSupplierOpeningHoursDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ReplaceSupplierOpeningHoursDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.openingHours)) {
+            data["openingHours"] = [];
+            for (let item of this.openingHours)
+                data["openingHours"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface IReplaceSupplierOpeningHoursDto {
+    openingHours?: SupplierOpeningHoursUpsertDto[];
+}
+
+export class SupplierOpeningHoursUpsertDto implements ISupplierOpeningHoursUpsertDto {
+    dayOfWeek?: DayOfWeek;
+    from?: string;
+    to?: string;
+
+    constructor(data?: ISupplierOpeningHoursUpsertDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.dayOfWeek = _data["dayOfWeek"];
+            this.from = _data["from"];
+            this.to = _data["to"];
+        }
+    }
+
+    static fromJS(data: any): SupplierOpeningHoursUpsertDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierOpeningHoursUpsertDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["dayOfWeek"] = this.dayOfWeek;
+        data["from"] = this.from;
+        data["to"] = this.to;
+        return data;
+    }
+}
+
+export interface ISupplierOpeningHoursUpsertDto {
+    dayOfWeek?: DayOfWeek;
+    from?: string;
+    to?: string;
+}
+
+export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
+    name!: string;
+    size?: string | undefined;
+    description?: string | undefined;
+    prices!: SupplierGoodPriceUpsertDto[];
+
+    constructor(data?: ISupplierGoodUpsertDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.prices = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.name = _data["name"];
+            this.size = _data["size"];
+            this.description = _data["description"];
+            if (Array.isArray(_data["prices"])) {
+                this.prices = [] as any;
+                for (let item of _data["prices"])
+                    this.prices!.push(SupplierGoodPriceUpsertDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SupplierGoodUpsertDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierGoodUpsertDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["name"] = this.name;
+        data["size"] = this.size;
+        data["description"] = this.description;
+        if (Array.isArray(this.prices)) {
+            data["prices"] = [];
+            for (let item of this.prices)
+                data["prices"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISupplierGoodUpsertDto {
+    name: string;
+    size?: string | undefined;
+    description?: string | undefined;
+    prices: SupplierGoodPriceUpsertDto[];
+}
+
+export class SupplierGoodPriceUpsertDto implements ISupplierGoodPriceUpsertDto {
+    kind!: SupplierChargeKind;
+    priceWithVat?: number;
+    priceWithoutVat?: number | undefined;
+    note?: string | undefined;
+
+    constructor(data?: ISupplierGoodPriceUpsertDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.kind = _data["kind"];
+            this.priceWithVat = _data["priceWithVat"];
+            this.priceWithoutVat = _data["priceWithoutVat"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): SupplierGoodPriceUpsertDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SupplierGoodPriceUpsertDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["kind"] = this.kind;
+        data["priceWithVat"] = this.priceWithVat;
+        data["priceWithoutVat"] = this.priceWithoutVat;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface ISupplierGoodPriceUpsertDto {
+    kind: SupplierChargeKind;
+    priceWithVat?: number;
+    priceWithoutVat?: number | undefined;
+    note?: string | undefined;
+}
+
+export class DeleteSupplierRequest implements IDeleteSupplierRequest {
+
+    constructor(data?: IDeleteSupplierRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteSupplierRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteSupplierRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteSupplierRequest {
+}
+
 export class GarageSalesRevenueReportDto implements IGarageSalesRevenueReportDto {
     totalRevenue?: number;
     salesCount?: number;
@@ -8852,83 +10665,68 @@ export interface IGarageSalesRevenueReportDto {
     unpaidTotal?: number;
 }
 
-export class CreateUserDto implements ICreateUserDto {
-    firstName?: string | undefined;
-    lastName?: string | undefined;
-    userName!: string;
-    password!: string;
-    userRoles!: UserRoleType[];
-    permissions?: ModulePermissionDto[];
-    driverId?: string | undefined;
+export class CreateSupplierDto implements ICreateSupplierDto {
+    name!: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactUpsertDto[];
 
-    constructor(data?: ICreateUserDto) {
+    constructor(data?: ICreateSupplierDto) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
                     (this as any)[property] = (data as any)[property];
             }
         }
-        if (!data) {
-            this.userRoles = [];
-        }
     }
 
     init(_data?: any) {
         if (_data) {
-            this.firstName = _data["firstName"];
-            this.lastName = _data["lastName"];
-            this.userName = _data["userName"];
-            this.password = _data["password"];
-            if (Array.isArray(_data["userRoles"])) {
-                this.userRoles = [] as any;
-                for (let item of _data["userRoles"])
-                    this.userRoles!.push(item);
+            this.name = _data["name"];
+            this.businessName = _data["businessName"];
+            this.note = _data["note"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
+            this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            if (Array.isArray(_data["contacts"])) {
+                this.contacts = [] as any;
+                for (let item of _data["contacts"])
+                    this.contacts!.push(SupplierContactUpsertDto.fromJS(item));
             }
-            if (Array.isArray(_data["permissions"])) {
-                this.permissions = [] as any;
-                for (let item of _data["permissions"])
-                    this.permissions!.push(ModulePermissionDto.fromJS(item));
-            }
-            this.driverId = _data["driverId"];
         }
     }
 
-    static fromJS(data: any): CreateUserDto {
+    static fromJS(data: any): CreateSupplierDto {
         data = typeof data === 'object' ? data : {};
-        let result = new CreateUserDto();
+        let result = new CreateSupplierDto();
         result.init(data);
         return result;
     }
 
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
-        data["firstName"] = this.firstName;
-        data["lastName"] = this.lastName;
-        data["userName"] = this.userName;
-        data["password"] = this.password;
-        if (Array.isArray(this.userRoles)) {
-            data["userRoles"] = [];
-            for (let item of this.userRoles)
-                data["userRoles"].push(item);
+        data["name"] = this.name;
+        data["businessName"] = this.businessName;
+        data["note"] = this.note;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
+        data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        if (Array.isArray(this.contacts)) {
+            data["contacts"] = [];
+            for (let item of this.contacts)
+                data["contacts"].push(item ? item.toJSON() : undefined as any);
         }
-        if (Array.isArray(this.permissions)) {
-            data["permissions"] = [];
-            for (let item of this.permissions)
-                data["permissions"].push(item ? item.toJSON() : undefined as any);
-        }
-        data["driverId"] = this.driverId;
         return data;
     }
 }
 
-export interface ICreateUserDto {
-    firstName?: string | undefined;
-    lastName?: string | undefined;
-    userName: string;
-    password: string;
-    userRoles: UserRoleType[];
-    permissions?: ModulePermissionDto[];
-    driverId?: string | undefined;
+export interface ICreateSupplierDto {
+    name: string;
+    businessName?: string | undefined;
+    note?: string | undefined;
+    officialAddress?: AddressDto;
+    contactAddress?: AddressDto | undefined;
+    contacts?: SupplierContactUpsertDto[];
 }
 
 export class RevenueSeriesPointDto implements IRevenueSeriesPointDto {
@@ -10494,6 +12292,7 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
     outgoingShipmentsCount?: number | undefined;
     productDeliveriesCount?: number | undefined;
     salesCount?: number | undefined;
+    suppliersCount?: number | undefined;
 
     constructor(data?: INumberOfRecordsInEachModuleDto) {
         if (data) {
@@ -10516,6 +12315,7 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
             this.outgoingShipmentsCount = _data["outgoingShipmentsCount"];
             this.productDeliveriesCount = _data["productDeliveriesCount"];
             this.salesCount = _data["salesCount"];
+            this.suppliersCount = _data["suppliersCount"];
         }
     }
 
@@ -10538,6 +12338,7 @@ export class NumberOfRecordsInEachModuleDto implements INumberOfRecordsInEachMod
         data["outgoingShipmentsCount"] = this.outgoingShipmentsCount;
         data["productDeliveriesCount"] = this.productDeliveriesCount;
         data["salesCount"] = this.salesCount;
+        data["suppliersCount"] = this.suppliersCount;
         return data;
     }
 }
@@ -10553,6 +12354,7 @@ export interface INumberOfRecordsInEachModuleDto {
     outgoingShipmentsCount?: number | undefined;
     productDeliveriesCount?: number | undefined;
     salesCount?: number | undefined;
+    suppliersCount?: number | undefined;
 }
 
 export class OperationsReportDto implements IOperationsReportDto {
@@ -11549,16 +13351,6 @@ export enum ReminderType {
 export enum ReminderRecurrenceType {
     Weekly = 0,
     Monthly = 1,
-}
-
-export enum DayOfWeek {
-    Sunday = 0,
-    Monday = 1,
-    Tuesday = 2,
-    Wednesday = 3,
-    Thursday = 4,
-    Friday = 5,
-    Saturday = 6,
 }
 
 export class GetBreweryRemindersListRequest extends FilterableRequest implements IGetBreweryRemindersListRequest {
@@ -14589,71 +16381,6 @@ export enum OutgoingShipmentStopKind {
     Company = 2,
 }
 
-export class AddressDto implements IAddressDto {
-    streetName!: string;
-    streetNumber!: string;
-    city!: string;
-    zip!: string;
-    country!: Country;
-    latitude?: number | undefined;
-    longitude?: number | undefined;
-
-    constructor(data?: IAddressDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.streetName = _data["streetName"];
-            this.streetNumber = _data["streetNumber"];
-            this.city = _data["city"];
-            this.zip = _data["zip"];
-            this.country = _data["country"];
-            this.latitude = _data["latitude"];
-            this.longitude = _data["longitude"];
-        }
-    }
-
-    static fromJS(data: any): AddressDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new AddressDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["streetName"] = this.streetName;
-        data["streetNumber"] = this.streetNumber;
-        data["city"] = this.city;
-        data["zip"] = this.zip;
-        data["country"] = this.country;
-        data["latitude"] = this.latitude;
-        data["longitude"] = this.longitude;
-        return data;
-    }
-}
-
-export interface IAddressDto {
-    streetName: string;
-    streetNumber: string;
-    city: string;
-    zip: string;
-    country: Country;
-    latitude?: number | undefined;
-    longitude?: number | undefined;
-}
-
-export enum Country {
-    Czechia = 1,
-    Germany = 2,
-}
-
 export class ClientDeliveryPlaceDto implements IClientDeliveryPlaceDto {
     id?: string;
     name?: string;
@@ -17375,9 +19102,9 @@ export class GetClientNotesRequest implements IGetClientNotesRequest {
 export interface IGetClientNotesRequest {
 }
 
-export class DeleteClientNoteRequest implements IDeleteClientNoteRequest {
+export class GetSupplierNotesRequest implements IGetSupplierNotesRequest {
 
-    constructor(data?: IDeleteClientNoteRequest) {
+    constructor(data?: IGetSupplierNotesRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -17389,9 +19116,9 @@ export class DeleteClientNoteRequest implements IDeleteClientNoteRequest {
     init(_data?: any) {
     }
 
-    static fromJS(data: any): DeleteClientNoteRequest {
+    static fromJS(data: any): GetSupplierNotesRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new DeleteClientNoteRequest();
+        let result = new GetSupplierNotesRequest();
         result.init(data);
         return result;
     }
@@ -17402,7 +19129,37 @@ export class DeleteClientNoteRequest implements IDeleteClientNoteRequest {
     }
 }
 
-export interface IDeleteClientNoteRequest {
+export interface IGetSupplierNotesRequest {
+}
+
+export class DeleteSupplierNoteRequest implements IDeleteSupplierNoteRequest {
+
+    constructor(data?: IDeleteSupplierNoteRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteSupplierNoteRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteSupplierNoteRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteSupplierNoteRequest {
 }
 
 export class UpdateNoteDto implements IUpdateNoteDto {
@@ -17439,6 +19196,36 @@ export class UpdateNoteDto implements IUpdateNoteDto {
 
 export interface IUpdateNoteDto {
     text: string;
+}
+
+export class DeleteClientNoteRequest implements IDeleteClientNoteRequest {
+
+    constructor(data?: IDeleteClientNoteRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientNoteRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientNoteRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientNoteRequest {
 }
 
 export class DeleteBreweryNoteRequest implements IDeleteBreweryNoteRequest {
@@ -18435,11 +20222,6 @@ export interface IClientContactDto {
     type?: ContactType;
     description?: string | undefined;
     value?: string;
-}
-
-export enum ContactType {
-    Email = 0,
-    Phone = 1,
 }
 
 export class GetClientDetailRequest implements IGetClientDetailRequest {

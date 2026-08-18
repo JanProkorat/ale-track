@@ -10,6 +10,7 @@ import { ReportsPage } from 'src/features/reports/ReportsPage';
 import { DriversPage } from 'src/features/drivers/DriversPage';
 import { BreweriesPage } from 'src/features/breweries/BreweriesPage';
 import { ClientsPage } from 'src/features/clients/ClientsPage';
+import { SuppliersPage } from 'src/features/suppliers/SuppliersPage';
 import { OrdersPage } from 'src/features/orders/OrdersPage';
 import { ShipmentsPage } from 'src/features/shipments/ShipmentsPage';
 import { DeliveriesPage } from 'src/features/deliveries/DeliveriesPage';
@@ -45,6 +46,8 @@ export const router = createBrowserRouter([
           { path: `${PATHS.sales}/:id/edit`, element: <SalesPage view="edit" /> },
           { path: PATHS.breweries, element: <BreweriesPage /> },
           { path: `${PATHS.breweries}/:id`, element: <BreweriesPage /> },
+          { path: PATHS.suppliers, element: <SuppliersPage /> },
+          { path: `${PATHS.suppliers}/:id`, element: <SuppliersPage /> },
           { path: PATHS.clients, element: <ClientsPage /> },
           { path: `${PATHS.clients}/:id`, element: <ClientsPage /> },
           { path: PATHS.drivers, element: <DriversPage /> },

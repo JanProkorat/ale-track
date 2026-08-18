@@ -230,6 +230,24 @@ gap, the roll to the next open day, the Sunday skip, nonstop at 23:58, a supplie
 with no hours. Plus `supplierGoods.test.ts`, and component tests for the page
 (loading/error/empty via a mock that can express all three) and the two drawers.
 
+## Found during implementation
+
+**Soft delete was broken for every entity with an owned `Address` — including `Client`.**
+Marking an entity `Deleted` cascades to its owned types, and an owned `Address` lives in the
+owner's own table. `SoftlyDeleteBySettingFlag` flipped only the owner back to `Modified`, so
+the owned entries stayed `Deleted` and EF wrote NULL into their columns in the same UPDATE:
+`null value in column "official_address_street_name" violates not-null constraint`. Both
+`DELETE /suppliers/{id}` and the pre-existing `DELETE /clients/{id}` answered 500.
+
+Fixed in `AleTrackDbContext.KeepOwnedData`, which resets an entity's owned entries when the
+delete is only a soft one. **The unit suite cannot see this class of bug at all** — it mocks
+`DbSet` through Moq, so no change tracker exists to get it wrong, and 947 tests passed either
+way. It was caught by a scripted round trip against a real Postgres.
+
+Worth considering separately: a second test project with `Microsoft.EntityFrameworkCore.Sqlite`
+would let change-tracker behaviour be asserted in CI. That is a new dependency and its own
+decision, so it is recommended here rather than taken.
+
 ## Known gaps
 
 - No purchase path (see Scope) — the registry records prices nobody yet spends.

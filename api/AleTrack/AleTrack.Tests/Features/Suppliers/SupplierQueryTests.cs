@@ -44,6 +44,8 @@ public sealed class GetSupplierListTests
         row.OfficialAddress.City.Should().Be("Praha");
         row.Contacts.Should().HaveCount(1);
         row.GoodsCount.Should().Be(2);
+        // Names, not the whole price list: the list is searchable by what a supplier sells.
+        row.GoodNames.Should().HaveCount(2);
         row.OpeningHours.Should().HaveCount(2);
     }
 

@@ -33,6 +33,9 @@ export const qk = {
   clientReminders: (clientId: string) => ['clients', clientId, 'reminders'] as const,
   clientDeliveryPlaces: (clientId: string) => ['clients', clientId, 'delivery-places'] as const,
 
+  suppliers: resource('suppliers'),
+  supplierNotes: (supplierId: string) => ['suppliers', supplierId, 'notes'] as const,
+
   products: resource('products'),
   productHistory: (clientId: string) => ['products', 'history', clientId] as const,
 

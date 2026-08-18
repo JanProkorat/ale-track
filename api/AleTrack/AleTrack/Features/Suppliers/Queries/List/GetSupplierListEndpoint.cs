@@ -50,6 +50,7 @@ public sealed class GetSupplierListEndpoint(AleTrackDbContext dbContext)
                     })
                     .ToList(),
                 GoodsCount = s.Goods.Count,
+                GoodNames = s.Goods.Select(g => g.Name).ToList(),
                 OpeningHours = s.OpeningHours
                     .OrderBy(h => h.DayOfWeek)
                     .ThenBy(h => h.From)
