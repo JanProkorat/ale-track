@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 
 namespace AleTrack.Features.OutgoingShipments.Utils;
@@ -9,7 +10,9 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 /// <remarks>
 /// Runs on the transition into <see cref="OutgoingShipmentState.Loaded"/> — the same boundary at
 /// which <see cref="ShipmentMutability"/> freezes content, which is what stops the snapshot and
-/// the shipment it describes from ever diverging.
+/// the shipment it describes from ever diverging. This is also where a client's own price is
+/// billed rather than the brewery's catalog price: <see cref="Apply"/> resolves and snapshots it,
+/// and because a loaded run is never re-applied, a later reprice cannot move the frozen number.
 ///
 /// Neither method touches the DbContext. <c>stop_id</c> is required and cascading, so clearing a
 /// stop's <see cref="OutgoingShipmentStop.Items"/> collection orphans the rows and EF deletes
@@ -21,7 +24,16 @@ public static class ShipmentContentSnapshotWriter
     /// Replaces every order stop's snapshotted content and client attribution. Idempotent:
     /// re-loading a run rebuilds the rows rather than appending to them.
     /// </summary>
-    public static void Apply(OutgoingShipment shipment)
+    /// <param name="shipment">The shipment whose order stops get snapshotted.</param>
+    /// <param name="priceListsByClientId">
+    /// Each client's own price overrides, keyed by the client's database id. Callers load this
+    /// in one query and hand it in — the writer stays DbContext-free. A client with no entry
+    /// here (or a stop whose client row is missing) resolves to <see cref="ClientPriceList.Empty"/>
+    /// and therefore bills the catalog price.
+    /// </param>
+    public static void Apply(
+        OutgoingShipment shipment,
+        IReadOnlyDictionary<long, ClientPriceList> priceListsByClientId)
     {
         foreach (var stop in shipment.Stops.Where(s =>
                      s.Kind == OutgoingShipmentStopKind.Order && s.ClientOrder is not null))
@@ -32,7 +44,14 @@ public static class ShipmentContentSnapshotWriter
             stop.ClientName = order.Client?.Name;
             stop.ClientRegion = order.Client?.Region;
 
-            stop.Items = [.. order.OrderItems.Select(item => Snapshot(stop, item))];
+            // The client's own prices, or none — a stop whose client row has gone missing still
+            // has to be loadable, so this degrades rather than throwing.
+            var priceList = order.Client is not null
+                            && priceListsByClientId.TryGetValue(order.Client.Id, out var list)
+                ? list
+                : ClientPriceList.Empty;
+
+            stop.Items = [.. order.OrderItems.Select(item => Snapshot(stop, item, priceList))];
         }
     }
 
@@ -57,9 +76,11 @@ public static class ShipmentContentSnapshotWriter
     /// One snapshotted line. Degrades to empty strings and zeroes rather than throwing: a run
     /// must still be loadable when a product row has gone missing under it.
     /// </summary>
-    private static OutgoingShipmentStopItem Snapshot(OutgoingShipmentStop stop, OrderItem item)
+    private static OutgoingShipmentStopItem Snapshot(
+        OutgoingShipmentStop stop, OrderItem item, ClientPriceList priceList)
     {
         var product = item.Product;
+        var resolved = product is null ? (ResolvedPrice?)null : priceList.Resolve(product);
 
         return new OutgoingShipmentStopItem
         {
@@ -77,8 +98,8 @@ public static class ShipmentContentSnapshotWriter
             PackageSize = product?.PackageSize,
             UnitsPerPackage = product?.UnitsPerPackage ?? 1,
             Quantity = item.Quantity,
-            UnitPriceWithVat = product?.PriceWithVat ?? 0m,
-            UnitPriceWithoutVat = product?.PriceWithoutVat,
+            UnitPriceWithVat = resolved?.PriceWithVat ?? 0m,
+            UnitPriceWithoutVat = resolved?.PriceWithoutVat,
             BreweryPublicId = product?.Brewery?.PublicId ?? Guid.Empty,
             BreweryName = product?.Brewery?.Name ?? string.Empty
         };

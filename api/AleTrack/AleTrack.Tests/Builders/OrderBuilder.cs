@@ -70,7 +70,7 @@ public static class OrderBuilder
         Guid? clientId = null,
         DateOnly? requiredDeliveryDate = null,
         DateOnly? actualDeliveryDate = null,
-        OrderState state = OrderState.Planning,
+        OrderState? state = OrderState.Planning,
         List<UpdateOrderItemDto>? orderItems = null,
         List<OrderReturnDto>? returns = null,
         List<OrderNoteDto>? notes = null,

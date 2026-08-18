@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
@@ -12,12 +13,14 @@ namespace AleTrack.Tests.Features.OutgoingShipments;
 /// </summary>
 public sealed class ShipmentContentSnapshotWriterTests
 {
+    private static readonly Dictionary<long, ClientPriceList> NoClientPrices = new();
+
     [Fact]
     public void Apply_CopiesProductAndBreweryFactsOntoTheStop()
     {
         var f = Fixture();
 
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         var item = f.Shipment.Stops.Single().Items.Should().ContainSingle().Subject;
         item.ProductName.Should().Be("Albrecht 12°");
@@ -39,7 +42,7 @@ public sealed class ShipmentContentSnapshotWriterTests
     {
         var f = Fixture();
 
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         var stop = f.Shipment.Stops.Single();
         stop.ClientPublicId.Should().Be(f.Client.PublicId);
@@ -55,7 +58,7 @@ public sealed class ShipmentContentSnapshotWriterTests
     public void Apply_SnapshotIsIndependentOfLaterProductEdits()
     {
         var f = Fixture();
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         f.Product.Name = "Přejmenováno";
         f.Product.PriceWithVat = 99m;
@@ -72,8 +75,8 @@ public sealed class ShipmentContentSnapshotWriterTests
     {
         var f = Fixture();
 
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         f.Shipment.Stops.Single().Items.Should().HaveCount(1);
     }
@@ -92,7 +95,7 @@ public sealed class ShipmentContentSnapshotWriterTests
             Longitude = 16.6m
         });
 
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         var custom = f.Shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Custom);
         custom.Items.Should().BeEmpty();
@@ -109,7 +112,7 @@ public sealed class ShipmentContentSnapshotWriterTests
         var f = Fixture();
         f.Product.IsDeleted = true;
 
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         f.Shipment.Stops.Single().Items.Single().ProductName.Should().Be("Albrecht 12°");
     }
@@ -118,7 +121,7 @@ public sealed class ShipmentContentSnapshotWriterTests
     public void Clear_RemovesItemsAndClientAttribution()
     {
         var f = Fixture();
-        ShipmentContentSnapshotWriter.Apply(f.Shipment);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
 
         ShipmentContentSnapshotWriter.Clear(f.Shipment);
 
@@ -127,6 +130,63 @@ public sealed class ShipmentContentSnapshotWriterTests
         stop.ClientPublicId.Should().BeNull();
         stop.ClientName.Should().BeNull();
         stop.ClientRegion.Should().BeNull();
+    }
+
+    [Fact]
+    public void Apply_ClientWithOwnPrice_SnapshotsThatPriceNotTheCatalogOne()
+    {
+        var f = Fixture();
+        var priceLists = new Dictionary<long, ClientPriceList>
+        {
+            [f.Client.Id] = new(new Dictionary<long, decimal> { [f.Product.Id] = 1190m })
+        };
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
+
+        var item = f.Shipment.Stops.Single().Items.Single();
+        item.UnitPriceWithVat.Should().Be(1190m);
+        // The net price is scaled by the same ratio, not left at the catalog's own net price —
+        // the classic invoice bug is a gross/net pair that stops agreeing with each other.
+        item.UnitPriceWithoutVat.Should().Be(983.90m);
+    }
+
+    [Fact]
+    public void Apply_ClientWithoutOwnPrice_SnapshotsTheCatalogPrice()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, new Dictionary<long, ClientPriceList>());
+
+        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(11.49m);
+    }
+
+    /// <summary>
+    /// The freeze: re-running Apply is how a run rebuilds its snapshot, but a shipment that is
+    /// already Loaded is never re-applied, so the billed number cannot move even when the source
+    /// price does.
+    /// </summary>
+    [Fact]
+    public void Apply_RepricedAfterLoading_LeavesTheSnapshotAlone()
+    {
+        var f = Fixture();
+        var overridesByProductId = new Dictionary<long, decimal> { [f.Product.Id] = 1190m };
+        var priceLists = new Dictionary<long, ClientPriceList>
+        {
+            [f.Client.Id] = new(overridesByProductId)
+        };
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
+
+        var billed = f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat;
+        billed.Should().Be(1190m);
+
+        // The client is repriced afterwards — the source dictionary backing the price list
+        // changes — but nothing re-applies for an already-loaded run, so the snapshot row must
+        // not move.
+        overridesByProductId[f.Product.Id] = 1350m;
+
+        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(billed,
+            "the snapshot was written once and nothing re-reads the price list afterwards");
     }
 
     private sealed record Graph(

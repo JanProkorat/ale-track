@@ -9,8 +9,15 @@ describe('clientDetailTab', () => {
   it('keeps every tab the detail actually has', () => {
     expect(clientDetailTab('info')).toBe('info');
     expect(clientDetailTab('orders')).toBe('orders');
+    expect(clientDetailTab('prices')).toBe('prices');
     expect(clientDetailTab('reminders')).toBe('reminders');
     expect(clientDetailTab('notes')).toBe('notes');
+  });
+
+  it('narrows the prices tab and still falls back for an unknown value', () => {
+    expect(clientDetailTab('prices')).toBe('prices');
+    expect(clientDetailTab('nonsense')).toBe('info');
+    expect(clientDetailTab(null)).toBe('info');
   });
 
   it.each([

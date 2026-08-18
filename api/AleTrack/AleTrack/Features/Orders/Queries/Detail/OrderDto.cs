@@ -119,7 +119,19 @@ public sealed record OrderItemDto
     /// Represents the quantity of the product in the order item.
     /// </summary>
     public int Quantity { get; set; }
-    
+
+    /// <summary>
+    /// Unit price with VAT: the frozen snapshot price once the order has been loaded,
+    /// otherwise the client's live-resolved price.
+    /// </summary>
+    public decimal UnitPriceWithVat { get; set; }
+
+    /// <summary>
+    /// The ceník price this stands in for. Null for snapshot-fed rows: the snapshot never
+    /// recorded the ceník price of the day, and today's beside a frozen one would mislead.
+    /// </summary>
+    public decimal? ListPriceWithVat { get; set; }
+
     /// <summary>
     /// State of the reminder for this item.
     /// </summary>

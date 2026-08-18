@@ -9,6 +9,28 @@ never restates a past one.
 feature in mind and already documents the intent in its own remarks. This design
 fills in the rule side that comment anticipated.
 
+> **Revised 2026-08-17**, re-checked against the code after price-list import,
+> explicit packaging, role-capability config and Garážový prodej landed. The data
+> model, the resolver and the freeze semantics survived unchanged. What changed:
+> the charged-vs-catalog field is named `ListPriceWithVat` after the precedent
+> garage sales set (#the-name-listpricewithvat), counter sales joined the surface
+> inventory (#counter-sales), the write routes are now a documented deviation
+> rather than a mirror (#api-surface), the Ceník lands in a tabbed
+> ClientDetail (#ceník-tab-on-clientdetail), and bulk price-list imports reopened
+> the staleness question (#staleness-after-a-price-list-import).
+>
+> The four questions that revision opened were **settled on 2026-08-17** and are
+> written into the sections below as decisions: an override pre-fills counter-sale
+> lines and wins over the last-sold price on both segments of the sale catalog; the
+> Ceník gets its own fifth tab on ClientDetail; and `set_on` lands as a column now
+> with its staleness marker deferred.
+>
+> **Added 2026-08-17:** bulk editing over the whole catalog
+> (#bulk-editing-over-the-catalog), which takes a percentage against the ceník *or*
+> exact amounts per row and saves both under one button. It changes no stored shape —
+> the two Out of scope entries it touches are narrowed to "as a stored rule" rather
+> than dropped.
+
 ## Data model
 
 New entity `ClientProductPrice` → table `client_product_prices`.
@@ -18,6 +40,14 @@ New entity `ClientProductPrice` → table `client_product_prices`.
 | `client_id` | `long` FK | Cascade — deleting a client drops its price list |
 | `product_id` | `long` FK | **Restrict** |
 | `price_with_vat` | `decimal` | The only operator-entered value |
+| `set_on` | `DateOnly` | Set server-side on every write — see #staleness-after-a-price-list-import |
+
+`set_on` is **provenance, not a rule**: it records when someone last decided this
+price, and nothing reads it to determine whether the override applies. Validity
+date ranges stay out of scope, which is why this is not called
+`price_effective_from` despite being compared against the product's field of that
+name — a reader who saw that name here would reasonably assume the override only
+takes effect from that date.
 
 Unique index on `(client_id, product_id)` — one price per client per product.
 
@@ -54,7 +84,7 @@ cross-feature `ProductOrdering.cs`. Two parts:
 ### The formula
 
 Only `PriceWithVat` is stored. The other three are scaled from the product's own
-ratios — the same approach `BulkPriceDrawer.tsx:79-81` already takes on the
+ratios — the same approach `BulkPriceDrawer.tsx` already takes on the
 frontend when bulk-repricing a brewery:
 
 ```
@@ -72,15 +102,30 @@ Deriving from the product's own ratio rather than a hardcoded `1.21` divisor
 keeps each product's real effective VAT rate intact.
 
 **Edge case — a product priced at zero.** The ratio is undefined. `PriceWithVat`
-takes the override; the three derived fields keep the product's own values.
+takes the override; the three derived fields keep the product's own values. This
+is the same resolution `BulkPriceDrawer.tsx` reaches by falling back to
+`ratio = 1`, so the two paths agree without either referencing the other.
 
 ### Why a lookup rather than a SQL LEFT JOIN
 
 `ShipmentContentSnapshotWriter` is deliberately DbContext-free — its remarks say
 so, and that property is what lets it run inside a state transition without
-touching persistence. A lookup can be passed into it; a JOIN in a projection
-cannot. Using the lookup form everywhere gives one implementation and one test
-suite across every path, and a client's override list is a handful of rows.
+touching persistence. Concretely:
+
+```csharp
+public static void Apply(
+    OutgoingShipment shipment,
+    IReadOnlyDictionary<long, ClientPriceList> priceListsByClientId)
+```
+
+The caller loads every stop's client's price list in one query — keyed by the
+client's database id, the same key `ClientPriceResolver.LoadAsync` returns —
+and hands the whole dictionary in; a stop whose client has no entry (or no
+client at all) resolves against `ClientPriceList.Empty` and bills the catalog
+price. A lookup can be passed into a DbContext-free method this way; a JOIN in
+a projection cannot. Using the lookup form everywhere gives one implementation
+and one test suite across every path, and a client's override list is a
+handful of rows.
 
 Constraint to record: no current query filters or sorts by price. If one ever
 does, applying the override after projection would desync from that sort, and
@@ -97,12 +142,34 @@ The complete inventory of price surfaces in the product, and what each needs.
 
 | surface | source today | change |
 |---|---|---|
-| `ShipmentContentSnapshotWriter.Snapshot()`:80 | `product.PriceWithVat` | **Resolve here** — the load-bearing change |
+| `ShipmentContentSnapshotWriter.Snapshot()` | `product.PriceWithVat` | **Resolve here** — the load-bearing change |
 | `ShipmentInvoicing.tsx` | invoice lines ← stop-item snapshot | None — inherits the above |
 | `GetProductsByClientHistoryEndpoint` | `p.PriceWithVat` | Resolve; already client-scoped by route |
-| Order detail item rows | *no price at all today* | New price fields on `OrderItemDto` |
+| Order detail item rows | *no price at all today* | New price fields on `OrderItemDto` (`OrderDto.cs`) |
+| `SaleEditor.tsx` — counter-sale line default | `suggestedPrice ?? row.priceWithVat` | Resolve the stock row's price — see #counter-sales |
+| `SaleCatalog.tsx` — "Dříve prodané" add | suggests `lastUnitPriceWithVat` | Suggest the override instead; keep displaying the last paid price |
+| `SaleLineWriter` — persisting a sale line | operator-typed `dto.UnitPriceWithVat` | None — the price arrives resolved from the client |
 | `breweries/Cenik.tsx`, `BulkPriceDrawer.tsx` | catalog | None — brewery-owned, not client-scoped |
-| Reports | — | None; reports carry no money |
+| Reports — orders/volume | — | None; these carry no money |
+| Reports — `GarageSalesRevenueReportDto` | `SaleItem.UnitPriceWithVat` | None — reads the frozen line, not the rule |
+
+The original table's "Reports — none; reports carry no money" no longer holds:
+the garage-sale revenue report does carry money. It needs no change regardless,
+because it reads the frozen `SaleItem` line rather than resolving anything, but
+the blanket claim was wrong and is worth not inheriting.
+
+### The name `ListPriceWithVat`
+
+This design originally called the catalog price carried beside a charged one
+`CatalogPriceWithVat`. Garage sales shipped first and named the same concept
+`ListPriceWithVat` — `SaleItem.ListPriceWithVat`, kept alongside
+`SaleItem.UnitPriceWithVat` so a discount given at the counter stays visible
+after the fact. That is this feature's charged-vs-catalog pair, already in the
+schema under a different word.
+
+So **`ListPriceWithVat` is the name everywhere** — the new DTO fields below, and
+the frontend `listPriceWithVat`. Two names for one idea costs more than the rename
+does, and `SaleItem` has the prior claim.
 
 ### Freeze semantics
 
@@ -121,79 +188,334 @@ display a price different from the invoice the client received. This follows the
 principle already committed in issue #25 — historical records stop reading live
 data. Orders not yet loaded resolve live.
 
-So `OrderItemDto.UnitPriceWithVat` is filled from the item's
-`OutgoingShipmentStopItem.UnitPriceWithVat` when a snapshot row exists (reachable
-via `OutgoingShipmentStopItem.OrderItemId`), and from `ClientPriceResolver`
-otherwise.
+**Refined during implementation: a snapshot row counts only when its shipment is
+not `Cancelled`.** `Loaded → Cancelled` is an allowed transition that does *not*
+clear the snapshot rows — `ResetOrderItemsForReuse` frees the order back to
+`OrderState.New` for reuse, but the stop-item rows survive — and
+`OrderMutability.IsContentEditable` deliberately excludes `Cancelled` from the
+frozen states, precisely so a freed order becomes editable again. Without the
+exclusion, such an order would show no shipment yet still display the cancelled
+run's frozen price with no special-price marker, and that stale number would
+survive a later reprice. The reasoning is the same one that motivates freezing in
+the first place: a cancelled run produced no invoice, so there is nothing for the
+frozen number to stay faithful to, and the live-resolved price is the only one
+that is still true.
 
-`CatalogPriceWithVat` stays **null for snapshot-fed rows**. The snapshot never
+So `OrderItemDto.UnitPriceWithVat` is filled from the item's
+`OutgoingShipmentStopItem.UnitPriceWithVat` when a snapshot row exists whose
+shipment is not `Cancelled` (reachable via `OutgoingShipmentStopItem.OrderItemId`),
+and from `ClientPriceResolver` otherwise.
+
+`ListPriceWithVat` stays **null for snapshot-fed rows**. The snapshot never
 recorded what the catalog price was at the time, and putting today's catalog
 price beside a frozen one would be actively misleading. The practical effect is
 that the "special price" marker shows on orders still being composed and drops
 away once the order is loaded — which is correct: at that point the frozen number
 is the whole truth.
 
+### Counter sales
+
+Garážový prodej did not exist when this was written, and it sells to clients:
+`Sale.BuyerKind` is `SaleBuyerKind.Client` exactly when `Sale.ClientId` is
+non-null, the other case being a walk-in identified only by `BuyerName`. So a
+client override has a claim on counter-sale lines too, and two things about how
+sales already work make this more than a mechanical extension.
+
+First, **the price on a sale line is operator-typed, not resolved.**
+`SaleLineWriter.BuildLinesAsync` takes `dto.UnitPriceWithVat ?? 0m` from the
+request and snapshots `stock.Product?.PriceWithVat` beside it as
+`ListPriceWithVat`. There is no server-side pricing rule to intercept; whatever
+happens has to happen as a *default* offered to the operator, who stays free to
+type over it.
+
+Second, **there is already an informal per-client price memory.**
+`GetSaleClientHistoryEndpoint` feeds the sale editor's "Dříve prodané" tab with
+`LastUnitPriceWithVat` per stock item — the price this client last actually paid.
+That is a competing answer to "what should this line cost for this client", built
+from history rather than from a rule.
+
+**Decided: an override pre-fills counter-sale lines, and it wins on both segments
+of the sale catalog.** For `BuyerKind.Client`, a line added from either "Procházet
+sklad" or "Dříve prodané" defaults to the client's override; the operator stays
+free to type over it. The "Dříve prodané" row keeps *displaying* what the client
+last paid — that is the point of the segment — but adding from it inserts the
+override. One product must not carry two different prices depending on which
+segment it was added from; an operator cannot reasonably be asked to track that.
+
+The rule wins over the last paid price because a decision outranks an observation.
+`GetSaleClientHistoryEndpoint` needs no change: it keeps reporting
+`LastUnitPriceWithVat` as the historical fact it already is.
+
+The seam for this already exists and is narrow. `SaleCatalog`'s
+`onAdd(row, suggestedPrice?, suggestedQuantity?)` is called with a suggested price
+on the history path and without one on the browse path, and `SaleEditor.tsx`
+resolves the line default as `suggestedPrice ?? row.priceWithVat ?? null`. So the
+whole change is: resolve the stock row's `priceWithVat` against the client's
+overrides, and pass the override rather than `lastUnitPriceWithVat` on the history
+path. No new plumbing, no change to how a line is persisted.
+
+As built, the resolution itself (`historyAddPrice`) and the row-shaping it
+depends on live in `saleCatalogModel.ts`, a sibling pure-logic module —
+`SaleCatalog.tsx` calls in but the arithmetic is testable without rendering it,
+the same split `app/CLAUDE.md` asks for once a feature file grows past ~500
+lines.
+
+Walk-ins are unaffected by construction — `showHistory` is false without a saved
+client, and there is no client whose overrides could resolve.
+
+The freeze side needs no new machinery either: `SaleItem` already carries
+`UnitPriceWithVat` and `ListPriceWithVat`, so a sale line records what was charged
+and what the catalog said, exactly as an invoice line does.
+
 ## API surface
 
 New slice `Features/ClientProductPrices/`, mirroring `Features/ClientDeliveryPlaces/`:
-`RequirePermission(ModuleType.Clients, …)`, `ThrowHelper.PublicEntityNotFound`,
-`DontCatchExceptions()`, `public sealed` endpoints.
+`.RequirePermission(ModuleType.Clients, …)` inside `Description(b => …)`,
+`ThrowHelper.PublicEntityNotFound`, `DontCatchExceptions()`.
+
+Endpoints are **`internal sealed`**, not the `public sealed` this originally said.
+`ClientDeliveryPlaces` is `public sealed`, but every slice added since — the whole
+of `Features/Sales/`, for instance — is `internal sealed`, which is also what the
+pack's C# rules call for. Follow the newer convention rather than the older
+neighbour.
 
 | endpoint | route | permission |
 |---|---|---|
 | `GetClientProductPricesEndpoint` | `GET clients/{ClientId:guid}/product-prices` | `Clients` / `View` |
 | `SaveClientProductPriceEndpoint` | `PUT clients/{ClientId:guid}/product-prices/{ProductId:guid}` | `Clients` / `Edit` |
 | `DeleteClientProductPriceEndpoint` | `DELETE clients/{ClientId:guid}/product-prices/{ProductId:guid}` | `Clients` / `Edit` |
+| `ReplaceClientProductPricesEndpoint` | `PUT clients/{ClientId:guid}/product-prices` | `Clients` / `Edit` |
 
-`PUT` is an upsert. There is one value per `(client, product)` pair, so a
-create/update split would add a 409 path and buy nothing.
+`PUT` on the compound route is an upsert. There is one value per `(client,
+product)` pair, so a create/update split would add a 409 path and buy nothing.
+
+**Added for the bulk editor: a whole-list replace endpoint, not in the original
+table.** `ReplaceClientProductPricesEndpoint` takes the complete desired list —
+`{ productId, priceWithVat }[]` — for one client and has **replace** semantics:
+every entry present is upserted, and every price the body omits is deleted. It
+exists because #bulk-editing-over-the-catalog can touch a whole catalog's worth
+of rows (hundreds, per the seeded demo's 22 products versus production's ~230) in
+one save, and a client's price list must not be left in a state nobody chose —
+one request that either lands completely or fails completely, rather than a few
+hundred individual upserts and deletes that can half-fail partway through. It is
+also the mechanism that makes the bulk editor's rule "an empty input means the
+client pays the ceník" (#bulk-editing-over-the-catalog) true all the way down:
+omitting a product from the body is how its row gets deleted, the same effect the
+single-row `DeleteClientProductPriceEndpoint` has. `ReplaceClientProductPricesValidator`
+requires every entry's `ProductId` to be distinct in the body — a duplicate would
+otherwise leave the last-seen price silently win.
+
+**The write routes are a deliberate deviation, not a mirror.**
+`ClientDeliveryPlaces` keys its writes off the row's own `PublicId` and flattens
+the route to match — `POST clients/{id}/delivery-places`, then
+`PUT`/`DELETE clients/delivery-places/{Id:guid}`. The compound
+`{ClientId}/product-prices/{ProductId}` form above departs from that on purpose:
+the pair *is* the key here, and an upsert has no row id to address before the row
+exists. Requiring the caller to look up a `PublicId` first — or to branch between
+POST and PUT — would buy nothing but a round trip. Worth stating explicitly so a
+reviewer reads it as a decision rather than as drift from the sibling slice.
 
 The list query filters out soft-deleted products (`!p.IsDeleted`), so a price
-pointing at a removed product stops appearing in the Ceník card. The row itself
+pointing at a removed product stops appearing in the Ceník tab. The row itself
 survives — `product_id` is `Restrict`, and nothing benefits from deleting it.
 
 A validator on the save request enforces `PriceWithVat` is present and greater
-than zero.
+than zero — the same rule applies per-row on the whole-list replace request.
+
+**Error codes, as actually written.** This repo's `Common/Utils/ErrorCodes.cs` is
+a flat `static class` of `SCREAMING_SNAKE_CASE` string constants, not the nested
+`"{Domain}.{ErrorName}"` shape a validator description might otherwise suggest.
+This feature added two:
+
+| constant | value |
+|---|---|
+| `ErrorCodes.ClientProductPriceMustBePositive` | `CLIENT_PRODUCT_PRICE_MUST_BE_POSITIVE` |
+| `ErrorCodes.ClientProductPriceDuplicateProduct` | `CLIENT_PRODUCT_PRICE_DUPLICATE_PRODUCT` |
+
+The first backs the positive-price rule on both the single upsert and the
+whole-list replace; the second is the whole-list replace's duplicate-`ProductId`
+check above. These strings, not a dotted form, are the stable frontend
+localization keys.
+
+**`set_on` is written by both write endpoints.** `SaveClientProductPriceEndpoint`
+and `ReplaceClientProductPricesEndpoint` each stamp it to today via the injected
+`TimeProvider` on every row they create or change. The replace endpoint
+deliberately does *not* restamp a row whose price did not move — see
+#staleness-after-a-price-list-import for why a no-op save must not rewrite when a
+price was decided.
 
 ### DTO changes
 
 Both additive and non-breaking:
 
-- `ProductListItemDto` gains `CatalogPriceWithVat: decimal?` — non-null **only**
+- `ProductListItemDto` gains `ListPriceWithVat: decimal?` — non-null **only**
   when an override applies. `PriceWithVat` keeps meaning "the effective price",
-  so existing consumers keep working, and a non-null `CatalogPriceWithVat` is
+  so existing consumers keep working, and a non-null `ListPriceWithVat` is
   the signal that this row is a special price. On the global product list, where
   no client is in scope, it is always null.
-- `OrderItemDto` gains `UnitPriceWithVat: decimal` and
-  `CatalogPriceWithVat: decimal?`.
+- `OrderItemDto` (nested in `OrderDto.cs`) gains `UnitPriceWithVat: decimal`
+  and `ListPriceWithVat: decimal?`.
+
+Note that `ProductListItemDto` carries `PriceWithVat`, `PriceForUnitWithVat` and
+`PriceForUnitWithoutVat` but **no `PriceWithoutVat`** — the resolver computes four
+fields, and only three of them have anywhere to go on this DTO. Nothing needs the
+fourth today; if the Ceník tab or the OrderEditor ends up wanting a without-VAT
+figure, adding it is a separate additive change, not something to slip in here.
 
 These are backend DTO changes, so `yarn generate-api` and its frontend
 consumption land in the same commit.
 
 ## UI
 
-### Ceník card on ClientDetail
+### Ceník tab on ClientDetail
 
-A `CollapsibleCard` with a count pill, following the Kontakty / Dodací místa
-pattern already on the page. Each row shows the product name, its brewery, the
-client price, and the catalog price as secondary. Adding a row uses the existing
-brewery-grouped `ProductCombobox` from #25. Gated on `canEdit('clients')`.
+Each row shows the product name, its brewery, the client price, and the list price
+as secondary. Adding a row uses the existing brewery-grouped `ProductCombobox`
+from #25. Gated on `canEdit('clients')`. Mobile gets the `mobileCard` treatment
+used by the other client collections.
 
-Mobile gets the `mobileCard` treatment used by the other client collections.
+What changed: **ClientDetail is tabbed now**, so "a `CollapsibleCard` following
+the Kontakty / Dodací místa pattern" no longer names one place. Before the Ceník
+tab landed, `clientDetailTab.ts` narrowed a `?tab=` URL param to
+`'info' | 'orders' | 'reminders' | 'notes'`, and the Dodací místa card sat inside
+the `info` tab (`ClientDetail.tsx`), one of several full-width cards there
+alongside Kontakty.
+
+**Decided: the Ceník gets its own fifth tab**, with a count pill like Objednávky
+and Připomínky carry. A client's price list is expected to be long enough to want
+the width, and the pill advertises that overrides exist without anyone expanding a
+card to find out.
+
+That means widening `SubTab` in `clientDetailTab.ts` to include the new value —
+**`'prices'`**, not a Czech `'cenik'`: the `SubTab` union is English identifiers
+like its four siblings, and a `?tab=` value is a URL param, not user-facing copy,
+so the visible tab label stays "Ceník" regardless — adding it to `SUB_TABS` so a
+`?tab=` param narrows to it, extending `clientDetailTab.test.ts`, and adding the
+`Tab` plus its render branch in `ClientDetail.tsx`. The panel is a
+`ProductPricesPanel` built on `DeliveryPlacesPanel`'s shape — own query hook, own
+`editable` prop — it just renders as a tab body rather than inside a
+`CollapsibleCard`.
+
+The tab needs no permission gate of its own: the whole detail is already
+Clients-scoped, and unlike Objednávky — which falls back to `info` when the user
+lacks the Orders module (`ClientDetail.tsx`) — a price list belongs to the
+module the page is already behind. Editing controls inside it take
+`canEdit('clients')` as before.
+
+One thing worth a second look during implementation rather than a decision here:
+prices are money, and money elsewhere in the app is hidden from drivers via a
+named capability rather than a module permission (the Fakturace card, per
+`capabilityRegistry.ts`). If a role can reach a client detail but should not see
+what that client pays, this tab is a capability candidate — not a change to make
+speculatively, but the precedent exists if the question comes up.
+
+### Bulk editing over the catalog
+
+Setting a client's prices one product at a time does not survive contact with a real
+catalog — the seeded demo has 22 products, production has around 230. So the Ceník tab
+carries a second action, **Hromadná úprava cen**, opening a wide drawer over the
+**whole catalog** (not a scope the operator has to choose first).
+
+The drawer offers two ways to fill one column, and neither is the primary one:
+
+- A **percentage against the ceník**, signed, so `−5` is a discount and `3` an
+  increase. It fills every row at once.
+- An **exact amount per row**. Walking the catalog and typing prices is a first-class
+  path; the percentage is a shortcut for filling the table, not the way prices are
+  expressed.
+
+Whatever stands in the inputs is what gets saved, under one button.
+
+**The percentage works from the ceník price, never from the client's current one.**
+Running it twice therefore lands on the same number, and "95 % of ceník" stays
+explainable a year later. The cost is that it can *raise* a price the client already
+has — when their existing discount was deeper than the percentage being applied. That
+is legitimate, but invisible when one click filled 230 rows, so the affected rows are
+marked in the preview rather than left to be discovered on an invoice.
+
+**An empty input means the client pays the ceník.** Clearing a price that exists
+deletes the row on save, which is the same thing the trash button in the Ceník table
+does — the two must not mean different things. Rows in that state say so before
+anything is written.
+
+For the same reason the drawer has **Vyprázdnit vše** beside the recalculate button.
+Without it the tool is asymmetric: one click can give a client prices on the whole
+catalog, and undoing it would mean 230 individual deletions. With it, reverting a
+client to ceník prices is also one action.
+
+A search field filters the rows. It is a view over the table, not a scope on the save:
+prices typed into a row that is currently filtered out are still written.
 
 ### OrderEditor
 
-Where a catalog row has a non-null `catalogPriceWithVat`, the client price
-renders as primary with the catalog price struck through beside it, plus a marker
-making clear the total is not list price. Cart totals
-(`OrderEditor.tsx:439`, `:770`) already read `priceWithVat`, so they become
-correct with no arithmetic change.
+Where a catalog row has a non-null `listPriceWithVat`, the client price renders as
+primary with the list price struck through beside it, via a shared
+`PriceWithList` component (`src/components/common/PriceWithList.tsx`), plus a
+`ClientPriceChip` marker making clear the price is not list price. Both the flat
+catalog listing and the size-variant grouping in `OrderEditor.tsx` render this
+way — `PriceWithList` is a small shared component precisely so both places (and
+`SaleCatalog.tsx`'s own catalog rows, below) agree on one look rather than each
+rolling its own strikethrough.
+
+The cart ("Košík") line is deliberately lighter: it shows only the line's amber
+"· vlastní cena" text beside the total, not a struck-through list price — the
+cart already collapsed each product to one total, and a second number there
+would compete with it rather than clarify anything. The cart and catalog totals
+already read `priceWithVat` — the resolved, effective price — so they are correct
+with no arithmetic change; only the marker is new.
+
+`OrderEditor.tsx` is now over 1000 lines, well past the ~500-line threshold at
+which `app/CLAUDE.md` asks for the pure shaping logic to move to a sibling
+module. This feature adds marker-rendering to it. Splitting it is **not** in this
+feature's scope, but the next change to touch it should propose the split
+separately — `orderCatalogModel.ts` is already the sibling it would grow into.
 
 ### Order detail
 
-Item rows gain a unit price and line total, with the same override marker.
+Item rows gain a unit price and line total, using the same `PriceWithList`
+struck-through marker as OrderEditor's catalog rows — not the cart's lighter
+text marker, since an order-detail row has room for the full comparison.
 
 All new copy is Czech; identifiers and comments English.
+
+## Staleness after a price-list import
+
+When this was written, a catalog price only moved because someone edited a product
+or ran `BulkPriceDrawer` over one brewery — deliberate acts, one at a time, by
+someone who could reasonably be expected to know which clients had overrides. On
+that basis a "this override may be stale" warning was pushed out of scope.
+
+Price-list import changed the premise. `Product.PriceEffectiveFrom` records the
+date the list that set a product's prices takes effect, and `PriceListImport`
+records the import as a whole. A single import can now move a whole brewery's
+catalog in one action — including *below* a client's override, which silently turns
+a discount into a surcharge with nothing anywhere saying so. The override keeps
+resolving correctly and the invoice keeps freezing correctly; the number is just
+quietly wrong for the business.
+
+The mitigation is provenance on the override itself, and it does cost a column:
+`PublicEntity` inherits only `Id` and `PublicId` from `BaseEntity`, so an override
+carries no timestamp of its own — this repo has no `AuditableEntity` base despite
+what the pack's EF rules assume. Add `ClientProductPrice.SetOn: DateOnly`, written
+server-side on every upsert. Comparing it against the product's
+`PriceEffectiveFrom` answers "was this override decided before or after the price
+list that currently governs this product" — the staleness question, directly, in
+the list query, from two columns already loaded.
+
+**Decided: the column lands now, the marker does not.** `SetOn` is written from the
+first migration; no UI reads it yet.
+
+The asymmetry is what decides it. A marker is addable whenever someone wants it,
+against data that will by then be real. The column is not: added a year later, the
+migration has nothing truthful to backfill with, so every pre-existing override
+gets the migration date and the marker then lies precisely about the old overrides
+it exists to catch. One is cheap to defer, the other is impossible to.
+
+So the staleness *question* stays answerable and the staleness *UI* stays out of
+scope — see #out-of-scope. When it does get built, the shape it should take is a
+passive marker on the Ceník row and nothing more: no warning at import time, no
+blocking an import, no recomputing overrides. An import must not rewrite a pricing
+decision a human made.
 
 ## Testing
 
@@ -203,21 +525,65 @@ no-override passthrough.
 
 **Endpoint tests** (Moq.EntityFrameworkCore, per the repo's existing pattern):
 upsert creates then overwrites; delete reverts to catalog; 404 on an unknown
-client or product; validator rejects a non-positive price.
+client or product; validator rejects a non-positive price. The whole-list
+replace endpoint gets its own coverage for its own semantics: an entry present
+in the body upserts, an omitted entry deletes, an unchanged price does not
+restamp `SetOn`, a changed price does, and a duplicate `ProductId` in the body
+is rejected.
 
 **Snapshot test** — a loaded shipment for a client holding an override bills the
 override, and repricing afterwards leaves that invoice untouched.
 
-**Frontend** — the Ceník card's interactions, and the override marker rendering
+**Frontend** — the Ceník tab's interactions, and the override marker rendering
 in the OrderEditor catalog and on order detail. Per `app/CLAUDE.md`, mock the
 resource hook so it can express loading, error and no-data.
+
+**Counter-sale prefill** — a line added from "Procházet sklad" and the same line
+added from "Dříve prodané" both default to the override, an operator edit still
+wins over both, the history row still displays `lastUnitPriceWithVat`, and a
+walk-in sale resolves nothing. The two-segments-agree case is the one worth
+asserting explicitly: it is the whole reason the decision went this way, and a
+regression there would be invisible from either segment alone.
+
+**`SetOn`** — the upsert writes it on create and refreshes it on overwrite. That is
+the extent of it; there is no marker to test yet.
+
+**The new tab** — `clientDetailTab.test.ts` covers the widened `SubTab`: the new
+`?tab=` value narrows to itself, and an unknown value still falls back to `info`.
+
+**The bulk editor** — the percentage fill is idempotent (two runs from the ceník give
+the same number); a positive percentage raises; exact per-row amounts save with no
+percentage involved; clearing a row deletes that price and leaves the client's others
+alone; Vyprázdnit vše plus save reverts the client to ceník without touching another
+client; a row priced above the client's current one is marked; a non-positive amount is
+skipped rather than written; and a price typed into a row that search has filtered out
+is still saved.
+
+Two harness traps this slice will hit, both already paid for once: endpoint tests
+go through `EndpointBuilder`/`Factory.Create`, which bypasses DI — a new
+constructor parameter on an existing endpoint breaks every test that builds it —
+and `AsQueryable()` over a mocked `DbSet` breaks `ToListAsync`, so set the mock up
+with `Moq.EntityFrameworkCore`'s `ReturnsDbSet` instead.
 
 ## Out of scope
 
 Deliberately excluded; each is addable later without reshaping the above.
 
-- Percentage discounts instead of absolute prices.
+- Percentage discounts **as a stored form**. A percentage is an input the bulk editor
+  accepts to fill absolute prices with (#bulk-editing-over-the-catalog); what lands in
+  the table is always an absolute price per product, and nothing reads a percentage
+  back. "Client pays 95 % of ceník" is not a rule this feature can express.
 - Validity date ranges on an override.
-- Brewery-wide or product-category-wide overrides.
+- Brewery-wide or product-category-wide overrides **as a stored rule**. The bulk editor
+  can write a whole catalog's worth of rows in one action, but each row stands alone —
+  there is no entity meaning "everything from this brewery, minus five percent", so a
+  product added to a brewery later inherits nothing.
 - Price-list templates shared across clients.
-- A "the catalog price moved, this override may be stale" warning.
+- **The staleness marker UI.** The `set_on` column it needs is in scope and ships
+  with the first migration; nothing reads it yet. See
+  #staleness-after-a-price-list-import for why the column could not wait and the
+  marker could.
+- Any import-side reaction to overrides: no warning while importing a price list,
+  no blocking one, no recomputing overrides against it.
+- Pre-filling counter-sale lines for a **walk-in** buyer (`BuyerKind` other than
+  `Client`). There is no client, so there is no override to resolve.

@@ -6,9 +6,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
+  SetOrderItemSourcingDto,
   SetPreparationStepDto,
+  SetShipmentStateDto,
+  SetStockPurchaseDto,
   type CreateOutgoingShipmentDto,
   type OutgoingShipmentDetailDto,
+  type OutgoingShipmentState,
   type UpdateOutgoingShipmentDto,
 } from 'src/generated/api-client';
 
@@ -146,6 +150,174 @@ export function useSetPreparationStep(shipmentId: string | undefined) {
         return patched;
       });
       qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+/**
+ * Moves the shipment to another state.
+ *
+ * Its own endpoint rather than the full shipment PUT. Advancing a run used to re-post the
+ * whole thing — every stop, order line, via point, purchase and checklist step — for the
+ * server to diff, rebuild and re-link before it reached the one field that changed. This
+ * sends the state and nothing else.
+ *
+ * Not optimistic, unlike the checklist and the sourcing stepper: a transition moves stock,
+ * rewrites the orders' own states and freezes prices, so what comes back is a genuinely
+ * different shipment and guessing at it would be guessing at all of that. The caller shows
+ * what is happening instead — see `stateChange` in ShipmentDetail.
+ */
+export function useSetShipmentState(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (state: OutgoingShipmentState) =>
+      ds.setShipmentStateEndpoint(shipmentId!, new SetShipmentStateDto({ state })),
+
+    // Awaited, not fired and forgotten: TanStack holds the mutation open until a promise
+    // returned from here settles, which keeps the caller's progress overlay up until the
+    // refreshed shipment has actually arrived. Without the await the overlay clears on the
+    // 204 and the screen re-renders its pre-transition self for a beat — which reads as the
+    // click having done nothing.
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.shipments.all }),
+      // The run's orders change state along with it, so the orders module is stale too.
+      qc.invalidateQueries({ queryKey: qk.orders.all }),
+      // Loading and unloading move stock.
+      qc.invalidateQueries({ queryKey: qk.inventory.all }),
+    ]),
+  });
+}
+
+export interface SetOrderItemSourcingArgs {
+  orderItemId: string;
+  quantityFromInventory: number;
+  inventoryItemId?: string;
+}
+
+/**
+ * Sets how many of one order line's pieces come off our own shelf.
+ *
+ * Its own endpoint for the same reason the preparation checklist has one: the "Z garáže"
+ * stepper is clicked once per piece, and re-posting the whole run to move a single piece
+ * between two columns made every click wait on a whole-shipment rebuild.
+ *
+ * Optimistic for the same reason too — a number that only moves after the round trip
+ * invites a second click, and a second click on a stepper is a wrong quantity.
+ */
+export function useSetOrderItemSourcing(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ orderItemId, quantityFromInventory, inventoryItemId }: SetOrderItemSourcingArgs) =>
+      ds.setOrderItemSourcingEndpoint(
+        shipmentId!,
+        orderItemId,
+        new SetOrderItemSourcingDto({ quantityFromInventory, inventoryItemId }),
+      ),
+
+    onMutate: async ({ orderItemId, quantityFromInventory, inventoryItemId }: SetOrderItemSourcingArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype so the patched value stays an OutgoingShipmentDetailDto —
+      // a plain spread would lose its methods.
+      const clone = <T extends object>(value: T, patch: Partial<T>): T =>
+        Object.assign(Object.create(Object.getPrototypeOf(value)) as T, value, patch);
+
+      qc.setQueryData(detailKey, clone(previous, {
+        stops: (previous.stops ?? []).map((stop) => clone(stop, {
+          products: (stop.products ?? []).map((p) => (p.orderItemId === orderItemId
+            ? clone(p, { quantityFromInventory, inventoryItemId })
+            : p)),
+        })),
+      }));
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+export interface SetStockPurchaseArgs {
+  productId: string;
+  /** Absolute, not a delta. Zero removes the line. */
+  quantity: number;
+}
+
+/**
+ * Sets how many pieces of a product the run buys for our own warehouse — "Do garáže".
+ *
+ * The counterpart to {@link useSetOrderItemSourcing}, and its own endpoint for the same
+ * reason: the stepper is clicked once per piece, and re-posting the whole run per click made
+ * each one wait on a whole-shipment rebuild.
+ *
+ * Optimistic, so the number moves on click. A purchase is content rather than progress, so
+ * the API only accepts it while the run is still being planned — the screen hides the
+ * controls past that point, and a rejection here rolls the cache back.
+ */
+export function useSetStockPurchase(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ productId, quantity }: SetStockPurchaseArgs) =>
+      ds.setStockPurchaseEndpoint(shipmentId!, new SetStockPurchaseDto({ productId, quantity })),
+
+    onMutate: async ({ productId, quantity }: SetStockPurchaseArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      const lines = previous.stockPurchases ?? [];
+      const existing = lines.find((p) => p.productId === productId);
+
+      // A brand-new line is left to the server: the row needs an id and the product's name,
+      // brewery, package size and weight, none of which this hook has. Only quantity changes
+      // to an existing line — the stepper's case — are guessed at here.
+      if (!existing && quantity > 0) return { previous };
+
+      qc.setQueryData(detailKey, Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+        {
+          stockPurchases: quantity === 0
+            ? lines.filter((p) => p.productId !== productId)
+            : lines.map((p) => (p.productId === productId
+              ? Object.assign(Object.create(Object.getPrototypeOf(p)), p, { quantity })
+              : p)),
+        },
+      ));
 
       return { previous };
     },

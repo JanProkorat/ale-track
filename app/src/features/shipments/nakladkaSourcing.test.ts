@@ -82,4 +82,33 @@ describe('overdrawnStock', () => {
 
     expect(overdrawnStock(rows)).toEqual([]);
   });
+
+  // The reported bug: 40 on hand, 30 sourced, run loaded. Loading takes the 30 off the shelf,
+  // so the on-hand figure the API reports is now 10 — and comparing the same 30 against it
+  // announced an over-draw that had already been satisfied. Once the goods have moved there
+  // is nothing left to warn about.
+  describe('once the run is loaded', () => {
+    const loadedRows = [stop([product({
+      quantityFromInventory: 30, inventoryItemId: STOCK_A, inventoryItemName: 'Svijanský Máz', inventoryItemAvailable: 10,
+    })])];
+
+    it('warns while the draw is still only planned', () => {
+      expect(overdrawnStock(loadedRows, 'Created')).toHaveLength(1);
+    });
+
+    it.each(['Loaded', 'InTransit', 'Delivered'])('says nothing once the pieces are off the shelf (%s)', (state) => {
+      expect(overdrawnStock(loadedRows, state)).toEqual([]);
+    });
+
+    it('warns again on a run that was reverted to planning', () => {
+      // Reverting puts the stock back, so the reservation is a reservation again.
+      expect(overdrawnStock(loadedRows, 'Created')).toHaveLength(1);
+    });
+
+    it('warns on a cancelled run only if it still has sourcing', () => {
+      // Cancelling clears the sourcing server-side, so this is really a guard against the
+      // gate swallowing a state it should not.
+      expect(overdrawnStock(loadedRows, 'Cancelled')).toHaveLength(1);
+    });
+  });
 });
