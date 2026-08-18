@@ -1,7 +1,10 @@
-// PriceWithList renders the price that actually counts wherever an order shows
-// money. It is one shared component — ProductPricesPanel, the order catalog,
-// the cart, and order detail all need the same mark, and near-copies would
-// drift (ports the prototype's `priceCell`).
+// PriceWithList renders the price that actually counts wherever an order or a
+// counter sale shows money. It is one shared component — the order catalog and
+// cart (OrderEditor), order detail, and the till's stock rows (SaleCatalog) all
+// need the same mark, and near-copies would drift (ports the prototype's
+// `priceCell`). ProductPricesPanel deliberately does not use it: the Ceník tab
+// shows both prices as separate table columns with a difference pill, which is
+// a different presentation of the same pair.
 
 import { render, screen } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material';

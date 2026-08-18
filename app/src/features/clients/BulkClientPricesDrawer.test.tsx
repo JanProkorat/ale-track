@@ -311,7 +311,7 @@ describe('BulkClientPricesDrawer save payload', () => {
   // real endpoint can never return such a row, and the draft is never seeded
   // with it in the first place. The scenario that matters — the row surviving
   // a bulk save the operator never saw it in — is a backend guarantee now:
-  // see ReplaceClientProductPricesEndpointTests (backend) for the real guard.
+  // see ReplaceClientProductPricesTests (backend) for the real guard.
 });
 
 describe('BulkClientPricesDrawer background refetch', () => {
