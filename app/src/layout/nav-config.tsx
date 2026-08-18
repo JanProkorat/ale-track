@@ -85,10 +85,10 @@ export const NAV_GROUPS: NavGroup[] = [
     heading: 'Evidence',
     items: [
       { key: 'breweries', label: 'Pivovary', path: PATHS.breweries, icon: icon(<SportsBarOutlinedIcon fontSize="small" />) },
-      { key: 'suppliers', label: 'Dodavatelé', path: PATHS.suppliers, icon: icon(<FactoryOutlinedIcon fontSize="small" />) },
       { key: 'clients', label: 'Klienti', path: PATHS.clients, icon: icon(<StorefrontOutlinedIcon fontSize="small" />) },
       { key: 'drivers', label: 'Řidiči', path: PATHS.drivers, icon: icon(<BadgeOutlinedIcon fontSize="small" />) },
       { key: 'vehicles', label: 'Vozy', path: PATHS.vehicles, icon: icon(<AirportShuttleOutlinedIcon fontSize="small" />) },
+      { key: 'suppliers', label: 'Dodavatelé', path: PATHS.suppliers, icon: icon(<FactoryOutlinedIcon fontSize="small" />) },
     ],
   },
   {

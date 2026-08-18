@@ -53,7 +53,15 @@ export function GoodsPricesPanel({
   const total = priceCount(goods);
 
   const addButton = editable && (
-    <Button size="small" startIcon={<AddIcon />} onClick={onAdd} color="inherit">
+    <Button
+      variant="outlined"
+      startIcon={<AddIcon />}
+      onClick={onAdd}
+      sx={{
+        color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700,
+        '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+      }}
+    >
       Přidat zboží
     </Button>
   );
