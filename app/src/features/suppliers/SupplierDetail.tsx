@@ -146,7 +146,17 @@ export function SupplierDetail({
         actions={
           editable && (
             <Stack direction="row" spacing={1}>
-              <Button startIcon={<EditIcon />} onClick={onEdit} color="inherit">Upravit</Button>
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={onEdit}
+                sx={{
+                  color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700,
+                  '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+                }}
+              >
+                Upravit
+              </Button>
               <IconButton onClick={onDelete} aria-label="Smazat dodavatele" sx={{ color: 'error.main' }}>
                 <DeleteIcon />
               </IconButton>
