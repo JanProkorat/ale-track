@@ -12,6 +12,7 @@ import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { apiErrorMessage } from 'src/api/errors';
+import { TabActions } from 'src/components/common/DetailTabs';
 import { fmtDate } from 'src/lib/format';
 import { ReminderType, type ReminderListItemDto } from 'src/generated/api-client';
 import {
@@ -140,7 +141,7 @@ export function RemindersPanel({ clientId, editable }: { clientId: string; edita
   return (
     <Box>
       {editable && (
-        <Box sx={{ mb: 2 }}>
+        <TabActions>
           <Button
             variant="outlined"
             startIcon={<AddIcon />}
@@ -149,7 +150,7 @@ export function RemindersPanel({ clientId, editable }: { clientId: string; edita
           >
             Nová připomínka
           </Button>
-        </Box>
+        </TabActions>
       )}
 
       <QueryBoundary

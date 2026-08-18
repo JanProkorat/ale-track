@@ -7,6 +7,7 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import PropaneTankIcon from '@mui/icons-material/PropaneTankOutlined';
 import { EmptyState } from 'src/components/common/EmptyState';
+import { TabActions } from 'src/components/common/DetailTabs';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { chargeKindLabel, chargeKindName } from 'src/lib/labels';
 import { plural } from 'src/lib/format';
@@ -53,34 +54,38 @@ export function GoodsPricesPanel({
   const total = priceCount(goods);
 
   const addButton = editable && (
-    <Button
-      variant="outlined"
-      startIcon={<AddIcon />}
-      onClick={onAdd}
-      sx={{
-        color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700,
-        '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
-      }}
-    >
-      Přidat zboží
-    </Button>
+    <TabActions>
+      <Button
+        variant="outlined"
+        startIcon={<AddIcon />}
+        onClick={onAdd}
+        sx={{
+          color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700,
+          '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+        }}
+      >
+        Přidat zboží
+      </Button>
+    </TabActions>
   );
 
   if (goods.length === 0) {
     return (
-      <EmptyState
-        icon={<PropaneTankIcon />}
-        title="Prázdný ceník"
-        description="Přidejte zboží a k němu cenu za plnění, nákup, zálohu nebo nájem."
-        action={addButton}
-      />
+      <>
+        {addButton}
+        <EmptyState
+          icon={<PropaneTankIcon />}
+          title="Prázdný ceník"
+          description="Přidejte zboží a k němu cenu za plnění, nákup, zálohu nebo nájem."
+        />
+      </>
     );
   }
 
   return (
     <Stack spacing={1.5}>
+      {addButton}
       <Stack direction="row" spacing={1.5} alignItems="center">
-        {addButton}
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'text.disabled' }}>
           {goods.length} {plural(goods.length, 'druh', 'druhy', 'druhů')} zboží · {total}{' '}

@@ -14,6 +14,7 @@ import { useSnackbar } from 'notistack';
 import { PointMap } from 'src/components/common/PointMap';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
+import { DetailTabs } from 'src/components/common/DetailTabs';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
@@ -113,14 +114,16 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
 
   return (
     <Box>
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+      <DetailTabs
+        tabs={
         <Tabs value={tab} onChange={(_e, v: SubTab) => setTab(v)} variant="scrollable" scrollButtons="auto">
           <Tab value="info" iconPosition="start" icon={<InfoIcon fontSize="small" />} label="Info" sx={{ minHeight: 48 }} />
           <Tab value="cenik" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Ceník', productCount)} sx={{ minHeight: 48 }} />
           <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
         </Tabs>
-      </Box>
+        }
+      >
 
       {tab === 'info' && (
         <Stack spacing={2.5}>
@@ -184,6 +187,7 @@ export function BreweryDetail({ brewery, editable }: { brewery: BreweryDto; edit
       {tab === 'reminders' && <RemindersPanel breweryId={breweryId} editable={editable} />}
 
       {tab === 'notes' && <NotesPanel breweryId={breweryId} editable={editable} />}
+      </DetailTabs>
 
       <ProductFormDrawer
         open={productForm}

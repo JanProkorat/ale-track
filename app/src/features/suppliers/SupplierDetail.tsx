@@ -14,6 +14,7 @@ import { PointMap } from 'src/components/common/PointMap';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { DetailTabs } from 'src/components/common/DetailTabs';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { contactTypeLabel, countryLabel, isEmailContact } from 'src/lib/labels';
 import {
@@ -154,18 +155,21 @@ export function SupplierDetail({
         }
       />
 
-      <Tabs
-        value={tab}
-        onChange={(_e, v) => onTabChange(v as SupplierTab)}
-        sx={{ mb: 2.5 }}
-        variant="scrollable"
-        scrollButtons="auto"
+      <DetailTabs
+        tabs={
+          <Tabs
+            value={tab}
+            onChange={(_e, v) => onTabChange(v as SupplierTab)}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab value="info" icon={<InfoIcon fontSize="small" />} iconPosition="start" label="Info a kontakty" sx={{ minHeight: 48 }} />
+            <Tab value="hours" icon={<ScheduleIcon fontSize="small" />} iconPosition="start" label="Otevírací doba" sx={{ minHeight: 48 }} />
+            <Tab value="cenik" icon={<WalletIcon fontSize="small" />} iconPosition="start" label={tabLabel('Ceník', goods.length)} sx={{ minHeight: 48 }} />
+            <Tab value="notes" icon={<StickyNote2Icon fontSize="small" />} iconPosition="start" label="Poznámky" sx={{ minHeight: 48 }} />
+          </Tabs>
+        }
       >
-        <Tab value="info" icon={<InfoIcon fontSize="small" />} iconPosition="start" label="Info a kontakty" />
-        <Tab value="hours" icon={<ScheduleIcon fontSize="small" />} iconPosition="start" label="Otevírací doba" />
-        <Tab value="cenik" icon={<WalletIcon fontSize="small" />} iconPosition="start" label={tabLabel('Ceník', goods.length)} />
-        <Tab value="notes" icon={<StickyNote2Icon fontSize="small" />} iconPosition="start" label="Poznámky" />
-      </Tabs>
 
       {tab === 'info' && (
         <Stack spacing={2}>
@@ -281,9 +285,10 @@ export function SupplierDetail({
         />
       )}
 
-      {tab === 'notes' && supplier.id && (
-        <SupplierNotesPanel supplierId={supplier.id} editable={editable} />
-      )}
+        {tab === 'notes' && supplier.id && (
+          <SupplierNotesPanel supplierId={supplier.id} editable={editable} />
+        )}
+      </DetailTabs>
     </>
   );
 }

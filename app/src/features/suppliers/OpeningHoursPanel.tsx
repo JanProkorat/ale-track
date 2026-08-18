@@ -3,6 +3,7 @@ import ScheduleIcon from '@mui/icons-material/ScheduleOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonthOutlined';
 import { StatusPill } from 'src/components/common/StatusPill';
+import { TabActions } from 'src/components/common/DetailTabs';
 import { plural } from 'src/lib/format';
 import { type SupplierOpeningHoursDto } from 'src/generated/api-client';
 import {
@@ -56,9 +57,19 @@ export function OpeningHoursPanel({
             </Typography>
           </Box>
           {editable && (
-            <Button size="small" startIcon={<EditIcon />} onClick={onEdit} color="inherit">
-              Upravit dobu
-            </Button>
+            <TabActions>
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={onEdit}
+                sx={{
+                  color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700,
+                  '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' },
+                }}
+              >
+                Upravit dobu
+              </Button>
+            </TabActions>
           )}
         </Stack>
       </Card>

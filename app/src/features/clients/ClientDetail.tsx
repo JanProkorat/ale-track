@@ -15,6 +15,7 @@ import PhoneIcon from '@mui/icons-material/PhoneOutlined';
 import { PointMap } from 'src/components/common/PointMap';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { CollapsibleCard } from 'src/components/common/CollapsibleCard';
+import { DetailTabs } from 'src/components/common/DetailTabs';
 import { countryLabel, regionLabel, contactTypeLabel, isEmailContact, orderStateName } from 'src/lib/labels';
 import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/generated/api-client';
 import { useClientReminders } from 'src/hooks/useClientReminders';
@@ -167,7 +168,8 @@ export function ClientDetail({
         )}
       />
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+      <DetailTabs
+        tabs={
         <Tabs value={activeTab} onChange={(_e, v: SubTab) => onTabChange(v)} variant="scrollable" scrollButtons="auto">
           <Tab value="info" iconPosition="start" icon={<InfoIcon fontSize="small" />} label="Info a kontakty" sx={{ minHeight: 48 }} />
           {canSeeOrders && (
@@ -176,7 +178,8 @@ export function ClientDetail({
           <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
         </Tabs>
-      </Box>
+        }
+      >
 
       {activeTab === 'info' && (
         <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
@@ -270,6 +273,7 @@ export function ClientDetail({
       {activeTab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
 
       {activeTab === 'notes' && <NotesPanel clientId={clientId} editable={editable} />}
+      </DetailTabs>
     </Box>
   );
 }

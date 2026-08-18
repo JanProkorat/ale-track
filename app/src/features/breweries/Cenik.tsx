@@ -13,6 +13,7 @@ import { plural } from 'src/lib/format';
 import { ProductKind, type BreweryProductListItemDto } from 'src/generated/api-client';
 import { BulkPriceDrawer } from './BulkPriceDrawer';
 import { PriceListImportDrawer } from './PriceListImportDrawer';
+import { TabActions } from 'src/components/common/DetailTabs';
 
 type P = BreweryProductListItemDto;
 
@@ -189,7 +190,8 @@ export function Cenik({
   return (
     <Box>
       {editable && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <>
+          <TabActions>
           <Button
             startIcon={<WalletIcon />}
             onClick={() => setBulkOpen(true)}
@@ -203,10 +205,11 @@ export function Cenik({
           <Button variant="outlined" startIcon={<AddIcon />} onClick={onAdd} sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}>
             Přidat produkt
           </Button>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+          </TabActions>
+          <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
             Sloupce = velikosti balení · klikni na cenu pro úpravu
           </Typography>
-        </Stack>
+        </>
       )}
 
       {sections.map(([kind, items]) => (
