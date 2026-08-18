@@ -57,27 +57,32 @@ public record ProductDeliveryStopDto
     public int Order { get; set; }
 
     /// <summary>
-    /// Whether this stop is a brewery or a custom waypoint.
+    /// Whether this stop is a brewery, a supplier or a custom waypoint.
     /// </summary>
     public DeliveryStopKind Kind { get; set; }
 
     /// <summary>
-    /// Info about related brewery. Null for custom stops.
+    /// Info about related brewery. Set only for brewery stops.
     /// </summary>
     public BreweryInfoDto? Brewery { get; set; }
 
     /// <summary>
-    /// Display name of a custom stop. Null for brewery stops.
+    /// Info about the related supplier. Set only for supplier stops.
+    /// </summary>
+    public SupplierInfoDto? Supplier { get; set; }
+
+    /// <summary>
+    /// Display name of a custom stop. Null for brewery and supplier stops.
     /// </summary>
     public string? Label { get; set; }
 
     /// <summary>
-    /// Latitude of a custom stop. Null for brewery stops.
+    /// Latitude of a custom stop. Null for brewery and supplier stops.
     /// </summary>
     public decimal? Latitude { get; set; }
 
     /// <summary>
-    /// Longitude of a custom stop. Null for brewery stops.
+    /// Longitude of a custom stop. Null for brewery and supplier stops.
     /// </summary>
     public decimal? Longitude { get; set; }
 
@@ -87,14 +92,70 @@ public record ProductDeliveryStopDto
     public string? Note { get; set; }
 
     /// <summary>
-    /// List of products included in the delivery stop.
+    /// List of items included in the delivery stop — brewery products at a brewery stop,
+    /// price-list goods at a supplier stop, none at a custom one.
     /// </summary>
     public List<ProductDeliveryItemDto> Products { get; set; } = [];
 }
 
-public record ProductDeliveryItemDto(Guid ProductId, string Name, int Quantity, string? Note);
+/// <summary>
+/// One line of a delivery stop: either a brewery product or one charge kind of a supplier's good.
+/// </summary>
+/// <remarks>
+/// Which of the two it is shows in whether <see cref="ProductId"/> or <see cref="SupplierGoodId"/>
+/// is set — exactly one always is. <see cref="Name"/> is filled from whichever it is, so a
+/// consumer that only renders the line needs no branch at all.
+/// </remarks>
+public sealed record ProductDeliveryItemDto
+{
+    /// <summary>
+    /// Public ID of the product. Set on brewery lines.
+    /// </summary>
+    public Guid? ProductId { get; set; }
+
+    /// <summary>
+    /// Public ID of the supplier good. Set on supplier lines.
+    /// </summary>
+    public Guid? SupplierGoodId { get; set; }
+
+    /// <summary>
+    /// Which of the good's prices this line is for. Set on supplier lines.
+    /// </summary>
+    public SupplierChargeKind? ChargeKind { get; set; }
+
+    /// <summary>
+    /// Name of the product or of the good
+    /// </summary>
+    public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// The good's size as the supplier states it — "10 kg", "50 l". Supplier lines only; a
+    /// product's size is its container volume, which the client already holds in its catalogue.
+    /// </summary>
+    public string? Size { get; set; }
+
+    /// <summary>
+    /// Amount to be delivered
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Note to this particular line
+    /// </summary>
+    public string? Note { get; set; }
+}
 
 public record BreweryInfoDto(Guid Id, string Name);
+
+/// <summary>
+/// The supplier a stop calls at, with the coordinates the route map draws it at.
+/// </summary>
+/// <remarks>
+/// Coordinates are resolved here rather than looked up by the client, as brewery ones are: the
+/// suppliers list is behind the Suppliers permission, so a user who may plan dovozy but not read
+/// the supplier register would otherwise get a route with a hole in it.
+/// </remarks>
+public record SupplierInfoDto(Guid Id, string Name, decimal? Latitude, decimal? Longitude);
 
 public record VehicleInfoDto(Guid Id, string Name);
     

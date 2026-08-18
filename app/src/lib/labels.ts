@@ -6,7 +6,7 @@ import {
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
-  SupplierChargeKind, DayOfWeek,
+  SupplierChargeKind, DayOfWeek, DeliveryStopKind,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -123,6 +123,11 @@ export const L = {
     Deposit: 'Záloha',
     Rent: 'Nájem',
     Other: 'Ostatní',
+  } as Record<string, string>,
+  deliveryStopKind: {
+    Brewery: 'Pivovar',
+    Custom: 'Vlastní',
+    Supplier: 'Dodavatel',
   } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
   addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
@@ -307,6 +312,18 @@ export function chargeKindName(k?: SupplierChargeKind | string | number): string
 export function chargeKindLabel(k?: SupplierChargeKind | string | number): string | undefined {
   const name = chargeKindName(k);
   return name ? (L.chargeKind[name] ?? name) : undefined;
+}
+
+/** The DeliveryStopKind member name ("Brewery" / "Custom" / "Supplier"), from either wire
+ * representation. A stop's kind arrives as the string, so comparing it to the generated
+ * numeric enum member never matches — every read has to come through here. */
+export function deliveryStopKindName(k?: DeliveryStopKind | string | number): string | undefined {
+  return enumName(DeliveryStopKind as unknown as Record<string, string | number>, k);
+}
+
+export function deliveryStopKindLabel(k?: DeliveryStopKind | string | number): string | undefined {
+  const name = deliveryStopKindName(k);
+  return name ? (L.deliveryStopKind[name] ?? name) : undefined;
 }
 
 export function isEmailContact(t?: ContactType | string | number): boolean {

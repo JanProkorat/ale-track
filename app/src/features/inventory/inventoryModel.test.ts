@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { InventoryItemListItemDto, ProductKind } from 'src/generated/api-client';
-import { groupInventoryItems } from './inventoryModel';
+import { groupInventoryItems, isLow, itemSubtitle } from './inventoryModel';
 
 const item = (over: Partial<InventoryItemListItemDto>) => new InventoryItemListItemDto({
   id: 'i1',
@@ -59,5 +59,52 @@ describe('groupInventoryItems', () => {
 
   it('returns nothing for an empty section', () => {
     expect(groupInventoryItems([])).toEqual([]);
+  });
+
+  /**
+   * Stock booked in from a supplier is already one row per good, so there is nothing to fold — and
+   * folding two different goods that happen to share a name would claim they were one thing.
+   */
+  it('keeps each supplier good as its own group', () => {
+    const groups = groupInventoryItems([
+      item({ id: 'g1', productId: undefined, supplierGoodId: 'sg1', name: 'CO₂ láhev', kind: undefined, packageSize: undefined, size: '10 kg' }),
+      item({ id: 'g2', productId: undefined, supplierGoodId: 'sg2', name: 'CO₂ láhev', kind: undefined, packageSize: undefined, size: '30 kg' }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.items[0].size)).toEqual(['10 kg', '30 kg']);
+  });
+});
+
+describe('itemSubtitle', () => {
+  it('reads a product by its kind and litre volume', () => {
+    expect(itemSubtitle(item({ kind: ProductKind.Keg, packageSize: 15 }))).toBe('Sud · 15 l');
+  });
+
+  /** A good's size is free text, so it must not go through the litre formatter. */
+  it('reads a supplier good by the size the supplier states', () => {
+    expect(itemSubtitle(item({
+      productId: undefined, supplierGoodId: 'sg1', kind: undefined, packageSize: undefined, size: '10 kg',
+    }))).toBe('10 kg');
+  });
+
+  it('is blank for a supplier good with no stated size', () => {
+    expect(itemSubtitle(item({
+      productId: undefined, supplierGoodId: 'sg1', kind: undefined, packageSize: undefined, size: undefined,
+    }))).toBe('');
+  });
+});
+
+describe('isLow', () => {
+  it('warns on a thin product row', () => {
+    expect(isLow(item({ quantity: 2 }))).toBe(true);
+  });
+
+  /**
+   * The threshold is a beer number. Three CO₂ bottles is not a shortage, and a supplier's goods
+   * carry no reorder level, so they stay out of the warning.
+   */
+  it('never warns on a supplier good', () => {
+    expect(isLow(item({ productId: undefined, supplierGoodId: 'sg1', quantity: 1 }))).toBe(false);
   });
 });

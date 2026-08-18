@@ -69,102 +69,56 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
 
     private async Task<List<DeliveryStop>> CreateDeliveryStopsAsync(List<CreateProductDeliveryStopDto> requestStops, CancellationToken cancellationToken)
     {
-        var breweryIds = requestStops
-            .Where(s => s.Kind == DeliveryStopKind.Brewery)
-            .Select(s => s.BreweryId!.Value)
-            .ToList();
-
-        var breweries = await GetBreweriesAsync(breweryIds, cancellationToken);
-
-        var productIds = requestStops
-            .SelectMany(s => s.Products)
-            .Select(p => p.ProductId)
-            .Distinct()
-            .ToList();
-
-        var products = await GetProductsAsync(productIds, cancellationToken);
+        var sources = requestStops.Select(ToSource).ToList();
+        var catalog = await DeliverySourceCatalog.LoadAsync(dbContext, sources, cancellationToken);
 
         var deliveryStops = new List<DeliveryStop>();
 
-        foreach (var (requestStop, index) in requestStops.Select((s, i) => (s, i)))
+        // The list position is the stop's Order.
+        for (var index = 0; index < requestStops.Count; index++)
         {
-            if (requestStop.Kind == DeliveryStopKind.Custom)
-            {
-                deliveryStops.Add(new DeliveryStop
-                {
-                    Order = index,
-                    Kind = DeliveryStopKind.Custom,
-                    Label = requestStop.Label,
-                    Note = requestStop.Note,
-                    Latitude = requestStop.Latitude,
-                    Longitude = requestStop.Longitude
-                });
-                continue;
-            }
+            var requestStop = requestStops[index];
+            var source = sources[index];
 
-            var relatedProducts = products
-                .Where(p => requestStop.Products.Any(dp => dp.ProductId == p.PublicId))
-                .ToList();
-
-            deliveryStops.Add(new DeliveryStop
+            var stop = new DeliveryStop
             {
                 Order = index,
-                Kind = DeliveryStopKind.Brewery,
-                Note = requestStop.Note,
-                Brewery = breweries.First(b => b.PublicId == requestStop.BreweryId),
-                Items = requestStop.Products
-                    .Select(p =>
-                    {
-                        var product = relatedProducts.First(rp => rp.PublicId == p.ProductId);
-                        var item = new DeliveryItem
-                        {
-                            Product = product,
-                            Quantity = p.Quantity,
-                            Note = p.Note
-                        };
-                        DeliveryItemSnapshot.Apply(item, product);
-                        return item;
-                    })
-                    .ToList()
-            });
+                Kind = source.Kind,
+                Note = requestStop.Note
+            };
+
+            switch (source.Kind)
+            {
+                case DeliveryStopKind.Custom:
+                    stop.Label = requestStop.Label;
+                    stop.Latitude = requestStop.Latitude;
+                    stop.Longitude = requestStop.Longitude;
+                    break;
+
+                case DeliveryStopKind.Brewery:
+                    stop.Brewery = catalog.Brewery(source.BreweryId!.Value);
+                    stop.Items = source.Lines.Select(l => catalog.BuildItem(source, l)).ToList();
+                    break;
+
+                case DeliveryStopKind.Supplier:
+                    stop.Supplier = catalog.Supplier(source.SupplierId!.Value);
+                    stop.Items = source.Lines.Select(l => catalog.BuildItem(source, l)).ToList();
+                    break;
+            }
+
+            deliveryStops.Add(stop);
         }
 
         return deliveryStops;
     }
 
-    private async Task<List<Product>> GetProductsAsync(List<Guid> productIds, CancellationToken cancellationToken)
-    {
-        var existingProducts = await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
-            .ToListAsync(cancellationToken);
-
-        if (existingProducts.Count == productIds.Count)
-            return existingProducts;
-        
-        var foundProductIds = existingProducts.Select(p => p.PublicId).ToList();
-        var nonExistingProductIds = productIds.Except(foundProductIds).ToList();
-        
-        ThrowHelper.PublicEntitiesNotFound(nameof(Product), nonExistingProductIds);
-
-        return existingProducts;
-    }
-
-    private async Task<List<Brewery>> GetBreweriesAsync(List<Guid> breweryIds, CancellationToken cancellationToken)
-    {
-        var existingBreweries = await dbContext.Breweries
-            .Where(b => breweryIds.Contains(b.PublicId))
-            .ToListAsync(cancellationToken);
-
-        if (existingBreweries.Count == breweryIds.Count)
-            return existingBreweries;
-        
-        var foundBreweryIds = existingBreweries.Select(b => b.PublicId).ToList();
-        var nonExistingBreweryIds = breweryIds.Except(foundBreweryIds).ToList();
-    
-        ThrowHelper.PublicEntitiesNotFound(nameof(Brewery), nonExistingBreweryIds);
-
-        return existingBreweries;
-    }
+    private static DeliveryStopSource ToSource(CreateProductDeliveryStopDto stop) => new(
+        stop.Kind,
+        stop.BreweryId,
+        stop.SupplierId,
+        stop.Products
+            .Select(p => new DeliveryLineSource(p.ProductId, p.SupplierGoodId, p.ChargeKind, p.Quantity, p.Note))
+            .ToList());
 
     private async Task<Vehicle?> GetVehicleAsync(Guid? vehicleId, CancellationToken cancellationToken)
     {
@@ -196,45 +150,5 @@ public sealed class CreateProductsDeliveryEndpoint(AleTrackDbContext dbContext) 
         ThrowHelper.PublicEntitiesNotFound(nameof(Driver), nonExistingDriverIds);
 
         return drivers;
-    }
-    
-    private async Task<List<DeliveryItem>> GetDeliveryItemsAsync(List<CreateProductDeliveryItemDto> products, CancellationToken cancellationToken)
-    {
-        if (products.Count == 0)
-            return [];
-        
-        var productIds = products
-            .Select(p => p.ProductId)
-            .Distinct()
-            .ToList();
-
-        var existingProducts = await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
-            .ToListAsync(cancellationToken);
-
-        if (existingProducts.Count < productIds.Count)
-        {
-            var foundProductIds = existingProducts.Select(d => d.PublicId).ToList();
-            var nonExistingProductIds = productIds.Except(foundProductIds).ToList();
-        
-            ThrowHelper.PublicEntitiesNotFound(nameof(Product), nonExistingProductIds);
-        }
-        
-        var deliveryItems = new List<DeliveryItem>();
-        foreach (var requestProduct in products)
-        {
-            var relatedProduct = existingProducts.First(p => p.PublicId == requestProduct.ProductId);
-            
-            var item = new DeliveryItem
-            {
-                Product = relatedProduct,
-                Quantity = requestProduct.Quantity,
-                Note = requestProduct.Note
-            };
-            DeliveryItemSnapshot.Apply(item, relatedProduct);
-            deliveryItems.Add(item);
-        }
-        
-        return deliveryItems;
     }
 }

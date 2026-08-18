@@ -23,7 +23,20 @@ import { EmptyState } from 'src/components/common/EmptyState';
 import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { apiErrorMessage } from 'src/api/errors';
 import { plural, fmtLiters, deliveryNumber } from 'src/lib/format';
-import { kindLabel, startPointKindName } from 'src/lib/labels';
+import {
+  kindLabel, startPointKindName, deliveryStopKindName, chargeKindLabel, chargeKindName,
+} from 'src/lib/labels';
+import { useCurrency } from 'src/providers/CurrencyProvider';
+import { useAuth } from 'src/auth/AuthProvider';
+import { SUPPLIER_COLOR, CUSTOM_COLOR } from './stopVisuals';
+import { supplierRoutePoint } from './supplierRoutePoint';
+import { DeliveryCart } from './DeliveryCart';
+import { buildCartRows, type CartRow } from './deliveryCartModel';
+import { buildStopOptions, parseStopOption } from './deliveryStopOptions';
+import {
+  serializeDelivery, stopWireFields, lineWireFields, sameLine,
+  type DraftLine, type DraftStop,
+} from './deliveryDraft';
 import {
   ProductKind,
   CreateProductsDeliveryDto,
@@ -33,46 +46,21 @@ import {
   UpdateProductDeliveryStopDto,
   UpdateProductDeliveryItemDto,
   ProductDeliveryState,
-  DeliveryStopKind,
+  SupplierChargeKind,
   type BreweryProductListItemDto,
+  type SupplierDto,
 } from 'src/generated/api-client';
 import { CustomStopDialog, type CustomStopResult } from 'src/components/common/CustomStopDialog';
 import { useBreweries } from 'src/hooks/useBreweries';
-import { useBreweryProducts } from 'src/hooks/useBreweryProducts';
+import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
+import { useBreweryProductsMany } from 'src/hooks/useBreweryProducts';
 import { useDrivers } from 'src/hooks/useDrivers';
 import { useVehicles } from 'src/hooks/useVehicles';
 import { useDelivery, useCreateDelivery, useUpdateDelivery } from 'src/hooks/useDeliveries';
 import { useShipmentStartPoints } from 'src/hooks/useShipments';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
-import { TOPBAR_H } from 'src/layout/Topbar';
 
 const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
-
-interface DraftItem { productId: string; quantity: number }
-/** A route stop: either a brewery (with its own product list) or a custom
- * free-form waypoint (label + coordinates, no products). */
-interface DraftStop {
-  key: string;
-  publicId?: string;
-  kind: 'brewery' | 'custom';
-  breweryId: string; // '' for custom stops
-  note: string;
-  items: DraftItem[]; // [] for custom stops
-  label?: string; // custom stops only
-  lat?: number; // custom stops only
-  lng?: number; // custom stops only
-}
-
-/** Serialized snapshot of the savable state, for unsaved-change detection. */
-function serializeDelivery(date: Dayjs | null, vehicleId: string | null, driverIds: string[], note: string, stops: DraftStop[]): string {
-  return JSON.stringify({
-    date: date ? date.toISOString() : null,
-    vehicleId,
-    driverIds: [...driverIds].sort(),
-    note: note.trim(),
-    stops: stops.map((s) => ({ kind: s.kind, breweryId: s.breweryId, note: s.note.trim(), items: s.items, label: s.label, lat: s.lat, lng: s.lng })),
-  });
-}
 
 let seq = 0;
 const newKey = () => `ds-${++seq}`;
@@ -99,34 +87,38 @@ function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; 
   );
 }
 
-/** One brewery stop: its own product catalog (search + kind filter), with a
- * qty control per product. Loads the brewery's product list on its own. */
+/** One brewery stop: its product catalog (search + kind filter), with a qty control per product.
+ * The catalog arrives as a prop — the editor loads every stop's at once so the cart can price
+ * lines from all of them (see useBreweryProductsMany). */
 function StopCard({
-  stop, index, total, color, breweryName, onRemove, onMove, onItemsChange,
+  stop, index, total, color, breweryName, products, loading, onRemove, onMove, onItemsChange,
 }: {
   stop: DraftStop;
   index: number;
   total: number;
   color?: string;
   breweryName: string;
+  products: BreweryProductListItemDto[];
+  loading: boolean;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
-  onItemsChange: (items: DraftItem[]) => void;
+  onItemsChange: (items: DraftLine[]) => void;
 }) {
-  const productsQuery = useBreweryProducts(stop.breweryId);
-  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<ProductKind | 'all'>('all');
   const [collapsed, setCollapsed] = useState(false);
 
-  const qtyOf = (productId: string) => stop.items.find((i) => i.productId === productId)?.quantity ?? 0;
+  const qtyOf = (productId: string) => stop.items.find((i) => i.source === 'product' && i.productId === productId)?.quantity ?? 0;
+  const isThis = (i: DraftLine, productId: string) => i.source === 'product' && i.productId === productId;
   const addItem = (productId: string) => {
-    const ex = stop.items.find((i) => i.productId === productId);
-    onItemsChange(ex ? stop.items.map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)) : [...stop.items, { productId, quantity: 1 }]);
+    const ex = stop.items.find((i) => isThis(i, productId));
+    onItemsChange(ex
+      ? stop.items.map((i) => (isThis(i, productId) ? { ...i, quantity: i.quantity + 1 } : i))
+      : [...stop.items, { source: 'product', productId, quantity: 1 }]);
   };
   const changeQty = (productId: string, delta: number) => {
     onItemsChange(stop.items
-      .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta } : i))
+      .map((i) => (isThis(i, productId) ? { ...i, quantity: i.quantity + delta } : i))
       .filter((i) => i.quantity > 0));
   };
 
@@ -181,7 +173,7 @@ function StopCard({
         <Box sx={{ mb: 1.5 }}>
           <SearchField value={search} onChange={setSearch} placeholder="Hledat produkt v pivovaru…" width="100%" />
         </Box>
-        {productsQuery.isLoading ? (
+        {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>
         ) : products.length === 0 ? (
           <EmptyState title="Pivovar nemá produkty" dense />
@@ -237,6 +229,136 @@ function StopCard({
   );
 }
 
+/** One supplier stop: its price list, with a qty control per charge kind.
+ *
+ * A good is listed once with a row per price rather than once per price, mirroring how the ceník
+ * reads and how the brewery card above groups a product's sizes. There are no kind filter tabs —
+ * a good has no ProductKind to filter by, only a free-text size — so search alone. */
+function SupplierStopCard({
+  stop, index, total, supplierName, supplier, loading, onRemove, onMove, onItemsChange,
+}: {
+  stop: DraftStop;
+  index: number;
+  total: number;
+  supplierName: string;
+  supplier: SupplierDto | undefined;
+  loading: boolean;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+  onItemsChange: (items: DraftLine[]) => void;
+}) {
+  const { formatMoney } = useCurrency();
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
+
+  const goods = supplier?.goods ?? [];
+  const q = search.trim().toLowerCase();
+  const shown = goods.filter((g) => !q
+    || (g.name ?? '').toLowerCase().includes(q)
+    || (g.description ?? '').toLowerCase().includes(q));
+
+  const isThis = (i: DraftLine, goodId: string, kind: SupplierChargeKind) =>
+    i.source === 'good' && i.supplierGoodId === goodId && chargeKindName(i.chargeKind) === chargeKindName(kind);
+  const qtyOf = (goodId: string, kind: SupplierChargeKind) =>
+    stop.items.find((i) => isThis(i, goodId, kind))?.quantity ?? 0;
+  const addItem = (goodId: string, kind: SupplierChargeKind) => {
+    const ex = stop.items.find((i) => isThis(i, goodId, kind));
+    onItemsChange(ex
+      ? stop.items.map((i) => (isThis(i, goodId, kind) ? { ...i, quantity: i.quantity + 1 } : i))
+      : [...stop.items, { source: 'good', supplierGoodId: goodId, chargeKind: kind, quantity: 1 }]);
+  };
+  const changeQty = (goodId: string, kind: SupplierChargeKind, delta: number) => {
+    onItemsChange(stop.items
+      .map((i) => (isThis(i, goodId, kind) ? { ...i, quantity: i.quantity + delta } : i))
+      .filter((i) => i.quantity > 0));
+  };
+
+  const itemCount = stop.items.length;
+  const ks = stop.items.reduce((s, i) => s + i.quantity, 0);
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        onClick={() => setCollapsed((v) => !v)}
+        sx={{ px: 2, py: 1.5, borderBottom: collapsed ? 0 : 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+      >
+        <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0, transition: 'transform .15s', transform: collapsed ? 'rotate(-90deg)' : 'none' }} />
+        <Box sx={{ width: 26, height: 26, borderRadius: 1.5, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0, bgcolor: `${SUPPLIER_COLOR}22`, color: SUPPLIER_COLOR }}>{index + 1}</Box>
+        <Stack sx={{ flex: 1, minWidth: 0 }} direction="row" alignItems="center" spacing={0.75}>
+          <Typography sx={{ fontWeight: 700, fontSize: 14, minWidth: 0 }} noWrap>{supplierName}</Typography>
+          <Chip size="small" label="Dodavatel" sx={{ height: 20, fontSize: 11 }} />
+        </Stack>
+        <Chip size="small" label={`${itemCount} ${plural(itemCount, 'položka', 'položky', 'položek')} · ${ks} ks`} sx={{ fontWeight: 600 }} />
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onMove(-1); }} disabled={index === 0} aria-label="Nahoru"><ArrowUpIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onMove(1); }} disabled={index === total - 1} aria-label="Dolů"><ArrowDownIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onRemove(); }} sx={{ color: 'error.main' }} aria-label="Odebrat dodavatele"><DeleteIcon fontSize="small" /></IconButton>
+      </Stack>
+
+      <Collapse in={!collapsed} unmountOnExit>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ mb: 1.5 }}>
+            <SearchField value={search} onChange={setSearch} placeholder="Hledat zboží u dodavatele…" width="100%" />
+          </Box>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>
+          ) : goods.length === 0 ? (
+            <EmptyState title="Dodavatel nemá zboží v ceníku" dense />
+          ) : shown.length === 0 ? (
+            <EmptyState title="Nic nenalezeno" dense />
+          ) : (
+            <Stack spacing={1}>
+              {shown.map((g) => {
+                const prices = g.prices ?? [];
+                return (
+                  <Box key={g.id} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1.5, py: 1, bgcolor: 'action.hover' }}>
+                      <Box sx={{ width: 9, height: 9, borderRadius: '2px', bgcolor: SUPPLIER_COLOR, flexShrink: 0 }} />
+                      <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{g.name}</Typography>
+                      {g.size && <Chip size="small" label={g.size} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
+                      <Box sx={{ flex: 1 }} />
+                      {prices.length > 1 && (
+                        <Chip size="small" label={`${prices.length} ${plural(prices.length, 'cena', 'ceny', 'cen')}`} sx={{ height: 20, fontSize: 11 }} />
+                      )}
+                    </Stack>
+                    {prices.map((p) => {
+                      const qty = qtyOf(g.id ?? '', p.kind!);
+                      return (
+                        <Stack
+                          key={chargeKindName(p.kind)}
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}
+                        >
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                              <Chip size="small" label={chargeKindLabel(p.kind)} sx={{ height: 20, fontSize: 11 }} />
+                              <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{formatMoney(p.priceWithVat ?? 0)}</Typography>
+                            </Stack>
+                            {p.note && <Typography sx={{ fontSize: 11, color: 'text.secondary' }} noWrap>{p.note}</Typography>}
+                          </Box>
+                          <QtyControl
+                            qty={qty}
+                            onAdd={() => addItem(g.id ?? '', p.kind!)}
+                            onChange={(d) => changeQty(g.id ?? '', p.kind!, d)}
+                          />
+                        </Stack>
+                      );
+                    })}
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
+      </Collapse>
+    </Card>
+  );
+}
+
 /** Dovoz editor: pick breweries, then products per brewery; date, vehicle,
  * drivers, and a live pickup-route preview. Mirrors the prototype's deHTML. */
 export function DeliveryEditor({
@@ -251,8 +373,13 @@ export function DeliveryEditor({
   onCancel: () => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
+  const { canSee } = useAuth();
+  const canSeeSuppliers = canSee('suppliers');
   const deliveryQuery = useDelivery(mode === 'edit' ? deliveryId : undefined);
   const breweriesQuery = useBreweries();
+  // Skipped entirely without the permission — the endpoint would refuse it, and a rejected query
+  // behind a group the user cannot be shown is a retry loop with nothing to show for it.
+  const suppliersQuery = useSuppliers({}, { enabled: canSeeSuppliers });
   const driversQuery = useDrivers();
   const vehiclesQuery = useVehicles();
   const createDelivery = useCreateDelivery();
@@ -264,7 +391,7 @@ export function DeliveryEditor({
   const [driverIds, setDriverIds] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [stops, setStops] = useState<DraftStop[]>([]);
-  const [pickBrewery, setPickBrewery] = useState<string | null>(null);
+  const [pickStop, setPickStop] = useState<string | null>(null);
   const [customStopOpen, setCustomStopOpen] = useState(false);
   const loadedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
@@ -285,26 +412,52 @@ export function DeliveryEditor({
     const loadedVehicle = d.vehicle?.id ?? null;
     const loadedDrivers = (d.drivers ?? []).map((dr) => dr.id ?? '').filter(Boolean);
     const loadedNote = d.note ?? '';
-    const loadedStops: DraftStop[] = (d.stops ?? []).map((s) => s.kind === DeliveryStopKind.Custom
-      ? {
-          key: newKey(),
-          publicId: s.id,
-          kind: 'custom' as const,
-          breweryId: '',
-          note: s.note ?? '',
-          items: [],
-          label: s.label ?? '',
-          lat: s.latitude ?? undefined,
-          lng: s.longitude ?? undefined,
-        }
-      : {
-          key: newKey(),
-          publicId: s.id,
-          kind: 'brewery' as const,
-          breweryId: s.brewery?.id ?? '',
-          note: s.note ?? '',
-          items: (s.products ?? []).map((p) => ({ productId: p.productId ?? '', quantity: p.quantity ?? 1 })),
-        });
+    // Through deliveryStopKindName, not `=== DeliveryStopKind.Custom`: the API serializes enums as
+    // strings while the generated enum is numeric, so the direct comparison never matched and a
+    // custom waypoint came back as a brewery stop with no brewery.
+    const loadedStops: DraftStop[] = (d.stops ?? []).map((s) => {
+      const base = { key: newKey(), publicId: s.id, note: s.note ?? '' };
+      switch (deliveryStopKindName(s.kind)) {
+        case 'Custom':
+          return {
+            ...base,
+            kind: 'custom' as const,
+            breweryId: '',
+            supplierId: '',
+            items: [],
+            label: s.label ?? '',
+            lat: s.latitude ?? undefined,
+            lng: s.longitude ?? undefined,
+          };
+        case 'Supplier':
+          return {
+            ...base,
+            kind: 'supplier' as const,
+            breweryId: '',
+            supplierId: s.supplier?.id ?? '',
+            items: (s.products ?? []).map((p): DraftLine => ({
+              source: 'good',
+              supplierGoodId: p.supplierGoodId ?? '',
+              chargeKind: p.chargeKind!,
+              quantity: p.quantity ?? 1,
+              note: p.note ?? undefined,
+            })),
+          };
+        default:
+          return {
+            ...base,
+            kind: 'brewery' as const,
+            breweryId: s.brewery?.id ?? '',
+            supplierId: '',
+            items: (s.products ?? []).map((p): DraftLine => ({
+              source: 'product',
+              productId: p.productId ?? '',
+              quantity: p.quantity ?? 1,
+              note: p.note ?? undefined,
+            })),
+          };
+      }
+    });
     setDeliveryDate(loadedDate);
     setVehicleId(loadedVehicle);
     setDriverIds(loadedDrivers);
@@ -316,21 +469,39 @@ export function DeliveryEditor({
   const breweries = useMemo(() => breweriesQuery.data ?? [], [breweriesQuery.data]);
   const breweryById = useMemo(() => new Map(breweries.map((b) => [b.id ?? '', b])), [breweries]);
   const usedBreweryIds = useMemo(() => new Set(stops.filter((s) => s.kind === 'brewery').map((s) => s.breweryId)), [stops]);
-  const breweryOptions = breweries
-    .filter((b) => !usedBreweryIds.has(b.id ?? ''))
-    .map((b) => ({ value: b.id ?? '', label: b.name ?? '' }));
+  const suppliers = useMemo(() => suppliersQuery.data ?? [], [suppliersQuery.data]);
+  const supplierNameById = useMemo(() => new Map(suppliers.map((s) => [s.id ?? '', s.name ?? ''])), [suppliers]);
+  const usedSupplierIds = useMemo(() => new Set(stops.filter((s) => s.kind === 'supplier').map((s) => s.supplierId)), [stops]);
 
-  const addStop = (breweryId: string) => {
-    if (!breweryId || usedBreweryIds.has(breweryId)) return;
-    setStops((prev) => [...prev, { key: newKey(), kind: 'brewery', breweryId, note: '', items: [] }]);
-    setPickBrewery(null);
+  // Every stop's catalogue, loaded together: the stop cards browse them and the cart prices from
+  // them, so one fetch per place serves both.
+  const breweryProducts = useBreweryProductsMany(useMemo(() => [...usedBreweryIds].filter(Boolean), [usedBreweryIds]));
+  const supplierDetails = useSuppliersMany(useMemo(() => [...usedSupplierIds].filter(Boolean), [usedSupplierIds]));
+
+  const stopOptions = buildStopOptions({
+    breweries,
+    suppliers,
+    usedBreweryIds,
+    usedSupplierIds,
+    canSeeSuppliers,
+  });
+
+  const addStop = (option: string) => {
+    const picked = parseStopOption(option);
+    if (!picked) return;
+    if (picked.kind === 'brewery' && !usedBreweryIds.has(picked.id)) {
+      setStops((prev) => [...prev, { key: newKey(), kind: 'brewery', breweryId: picked.id, supplierId: '', note: '', items: [] }]);
+    } else if (picked.kind === 'supplier' && !usedSupplierIds.has(picked.id)) {
+      setStops((prev) => [...prev, { key: newKey(), kind: 'supplier', breweryId: '', supplierId: picked.id, note: '', items: [] }]);
+    }
+    setPickStop(null);
   };
   const addCustomStop = (stop: CustomStopResult) => {
     // showCompanyOption={false} below hides the company toggle entirely, so
     // `stop` is always the custom variant in practice — narrowed here only to
     // satisfy CustomStopResult's type, not as a domain-specific guard.
     if (stop.kind !== 'custom') return;
-    setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
+    setStops((prev) => [...prev, { key: newKey(), kind: 'custom', breweryId: '', supplierId: '', note: stop.note ?? '', items: [], label: stop.label, lat: stop.lat, lng: stop.lng }]);
     setCustomStopOpen(false);
   };
   const removeStop = (key: string) => setStops((prev) => prev.filter((s) => s.key !== key));
@@ -342,16 +513,47 @@ export function DeliveryEditor({
     [next[i], next[j]] = [next[j], next[i]];
     return next;
   });
-  const setStopItems = (key: string, items: DraftItem[]) => setStops((prev) => prev.map((s) => (s.key === key ? { ...s, items } : s)));
+  const setStopItems = (key: string, items: DraftLine[]) => setStops((prev) => prev.map((s) => (s.key === key ? { ...s, items } : s)));
   const toggleDriver = (id: string) => setDriverIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const routeStops: RouteStop[] = useMemo(() => stops.map((s): RouteStop => {
+  // The cart edits the owning stop's line rather than a copy, so it and the stop card stay two
+  // views of one list. A quantity taken to zero removes the line, matching what the stop card's
+  // own minus button does.
+  const editCartLine = (row: CartRow, edit: (line: DraftLine) => DraftLine | null) => setStops((prev) => prev.map((s) => {
+    if (s.key !== row.stopKey) return s;
+    return {
+      ...s,
+      items: s.items.flatMap((i) => {
+        if (!sameLine(i, row.line)) return [i];
+        const next = edit(i);
+        return next ? [next] : [];
+      }),
+    };
+  }));
+
+  const cartRows = buildCartRows(stops, {
+    byBrewery: breweryProducts.byBrewery,
+    bySupplier: supplierDetails.bySupplier,
+    breweryColor: new Map(breweries.map((b) => [b.id ?? '', b.color])),
+  });
+
+  const routeStops: RouteStop[] = stops.map((s): RouteStop => {
     if (s.kind === 'custom') {
-      return { lat: s.lat, lng: s.lng, label: s.label || 'Vlastní zastávka', color: '#1A2B4C', kind: 'custom' };
+      return { lat: s.lat, lng: s.lng, label: s.label || 'Vlastní zastávka', color: CUSTOM_COLOR, kind: 'custom' };
+    }
+    if (s.kind === 'supplier') {
+      const point = supplierRoutePoint(supplierDetails.bySupplier.get(s.supplierId));
+      return {
+        lat: point.lat,
+        lng: point.lng,
+        label: supplierNameById.get(s.supplierId) || 'Dodavatel',
+        color: SUPPLIER_COLOR,
+        kind: 'order',
+      };
     }
     const b = breweryById.get(s.breweryId);
     return { lat: b?.latitude ?? undefined, lng: b?.longitude ?? undefined, label: b?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
-  }), [stops, breweryById]);
+  });
 
   // Same reasoning as DeliveryDetail: a dovoz starts and ends at the company,
   // so both RouteMap endpoints are this one point. While that reference-data
@@ -376,6 +578,7 @@ export function DeliveryEditor({
   const persist = async (): Promise<string | null> => {
     if (stops.length === 0) { enqueueSnackbar('Přidejte alespoň jednu zastávku', { variant: 'warning' }); return null; }
     if (stops.some((s) => s.kind === 'brewery' && s.items.length === 0)) { enqueueSnackbar('Každý pivovar musí mít alespoň jeden produkt', { variant: 'warning' }); return null; }
+    if (stops.some((s) => s.kind === 'supplier' && s.items.length === 0)) { enqueueSnackbar('Každý dodavatel musí mít alespoň jednu položku', { variant: 'warning' }); return null; }
     if (!deliveryDate) { enqueueSnackbar('Vyberte datum dovozu', { variant: 'warning' }); return null; }
     try {
       let savedId: string;
@@ -390,13 +593,8 @@ export function DeliveryEditor({
             note: note.trim() || undefined,
             stops: stops.map((s) => new UpdateProductDeliveryStopDto({
               publicId: s.publicId,
-              kind: s.kind === 'custom' ? DeliveryStopKind.Custom : DeliveryStopKind.Brewery,
-              breweryId: s.kind === 'custom' ? undefined : s.breweryId,
-              label: s.kind === 'custom' ? s.label : undefined,
-              latitude: s.kind === 'custom' ? s.lat : undefined,
-              longitude: s.kind === 'custom' ? s.lng : undefined,
-              note: s.note.trim() || undefined,
-              products: s.kind === 'custom' ? [] : s.items.map((it) => new UpdateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+              ...stopWireFields(s),
+              products: s.items.map((it) => new UpdateProductDeliveryItemDto(lineWireFields(it))),
             })),
           }),
         });
@@ -409,13 +607,8 @@ export function DeliveryEditor({
           vehicleId: vehicleId ?? undefined,
           note: note.trim() || undefined,
           stops: stops.map((s) => new CreateProductDeliveryStopDto({
-            kind: s.kind === 'custom' ? DeliveryStopKind.Custom : DeliveryStopKind.Brewery,
-            breweryId: s.kind === 'custom' ? undefined : s.breweryId,
-            label: s.kind === 'custom' ? s.label : undefined,
-            latitude: s.kind === 'custom' ? s.lat : undefined,
-            longitude: s.kind === 'custom' ? s.lng : undefined,
-            note: s.note.trim() || undefined,
-            products: s.kind === 'custom' ? [] : s.items.map((it) => new CreateProductDeliveryItemDto({ productId: it.productId, quantity: it.quantity })),
+            ...stopWireFields(s),
+            products: s.items.map((it) => new CreateProductDeliveryItemDto(lineWireFields(it))),
           })),
         }));
         enqueueSnackbar('Dovoz vytvořen.', { variant: 'success' });
@@ -443,7 +636,9 @@ export function DeliveryEditor({
         onBack={onCancel}
         backLabel="Zpět na dovozy zboží"
         title={title}
-        meta={['Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů.']}
+        meta={[canSeeSuppliers
+          ? 'Vyberte pivovary, dodavatele a zboží k dovezení. V jednom dovozu lze objet více míst.'
+          : 'Vyberte pivovary a produkty k naskladnění. V jednom dovozu lze objet více pivovarů.']}
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>
@@ -492,32 +687,55 @@ export function DeliveryEditor({
             </Button>
           </Stack>
 
-          {breweryOptions.length > 0 ? (
+          {stopOptions.length > 0 ? (
             <Combobox
-              value={pickBrewery}
+              value={pickStop}
               onChange={(v) => v && addStop(v)}
-              options={breweryOptions}
-              placeholder="Přidat pivovar — začněte psát název…"
+              options={stopOptions}
+              placeholder={canSeeSuppliers
+                ? 'Přidat pivovar nebo dodavatele — začněte psát název…'
+                : 'Přidat pivovar — začněte psát název…'}
               fullWidth
             />
           ) : (
-            <Typography color="text.disabled" sx={{ fontSize: 13 }}>Všechny pivovary už jsou v dovozu.</Typography>
+            <Typography color="text.disabled" sx={{ fontSize: 13 }}>
+              {canSeeSuppliers ? 'Všechny pivovary a dodavatelé už jsou v dovozu.' : 'Všechny pivovary už jsou v dovozu.'}
+            </Typography>
           )}
 
           {stops.length === 0 ? (
-            <EmptyState icon={<WarehouseOutlinedIcon />} title="Zatím žádná zastávka" description="Přidejte pivovar polem nahoře, nebo vlastní zastávku tlačítkem." dense />
+            <EmptyState icon={<WarehouseOutlinedIcon />} title="Zatím žádná zastávka" description="Přidejte pivovar nebo dodavatele polem nahoře, nebo vlastní zastávku tlačítkem." dense />
           ) : (
-            stops.map((s, i) => (
-              s.kind === 'custom' ? (
-                <CustomStopCard
-                  key={s.key}
-                  stop={s}
-                  index={i}
-                  total={stops.length}
-                  onRemove={() => removeStop(s.key)}
-                  onMove={(dir) => moveStop(s.key, dir)}
-                />
-              ) : (
+            stops.map((s, i) => {
+              if (s.kind === 'custom') {
+                return (
+                  <CustomStopCard
+                    key={s.key}
+                    stop={s}
+                    index={i}
+                    total={stops.length}
+                    onRemove={() => removeStop(s.key)}
+                    onMove={(dir) => moveStop(s.key, dir)}
+                  />
+                );
+              }
+              if (s.kind === 'supplier') {
+                return (
+                  <SupplierStopCard
+                    key={s.key}
+                    stop={s}
+                    index={i}
+                    total={stops.length}
+                    supplierName={supplierNameById.get(s.supplierId) || '—'}
+                    supplier={supplierDetails.bySupplier.get(s.supplierId)}
+                    loading={supplierDetails.loading.has(s.supplierId)}
+                    onRemove={() => removeStop(s.key)}
+                    onMove={(dir) => moveStop(s.key, dir)}
+                    onItemsChange={(items) => setStopItems(s.key, items)}
+                  />
+                );
+              }
+              return (
                 <StopCard
                   key={s.key}
                   stop={s}
@@ -525,16 +743,23 @@ export function DeliveryEditor({
                   total={stops.length}
                   color={breweryById.get(s.breweryId)?.color}
                   breweryName={breweryById.get(s.breweryId)?.name ?? '—'}
+                  products={breweryProducts.byBrewery.get(s.breweryId) ?? []}
+                  loading={breweryProducts.loading.has(s.breweryId)}
                   onRemove={() => removeStop(s.key)}
                   onMove={(dir) => moveStop(s.key, dir)}
                   onItemsChange={(items) => setStopItems(s.key, items)}
                 />
-              )
-            ))
+              );
+            })
           )}
         </Stack>
 
-        <Stack spacing={2} sx={{ position: { lg: 'sticky' }, top: { lg: TOPBAR_H + 16 } }}>
+        {/* Deliberately NOT position: sticky, for the reason OrderEditor's right column records:
+            this column now stacks the date/vehicle card, the drivers card and the cart, and on a
+            dovoz with a few stops that runs taller than the viewport. A sticky element taller than
+            the screen pins in place and its bottom becomes unreachable — the cart's total and its
+            last lines would render and never be scrollable to. */}
+        <Stack spacing={2}>
           <Card sx={{ p: 2.5 }}>
             <Stack spacing={2}>
               <DatePicker
@@ -594,6 +819,15 @@ export function DeliveryEditor({
               )}
             </Box>
           </Card>
+
+          <DeliveryCart
+            rows={cartRows}
+            onChangeQuantity={(row, delta) => editCartLine(row, (line) => (
+              line.quantity + delta > 0 ? { ...line, quantity: line.quantity + delta } : null
+            ))}
+            onChangeNote={(row, note) => editCartLine(row, (line) => ({ ...line, note }))}
+            onRemove={(row) => editCartLine(row, () => null)}
+          />
         </Stack>
       </Box>
 

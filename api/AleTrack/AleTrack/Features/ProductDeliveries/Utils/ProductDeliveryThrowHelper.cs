@@ -23,4 +23,35 @@ internal static class ProductDeliveryThrowHelper
             {
                 { nameof(state), state }
             });
+
+    /// <summary>
+    /// Throws an exception indicating that a line asks for a good priced by a different supplier
+    /// than the one whose stop it sits on.
+    /// </summary>
+    /// <remarks>
+    /// Not a 404 — both the good and the supplier exist. What does not exist is the relationship
+    /// between them, which is a bad request about otherwise valid ids.
+    /// </remarks>
+    public static void SupplierGoodNotFromStopSupplier(Guid supplierGoodId, Guid supplierId)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ProductDeliveryErrorCodes.SupplierGoodNotFromStopSupplierError,
+            new Dictionary<string, object>
+            {
+                { nameof(supplierGoodId), supplierGoodId },
+                { nameof(supplierId), supplierId }
+            });
+
+    /// <summary>
+    /// Throws an exception indicating that the good has no price for the requested charge kind.
+    /// </summary>
+    public static void SupplierGoodPriceMissing(Guid supplierGoodId, SupplierChargeKind chargeKind)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ProductDeliveryErrorCodes.SupplierGoodPriceMissingError,
+            new Dictionary<string, object>
+            {
+                { nameof(supplierGoodId), supplierGoodId },
+                { nameof(chargeKind), chargeKind }
+            });
 }

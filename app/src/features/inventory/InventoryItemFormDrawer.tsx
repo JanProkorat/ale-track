@@ -92,7 +92,11 @@ export function InventoryItemFormDrawer({
           id: item.id,
           data: new UpdateInventoryItemDto({
             productId: item.productId,
-            name: item.name,
+            // Only a hand-written row owns its name. A row backed by a product or by a supplier's
+            // goods takes its name from that catalogue, so echoing the displayed name back would
+            // store a copy that goes stale the moment the entry is renamed — which is the whole
+            // reason those rows hold a reference rather than a name.
+            name: item.productId || item.supplierGoodId ? undefined : item.name,
             quantity,
             note: values.note || undefined,
           }),

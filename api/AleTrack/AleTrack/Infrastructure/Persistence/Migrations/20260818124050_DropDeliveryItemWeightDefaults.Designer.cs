@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260818124050_DropDeliveryItemWeightDefaults")]
+    partial class DropDeliveryItemWeightDefaults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -703,10 +706,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
-                    b.Property<long?>("SupplierGoodId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("supplier_good_id");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId")
@@ -715,13 +714,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.HasIndex("SupplierGoodId")
-                        .IsUnique();
-
-                    b.ToTable("inventory_items", t =>
-                        {
-                            t.HasCheckConstraint("ck_inventory_items_at_most_one_source", "NOT (\"product_id\" IS NOT NULL AND \"supplier_good_id\" IS NOT NULL)");
-                        });
+                    b.ToTable("inventory_items");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Order", b =>
@@ -2787,14 +2780,7 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AleTrack.Entities.InventoryItem", "ProductId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("AleTrack.Entities.SupplierGood", "SupplierGood")
-                        .WithOne("InventoryItem")
-                        .HasForeignKey("AleTrack.Entities.InventoryItem", "SupplierGoodId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Product");
-
-                    b.Navigation("SupplierGood");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.Order", b =>
@@ -3560,8 +3546,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("AleTrack.Entities.SupplierGood", b =>
                 {
-                    b.Navigation("InventoryItem");
-
                     b.Navigation("Prices");
                 });
 

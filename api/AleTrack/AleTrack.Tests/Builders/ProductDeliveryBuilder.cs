@@ -52,12 +52,16 @@ public static class ProductDeliveryBuilder
         DeliveryStopKind kind = DeliveryStopKind.Brewery,
         string? label = null,
         decimal? latitude = null,
-        decimal? longitude = null)
+        decimal? longitude = null,
+        Guid? supplierId = null)
     {
         return new CreateProductDeliveryStopDto
         {
             Kind = kind,
-            BreweryId = kind == DeliveryStopKind.Custom ? null : (breweryId ?? Guid.NewGuid()),
+            // Only the kind's own place is filled. The validators reject a stop carrying another
+            // kind's id, so a builder that filled both would make every supplier stop invalid.
+            BreweryId = kind == DeliveryStopKind.Brewery ? (breweryId ?? Guid.NewGuid()) : null,
+            SupplierId = kind == DeliveryStopKind.Supplier ? (supplierId ?? Guid.NewGuid()) : null,
             Label = label,
             Latitude = latitude,
             Longitude = longitude,
@@ -73,6 +77,12 @@ public static class ProductDeliveryBuilder
         string? note = null)
         => BuildCreateStopDto(kind: DeliveryStopKind.Custom, label: label ?? "Čerpací stanice", latitude: latitude, longitude: longitude, note: note);
 
+    public static CreateProductDeliveryStopDto BuildCreateSupplierStopDto(
+        Guid? supplierId = null,
+        string? note = null,
+        List<CreateProductDeliveryItemDto>? products = null)
+        => BuildCreateStopDto(kind: DeliveryStopKind.Supplier, supplierId: supplierId, note: note, products: products);
+
     public static CreateProductDeliveryItemDto BuildCreateItemDto(
         Guid? productId = null,
         int? quantity = null,
@@ -81,6 +91,21 @@ public static class ProductDeliveryBuilder
         return new CreateProductDeliveryItemDto
         {
             ProductId = productId ?? Guid.NewGuid(),
+            Quantity = quantity ?? 10,
+            Note = note
+        };
+    }
+
+    public static CreateProductDeliveryItemDto BuildCreateGoodItemDto(
+        Guid? supplierGoodId = null,
+        SupplierChargeKind chargeKind = SupplierChargeKind.Fill,
+        int? quantity = null,
+        string? note = null)
+    {
+        return new CreateProductDeliveryItemDto
+        {
+            SupplierGoodId = supplierGoodId ?? Guid.NewGuid(),
+            ChargeKind = chargeKind,
             Quantity = quantity ?? 10,
             Note = note
         };
@@ -113,13 +138,16 @@ public static class ProductDeliveryBuilder
         DeliveryStopKind kind = DeliveryStopKind.Brewery,
         string? label = null,
         decimal? latitude = null,
-        decimal? longitude = null)
+        decimal? longitude = null,
+        Guid? supplierId = null)
     {
         return new UpdateProductDeliveryStopDto
         {
             PublicId = publicId,
             Kind = kind,
-            BreweryId = kind == DeliveryStopKind.Custom ? null : (breweryId ?? Guid.NewGuid()),
+            // See BuildCreateStopDto — only the kind's own place is filled.
+            BreweryId = kind == DeliveryStopKind.Brewery ? (breweryId ?? Guid.NewGuid()) : null,
+            SupplierId = kind == DeliveryStopKind.Supplier ? (supplierId ?? Guid.NewGuid()) : null,
             Label = label,
             Latitude = latitude,
             Longitude = longitude,
@@ -127,6 +155,13 @@ public static class ProductDeliveryBuilder
             Products = products ?? []
         };
     }
+
+    public static UpdateProductDeliveryStopDto BuildUpdateSupplierStopDto(
+        Guid? publicId = null,
+        Guid? supplierId = null,
+        string? note = null,
+        List<UpdateProductDeliveryItemDto>? products = null)
+        => BuildUpdateStopDto(publicId: publicId, kind: DeliveryStopKind.Supplier, supplierId: supplierId, note: note, products: products);
 
     public static UpdateProductDeliveryStopDto BuildUpdateCustomStopDto(
         Guid? publicId = null,
@@ -149,6 +184,21 @@ public static class ProductDeliveryBuilder
         };
     }
 
+    public static UpdateProductDeliveryItemDto BuildUpdateGoodItemDto(
+        Guid? supplierGoodId = null,
+        SupplierChargeKind chargeKind = SupplierChargeKind.Fill,
+        int? quantity = null,
+        string? note = null)
+    {
+        return new UpdateProductDeliveryItemDto
+        {
+            SupplierGoodId = supplierGoodId ?? Guid.NewGuid(),
+            ChargeKind = chargeKind,
+            Quantity = quantity ?? 10,
+            Note = note
+        };
+    }
+
     public static DeliveryStop BuildDeliveryStopEntity(
         Guid? publicId = null,
         Brewery? brewery = null,
@@ -158,14 +208,16 @@ public static class ProductDeliveryBuilder
         DeliveryStopKind kind = DeliveryStopKind.Brewery,
         string? label = null,
         decimal? latitude = null,
-        decimal? longitude = null)
+        decimal? longitude = null,
+        Supplier? supplier = null)
     {
         return new DeliveryStop
         {
             PublicId = publicId ?? Guid.NewGuid(),
             Order = order,
             Kind = kind,
-            Brewery = kind == DeliveryStopKind.Custom ? null : (brewery ?? BreweryBuilder.BuildEntity()),
+            Brewery = kind == DeliveryStopKind.Brewery ? (brewery ?? BreweryBuilder.BuildEntity()) : null,
+            Supplier = kind == DeliveryStopKind.Supplier ? (supplier ?? SupplierBuilder.BuildEntity()) : null,
             Label = label,
             Latitude = latitude,
             Longitude = longitude,
@@ -173,6 +225,14 @@ public static class ProductDeliveryBuilder
             Note = note
         };
     }
+
+    public static DeliveryStop BuildSupplierStopEntity(
+        Guid? publicId = null,
+        Supplier? supplier = null,
+        List<DeliveryItem>? items = null,
+        string? note = null,
+        int order = 0)
+        => BuildDeliveryStopEntity(publicId: publicId, kind: DeliveryStopKind.Supplier, supplier: supplier, items: items, note: note, order: order);
 
     public static DeliveryItem BuildDeliveryItemEntity(
         Product? product = null,
@@ -184,6 +244,28 @@ public static class ProductDeliveryBuilder
             Product = product ?? ProductBuilder.BuildEntity(),
             Quantity = quantity ?? 10,
             Note = note
+        };
+    }
+
+    /// <summary>
+    /// A supplier line: a good and the charge kind its price is read from, with no weight inputs —
+    /// the shape delivery_items' check constraints require of one.
+    /// </summary>
+    public static DeliveryItem BuildDeliveryGoodItemEntity(
+        SupplierGood? supplierGood = null,
+        SupplierChargeKind chargeKind = SupplierChargeKind.Fill,
+        int? quantity = null,
+        string? note = null)
+    {
+        return new DeliveryItem
+        {
+            SupplierGood = supplierGood ?? SupplierBuilder.BuildGood(),
+            ChargeKind = chargeKind,
+            Quantity = quantity ?? 10,
+            Note = note,
+            Kind = null,
+            PackageSize = null,
+            UnitsPerPackage = null
         };
     }
 }

@@ -127,11 +127,17 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext, IDriverSc
         // this side live left one series moving under a product edit while the other stayed put.
         // The formula stays live on both sides, so correcting it still reaches history.
         IQueryable<DeliveryItem> incomingRowsQuery = dbContext.DeliveryItems
-            // Finished only, mirroring the outgoing side's delivered-only rule. The spec's
-            // "delivered = actuals, not plans" principle applies to both sides of this chart:
-            // counting planned or cancelled Dovozy against delivered Vyvozy would compare
-            // unlike quantities on a shared axis.
-            .Where(di => di.DeliveryStop.Delivery.State == ProductDeliveryState.Finished
+            // Brewery product lines only. A supplier stop's lines are goods off a price list — a
+            // CO₂ bottle, a crate — which state their size as free text and carry no ProductKind,
+            // so there is no weight to compute for them. Excluded rather than defaulted: weighing
+            // them as zero would be honest, but weighing them at all invites a later "fix" that
+            // invents a kind and quietly puts gas bottles on the beer-tonnage axis.
+            .Where(di => di.ProductId != null
+                         // Finished only, mirroring the outgoing side's delivered-only rule. The
+                         // spec's "delivered = actuals, not plans" principle applies to both sides
+                         // of this chart: counting planned or cancelled Dovozy against delivered
+                         // Vyvozy would compare unlike quantities on a shared axis.
+                         && di.DeliveryStop.Delivery.State == ProductDeliveryState.Finished
                          && di.DeliveryStop.Delivery.Date >= req.From
                          && di.DeliveryStop.Delivery.Date <= req.To);
 
@@ -159,8 +165,14 @@ public sealed class GetOperationsEndpoint(AleTrackDbContext dbContext, IDriverSc
             .GroupBy(r => ReportBucketing.BucketStart(r.Date, ReportGranularity.Month))
             .ToDictionary(
                 g => g.Key,
-                g => g.Sum(r => ProductWeightCalculator.ComputeLineWeightKg(
-                    r.Kind, r.PackageSize, r.Quantity, r.UnitsPerPackage)));
+                // Kind is nullable on the column because supplier lines have none; those are
+                // already filtered out above, so a null here would be a product line whose
+                // snapshot never got written. Contributing nothing is the only honest answer —
+                // there are no inputs to weigh.
+                g => g.Sum(r => r.Kind is null
+                    ? 0m
+                    : ProductWeightCalculator.ComputeLineWeightKg(
+                        r.Kind.Value, r.PackageSize, r.Quantity, r.UnitsPerPackage ?? 1)));
 
         var result = new OperationsReportDto
         {

@@ -49,6 +49,7 @@ public static class SupplierBuilder
     public static SupplierGood BuildGood(
         Guid? publicId = null,
         long id = 1,
+        long supplierId = 1,
         string? name = null,
         string? size = null,
         string? description = null,
@@ -57,6 +58,7 @@ public static class SupplierBuilder
         return new SupplierGood
         {
             Id = id,
+            SupplierId = supplierId,
             PublicId = publicId ?? Guid.NewGuid(),
             Name = name ?? "CO₂ láhev",
             Size = size ?? "10 kg",

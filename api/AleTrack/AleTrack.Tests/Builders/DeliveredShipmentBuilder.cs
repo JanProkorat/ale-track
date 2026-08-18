@@ -330,7 +330,8 @@ public static class DeliveredShipmentBuilder
         ProductKind kind,
         double packageSize,
         int quantity,
-        ProductDeliveryState state = ProductDeliveryState.Finished)
+        ProductDeliveryState state = ProductDeliveryState.Finished,
+        int supplierGoodQuantity = 0)
     {
         var product = ProductBuilder.BuildEntity(
             name: "Dovezený produkt",
@@ -376,6 +377,48 @@ public static class DeliveredShipmentBuilder
         stop.Items = [item];
         delivery.Stops = [stop];
 
+        var deliveryItems = new List<DeliveryItem> { item };
+        var suppliers = new List<Supplier>();
+        var supplierGoods = new List<SupplierGood>();
+
+        // A second stop, at a supplier, on the same trip. Its line has no weight inputs at all — the
+        // point of collecting it here is that the incoming series must not try to weigh it.
+        if (supplierGoodQuantity > 0)
+        {
+            var supplier = SupplierBuilder.BuildEntity(id: 700);
+            var good = SupplierBuilder.BuildGood(id: 700, supplierId: supplier.Id);
+
+            var supplierStop = new DeliveryStop
+            {
+                Id = 2,
+                PublicId = Guid.NewGuid(),
+                DeliveryId = delivery.Id,
+                Delivery = delivery,
+                Order = 2,
+                Kind = DeliveryStopKind.Supplier,
+                SupplierId = supplier.Id,
+                Supplier = supplier
+            };
+
+            var goodItem = new DeliveryItem
+            {
+                Id = 2,
+                DeliveryStopId = supplierStop.Id,
+                DeliveryStop = supplierStop,
+                SupplierGoodId = good.Id,
+                SupplierGood = good,
+                ChargeKind = SupplierChargeKind.Fill,
+                Quantity = supplierGoodQuantity
+            };
+
+            supplierStop.Items = [goodItem];
+            delivery.Stops = [stop, supplierStop];
+
+            deliveryItems.Add(goodItem);
+            suppliers.Add(supplier);
+            supplierGoods.Add(good);
+        }
+
         var allProducts = fixture.OrderItems.Select(oi => oi.Product).Append(product).ToList();
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
@@ -386,10 +429,12 @@ public static class DeliveredShipmentBuilder
             orderItems: fixture.OrderItems,
             drivers: [fixture.Driver],
             productDeliveries: [delivery],
-            deliveryItems: [item],
+            deliveryItems: deliveryItems,
             outgoingShipments: [fixture.Shipment],
             // The outgoing side must stay visible: this re-mocks the whole context.
-            outgoingShipmentStopItems: fixture.StopItems);
+            outgoingShipmentStopItems: fixture.StopItems,
+            suppliers: suppliers,
+            supplierGoods: supplierGoods);
 
         return fixture with { DbContext = dbContext };
     }

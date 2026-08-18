@@ -16,7 +16,11 @@ import { DetailHeader } from 'src/components/common/DetailHeader';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, deliveryNumber, plural } from 'src/lib/format';
-import { DELIVERY_STATUS, deliveryStateName, startPointKindName } from 'src/lib/labels';
+import {
+  DELIVERY_STATUS, deliveryStateName, startPointKindName, deliveryStopKindName,
+  deliveryStopKindLabel, chargeKindLabel, chargeKindName,
+} from 'src/lib/labels';
+import { SUPPLIER_COLOR, CUSTOM_COLOR } from './stopVisuals';
 import {
   ProductDeliveryState,
   UpdateProductDeliveryDto,
@@ -38,7 +42,13 @@ function colorFor(str: string): string {
 
 /** Build the write DTO from the current delivery, changing only the state —
  * used for the InPlanning→OnTheWay→Finished transitions (Update-driven; the
- * backend stocks inventory when the new state is Finished). */
+ * backend stocks inventory when the new state is Finished).
+ *
+ * Every stop kind has to survive this round trip intact. It previously sent
+ * neither `kind` nor a custom stop's label and coordinates, so the omitted
+ * enum arrived as its default — Brewery — and a dovoz containing a custom
+ * waypoint was rejected on "Vyrazit" for having no brewery. Supplier stops
+ * would have failed the same way. */
 function toUpdateDto(d: ProductDeliveryDto, nextState: ProductDeliveryState): UpdateProductDeliveryDto {
   return new UpdateProductDeliveryDto({
     deliveryDate: d.deliveryDate!,
@@ -48,17 +58,40 @@ function toUpdateDto(d: ProductDeliveryDto, nextState: ProductDeliveryState): Up
     note: d.note,
     stops: (d.stops ?? []).map((s) => new UpdateProductDeliveryStopDto({
       publicId: s.id,
+      kind: s.kind,
       breweryId: s.brewery?.id,
+      supplierId: s.supplier?.id,
+      label: s.label,
+      latitude: s.latitude,
+      longitude: s.longitude,
       note: s.note,
       products: (s.products ?? []).map((p) => new UpdateProductDeliveryItemDto({
-        productId: p.productId, quantity: p.quantity, note: p.note,
+        productId: p.productId,
+        supplierGoodId: p.supplierGoodId,
+        chargeKind: p.chargeKind,
+        quantity: p.quantity,
+        note: p.note,
       })),
     })),
   });
 }
 
-/** One expandable brewery in the stops overview: collapsed header (brewery
- * avatar + name + item count) that reveals its product list on click. */
+/** The name a stop goes by, whichever kind it is. */
+function stopName(stop: ProductDeliveryStopDto): string {
+  return stop.brewery?.name ?? stop.supplier?.name ?? stop.label ?? '—';
+}
+
+/** The colour a stop is drawn in: a brewery's own, or the fixed tone for the kinds without one. */
+function stopColor(stop: ProductDeliveryStopDto, breweryById: Map<string, { color?: string }>): string {
+  switch (deliveryStopKindName(stop.kind)) {
+    case 'Supplier': return SUPPLIER_COLOR;
+    case 'Custom': return CUSTOM_COLOR;
+    default: return (stop.brewery?.id ? breweryById.get(stop.brewery.id)?.color : undefined) ?? '#7C3AED';
+  }
+}
+
+/** One expandable stop in the overview: collapsed header (avatar + name + item
+ * count) that reveals its item list on click. */
 function StopRow({ stop, index, color, open, onToggle }: {
   stop: ProductDeliveryStopDto;
   index: number;
@@ -67,6 +100,7 @@ function StopRow({ stop, index, color, open, onToggle }: {
   onToggle: () => void;
 }) {
   const products = stop.products ?? [];
+  const kind = deliveryStopKindName(stop.kind);
   return (
     <Box sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
       <ButtonBase
@@ -75,7 +109,13 @@ function StopRow({ stop, index, color, open, onToggle }: {
       >
         <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{index + 1}</Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{stop.brewery?.name ?? '—'}</Typography>
+          <Stack direction="row" alignItems="center" spacing={0.75}>
+            <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{stopName(stop)}</Typography>
+            {/* A brewery needs no badge — it is what a dovoz stop has always been. */}
+            {kind !== 'Brewery' && (
+              <Chip size="small" label={deliveryStopKindLabel(stop.kind)} sx={{ height: 18, fontSize: 10.5 }} />
+            )}
+          </Stack>
           <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
             {products.length} {plural(products.length, 'položka', 'položky', 'položek')}
           </Typography>
@@ -89,6 +129,13 @@ function StopRow({ stop, index, color, open, onToggle }: {
               <Stack key={i} direction="row" alignItems="center" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{p.name}</Typography>
+                  {/* Only supplier lines have these: which price the trip is for, and the size
+                      the supplier states. A product's size is already in its own name. */}
+                  {(p.chargeKind != null || p.size) && (
+                    <Typography sx={{ fontSize: 11, color: 'text.secondary' }} noWrap>
+                      {[chargeKindLabel(p.chargeKind), p.size].filter(Boolean).join(' · ')}
+                    </Typography>
+                  )}
                   {p.note && <Typography sx={{ fontSize: 11, color: 'text.secondary' }} noWrap>{p.note}</Typography>}
                 </Box>
                 <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{p.quantity} ks</Typography>
@@ -132,8 +179,32 @@ export function DeliveryDetail({
 
   const stops = useMemo(() => delivery.stops ?? [], [delivery.stops]);
   const routeStops: RouteStop[] = useMemo(() => stops.map((s): RouteStop => {
-    const b = s.brewery?.id ? breweryById.get(s.brewery.id) : undefined;
-    return { lat: b?.lat, lng: b?.lng, label: s.brewery?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
+    // A brewery's coordinates come from the breweries cache, which is on screen anyway for
+    // its colour. A supplier's arrive on the stop itself — the suppliers list is behind its
+    // own permission, so resolving them here would leave a planner without it a route with a
+    // hole in it. A custom stop carries its own.
+    switch (deliveryStopKindName(s.kind)) {
+      case 'Supplier':
+        return {
+          lat: s.supplier?.latitude ?? undefined,
+          lng: s.supplier?.longitude ?? undefined,
+          label: s.supplier?.name ?? 'Dodavatel',
+          color: SUPPLIER_COLOR,
+          kind: 'order',
+        };
+      case 'Custom':
+        return {
+          lat: s.latitude ?? undefined,
+          lng: s.longitude ?? undefined,
+          label: s.label || 'Vlastní zastávka',
+          color: CUSTOM_COLOR,
+          kind: 'custom',
+        };
+      default: {
+        const b = s.brewery?.id ? breweryById.get(s.brewery.id) : undefined;
+        return { lat: b?.lat, lng: b?.lng, label: s.brewery?.name ?? 'Pivovar', color: b?.color ?? '#7C3AED', kind: 'order' };
+      }
+    }
   }), [stops, breweryById]);
 
   // A dovoz (incoming delivery) is the reverse of a vývoz: the van visits
@@ -150,11 +221,13 @@ export function DeliveryDetail({
     ? { lat: company.latitude ?? 0, lng: company.longitude ?? 0, name: company.name ?? '—', address: company.address }
     : (firstLocatedStop ? { lat: firstLocatedStop.lat!, lng: firstLocatedStop.lng!, name: firstLocatedStop.label } : undefined);
 
-  // Aggregated arriving goods: sum quantity per product across all breweries.
+  // Aggregated arriving goods: sum quantity per line identity across every stop. A good's
+  // identity includes its charge kind — the same bottle refilled and rented is two lines at
+  // two prices, and folding them together would report one trip as half of what it is.
   const aggProducts = useMemo(() => {
     const m = new Map<string, { name: string; quantity: number }>();
     stops.forEach((s) => (s.products ?? []).forEach((p) => {
-      const key = p.productId ?? p.name ?? '';
+      const key = p.productId ?? `${p.supplierGoodId ?? p.name ?? ''}:${chargeKindName(p.chargeKind) ?? ''}`;
       const ex = m.get(key);
       if (ex) ex.quantity += p.quantity ?? 0;
       else m.set(key, { name: p.name ?? '—', quantity: p.quantity ?? 0 });
@@ -202,7 +275,7 @@ export function DeliveryDetail({
         status={<StatusPill tone={status.tone} label={status.label} />}
         meta={[
           delivery.deliveryDate ? fmtDate(delivery.deliveryDate) : 'termín neurčen',
-          `${stops.length} ${plural(stops.length, 'pivovar', 'pivovary', 'pivovarů')}`,
+          `${stops.length} ${plural(stops.length, 'zastávka', 'zastávky', 'zastávek')}`,
         ]}
         actions={(
           <>
@@ -315,7 +388,7 @@ export function DeliveryDetail({
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled zastávek</Typography>
               <Box sx={{ flex: 1 }} />
               <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled' }}>
-                {stops.length} {plural(stops.length, 'pivovar', 'pivovary', 'pivovarů')}
+                {stops.length} {plural(stops.length, 'zastávka', 'zastávky', 'zastávek')}
               </Typography>
             </Stack>
             {stops.length > 0 ? (
@@ -325,7 +398,7 @@ export function DeliveryDetail({
                     key={s.id ?? i}
                     stop={s}
                     index={i}
-                    color={(s.brewery?.id ? breweryById.get(s.brewery.id)?.color : undefined) ?? '#7C3AED'}
+                    color={stopColor(s, breweryById)}
                     open={expanded.has(s.id ?? `stop-${i}`)}
                     onToggle={() => toggle(s.id ?? `stop-${i}`)}
                   />

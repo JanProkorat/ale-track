@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.InventoryItems.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -53,9 +54,17 @@ public sealed class UpdateInventoryItemEndpoint(AleTrackDbContext dbContext) : E
         if (inventoryItem is null)
             ThrowHelper.PublicEntityNotFound(nameof(InventoryItem), req.Id);
         
+        // A row booked in from a supplier stop keeps its goods: its identity is what lets the next
+        // dovoz find it to increment. Quantity and note stay editable — a stock correction is the
+        // point of this endpoint — but pointing it at a product instead would leave a row claiming
+        // to be both, which the check constraint refuses. Said here as a 400 rather than let through
+        // as a 500.
+        if (inventoryItem!.SupplierGoodId is not null && req.Data.ProductId is not null)
+            InventoryItemThrowHelper.SupplierGoodStockCannotBeRepointed(req.Id, req.Data.ProductId.Value);
+
         var product = await GetProductAsync(req.Data.ProductId, ct);
 
-        inventoryItem!.Product = product;
+        inventoryItem.Product = product;
         inventoryItem.Name = req.Data.Name;
         inventoryItem.Quantity = req.Data.Quantity;
         inventoryItem.Note = req.Data.Note;

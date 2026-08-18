@@ -9,5 +9,8 @@ public enum DeliveryStopKind
     Brewery = 0,
 
     /// <summary>A custom waypoint (no brewery) — a free-form point on the route.</summary>
-    Custom = 1
+    Custom = 1,
+
+    /// <summary>A stop at a supplier, from which goods off its price list are collected.</summary>
+    Supplier = 2
 }

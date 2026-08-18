@@ -51,8 +51,9 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
             {
                 Id = g.Key.Id,
                 Name = g.Key.Name,
-                // Product order per ProductOrdering. Manual rows have no product at
-                // all, so they rank with the non-beers and fall to the end.
+                // Product order per ProductOrdering. Rows with no product — a supplier's goods, or a
+                // hand-written row — rank with the non-beers and fall to the end, sorted by whatever
+                // name they do have.
                 Items = g
                     .OrderBy(i => i.Product == null
                                || i.Product.Type == ProductType.Lemonade
@@ -61,12 +62,20 @@ internal sealed class GetInventoryItemsListEndpoint(AleTrackDbContext dbContext)
                     .ThenBy(i => i.Product == null || i.Product.PlatoDegree == null)
                     .ThenBy(i => i.Product != null ? i.Product.PlatoDegree : null)
                     .ThenBy(i => i.Product != null ? i.Product.PackageSize : null)
-                    .ThenBy(i => i.Product != null ? i.Product.Name : i.Name)
+                    .ThenBy(i => i.Product != null
+                        ? i.Product.Name
+                        : (i.SupplierGood != null ? i.SupplierGood.Name : i.Name))
                     .Select(i => new InventoryItemListItemDto
                 {
                     Id = i.PublicId,
                     ProductId = i.Product != null ? i.Product.PublicId : null,
-                    Name = i.Product != null ? i.Product.Name : i.Name,
+                    SupplierGoodId = i.SupplierGood != null ? i.SupplierGood.PublicId : null,
+                    // A supplier's goods are named by the ceník entry, so renaming it there renames
+                    // the stock row rather than leaving a stale copy behind.
+                    Name = i.Product != null
+                        ? i.Product.Name
+                        : (i.SupplierGood != null ? i.SupplierGood.Name : i.Name),
+                    Size = i.SupplierGood != null ? i.SupplierGood.Size : null,
                     Quantity = i.Quantity,
                     Kind = i.Product != null ? i.Product.Kind : null,
                     Type = i.Product != null ? i.Product.Type : null,

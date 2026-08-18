@@ -195,6 +195,36 @@ public sealed class GetOperationsEndpointTests
     }
 
     /// <summary>
+    /// A supplier stop's lines are goods off a price list — a CO₂ bottle states its size as free
+    /// text and has no ProductKind, so there is nothing to weigh. They must leave the incoming
+    /// series untouched rather than be defaulted onto the beer-tonnage axis.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_IncomingWeight_IgnoresSupplierGoodLines()
+    {
+        var fixture = DeliveredShipmentBuilder.Build(
+            deliveryDate: new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+            state: OutgoingShipmentState.Delivered,
+            lines: [new(ProductKind.Keg, ProductType.PaleLager, KegSize.FiftyLiters, quantity: 2)]);
+
+        // The same 5 kegs of 30 l as the test above, plus a supplier stop for 4 gas bottles.
+        var withIncoming = DeliveredShipmentBuilder.WithIncomingDelivery(
+            fixture,
+            date: new DateOnly(2026, 7, 15),
+            kind: ProductKind.Keg,
+            packageSize: KegSize.ThirtyLiters,
+            quantity: 5,
+            supplierGoodQuantity: 4);
+
+        var endpoint = Endpoint(withIncoming);
+
+        await endpoint.HandleAsync(Window(), CancellationToken.None);
+
+        endpoint.Response.IncomingVsOutgoing[0].IncomingWeightKg
+            .Should().Be(210m, "the four gas bottles have no weight inputs and must not be counted");
+    }
+
+    /// <summary>
     /// The incoming half of the chart must hold as still as the outgoing half, or one series moves
     /// under a product edit while the other stays put — which is exactly the inconsistency this
     /// snapshot closes.
