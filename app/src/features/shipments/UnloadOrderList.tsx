@@ -4,8 +4,7 @@
 // for the road. See unloadOrder.ts for why the shapes differ and what each
 // line carries; this component only lays that shape out.
 
-import { Fragment } from 'react';
-import { Box, Chip, Divider, Stack, Typography } from '@mui/material';
+import { Box, Divider, Stack, Typography } from '@mui/material';
 import type { UnloadStop } from './unloadOrder';
 
 /** The stop's 1-based route position, in a plain token-coloured circle — the
@@ -29,33 +28,38 @@ function SeqBadge({ seq }: { seq: number }) {
 }
 
 /**
- * The stop's products, one row each: name, then what it is, then how many.
+ * The stop's products, two lines each: the name with its count, then what it is packed in.
  *
- * A grid rather than a row of flex Stacks so the chips and the quantities line up down the
- * list — the complaint that started this was three rows reading "Svijanský Kníže" whose only
- * difference was a chip the eye had to hunt for on each line. Grid columns are shared by
- * every row in one container, so a per-row Stack could not align them.
+ * Two lines rather than three columns because the packaging is the longest thing on the row and
+ * the name is the shortest — side by side they left a river of empty card between them, and a
+ * chip wide enough for 'Plechovka · 0,5 l · 10°' pushed the count around with it. Stacked, the
+ * name and the count sit at the two ends of one line and nothing can drift.
  */
 function UnloadLines({ stop }: { stop: UnloadStop }) {
   return (
-    <Box sx={{
-      mt: 0.5, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto',
-      columnGap: 1, rowGap: 0.25, alignItems: 'center',
-    }}>
+    <Stack spacing={1.25} sx={{ mt: 1 }}>
       {stop.lines.map((line, index) => (
-        // A keyed Fragment, so each line's three cells land in the grid itself — a wrapper
-        // element would become one grid item and the columns would collapse.
-        <Fragment key={`${line.name}-${index}`}>
-          <Typography sx={{ fontSize: 12.5 }} noWrap>{line.name}</Typography>
-          {line.chip
-            ? <Chip size="small" label={line.chip} sx={{ height: 18, fontSize: 10, fontWeight: 600, justifySelf: 'start' }} />
-            : <Box />}
-          <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
-            {`× ${line.quantity}`}
-          </Typography>
-        </Fragment>
+        <Box key={`${line.name}-${index}`} data-testid="unload-line">
+          <Stack direction="row" alignItems="baseline" spacing={1}>
+            <Typography sx={{ fontSize: 13, fontWeight: 500, minWidth: 0, lineHeight: 1.3 }} noWrap>
+              {line.name}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Typography sx={{
+              fontSize: 13, fontWeight: 700, flexShrink: 0, lineHeight: 1.3,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {`× ${line.quantity}`}
+            </Typography>
+          </Stack>
+          {line.chip && (
+            <Typography sx={{ fontSize: 11.5, color: 'text.secondary', lineHeight: 1.3 }} noWrap>
+              {line.chip}
+            </Typography>
+          )}
+        </Box>
       ))}
-    </Box>
+    </Stack>
   );
 }
 
@@ -69,7 +73,7 @@ function UnloadStopBlock({ stop }: { stop: UnloadStop }) {
       <SeqBadge seq={stop.seq} />
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Stack direction="row" alignItems="baseline" spacing={1}>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5, minWidth: 0 }} noWrap>{stop.title}</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: 14, minWidth: 0 }} noWrap>{stop.title}</Typography>
           <Box sx={{ flex: 1 }} />
           {/* What the driver counts the handover against, so it belongs beside the client's
               name rather than under the last line. */}
