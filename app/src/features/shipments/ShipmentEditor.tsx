@@ -14,6 +14,7 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
@@ -57,6 +58,7 @@ import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsEditor } from './PreparationStepsEditor';
 import { defaultChecklistSteps, type DraftStep } from './preparationStepModel';
 import { resolveStopAddress } from './stopAddress';
+import { suppliersNeedingPickup, needsGarageStop } from './pickupStopPrediction';
 import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/features/clients/deliveryAddress';
 import { StartPointPicker } from './StartPointPicker';
 import { optionKey, routeEndpointFrom, type StartPointValue } from './startPointOption';
@@ -249,6 +251,47 @@ function SortableStopRow({
 /** Vývoz editor: draggable stop ordering + nearest-neighbour route
  * optimizer + order selection with a region filter, plus vehicle/driver
  * assignment. Matches the prototype's viewShipmentEditor/seOptimize/seSave. */
+/**
+ * A pickup stop the save will create, shown before it exists.
+ *
+ * Read-only by nature rather than by choice: it has no identity yet, so there is nothing to drag,
+ * remove or address. The label says so, because a row that looked like the others but ignored every
+ * control would read as broken. Once saved, the detail screen's stop list can place it.
+ */
+function PickupPreviewRow({ seq, label, isCompany }: { seq: number; label: string; isCompany: boolean }) {
+  return (
+    <Box
+      data-testid="pickup-preview-row"
+      sx={{
+        display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25,
+        border: 1, borderStyle: 'dashed', borderColor: 'divider', borderRadius: 2,
+        bgcolor: 'action.hover',
+      }}
+    >
+      {/* The drag column, left empty so these rows line up with the ones above them. */}
+      <Box sx={{ width: 20, flexShrink: 0 }} />
+      <Box sx={{
+        width: 28, height: 28, display: 'grid', placeItems: 'center', flexShrink: 0,
+        borderRadius: '4px', transform: 'rotate(45deg)', bgcolor: 'text.disabled', color: '#fff',
+      }}
+      >
+        <Box component="span" sx={{ transform: 'rotate(-45deg)', fontSize: 12, fontWeight: 800 }}>{seq}</Box>
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          {isCompany
+            ? <WarehouseOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
+            : <PropaneOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />}
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{label}</Typography>
+        </Stack>
+        <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+          {isCompany ? 'Vyzvednutí z garáže — přidá se po uložení' : 'Vyzvednutí u dodavatele — přidá se po uložení'}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 export function ShipmentEditor({
   mode,
   shipmentId,
@@ -410,19 +453,85 @@ export function ShipmentEditor({
     ? ordersWithRegion
     : ordersWithRegion.filter((x) => String(x.region) === regionFilter || usedOrderIds.has(x.order.id ?? ''));
 
+  // The company entry regardless of which start point is currently picked — a
+  // company *stop* (dropped off at the warehouse mid-route) is independent of
+  // where the run *starts* from, so this is looked up separately from
+  // `pickedStartPoint` below. Feeds a freshly-added company stop's display
+  // coordinates/label, every company row's address line, and the warehouse
+  // pickup preview.
+  const companyStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === 'company');
+  const hasStockPurchases = Boolean(shipmentQuery.data?.stockPurchases?.length);
+
   const stopsSorted = useMemo(() => stops.slice().sort((a, b) => a.order - b.order), [stops]);
-  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
+
+  // Every supplier-good line the picked orders bring with them.
+  const pickedSupplierGoods = useMemo(
+    () => stopsSorted
+      .filter((st) => st.kind === 'order' && st.orderId)
+      .flatMap((st) => orderById.get(st.orderId!)?.supplierGoods ?? []),
+    [stopsSorted, orderById],
+  );
+
+  /**
+   * The pickup stops saving would create, shown here as previews.
+   *
+   * Previews rather than draft stops on purpose: these are derived from what the orders ask for,
+   * and the server is the one thing that creates them — the editor never sends them, exactly as it
+   * never sends the supplier stops it filters out on load. Showing them is what stops "add an order
+   * with a CO₂ refill" from looking like it changed nothing about the route.
+   *
+   * A supplier already sitting in the draft as a real stop is not previewed again.
+   */
+  const pickupPreviews = useMemo(() => {
+    const suppliers = suppliersNeedingPickup(pickedSupplierGoods);
+    const previews = suppliers.map((sup) => ({
+      key: `preview-supplier-${sup.supplierId}`,
+      kind: 'supplier' as const,
+      label: sup.supplierName ?? '—',
+      lat: sup.latitude,
+      lng: sup.longitude,
+    }));
+
+    // The warehouse, when a garage-sourced piece or a stock purchase calls for one and the planner
+    // has not already placed the stop by hand.
+    if (needsGarageStop(pickedSupplierGoods, hasStockPurchases) && !stopsSorted.some((st) => st.kind === 'company')) {
+      previews.push({
+        key: 'preview-company',
+        kind: 'company' as unknown as 'supplier',
+        label: companyStartPoint?.name ?? 'Firemní sklad',
+        lat: companyStartPoint?.latitude,
+        lng: companyStartPoint?.longitude,
+      });
+    }
+
+    return previews;
+  }, [pickedSupplierGoods, hasStockPurchases, stopsSorted, companyStartPoint]);
+
+  const routeStops: RouteStop[] = useMemo(() => [...stopsSorted.map((st, i): RouteStop => {
     // RouteMap only distinguishes 'order' vs. 'custom' waypoints — a company
     // stop renders the same diamond marker a custom stop does; that map isn't
     // this task's to extend, and visually the two aren't meant to differ.
     if (st.kind === 'custom' || st.kind === 'company') {
       const fallbackLabel = st.kind === 'company' ? 'Firemní sklad' : 'Vlastní zastávka';
-      return { lat: st.lat, lng: st.lng, label: st.label || fallbackLabel, color: '#1A2B4C', kind: 'custom' };
+      return {
+        lat: st.lat, lng: st.lng, label: st.label || fallbackLabel,
+        color: '#1A2B4C', kind: 'custom', seq: i + 1,
+      };
     }
     const order = orderById.get(st.orderId ?? '');
     const pt = resolveStopAddress(order, st.addressKind, st.deliveryPlaceId);
-    return { lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—', color: colorForClient(order?.clientName ?? st.key), kind: 'order' };
-  }), [stopsSorted, orderById]);
+    return {
+      lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—',
+      color: colorForClient(order?.clientName ?? st.key), kind: 'order', seq: i + 1,
+    };
+  }),
+  // Drawn with the drafted stops so the route — and the distance and time read off it — is the
+  // one that will actually be driven, not the one before the pickups were accounted for.
+  ...pickupPreviews.map((p, i): RouteStop => ({
+    lat: p.lat, lng: p.lng, label: p.label, color: '#1A2B4C', kind: 'custom',
+    seq: stopsSorted.length + i + 1,
+  })),
+  ], [stopsSorted, orderById, pickupPreviews]);
 
   // The picker's own choice drives the route's origin. While that reference-data
   // query hasn't resolved (or the picked entry isn't in it yet), a synthetic
@@ -434,14 +543,7 @@ export function ShipmentEditor({
   // explicitly and the render below skips RouteMap entirely then rather than
   // draw a route anchored at (0, 0).
   const pickedStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === optionKey(startPoint));
-  // The company entry regardless of which start point is currently picked — a
-  // company *stop* (dropped off at the warehouse mid-route) is independent of
-  // where the run *starts* from, so this is looked up separately from
-  // `pickedStartPoint` above. Feeds both a freshly-added company stop's
-  // display coordinates/label and every company row's address line.
-  const companyStartPoint = (startPointsQuery.data ?? []).find((p) => optionKey(p) === 'company');
   const hasCompanyStop = stops.some((s) => s.kind === 'company');
-  const hasStockPurchases = Boolean(shipmentQuery.data?.stockPurchases?.length);
   const savedStart: RouteEndpoint | undefined = mode === 'edit'
     && shipmentQuery.data?.startPointLatitude != null
     && shipmentQuery.data?.startPointLongitude != null
@@ -827,6 +929,21 @@ export function ShipmentEditor({
                     </Stack>
                   </SortableContext>
                 </DndContext>
+              )}
+              {/* After the drafted stops, because that is where saving will append them. Not part
+                  of the sortable list: they have no identity yet, so there is nothing to reorder —
+                  once saved, the stop list on the detail screen can place them. */}
+              {pickupPreviews.length > 0 && (
+                <Stack spacing={1} sx={{ mt: stopsSorted.length > 0 ? 1 : 0 }}>
+                  {pickupPreviews.map((preview, i) => (
+                    <PickupPreviewRow
+                      key={preview.key}
+                      seq={stopsSorted.length + i + 1}
+                      label={preview.label}
+                      isCompany={preview.key === 'preview-company'}
+                    />
+                  ))}
+                </Stack>
               )}
             </Box>
           </Card>

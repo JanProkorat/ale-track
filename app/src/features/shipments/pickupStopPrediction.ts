@@ -23,6 +23,66 @@ export interface CompanyPoint {
 }
 
 /**
+ * The least a good line has to say for the two rules to be applied to it.
+ *
+ * A structural type rather than one of the DTOs, because two screens ask the same question about
+ * different shapes: the detail screen about the run's own supplier goods, the editor about the
+ * lines of an order it is considering adding. Both carry these fields under these names.
+ */
+export interface PickupCandidate {
+  quantity?: number;
+  quantityFromGarage?: number;
+  supplierId?: string;
+  supplierName?: string;
+  supplierAddress?: { latitude?: number; longitude?: number } | undefined;
+}
+
+/** A supplier the run has to call at, and where. */
+export interface PickupSupplier {
+  supplierId: string;
+  supplierName?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+/**
+ * The suppliers that need a stop: one per supplier with any piece still collected there, in name
+ * order — the order the server adds them in.
+ *
+ * The mirror of SupplierPickupStopReconciler's own rule, and the single place the client states
+ * it. Two screens ask it; neither restates it.
+ */
+export function suppliersNeedingPickup(goods: PickupCandidate[]): PickupSupplier[] {
+  const bySupplier = new Map<string, PickupSupplier>();
+
+  for (const g of goods) {
+    if (!g.supplierId) continue;
+    if ((g.quantity ?? 0) - (g.quantityFromGarage ?? 0) <= 0) continue;
+    if (bySupplier.has(g.supplierId)) continue;
+
+    bySupplier.set(g.supplierId, {
+      supplierId: g.supplierId,
+      supplierName: g.supplierName,
+      latitude: g.supplierAddress?.latitude,
+      longitude: g.supplierAddress?.longitude,
+    });
+  }
+
+  return [...bySupplier.values()]
+    .sort((a, b) => (a.supplierName ?? '').localeCompare(b.supplierName ?? '', 'cs'));
+}
+
+/**
+ * Whether the warehouse needs a stop: anything bought for stock, or any piece off our own shelf.
+ *
+ * The mirror of CompanyStopReconciler's condition. An OR, so neither reason may remove the stop on
+ * the other's behalf.
+ */
+export function needsGarageStop(goods: PickupCandidate[], hasStockPurchases: boolean): boolean {
+  return hasStockPurchases || goods.some((g) => (g.quantityFromGarage ?? 0) > 0);
+}
+
+/**
  * The run's stops as they will stand once these supplier-good splits are saved.
  *
  * Two rules, each the mirror of a backend reconciler:
@@ -48,30 +108,20 @@ export function predictPickupStops({
   hasStockPurchases: boolean;
   company?: CompanyPoint;
 }): OutgoingShipmentStopDto[] {
+  const wanted = suppliersNeedingPickup(supplierGoods);
+  const needsCompany = needsGarageStop(supplierGoods, hasStockPurchases);
+
   const kept = stops.filter((s) => {
     const kind = stopKindName(s.kind);
-    if (kind === 'Supplier') {
-      return supplierGoods.some((g) => g.supplierId === s.supplierId
-        && (g.quantity ?? 0) - (g.quantityFromGarage ?? 0) > 0);
-    }
-    if (kind === 'Company') {
-      return hasStockPurchases || supplierGoods.some((g) => (g.quantityFromGarage ?? 0) > 0);
-    }
+    if (kind === 'Supplier') return wanted.some((w) => w.supplierId === s.supplierId);
+    if (kind === 'Company') return needsCompany;
     return true;
   });
 
   const nextOrder = () => kept.reduce((max, s) => Math.max(max, s.order ?? 0), 0) + 1;
 
-  // One stop per supplier still being collected from, in name order — the same order the server
-  // adds them in, so a prediction and a refetch lay them out the same way.
-  const wanted = [...new Map(
-    supplierGoods
-      .filter((g) => (g.quantity ?? 0) - (g.quantityFromGarage ?? 0) > 0 && g.supplierId)
-      .map((g) => [g.supplierId!, g]),
-  ).values()].sort((a, b) => (a.supplierName ?? '').localeCompare(b.supplierName ?? '', 'cs'));
-
-  for (const good of wanted) {
-    if (kept.some((s) => stopKindName(s.kind) === 'Supplier' && s.supplierId === good.supplierId)) continue;
+  for (const supplier of wanted) {
+    if (kept.some((s) => stopKindName(s.kind) === 'Supplier' && s.supplierId === supplier.supplierId)) continue;
 
     kept.push(new OutgoingShipmentStopDto({
       // No id: this stop does not exist yet. Every consumer treats a missing id as "not
@@ -79,11 +129,10 @@ export function predictPickupStops({
       // not acknowledged.
       kind: OutgoingShipmentStopKind.Supplier,
       order: nextOrder(),
-      label: good.supplierName,
-      supplierId: good.supplierId,
-      supplierAddress: good.supplierAddress,
-      latitude: good.supplierAddress?.latitude,
-      longitude: good.supplierAddress?.longitude,
+      label: supplier.supplierName,
+      supplierId: supplier.supplierId,
+      latitude: supplier.latitude,
+      longitude: supplier.longitude,
       products: [],
       returns: [],
       customExtraItems: [],
@@ -91,7 +140,6 @@ export function predictPickupStops({
     }));
   }
 
-  const needsCompany = hasStockPurchases || supplierGoods.some((g) => (g.quantityFromGarage ?? 0) > 0);
   const hasCompany = kept.some((s) => stopKindName(s.kind) === 'Company');
 
   if (needsCompany && !hasCompany) {

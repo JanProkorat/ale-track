@@ -18977,6 +18977,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     deliveryAddressKind?: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     items?: UnassignedOrderItemDto[];
+    supplierGoods?: UnassignedSupplierGoodDto[];
 
     constructor(data?: IOutgoingShipmentOrderDto) {
         if (data) {
@@ -19005,6 +19006,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
                 this.items = [] as any;
                 for (let item of _data["items"])
                     this.items!.push(UnassignedOrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoods"])) {
+                this.supplierGoods = [] as any;
+                for (let item of _data["supplierGoods"])
+                    this.supplierGoods!.push(UnassignedSupplierGoodDto.fromJS(item));
             }
         }
     }
@@ -19035,6 +19041,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
             for (let item of this.items)
                 data["items"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoods)) {
+            data["supplierGoods"] = [];
+            for (let item of this.supplierGoods)
+                data["supplierGoods"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -19049,6 +19060,7 @@ export interface IOutgoingShipmentOrderDto {
     deliveryAddressKind?: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     items?: UnassignedOrderItemDto[];
+    supplierGoods?: UnassignedSupplierGoodDto[];
 }
 
 export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
@@ -19288,6 +19300,66 @@ export interface IUnassignedOrderItemDto {
     isShipmentLoadingConfirmed?: boolean;
     breweryDisplayOrder?: number;
     displayOrder?: number;
+}
+
+export class UnassignedSupplierGoodDto implements IUnassignedSupplierGoodDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    quantityFromGarage?: number;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
+
+    constructor(data?: IUnassignedSupplierGoodDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.quantityFromGarage = _data["quantityFromGarage"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): UnassignedSupplierGoodDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UnassignedSupplierGoodDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
+        return data;
+    }
+}
+
+export interface IUnassignedSupplierGoodDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    quantityFromGarage?: number;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
 }
 
 export class GetOrdersListForOutgoingShipmentsRequest extends FilterableRequest implements IGetOrdersListForOutgoingShipmentsRequest {

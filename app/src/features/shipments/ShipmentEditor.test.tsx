@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
+  UnassignedSupplierGoodDto,
   OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
   OutgoingShipmentPreparationStepDto, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
@@ -641,6 +642,92 @@ describe('ShipmentEditor — company stop round-trip', () => {
         }),
       );
     });
+  });
+});
+
+describe('ShipmentEditor — previewing the pickup stops a save will add', () => {
+  const LINDE = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  /** A supplier-good line on the order already on the run, with the given split. */
+  function withSupplierGood(quantityFromGarage: number) {
+    availableOrders = [
+      new OutgoingShipmentOrderDto({
+        ...availableOrders[0],
+        supplierGoods: [
+          new UnassignedSupplierGoodDto({
+            id: 'line-1',
+            name: 'CO₂ láhev',
+            quantity: 2,
+            quantityFromGarage,
+            supplierId: LINDE,
+            supplierName: 'Linde Gas',
+            supplierAddress: new AddressDto({
+              streetName: 'Průmyslová', streetNumber: '3', city: 'Liberec', zip: '46001',
+              country: Country.Czechia, latitude: 50.77, longitude: 15.05,
+            }),
+          }),
+        ],
+      } as unknown as OutgoingShipmentOrderDto),
+    ];
+  }
+
+  // The complaint: adding an order that brings a CO₂ refill looked like it changed nothing about
+  // the route, because the stop only appears once the server has reconciled it on save.
+  it('previews a supplier pickup for a good collected at the supplier', () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    const preview = screen.getByTestId('pickup-preview-row');
+    expect(within(preview).getByText('Linde Gas')).toBeInTheDocument();
+    expect(within(preview).getByText(/přidá se po uložení/i)).toBeInTheDocument();
+  });
+
+  it('previews the warehouse instead for a good collected from the garage', () => {
+    withSupplierGood(2);
+    renderEditor({ mode: 'edit' });
+
+    const preview = screen.getByTestId('pickup-preview-row');
+    expect(within(preview).queryByText('Linde Gas')).not.toBeInTheDocument();
+    expect(within(preview).getByText(/z garáže/i)).toBeInTheDocument();
+  });
+
+  it('previews both when the split is shared between them', () => {
+    withSupplierGood(1);
+    renderEditor({ mode: 'edit' });
+
+    expect(screen.getAllByTestId('pickup-preview-row')).toHaveLength(2);
+  });
+
+  it('previews nothing when no picked order asks for supplier goods', () => {
+    renderEditor({ mode: 'edit' });
+
+    expect(screen.queryByTestId('pickup-preview-row')).not.toBeInTheDocument();
+  });
+
+  // The map has to show the route that will be driven, or its distance and time describe a
+  // different journey than the one being planned.
+  it('draws the previewed stop on the map, numbered after the drafted ones', () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Hospoda U Netopýra'],
+      [2, 'Linde Gas'],
+    ]);
+  });
+
+  // A preview has no identity, so there is nothing to send — the server derives these, and the
+  // editor sending them would duplicate the copy it keeps.
+  it('sends no previewed stop on save', async () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    const { customStops } = updateMutateAsync.mock.calls.at(-1)![0].data;
+    expect(customStops).not.toContainEqual(expect.objectContaining({ label: 'Linde Gas' }));
   });
 });
 
