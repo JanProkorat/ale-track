@@ -16602,6 +16602,7 @@ export interface IShipmentInvoiceLineDto {
 export enum InvoiceLineSourceKind {
     OrderItem = 0,
     CustomExtraItem = 2,
+    SupplierGoodItem = 3,
 }
 
 export class InvoiceAdjustmentDto implements IInvoiceAdjustmentDto {

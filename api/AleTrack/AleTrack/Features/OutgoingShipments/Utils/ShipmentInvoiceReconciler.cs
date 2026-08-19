@@ -313,6 +313,23 @@ public static class ShipmentInvoiceReconciler
             }
         }
 
+        // The client ordered these off a supplier's price list, so they are billed like the beer
+        // beside them. The garage/supplier split is sourcing, not content — the full quantity is
+        // billed either way, exactly as an order item's pieces are whether or not they came off
+        // our own shelf.
+        foreach (var (item, order) in ShipmentInvoiceGraph.SupplierGoodsOf(shipment))
+        {
+            sources.Add(new BillableSource
+            {
+                Kind = InvoiceLineSourceKind.SupplierGoodItem,
+                ItemId = RequirePersisted(item.Id, nameof(OrderSupplierGoodItem)),
+                OrderingClientId = order.ClientId,
+                OrderingClient = order.Client,
+                Quantity = item.Quantity,
+                Snapshot = SupplierGoodSnapshot(item)
+            });
+        }
+
         // Inventory sourcing is not a billable source: those pieces are already covered
         // by the order item they fulfil, so billing them again would double-charge.
         foreach (var (item, order) in ShipmentInvoiceGraph.CustomExtrasOf(shipment))
@@ -331,6 +348,28 @@ public static class ShipmentInvoiceReconciler
         }
 
         return sources;
+    }
+
+    /// <summary>
+    /// What a supplier-good line records: the good's name with its size, and no price.
+    /// </summary>
+    /// <remarks>
+    /// No price, like a custom extra: a good's price list carries one entry per
+    /// <see cref="SupplierChargeKind"/> — a refill costs something different from a purchase —
+    /// and the order line does not say which was agreed, so there is nothing to bill from yet.
+    ///
+    /// The size joins the name because it is what tells two lines apart: a 10 kg and a 2 kg CO₂
+    /// bottle are separate goods with the same name, and <see cref="LineSnapshot.PackageSize"/>
+    /// cannot hold '10 kg' — it is a volume in litres.
+    /// </remarks>
+    private static LineSnapshot SupplierGoodSnapshot(OrderSupplierGoodItem item)
+    {
+        var good = item.SupplierGood;
+        var name = good is null
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(good.Size) ? good.Name : $"{good.Name} {good.Size}";
+
+        return new LineSnapshot(Truncate(name), null, null, null, null);
     }
 
     /// <summary>
@@ -463,6 +502,9 @@ public static class ShipmentInvoiceReconciler
             case InvoiceLineSourceKind.CustomExtraItem:
                 line.CustomExtraItemId = source.ItemId;
                 break;
+            case InvoiceLineSourceKind.SupplierGoodItem:
+                line.SupplierGoodItemId = source.ItemId;
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), source.Kind, "Unknown invoice line source kind.");
         }
@@ -478,6 +520,7 @@ public static class ShipmentInvoiceReconciler
         {
             InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
             InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
+            InvoiceLineSourceKind.SupplierGoodItem => line.SupplierGoodItemId ?? 0,
             _ => 0
         });
 
