@@ -345,7 +345,7 @@ function breakdownSlots(
   ];
 }
 
-/** One aggregated product line on "Celková nakládka": what the product is, how many
+/** One aggregated product line on the nakládka: what the product is, how many
  * pieces and where they come from, then one group per brewery invoice carrying the
  * pieces on it and how far they have got through loading. Invoicing the client is not
  * this card's concern; it lives in the Fakturace section. */
@@ -580,7 +580,7 @@ function tableFloorWidth(columnCount: number): number {
 }
 
 /**
- * "Celková nakládka" — the loading list: one row per distinct product, sectioned by
+ * The nakládka view of "Rozpis zboží" — the loading list: one row per distinct product, sectioned by
  * brewery and then by kind, with the loading state living inside each brewery-invoice
  * column group.
  *
@@ -1530,7 +1530,9 @@ export function ShipmentDetail({
 
   const invoiceColumns = useMemo(() => columnsOf(purchaseInvoices), [purchaseInvoices]);
   const filterOptions = useMemo<SegOption<string>[]>(() => [
-    { value: ALL_INVOICES, label: 'Vše' },
+    // 'Nakládka', not 'Vše': it names what the view is rather than how much of it there is,
+    // which is the only reading that pairs with 'Vykládka' beside it.
+    { value: ALL_INVOICES, label: 'Nakládka' },
     ...invoiceColumns.map((column) => ({ value: String(column.sequence), label: `F${column.sequence}` })),
     { value: UNLOAD_VIEW, label: 'Vykládka' },
   ], [invoiceColumns]);
@@ -1560,13 +1562,8 @@ export function ShipmentDetail({
   // Footers total what is on screen; a filtered table whose sum counts hidden rows
   // is worse than no sum at all.
   const purchaseTotals = useMemo(() => columnTotals(visibleRows, purchaseInvoices), [visibleRows, purchaseInvoices]);
-  // Progress pills report the whole run; the table's own footers report what it shows.
-  // Counted per (row, column) pair: a product split across two invoices is loaded
-  // twice, once for each pallet read out.
-  const progress = useMemo(
-    () => loadingProgress(aggRows, purchaseInvoices, loadingStates),
-    [aggRows, purchaseInvoices, loadingStates],
-  );
+  // Per-column, over what the table shows. Counted per (row, column) pair: a product split
+  // across two invoices is loaded twice, once for each pallet read out.
   const columnProgress = useMemo(
     () => columnsOf(purchaseInvoices).map((column) =>
       loadingProgress(visibleRows, purchaseInvoices, loadingStates, column.sequence)),
@@ -1985,44 +1982,37 @@ export function ShipmentDetail({
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Celková nakládka</Typography>
-              <Box sx={{ flex: 1 }} />
-              {nakladkaEditable && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {stockPurchaseEditable && (
-                    <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
-                      sx={ghostBtnSx}>
-                      Zboží na sklad
-                    </Button>
-                  )}
-                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
-                    disabled={addPurchaseInvoice.isPending}
-                    onClick={() => addPurchaseInvoice.mutate(undefined, {
-                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo přidat'), { variant: 'error' }),
-                    })}
-                    sx={ghostBtnSx}>
-                    Faktura pivovaru
-                  </Button>
-                </Stack>
-              )}
+              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Rozpis zboží</Typography>
             </Stack>
             {/* Tighter gutters on a phone: 2.5 each side plus the inner card's own
                 border spends ~45px of a 390px screen on nothing. */}
             <Box sx={{ px: { xs: 1.25, compact: 2.5 }, py: 2 }}>
               <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
-                <StatusPill
-                  tone={progress.total > 0 && progress.dictated === progress.total ? 'ok' : 'grey'}
-                  label={`Nadiktováno ${progress.dictated}/${progress.total}`}
-                />
-                <StatusPill
-                  tone={progress.total > 0 && progress.checked === progress.total ? 'ok' : 'grey'}
-                  label={`Zkontrolováno ${progress.checked}/${progress.total}`}
-                />
-                <Box sx={{ flex: 1 }} />
                 {/* A one-option toggle is worse than none, so it goes entirely rather
                     than rendering a lone Vykládka button. */}
                 {canSeeLoadingBreakdown && (
                   <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
+                )}
+                <Box sx={{ flex: 1 }} />
+                {/* Beside the views rather than up in the card's head, because both act on the
+                    nakládka alone — hidden under Vykládka, where neither has anything to add. */}
+                {nakladkaEditable && activeFilter !== UNLOAD_VIEW && (
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {stockPurchaseEditable && (
+                      <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
+                        sx={ghostBtnSx}>
+                        Zboží na sklad
+                      </Button>
+                    )}
+                    <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
+                      disabled={addPurchaseInvoice.isPending}
+                      onClick={() => addPurchaseInvoice.mutate(undefined, {
+                        onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo přidat'), { variant: 'error' }),
+                      })}
+                      sx={ghostBtnSx}>
+                      Faktura pivovaru
+                    </Button>
+                  </Stack>
                 )}
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (

@@ -1363,6 +1363,20 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
+  it("hides the nakládka's own actions while the unload view is up", () => {
+    // Both buttons add to the loading list, which the unload view does not show — offering them
+    // there invites an edit whose effect is invisible on screen.
+    renderDetail(shipmentWithTwoStops, undefined, { editable: true });
+
+    expect(screen.getByRole('button', { name: /Zboží na sklad/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Faktura pivovaru/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.queryByRole('button', { name: /Zboží na sklad/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Faktura pivovaru/ })).toBeNull();
+  });
+
   it("reads out the order's supplier goods at its stop", () => {
     // The wiring, not the shaping (unloadOrder.test.ts covers that): these goods hang off the
     // shipment rather than off the stop, so a screen that forgot to hand them over would show
@@ -1405,7 +1419,7 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     renderDetail(shipmentWithTwoStops);
 
     fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Vše' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nakládka' }));
 
     expect(screen.getAllByTestId('nakladka-row').length).toBeGreaterThan(0);
   });

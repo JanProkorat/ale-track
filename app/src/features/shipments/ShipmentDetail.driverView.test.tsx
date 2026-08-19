@@ -94,7 +94,7 @@ describe('ShipmentDetail for a driver', () => {
   it('drops the invoice-filter tabs and shows the unload view instead', () => {
     renderDetail({ canSeeInvoicing: false, canSeeLoadingBreakdown: false });
 
-    expect(screen.queryByRole('button', { name: 'Vše' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nakládka' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Vykládka' })).toBeNull();
     // The unload view names each stop; the aggregated table never renders a client.
     expect(screen.getByText('Hospoda U Kotvy')).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('ShipmentDetail for a driver', () => {
     renderDetail({ canSeeInvoicing: true, canSeeLoadingBreakdown: true });
 
     expect(screen.getByTestId('shipment-invoicing')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Vše' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nakládka' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vykládka' })).toBeInTheDocument();
   });
 });
