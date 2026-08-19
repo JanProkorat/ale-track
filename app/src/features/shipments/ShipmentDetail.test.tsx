@@ -1363,6 +1363,21 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
+  it("opens the stop's order from its name, and drops the address-kind tail", () => {
+    const onOpenOrder = vi.fn();
+    renderDetail(shipmentWithTwoStops, onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    fireEvent.click(list.getByRole('button', { name: 'Restaurace B' }));
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+
+    // Which of the client's addresses it is only matters where it can be changed, and that is
+    // the editor — the same reason Přehled zastávek drops the tail.
+    expect(list.queryByText(/Fakturační/)).toBeNull();
+  });
+
   it('says what each line is and how much the stop takes', () => {
     renderDetail(shipmentWithTwoStops);
 

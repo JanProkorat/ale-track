@@ -74,9 +74,14 @@ export interface UnloadStop {
   kind: 'order' | 'custom' | 'company';
   /** Client name, custom label, or the company name. */
   title: string;
-  /** Resolved address line, when the stop has one. */
+  /** Resolved address line, when the stop has one. Without the address-kind tail: which of the
+   *  client's addresses it is only matters where it can be changed, and that is the editor. */
   subtitle?: string;
   note?: string;
+  /** The order behind a delivery stop, so the row can open it. */
+  orderId?: string;
+  /** Colour key for the numbered circle; only delivery stops are coloured per client. */
+  clientId?: string;
   lines: UnloadLine[];
   /** Pieces coming off here, all lines together — the number to count the handover against. */
   totalQuantity: number;
@@ -149,7 +154,9 @@ function shapeStop(
   return {
     kind: 'order',
     title: stop.clientName ?? '—',
-    subtitle: resolveDetailStopAddress(stop).text,
+    subtitle: resolveDetailStopAddress(stop).addressText,
+    orderId: stop.orderId,
+    clientId: stop.clientId,
     // The order's beer, then the supplier goods bought alongside it. Those are carried on the
     // run rather than on the stop, so they are matched back to it by order — a stop with no
     // order (a run may not have reconciled one yet) matches nothing rather than everything.

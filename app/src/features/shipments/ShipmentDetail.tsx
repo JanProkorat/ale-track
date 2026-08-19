@@ -76,6 +76,7 @@ import {
 import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
+import { StopAvatar } from './StopAvatar';
 import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
 import { stateChangeProgress, type StateChangeProgress } from './shipmentStateProgress';
@@ -964,40 +965,6 @@ function OrdersOverviewCard({ stops, onOpenOrder, reorderable, onReorder }: {
     && entries.length > 1
     && entries.every((e) => e.stopId);
 
-  const numberAvatar = (color: string, n: number): ReactNode => (
-    <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
-  );
-
-  // A non-delivery stop is one of ours rather than a client's, so it takes the navy the map
-  // already gives those pins instead of a per-client colour.
-  const ROUTE_STOP_COLOR = '#1A2B4C';
-
-  const iconFor = (kind: StopOverviewEntry['kind']): ReactNode => {
-    if (kind === 'supplier') return <PropaneOutlinedIcon sx={{ fontSize: 15 }} />;
-    if (kind === 'company') return <WarehouseOutlinedIcon sx={{ fontSize: 15 }} />;
-    return <PlaceOutlinedIcon sx={{ fontSize: 15 }} />;
-  };
-
-  /** Same circle as the numbered avatar, but marked with what kind of stop it is. */
-  const kindAvatar = (kind: StopOverviewEntry['kind'], n: number): ReactNode => (
-    <Box sx={{
-      width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
-      fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: ROUTE_STOP_COLOR,
-      position: 'relative',
-    }}
-    >
-      {n}
-      <Box sx={{
-        position: 'absolute', right: -4, bottom: -4, width: 15, height: 15, borderRadius: '50%',
-        display: 'grid', placeItems: 'center', bgcolor: 'background.paper', color: 'text.secondary',
-        border: 1, borderColor: 'divider',
-      }}
-      >
-        {iconFor(kind)}
-      </Box>
-    </Box>
-  );
-
   // A column whose header is outside the scrollport and whose list is inside it: the heading
   // and the count stay put while the stops scroll under them. Sticky positioning would not do
   // it — the Card clips, so a sticky header would have nothing to stick to.
@@ -1031,9 +998,7 @@ function OrdersOverviewCard({ stops, onOpenOrder, reorderable, onReorder }: {
           {(() => {
             const row = (entry: StopOverviewEntry, i: number, handle?: ReactNode) => (
               <OverviewRow
-                avatar={entry.kind === 'order'
-                  ? numberAvatar(colorForClient(entry.clientId ?? ''), entry.seq)
-                  : kindAvatar(entry.kind, entry.seq)}
+                avatar={<StopAvatar kind={entry.kind} seq={entry.seq} clientId={entry.clientId} />}
                 title={entry.title}
                 chip={entry.placeName ? (
                   <Chip
@@ -2016,7 +1981,7 @@ export function ShipmentDetail({
                 )}
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
-                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} />
+                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
               ) : (
                 <AggLoadingTable
                   sections={sections}
