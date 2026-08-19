@@ -116,10 +116,14 @@ function shapeStop(
  * Shapes a shipment's stops into the driver's unload order: route order, numbered
  * from 1, each stop carrying only what comes off there.
  *
- * A supplier stop is left out: the van calls there to *collect*, so it has nothing in
- * an unload list. It is still numbered before being dropped, so the numbers here stay
- * the numbers on the map pins and in Přehled zastávek (see stopOverview.ts) — the
- * list skips a position rather than renaming every stop after it.
+ * Two kinds of stop are left out, both because the van calls there to *collect*: every
+ * supplier stop, and the warehouse when nothing is bought for stock — a run that only
+ * fetches garage-sourced supplier goods gets that stop too, and it unloads nothing.
+ * A custom stop with no lines does stay: its note is the reason the driver is there.
+ *
+ * Both are numbered before being dropped, so the numbers here stay the numbers on the
+ * map pins and in Přehled zastávek (see stopOverview.ts) — the list skips a position
+ * rather than renaming every stop after it.
  *
  * The start point is deliberately not among these either — nothing is unloaded there,
  * and giving it a `seq` would put it in the driver's count. The caller (Task 11's
@@ -134,5 +138,6 @@ export function unloadOrder(
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((stop, index) => ({ stop, seq: index + 1 }))
     .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
-    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases), seq }));
+    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases), seq }))
+    .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);
 }

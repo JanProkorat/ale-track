@@ -90,6 +90,20 @@ describe('unloadOrder', () => {
     expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
   });
 
+  it('leaves out the warehouse when nothing is bought for stock', () => {
+    // A run that only fetches garage-sourced supplier goods gets the company stop too, and
+    // there it is a pickup like the supplier's — nothing comes off the van. The stop with
+    // stock purchases on it is covered above, so this asserts the difference between the two
+    // reasons the stop can exist, not "company stops are never listed".
+    const hq = new OutgoingShipmentStopDto({
+      id: 'hq', order: 1, kind: 'Company' as unknown as OutgoingShipmentStopKind, label: 'AleTrack s.r.o.',
+    } as never);
+
+    const result = unloadOrder([hq, orderStop(2, 'Chrastava')], []);
+
+    expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
+  });
+
   it('returns nothing for a shipment with no stops', () => {
     expect(unloadOrder([], [])).toEqual([]);
   });
