@@ -272,7 +272,8 @@ describe('supplier goods', () => {
       name: 'CO₂ láhev 10 kg',
       kind: undefined,
       packageSize: undefined,
-      priceWithVat: undefined,
+      // Priced off the good's own list, so the row values like any other.
+      priceWithVat: 450,
       quantity: 2,
       ...over,
     });
@@ -290,6 +291,8 @@ describe('supplier goods', () => {
     const row = screen.getByText('CO₂ láhev 10 kg').closest('tr') as HTMLElement;
     expect(within(row).getByText('zboží dodavatele')).toBeInTheDocument();
     expect(within(row).getByText('2 ks')).toBeInTheDocument();
+    // Valued like any other row — 2 × 450 — rather than showing the no-price dash.
+    expect(within(row).getByText('900 Kč')).toBeInTheDocument();
   });
 
   it('does not mark an ordinary product row', () => {

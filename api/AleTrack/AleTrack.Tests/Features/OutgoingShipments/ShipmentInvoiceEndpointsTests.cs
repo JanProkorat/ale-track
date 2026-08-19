@@ -71,6 +71,29 @@ public sealed class ShipmentInvoiceEndpointsTests
     }
 
     /// <summary>
+    /// What the office reads on the invoice for a supplier good: its name with the size, the price
+    /// the order line is quoted at, and no product to navigate to.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_SupplierGoodLine_CarriesItsNameAndPrice()
+    {
+        var scenario = Scenario.Build();
+        var supplierGood = scenario.AddSupplierGood(quantity: 3);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+
+        var line = endpoint.Response.Invoices
+            .SelectMany(i => i.Lines)
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem);
+        line.Name.Should().Be("CO₂ láhev 10 kg");
+        line.PriceWithVat.Should().Be(450m);
+        line.Quantity.Should().Be(3);
+        line.ProductId.Should().BeNull("a supplier good is not a brewery product");
+        line.SourceItemId.Should().Be(supplierGood.PublicId, "a move request addresses the line by this ID");
+    }
+
+    /// <summary>
     /// The billing correctness bug from #25. Correcting the Svijany seed data on 2026-07-28 moved
     /// Svijanský Vozka from 12.09 to 11.49, and every historical invoice containing it changed with
     /// it. Nothing flagged that.
@@ -829,7 +852,11 @@ public sealed class ShipmentInvoiceEndpointsTests
                 Id = 21, PublicId = Guid.NewGuid(), Quantity = quantity,
                 SupplierGood = new SupplierGood
                 {
-                    Id = 61, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg"
+                    Id = 61, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg",
+                    Prices =
+                    [
+                        new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m }
+                    ]
                 }
             };
 

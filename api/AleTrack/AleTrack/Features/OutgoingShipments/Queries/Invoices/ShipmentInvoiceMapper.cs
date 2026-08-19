@@ -172,7 +172,8 @@ public static class ShipmentInvoiceMapper
             Name = line.ProductName,
             Kind = null,
             PackageSize = null,
-            PriceWithVat = null,
+            // The price frozen onto the line, as for an order item — not the good's current one.
+            PriceWithVat = line.UnitPriceWithVat,
             Quantity = line.Quantity,
             OrderingClientId = owningOrder.Client?.PublicId ?? Guid.Empty,
             OrderingClientName = owningOrder.Client?.Name ?? string.Empty,

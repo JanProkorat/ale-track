@@ -335,16 +335,22 @@ public sealed class ShipmentInvoiceReconcilerTests
     }
 
     /// <summary>
-    /// Its name carries the size, because that is what tells two goods of one name apart, and it
-    /// carries no price: the good's price list has one entry per charge kind and the order line
-    /// does not say which was agreed.
+    /// Its name carries the size, because that is what tells two goods of one name apart, and its
+    /// price is the one the order line is quoted at — the good's Plnění row.
     /// </summary>
     [Fact]
-    public void Reconcile_SupplierGoodLine_RecordsNameWithSizeAndNoPrice()
+    public void Reconcile_SupplierGoodLine_RecordsNameWithSizeAndTheRefillPrice()
     {
         var stop = OrderStop(ClientA, order: 1);
         var shipment = Shipment(stop);
-        stop.ClientOrder!.SupplierGoodItems.Add(SupplierGoodItem(id: 720, quantity: 1));
+        var item = SupplierGoodItem(id: 720, quantity: 1);
+        // Deliberately after the purchase row, so picking "the first price" would take 1800.
+        item.SupplierGood.Prices =
+        [
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Purchase, PriceWithVat = 1800m, PriceWithoutVat = 1487.60m },
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m, PriceWithoutVat = 371.90m }
+        ];
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
 
         Reconcile(shipment);
 
@@ -353,7 +359,53 @@ public sealed class ShipmentInvoiceReconcilerTests
         line.ProductName.Should().Be("CO₂ láhev 10 kg");
         line.Kind.Should().BeNull();
         line.PackageSize.Should().BeNull();
-        line.UnitPriceWithVat.Should().BeNull();
+        line.UnitPriceWithVat.Should().Be(450m, "the same price the order line shows");
+        line.UnitPriceWithoutVat.Should().Be(371.90m);
+    }
+
+    /// <summary>
+    /// A good that prices no refill — a crate that is only ever bought — is billed at what it does
+    /// price.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodWithNoRefillPrice_IsBilledAtItsFirstOne()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 721, quantity: 1);
+        item.SupplierGood.Prices =
+        [
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Purchase, PriceWithVat = 1800m }
+        ];
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem)
+            .UnitPriceWithVat.Should().Be(1800m);
+    }
+
+    /// <summary>
+    /// And a repriced good does not restate an invoice already issued — the same freeze an order
+    /// item's price gets.
+    /// </summary>
+    [Fact]
+    public void Reconcile_LoadedShipment_DoesNotRepriceASupplierGoodLine()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 722, quantity: 2);
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+        Reconcile(shipment);
+
+        shipment.State = OutgoingShipmentState.Loaded;
+        item.SupplierGood.Prices.Single().PriceWithVat = 999m;
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem)
+            .UnitPriceWithVat.Should().Be(450m, "an issued line is frozen");
     }
 
     /// <summary>
@@ -673,7 +725,11 @@ public sealed class ShipmentInvoiceReconcilerTests
             Quantity = quantity,
             SupplierGood = new SupplierGood
             {
-                Id = id * 10, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg"
+                Id = id * 10, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg",
+                Prices =
+                [
+                    new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m }
+                ]
             }
         };
 

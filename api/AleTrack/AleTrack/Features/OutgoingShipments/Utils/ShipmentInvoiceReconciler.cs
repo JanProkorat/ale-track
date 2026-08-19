@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Suppliers.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Utils;
 
@@ -351,12 +352,13 @@ public static class ShipmentInvoiceReconciler
     }
 
     /// <summary>
-    /// What a supplier-good line records: the good's name with its size, and no price.
+    /// What a supplier-good line records: the good's name with its size, and the price the order
+    /// line is quoted at.
     /// </summary>
     /// <remarks>
-    /// No price, like a custom extra: a good's price list carries one entry per
-    /// <see cref="SupplierChargeKind"/> — a refill costs something different from a purchase —
-    /// and the order line does not say which was agreed, so there is nothing to bill from yet.
+    /// The price comes from <see cref="SupplierGoodPricing.Primary"/>, so the invoice charges the
+    /// number the order already showed for that line. Frozen onto the line like every other, which
+    /// is what keeps an issued invoice from following a later change to the supplier's price list.
     ///
     /// The size joins the name because it is what tells two lines apart: a 10 kg and a 2 kg CO₂
     /// bottle are separate goods with the same name, and <see cref="LineSnapshot.PackageSize"/>
@@ -369,7 +371,9 @@ public static class ShipmentInvoiceReconciler
             ? string.Empty
             : string.IsNullOrWhiteSpace(good.Size) ? good.Name : $"{good.Name} {good.Size}";
 
-        return new LineSnapshot(Truncate(name), null, null, null, null);
+        var price = SupplierGoodPricing.Primary(good?.Prices);
+
+        return new LineSnapshot(Truncate(name), null, null, price?.PriceWithVat, price?.PriceWithoutVat);
     }
 
     /// <summary>
