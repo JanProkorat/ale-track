@@ -70,6 +70,8 @@ public sealed class ShipmentSupplierGoodsProjectionTests
         goods[1].Size.Should().Be("10 kg");
         goods[1].PickupSource.Should().Be(SupplierGoodPickupSource.Supplier);
         goods[1].SupplierName.Should().Be("Linde Gas");
+        // Carried so the screen can draw a pickup stop for this supplier without re-reading the run.
+        goods[1].SupplierAddress.Should().NotBeNull();
         goods[1].ClientName.Should().Be("Hospoda A");
         goods[1].Note.Should().Be("Ráno");
     }

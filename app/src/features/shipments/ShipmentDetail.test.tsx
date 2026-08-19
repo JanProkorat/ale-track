@@ -19,6 +19,7 @@ import {
   type IOutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
+  OutgoingShipmentSupplierGoodDto,
   ProductKind,
   ShipmentDriverDto,
   ShipmentStartPointKind,
@@ -481,6 +482,112 @@ describe('ShipmentDetail — Přehled zastávek scrolls under a fixed header', (
 
     const heading = within(stopsOverviewCard()).getByText('Přehled zastávek');
     expect(scrollingBody().contains(heading)).toBe(false);
+  });
+});
+
+describe('ShipmentDetail — the route follows the garage split at once', () => {
+  const SUPPLIER_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  /**
+   * A run carrying one supplier good of 2 pieces, with the stops the server would actually have
+   * given that split: a pickup stop while anything is still fetched, the warehouse while anything
+   * comes off our shelf. Building it consistently matters — a fixture whose stops contradict its
+   * split would let a broken prediction look right.
+   */
+  function runWithSplit(quantityFromGarage: number) {
+    const stops = [officialStop()];
+
+    if (quantityFromGarage < 2) {
+      stops.push(new OutgoingShipmentStopDto({
+        id: 'supplier-stop-1',
+        order: stops.length + 1,
+        kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+        label: 'Linde Gas',
+        supplierId: SUPPLIER_ID,
+        latitude: 50.77,
+        longitude: 15.05,
+        products: [],
+        returns: [],
+      }));
+    }
+
+    if (quantityFromGarage > 0) {
+      stops.push(new OutgoingShipmentStopDto({
+        id: 'company-stop-1',
+        order: stops.length + 1,
+        kind: 'Company' as unknown as OutgoingShipmentStopKind,
+        label: 'Sklad AleTrack',
+        products: [],
+        returns: [],
+      }));
+    }
+
+    return {
+      state: OutgoingShipmentState.Created,
+      stops,
+      supplierGoods: [
+        new OutgoingShipmentSupplierGoodDto({
+          id: 'line-1',
+          supplierGoodId: 'g-co2',
+          name: 'CO₂ láhev',
+          quantity: 2,
+          quantityFromGarage,
+          supplierId: SUPPLIER_ID,
+          supplierName: 'Linde Gas',
+        }),
+      ],
+    };
+  }
+
+  // The complaint this guards: the stop list waited for the run to be re-read, so a stop nobody
+  // was driving to stayed on the list. The mocked mutation here never settles, so only the
+  // client-side prediction can move it.
+  it('drops the pickup stop as soon as the last piece moves to the garage', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).queryByText('Linde Gas')).not.toBeInTheDocument();
+    // The warehouse is still needed — every piece now comes off our shelf.
+    expect(within(stopsOverviewCard()).getByText('Sklad AleTrack')).toBeInTheDocument();
+  });
+
+  it('brings the pickup stop back as soon as a piece moves off the garage', () => {
+    renderDetail(runWithSplit(2), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).queryByText('Linde Gas')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ubrat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+  });
+
+  it('drops the warehouse stop when the last garage piece goes back to the supplier', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).getByText('Sklad AleTrack')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ubrat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).queryByText('Sklad AleTrack')).not.toBeInTheDocument();
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+  });
+
+  it('recounts the stops with it', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(screen.getByText('3 zastávky')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(screen.getByText('2 zastávky')).toBeInTheDocument();
+  });
+
+  it('moves the stepper number in the same breath', () => {
+    renderDetail(runWithSplit(0), undefined, { editable: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    const row = screen.getAllByTestId('supplier-good-row')[0];
+    expect(within(row).getByText('1')).toBeInTheDocument();
   });
 });
 

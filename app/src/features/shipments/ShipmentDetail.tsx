@@ -43,7 +43,8 @@ import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format'
 import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
-  type OutgoingShipmentStopDto,
+  OutgoingShipmentStopDto,
+  type OutgoingShipmentSupplierGoodDto,
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
@@ -83,6 +84,7 @@ import {
   aggregateSupplierGoods, nextSourcingWrite, type SupplierGoodRow,
 } from './supplierGoodSourcing';
 import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from './stopOverview';
+import { predictPickupStops, withSplitApplied } from './pickupStopPrediction';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -1406,8 +1408,14 @@ export function ShipmentDetail({
   // the new order if the write took, the old one if it was rejected and rolled back.
   const [pendingStopOrder, setPendingStopOrder] = useState<string[] | null>(null);
 
+  // The stops a pending sourcing write will leave behind, for the same reason: a supplier stop
+  // stops being needed the moment the last piece moves into the garage, and waiting for the run
+  // to be re-read to learn that leaves the list showing a stop nobody is driving to. Predicted
+  // by the mirror of the server's own two reconcilers — see pickupStopPrediction.
+  const [pendingStops, setPendingStops] = useState<OutgoingShipmentStopDto[] | null>(null);
+
   const stopsSorted = useMemo(() => {
-    const stops = (shipment.stops ?? []).slice();
+    const stops = (pendingStops ?? shipment.stops ?? []).slice();
 
     if (pendingStopOrder) {
       const position = new Map(pendingStopOrder.map((id, i) => [id, i]));
@@ -1419,7 +1427,7 @@ export function ShipmentDetail({
     }
 
     return stops.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [shipment.stops, pendingStopOrder]);
+  }, [shipment.stops, pendingStops, pendingStopOrder]);
   // Mirrors AddressChangedBanner's own "anything to show" check, so the
   // wrapper placing it directly under the map can skip its top margin when
   // the banner will render nothing (it returns null with no addressChangedAt
@@ -1448,6 +1456,12 @@ export function ShipmentDetail({
   // plotted at (0, 0).
   const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
   const companyEnd = routeEndpointFrom(company);
+  // The same entry, in the shape a predicted warehouse stop needs. Undefined while the
+  // start-points query is still pending, in which case a predicted stop is drawn without
+  // coordinates and gains them on the refetch.
+  const companyPoint = company
+    ? { name: company.name, latitude: company.latitude, longitude: company.longitude }
+    : undefined;
   // A brewery whose address was never geocoded is a legal start point, so the
   // shipment's own resolved coordinates may be absent — in which case there is
   // nothing to plot and the map falls back to the company (always configured
@@ -1491,9 +1505,13 @@ export function ShipmentDetail({
   // One row per supplier good, summed across orders. Computed here rather than inside the card
   // because "Doložit" lists the garage side of the very same rows — hoisting it means there is
   // one aggregation feeding both, instead of two that could be given different input.
+  // The split a pending write is asking for, so the stepper's own number and the stop list it
+  // drives cannot briefly disagree about how many pieces come from the garage.
+  const [pendingSupplierGoods, setPendingSupplierGoods] = useState<OutgoingShipmentSupplierGoodDto[] | null>(null);
+
   const supplierGoodRows = useMemo(
-    () => aggregateSupplierGoods(shipment.supplierGoods ?? []),
-    [shipment.supplierGoods],
+    () => aggregateSupplierGoods(pendingSupplierGoods ?? shipment.supplierGoods ?? []),
+    [shipment.supplierGoods, pendingSupplierGoods],
   );
 
 
@@ -1718,10 +1736,32 @@ export function ShipmentDetail({
       return;
     }
 
+    // The split as it will be, and the route that follows from it. Both are applied before the
+    // request goes out and dropped when it settles, by which point the cache holds the truth
+    // either way — the server reconciles the stops itself and is the authority on them.
+    const nextGoods = withSplitApplied(
+      pendingSupplierGoods ?? shipment.supplierGoods ?? [],
+      write.itemId,
+      write.quantityFromGarage,
+    );
+    setPendingSupplierGoods(nextGoods);
+    setPendingStops(predictPickupStops({
+      stops: pendingStops ?? shipment.stops ?? [],
+      supplierGoods: nextGoods,
+      hasStockPurchases: (shipment.stockPurchases ?? []).length > 0,
+      company: companyPoint,
+    }));
+
+    const settled = () => {
+      setPendingSupplierGoods(null);
+      setPendingStops(null);
+    };
+
     // Deliberately no stock cap: drawing more than the garage holds is allowed and warned
     // about on the row, because a dovoz may still land before the truck is packed.
     setSupplierGoodSourcing.mutate(write, {
       onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
+      onSettled: settled,
     });
   }
 

@@ -546,6 +546,16 @@ public sealed record OutgoingShipmentSupplierGoodDto
     /// <summary>Name of that supplier.</summary>
     public string SupplierName { get; set; } = null!;
 
+    /// <summary>
+    /// That supplier's registered seat — where a pickup stop for it would be.
+    /// </summary>
+    /// <remarks>
+    /// Carried so the screen can render a pickup stop the moment the split calls for one, rather
+    /// than waiting for the run to be re-read to learn where it is. The server remains the
+    /// authority on whether the stop exists; this only spares the client a round trip to draw it.
+    /// </remarks>
+    public AddressDto? SupplierAddress { get; set; }
+
     /// <summary>Public ID of the client who ordered it, so the card can say who it is for.</summary>
     public Guid? ClientId { get; set; }
 

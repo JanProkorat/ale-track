@@ -17630,6 +17630,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
     garageAvailable?: number | undefined;
     supplierId?: string;
     supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
     clientId?: string | undefined;
     clientName?: string | undefined;
     orderId?: string | undefined;
@@ -17656,6 +17657,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
             this.garageAvailable = _data["garageAvailable"];
             this.supplierId = _data["supplierId"];
             this.supplierName = _data["supplierName"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
             this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
             this.orderId = _data["orderId"];
@@ -17682,6 +17684,7 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
         data["garageAvailable"] = this.garageAvailable;
         data["supplierId"] = this.supplierId;
         data["supplierName"] = this.supplierName;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
         data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
         data["orderId"] = this.orderId;
@@ -17701,6 +17704,7 @@ export interface IOutgoingShipmentSupplierGoodDto {
     garageAvailable?: number | undefined;
     supplierId?: string;
     supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
     clientId?: string | undefined;
     clientName?: string | undefined;
     orderId?: string | undefined;

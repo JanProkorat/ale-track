@@ -297,6 +297,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                                 : null,
                             SupplierId = i.SupplierGood.Supplier.PublicId,
                             SupplierName = i.SupplierGood.Supplier.Name,
+                            SupplierAddress = i.SupplierGood.Supplier.OfficialAddress.ToDto(),
                             ClientId = s.ClientOrder!.Client.PublicId,
                             ClientName = s.ClientOrder!.Client.Name,
                             OrderId = s.ClientOrder!.PublicId,
