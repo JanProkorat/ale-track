@@ -1935,6 +1935,11 @@ export function ShipmentDetail({
           viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
           height={360}
           navigable
+          // Veiled while a write the screen has predicted is still being confirmed. Both pending
+          // values are cleared once the refetch has landed, so this covers exactly the window in
+          // which the drawn route is catching up — including the road route, which re-resolves
+          // whenever the stops change and would otherwise blink back to a straight line.
+          busy={pendingStops !== null || pendingStopOrder !== null}
           overlay={(
             <OrdersOverviewCard
               stops={stopsSorted}

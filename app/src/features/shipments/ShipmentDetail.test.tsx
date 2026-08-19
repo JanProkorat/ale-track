@@ -48,9 +48,13 @@ vi.mock('src/components/common/RouteMap', () => ({
   // that docked copy is the *only* rendered "Přehled zastávek" — the page-flow copy
   // is display:none there. A stub that dropped the prop hid the card from every
   // role-based query in this file.
-  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[]; overlay?: ReactNode }) => {
+  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[]; overlay?: ReactNode; busy?: boolean }) => {
     routeMapProps(props);
-    return <div data-testid="route-map-stub">{props.overlay}</div>;
+    return (
+      <div data-testid="route-map-stub" data-busy={props.busy ? 'true' : 'false'}>
+        {props.overlay}
+      </div>
+    );
   },
 }));
 
@@ -579,6 +583,18 @@ describe('ShipmentDetail — the route follows the garage split at once', () => 
     fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
 
     expect(screen.getByText('2 zastávky')).toBeInTheDocument();
+  });
+
+  // The map's road route re-resolves whenever the stops change, and the drawn line falls back to a
+  // straight one until it answers. The veil covers exactly the window in which the screen is
+  // showing a predicted route it has not had confirmed.
+  it('veils the map while the change is being confirmed', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(screen.getByTestId('route-map-stub')).toHaveAttribute('data-busy', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(screen.getByTestId('route-map-stub')).toHaveAttribute('data-busy', 'true');
   });
 
   it('moves the stepper number in the same breath', () => {

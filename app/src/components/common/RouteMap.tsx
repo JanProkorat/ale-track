@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Box, Collapse, IconButton, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
+import { Backdrop, Box, CircularProgress, Collapse, IconButton, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -90,6 +90,7 @@ export function RouteMap({
   stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
   overlay, overlayWidth = 380,
   overlayShowLabel = 'Zobrazit seznam', overlayHideLabel = 'Skrýt seznam',
+  busy = false, busyLabel = 'Přepočítávám trasu…',
 }: {
   stops: RouteStop[];
   /** Where the van is loaded — a brewery or the company, resolved by the caller. */
@@ -112,6 +113,15 @@ export function RouteMap({
   /** Labels for the chevron, so it can name what it actually unfolds. */
   overlayShowLabel?: string;
   overlayHideLabel?: string;
+  /**
+   * Veils the map while its route is being re-resolved.
+   *
+   * Changing the stops means a new road route, and the drawn line drops to its straight-line
+   * fallback until OSRM answers — a redraw that reads as a flicker when it happens under an
+   * unannounced edit. The veil says "this is catching up" instead.
+   */
+  busy?: boolean;
+  busyLabel?: string;
 }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
@@ -415,6 +425,39 @@ export function RouteMap({
           </Box>
         </MuiTooltip>
       </Stack>
+
+      {/* Above the map, below the overlay column's own z-index (1000): the trip stats and the stop
+          list stay legible and clickable, which matters because the reorder controls live in that
+          list and a second nudge must not be swallowed. pointerEvents none for the same reason. */}
+      {busy && (
+        <Backdrop
+          data-testid="route-map-busy"
+          open
+          role="status"
+          aria-live="polite"
+          // Backdrop rather than a hand-mixed rgba: it already resolves its scrim against the
+          // active colour scheme, which a literal alpha would get wrong in one of the two.
+          sx={{
+            position: 'absolute', inset: 0, zIndex: 900,
+            display: 'grid', placeItems: 'center',
+            pointerEvents: 'none',
+            borderRadius: 2,
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.25}
+            alignItems="center"
+            sx={{
+              bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
+              px: 1.75, py: 1, boxShadow: 2,
+            }}
+          >
+            <CircularProgress size={16} />
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{busyLabel}</Typography>
+          </Stack>
+        </Backdrop>
+      )}
 
       {stats && (
         // Top-left column: the trip stats, and — when the caller hands one over — the

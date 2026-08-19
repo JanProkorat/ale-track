@@ -31,7 +31,7 @@ const stops = [
   { lat: 50.77, lng: 15.05, label: 'Hospoda C' },
 ];
 
-function renderMap(overlay?: ReactNode) {
+function renderMap(overlay?: ReactNode, opts: { busy?: boolean } = {}) {
   return render(
     <RouteMap
       stops={stops}
@@ -40,6 +40,7 @@ function renderMap(overlay?: ReactNode) {
       overlay={overlay}
       overlayShowLabel="Zobrazit zastávky"
       overlayHideLabel="Skrýt zastávky"
+      busy={opts.busy}
     />,
   );
 }
@@ -118,5 +119,49 @@ describe('RouteMap — the panel that unfolds from the trip stats', () => {
 
     const stats = screen.getByText('ZASTÁVEK').parentElement as HTMLElement;
     expect(within(stats).getByText('2')).toBeInTheDocument();
+  });
+});
+
+// Changing the stops means a new road route, and the drawn line falls back to a straight one until
+// OSRM answers. Under an edit the operator did not initiate that redraw reads as a flicker, so the
+// map says it is catching up instead.
+describe('RouteMap — the veil while the route is catching up', () => {
+  it('is absent by default', () => {
+    renderMap();
+
+    expect(screen.queryByTestId('route-map-busy')).not.toBeInTheDocument();
+  });
+
+  it('names what it is waiting for', () => {
+    renderMap(undefined, { busy: true });
+
+    expect(screen.getByTestId('route-map-busy')).toBeInTheDocument();
+    expect(screen.getByText('Přepočítávám trasu…')).toBeInTheDocument();
+  });
+
+  it('announces itself to assistive tech rather than only dimming', () => {
+    renderMap(undefined, { busy: true });
+
+    const veil = screen.getByTestId('route-map-busy');
+    expect(veil).toHaveAttribute('role', 'status');
+    expect(veil).toHaveAttribute('aria-live', 'polite');
+  });
+
+  // The reorder controls live in the stop list, so a second nudge must not be swallowed by the
+  // veil that the first one raised.
+  it('swallows no clicks, and stays under the stop list', () => {
+    renderMap(<div>Přehled zastávek</div>, { busy: true });
+
+    const veil = screen.getByTestId('route-map-busy');
+    expect(getComputedStyle(veil).pointerEvents).toBe('none');
+    // 900 is below the overlay column's own 1000.
+    expect(Number(getComputedStyle(veil).zIndex)).toBeLessThan(1000);
+  });
+
+  it('leaves the stop list reachable underneath it', () => {
+    renderMap(<div>Přehled zastávek</div>, { busy: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Zobrazit zastávky' }));
+
+    expect(screen.getByText('Přehled zastávek')).toBeInTheDocument();
   });
 });

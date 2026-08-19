@@ -316,10 +316,14 @@ export function useReorderShipmentStops(shipmentId: string | undefined) {
       if (context?.previous) qc.setQueryData(detailKey, context.previous);
     },
 
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.shipments.all });
-      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
-    },
+    // Returns the invalidation so the refetch is awaited: React Query resolves the mutate-level
+    // onSettled only after this one's promise settles, and the caller drops its predicted stops
+    // there. Without the await the prediction is dropped while the cache still holds the
+    // pre-write route, which reads on screen as the stop snapping back and then forward again.
+    onSettled: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipments.all }),
+      shipmentId ? qc.invalidateQueries({ queryKey: detailKey }) : Promise.resolve(),
+    ]),
   });
 }
 
@@ -380,10 +384,14 @@ export function useSetSupplierGoodSourcing(shipmentId: string | undefined) {
       if (context?.previous) qc.setQueryData(detailKey, context.previous);
     },
 
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: qk.shipments.all });
-      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
-    },
+    // Returns the invalidation so the refetch is awaited: React Query resolves the mutate-level
+    // onSettled only after this one's promise settles, and the caller drops its predicted stops
+    // there. Without the await the prediction is dropped while the cache still holds the
+    // pre-write route, which reads on screen as the stop snapping back and then forward again.
+    onSettled: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipments.all }),
+      shipmentId ? qc.invalidateQueries({ queryKey: detailKey }) : Promise.resolve(),
+    ]),
   });
 }
 
