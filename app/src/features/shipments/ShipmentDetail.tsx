@@ -75,6 +75,7 @@ import { resolveDetailStopAddress } from './stopAddress';
 import {
   aggregateSupplierGoods, nextSourcingWrite, type SupplierGoodRow,
 } from './supplierGoodSourcing';
+import { stopOverviewEntries, type StopOverviewEntry } from './stopOverview';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -842,8 +843,12 @@ function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
 }
 
 /** "Přehled zastávek" card — a flat list of the shipment's stops in route order, one
- * row per client order, each opening that order. Read-only; what is loaded for each
- * stop belongs to the nakládka.
+ * row per stop in route order — client deliveries, supplier pickups, the warehouse and custom
+ * waypoints alike. Read-only; what is loaded at each stop belongs to the nakládka.
+ *
+ * Every kind, not just the orders: the number beside a row is the number on its map pin, and
+ * those are numbered over the whole route. Listing only order stops made the list and the map
+ * disagree about which stop was "3" as soon as the run gained a warehouse or pickup stop.
  *
  * Lives in the route map, folded away behind the trip stats' chevron — the route is
  * what the map is looked at for, and the stop list is the follow-up question. */
@@ -851,53 +856,92 @@ function OrdersOverviewCard({ stops, onOpenOrder }: {
   stops: OutgoingShipmentStopDto[];
   onOpenOrder?: (orderId: string) => void;
 }) {
+  const entries = stopOverviewEntries(stops);
+
   const numberAvatar = (color: string, n: number): ReactNode => (
     <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
   );
 
+  // A non-delivery stop is one of ours rather than a client's, so it takes the navy the map
+  // already gives those pins instead of a per-client colour.
+  const ROUTE_STOP_COLOR = '#1A2B4C';
+
+  const iconFor = (kind: StopOverviewEntry['kind']): ReactNode => {
+    if (kind === 'supplier') return <PropaneOutlinedIcon sx={{ fontSize: 15 }} />;
+    if (kind === 'company') return <WarehouseOutlinedIcon sx={{ fontSize: 15 }} />;
+    return <PlaceOutlinedIcon sx={{ fontSize: 15 }} />;
+  };
+
+  /** Same circle as the numbered avatar, but marked with what kind of stop it is. */
+  const kindAvatar = (kind: StopOverviewEntry['kind'], n: number): ReactNode => (
+    <Box sx={{
+      width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
+      fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: ROUTE_STOP_COLOR,
+      position: 'relative',
+    }}
+    >
+      {n}
+      <Box sx={{
+        position: 'absolute', right: -4, bottom: -4, width: 15, height: 15, borderRadius: '50%',
+        display: 'grid', placeItems: 'center', bgcolor: 'background.paper', color: 'text.secondary',
+        border: 1, borderColor: 'divider',
+      }}
+      >
+        {iconFor(kind)}
+      </Box>
+    </Box>
+  );
+
+  // A column whose header is outside the scrollport and whose list is inside it: the heading
+  // and the count stay put while the stops scroll under them. Sticky positioning would not do
+  // it — the Card clips, so a sticky header would have nothing to stick to.
   return (
-    <Card sx={{ overflow: 'hidden' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+    <Card sx={{ overflow: 'clip', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{ flex: '0 0 auto', px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}
+      >
         <ReceiptLongOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
         <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled zastávek</Typography>
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled' }}>
-          {stops.length} {plural(stops.length, 'zastávka', 'zastávky', 'zastávek')}
+          {entries.length} {plural(entries.length, 'zastávka', 'zastávky', 'zastávek')}
         </Typography>
       </Stack>
-      {stops.length > 0 ? (
-        <Box>
-          {stops.map((stop, i) => {
-            const key = stop.orderId ?? `stop-${i}`;
-            // The chip carries the place name; the address line below never
-            // repeats it (formatPlaceAddress only formats the address part).
-            // `resolveDetailStopAddress` is the single place that normalizes
-            // the wire's string-enum `selectedAddressKind` — deriving `isPlace`
-            // separately here previously compared the raw field directly and
-            // was always false against real API data.
-            const detailAddress = resolveDetailStopAddress(stop);
-            const isPlace = detailAddress.isPlace && stop.deliveryPlace != null;
-            return (
-              <OverviewRow
-                key={key}
-                avatar={numberAvatar(colorForClient(stop.clientId ?? ''), i + 1)}
-                title={stop.clientName ?? '—'}
-                chip={isPlace ? (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
-                    label={stop.deliveryPlace!.name ?? '—'}
-                    sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
-                  />
-                ) : undefined}
-                // Address only, no "· Fakturační" tail: which of the client's addresses
-                // it is only matters where it can be changed, and that is the editor.
-                addressLine={detailAddress.addressText}
-                onOpen={onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined}
-              />
-            );
-          })}
+      {entries.length > 0 ? (
+        <Box sx={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          // contain, so reaching the last stop does not chain the scroll on to the document —
+          // the nested-pane trap app/CLAUDE.md warns about.
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+        }}
+        >
+          {entries.map((entry) => (
+            <OverviewRow
+              key={entry.key}
+              avatar={entry.kind === 'order'
+                ? numberAvatar(colorForClient(entry.clientId ?? ''), entry.seq)
+                : kindAvatar(entry.kind, entry.seq)}
+              title={entry.title}
+              chip={entry.placeName ? (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
+                  label={entry.placeName}
+                  sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
+                />
+              ) : undefined}
+              // Address only, no "· Fakturační" tail: which of the client's addresses it is
+              // only matters where it can be changed, and that is the editor.
+              addressLine={entry.addressLine ?? entry.note}
+              onOpen={onOpenOrder && entry.orderId ? () => onOpenOrder(entry.orderId!) : undefined}
+            />
+          ))}
         </Box>
       ) : (
         <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné zastávky.</Typography>
@@ -1227,15 +1271,19 @@ export function ShipmentDetail({
   // the banner will render nothing (it returns null with no addressChangedAt
   // stops) rather than leave a stray gap.
   const hasAddressChanges = stopsSorted.some((s) => s.addressChangedAt);
-  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
+  // `seq` is the stop's position on the route, handed over so the pins carry the same numbers
+  // the stop list does — without it the map numbers only the stops it can locate, and an
+  // ungeocoded address shifts every number after it.
+  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st, i): RouteStop => {
+    const seq = i + 1;
     if (st.orderId == null) {
-      return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
+      return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom', seq };
     }
     // Shared with the stop header below so a DeliveryPlace stop pins at the
     // place, not the billing address (the previous inline check here only
     // ever branched on Contact vs Official and silently ignored a place).
     const { lat, lng } = resolveDetailStopAddress(st);
-    return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
+    return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order', seq };
   }), [stopsSorted]);
 
   // The detail DTO already carries the shipment's own resolved start point, so
@@ -1684,10 +1732,7 @@ export function ShipmentDetail({
           height={360}
           navigable
           overlay={(
-            <OrdersOverviewCard
-              stops={stopsSorted.filter((st) => st.orderId != null)}
-              onOpenOrder={onOpenOrder}
-            />
+            <OrdersOverviewCard stops={stopsSorted} onOpenOrder={onOpenOrder} />
           )}
           overlayShowLabel="Zobrazit zastávky"
           overlayHideLabel="Skrýt zastávky"

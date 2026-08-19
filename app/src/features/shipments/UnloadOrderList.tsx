@@ -8,9 +8,9 @@ import { Box, Chip, Divider, Stack, Typography } from '@mui/material';
 import type { UnloadLine, UnloadStop } from './unloadOrder';
 
 /** The stop's 1-based route position, in a plain token-coloured circle — the
- * same numbered-avatar language "Přehled objednávek" uses for its own
+ * same numbered-avatar language "Přehled zastávek" uses for its own
  * per-stop rows (`OrdersOverviewCard`), but without a per-client colour: a
- * Custom or Company stop has none to draw. */
+ * Custom, Company or Supplier stop has none to draw. */
 function SeqBadge({ seq }: { seq: number }) {
   return (
     <Box
@@ -83,7 +83,7 @@ export function UnloadOrderList({
   startPoint: { name: string; address?: string };
 }) {
   return (
-    <Stack spacing={0.5}>
+    <Stack data-testid="unload-list" spacing={0.5}>
       <Box sx={{ px: 0.25, pb: 1 }}>
         <Typography
           sx={{

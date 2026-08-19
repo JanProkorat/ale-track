@@ -87,6 +87,22 @@ describe('RouteMap — the panel that unfolds from the trip stats', () => {
     await waitForElementToBeRemoved(() => screen.queryByText('Přehled zastávek'));
   });
 
+  // The panel is bounded so its bottom edge clears the map by the same inset as its left edge.
+  // It clips rather than scrolls, because what scrolls is the panel's own list — that is what
+  // lets a card keep its header out of the scrollport.
+  it('bounds the panel and leaves the scrolling to it', () => {
+    renderMap(<div data-testid="panel">Přehled zastávek</div>);
+    fireEvent.click(screen.getByRole('button', { name: 'Zobrazit zastávky' }));
+
+    const wrapper = screen.getByTestId('panel').parentElement as HTMLElement;
+    const style = getComputedStyle(wrapper);
+    expect(style.maxHeight).not.toBe('');
+    expect(style.maxHeight).not.toBe('none');
+    // Not `auto`: the wrapper must not be the scroller.
+    expect(style.overflow).not.toBe('auto');
+    expect(style.display).toBe('flex');
+  });
+
   it('reports its state to assistive tech rather than only rotating the chevron', () => {
     renderMap(<div>Přehled zastávek</div>);
 

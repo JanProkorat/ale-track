@@ -450,6 +450,112 @@ describe('ShipmentDetail — where Přehled zastávek is placed', () => {
   });
 });
 
+describe('ShipmentDetail — Přehled zastávek scrolls under a fixed header', () => {
+  /** The element that actually scrolls: the one holding the stop rows. */
+  function scrollingBody(): HTMLElement {
+    const rows = within(stopsOverviewCard()).getAllByTestId('overview-row');
+    return rows[0].parentElement as HTMLElement;
+  }
+
+  // The heading and the count have to stay put while the stops move under them, which they can
+  // only do by living outside the scrollport — sticky would have nothing to stick to, since the
+  // card clips.
+  it('scrolls the list, not the card', () => {
+    renderDetail([officialStop()]);
+
+    const body = getComputedStyle(scrollingBody());
+    expect(body.overflowY).toBe('auto');
+    // Reaching the last stop must not chain the scroll on to the page.
+    expect(body.overscrollBehavior).toBe('contain');
+
+    // The card itself does not scroll — otherwise the header would travel with the rows.
+    expect(getComputedStyle(stopsOverviewCard()).overflowY).not.toBe('auto');
+  });
+
+  it('keeps the header out of the scrolling element', () => {
+    renderDetail([officialStop()]);
+
+    const heading = within(stopsOverviewCard()).getByText('Přehled zastávek');
+    expect(scrollingBody().contains(heading)).toBe(false);
+  });
+});
+
+describe('ShipmentDetail — non-delivery stops in Přehled zastávek', () => {
+  /** A supplier pickup stop as the backend sends one — enum as its string name. */
+  function supplierStop() {
+    return new OutgoingShipmentStopDto({
+      id: 'supplier-stop-1',
+      order: 2,
+      kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+      label: 'Linde Gas',
+      supplierId: 'aaaaaaaa-0000-0000-0000-000000000001',
+      supplierAddress: new AddressDto({
+        streetName: 'Průmyslová', streetNumber: '3', city: 'Liberec', zip: '46001',
+        country: Country.Czechia, latitude: 50.77, longitude: 15.05,
+      }),
+      latitude: 50.77,
+      longitude: 15.05,
+      products: [],
+      returns: [],
+    });
+  }
+
+  it('lists a supplier pickup stop with its address', () => {
+    renderDetail({ stops: [officialStop(), supplierStop()] });
+
+    const card = within(stopsOverviewCard());
+    expect(card.getByText('Linde Gas')).toBeInTheDocument();
+    expect(card.getByText('Průmyslová 3, 46001 Liberec')).toBeInTheDocument();
+  });
+
+  it('counts it among the stops', () => {
+    renderDetail({ stops: [officialStop(), supplierStop()] });
+
+    expect(screen.getByText('2 zastávky')).toBeInTheDocument();
+  });
+
+  // The reason the list carries every kind: its numbers are the map pins' numbers. With the
+  // list filtered to order stops, the second delivery read as "2" while its pin said "3".
+  it('numbers the stops the same way the map does', () => {
+    renderDetail({
+      stops: [
+        officialStop(),
+        supplierStop(),
+        new OutgoingShipmentStopDto({
+          id: 'order-stop-2', order: 3, orderId: 'order-9', clientId: 'client-c',
+          clientName: 'Hospoda C', officialAddress: new AddressDto({
+            streetName: 'Dlouhá', streetNumber: '1', city: 'Liberec', zip: '46001',
+            country: Country.Czechia, latitude: 50.7, longitude: 15.0,
+          }),
+          selectedAddressKind: 'Official' as unknown as DeliveryAddressKind,
+          products: [], returns: [],
+        }),
+      ],
+    });
+
+    // What the map was handed.
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Restaurace B'],
+      [2, 'Linde Gas'],
+      [3, 'Hospoda C'],
+    ]);
+
+    // And the same numbers in the list beside them.
+    const rows = within(stopsOverviewCard()).getAllByTestId('overview-row');
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText('2')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('3')).toBeInTheDocument();
+  });
+
+  it('offers no order link on a pickup stop, which has no order behind it', () => {
+    renderDetail({ stops: [supplierStop()] }, vi.fn());
+
+    expect(screen.queryByRole('button', { name: 'Linde Gas' })).not.toBeInTheDocument();
+    expect(screen.getByText('Linde Gas')).toBeInTheDocument();
+  });
+});
+
 describe('ShipmentDetail — opening a stop\'s order', () => {
   it('opens the order from the client name', () => {
     const onOpenOrder = vi.fn();
@@ -999,7 +1105,9 @@ describe('ShipmentDetail — the Vykládka tab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
 
-    expect(screen.getByText('Chrastava')).toBeInTheDocument();
+    // Scoped to the unload list: the stop list in the map names every stop too, so an
+    // unscoped query now finds this custom stop twice.
+    expect(within(screen.getByTestId('unload-list')).getByText('Chrastava')).toBeInTheDocument();
     expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
     // The tab exists to show what comes off at each stop — assert the payload
     // itself, not just that the tab swapped. Without these, a dropped quantity,

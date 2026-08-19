@@ -26,6 +26,12 @@ export interface RouteStop {
   color?: string;
   /** 'custom' stops render as a diamond waypoint; 'order' (default) as a pin. */
   kind?: 'order' | 'custom';
+  /**
+   * Number printed on the pin. Defaults to the stop's position among the located ones, which
+   * is only the same thing when every stop has coordinates — pass it explicitly wherever
+   * another view numbers the same route, so the two cannot disagree about which stop is "3".
+   */
+  seq?: number;
 }
 
 /** One end of a route — where the van is loaded, and where it comes home to. */
@@ -82,7 +88,7 @@ function depotIcon(): L.DivIcon {
  * located. */
 export function RouteMap({
   stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
-  overlay, overlayWidth = 340,
+  overlay, overlayWidth = 380,
   overlayShowLabel = 'Zobrazit seznam', overlayHideLabel = 'Skrýt seznam',
 }: {
   stops: RouteStop[];
@@ -113,16 +119,24 @@ export function RouteMap({
   // rather than taking a responsive prop, so every call site benefits as-is.
   const mapHeight = { xs: Math.min(height, 260), mobile: height };
 
-  // How tall the unfolded panel may get: the map, less the 12px inset at each end, the
-  // stats bar it hangs off, and the gap between the two. Given to the panel rather than
-  // enforced by bounding the column — see the note at the render site. A rounded-up bar
-  // height is the one estimate here; erring high only ever leaves a little slack at the
-  // bottom of the map, never a panel hanging over its edge.
-  const STATS_BAR_H = 62;
-  const overlayInset = 24 + STATS_BAR_H + 8;
+  // How tall the unfolded panel may get: the map, less the 12px inset at each end, the stats
+  // bar it hangs off, and the gap between the two — so its bottom edge sits the same 12px
+  // clear of the map as its left edge does.
+  //
+  // The bar is measured rather than assumed. A guessed height was wrong the moment a long
+  // duration wrapped "1 h 56 min" onto a second line, and the panel then hung over the map's
+  // bottom edge by exactly the amount the guess was short. The fallback below only applies
+  // before the first measurement (and under happy-dom, which has no ResizeObserver).
+  const statsRef = useRef<HTMLDivElement | null>(null);
+  const [statsHeight, setStatsHeight] = useState(0);
+
+  const INSET = 12;
+  const GAP = 8;
+  const FALLBACK_STATS_H = 62;
+  const takenByStats = (statsHeight || FALLBACK_STATS_H) + GAP;
   const overlayMaxHeight = {
-    xs: Math.max(Math.min(height, 260) - overlayInset, 120),
-    mobile: Math.max(height - overlayInset, 120),
+    xs: Math.max(Math.min(height, 260) - INSET * 2 - takenByStats, 120),
+    mobile: Math.max(height - INSET * 2 - takenByStats, 120),
   };
 
   // Base trip: the run's start -> each located stop (in order) -> its end.
@@ -199,6 +213,21 @@ export function RouteMap({
     const min = Math.round((km / 45) * 60) + (located.length - 1) * 12;
     return { km: Math.round(km * 10) / 10, min };
   }, [full, located.length]);
+
+  // Measures the stats bar so the panel hanging off it can be bounded exactly. Above the early
+  // return below, because a hook may not be called conditionally; the ref is simply null when
+  // there is no bar to measure.
+  const hasStatsBar = Boolean(road ?? fallback);
+  const hasOverlay = Boolean(overlay);
+
+  useEffect(() => {
+    const element = statsRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(([entry]) => setStatsHeight(entry.contentRect.height));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasStatsBar, hasOverlay]);
 
   if (located.length === 0) {
     return (
@@ -308,17 +337,20 @@ export function RouteMap({
               </Marker>
             </>
           )}
-          {located.map((s, i) => (
-            <Marker
-              key={i}
-              position={[s.lat, s.lng]}
-              icon={s.kind === 'custom' ? customPinIcon(s.color ?? '#1A2B4C', i + 1) : numberedPinIcon(s.color ?? '#F08C00', i + 1)}
-            >
-              <Tooltip direction="top" offset={[0, -34]}>
-                <strong>{i + 1}. {s.label}</strong>{s.kind === 'custom' ? ' · vlastní zastávka' : ''}
-              </Tooltip>
-            </Marker>
-          ))}
+          {located.map((s, i) => {
+            const seq = s.seq ?? i + 1;
+            return (
+              <Marker
+                key={i}
+                position={[s.lat, s.lng]}
+                icon={s.kind === 'custom' ? customPinIcon(s.color ?? '#1A2B4C', seq) : numberedPinIcon(s.color ?? '#F08C00', seq)}
+              >
+                <Tooltip direction="top" offset={[0, -34]}>
+                  <strong>{seq}. {s.label}</strong>{s.kind === 'custom' ? ' · vlastní zastávka' : ''}
+                </Tooltip>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </Box>
 
@@ -401,6 +433,7 @@ export function RouteMap({
           }}
         >
           <Stack
+            ref={statsRef}
             direction="row"
             spacing={2.5}
             alignItems="center"
@@ -413,15 +446,17 @@ export function RouteMap({
               justifyContent: overlay ? 'space-between' : 'flex-start',
             }}
           >
-            <Box>
+            {/* nowrap throughout: a long duration wrapping onto a second line made the bar
+                taller, and the panel hanging off it was bounded against the shorter one. */}
+            <Box sx={{ whiteSpace: 'nowrap' }}>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>VZDÁLENOST</Typography>
               <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{stats.km} km</Typography>
             </Box>
-            <Box>
+            <Box sx={{ whiteSpace: 'nowrap' }}>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
               <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
             </Box>
-            <Box>
+            <Box sx={{ whiteSpace: 'nowrap' }}>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
               <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
             </Box>
@@ -451,12 +486,17 @@ export function RouteMap({
               <Box
                 sx={{
                   maxHeight: overlayMaxHeight,
-                  // contain, so hitting the panel's end does not chain the scroll on to the
-                  // document — the nested-pane trap app/CLAUDE.md warns about.
-                  overflowY: 'auto',
-                  overscrollBehavior: 'contain',
+                  // A column that clips rather than scrolls: the panel itself decides what
+                  // scrolls inside it, which is how a card keeps its header fixed while only
+                  // its list moves. `clip` and not `hidden` — a tall hidden box swallows the
+                  // wheel and freezes the page (see app/CLAUDE.md).
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'clip',
                   boxShadow: 2,
                   borderRadius: 1.5,
+                  // Whatever the caller passed fills the column and does its own scrolling.
+                  '& > *': { flex: '1 1 auto', minHeight: 0 },
                 }}
               >
                 {overlay}
