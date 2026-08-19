@@ -18283,6 +18283,7 @@ export interface IExtraItemInfoDto {
 export class CustomStopDto implements ICustomStopDto {
     id?: string | undefined;
     kind?: OutgoingShipmentStopKind;
+    supplierId?: string | undefined;
     order?: number;
     label?: string;
     note?: string | undefined;
@@ -18302,6 +18303,7 @@ export class CustomStopDto implements ICustomStopDto {
         if (_data) {
             this.id = _data["id"];
             this.kind = _data["kind"];
+            this.supplierId = _data["supplierId"];
             this.order = _data["order"];
             this.label = _data["label"];
             this.note = _data["note"];
@@ -18321,6 +18323,7 @@ export class CustomStopDto implements ICustomStopDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["kind"] = this.kind;
+        data["supplierId"] = this.supplierId;
         data["order"] = this.order;
         data["label"] = this.label;
         data["note"] = this.note;
@@ -18333,6 +18336,7 @@ export class CustomStopDto implements ICustomStopDto {
 export interface ICustomStopDto {
     id?: string | undefined;
     kind?: OutgoingShipmentStopKind;
+    supplierId?: string | undefined;
     order?: number;
     label?: string;
     note?: string | undefined;

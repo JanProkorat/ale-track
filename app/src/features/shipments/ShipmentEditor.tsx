@@ -63,11 +63,18 @@ import { NEW_PLACE_CHOICE, decodeStopChoice, encodeStopChoice } from 'src/featur
 import { StartPointPicker } from './StartPointPicker';
 import { optionKey, routeEndpointFrom, type StartPointValue } from './startPointOption';
 
+/** The draft kind matching a stop's wire kind. */
+function draftKindOf(wireKind: string | undefined): DraftStop['kind'] {
+  if (wireKind === 'Company') return 'company';
+  if (wireKind === 'Supplier') return 'supplier';
+  return 'custom';
+}
+
 interface DraftStop {
   /** Stable client-side identity: the orderId for order stops, or a generated
    *  id for custom/company stops. Used as the sortable/dnd key. */
   key: string;
-  kind: 'order' | 'custom' | 'company';
+  kind: 'order' | 'custom' | 'company' | 'supplier';
   order: number;
   addressKind: DeliveryAddressKind;
   // order stops
@@ -75,8 +82,10 @@ interface DraftStop {
   /** Set only when addressKind is DeliveryPlace. Undefined for a freshly
    *  toggled order or when Official/Contact is chosen. */
   deliveryPlaceId?: string;
-  // custom and company stops
-  customId?: string; // existing custom/company stop's PublicId (undefined when new)
+  // custom, company and supplier stops
+  customId?: string; // existing non-order stop's PublicId (undefined when new)
+  /** The supplier collected from. Set only on a `supplier` stop. */
+  supplierId?: string;
   label?: string;
   note?: string;
   lat?: number;
@@ -90,7 +99,7 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
     date: date ? date.toISOString() : null,
     vehicleId,
     driverIds: [...driverIds].sort(),
-    stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind, deliveryPlaceId: s.deliveryPlaceId ?? null })),
+    stops: stops.map((s) => ({ kind: s.kind, order: s.order, orderId: s.orderId ?? null, customId: s.customId ?? null, supplierId: s.supplierId ?? null, label: s.label ?? null, note: s.note ?? null, lat: s.lat ?? null, lng: s.lng ?? null, addressKind: s.addressKind, deliveryPlaceId: s.deliveryPlaceId ?? null })),
     vias: viaPoints.map((v) => ({ lat: v.lat, lng: v.lng })),
     // Position matters (it is the order the steps are worked in), so this is the array order,
     // not a sorted copy. The local `key` is left out — it changes per session.
@@ -123,8 +132,15 @@ function serializeShipment(name: string, date: Dayjs | null, vehicleId: string |
   });
 }
 
+/** The supplier-good lines the picked orders bring with them. */
+function pickupGoodsFor(stops: DraftStop[], orderById: Map<string, OutgoingShipmentOrderDto>) {
+  return stops
+    .filter((st) => st.kind === 'order' && st.orderId)
+    .flatMap((st) => orderById.get(st.orderId!)?.supplierGoods ?? []);
+}
+
 function SortableStopRow({
-  stop, index, order, total, locked, deletedPlaceName, companyAddress, hasStockPurchases, onMove, onRemove, onAddrChoice,
+  stop, index, order, total, locked, deletedPlaceName, companyAddress, hasStockPurchases, requiredForPickup, onMove, onRemove, onAddrChoice,
 }: {
   stop: DraftStop;
   index: number;
@@ -143,6 +159,9 @@ function SortableStopRow({
    *  server re-adds a removed company stop on save. Unused for order/custom
    *  rows. */
   hasStockPurchases?: boolean;
+  /** Whether the picked orders require this stop — a supplier's pickup, or the garage's. Such a
+   *  stop can be moved but not removed: the reconciler would put it straight back. */
+  requiredForPickup?: boolean;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
   /** Raw <Select> value — 'Official' | 'Contact' | `place:<id>` | the
@@ -154,6 +173,7 @@ function SortableStopRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   const isOrder = stop.kind === 'order';
   const isCompany = stop.kind === 'company';
+  const isSupplier = stop.kind === 'supplier';
   const places = order?.clientDeliveryPlaces ?? [];
   // Gated on `deletedPlaceName` (not just "missing from the list"), because a
   // place is *also* briefly missing from the list right after "+ Nové
@@ -166,8 +186,12 @@ function SortableStopRow({
     && deletedPlaceName != null
     && !places.some((p) => p.id === stop.deliveryPlaceId);
   const addressText = isOrder ? resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text : undefined;
-  const title = isCompany ? (stop.label || 'Firemní sklad') : isOrder ? (order?.clientName ?? '—') : (stop.label || 'Vlastní zastávka');
-  const subtitle = isCompany ? companyAddress : isOrder ? addressText : (stop.note || 'Vlastní zastávka');
+  const title = isCompany ? (stop.label || 'Firemní sklad')
+    : isOrder ? (order?.clientName ?? '—')
+      : (stop.label || 'Vlastní zastávka');
+  const subtitle = isSupplier ? 'Vyzvednutí u dodavatele'
+    : isCompany ? (requiredForPickup ? 'Vyzvednutí z garáže' : companyAddress)
+      : isOrder ? addressText : (stop.note || 'Vlastní zastávka');
   const deleteTooltip = isCompany && hasStockPurchases
     ? 'Dokud je v nakládce zboží na sklad, zastávka se po uložení vrátí.'
     : '';
@@ -175,6 +199,7 @@ function SortableStopRow({
     <Box
       ref={setNodeRef}
       style={style}
+      data-testid="stop-row"
       sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}
     >
       {!locked && (
@@ -190,6 +215,8 @@ function SortableStopRow({
       }}>
         {isCompany ? (
           <WarehouseOutlinedIcon sx={{ fontSize: 15, transform: 'rotate(-45deg)' }} />
+        ) : isSupplier ? (
+          <PropaneOutlinedIcon sx={{ fontSize: 15, transform: 'rotate(-45deg)' }} />
         ) : (
           <Box component="span" sx={{ transform: isOrder ? undefined : 'rotate(-45deg)' }}>{index + 1}</Box>
         )}
@@ -237,11 +264,15 @@ function SortableStopRow({
           <IconButton size="small" onClick={() => onMove(1)} disabled={index === total - 1} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
             <ArrowDownwardIcon fontSize="small" />
           </IconButton>
-          <Tooltip title={deleteTooltip}>
-            <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
-              <DeleteOutlineOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {/* No delete on a stop the orders require: the reconciler re-adds it on the next save,
+              so the button would be a lie. Moving it is still the planner's call. */}
+          {!requiredForPickup && (
+            <Tooltip title={deleteTooltip}>
+              <IconButton size="small" onClick={onRemove} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, color: 'error.main' }}>
+                <DeleteOutlineOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </>
       )}
     </Box>
@@ -251,47 +282,6 @@ function SortableStopRow({
 /** Vývoz editor: draggable stop ordering + nearest-neighbour route
  * optimizer + order selection with a region filter, plus vehicle/driver
  * assignment. Matches the prototype's viewShipmentEditor/seOptimize/seSave. */
-/**
- * A pickup stop the save will create, shown before it exists.
- *
- * Read-only by nature rather than by choice: it has no identity yet, so there is nothing to drag,
- * remove or address. The label says so, because a row that looked like the others but ignored every
- * control would read as broken. Once saved, the detail screen's stop list can place it.
- */
-function PickupPreviewRow({ seq, label, isCompany }: { seq: number; label: string; isCompany: boolean }) {
-  return (
-    <Box
-      data-testid="pickup-preview-row"
-      sx={{
-        display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25,
-        border: 1, borderStyle: 'dashed', borderColor: 'divider', borderRadius: 2,
-        bgcolor: 'action.hover',
-      }}
-    >
-      {/* The drag column, left empty so these rows line up with the ones above them. */}
-      <Box sx={{ width: 20, flexShrink: 0 }} />
-      <Box sx={{
-        width: 28, height: 28, display: 'grid', placeItems: 'center', flexShrink: 0,
-        borderRadius: '4px', transform: 'rotate(45deg)', bgcolor: 'text.disabled', color: '#fff',
-      }}
-      >
-        <Box component="span" sx={{ transform: 'rotate(-45deg)', fontSize: 12, fontWeight: 800 }}>{seq}</Box>
-      </Box>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-          {isCompany
-            ? <WarehouseOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />
-            : <PropaneOutlinedIcon sx={{ fontSize: 15, color: 'text.disabled' }} />}
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{label}</Typography>
-        </Stack>
-        <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-          {isCompany ? 'Vyzvednutí z garáže — přidá se po uložení' : 'Vyzvednutí u dodavatele — přidá se po uložení'}
-        </Typography>
-      </Box>
-    </Box>
-  );
-}
-
 export function ShipmentEditor({
   mode,
   shipmentId,
@@ -352,10 +342,6 @@ export function ShipmentEditor({
     const loadedDrivers = s.driverIds ?? [];
     const loadedStops: DraftStop[] = (s.stops ?? [])
       .slice()
-      // Supplier pickup stops are derived by the server from what the orders ask for, and it
-      // carries them across a save itself. Loading them here would echo them back as custom
-      // stops — duplicating each one and letting the planner rename a stop it does not own.
-      .filter((st) => stopKindName(st.kind) !== 'Supplier')
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((st, i): DraftStop => st.orderId != null
         ? {
@@ -366,8 +352,9 @@ export function ShipmentEditor({
             key: st.id ?? `custom-${i}`,
             // `stopKindName` (not a raw `=== OutgoingShipmentStopKind.Company`) because the
             // backend serializes this enum as a JSON string — see stopKindName's own comment.
-            kind: stopKindName(st.kind) === 'Company' ? 'company' : 'custom',
+            kind: draftKindOf(stopKindName(st.kind)),
             customId: st.id,
+            supplierId: st.supplierId,
             label: st.label ?? '',
             note: st.note,
             lat: st.latitude,
@@ -464,54 +451,89 @@ export function ShipmentEditor({
 
   const stopsSorted = useMemo(() => stops.slice().sort((a, b) => a.order - b.order), [stops]);
 
-  // Every supplier-good line the picked orders bring with them.
-  const pickedSupplierGoods = useMemo(
-    () => stopsSorted
-      .filter((st) => st.kind === 'order' && st.orderId)
-      .flatMap((st) => orderById.get(st.orderId!)?.supplierGoods ?? []),
-    [stopsSorted, orderById],
+  const pickedSupplierGoods = useMemo(() => pickupGoodsFor(stopsSorted, orderById), [stopsSorted, orderById]);
+
+  const garagePickupNeeded = useMemo(
+    // Only the supplier-goods half of the rule: stock purchases also require the stop, but they
+    // are not this screen's to add — the nakládka on the detail screen owns them, and the server
+    // reconciles that reason on save either way.
+    () => needsGarageStop(pickedSupplierGoods, false),
+    [pickedSupplierGoods],
   );
 
   /**
-   * The pickup stops saving would create, shown here as previews.
+   * Keeps the draft's pickup stops in step with what the picked orders ask for.
    *
-   * Previews rather than draft stops on purpose: these are derived from what the orders ask for,
-   * and the server is the one thing that creates them — the editor never sends them, exactly as it
-   * never sends the supplier stops it filters out on load. Showing them is what stops "add an order
-   * with a CO₂ refill" from looking like it changed nothing about the route.
+   * They are real draft stops rather than previews, because the planner has to be able to place
+   * them: the save round-trips them like the company stop, matched by supplier, and the server
+   * leaves each where it was put. What the server still owns is *whether* each is needed, so this
+   * mirrors that decision — it adds the ones the orders call for and drops the ones they no longer
+   * do, which is also why their rows have no delete button.
    *
-   * A supplier already sitting in the draft as a real stop is not previewed again.
+   * Only the stops this effect is responsible for are dropped: a company stop is added when garage
+   * pickup needs one, but never removed, because the planner may have added that one by hand (and
+   * stock purchases, which this screen cannot see, are the other reason to keep it).
    */
-  const pickupPreviews = useMemo(() => {
-    const suppliers = suppliersNeedingPickup(pickedSupplierGoods);
-    const previews = suppliers.map((sup) => ({
-      key: `preview-supplier-${sup.supplierId}`,
-      kind: 'supplier' as const,
-      label: sup.supplierName ?? '—',
-      lat: sup.latitude,
-      lng: sup.longitude,
-    }));
+  useEffect(() => {
+    // Without the orders there is nothing to judge against, and a loaded shipment's own pickup
+    // stops would all read as obsolete — removing them, then re-adding them at the end of the
+    // route once the query lands.
+    if (!availableQuery.data) return;
 
-    // The warehouse, when a garage-sourced piece or a stock purchase calls for one and the planner
-    // has not already placed the stop by hand.
-    if (needsGarageStop(pickedSupplierGoods, hasStockPurchases) && !stopsSorted.some((st) => st.kind === 'company')) {
-      previews.push({
-        key: 'preview-company',
-        kind: 'company' as unknown as 'supplier',
-        label: companyStartPoint?.name ?? 'Firemní sklad',
-        lat: companyStartPoint?.latitude,
-        lng: companyStartPoint?.longitude,
-      });
-    }
+    setStops((prev) => {
+      // Asked of `prev` rather than of the render's own `pickedSupplierGoods`: in edit mode this
+      // effect runs in the same flush as the load, so the updater already sees the loaded stops
+      // while the closure still describes the empty draft. Judging them against that would read
+      // every loaded pickup stop as obsolete and drop it — losing its id and its position.
+      const goods = pickupGoodsFor(prev, orderById);
+      const wanted = suppliersNeedingPickup(goods);
+      const wantedIds = new Set(wanted.map((w) => w.supplierId));
 
-    return previews;
-  }, [pickedSupplierGoods, hasStockPurchases, stopsSorted, companyStartPoint]);
+      const stale = prev.filter((st) => st.kind === 'supplier' && !wantedIds.has(st.supplierId ?? ''));
+      const missing = wanted.filter((w) => !prev.some((st) => st.kind === 'supplier' && st.supplierId === w.supplierId));
+      const needsCompany = needsGarageStop(goods, false) && !prev.some((st) => st.kind === 'company');
+
+      if (stale.length === 0 && missing.length === 0 && !needsCompany) return prev;
+
+      const kept = prev.filter((st) => !stale.includes(st));
+      const added: DraftStop[] = missing.map((w) => ({
+        key: `supplier-${w.supplierId}`,
+        kind: 'supplier' as const,
+        supplierId: w.supplierId,
+        label: w.supplierName ?? '—',
+        lat: w.latitude,
+        lng: w.longitude,
+        addressKind: DeliveryAddressKind.Official,
+        order: 0, // renumbered below
+      }));
+
+      if (needsCompany) {
+        added.push({
+          key: `company-${crypto.randomUUID()}`,
+          kind: 'company' as const,
+          label: companyStartPoint?.name ?? 'Firemní sklad',
+          lat: companyStartPoint?.latitude,
+          lng: companyStartPoint?.longitude,
+          addressKind: DeliveryAddressKind.Official,
+          order: 0,
+        });
+      }
+
+      // Appended, as the server appends them; the existing stops keep their relative order and the
+      // whole list is renumbered so a removal mid-route leaves no gap.
+      return [...kept.slice().sort((a, b) => a.order - b.order), ...added]
+        .map((st, i) => ({ ...st, order: i + 1 }));
+    });
+    // `companyStartPoint` only supplies a freshly-added row's display label and coordinates — the
+    // server authors both on save — so a late-arriving start-points query must not re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedSupplierGoods, garagePickupNeeded, orderById, availableQuery.data]);
 
   const routeStops: RouteStop[] = useMemo(() => [...stopsSorted.map((st, i): RouteStop => {
     // RouteMap only distinguishes 'order' vs. 'custom' waypoints — a company
     // stop renders the same diamond marker a custom stop does; that map isn't
     // this task's to extend, and visually the two aren't meant to differ.
-    if (st.kind === 'custom' || st.kind === 'company') {
+    if (st.kind !== 'order') {
       const fallbackLabel = st.kind === 'company' ? 'Firemní sklad' : 'Vlastní zastávka';
       return {
         lat: st.lat, lng: st.lng, label: st.label || fallbackLabel,
@@ -524,14 +546,7 @@ export function ShipmentEditor({
       lat: pt.lat, lng: pt.lng, label: order?.clientName ?? '—',
       color: colorForClient(order?.clientName ?? st.key), kind: 'order', seq: i + 1,
     };
-  }),
-  // Drawn with the drafted stops so the route — and the distance and time read off it — is the
-  // one that will actually be driven, not the one before the pickups were accounted for.
-  ...pickupPreviews.map((p, i): RouteStop => ({
-    lat: p.lat, lng: p.lng, label: p.label, color: '#1A2B4C', kind: 'custom',
-    seq: stopsSorted.length + i + 1,
-  })),
-  ], [stopsSorted, orderById, pickupPreviews]);
+  })], [stopsSorted, orderById]);
 
   // The picker's own choice drives the route's origin. While that reference-data
   // query hasn't resolved (or the picked entry isn't in it yet), a synthetic
@@ -743,11 +758,12 @@ export function ShipmentEditor({
       }));
 
     const customStops = stopsSorted
-      .filter((st) => st.kind === 'custom' || st.kind === 'company')
+      .filter((st) => st.kind !== 'order')
       .map((st) => {
-        // A company stop is sent as a CustomStopDto with kind: Company — the server
-        // authors its label/coordinates itself and ignores whatever is sent here;
-        // a plain custom stop leaves `kind` unset, defaulting server-side to Custom.
+        // A company or supplier stop is sent as a CustomStopDto with its kind — the server
+        // authors those two's label and coordinates itself and ignores whatever is sent here, so
+        // what they really carry is their place in the route (and, for a supplier, which
+        // supplier); a plain custom stop leaves `kind` unset, defaulting server-side to Custom.
         const dto = new CustomStopDto({
           order: st.order,
           label: st.label ?? '',
@@ -755,6 +771,9 @@ export function ShipmentEditor({
           latitude: st.lat ?? 0,
           longitude: st.lng ?? 0,
           ...(st.kind === 'company' ? { kind: OutgoingShipmentStopKind.Company } : {}),
+          ...(st.kind === 'supplier'
+            ? { kind: OutgoingShipmentStopKind.Supplier, supplierId: st.supplierId }
+            : {}),
         });
         dto.id = st.customId; // undefined for new (base class, but keep the pattern explicit)
         return dto;
@@ -921,6 +940,7 @@ export function ShipmentEditor({
                           deletedPlaceName={st.orderId ? loadedPlaceNames.get(st.orderId) : undefined}
                           companyAddress={companyStartPoint?.address}
                           hasStockPurchases={hasStockPurchases}
+                          requiredForPickup={st.kind === 'supplier' || (st.kind === 'company' && garagePickupNeeded)}
                           onMove={(dir) => moveStop(st.key, dir)}
                           onRemove={() => removeStop(st.key)}
                           onAddrChoice={(value) => handleAddrChoice(st.key, st.orderId, value)}
@@ -929,21 +949,6 @@ export function ShipmentEditor({
                     </Stack>
                   </SortableContext>
                 </DndContext>
-              )}
-              {/* After the drafted stops, because that is where saving will append them. Not part
-                  of the sortable list: they have no identity yet, so there is nothing to reorder —
-                  once saved, the stop list on the detail screen can place them. */}
-              {pickupPreviews.length > 0 && (
-                <Stack spacing={1} sx={{ mt: stopsSorted.length > 0 ? 1 : 0 }}>
-                  {pickupPreviews.map((preview, i) => (
-                    <PickupPreviewRow
-                      key={preview.key}
-                      seq={stopsSorted.length + i + 1}
-                      label={preview.label}
-                      isCompany={preview.key === 'preview-company'}
-                    />
-                  ))}
-                </Stack>
               )}
             </Box>
           </Card>

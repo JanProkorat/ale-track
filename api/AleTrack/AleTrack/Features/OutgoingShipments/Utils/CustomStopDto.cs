@@ -3,8 +3,8 @@ using AleTrack.Common.Enums;
 namespace AleTrack.Features.OutgoingShipments.Utils;
 
 /// <summary>
-/// A custom (non-order) stop on an outgoing shipment — a free-form waypoint the
-/// route passes through.
+/// A non-order stop on an outgoing shipment: a free-form waypoint, the company warehouse, or a
+/// supplier the run collects goods from.
 /// </summary>
 public sealed record CustomStopDto
 {
@@ -20,10 +20,24 @@ public sealed record CustomStopDto
     /// A <see cref="OutgoingShipmentStopKind.Company"/> stop's label and coordinates
     /// are authored by the server from configuration — whatever the client sends in
     /// those fields is ignored, so a stale client cannot pin the warehouse elsewhere.
+    /// The same holds for a <see cref="OutgoingShipmentStopKind.Supplier"/> stop, whose label and
+    /// coordinates come from the supplier named by <see cref="SupplierId"/>.
     /// Defaults to <see cref="OutgoingShipmentStopKind.Custom"/> so an existing
     /// payload keeps its meaning.
     /// </remarks>
     public OutgoingShipmentStopKind Kind { get; set; } = OutgoingShipmentStopKind.Custom;
+
+    /// <summary>
+    /// The supplier collected from. Required when <see cref="Kind"/> is
+    /// <see cref="OutgoingShipmentStopKind.Supplier"/>, ignored otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Round-tripped so the planner can place a pickup stop in the route before it exists — the
+    /// reconciler then matches it by supplier and leaves it where it was put, exactly as it does
+    /// for one it created itself. Whether the stop is needed at all is still the server's call:
+    /// a supplier nothing is collected from is dropped however the client ordered it.
+    /// </remarks>
+    public Guid? SupplierId { get; set; }
 
     /// <summary>
     /// Position of the stop in the shipment route.
