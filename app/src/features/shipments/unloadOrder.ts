@@ -76,6 +76,10 @@ function lineFrom(product: ChippableProduct): UnloadLine {
  * the server), and Custom unloads nothing at all, only a note. Everything else is
  * an order stop, whose lines come straight off `stop.products` — already populated
  * from the live order while the run is still being planned, not only after loading.
+ *
+ * Supplier stops never reach here: {@link unloadOrder} drops them, so they must not be
+ * fed to this function directly either — the order branch would title one from a
+ * `clientName` it has never had.
  */
 function shapeStop(
   stop: OutgoingShipmentStopDto,
@@ -109,11 +113,16 @@ function shapeStop(
 }
 
 /**
- * Shapes a shipment's stops into the driver's unload order: route order, renumbered
- * 1..N, each stop carrying only what comes off there.
+ * Shapes a shipment's stops into the driver's unload order: route order, numbered
+ * from 1, each stop carrying only what comes off there.
  *
- * The start point is deliberately not among these — nothing is unloaded there, and
- * giving it a `seq` would put it in the driver's count. The caller (Task 11's
+ * A supplier stop is left out: the van calls there to *collect*, so it has nothing in
+ * an unload list. It is still numbered before being dropped, so the numbers here stay
+ * the numbers on the map pins and in Přehled zastávek (see stopOverview.ts) — the
+ * list skips a position rather than renaming every stop after it.
+ *
+ * The start point is deliberately not among these either — nothing is unloaded there,
+ * and giving it a `seq` would put it in the driver's count. The caller (Task 11's
  * component) takes it as a separate prop.
  */
 export function unloadOrder(
@@ -123,5 +132,7 @@ export function unloadOrder(
   return stops
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((stop, index) => ({ ...shapeStop(stop, stockPurchases), seq: index + 1 }));
+    .map((stop, index) => ({ stop, seq: index + 1 }))
+    .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
+    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases), seq }));
 }

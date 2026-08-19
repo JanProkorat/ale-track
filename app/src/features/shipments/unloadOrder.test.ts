@@ -73,6 +73,23 @@ describe('unloadOrder', () => {
     expect(result[0].note).toBe('natankovat');
   });
 
+  it('leaves out a supplier pickup, keeping the route numbers the map shows', () => {
+    // The complaint: a supplier set as the first stop showed up in the vykládka as a
+    // nameless "Bez vykládky" row — the van calls there to collect, not to unload.
+    // Wire-string kind again ('Supplier'), the shape a raw enum comparison gets wrong.
+    //
+    // The remaining stop stays "2", not renumbered to "1": the pins on the map and the
+    // rows in Přehled zastávek number the whole route, so renumbering here would have
+    // the driver's list and the map disagree about which stop is which.
+    const linde = new OutgoingShipmentStopDto({
+      id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind, label: 'Linde Gas',
+    } as never);
+
+    const result = unloadOrder([linde, orderStop(2, 'Chrastava')], []);
+
+    expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
+  });
+
   it('returns nothing for a shipment with no stops', () => {
     expect(unloadOrder([], [])).toEqual([]);
   });
