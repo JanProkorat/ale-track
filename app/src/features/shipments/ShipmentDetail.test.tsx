@@ -58,6 +58,7 @@ vi.mock('src/components/common/RouteMap', () => ({
 const exportShipmentMutate = vi.hoisted(() => vi.fn());
 const setShipmentStateMutate = vi.hoisted(() => vi.fn());
 const setOrderItemSourcingMutate = vi.hoisted(() => vi.fn());
+const reorderStopsMutate = vi.hoisted(() => vi.fn());
 const setStockPurchaseMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 // Mutable so the start-point test below can assert against a specific company
@@ -82,6 +83,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetOrderItemSourcing: () => ({ mutate: setOrderItemSourcingMutate, isPending: false }),
   // Feeds the Další zboží card's stepper; a click also re-derives the run's pickup stops.
   useSetSupplierGoodSourcing: () => ({ mutate: vi.fn(), isPending: false }),
+  useReorderShipmentStops: () => ({ mutate: reorderStopsMutate, isPending: false }),
   useSetStockPurchase: () => ({ mutate: setStockPurchaseMutate, isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
   // String "kind" here, deliberately not the numeric enum member — the real
@@ -205,6 +207,9 @@ function contactStop(): OutgoingShipmentStopDto {
 function renderDetail(
   input: OutgoingShipmentStopDto[] | (Partial<IOutgoingShipmentDetailDto> & { stops: OutgoingShipmentStopDto[] }),
   onOpenOrder?: (orderId: string) => void,
+  // Read-only by default, which is what most of this file asserts about. The reorder tests
+  // need the editable case, since the route may only be resequenced by someone who can edit.
+  opts: { editable?: boolean } = {},
 ) {
   const overrides: Partial<IOutgoingShipmentDetailDto> = Array.isArray(input) ? { stops: input } : input;
   const shipment = new OutgoingShipmentDetailDto({
@@ -215,7 +220,7 @@ function renderDetail(
     <MuiThemeProvider theme={theme}>
       <ShipmentDetail
         shipment={shipment}
-        editable={false}
+        editable={opts.editable ?? false}
         canSeeInvoicing
         canSeeLoadingBreakdown
         onBack={vi.fn()}
@@ -453,8 +458,7 @@ describe('ShipmentDetail — where Přehled zastávek is placed', () => {
 describe('ShipmentDetail — Přehled zastávek scrolls under a fixed header', () => {
   /** The element that actually scrolls: the one holding the stop rows. */
   function scrollingBody(): HTMLElement {
-    const rows = within(stopsOverviewCard()).getAllByTestId('overview-row');
-    return rows[0].parentElement as HTMLElement;
+    return within(stopsOverviewCard()).getByTestId('stops-overview-body');
   }
 
   // The heading and the count have to stay put while the stops move under them, which they can
@@ -477,6 +481,122 @@ describe('ShipmentDetail — Přehled zastávek scrolls under a fixed header', (
 
     const heading = within(stopsOverviewCard()).getByText('Přehled zastávek');
     expect(scrollingBody().contains(heading)).toBe(false);
+  });
+});
+
+describe('ShipmentDetail — reordering the stops', () => {
+  function supplierStop() {
+    return new OutgoingShipmentStopDto({
+      id: 'supplier-stop-1',
+      order: 2,
+      kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+      label: 'Linde Gas',
+      latitude: 50.77,
+      longitude: 15.05,
+      products: [],
+      returns: [],
+    });
+  }
+
+  /** An editable run — the route is content, so it only moves while still being planned. */
+  function renderPlanned() {
+    return renderDetail({
+      state: OutgoingShipmentState.Created,
+      stops: [officialStop(), supplierStop()],
+    }, undefined, { editable: true });
+  }
+
+  it('moves a stop down, posting the whole new sequence as stop ids', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    expect(reorderStopsMutate).toHaveBeenCalledTimes(1);
+    // The whole route, as *stop* ids — not the order id the row is keyed by.
+    expect(reorderStopsMutate.mock.calls[0][0]).toEqual(['supplier-stop-1', 'stop-2']);
+  });
+
+  it('moves a stop up', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout výše — Linde Gas' }));
+
+    expect(reorderStopsMutate.mock.calls[0][0]).toEqual(['supplier-stop-1', 'stop-2']);
+  });
+
+  // The flicker this guards against: the cache patch lands a commit *later* than the click, and
+  // dnd-kit animates a dropped row back to where it started unless the order changes in the same
+  // render. The rows must already be resequenced on the click, with no new data from the server —
+  // the mocked mutation never settles here, so nothing but the local pending order can do it.
+  it('shows the new order immediately, before the server answers', () => {
+    renderPlanned();
+
+    const before = within(stopsOverviewCard()).getAllByTestId('overview-row')
+      .map((r) => r.textContent);
+    expect(before[0]).toMatch(/Restaurace B/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    const after = within(stopsOverviewCard()).getAllByTestId('overview-row')
+      .map((r) => r.textContent);
+    expect(after[0]).toMatch(/Linde Gas/);
+    expect(after[1]).toMatch(/Restaurace B/);
+  });
+
+  // The list's numbers are the map pins' numbers, so they have to move together — otherwise the
+  // row says 2 while its pin still says 1 until the refetch lands.
+  it('renumbers the map pins in the same breath', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Linde Gas'],
+      [2, 'Restaurace B'],
+    ]);
+  });
+
+  // Nothing to move past, so the control is dead rather than posting a no-op.
+  it('disables each direction at its end of the route', () => {
+    renderPlanned();
+
+    expect(screen.getByRole('button', { name: 'Posunout výše — Restaurace B' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Posunout níže — Linde Gas' })).toBeDisabled();
+  });
+
+  it('offers a drag handle beside the arrows', () => {
+    renderPlanned();
+
+    expect(screen.getAllByLabelText('Přetáhnout zastávku')).toHaveLength(2);
+  });
+
+  // The route is content: the export, the unload list and the invoice ordering read the stop
+  // order, and the snapshot taken when the truck is packed depends on it.
+  it('withdraws the controls once the run is loaded', () => {
+    renderDetail({
+      state: OutgoingShipmentState.Loaded,
+      stops: [officialStop(), supplierStop()],
+    }, undefined, { editable: true });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Přetáhnout zastávku')).not.toBeInTheDocument();
+  });
+
+  it('withdraws them from a read-only viewer', () => {
+    renderDetail({
+      state: OutgoingShipmentState.Created,
+      stops: [officialStop(), supplierStop()],
+    });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
+  });
+
+  // One stop is already in order; offering to move it is noise.
+  it('offers nothing on a single-stop run', () => {
+    renderDetail({ state: OutgoingShipmentState.Created, stops: [officialStop()] }, undefined, { editable: true });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
   });
 });
 

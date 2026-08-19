@@ -9,7 +9,7 @@ import {
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
-import { stopOverviewEntries } from './stopOverview';
+import { reorderedStopIds, stopOverviewEntries } from './stopOverview';
 
 function address(over: Partial<AddressDto> = {}): AddressDto {
   return new AddressDto({
@@ -155,5 +155,50 @@ describe('stopOverviewEntries', () => {
 
   it('returns nothing for a run with no stops', () => {
     expect(stopOverviewEntries([])).toEqual([]);
+  });
+});
+
+describe('reorderedStopIds', () => {
+  const route = () => stopOverviewEntries([
+    orderStop({ id: 's1', orderId: 'order-1' }),
+    supplierStop({ id: 's2' }),
+    companyStop({ id: 's3' }),
+  ]);
+
+  it('moves a stop up by one, returning the whole sequence as stop ids', () => {
+    // Keyed by the entry key — the *order* id for a delivery — but written as stop ids.
+    expect(reorderedStopIds(route(), 's2', { delta: -1 })).toEqual(['s2', 's1', 's3']);
+  });
+
+  it('moves a stop down by one', () => {
+    expect(reorderedStopIds(route(), 'order-1', { delta: 1 })).toEqual(['s2', 's1', 's3']);
+  });
+
+  it('drops a stop onto another\'s position', () => {
+    expect(reorderedStopIds(route(), 'order-1', { dropOn: 's3' })).toEqual(['s2', 's3', 's1']);
+  });
+
+  it('is null at either end, so the button stays disabled and nothing is posted', () => {
+    expect(reorderedStopIds(route(), 'order-1', { delta: -1 })).toBeNull();
+    expect(reorderedStopIds(route(), 's3', { delta: 1 })).toBeNull();
+  });
+
+  it('is null for a drop on itself, which is a no-op', () => {
+    expect(reorderedStopIds(route(), 's2', { dropOn: 's2' })).toBeNull();
+  });
+
+  it('is null for a stop that is not on the route', () => {
+    expect(reorderedStopIds(route(), 'nope', { delta: 1 })).toBeNull();
+  });
+
+  // The endpoint requires every stop of the run, so a list with a hole would be rejected —
+  // better to refuse here than post something the run cannot have.
+  it('is null when any stop is missing its own id', () => {
+    const entries = stopOverviewEntries([
+      orderStop({ id: undefined, orderId: 'order-1' }),
+      supplierStop({ id: 's2' }),
+    ]);
+
+    expect(reorderedStopIds(entries, 's2', { delta: -1 })).toBeNull();
   });
 });

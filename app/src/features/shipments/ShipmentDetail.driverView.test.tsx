@@ -23,6 +23,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetShipmentState: () => noMutation,
   useSetOrderItemSourcing: () => noMutation,
   useSetSupplierGoodSourcing: () => noMutation,
+  useReorderShipmentStops: () => noMutation,
   useSetStockPurchase: () => noMutation,
   useExportShipment: () => noMutation,
   useShipmentStartPoints: () => listQuery,

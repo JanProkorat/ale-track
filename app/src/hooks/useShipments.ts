@@ -8,6 +8,7 @@ import { qk } from 'src/api/queryKeys';
 import {
   SetOrderItemSourcingDto,
   SetSupplierGoodSourcingDto,
+  ReorderShipmentStopsDto,
   SetPreparationStepDto,
   SetShipmentStateDto,
   SetStockPurchaseDto,
@@ -250,6 +251,62 @@ export function useSetOrderItemSourcing(shipmentId: string | undefined) {
             ? clone(p, { quantityFromInventory, inventoryItemId })
             : p)),
         })),
+      }));
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+/**
+ * Writes a new stop sequence for a run.
+ *
+ * Its own endpoint like the sourcing writes, and for the same reason: moving a stop one place is
+ * a single click, and re-posting the whole run to change two integers made every click wait on a
+ * whole-shipment rebuild — address diffing and stop reconciliation included.
+ *
+ * Optimistic, so the row moves under the cursor. The reorder is also the only way to place an
+ * auto-derived pickup stop, which the shipment editor keeps out of its draft entirely.
+ */
+export function useReorderShipmentStops(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: (stopIds: string[]) =>
+      ds.reorderShipmentStopsEndpoint(shipmentId!, new ReorderShipmentStopsDto({ stopIds })),
+
+    onMutate: async (stopIds: string[]) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype so the patched values keep their DTO methods — a plain
+      // spread would lose them.
+      const clone = <T extends object>(value: T, patch: Partial<T>): T =>
+        Object.assign(Object.create(Object.getPrototypeOf(value)) as T, value, patch);
+
+      // `order` is what every consumer sorts by, so the patch rewrites that rather than the
+      // array's own sequence: the detail screen sorts the stops itself.
+      const positionById = new Map(stopIds.map((id, i) => [id, i + 1]));
+      qc.setQueryData(detailKey, clone(previous, {
+        stops: (previous.stops ?? []).map((stop) => {
+          const next = stop.id ? positionById.get(stop.id) : undefined;
+          return next == null ? stop : clone(stop, { order: next });
+        }),
       }));
 
       return { previous };

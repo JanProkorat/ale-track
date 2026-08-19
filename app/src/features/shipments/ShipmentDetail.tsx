@@ -1,4 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Backdrop,
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
@@ -23,6 +26,9 @@ import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ArrowUpIcon from '@mui/icons-material/KeyboardArrowUpOutlined';
+import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
@@ -48,6 +54,7 @@ import {
 import {
   useSetPreparationStep, useExportShipment, useShipmentStartPoints,
   useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
+  useReorderShipmentStops,
   type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
@@ -75,7 +82,7 @@ import { resolveDetailStopAddress } from './stopAddress';
 import {
   aggregateSupplierGoods, nextSourcingWrite, type SupplierGoodRow,
 } from './supplierGoodSourcing';
-import { stopOverviewEntries, type StopOverviewEntry } from './stopOverview';
+import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from './stopOverview';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -788,7 +795,7 @@ function AggLoadingTable({
  * Flat, not expandable: what is on the truck for this stop is the nakládka's job, and
  * repeating it here behind a chevron gave two places to read the same numbers from.
  * The row's only action is opening its order. */
-function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
+function OverviewRow({ avatar, title, chip, addressLine, onOpen, reorder }: {
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
@@ -800,6 +807,14 @@ function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
   /** Opens the row's source order — makes the client name a link. Omitted for
    *  users who cannot see the Objednávky module, who then get the plain name back. */
   onOpen?: () => void;
+  /** Reorder controls, present only while the route can still be resequenced. */
+  reorder?: {
+    /** Rendered by the sortable wrapper — the grab area. */
+    handle?: ReactNode;
+    onMove: (delta: number) => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
+  };
 }) {
   return (
     <Box data-testid="overview-row" sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
@@ -815,6 +830,7 @@ function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
           '&:hover': onOpen ? { bgcolor: 'action.hover' } : undefined,
         }}
       >
+        {reorder?.handle}
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -837,7 +853,69 @@ function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{addressLine}</Typography>
           )}
         </Box>
+        {/* Stacked arrows beside the drag handle: a drag is quicker across several places, a
+            click is surer for one — and the only option on a touch screen where the pane
+            itself scrolls. `stopPropagation` so nudging a row does not also open its order. */}
+        {reorder && (
+          <Stack sx={{ flexShrink: 0 }}>
+            <IconButton
+              size="small"
+              disabled={!reorder.canMoveUp}
+              onClick={(e) => { e.stopPropagation(); reorder.onMove(-1); }}
+              aria-label={`Posunout výše — ${title}`}
+              sx={{ width: 22, height: 18, borderRadius: 1 }}
+            >
+              <ArrowUpIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              disabled={!reorder.canMoveDown}
+              onClick={(e) => { e.stopPropagation(); reorder.onMove(1); }}
+              aria-label={`Posunout níže — ${title}`}
+              sx={{ width: 22, height: 18, borderRadius: 1 }}
+            >
+              <ArrowDownIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+          </Stack>
+        )}
       </Box>
+    </Box>
+  );
+}
+
+/**
+ * One sortable row of the stop list: supplies the drag handle and the transform dnd-kit applies
+ * while it is being dragged.
+ *
+ * A wrapper rather than sortable logic inside OverviewRow, so the row itself stays a plain
+ * presentational component and the non-reorderable case pulls in no drag machinery at all.
+ */
+function SortableStopRow({ id, children }: { id: string; children: (handle: ReactNode) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const handle = (
+    <Box
+      {...attributes}
+      {...listeners}
+      aria-label="Přetáhnout zastávku"
+      sx={{
+        display: 'flex', flexShrink: 0, cursor: 'grab', color: 'text.disabled',
+        // Without this the browser's own touch scrolling wins and the drag never starts —
+        // which matters here because the pane the row sits in scrolls too.
+        touchAction: 'none',
+      }}
+    >
+      <DragIndicatorIcon sx={{ fontSize: 17 }} />
+    </Box>
+  );
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      sx={{ opacity: isDragging ? 0.6 : 1, bgcolor: isDragging ? 'action.hover' : undefined }}
+    >
+      {children(handle)}
     </Box>
   );
 }
@@ -852,11 +930,37 @@ function OverviewRow({ avatar, title, chip, addressLine, onOpen }: {
  *
  * Lives in the route map, folded away behind the trip stats' chevron — the route is
  * what the map is looked at for, and the stop list is the follow-up question. */
-function OrdersOverviewCard({ stops, onOpenOrder }: {
+function OrdersOverviewCard({ stops, onOpenOrder, reorderable, onReorder }: {
   stops: OutgoingShipmentStopDto[];
   onOpenOrder?: (orderId: string) => void;
+  /** Whether the route may still be resequenced — content is only editable while planned. */
+  reorderable?: boolean;
+  /** Hands over the full new sequence, as stop ids. */
+  onReorder?: (stopIds: string[]) => void;
 }) {
   const entries = stopOverviewEntries(stops);
+
+  // A pointer has to travel a few pixels before a drag begins, so a click on the arrow buttons
+  // or the client-name link inside a draggable row still reads as a click.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const move = (key: string, delta: number) => {
+    const ids = reorderedStopIds(entries, key, { delta });
+    if (ids) onReorder?.(ids);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const overKey = event.over?.id;
+    if (!overKey) return;
+    const ids = reorderedStopIds(entries, String(event.active.id), { dropOn: String(overKey) });
+    if (ids) onReorder?.(ids);
+  };
+
+  // Only when every stop carries its own id: the endpoint wants the run's whole sequence, so a
+  // list with a hole in it would be rejected — better to show no controls than a broken one.
+  const canReorder = Boolean(reorderable && onReorder)
+    && entries.length > 1
+    && entries.every((e) => e.stopId);
 
   const numberAvatar = (color: string, n: number): ReactNode => (
     <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
@@ -911,37 +1015,64 @@ function OrdersOverviewCard({ stops, onOpenOrder }: {
         </Typography>
       </Stack>
       {entries.length > 0 ? (
-        <Box sx={{
-          flex: '1 1 auto',
-          minHeight: 0,
-          // contain, so reaching the last stop does not chain the scroll on to the document —
-          // the nested-pane trap app/CLAUDE.md warns about.
-          overflowY: 'auto',
-          overscrollBehavior: 'contain',
-        }}
+        <Box
+          data-testid="stops-overview-body"
+          sx={{
+            flex: '1 1 auto',
+            minHeight: 0,
+            // contain, so reaching the last stop does not chain the scroll on to the document —
+            // the nested-pane trap app/CLAUDE.md warns about.
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+          }}
         >
-          {entries.map((entry) => (
-            <OverviewRow
-              key={entry.key}
-              avatar={entry.kind === 'order'
-                ? numberAvatar(colorForClient(entry.clientId ?? ''), entry.seq)
-                : kindAvatar(entry.kind, entry.seq)}
-              title={entry.title}
-              chip={entry.placeName ? (
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
-                  label={entry.placeName}
-                  sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
-                />
-              ) : undefined}
-              // Address only, no "· Fakturační" tail: which of the client's addresses it is
-              // only matters where it can be changed, and that is the editor.
-              addressLine={entry.addressLine ?? entry.note}
-              onOpen={onOpenOrder && entry.orderId ? () => onOpenOrder(entry.orderId!) : undefined}
-            />
-          ))}
+          {(() => {
+            const row = (entry: StopOverviewEntry, i: number, handle?: ReactNode) => (
+              <OverviewRow
+                avatar={entry.kind === 'order'
+                  ? numberAvatar(colorForClient(entry.clientId ?? ''), entry.seq)
+                  : kindAvatar(entry.kind, entry.seq)}
+                title={entry.title}
+                chip={entry.placeName ? (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
+                    label={entry.placeName}
+                    sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
+                  />
+                ) : undefined}
+                // Address only, no "· Fakturační" tail: which of the client's addresses it is
+                // only matters where it can be changed, and that is the editor.
+                addressLine={entry.addressLine ?? entry.note}
+                onOpen={onOpenOrder && entry.orderId ? () => onOpenOrder(entry.orderId!) : undefined}
+                reorder={canReorder
+                  ? {
+                    handle,
+                    onMove: (delta) => move(entry.key, delta),
+                    canMoveUp: i > 0,
+                    canMoveDown: i < entries.length - 1,
+                  }
+                  : undefined}
+              />
+            );
+
+            if (!canReorder) {
+              return entries.map((entry, i) => <Box key={entry.key}>{row(entry, i)}</Box>);
+            }
+
+            return (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={entries.map((e) => e.key)} strategy={verticalListSortingStrategy}>
+                  {entries.map((entry, i) => (
+                    <SortableStopRow key={entry.key} id={entry.key}>
+                      {(handle) => row(entry, i, handle)}
+                    </SortableStopRow>
+                  ))}
+                </SortableContext>
+              </DndContext>
+            );
+          })()}
         </Box>
       ) : (
         <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné zastávky.</Typography>
@@ -1245,6 +1376,7 @@ export function ShipmentDetail({
   const setShipmentState = useSetShipmentState(shipment.id);
   const setOrderItemSourcing = useSetOrderItemSourcing(shipment.id);
   const setSupplierGoodSourcing = useSetSupplierGoodSourcing(shipment.id);
+  const reorderShipmentStops = useReorderShipmentStops(shipment.id);
   const setStockPurchase = useSetStockPurchase(shipment.id);
   const exportShipment = useExportShipment();
 
@@ -1262,10 +1394,32 @@ export function ShipmentDetail({
 
   const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
-  const stopsSorted = useMemo(
-    () => (shipment.stops ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [shipment.stops],
-  );
+  // The sequence a reorder is asking for, held until the write settles.
+  //
+  // The query cache is patched optimistically too, but that is not enough on its own: a cache
+  // write lands in a later commit than the drop, and dnd-kit animates the dragged row back to
+  // where it started unless the list order changes in the *same* render. That snap-back is the
+  // flicker. Holding the order here makes the move synchronous with the drop, and it also keeps
+  // the arrow buttons instant.
+  //
+  // Cleared on settle rather than on success: by then the cache holds the truth either way —
+  // the new order if the write took, the old one if it was rejected and rolled back.
+  const [pendingStopOrder, setPendingStopOrder] = useState<string[] | null>(null);
+
+  const stopsSorted = useMemo(() => {
+    const stops = (shipment.stops ?? []).slice();
+
+    if (pendingStopOrder) {
+      const position = new Map(pendingStopOrder.map((id, i) => [id, i]));
+      // Anything the pending sequence does not name sorts after it rather than to the front,
+      // so a stop that appeared meanwhile cannot jump the queue.
+      const rank = (stop: OutgoingShipmentStopDto) =>
+        (stop.id ? position.get(stop.id) : undefined) ?? Number.MAX_SAFE_INTEGER;
+      return stops.sort((a, b) => rank(a) - rank(b));
+    }
+
+    return stops.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [shipment.stops, pendingStopOrder]);
   // Mirrors AddressChangedBanner's own "anything to show" check, so the
   // wrapper placing it directly under the map can skip its top margin when
   // the banner will render nothing (it returns null with no addressChangedAt
@@ -1540,6 +1694,16 @@ export function ShipmentDetail({
     });
   }
 
+  // Writes a new stop sequence. Optimistic in the cache, so the row moves under the cursor and
+  // the map's pins renumber with it rather than after a round trip.
+  function reorderStops(stopIds: string[]) {
+    setPendingStopOrder(stopIds);
+    reorderShipmentStops.mutate(stopIds, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Pořadí zastávek se nepodařilo uložit'), { variant: 'error' }),
+      onSettled: () => setPendingStopOrder(null),
+    });
+  }
+
   // Move one piece of a supplier good between the garage and the supplier. The row is a sum
   // across orders, so the write lands on one underlying line — see nextSourcingWrite for which.
   // The server re-derives the run's pickup stops from the result, so this is also what makes a
@@ -1732,7 +1896,14 @@ export function ShipmentDetail({
           height={360}
           navigable
           overlay={(
-            <OrdersOverviewCard stops={stopsSorted} onOpenOrder={onOpenOrder} />
+            <OrdersOverviewCard
+              stops={stopsSorted}
+              onOpenOrder={onOpenOrder}
+              // Sequence is content, so it follows the same freeze as the stock purchases:
+              // editable only while the run is still being planned.
+              reorderable={stockPurchaseEditable}
+              onReorder={reorderStops}
+            />
           )}
           overlayShowLabel="Zobrazit zastávky"
           overlayHideLabel="Skrýt zastávky"

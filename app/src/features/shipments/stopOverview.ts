@@ -13,6 +13,12 @@ import { resolveDetailStopAddress } from './stopAddress';
 /** One line of the stop list, already resolved to what it should say. */
 export interface StopOverviewEntry {
   key: string;
+  /**
+   * The stop's own public id. Distinct from {@link key}, which is the *order* id for a delivery
+   * stop — the reorder endpoint keys on stops, so it needs this one. Absent only if the server
+   * ever omitted it, which disables reordering rather than posting a guess.
+   */
+  stopId?: string;
   /** Position on the route — the same number the map pin carries. */
   seq: number;
   kind: 'order' | 'supplier' | 'company' | 'custom';
@@ -49,6 +55,7 @@ export function stopOverviewEntries(stops: OutgoingShipmentStopDto[]): StopOverv
       const isPlace = resolved.isPlace && stop.deliveryPlace != null;
       return {
         key: stop.orderId,
+        stopId: stop.id,
         seq,
         kind: 'order',
         title: stop.clientName ?? '—',
@@ -62,6 +69,7 @@ export function stopOverviewEntries(stops: OutgoingShipmentStopDto[]): StopOverv
     if (kindName === 'Supplier') {
       return {
         key: stop.id ?? `supplier-${i}`,
+        stopId: stop.id,
         seq,
         kind: 'supplier',
         // The stop's own label, not the live supplier name: it was written when the stop was
@@ -74,6 +82,7 @@ export function stopOverviewEntries(stops: OutgoingShipmentStopDto[]): StopOverv
     if (kindName === 'Company') {
       return {
         key: stop.id ?? `company-${i}`,
+        stopId: stop.id,
         seq,
         kind: 'company',
         title: stop.label ?? 'Firemní sklad',
@@ -82,10 +91,45 @@ export function stopOverviewEntries(stops: OutgoingShipmentStopDto[]): StopOverv
 
     return {
       key: stop.id ?? `custom-${i}`,
+      stopId: stop.id,
       seq,
       kind: 'custom',
       title: stop.label ?? 'Zastávka',
       note: stop.note,
     };
   });
+}
+
+/**
+ * The whole sequence with one stop moved, as the stop ids the reorder endpoint wants.
+ *
+ * `move` gives a relative step (the arrow buttons); `dropOn` names the row landed on (a drag).
+ * Null when the move is impossible or a no-op, so the caller can disable the control and never
+ * post a sequence the run cannot have. One home for the off-by-one, since both controls use it.
+ *
+ * Null too if any stop is missing its own id: the endpoint requires *every* stop of the run, so
+ * a partial list would be rejected anyway — better not to send it.
+ */
+export function reorderedStopIds(
+  entries: StopOverviewEntry[],
+  target: string,
+  move: { delta: number } | { dropOn: string },
+): string[] | null {
+  const ids = entries.map((e) => e.stopId);
+  if (ids.some((id) => !id)) return null;
+
+  const from = entries.findIndex((e) => e.key === target);
+  if (from < 0) return null;
+
+  const to = 'delta' in move
+    ? from + move.delta
+    : entries.findIndex((e) => e.key === move.dropOn);
+
+  if (to < 0 || to >= entries.length || to === from) return null;
+
+  const next = ids as string[];
+  const reordered = [...next];
+  const [moved] = reordered.splice(from, 1);
+  reordered.splice(to, 0, moved);
+  return reordered;
 }
