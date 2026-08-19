@@ -5,11 +5,12 @@ import { unloadOrder } from './unloadOrder';
 const orderStop = (order: number, clientName: string, products: unknown[] = []) =>
   new OutgoingShipmentStopDto({
     id: `stop-${order}`, order, kind: OutgoingShipmentStopKind.Order, clientName, products,
+    orderId: `order-${order}`,
   } as never);
 
 describe('unloadOrder', () => {
   it('lists stops in route order regardless of the order they arrive in', () => {
-    const result = unloadOrder([orderStop(2, 'Bílý Kostel'), orderStop(1, 'Chrastava')], []);
+    const result = unloadOrder([orderStop(2, 'Bílý Kostel'), orderStop(1, 'Chrastava')], [], []);
 
     expect(result.map((s) => s.seq)).toEqual([1, 2]);
     expect(result.map((s) => s.title)).toEqual(['Chrastava', 'Bílý Kostel']);
@@ -30,7 +31,7 @@ describe('unloadOrder', () => {
     } as never);
     const purchases = [{ name: 'Svijanský Rytíř', quantity: 48, packageSize: 0.5 }];
 
-    const result = unloadOrder([company, orderStop(2, 'Chrastava')], purchases as never);
+    const result = unloadOrder([company, orderStop(2, 'Chrastava')], purchases as never, []);
 
     expect(result[0].kind).toBe('company');
     expect(result[0].lines).toEqual([
@@ -48,7 +49,7 @@ describe('unloadOrder', () => {
       { name: 'Kozel 12°', quantity: 24, platoDegree: 12, packageSize: 0.5 },
     ]);
 
-    const result = unloadOrder([stop], []);
+    const result = unloadOrder([stop], [], []);
 
     expect(result[0].lines).toEqual([
       { name: 'Kozel 12°', quantity: 24, chip: '12° · 0,5 l' },
@@ -66,7 +67,7 @@ describe('unloadOrder', () => {
     } as never);
     const purchases = [{ name: 'Svijanský Rytíř', quantity: 48, packageSize: 0.5 }];
 
-    const result = unloadOrder([fuel], purchases as never);
+    const result = unloadOrder([fuel], purchases as never, []);
 
     expect(result).toHaveLength(1);
     expect(result[0].lines).toEqual([]);
@@ -85,7 +86,7 @@ describe('unloadOrder', () => {
       id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind, label: 'Linde Gas',
     } as never);
 
-    const result = unloadOrder([linde, orderStop(2, 'Chrastava')], []);
+    const result = unloadOrder([linde, orderStop(2, 'Chrastava')], [], []);
 
     expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
   });
@@ -99,17 +100,56 @@ describe('unloadOrder', () => {
       id: 'hq', order: 1, kind: 'Company' as unknown as OutgoingShipmentStopKind, label: 'AleTrack s.r.o.',
     } as never);
 
-    const result = unloadOrder([hq, orderStop(2, 'Chrastava')], []);
+    const result = unloadOrder([hq, orderStop(2, 'Chrastava')], [], []);
 
     expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
   });
 
+  it("hands the order's supplier goods over at its own stop, after the beer", () => {
+    // Supplier goods hang off the run, not off the stop, so they have to be matched back to it
+    // by order — the whole point of the `orderId` on both sides.
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Kozel 12°', quantity: 24, platoDegree: 12, packageSize: 0.5 },
+    ]);
+    const goods = [{ id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-1' }];
+
+    const result = unloadOrder([stop], [], goods as never);
+
+    expect(result[0].lines).toEqual([
+      { name: 'Kozel 12°', quantity: 24, chip: '12° · 0,5 l' },
+      { name: 'CO₂ láhev', quantity: 2, chip: '10 kg' },
+    ]);
+  });
+
+  it("does not put one order's supplier goods on another order's stop", () => {
+    // The failure a `supplierGoods.map(...)` with no filter produces: every client gets every
+    // run's extra goods read out at their door.
+    const goods = [{ id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-1' }];
+
+    const result = unloadOrder([orderStop(1, 'Chrastava'), orderStop(2, 'Bílý Kostel')], [], goods as never);
+
+    expect(result[0].lines.map((l) => l.name)).toEqual(['CO₂ láhev']);
+    expect(result[1].lines).toEqual([]);
+  });
+
+  it('hands over every piece, whichever way it was collected', () => {
+    // The garage/supplier split says where the van picks the pieces up. All of them still go to
+    // the client, so a line that reported only the supplier-sourced half would short the delivery.
+    const goods = [{
+      id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 5, quantityFromGarage: 3, orderId: 'order-1',
+    }];
+
+    const result = unloadOrder([orderStop(1, 'Chrastava')], [], goods as never);
+
+    expect(result[0].lines).toEqual([{ name: 'CO₂ láhev', quantity: 5, chip: '10 kg' }]);
+  });
+
   it('returns nothing for a shipment with no stops', () => {
-    expect(unloadOrder([], [])).toEqual([]);
+    expect(unloadOrder([], [], [])).toEqual([]);
   });
 
   it('numbers sequentially even when the stored orders have gaps', () => {
-    const result = unloadOrder([orderStop(3, 'A'), orderStop(9, 'B')], []);
+    const result = unloadOrder([orderStop(3, 'A'), orderStop(9, 'B')], [], []);
 
     expect(result.map((s) => s.seq)).toEqual([1, 2]);
   });

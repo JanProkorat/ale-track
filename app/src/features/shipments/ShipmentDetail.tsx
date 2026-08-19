@@ -1546,8 +1546,8 @@ export function ShipmentDetail({
   // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
   // without a rendering harness — this screen only shapes it into rows.
   const unloadStops = useMemo(
-    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? []),
-    [stopsSorted, shipment.stockPurchases],
+    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? [], shipment.supplierGoods ?? []),
+    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods],
   );
 
   const visibleRows = useMemo(

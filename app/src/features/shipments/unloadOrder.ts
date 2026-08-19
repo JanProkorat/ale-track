@@ -8,7 +8,9 @@
 // Kept out of ShipmentDetail (already ~1720 lines) so the ordering can be checked
 // without a rendering harness, same as nakladkaGrouping.ts.
 
-import type { OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto } from 'src/generated/api-client';
+import type {
+  OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto, OutgoingShipmentSupplierGoodDto,
+} from 'src/generated/api-client';
 import { stopKindName } from 'src/lib/labels';
 import { fmtLiters } from 'src/lib/format';
 import { resolveDetailStopAddress } from './stopAddress';
@@ -68,6 +70,23 @@ function lineFrom(product: ChippableProduct): UnloadLine {
 }
 
 /**
+ * One supplier good handed over at its order's stop.
+ *
+ * The whole quantity, whichever way it was collected: the split between the garage and the
+ * supplier decides where the van picks the pieces up, never how many the client gets.
+ *
+ * `size` is already a display string ('10 kg', '2 l'), so it becomes the chip as it stands
+ * rather than going through the degree/volume format the beer lines use.
+ */
+function supplierLineFrom(good: OutgoingShipmentSupplierGoodDto): UnloadLine {
+  return {
+    name: good.name ?? '—',
+    chip: good.size ?? '',
+    quantity: good.quantity ?? 0,
+  };
+}
+
+/**
  * Shapes one stop, without its route position — {@link unloadOrder} assigns `seq`
  * once the stops are sorted.
  *
@@ -84,6 +103,7 @@ function lineFrom(product: ChippableProduct): UnloadLine {
 function shapeStop(
   stop: OutgoingShipmentStopDto,
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
+  supplierGoods: OutgoingShipmentSupplierGoodDto[],
 ): Omit<UnloadStop, 'seq'> {
   const kind = stopKindName(stop.kind);
 
@@ -108,7 +128,15 @@ function shapeStop(
     kind: 'order',
     title: stop.clientName ?? '—',
     subtitle: resolveDetailStopAddress(stop).text,
-    lines: (stop.products ?? []).map(lineFrom),
+    // The order's beer, then the supplier goods bought alongside it. Those are carried on the
+    // run rather than on the stop, so they are matched back to it by order — a stop with no
+    // order (a run may not have reconciled one yet) matches nothing rather than everything.
+    lines: [
+      ...(stop.products ?? []).map(lineFrom),
+      ...(stop.orderId != null
+        ? supplierGoods.filter((g) => g.orderId === stop.orderId).map(supplierLineFrom)
+        : []),
+    ],
   };
 }
 
@@ -118,7 +146,8 @@ function shapeStop(
  *
  * Two kinds of stop are left out, both because the van calls there to *collect*: every
  * supplier stop, and the warehouse when nothing is bought for stock — a run that only
- * fetches garage-sourced supplier goods gets that stop too, and it unloads nothing.
+ * fetches garage-sourced supplier goods gets that stop too, and it unloads nothing (the
+ * goods themselves come off at the client's stop, which is where they are listed).
  * A custom stop with no lines does stay: its note is the reason the driver is there.
  *
  * Both are numbered before being dropped, so the numbers here stay the numbers on the
@@ -132,12 +161,13 @@ function shapeStop(
 export function unloadOrder(
   stops: OutgoingShipmentStopDto[],
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
+  supplierGoods: OutgoingShipmentSupplierGoodDto[],
 ): UnloadStop[] {
   return stops
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((stop, index) => ({ stop, seq: index + 1 }))
     .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
-    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases), seq }))
+    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases, supplierGoods), seq }))
     .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);
 }

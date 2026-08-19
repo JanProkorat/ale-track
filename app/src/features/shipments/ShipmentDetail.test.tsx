@@ -1363,6 +1363,26 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
+  it("reads out the order's supplier goods at its stop", () => {
+    // The wiring, not the shaping (unloadOrder.test.ts covers that): these goods hang off the
+    // shipment rather than off the stop, so a screen that forgot to hand them over would show
+    // the driver a stop missing half its delivery.
+    renderDetail({
+      ...shipmentWithTwoStops,
+      supplierGoods: [
+        new OutgoingShipmentSupplierGoodDto({
+          id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-2',
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    expect(list.getByText('CO₂ láhev')).toBeInTheDocument();
+    expect(list.getByText('× 2')).toBeInTheDocument();
+  });
+
   it('names the start point above the numbered stops', () => {
     renderDetail({ ...shipmentWithTwoStops, startPointName: 'Pivovar Svijany' });
 
