@@ -7,6 +7,7 @@ import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
   SetOrderItemSourcingDto,
+  SetSupplierGoodSourcingDto,
   SetPreparationStepDto,
   SetShipmentStateDto,
   SetStockPurchaseDto,
@@ -249,6 +250,70 @@ export function useSetOrderItemSourcing(shipmentId: string | undefined) {
             ? clone(p, { quantityFromInventory, inventoryItemId })
             : p)),
         })),
+      }));
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+export interface SetSupplierGoodSourcingArgs {
+  /** Public ID of the supplier-good order line. */
+  itemId: string;
+  /** Absolute, not a delta. */
+  quantityFromGarage: number;
+}
+
+/**
+ * Sets how many of a supplier-good line's pieces come from the garage rather than the supplier.
+ *
+ * Its own endpoint for the same reason {@link useSetOrderItemSourcing} has one — the stepper is
+ * clicked once per piece. Unlike that one, the server also re-derives the run's pickup stops
+ * from the answer, so the *route* changes on the click too; hence the full invalidation on
+ * settle rather than trusting the optimistic patch alone.
+ */
+export function useSetSupplierGoodSourcing(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ itemId, quantityFromGarage }: SetSupplierGoodSourcingArgs) =>
+      ds.setSupplierGoodSourcingEndpoint(
+        shipmentId!,
+        itemId,
+        new SetSupplierGoodSourcingDto({ quantityFromGarage }),
+      ),
+
+    onMutate: async ({ itemId, quantityFromGarage }: SetSupplierGoodSourcingArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype so the patched value keeps its DTO methods — a plain
+      // spread would lose them.
+      const clone = <T extends object>(value: T, patch: Partial<T>): T =>
+        Object.assign(Object.create(Object.getPrototypeOf(value)) as T, value, patch);
+
+      // Only the number is patched, not the stops: which stops the run needs is the server's
+      // derivation, and guessing it here would flicker the route the wrong way on the way to
+      // being corrected.
+      qc.setQueryData(detailKey, clone(previous, {
+        supplierGoods: (previous.supplierGoods ?? []).map((g) => (g.id === itemId
+          ? clone(g, { quantityFromGarage })
+          : g)),
       }));
 
       return { previous };

@@ -22,6 +22,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetPreparationStep: () => noMutation,
   useSetShipmentState: () => noMutation,
   useSetOrderItemSourcing: () => noMutation,
+  useSetSupplierGoodSourcing: () => noMutation,
   useSetStockPurchase: () => noMutation,
   useExportShipment: () => noMutation,
   useShipmentStartPoints: () => listQuery,

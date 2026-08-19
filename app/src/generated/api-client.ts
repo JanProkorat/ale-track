@@ -448,6 +448,12 @@ export interface IClient {
     deleteOutgoingShipmentEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Sets how many of a supplier-good line's pieces come from the garage
+     * @return Sourcing stored
+     */
+    setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -5417,6 +5423,81 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets how many of a supplier-good line's pieces come from the garage
+     * @return Sourcing stored
+     */
+    setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/supplier-goods/{ItemId}/sourcing";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (itemId === undefined || itemId === null)
+            throw new globalThis.Error("The parameter 'itemId' must be defined.");
+        url_ = url_.replace("{ItemId}", encodeURIComponent("" + itemId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetSupplierGoodSourcingEndpoint(_response);
+        });
+    }
+
+    protected processSetSupplierGoodSourcingEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("More than was ordered, or the run is no longer editable", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Shipment or line not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -17467,6 +17548,8 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
     size?: string | undefined;
     quantity?: number;
     pickupSource?: SupplierGoodPickupSource;
+    quantityFromGarage?: number;
+    garageAvailable?: number | undefined;
     supplierId?: string;
     supplierName?: string;
     clientId?: string | undefined;
@@ -17491,6 +17574,8 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
             this.size = _data["size"];
             this.quantity = _data["quantity"];
             this.pickupSource = _data["pickupSource"];
+            this.quantityFromGarage = _data["quantityFromGarage"];
+            this.garageAvailable = _data["garageAvailable"];
             this.supplierId = _data["supplierId"];
             this.supplierName = _data["supplierName"];
             this.clientId = _data["clientId"];
@@ -17515,6 +17600,8 @@ export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplie
         data["size"] = this.size;
         data["quantity"] = this.quantity;
         data["pickupSource"] = this.pickupSource;
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        data["garageAvailable"] = this.garageAvailable;
         data["supplierId"] = this.supplierId;
         data["supplierName"] = this.supplierName;
         data["clientId"] = this.clientId;
@@ -17532,6 +17619,8 @@ export interface IOutgoingShipmentSupplierGoodDto {
     size?: string | undefined;
     quantity?: number;
     pickupSource?: SupplierGoodPickupSource;
+    quantityFromGarage?: number;
+    garageAvailable?: number | undefined;
     supplierId?: string;
     supplierName?: string;
     clientId?: string | undefined;
@@ -18354,6 +18443,42 @@ export interface IPreparationStepDto {
     id?: string | undefined;
     order?: number;
     label: string;
+}
+
+export class SetSupplierGoodSourcingDto implements ISetSupplierGoodSourcingDto {
+    quantityFromGarage?: number;
+
+    constructor(data?: ISetSupplierGoodSourcingDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.quantityFromGarage = _data["quantityFromGarage"];
+        }
+    }
+
+    static fromJS(data: any): SetSupplierGoodSourcingDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetSupplierGoodSourcingDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        return data;
+    }
+}
+
+export interface ISetSupplierGoodSourcingDto {
+    quantityFromGarage?: number;
 }
 
 export class SetStockPurchaseDto implements ISetStockPurchaseDto {

@@ -34,11 +34,10 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName, pickupSourceName, pickupSourceLabel } from 'src/lib/labels';
+import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
   type OutgoingShipmentStopDto,
-  type OutgoingShipmentSupplierGoodDto,
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
@@ -48,7 +47,7 @@ import {
 } from 'src/generated/api-client';
 import {
   useSetPreparationStep, useExportShipment, useShipmentStartPoints,
-  useSetShipmentState, useSetOrderItemSourcing, useSetStockPurchase,
+  useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
   type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
@@ -73,6 +72,9 @@ import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
 import { stateChangeProgress, type StateChangeProgress } from './shipmentStateProgress';
 import { resolveDetailStopAddress } from './stopAddress';
+import {
+  aggregateSupplierGoods, nextSourcingWrite, type SupplierGoodRow,
+} from './supplierGoodSourcing';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -908,22 +910,30 @@ function OrdersOverviewCard({ stops, onOpenOrder }: {
  * What the van exchanges with the garage: one card for the pieces coming off it,
  * one for the pieces going onto it.
  *
- * Both are read-only views of the nakládka's own numbers ("Do garáže" and
- * "Z garáže") — the counts are edited there. They exist as their own cards because
- * they are worked at a different moment than the loading list: at the garage door,
- * not at the brewery's pallet.
+ * Both are read-only views of numbers edited elsewhere — the nakládka's "Do garáže" and
+ * "Z garáže" columns, and (for "Doložit") the Další zboží card's own split. They exist as their
+ * own cards because they are worked at a different moment than the loading list: at the garage
+ * door, not at the brewery's pallet.
  */
 export function GarageCard({
-  title, icon, rows, quantityOf, emptyText,
+  title, icon, rows, quantityOf, emptyText, extraRows = [],
 }: {
   title: string;
   icon: ReactNode;
   rows: AggRow[];
   quantityOf: (row: AggRow) => number;
   emptyText: string;
+  /**
+   * Lines that are not brewery products — supplier goods sourced from the garage. Passed
+   * already shaped rather than as another AggRow, because they have no brewery, kind or
+   * package size, and inventing empty ones would put blank chips on the row.
+   */
+  extraRows?: { key: string; name: string; chipText?: string; quantity: number }[];
 }) {
   const listed = rows.filter((row) => quantityOf(row) > 0);
-  const total = listed.reduce((sum, row) => sum + quantityOf(row), 0);
+  const extras = extraRows.filter((row) => row.quantity > 0);
+  const total = listed.reduce((sum, row) => sum + quantityOf(row), 0)
+    + extras.reduce((sum, row) => sum + row.quantity, 0);
 
   return (
     <Card sx={{ overflow: 'hidden' }}>
@@ -931,13 +941,13 @@ export function GarageCard({
         {icon}
         <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{title}</Typography>
         <Box sx={{ flex: 1 }} />
-        {listed.length > 0 && (
+        {(listed.length > 0 || extras.length > 0) && (
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
             {total} ks
           </Typography>
         )}
       </Stack>
-      {listed.length === 0 ? (
+      {listed.length === 0 && extras.length === 0 ? (
         <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>{emptyText}</Typography>
       ) : (
         <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
@@ -955,6 +965,17 @@ export function GarageCard({
               </Stack>
             );
           })}
+          {extras.map((row) => (
+            <Stack key={row.key} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 13.5 }} noWrap>{row.name}</Typography>
+                {row.chipText && <Chip size="small" label={row.chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
+              </Stack>
+              <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                {row.quantity} ks
+              </Typography>
+            </Stack>
+          ))}
         </Stack>
       )}
     </Card>
@@ -962,89 +983,137 @@ export function GarageCard({
 }
 
 /**
- * Supplier goods the run has to bring — gas, packaging, sanitation — across every order on
- * it, grouped by where each is collected from.
+ * Supplier goods the run has to bring — gas, packaging, sanitation — one row per good with the
+ * total across every order that asked for it, and a stepper splitting that total between our
+ * own garage and a call at the supplier.
  *
- * Read-only, like the two garage cards: the quantities belong to the orders that asked for
- * them. Its own card rather than rows in the nakládka because these are not brewery products
- * — they have no brewery to section under, and the loading list is organised by brewery.
+ * Not read-only, unlike the two garage cards, because this split is a decision made here: the
+ * good's own pickup source only seeds it. Each click writes one underlying order line (see
+ * {@link nextSourcingWrite}) and the server re-derives the route from the result, which is what
+ * makes a stop appear or vanish as the last piece moves either way.
  *
- * Grouped by pickup source rather than by supplier, because that is the order they are
- * actually gathered in: everything out of the garage before the van leaves, then a call at
- * each supplier. The route grows a stop per group — see the backend's two reconcilers.
+ * No supplier or client column: those tell you where a piece came from and who it is for, and
+ * this card answers a different question — what has to be picked up, and from where.
  */
-export function SupplierGoodsCard({ goods, onOpenOrder }: {
-  goods: OutgoingShipmentSupplierGoodDto[];
-  onOpenOrder?: (orderId: string) => void;
+export function SupplierGoodsCard({ rows, editable, onAdjust }: {
+  /** Already aggregated by the page, which also feeds the garage side of these rows to
+   *  "Doložit" — one aggregation, so the two cards cannot report different totals. */
+  rows: SupplierGoodRow[];
+  /** Whether the split can still be changed — the run's loading has to be open. */
+  editable?: boolean;
+  /** Moves one piece of a row between the garage and the supplier. */
+  onAdjust?: (row: SupplierGoodRow, delta: number) => void;
 }) {
-  if (goods.length === 0) return null;
+  if (rows.length === 0) return null;
 
-  const total = goods.reduce((sum, g) => sum + (g.quantity ?? 0), 0);
-
-  // Source order is the backend's (Garage first), preserved rather than re-derived so the
-  // card and the picking order it describes cannot disagree.
-  const groups: { source: string; label: string; rows: OutgoingShipmentSupplierGoodDto[] }[] = [];
-  for (const g of goods) {
-    const source = pickupSourceName(g.pickupSource) ?? 'Garage';
-    const existing = groups.find((x) => x.source === source);
-    if (existing) existing.rows.push(g);
-    else groups.push({ source, label: pickupSourceLabel(g.pickupSource) ?? source, rows: [g] });
-  }
+  const total = rows.reduce((sum, r) => sum + r.quantity, 0);
+  const fromGarage = rows.reduce((sum, r) => sum + r.fromGarage, 0);
 
   return (
     <Card sx={{ overflow: 'hidden' }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
         <PropaneOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Zboží od dodavatelů</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Další zboží</Typography>
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
           {total} ks
         </Typography>
       </Stack>
 
+      {/* The two columns the stepper moves pieces between, named once at the top rather than on
+          every row. */}
+      <Stack
+        direction="row"
+        sx={{
+          px: 2.5, py: 0.75, borderBottom: 1, borderColor: 'divider',
+          bgcolor: 'action.hover',
+          '& > *': { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3, color: 'text.secondary', textTransform: 'uppercase' },
+        }}
+      >
+        <Box sx={{ flex: 1 }}>Zboží</Box>
+        <Box sx={{ width: 104, textAlign: 'center' }}>Z garáže</Box>
+        <Box sx={{ width: 74, textAlign: 'right' }}>Od dodav.</Box>
+      </Stack>
+
       <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-        {groups.map((group) => (
-          <Box key={group.source} sx={{ px: 2.5, py: 1.5 }}>
-            <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, color: 'text.secondary', textTransform: 'uppercase', mb: 1 }}>
-              {group.label}
-            </Typography>
-            <Stack spacing={1}>
-              {group.rows.map((g) => (
-                <Stack key={g.id} direction="row" alignItems="flex-start" spacing={1}>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 13.5, fontWeight: 600 }} noWrap>{g.name}</Typography>
-                      {g.size && <Chip size="small" label={g.size} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
-                    </Stack>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      {g.supplierName}
-                      {g.clientName ? ' · ' : ''}
-                      {/* The client is the reason the good is on the run, so it links to the
-                          order the way the stop list does. */}
-                      {g.clientName && (onOpenOrder && g.orderId ? (
-                        <Link
-                          component="button"
-                          type="button"
-                          underline="hover"
-                          onClick={() => onOpenOrder(g.orderId!)}
-                          sx={{ font: 'inherit', color: 'primary.dark', verticalAlign: 'baseline' }}
-                        >
-                          {g.clientName}
-                        </Link>
-                      ) : <Box component="span">{g.clientName}</Box>)}
-                    </Typography>
-                    {g.note && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{g.note}</Typography>
-                    )}
-                  </Box>
-                  <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {g.quantity} ks
-                  </Typography>
+        {rows.map((row) => {
+          const fromSupplier = row.quantity - row.fromGarage;
+          const overdrawn = row.garageAvailable != null && row.fromGarage > row.garageAvailable;
+          return (
+            <Stack key={row.key} data-testid="supplier-good-row" direction="row" alignItems="center" sx={{ px: 2.5, py: 1.25 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 600 }} noWrap>{row.name}</Typography>
+                  {row.size && <Chip size="small" label={row.size} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
                 </Stack>
-              ))}
+                <Typography variant="caption" color="text.secondary">
+                  {row.quantity} ks celkem
+                </Typography>
+                {/* Drawing more than the garage holds is allowed — a dovoz may still land before
+                    the truck is packed — so this warns rather than blocks, like the nakládka. */}
+                {overdrawn && (
+                  <Typography variant="caption" sx={{ display: 'block', color: 'warning.dark', fontWeight: 700 }}>
+                    Na skladě jen {row.garageAvailable} ks
+                  </Typography>
+                )}
+              </Box>
+
+              {/* minus · number · plus, so the number of every row sits in one column whether or
+                  not its buttons are shown. */}
+              <Stack direction="row" alignItems="center" spacing={0.25} sx={{ width: 104, justifyContent: 'center' }}>
+                {editable ? (
+                  <IconButton
+                    size="small"
+                    disabled={row.fromGarage <= 0}
+                    onClick={() => onAdjust?.(row, -1)}
+                    aria-label={`Ubrat z garáže — ${row.name}`}
+                    sx={{ width: 24, height: 24, color: 'info.main' }}
+                  >
+                    <RemoveIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                ) : <Box sx={{ width: 24 }} />}
+                <Typography sx={{
+                  minWidth: 26, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  color: row.fromGarage > 0 ? (overdrawn ? 'warning.dark' : 'info.main') : 'text.disabled',
+                }}
+                >
+                  {row.fromGarage}
+                </Typography>
+                {editable ? (
+                  <IconButton
+                    size="small"
+                    disabled={row.fromGarage >= row.quantity}
+                    onClick={() => onAdjust?.(row, 1)}
+                    aria-label={`Přidat z garáže — ${row.name}`}
+                    sx={{ width: 24, height: 24, color: 'info.main' }}
+                  >
+                    <AddIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                ) : <Box sx={{ width: 24 }} />}
+              </Stack>
+
+              {/* Derived, never edited: the two always add up to the ordered quantity, so one
+                  stepper is the whole control. */}
+              <Typography sx={{
+                width: 74, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                color: fromSupplier > 0 ? 'text.primary' : 'text.disabled',
+              }}
+              >
+                {fromSupplier} ks
+              </Typography>
             </Stack>
-          </Box>
-        ))}
+          );
+        })}
+      </Stack>
+
+      <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.25, borderTop: 1, borderColor: 'divider' }}>
+        <Typography sx={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'text.secondary' }}>Celkem</Typography>
+        <Typography sx={{ width: 104, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: fromGarage > 0 ? 'info.main' : 'text.disabled' }}>
+          {fromGarage}
+        </Typography>
+        <Typography sx={{ width: 74, textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+          {total - fromGarage} ks
+        </Typography>
       </Stack>
     </Card>
   );
@@ -1131,6 +1200,7 @@ export function ShipmentDetail({
   const setPreparationStep = useSetPreparationStep(shipment.id);
   const setShipmentState = useSetShipmentState(shipment.id);
   const setOrderItemSourcing = useSetOrderItemSourcing(shipment.id);
+  const setSupplierGoodSourcing = useSetSupplierGoodSourcing(shipment.id);
   const setStockPurchase = useSetStockPurchase(shipment.id);
   const exportShipment = useExportShipment();
 
@@ -1215,6 +1285,14 @@ export function ShipmentDetail({
     [stopsSorted, extraRows],
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
+
+  // One row per supplier good, summed across orders. Computed here rather than inside the card
+  // because "Doložit" lists the garage side of the very same rows — hoisting it means there is
+  // one aggregation feeding both, instead of two that could be given different input.
+  const supplierGoodRows = useMemo(
+    () => aggregateSupplierGoods(shipment.supplierGoods ?? []),
+    [shipment.supplierGoods],
+  );
 
 
 
@@ -1410,6 +1488,27 @@ export function ShipmentDetail({
       quantityFromInventory,
       inventoryItemId: quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined,
     }, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
+    });
+  }
+
+  // Move one piece of a supplier good between the garage and the supplier. The row is a sum
+  // across orders, so the write lands on one underlying line — see nextSourcingWrite for which.
+  // The server re-derives the run's pickup stops from the result, so this is also what makes a
+  // stop appear or disappear.
+  function adjustSupplierGoodSourcing(row: SupplierGoodRow, delta: number) {
+    const write = nextSourcingWrite(row, delta);
+    if (!write) {
+      enqueueSnackbar(
+        delta > 0 ? 'Všechny kusy už jsou z garáže.' : 'Žádné kusy nejsou z garáže.',
+        { variant: 'info' },
+      );
+      return;
+    }
+
+    // Deliberately no stock cap: drawing more than the garage holds is allowed and warned
+    // about on the row, because a dovoz may still land before the truck is packed.
+    setSupplierGoodSourcing.mutate(write, {
       onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
     });
   }
@@ -1842,7 +1941,11 @@ export function ShipmentDetail({
           {/* Directly under "kdo a čím": these are collected before or on the way round,
               so they are read before the garage exchange further down. Renders nothing when
               no order on the run asks for any. */}
-          <SupplierGoodsCard goods={shipment.supplierGoods ?? []} onOpenOrder={onOpenOrder} />
+          <SupplierGoodsCard
+            rows={supplierGoodRows}
+            editable={nakladkaEditable}
+            onAdjust={adjustSupplierGoodSourcing}
+          />
 
           {/* Deliberately the whole loading list, not the invoice-filtered view: what
               the garage gives and takes has nothing to do with which brewery invoice
@@ -1861,6 +1964,14 @@ export function ShipmentDetail({
             rows={aggRows}
             quantityOf={(row) => row.fromInventory}
             emptyText="Nic se z garáže nenakládá."
+            // Supplier goods whose pieces were sourced from the garage come off the same shelf
+            // as the inventory-sourced beer, so the loader reads them off the same card.
+            extraRows={supplierGoodRows.map((row) => ({
+              key: row.key,
+              name: row.name,
+              chipText: row.size,
+              quantity: row.fromGarage,
+            }))}
           />
 
           <ReturnsCard stops={stopsSorted} />

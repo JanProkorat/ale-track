@@ -80,6 +80,8 @@ vi.mock('src/hooks/useShipments', () => ({
   // (ShipmentStateEndpointTests), the sourcing stepper in nakladkaSourcing.test.ts.
   useSetShipmentState: () => ({ mutate: setShipmentStateMutate, isPending: false }),
   useSetOrderItemSourcing: () => ({ mutate: setOrderItemSourcingMutate, isPending: false }),
+  // Feeds the Další zboží card's stepper; a click also re-derives the run's pickup stops.
+  useSetSupplierGoodSourcing: () => ({ mutate: vi.fn(), isPending: false }),
   useSetStockPurchase: () => ({ mutate: setStockPurchaseMutate, isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
   // String "kind" here, deliberately not the numeric enum member — the real
