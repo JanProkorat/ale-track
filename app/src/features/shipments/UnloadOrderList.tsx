@@ -4,8 +4,9 @@
 // for the road. See unloadOrder.ts for why the shapes differ and what each
 // line carries; this component only lays that shape out.
 
+import { Fragment } from 'react';
 import { Box, Chip, Divider, Stack, Typography } from '@mui/material';
-import type { UnloadLine, UnloadStop } from './unloadOrder';
+import type { UnloadStop } from './unloadOrder';
 
 /** The stop's 1-based route position, in a plain token-coloured circle — the
  * same numbered-avatar language "Přehled zastávek" uses for its own
@@ -27,18 +28,34 @@ function SeqBadge({ seq }: { seq: number }) {
   );
 }
 
-/** One product coming off the van at this stop: name, its degree/size chip,
- * then the quantity right-aligned in tabular figures so the column reads
- * straight down the list, matching every other quantity in the nakládka card. */
-function UnloadLineRow({ line }: { line: UnloadLine }) {
+/**
+ * The stop's products, one row each: name, then what it is, then how many.
+ *
+ * A grid rather than a row of flex Stacks so the chips and the quantities line up down the
+ * list — the complaint that started this was three rows reading "Svijanský Kníže" whose only
+ * difference was a chip the eye had to hunt for on each line. Grid columns are shared by
+ * every row in one container, so a per-row Stack could not align them.
+ */
+function UnloadLines({ stop }: { stop: UnloadStop }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={0.75} sx={{ py: 0.375 }}>
-      <Typography sx={{ fontSize: 12.5, flex: 1, minWidth: 0 }} noWrap>{line.name}</Typography>
-      {line.chip && <Chip size="small" label={line.chip} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
-      <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-        {`× ${line.quantity}`}
-      </Typography>
-    </Stack>
+    <Box sx={{
+      mt: 0.5, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+      columnGap: 1, rowGap: 0.25, alignItems: 'center',
+    }}>
+      {stop.lines.map((line, index) => (
+        // A keyed Fragment, so each line's three cells land in the grid itself — a wrapper
+        // element would become one grid item and the columns would collapse.
+        <Fragment key={`${line.name}-${index}`}>
+          <Typography sx={{ fontSize: 12.5 }} noWrap>{line.name}</Typography>
+          {line.chip
+            ? <Chip size="small" label={line.chip} sx={{ height: 18, fontSize: 10, fontWeight: 600, justifySelf: 'start' }} />
+            : <Box />}
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
+            {`× ${line.quantity}`}
+          </Typography>
+        </Fragment>
+      ))}
+    </Box>
   );
 }
 
@@ -51,18 +68,26 @@ function UnloadStopBlock({ stop }: { stop: UnloadStop }) {
     <Stack direction="row" spacing={1.25} sx={{ py: 1 }}>
       <SeqBadge seq={stop.seq} />
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{stop.title}</Typography>
+        <Stack direction="row" alignItems="baseline" spacing={1}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13.5, minWidth: 0 }} noWrap>{stop.title}</Typography>
+          <Box sx={{ flex: 1 }} />
+          {/* What the driver counts the handover against, so it belongs beside the client's
+              name rather than under the last line. */}
+          {stop.totalQuantity > 0 && (
+            <Typography sx={{ fontSize: 11.5, color: 'text.secondary', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+              {`${stop.totalQuantity} ks`}
+            </Typography>
+          )}
+        </Stack>
         {stop.subtitle && (
           <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{stop.subtitle}</Typography>
         )}
         {stop.note && (
           <Typography variant="caption" color="text.secondary">{stop.note}</Typography>
         )}
-        <Box sx={{ mt: 0.5 }}>
-          {stop.lines.length > 0
-            ? stop.lines.map((line, index) => <UnloadLineRow key={`${line.name}-${index}`} line={line} />)
-            : <Typography color="text.secondary" sx={{ fontSize: 12 }}>Bez vykládky</Typography>}
-        </Box>
+        {stop.lines.length > 0
+          ? <UnloadLines stop={stop} />
+          : <Typography color="text.secondary" sx={{ fontSize: 12, mt: 0.5 }}>Bez vykládky</Typography>}
       </Box>
     </Stack>
   );

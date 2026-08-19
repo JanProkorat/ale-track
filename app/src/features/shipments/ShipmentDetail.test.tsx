@@ -1363,6 +1363,19 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
+  it('says what each line is and how much the stop takes', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    // Kind first: what the driver reaches for, and the only thing separating one package of a
+    // beer from another.
+    expect(list.getByText('Basa · 0,5 l · 12°')).toBeInTheDocument();
+    // And the stop's own count, to check the handover against.
+    expect(list.getByText('10 ks')).toBeInTheDocument();
+  });
+
   it("hides the nakládka's own actions while the unload view is up", () => {
     // Both buttons add to the loading list, which the unload view does not show — offering them
     // there invites an edit whose effect is invisible on screen.

@@ -10,8 +10,9 @@
 
 import type {
   OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto, OutgoingShipmentSupplierGoodDto,
+  ProductKind,
 } from 'src/generated/api-client';
-import { stopKindName } from 'src/lib/labels';
+import { kindLabel, stopKindName } from 'src/lib/labels';
 import { fmtLiters } from 'src/lib/format';
 import { resolveDetailStopAddress } from './stopAddress';
 
@@ -19,6 +20,8 @@ import { resolveDetailStopAddress } from './stopAddress';
  * purchases both extend `OutgoingShipmentProductDto`, which has all of this. */
 interface ChippableProduct {
   name?: string;
+  /** Either wire shape: the numeric member (demo) or its name (real). */
+  kind?: ProductKind | string | number;
   platoDegree?: number;
   packageSize?: number;
   quantity?: number;
@@ -43,9 +46,25 @@ export function platoSizeChipText(platoDegree: number | undefined, packageSize: 
 /** One product to take off the van at a stop. */
 export interface UnloadLine {
   name: string;
-  /** Degree and package size, as on the loading list. */
+  /** What kind of thing it is, then how big and how strong. See {@link unloadChipText}. */
   chip: string;
   quantity: number;
+}
+
+/**
+ * The unload list's chip: kind first, then package size, then degree — 'Sud · 50 l · 12°'.
+ *
+ * Kind leads because it is what the driver is looking for: the same beer appears once per
+ * package it is sold in, and three lines reading 'Svijanský Kníže' are told apart by the sud
+ * and the basa, not by the degree they share. The loading list's own chip
+ * ({@link platoSizeChipText}) stays as it is — there the section heading already says the kind.
+ */
+export function unloadChipText(product: ChippableProduct): string {
+  return [
+    kindLabel(product.kind),
+    product.packageSize != null ? fmtLiters(product.packageSize) : '',
+    product.platoDegree != null ? `${product.platoDegree}°` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 /** One stop on the driver's run. */
@@ -59,12 +78,14 @@ export interface UnloadStop {
   subtitle?: string;
   note?: string;
   lines: UnloadLine[];
+  /** Pieces coming off here, all lines together — the number to count the handover against. */
+  totalQuantity: number;
 }
 
 function lineFrom(product: ChippableProduct): UnloadLine {
   return {
     name: product.name ?? '—',
-    chip: platoSizeChipText(product.platoDegree, product.packageSize),
+    chip: unloadChipText(product),
     quantity: product.quantity ?? 0,
   };
 }
@@ -75,13 +96,14 @@ function lineFrom(product: ChippableProduct): UnloadLine {
  * The whole quantity, whichever way it was collected: the split between the garage and the
  * supplier decides where the van picks the pieces up, never how many the client gets.
  *
- * `size` is already a display string ('10 kg', '2 l'), so it becomes the chip as it stands
- * rather than going through the degree/volume format the beer lines use.
+ * Named as supplier goods in the chip, because that is what tells a CO₂ bottle apart from the
+ * beer around it — it has no kind, and its `size` is a free-text string ('10 kg') rather than
+ * the volume the beer lines carry, so it is appended as it stands.
  */
 function supplierLineFrom(good: OutgoingShipmentSupplierGoodDto): UnloadLine {
   return {
     name: good.name ?? '—',
-    chip: good.size ?? '',
+    chip: ['Zboží dodavatele', good.size].filter(Boolean).join(' · '),
     quantity: good.quantity ?? 0,
   };
 }
@@ -104,7 +126,7 @@ function shapeStop(
   stop: OutgoingShipmentStopDto,
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
   supplierGoods: OutgoingShipmentSupplierGoodDto[],
-): Omit<UnloadStop, 'seq'> {
+): Omit<UnloadStop, 'seq' | 'totalQuantity'> {
   const kind = stopKindName(stop.kind);
 
   if (kind === 'Company') {
@@ -168,6 +190,9 @@ export function unloadOrder(
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((stop, index) => ({ stop, seq: index + 1 }))
     .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
-    .map(({ stop, seq }) => ({ ...shapeStop(stop, stockPurchases, supplierGoods), seq }))
+    .map(({ stop, seq }) => {
+      const shaped = shapeStop(stop, stockPurchases, supplierGoods);
+      return { ...shaped, seq, totalQuantity: shaped.lines.reduce((sum, l) => sum + l.quantity, 0) };
+    })
     .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);
 }

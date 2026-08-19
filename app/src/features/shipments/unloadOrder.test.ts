@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OutgoingShipmentStopDto, OutgoingShipmentStopKind } from 'src/generated/api-client';
+import { OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
 import { unloadOrder } from './unloadOrder';
 
 const orderStop = (order: number, clientName: string, products: unknown[] = []) =>
@@ -43,17 +43,48 @@ describe('unloadOrder', () => {
   it("shapes an order stop's products into lines, chip included", () => {
     // stop.products -> lines had zero coverage (orderStop() defaults products to []
     // everywhere else in this file) — deleting that mapping from the order branch
-    // would pass every other test. This also exercises platoSizeChipText through
-    // lineFrom, the one thing this task lifted out of ShipmentDetail.tsx.
+    // would pass every other test.
     const stop = orderStop(1, 'Chrastava', [
-      { name: 'Kozel 12°', quantity: 24, platoDegree: 12, packageSize: 0.5 },
+      { name: 'Kozel 12°', quantity: 24, kind: ProductKind.Bottle, platoDegree: 12, packageSize: 0.5 },
     ]);
 
     const result = unloadOrder([stop], [], []);
 
     expect(result[0].lines).toEqual([
-      { name: 'Kozel 12°', quantity: 24, chip: '12° · 0,5 l' },
+      { name: 'Kozel 12°', quantity: 24, chip: 'Basa · 0,5 l · 12°' },
     ]);
+  });
+
+  it('tells the same beer in two packages apart by its kind, not by the degree they share', () => {
+    // The complaint the chip was rebuilt for: three rows reading 'Svijanský Kníže' whose only
+    // difference was a package size at the far right. Kind leads the chip now.
+    //
+    // 'Keg' as the wire STRING, the shape a raw `=== ProductKind.Keg` comparison gets wrong
+    // while the numeric fixture above would let it slide.
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Svijanský Kníže', quantity: 2, kind: 'Keg', platoDegree: 13, packageSize: 30 },
+      { name: 'Svijanský Kníže', quantity: 1, kind: ProductKind.Bottle, platoDegree: 13, packageSize: 0.5 },
+    ]);
+
+    const result = unloadOrder([stop], [], []);
+
+    expect(result[0].lines.map((l) => l.chip)).toEqual([
+      'Sud · 30 l · 13°',
+      'Basa · 0,5 l · 13°',
+    ]);
+  });
+
+  it('counts the pieces coming off at each stop', () => {
+    // What the driver checks the handover against, so it counts every line — the beer and the
+    // supplier goods alike.
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Kozel 12°', quantity: 24, kind: ProductKind.Bottle, platoDegree: 12, packageSize: 0.5 },
+    ]);
+    const goods = [{ id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-1' }];
+
+    const result = unloadOrder([stop], [], goods as never);
+
+    expect(result[0].totalQuantity).toBe(26);
   });
 
   it('keeps a custom stop that unloads nothing, even when stock purchases exist', () => {
@@ -109,15 +140,17 @@ describe('unloadOrder', () => {
     // Supplier goods hang off the run, not off the stop, so they have to be matched back to it
     // by order — the whole point of the `orderId` on both sides.
     const stop = orderStop(1, 'Chrastava', [
-      { name: 'Kozel 12°', quantity: 24, platoDegree: 12, packageSize: 0.5 },
+      { name: 'Kozel 12°', quantity: 24, kind: ProductKind.Bottle, platoDegree: 12, packageSize: 0.5 },
     ]);
     const goods = [{ id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-1' }];
 
     const result = unloadOrder([stop], [], goods as never);
 
+    // Named as supplier goods rather than left chipless: a CO₂ bottle has no kind, and a bare
+    // '10 kg' beside the beer's 'Basa · 0,5 l · 12°' reads as a line missing its chip.
     expect(result[0].lines).toEqual([
-      { name: 'Kozel 12°', quantity: 24, chip: '12° · 0,5 l' },
-      { name: 'CO₂ láhev', quantity: 2, chip: '10 kg' },
+      { name: 'Kozel 12°', quantity: 24, chip: 'Basa · 0,5 l · 12°' },
+      { name: 'CO₂ láhev', quantity: 2, chip: 'Zboží dodavatele · 10 kg' },
     ]);
   });
 
@@ -141,7 +174,9 @@ describe('unloadOrder', () => {
 
     const result = unloadOrder([orderStop(1, 'Chrastava')], [], goods as never);
 
-    expect(result[0].lines).toEqual([{ name: 'CO₂ láhev', quantity: 5, chip: '10 kg' }]);
+    expect(result[0].lines).toEqual([
+      { name: 'CO₂ láhev', quantity: 5, chip: 'Zboží dodavatele · 10 kg' },
+    ]);
   });
 
   it('returns nothing for a shipment with no stops', () => {
