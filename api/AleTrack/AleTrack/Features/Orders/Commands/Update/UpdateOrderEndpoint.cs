@@ -296,7 +296,8 @@ public sealed class UpdateOrderEndpoint(
             {
                 SupplierGood = good!,
                 Quantity = i.Quantity,
-                Note = i.Note
+                Note = i.Note,
+                QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good!, i.Quantity)
             });
         }
 
@@ -308,6 +309,9 @@ public sealed class UpdateOrderEndpoint(
             var existing = order.SupplierGoodItems.First(x => x.PublicId == i.Id!.Value);
             existing.Quantity = i.Quantity;
             existing.Note = i.Note;
+            // Clamped, not re-seeded: the split is a decision somebody made on the shipment,
+            // and cutting the quantity is no reason to throw it away.
+            existing.QuantityFromGarage = SupplierGoodSourcing.Clamp(existing.QuantityFromGarage, i.Quantity);
             result.Add(existing);
         }
 

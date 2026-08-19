@@ -522,8 +522,23 @@ public sealed record OutgoingShipmentSupplierGoodDto
     /// <summary>Quantity the order asks for.</summary>
     public int Quantity { get; set; }
 
-    /// <summary>Where it is collected from — the garage, or the supplier.</summary>
+    /// <summary>
+    /// The good's standing default, which seeded <see cref="QuantityFromGarage"/>. Carried so
+    /// the screen can say what the arrangement normally is, not to decide anything.
+    /// </summary>
     public SupplierGoodPickupSource PickupSource { get; set; }
+
+    /// <summary>
+    /// How many of <see cref="Quantity"/> come off our own shelf; the rest is collected at the
+    /// supplier. This — not <see cref="PickupSource"/> — is what the run acts on.
+    /// </summary>
+    public int QuantityFromGarage { get; set; }
+
+    /// <summary>
+    /// Pieces of this good currently in the garage, for the over-draw warning. Null when the
+    /// warehouse does not track it at all, which is different from tracking zero.
+    /// </summary>
+    public int? GarageAvailable { get; set; }
 
     /// <summary>Public ID of the supplier whose price list it is on.</summary>
     public Guid SupplierId { get; set; }

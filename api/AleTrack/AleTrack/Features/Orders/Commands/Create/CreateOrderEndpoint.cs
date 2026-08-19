@@ -115,7 +115,9 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             {
                 SupplierGood = relatedGood!,
                 Quantity = item.Quantity,
-                Note = item.Note
+                Note = item.Note,
+                // The good's standing default; a shipment can move pieces either way later.
+                QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(relatedGood!, item.Quantity)
             });
         }
 

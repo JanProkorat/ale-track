@@ -14,10 +14,10 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 /// carry, and two client write paths cannot be trusted to agree on it.
 ///
 /// One stop per <em>supplier</em>, not per order line: two clients both wanting a CO₂ refill
-/// is still one visit to the plnírna. Goods flagged
-/// <see cref="SupplierGoodPickupSource.Garage"/> add no stop of their own — they are already
-/// on our shelves, and <see cref="CompanyStopReconciler"/> is what puts the warehouse on the
-/// route for them.
+/// is still one visit to the plnírna. What counts is the part of each line still being
+/// collected there (<c>Quantity - QuantityFromGarage</c>) — pieces moved to the garage add no
+/// stop of their own, and <see cref="CompanyStopReconciler"/> is what puts the warehouse on
+/// the route for those.
 ///
 /// An existing stop keeps its position, exactly as the company stop does: a planner may have
 /// deliberately put the plnírna in the middle of the route, and an unrelated save must not
@@ -51,9 +51,11 @@ public static class SupplierPickupStopReconciler
             return;
         }
 
+        // The split, not the good's default: the default only seeded it, and moving every piece
+        // of a good into the garage is exactly how a supplier stop stops being needed.
         var wanted = orderStops
             .SelectMany(s => s.ClientOrder!.SupplierGoodItems)
-            .Where(i => i.SupplierGood is { PickupSource: SupplierGoodPickupSource.Supplier })
+            .Where(i => i.SupplierGood is not null && i.Quantity - i.QuantityFromGarage > 0)
             .Select(i => i.SupplierGood.Supplier)
             .Where(supplier => supplier is not null)
             .GroupBy(supplier => supplier!.Id)

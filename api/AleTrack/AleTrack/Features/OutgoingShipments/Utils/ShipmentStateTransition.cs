@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -158,6 +159,9 @@ public static class ShipmentStateTransition
     {
         foreach (var item in DrawnItems(shipment))
             item.InventoryItem!.Quantity -= item.QuantityFromInventory;
+
+        foreach (var good in DrawnSupplierGoods(shipment))
+            good.SupplierGood.InventoryItem!.Quantity -= good.QuantityFromGarage;
     }
 
     /// <summary>
@@ -172,6 +176,9 @@ public static class ShipmentStateTransition
     {
         foreach (var item in DrawnItems(shipment))
             item.InventoryItem!.Quantity += item.QuantityFromInventory;
+
+        foreach (var good in DrawnSupplierGoods(shipment))
+            good.SupplierGood.InventoryItem!.Quantity += good.QuantityFromGarage;
     }
 
     /// <summary>Order items whose pieces come out of a known stock entry.</summary>
@@ -180,6 +187,22 @@ public static class ShipmentStateTransition
             .Where(s => s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.OrderItems)
             .Where(i => i.QuantityFromInventory > 0 && i.InventoryItem is not null);
+
+    /// <summary>
+    /// Supplier-good lines whose garage-sourced pieces come out of a known stock entry.
+    /// </summary>
+    /// <remarks>
+    /// A good with no stock row is skipped rather than treated as zero stock: it means nobody
+    /// has ever booked one in through a dovoz, and inventing a row here would put a negative
+    /// count on something the warehouse does not track.
+    /// </remarks>
+    private static IEnumerable<OrderSupplierGoodItem> DrawnSupplierGoods(OutgoingShipment shipment) =>
+        shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .SelectMany(s => s.ClientOrder!.SupplierGoodItems)
+            .Where(i => i.QuantityFromGarage > 0
+                        && i.SupplierGood is not null
+                        && i.SupplierGood.InventoryItem is not null);
 
     /// <summary>
     /// Clears the shipment-scoped fields on a freed order so it can be planned onto
@@ -199,6 +222,12 @@ public static class ShipmentStateTransition
 
             foreach (var extra in stop.ClientOrder.CustomExtraItems)
                 extra.IsShipmentLoadingConfirmed = false;
+
+            // Back to the good's own default rather than to zero: the split was this run's
+            // decision about where to fetch from, and the standing arrangement with the
+            // supplier is what the next run should start from.
+            foreach (var good in stop.ClientOrder.SupplierGoodItems.Where(g => g.SupplierGood is not null))
+                good.QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good.SupplierGood, good.Quantity);
         }
     }
 

@@ -21,8 +21,8 @@ public static class CompanyStopReconciler
 {
     /// <summary>
     /// Adds, keeps or removes the company stop to match whether the run has anything to
-    /// do at the warehouse: goods bought for stock to drop off, or supplier goods flagged
-    /// <see cref="SupplierGoodPickupSource.Garage"/> to collect.
+    /// do at the warehouse: goods bought for stock to drop off, or supplier-good pieces
+    /// sourced from the garage to collect.
     /// </summary>
     /// <remarks>
     /// Two reasons for the same stop, so the condition is an OR and neither may remove it on
@@ -37,7 +37,7 @@ public static class CompanyStopReconciler
         var collectsFromGarage = shipment.Stops
             .Where(s => s.Kind == OutgoingShipmentStopKind.Order && s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.SupplierGoodItems)
-            .Any(i => i.SupplierGood is { PickupSource: SupplierGoodPickupSource.Garage });
+            .Any(i => i.QuantityFromGarage > 0);
 
         if (shipment.StockPurchases.Count == 0 && !collectsFromGarage)
         {

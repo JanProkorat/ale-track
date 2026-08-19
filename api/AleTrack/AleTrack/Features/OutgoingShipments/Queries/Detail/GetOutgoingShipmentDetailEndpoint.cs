@@ -291,6 +291,10 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                             Size = i.SupplierGood.Size,
                             Quantity = i.Quantity,
                             PickupSource = i.SupplierGood.PickupSource,
+                            QuantityFromGarage = i.QuantityFromGarage,
+                            GarageAvailable = i.SupplierGood.InventoryItem != null
+                                ? i.SupplierGood.InventoryItem.Quantity
+                                : null,
                             SupplierId = i.SupplierGood.Supplier.PublicId,
                             SupplierName = i.SupplierGood.Supplier.Name,
                             ClientId = s.ClientOrder!.Client.PublicId,

@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Tests.Builders;
 using FluentAssertions;
@@ -202,6 +203,109 @@ public sealed class SupplierPickupStopReconcilerTests
         shipment.Stops.Should().NotContain(s => s.Kind == OutgoingShipmentStopKind.Company);
     }
 
+    /// <summary>
+    /// The point of the split: a good whose default is "fetch it" but whose every piece has
+    /// been moved to the garage on this run no longer justifies the trip.
+    /// </summary>
+    [Fact]
+    public void Apply_EveryPieceMovedToTheGarage_DropsTheSupplierStop()
+    {
+        var linde = Supplier("Linde Gas", 1, 50.77m, 15.05m);
+        var shipment = ShipmentWithOrders(OrderAsking((linde, SupplierGoodPickupSource.Supplier)));
+        SupplierPickupStopReconciler.Apply(shipment);
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Supplier);
+
+        // What the stepper does: all of it, out of the garage.
+        var line = OnlyLine(shipment);
+        line.QuantityFromGarage = line.Quantity;
+
+        SupplierPickupStopReconciler.Apply(shipment);
+
+        shipment.Stops.Should().NotContain(s => s.Kind == OutgoingShipmentStopKind.Supplier);
+    }
+
+    /// <summary>
+    /// A partial split still needs the trip: some of it is being collected there.
+    /// </summary>
+    [Fact]
+    public void Apply_SomePiecesStillFromTheSupplier_KeepsTheStop()
+    {
+        var linde = Supplier("Linde Gas", 1, 50.77m, 15.05m);
+        var shipment = ShipmentWithOrders(OrderAsking((linde, SupplierGoodPickupSource.Supplier)));
+
+        var line = OnlyLine(shipment);
+        line.Quantity = 4;
+        line.QuantityFromGarage = 3;
+
+        SupplierPickupStopReconciler.Apply(shipment);
+
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Supplier);
+    }
+
+    /// <summary>
+    /// And the mirror image: a good we normally keep in the garage, fetched in full this once,
+    /// puts the supplier back on the route.
+    /// </summary>
+    [Fact]
+    public void Apply_GarageGoodMovedEntirelyToTheSupplier_AddsTheStop()
+    {
+        var linde = Supplier("Linde Gas", 1, 50.77m, 15.05m);
+        var shipment = ShipmentWithOrders(OrderAsking((linde, SupplierGoodPickupSource.Garage)));
+
+        OnlyLine(shipment).QuantityFromGarage = 0;
+
+        SupplierPickupStopReconciler.Apply(shipment);
+
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Supplier)
+            .Which.Label.Should().Be("Linde Gas");
+    }
+
+    /// <summary>
+    /// The company half of the same rule: with the last garage piece moved out and nothing
+    /// bought for stock, the warehouse has nothing left to offer this run.
+    /// </summary>
+    [Fact]
+    public void CompanyReconciler_LastGaragePieceMovedToTheSupplier_DropsTheCompanyStop()
+    {
+        var linde = Supplier("Linde Gas", 1, 50.77m, 15.05m);
+        var shipment = ShipmentWithOrders(OrderAsking((linde, SupplierGoodPickupSource.Garage)));
+        CompanyStopReconciler.Apply(shipment, Company);
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Company);
+
+        OnlyLine(shipment).QuantityFromGarage = 0;
+
+        CompanyStopReconciler.Apply(shipment, Company);
+
+        shipment.Stops.Should().NotContain(s => s.Kind == OutgoingShipmentStopKind.Company);
+    }
+
+    /// <summary>
+    /// Both stops at once, which is what a split line actually means: collect some at the
+    /// warehouse, the rest at the supplier.
+    /// </summary>
+    [Fact]
+    public void BothReconcilers_SplitLine_KeepBothStops()
+    {
+        var linde = Supplier("Linde Gas", 1, 50.77m, 15.05m);
+        var shipment = ShipmentWithOrders(OrderAsking((linde, SupplierGoodPickupSource.Supplier)));
+
+        var line = OnlyLine(shipment);
+        line.Quantity = 5;
+        line.QuantityFromGarage = 2;
+
+        SupplierPickupStopReconciler.Apply(shipment);
+        CompanyStopReconciler.Apply(shipment, Company);
+
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Supplier);
+        shipment.Stops.Should().ContainSingle(s => s.Kind == OutgoingShipmentStopKind.Company);
+    }
+
+    private static OrderSupplierGoodItem OnlyLine(OutgoingShipment shipment) =>
+        shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .SelectMany(s => s.ClientOrder!.SupplierGoodItems)
+            .Single();
+
     private static Supplier Supplier(string name, long id, decimal lat, decimal lng) =>
         SupplierBuilder.BuildEntity(
             publicId: Guid.NewGuid(),
@@ -226,7 +330,10 @@ public sealed class SupplierPickupStopReconcilerTests
             {
                 PublicId = Guid.NewGuid(),
                 SupplierGood = good,
-                Quantity = 1
+                Quantity = 1,
+                // Seeded exactly as the order write paths do, because the split — not the
+                // default that produced it — is what the reconcilers read.
+                QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good, 1)
             });
         }
 

@@ -51,6 +51,24 @@ public sealed class OrderSupplierGoodItem : PublicEntity
     public string? Note { get; set; }
 
     /// <summary>
+    /// How many of this line's pieces come off our own shelf rather than being collected at
+    /// the supplier. The client still ordered — and is billed for — <see cref="Quantity"/>;
+    /// this only records where the goods come from.
+    /// </summary>
+    /// <remarks>
+    /// The direct counterpart of <see cref="OrderItem.QuantityFromInventory"/>, and the same
+    /// kind of value: progress rather than content, adjusted from the shipment screen a piece
+    /// at a time. Seeded from the good's own <see cref="SupplierGood.PickupSource"/> — that
+    /// field is the standing default, this is one run's decision about it — and reset back to
+    /// it when the order is freed for another run. Never greater than <see cref="Quantity"/>.
+    ///
+    /// The remainder (<c>Quantity - QuantityFromGarage</c>) is what has to be collected at the
+    /// supplier, which is what decides whether the run keeps a stop there.
+    /// </remarks>
+    [Column("quantity_from_garage")]
+    public int QuantityFromGarage { get; set; }
+
+    /// <summary>
     /// The parent <see cref="Entities.Order"/>.
     /// </summary>
     public Order Order { get; set; } = null!;
