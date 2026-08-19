@@ -18,5 +18,11 @@ public enum InvoiceLineSourceKind
     /// billable source of its own — those pieces are billed as part of the order item
     /// they fulfil.
     /// </summary>
-    CustomExtraItem = 2
+    CustomExtraItem = 2,
+
+    /// <summary>
+    /// A line of a client order that buys off a supplier's price list — a CO₂ refill, a crate.
+    /// The client ordered it, so it is billed like anything else they ordered.
+    /// </summary>
+    SupplierGoodItem = 3
 }

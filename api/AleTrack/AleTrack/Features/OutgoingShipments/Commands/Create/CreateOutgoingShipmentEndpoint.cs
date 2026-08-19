@@ -67,6 +67,10 @@ public sealed class CreateOutgoingShipmentEndpoint(
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
+
+        // The suppliers of any pickup stop the planner placed in the route. Resolved up front so
+        // the stop can take its label and coordinates from the supplier rather than the client.
+        var pickupSuppliers = await GetPickupSuppliersAsync(req.Data.CustomStops, ct);
         var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
         var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
@@ -112,14 +116,25 @@ public sealed class CreateOutgoingShipmentEndpoint(
                     .Select(cs =>
                     {
                         var isCompany = cs.Kind == OutgoingShipmentStopKind.Company;
+                        var isSupplier = cs.Kind == OutgoingShipmentStopKind.Supplier;
+                        var supplier = isSupplier ? pickupSuppliers[cs.SupplierId!.Value] : null;
+
                         return new OutgoingShipmentStop
                         {
                             Kind = cs.Kind,
                             Order = cs.Order,
-                            Label = isCompany ? company.Name : cs.Label,
+                            // A company or supplier stop's label and coordinates are the server's
+                            // to author, so a stale client cannot pin either somewhere else.
+                            Label = isCompany ? company.Name : isSupplier ? supplier!.Name : cs.Label,
                             Note = cs.Note,
-                            Latitude = isCompany ? company.Latitude : cs.Latitude,
-                            Longitude = isCompany ? company.Longitude : cs.Longitude
+                            Latitude = isCompany ? company.Latitude
+                                : isSupplier ? supplier!.OfficialAddress?.Latitude
+                                : cs.Latitude,
+                            Longitude = isCompany ? company.Longitude
+                                : isSupplier ? supplier!.OfficialAddress?.Longitude
+                                : cs.Longitude,
+                            Supplier = supplier,
+                            SupplierId = supplier?.Id
                         };
                     })
             ],
@@ -141,11 +156,40 @@ public sealed class CreateOutgoingShipmentEndpoint(
 
         // A created shipment is always Created, so the content is always open —
         // no mutability gate needed here.
+        //
+        // Supplier stops first: it may add stops, and the company reconciler reads the same
+        // orders to decide whether the warehouse is also needed. Order between them does not
+        // actually matter today (neither looks at the other's stops), but running the one that
+        // can grow the route first keeps the resulting numbering readable.
+        SupplierPickupStopReconciler.Apply(outgoingShipment);
         CompanyStopReconciler.Apply(outgoingShipment, company);
 
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+    }
+
+    private async Task<Dictionary<Guid, Supplier>> GetPickupSuppliersAsync(
+        List<CustomStopDto> customStops, CancellationToken ct)
+    {
+        var ids = customStops
+            .Where(c => c.Kind == OutgoingShipmentStopKind.Supplier)
+            .Select(c => c.SupplierId ?? Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+            return [];
+
+        var found = await dbContext.Suppliers
+            .Where(x => ids.Contains(x.PublicId))
+            .ToDictionaryAsync(x => x.PublicId, ct);
+
+        var missing = ids.Where(id => !found.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+            ThrowHelper.PublicEntitiesNotFound(nameof(Supplier), missing);
+
+        return found;
     }
 
     private async Task<List<Entities.Order>> GetOrdersAsync(List<ClientOrderShipmentDto> clientOrderShipments, CancellationToken ct)
@@ -160,6 +204,11 @@ public sealed class CreateOutgoingShipmentEndpoint(
         var orders = await dbContext.Orders
             .Where(o => orderIds.Contains(o.PublicId))
             .Include(o => o.OutgoingShipmentStop)
+            // The two stop reconcilers below decide which pickup stops the run needs from
+            // these lines; without the goods and their suppliers they read an empty set.
+            .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
+                .ThenInclude(g => g.Supplier)
             .ToListAsync(ct);
 
         if (orders.Count != orderIds.Count)

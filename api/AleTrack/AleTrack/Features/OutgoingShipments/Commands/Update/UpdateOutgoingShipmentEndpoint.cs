@@ -81,6 +81,12 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         .Include(os => os.Stops)
             .ThenInclude(s => s.ClientOrder!)
                 .ThenInclude(o => o.CustomExtraItems)
+        // What the two pickup-stop reconcilers read to decide which stops the run needs.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.SupplierGoodItems)
+                    .ThenInclude(i => i.SupplierGood)
+                        .ThenInclude(g => g.Supplier)
         .Include(os => os.RouteViaPoints)
         // Needed by ShipmentContentGuard, which compares the stop's delivery place by
         // public ID — without this the diff would read every place as removed.
@@ -140,7 +146,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
-        var customStops = BuildCustomStops(req.Data.CustomStops, outgoingShipment);
+        var customStops = await BuildCustomStopsAsync(req.Data.CustomStops, outgoingShipment, ct);
         var stockPurchases = await GetStockPurchasesAsync(req.Data.StockPurchases, outgoingShipment, ct);
         var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
@@ -152,6 +158,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         outgoingShipment.StartBrewery = startBrewery;
         outgoingShipment.StartBreweryId = startBrewery?.Id;
         outgoingShipment.StartBreweryAddressKind = req.Data.StartBreweryAddressKind;
+        // Supplier stops arrive in CustomStops like the company stop does, so the planner can place
+        // one in the route before it exists. The reconciler below still decides whether each is
+        // needed; what the client contributes is only where it goes.
         outgoingShipment.Stops = [.. stops, .. customStops];
         outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
             .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
@@ -163,6 +172,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         // stops would be a bug.
         if (ShipmentMutability.IsContentEditable(outgoingShipment.State))
         {
+            SupplierPickupStopReconciler.Apply(outgoingShipment);
             CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
         }
 
@@ -361,23 +371,51 @@ public sealed class UpdateOutgoingShipmentEndpoint(
         return stops;
     }
 
-    private List<OutgoingShipmentStop> BuildCustomStops(List<CustomStopDto> customStops, OutgoingShipment outgoingShipment)
+    private async Task<List<OutgoingShipmentStop>> BuildCustomStopsAsync(
+        List<CustomStopDto> customStops, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
         var company = companyOptions.Value;
 
-        // Both non-order kinds live in this list; filtering to Custom alone would make
-        // every Company stop look new on each save and orphan the stored row.
+        // Every non-order kind lives in this list; filtering to Custom alone would make each
+        // Company or Supplier stop look new on every save and orphan the stored row.
         var existingById = outgoingShipment.Stops
-            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom or OutgoingShipmentStopKind.Company)
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom
+                or OutgoingShipmentStopKind.Company
+                or OutgoingShipmentStopKind.Supplier)
             .ToDictionary(s => s.PublicId);
+
+        // A pickup stop's label and coordinates come from its supplier, never from the client —
+        // the same rule the company stop follows, so a stale client cannot pin either elsewhere.
+        var supplierIds = customStops
+            .Where(d => d.Kind == OutgoingShipmentStopKind.Supplier && d.SupplierId is not null)
+            .Select(d => d.SupplierId!.Value)
+            .Distinct()
+            .ToList();
+
+        var suppliersById = supplierIds.Count == 0
+            ? new Dictionary<Guid, Supplier>()
+            : await dbContext.Suppliers
+                .Where(x => supplierIds.Contains(x.PublicId))
+                .ToDictionaryAsync(x => x.PublicId, ct);
 
         var result = new List<OutgoingShipmentStop>();
         foreach (var dto in customStops)
         {
             var isCompany = dto.Kind == OutgoingShipmentStopKind.Company;
-            var label = isCompany ? company.Name : dto.Label;
-            var latitude = isCompany ? company.Latitude : dto.Latitude;
-            var longitude = isCompany ? company.Longitude : dto.Longitude;
+            var isSupplier = dto.Kind == OutgoingShipmentStopKind.Supplier;
+
+            Supplier? supplier = null;
+            if (isSupplier)
+            {
+                if (dto.SupplierId is null || !suppliersById.TryGetValue(dto.SupplierId.Value, out supplier))
+                {
+                    ThrowHelper.PublicEntityNotFound(nameof(Supplier), dto.SupplierId ?? Guid.Empty);
+                }
+            }
+
+            var label = isCompany ? company.Name : isSupplier ? supplier!.Name : dto.Label;
+            var latitude = isCompany ? company.Latitude : isSupplier ? supplier!.OfficialAddress?.Latitude : dto.Latitude;
+            var longitude = isCompany ? company.Longitude : isSupplier ? supplier!.OfficialAddress?.Longitude : dto.Longitude;
 
             if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
             {
@@ -387,6 +425,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(
                 existing.Note = dto.Note;
                 existing.Latitude = latitude;
                 existing.Longitude = longitude;
+                existing.Supplier = supplier;
+                existing.SupplierId = supplier?.Id;
                 result.Add(existing);
             }
             else
@@ -398,7 +438,9 @@ public sealed class UpdateOutgoingShipmentEndpoint(
                     Label = label,
                     Note = dto.Note,
                     Latitude = latitude,
-                    Longitude = longitude
+                    Longitude = longitude,
+                    Supplier = supplier,
+                    SupplierId = supplier?.Id
                 });
             }
         }

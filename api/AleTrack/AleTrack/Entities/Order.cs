@@ -59,6 +59,14 @@ public sealed class Order : PublicEnumSoftlyDeletableEntity<OrderState>
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OrderCustomExtraItem> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// Lines bought off a supplier's price list — gas, packaging, sanitation. Deliberately
+    /// separate from <see cref="OrderItems"/>, which the loading table and the invoice split
+    /// both assume to be brewery products.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OrderSupplierGoodItem> SupplierGoodItems { get; set; } = [];
     
     /// <summary>
     /// Related items to be ordered

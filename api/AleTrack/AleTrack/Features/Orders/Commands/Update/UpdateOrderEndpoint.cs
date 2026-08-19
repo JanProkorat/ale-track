@@ -1,11 +1,14 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Common.Options;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Utils;
+using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Order = AleTrack.Entities.Order;
 
 namespace AleTrack.Features.Orders.Commands.Update;
@@ -33,7 +36,9 @@ public sealed record UpdateOrderRequest
 /// <remarks>
 /// Processes an HTTP PUT request to update the specified order's delivery date and state.
 /// </remarks>
-public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOrderRequest>
+public sealed class UpdateOrderEndpoint(
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions) : Endpoint<UpdateOrderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -69,6 +74,8 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Include(o => o.Returns)
             .Include(o => o.Notes)
             .Include(o => o.CustomExtraItems)
+            .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
             // The freeze follows the shipment carrying the order, not only the order's own
             // state — order items are the shipment's content.
             .Include(o => o.OutgoingShipmentStop)
@@ -143,7 +150,13 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
         order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
+        order.SupplierGoodItems = await GetSupplierGoodItemsAsync(req.Data.SupplierGoodItems, order, ct);
         ApplyItemNotes(req.Data.OrderItems, order);
+
+        // After the lines are settled, before the save: a supplier good added to (or dropped
+        // from) an order already sitting on a planned run changes which pickup stops that run
+        // needs, and nothing else would tell it.
+        await PickupStopSync.ForOrderAsync(dbContext, order.PublicId, companyOptions.Value, ct);
 
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
@@ -246,6 +259,59 @@ public sealed class UpdateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;
             existing.Note = e.Note;
+            result.Add(existing);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Diffs posted supplier-good lines against the persisted ones, like the custom extras.
+    /// </summary>
+    /// <remarks>
+    /// Merged rather than rebuilt, and deliberately outside the <c>contentEditable</c> branch
+    /// and <see cref="RequestChangesFrozenContent"/> — the same treatment custom extras get.
+    /// These lines are not part of the shipment's frozen content: they never reach the
+    /// nakládka or the content snapshot, so there is nothing a late edit could contradict.
+    /// </remarks>
+    private async Task<List<OrderSupplierGoodItem>> GetSupplierGoodItemsAsync(
+        List<OrderSupplierGoodItemDto> items, Order order, CancellationToken ct)
+    {
+        var newRows = items.Where(i => i.Id is null).ToList();
+
+        var goodIds = newRows.Select(i => i.SupplierGoodId).ToList();
+        var goods = goodIds.Count > 0
+            ? await dbContext.SupplierGoods.Where(g => goodIds.Contains(g.PublicId)).ToListAsync(ct)
+            : [];
+
+        var result = new List<OrderSupplierGoodItem>();
+
+        foreach (var i in newRows)
+        {
+            var good = goods.FirstOrDefault(g => g.PublicId == i.SupplierGoodId);
+            if (good is null)
+                ThrowHelper.PublicEntityNotFound(nameof(SupplierGood), i.SupplierGoodId);
+
+            result.Add(new OrderSupplierGoodItem
+            {
+                SupplierGood = good!,
+                Quantity = i.Quantity,
+                Note = i.Note,
+                QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good!, i.Quantity)
+            });
+        }
+
+        // An existing row keeps its identity and its good; only the quantity and note are
+        // patchable. Swapping the good on a line would be indistinguishable from removing
+        // one line and adding another, which is what the editor actually does.
+        foreach (var i in items.Where(i => i.Id is not null && order.SupplierGoodItems.Any(x => x.PublicId == i.Id!.Value)))
+        {
+            var existing = order.SupplierGoodItems.First(x => x.PublicId == i.Id!.Value);
+            existing.Quantity = i.Quantity;
+            existing.Note = i.Note;
+            // Clamped, not re-seeded: the split is a decision somebody made on the shipment,
+            // and cutting the quantity is no reason to throw it away.
+            existing.QuantityFromGarage = SupplierGoodSourcing.Clamp(existing.QuantityFromGarage, i.Quantity);
             result.Add(existing);
         }
 

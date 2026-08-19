@@ -67,6 +67,11 @@ public sealed record OrderDto
     public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 
     /// <summary>
+    /// Lines bought off a supplier's price list — gas, packaging, sanitation
+    /// </summary>
+    public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
+
+    /// <summary>
     /// The outgoing shipment carrying this order. Null when the order is not
     /// planned onto a run, or when the run it was on has been cancelled.
     /// </summary>

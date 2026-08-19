@@ -296,6 +296,175 @@ public sealed class ShipmentInvoiceReconcilerTests
         AssertBalanced(shipment);
     }
 
+    /// <summary>
+    /// A supplier good is something the client ordered, so it is billed like the beer beside it.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGood_IsBilledToTheOrderingClient()
+    {
+        var stop = OrderStop(ClientA, order: 1, (itemId: 1, qty: 5));
+        var shipment = Shipment(stop);
+        stop.ClientOrder!.SupplierGoodItems.Add(SupplierGoodItem(id: 700, quantity: 2));
+
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines.Should()
+            .ContainSingle(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem)
+            .Which.SupplierGoodItemId.Should().Be(700);
+        InvoiceFor(shipment, ClientA).Lines.Sum(l => l.Quantity).Should().Be(7, "5 ordered + 2 off the price list");
+        AssertBalanced(shipment);
+    }
+
+    /// <summary>
+    /// The garage/supplier split says where the van collects the pieces, not how many the client
+    /// gets — so all of them are billed, exactly as an order item's are when sourced from stock.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodTakenFromTheGarage_IsStillBilledInFull()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 710, quantity: 4);
+        item.QuantityFromGarage = 4;
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines.Sum(l => l.Quantity).Should().Be(4);
+        AssertBalanced(shipment);
+    }
+
+    /// <summary>
+    /// Its name carries the size, because that is what tells two goods of one name apart, and its
+    /// price is the one the order line is quoted at — the good's Plnění row.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodLine_RecordsNameWithSizeAndTheRefillPrice()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 720, quantity: 1);
+        // Deliberately after the purchase row, so picking "the first price" would take 1800.
+        item.SupplierGood.Prices =
+        [
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Purchase, PriceWithVat = 1800m, PriceWithoutVat = 1487.60m },
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m, PriceWithoutVat = 371.90m }
+        ];
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+
+        Reconcile(shipment);
+
+        var line = InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem);
+        line.ProductName.Should().Be("CO₂ láhev 10 kg");
+        line.Kind.Should().BeNull();
+        line.PackageSize.Should().BeNull();
+        line.UnitPriceWithVat.Should().Be(450m, "the same price the order line shows");
+        line.UnitPriceWithoutVat.Should().Be(371.90m);
+    }
+
+    /// <summary>
+    /// A good that prices no refill — a crate that is only ever bought — is billed at what it does
+    /// price.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodWithNoRefillPrice_IsBilledAtItsFirstOne()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 721, quantity: 1);
+        item.SupplierGood.Prices =
+        [
+            new SupplierGoodPrice { Kind = SupplierChargeKind.Purchase, PriceWithVat = 1800m }
+        ];
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem)
+            .UnitPriceWithVat.Should().Be(1800m);
+    }
+
+    /// <summary>
+    /// And a repriced good does not restate an invoice already issued — the same freeze an order
+    /// item's price gets.
+    /// </summary>
+    [Fact]
+    public void Reconcile_LoadedShipment_DoesNotRepriceASupplierGoodLine()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        var item = SupplierGoodItem(id: 722, quantity: 2);
+        stop.ClientOrder!.SupplierGoodItems.Add(item);
+        Reconcile(shipment);
+
+        shipment.State = OutgoingShipmentState.Loaded;
+        item.SupplierGood.Prices.Single().PriceWithVat = 999m;
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientA).Lines
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem)
+            .UnitPriceWithVat.Should().Be(450m, "an issued line is frozen");
+    }
+
+    /// <summary>
+    /// The line that was moved somewhere by hand stays where it was put — the same guarantee the
+    /// other two source kinds get, and the one a second reconcile pass could quietly undo.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodMarkedPrivate_StaysPrivate()
+    {
+        var stop = OrderStop(ClientA, order: 1);
+        var shipment = Shipment(stop);
+        stop.ClientOrder!.SupplierGoodItems.Add(SupplierGoodItem(id: 730, quantity: 3));
+        var split = ShipmentInvoiceSplit.Of(shipment);
+        ShipmentInvoiceReconciler.Reconcile(split);
+
+        // As the move endpoint does it: off the invoice, onto a line with no invoice.
+        var billed = InvoiceFor(shipment, ClientA).Lines.Single();
+        InvoiceFor(shipment, ClientA).Lines.Remove(billed);
+        split.PrivateLines.Add(new OutgoingShipmentInvoiceLine
+        {
+            PublicId = Guid.NewGuid(),
+            IsPrivate = true,
+            SourceKind = InvoiceLineSourceKind.SupplierGoodItem,
+            SupplierGoodItemId = 730,
+            Quantity = 3
+        });
+
+        var result = ShipmentInvoiceReconciler.Reconcile(split);
+
+        split.PrivateLines.Should().ContainSingle().Which.Quantity.Should().Be(3);
+        InvoiceFor(shipment, ClientA).Lines.Should().BeEmpty("the pieces are accounted for, just not billed");
+        result.Adjustments.Should().BeEmpty();
+        AssertBalanced(split);
+    }
+
+    /// <summary>
+    /// And when the line leaves the order, its billing goes with it rather than pointing at
+    /// nothing.
+    /// </summary>
+    [Fact]
+    public void Reconcile_SupplierGoodRemovedFromTheOrder_DropsItsLine()
+    {
+        var stop = OrderStop(ClientA, order: 1, (itemId: 1, qty: 2));
+        var shipment = Shipment(stop);
+        stop.ClientOrder!.SupplierGoodItems.Add(SupplierGoodItem(id: 740, quantity: 6));
+        Reconcile(shipment);
+
+        stop.ClientOrder.SupplierGoodItems.Clear();
+        var result = ShipmentInvoiceReconciler.Reconcile(ShipmentInvoiceSplit.Of(shipment));
+
+        InvoiceFor(shipment, ClientA).Lines.Should()
+            .NotContain(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem);
+        result.Adjustments.Should().ContainSingle(a =>
+            a.Kind == InvoiceAdjustmentKind.SourceRemoved
+            && a.SourceKind == InvoiceLineSourceKind.SupplierGoodItem
+            && a.Quantity == 6);
+        AssertBalanced(shipment);
+    }
+
     [Fact]
     public void Reconcile_StockPurchases_AreNeverInvoiced()
     {
@@ -509,9 +678,11 @@ public sealed class ShipmentInvoiceReconcilerTests
     private static void AssertBalanced(ShipmentInvoiceSplit split)
     {
         var shipment = split.Shipment;
+        var orders = shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!).ToList();
         var carried =
-            shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.OrderItems).Sum(i => i.Quantity)
-            + shipment.Stops.Where(s => s.ClientOrder is not null).SelectMany(s => s.ClientOrder!.CustomExtraItems).Sum(i => i.Quantity);
+            orders.SelectMany(o => o.OrderItems).Sum(i => i.Quantity)
+            + orders.SelectMany(o => o.CustomExtraItems).Sum(i => i.Quantity)
+            + orders.SelectMany(o => o.SupplierGoodItems).Sum(i => i.Quantity);
 
         var lines = shipment.Invoices.SelectMany(i => i.Lines).Concat(split.PrivateLines).ToList();
 
@@ -541,6 +712,26 @@ public sealed class ShipmentInvoiceReconcilerTests
             Quantity = quantity
         });
     }
+
+    /// <summary>
+    /// One line off a supplier's price list, with the good loaded — the graph the invoicing
+    /// endpoints hand reconciliation, which reads the good for the line's name.
+    /// </summary>
+    private static OrderSupplierGoodItem SupplierGoodItem(long id, int quantity) =>
+        new()
+        {
+            Id = id,
+            PublicId = Guid.NewGuid(),
+            Quantity = quantity,
+            SupplierGood = new SupplierGood
+            {
+                Id = id * 10, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg",
+                Prices =
+                [
+                    new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m }
+                ]
+            }
+        };
 
     private static OutgoingShipment Shipment(params OutgoingShipmentStop[] stops)
     {

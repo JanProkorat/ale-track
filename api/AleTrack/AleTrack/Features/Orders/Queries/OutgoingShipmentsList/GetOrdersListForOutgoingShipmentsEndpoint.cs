@@ -91,6 +91,20 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                         BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder,
                         DisplayOrder = oi.Product.DisplayOrder
                     })
+                    .ToList(),
+                SupplierGoods = o.SupplierGoodItems
+                    .OrderBy(i => i.SupplierGood.Supplier.Name)
+                    .ThenBy(i => i.SupplierGood.Name)
+                    .Select(i => new UnassignedSupplierGoodDto
+                    {
+                        Id = i.PublicId,
+                        Name = i.SupplierGood.Name,
+                        Quantity = i.Quantity,
+                        QuantityFromGarage = i.QuantityFromGarage,
+                        SupplierId = i.SupplierGood.Supplier.PublicId,
+                        SupplierName = i.SupplierGood.Supplier.Name,
+                        SupplierAddress = i.SupplierGood.Supplier.OfficialAddress.ToDto()
+                    })
                     .ToList()
             })
             .OrderBy(o => o.RequiredDeliveryDate)

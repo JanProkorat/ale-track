@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L, { type LatLngBoundsExpression, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Box, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
+import { Backdrop, Box, CircularProgress, Collapse, IconButton, Stack, Tooltip as MuiTooltip, Typography } from '@mui/material';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -10,6 +10,7 @@ import FullscreenIcon from '@mui/icons-material/FullscreenOutlined';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExitOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrongOutlined';
 import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import { haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
 import { RouteNavButton } from 'src/components/common/RouteNavButton';
 
@@ -25,6 +26,12 @@ export interface RouteStop {
   color?: string;
   /** 'custom' stops render as a diamond waypoint; 'order' (default) as a pin. */
   kind?: 'order' | 'custom';
+  /**
+   * Number printed on the pin. Defaults to the stop's position among the located ones, which
+   * is only the same thing when every stop has coordinates — pass it explicitly wherever
+   * another view numbers the same route, so the two cannot disagree about which stop is "3".
+   */
+  seq?: number;
 }
 
 /** One end of a route — where the van is loaded, and where it comes home to. */
@@ -81,6 +88,9 @@ function depotIcon(): L.DivIcon {
  * located. */
 export function RouteMap({
   stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
+  overlay, overlayWidth = 380,
+  overlayShowLabel = 'Zobrazit seznam', overlayHideLabel = 'Skrýt seznam',
+  busy = false, busyLabel = 'Přepočítávám trasu…',
 }: {
   stops: RouteStop[];
   /** Where the van is loaded — a brewery or the company, resolved by the caller. */
@@ -94,12 +104,50 @@ export function RouteMap({
   /** Adds a control that hands the route to Mapy.cz / Google / Apple Maps.
    * Opt-in so it appears on the screens a driver actually navigates from. */
   navigable?: boolean;
+  /** Panel that unfolds from the trip stats, capped to the map's height and scrolling
+   * internally past that. Collapsed until asked for, so the default view is still the
+   * route; passing one puts a chevron on the stats bar. */
+  overlay?: ReactNode;
+  /** Width of the stats bar and the panel below it — they share one. */
+  overlayWidth?: number;
+  /** Labels for the chevron, so it can name what it actually unfolds. */
+  overlayShowLabel?: string;
+  overlayHideLabel?: string;
+  /**
+   * Veils the map while its route is being re-resolved.
+   *
+   * Changing the stops means a new road route, and the drawn line drops to its straight-line
+   * fallback until OSRM answers — a redraw that reads as a flicker when it happens under an
+   * unannounced edit. The veil says "this is catching up" instead.
+   */
+  busy?: boolean;
+  busyLabel?: string;
 }) {
   const located = stops.filter((s) => s.lat != null && s.lng != null) as (RouteStop & { lat: number; lng: number })[];
 
   // Callers pass 280–360px, which eats most of a phone screen. Cap on mobile
   // rather than taking a responsive prop, so every call site benefits as-is.
   const mapHeight = { xs: Math.min(height, 260), mobile: height };
+
+  // How tall the unfolded panel may get: the map, less the 12px inset at each end, the stats
+  // bar it hangs off, and the gap between the two — so its bottom edge sits the same 12px
+  // clear of the map as its left edge does.
+  //
+  // The bar is measured rather than assumed. A guessed height was wrong the moment a long
+  // duration wrapped "1 h 56 min" onto a second line, and the panel then hung over the map's
+  // bottom edge by exactly the amount the guess was short. The fallback below only applies
+  // before the first measurement (and under happy-dom, which has no ResizeObserver).
+  const statsRef = useRef<HTMLDivElement | null>(null);
+  const [statsHeight, setStatsHeight] = useState(0);
+
+  const INSET = 12;
+  const GAP = 8;
+  const FALLBACK_STATS_H = 62;
+  const takenByStats = (statsHeight || FALLBACK_STATS_H) + GAP;
+  const overlayMaxHeight = {
+    xs: Math.max(Math.min(height, 260) - INSET * 2 - takenByStats, 120),
+    mobile: Math.max(height - INSET * 2 - takenByStats, 120),
+  };
 
   // Base trip: the run's start -> each located stop (in order) -> its end.
   // Usually a brewery pickup and the company, but a run that both loads and
@@ -154,6 +202,9 @@ export function RouteMap({
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const [isFull, setIsFull] = useState(false);
+  // Closed to begin with: the map is opened to see the route, and a panel covering it
+  // by default would answer a question nobody asked yet.
+  const [overlayOpen, setOverlayOpen] = useState(false);
   // Track native fullscreen and re-measure the map so tiles fill the new size.
   useEffect(() => {
     const onChange = () => {
@@ -172,6 +223,28 @@ export function RouteMap({
     const min = Math.round((km / 45) * 60) + (located.length - 1) * 12;
     return { km: Math.round(km * 10) / 10, min };
   }, [full, located.length]);
+
+  // Measures the stats bar so the panel hanging off it can be bounded exactly. Above the early
+  // return below, because a hook may not be called conditionally; the ref is simply null when
+  // there is no bar to measure.
+  const hasStatsBar = Boolean(road ?? fallback);
+  const hasOverlay = Boolean(overlay);
+
+  useEffect(() => {
+    const element = statsRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    // The rendered height, border and padding included. Deliberately not the entry's
+    // `contentRect`, which is the *content* box: it omits the bar's own py and border, so the
+    // panel below came out ~20px too tall and hung over the map's bottom edge — the very
+    // thing measuring was meant to fix.
+    const measure = () => setStatsHeight(element.getBoundingClientRect().height);
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
+  }, [hasStatsBar, hasOverlay]);
 
   if (located.length === 0) {
     return (
@@ -281,17 +354,20 @@ export function RouteMap({
               </Marker>
             </>
           )}
-          {located.map((s, i) => (
-            <Marker
-              key={i}
-              position={[s.lat, s.lng]}
-              icon={s.kind === 'custom' ? customPinIcon(s.color ?? '#1A2B4C', i + 1) : numberedPinIcon(s.color ?? '#F08C00', i + 1)}
-            >
-              <Tooltip direction="top" offset={[0, -34]}>
-                <strong>{i + 1}. {s.label}</strong>{s.kind === 'custom' ? ' · vlastní zastávka' : ''}
-              </Tooltip>
-            </Marker>
-          ))}
+          {located.map((s, i) => {
+            const seq = s.seq ?? i + 1;
+            return (
+              <Marker
+                key={i}
+                position={[s.lat, s.lng]}
+                icon={s.kind === 'custom' ? customPinIcon(s.color ?? '#1A2B4C', seq) : numberedPinIcon(s.color ?? '#F08C00', seq)}
+              >
+                <Tooltip direction="top" offset={[0, -34]}>
+                  <strong>{seq}. {s.label}</strong>{s.kind === 'custom' ? ' · vlastní zastávka' : ''}
+                </Tooltip>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </Box>
 
@@ -350,28 +426,137 @@ export function RouteMap({
         </MuiTooltip>
       </Stack>
 
-      {stats && (
-        <Stack
-          direction="row"
-          spacing={2.5}
+      {/* Over everything the map draws, the docked stats bar and stop list included — while the
+          route is being recomputed, none of it is settled, and leaving the panel bright made it
+          look like the one part that was.
+
+          Above the column's own z-index (1000) but with pointerEvents none, so it dims those
+          controls without swallowing them: the reorder arrows live in that list, and a second
+          nudge has to land while the veil the first one raised is still up. */}
+      {busy && (
+        <Backdrop
+          data-testid="route-map-busy"
+          open
+          role="status"
+          aria-live="polite"
+          // Backdrop rather than a hand-mixed rgba: it already resolves its scrim against the
+          // active colour scheme, which a literal alpha would get wrong in one of the two.
           sx={{
-            position: 'absolute', top: 12, left: 12, zIndex: 1000,
-            bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
-            px: 1.75, py: 1.1, boxShadow: 2,
+            position: 'absolute', inset: 0, zIndex: 1100,
+            display: 'grid', placeItems: 'center',
+            pointerEvents: 'none',
+            borderRadius: 2,
           }}
         >
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>VZDÁLENOST</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{stats.km} km</Typography>
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
-          </Box>
+          <Stack
+            direction="row"
+            spacing={1.25}
+            alignItems="center"
+            sx={{
+              bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
+              px: 1.75, py: 1, boxShadow: 2,
+            }}
+          >
+            <CircularProgress size={16} />
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{busyLabel}</Typography>
+          </Stack>
+        </Backdrop>
+      )}
+
+      {stats && (
+        // Top-left column: the trip stats, and — when the caller hands one over — the
+        // panel that slides out from under them.
+        //
+        // Top-anchored, with the panel capping its own height (see overlayMaxHeight)
+        // rather than the column pinning `bottom`. A bounded column would make the
+        // panel a shrinkable flex item, and flexbox re-measuring it every frame fights
+        // the height the slide is animating.
+        //
+        // pointerEvents off on the column, back on for its children, so the empty
+        // space beside a short panel still drags the map underneath.
+        <Stack
+          sx={{
+            position: 'absolute', top: 12, left: 12, zIndex: 1000,
+            // One width for both, so unfolding the panel does not resize the bar above
+            // it. Without a panel the bar stays content-sized, as on every other map.
+            width: overlay ? overlayWidth : undefined,
+            maxWidth: 'calc(100% - 24px)',
+            alignItems: overlay ? 'stretch' : 'flex-start',
+            gap: 1, pointerEvents: 'none',
+            '& > *': { pointerEvents: 'auto' },
+          }}
+        >
+          <Stack
+            ref={statsRef}
+            direction="row"
+            spacing={2.5}
+            alignItems="center"
+            sx={{
+              flex: '0 0 auto',
+              bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
+              px: 1.75, py: 1.1, boxShadow: 2,
+              // Spread within the fixed width rather than overflow it: `spacing` is the
+              // minimum gap, and a long distance ("1 234.5 km") just closes it up.
+              justifyContent: overlay ? 'space-between' : 'flex-start',
+            }}
+          >
+            {/* nowrap throughout: a long duration wrapping onto a second line made the bar
+                taller, and the panel hanging off it was bounded against the shorter one. */}
+            <Box sx={{ whiteSpace: 'nowrap' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>VZDÁLENOST</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{stats.km} km</Typography>
+            </Box>
+            <Box sx={{ whiteSpace: 'nowrap' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
+            </Box>
+            <Box sx={{ whiteSpace: 'nowrap' }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
+            </Box>
+            {overlay && (
+              <MuiTooltip title={overlayOpen ? overlayHideLabel : overlayShowLabel}>
+                <IconButton
+                  size="small"
+                  onClick={() => setOverlayOpen((v) => !v)}
+                  aria-label={overlayOpen ? overlayHideLabel : overlayShowLabel}
+                  aria-expanded={overlayOpen}
+                  sx={{ ml: -0.5, flexShrink: 0 }}
+                >
+                  <ExpandMoreIcon
+                    sx={{ color: 'text.secondary', transition: 'transform .15s', transform: overlayOpen ? 'rotate(180deg)' : 'none' }}
+                  />
+                </IconButton>
+              </MuiTooltip>
+            )}
+          </Stack>
+
+          {overlay && (
+            // Collapse animates the height between 0 and the child's own — and the child
+            // caps itself at overlayMaxHeight, so a long list animates to exactly the room
+            // it is allowed and scrolls the rest. unmountOnExit keeps a closed panel out of
+            // the DOM (and the a11y tree) rather than merely invisible.
+            <Collapse in={overlayOpen} unmountOnExit sx={{ flex: '0 0 auto' }}>
+              <Box
+                sx={{
+                  maxHeight: overlayMaxHeight,
+                  // A column that clips rather than scrolls: the panel itself decides what
+                  // scrolls inside it, which is how a card keeps its header fixed while only
+                  // its list moves. `clip` and not `hidden` — a tall hidden box swallows the
+                  // wheel and freezes the page (see app/CLAUDE.md).
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'clip',
+                  boxShadow: 2,
+                  borderRadius: 1.5,
+                  // Whatever the caller passed fills the column and does its own scrolling.
+                  '& > *': { flex: '1 1 auto', minHeight: 0 },
+                }}
+              >
+                {overlay}
+              </Box>
+            </Collapse>
+          )}
         </Stack>
       )}
     </Box>

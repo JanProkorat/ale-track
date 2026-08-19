@@ -55,6 +55,11 @@ public sealed record CreateOrderDto
     /// </summary>
     public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
 
+    /// <summary>
+    /// Lines bought off a supplier's price list — gas, packaging, sanitation.
+    /// </summary>
+    public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
+
 }
 
 /// <summary>

@@ -14,6 +14,8 @@ import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import UndoIcon from '@mui/icons-material/UndoOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
 import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -28,7 +30,7 @@ import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { initials, plural, fmtLiters, orderNumber } from 'src/lib/format';
-import { kindLabel, addrKindValue } from 'src/lib/labels';
+import { kindLabel, addrKindValue, chargeKindLabel } from 'src/lib/labels';
 import {
   ProductKind,
   DeliveryAddressKind,
@@ -39,13 +41,17 @@ import {
   OrderReturnDto,
   OrderNoteDto,
   OrderCustomExtraItemDto,
+  OrderSupplierGoodItemDto,
   type ProductListItemDto,
   type BreweryGroupDto,
   type KindGroupDto,
   type OrderItemReminderState,
+  type SupplierGoodDto,
 } from 'src/generated/api-client';
 import { useClients } from 'src/hooks/useClients';
 import { useBreweries } from 'src/hooks/useBreweries';
+import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
+import { groupSupplierGoods, primaryPrice, resolvedGoodMap } from './supplierGoodCatalogModel';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
@@ -70,6 +76,17 @@ interface DraftNote { id?: string; text: string }
 /** A custom extra being edited — something no brewery supplies. */
 interface DraftExtra { id?: string; description: string; quantity: number; note: string }
 
+/**
+ * A supplier-good line being edited — gas, packaging, sanitation off a supplier's
+ * price list. `id` is present only for lines already persisted; keeping it is what
+ * lets the backend patch the row in place instead of replacing it.
+ */
+interface DraftGoodLine { id?: string; supplierGoodId: string; quantity: number; note?: string }
+
+/** What a loaded order already told us about a good, for rendering a line before (or
+ *  without) the supplier's live price list. */
+interface GoodFallback { goodName: string; goodSize?: string; supplierName: string; unitPriceWithVat?: number }
+
 /** Serialized snapshot of the savable form state, for unsaved-change detection. */
 function serializeForm(
   clientId: string | null,
@@ -79,6 +96,7 @@ function serializeForm(
   notes: DraftNote[],
   extras: DraftExtra[],
   deliveryAddress: { kind: DeliveryAddressKind; placeId?: string },
+  goodLines: DraftGoodLine[],
 ): string {
   return JSON.stringify({
     clientId,
@@ -88,6 +106,7 @@ function serializeForm(
     notes: notes.map((n) => n.text.trim()),
     extras: extras.map((e) => ({ description: e.description.trim(), quantity: e.quantity, note: e.note.trim() })),
     deliveryAddress: { kind: deliveryAddress.kind, placeId: deliveryAddress.placeId ?? null },
+    goodLines: goodLines.map((g) => ({ supplierGoodId: g.supplierGoodId, quantity: g.quantity, note: g.note?.trim() ?? '' })),
   });
 }
 function flattenKind(k: KindGroupDto): ProductListItemDto[] {
@@ -308,6 +327,102 @@ function BreweryGroupPanel({
   );
 }
 
+/** One row of the "Další zboží" tab — a good off a supplier's price list. Priced by
+ *  {@link primaryPrice}, with no client-price override: a supplier charges every
+ *  client the same, so there is no ceník to strike through. */
+function SupplierGoodRow({
+  good, supplierName, qty, formatMoney, onAdd, onChange,
+}: {
+  good: SupplierGoodDto;
+  supplierName: string;
+  qty: number;
+  formatMoney: (czk: number) => string;
+  onAdd: () => void;
+  onChange: (delta: number) => void;
+}) {
+  const price = primaryPrice(good);
+  return (
+    <Box sx={{
+      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderRadius: 2,
+      borderColor: qty > 0 ? 'warning.main' : 'divider',
+      bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent'),
+    }}
+    >
+      <PropaneOutlinedIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{good.name}</Typography>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+          {good.size && <Chip size="small" label={good.size} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
+          <Chip size="small" label={supplierName} sx={{ height: 20, fontSize: 11 }} />
+          {price?.kind != null && (
+            <Chip size="small" label={chargeKindLabel(price.kind)} sx={{ height: 20, fontSize: 11 }} />
+          )}
+          {price ? (
+            <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{formatMoney(price.price)}</Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary">bez ceny</Typography>
+          )}
+        </Stack>
+      </Box>
+      <QtyControl qty={qty} onAdd={onAdd} onChange={onChange} />
+    </Box>
+  );
+}
+
+/** A supplier and its goods, collapsible — the "Další zboží" counterpart of
+ *  {@link BreweryGroupPanel}, and deliberately the same shape so the two browse
+ *  tabs read as one control. */
+function SupplierGoodPanel({
+  supplierName, goods, open, onToggle, qtyOf, formatMoney, onAdd, onChange,
+}: {
+  supplierName: string;
+  goods: SupplierGoodDto[];
+  open: boolean;
+  onToggle: () => void;
+  qtyOf: (goodId: string) => number;
+  formatMoney: (czk: number) => string;
+  onAdd: (goodId: string) => void;
+  onChange: (goodId: string, delta: number) => void;
+}) {
+  return (
+    <Box sx={{ mb: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
+      <Box
+        component="button"
+        type="button"
+        onClick={onToggle}
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left',
+          bgcolor: 'action.hover', border: 0, borderBottom: open ? 1 : 0, borderColor: 'divider',
+          px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
+        }}
+      >
+        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
+        <LocalShippingOutlinedIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />
+        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{supplierName}</Typography>
+        <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{goods.length}</Typography>
+        <Box sx={{ flex: 1 }} />
+      </Box>
+      {open && (
+        <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
+          <Stack spacing={1.1}>
+            {goods.map((g) => (
+              <SupplierGoodRow
+                key={g.id}
+                good={g}
+                supplierName={supplierName}
+                qty={qtyOf(g.id ?? '')}
+                formatMoney={formatMoney}
+                onAdd={() => onAdd(g.id ?? '')}
+                onChange={(d) => onChange(g.id ?? '', d)}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 /** History-first order builder: pick a client, then add products from their
  * order history or the full catalog (browsed by brewery/kind), review the
  * cart, and save. Matches the prototype's viewOrderEditor/oe* functions. */
@@ -348,10 +463,13 @@ export function OrderEditor({
   const [notes, setNotes] = useState<DraftNote[]>([]);
   const [extras, setExtras] = useState<DraftExtra[]>([]);
   const [fallbackNames, setFallbackNames] = useState<Record<string, string>>({});
-  const [catalogTab, setCatalogTab] = useState<'history' | 'browse'>('history');
+  const [goodLines, setGoodLines] = useState<DraftGoodLine[]>([]);
+  const [goodFallback, setGoodFallback] = useState<Record<string, GoodFallback>>({});
+  const [catalogTab, setCatalogTab] = useState<'history' | 'browse' | 'suppliers'>('history');
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<ProductKind | 'all'>('all');
   const [brewOpen, setBrewOpen] = useState<Record<string, boolean>>({});
+  const [supOpen, setSupOpen] = useState<Record<string, boolean>>({});
   const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
   const autoTabClientRef = useRef<string | null>(null);
   const loadedOrderRef = useRef(false);
@@ -361,7 +479,7 @@ export function OrderEditor({
   // Create mode has a stable initial baseline right away; edit mode sets it once
   // the order loads (below).
   useEffect(() => {
-    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress);
+    if (mode === 'create') baselineRef.current = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress, goodLines);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -391,11 +509,27 @@ export function OrderEditor({
     setCart(loadedCart);
     setReturns(loadedReturns);
     const loadedExtras: DraftExtra[] = (o.customExtraItems ?? []).map((e) => ({ id: e.id, description: e.description ?? '', quantity: e.quantity ?? 1, note: e.note ?? '' }));
+    const loadedGoodLines: DraftGoodLine[] = (o.supplierGoodItems ?? []).map((g) => ({
+      id: g.id,
+      supplierGoodId: g.supplierGoodId ?? '',
+      quantity: g.quantity ?? 1,
+      note: g.note ?? undefined,
+    }));
     setNotes(loadedNotes);
     setExtras(loadedExtras);
+    setGoodLines(loadedGoodLines);
     setFallbackNames(Object.fromEntries((o.orderItems ?? []).map((it) => [it.productId ?? '', it.productName ?? '—'])));
+    // The detail response already names and prices each good. Kept as a fallback so a
+    // loaded line renders before the suppliers' price lists arrive — and keeps rendering
+    // if the good has since been taken off the supplier.
+    setGoodFallback(Object.fromEntries((o.supplierGoodItems ?? []).map((g) => [g.supplierGoodId ?? '', {
+      goodName: g.goodName ?? '—',
+      goodSize: g.goodSize ?? undefined,
+      supplierName: g.supplierName ?? '',
+      unitPriceWithVat: g.unitPriceWithVat ?? undefined,
+    }])));
     autoTabClientRef.current = loadedClientId;
-    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart, loadedReturns, loadedNotes, loadedExtras, loadedDeliveryAddress);
+    baselineRef.current = serializeForm(loadedClientId, loadedDate, loadedCart, loadedReturns, loadedNotes, loadedExtras, loadedDeliveryAddress, loadedGoodLines);
   }, [mode, orderQuery.data]);
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
@@ -433,9 +567,35 @@ export function OrderEditor({
     return m;
   }, [historyQuery.data]);
 
+  // Suppliers' price lists for the "Další zboží" tab. Two steps because the list
+  // endpoint carries goods *names* but not their ids or prices; the same
+  // list-then-details pattern the dovoz editor uses, sharing one cache with it.
+  const suppliersQuery = useSuppliers();
+  const supplierIds = useMemo(
+    () => (suppliersQuery.data ?? []).map((s) => s.id).filter((id): id is string => Boolean(id)),
+    [suppliersQuery.data],
+  );
+  const { bySupplier: supplierDetails } = useSuppliersMany(supplierIds);
+  // Sorted by name so the panels keep one order while the details stream in.
+  const loadedSuppliers = useMemo(
+    () => supplierIds.map((id) => supplierDetails.get(id)).filter((s): s is NonNullable<typeof s> => Boolean(s)),
+    // supplierDetails is a fresh Map per render (see useSuppliersMany), so it cannot be a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supplierIds, supplierIds.map((id) => supplierDetails.has(id)).join(',')],
+  );
+  const goodMap = useMemo(() => resolvedGoodMap(loadedSuppliers), [loadedSuppliers]);
+  const supplierGroups = useMemo(() => groupSupplierGoods(loadedSuppliers, search), [loadedSuppliers, search]);
+
+  /** A good line's unit price: live off the price list, falling back to what the loaded
+   *  order recorded when the list has not arrived (or the good is gone). */
+  const goodUnitPrice = (goodId: string): number | undefined =>
+    primaryPrice(goodMap.get(goodId)?.good)?.price ?? goodFallback[goodId]?.unitPriceWithVat;
+
   const cartMap = useMemo(() => new Map(cart.map((c) => [c.productId, c])), [cart]);
-  const cartTotalQty = cart.reduce((n, c) => n + c.quantity, 0);
-  const cartTotalPrice = cart.reduce((sum, c) => sum + (productMap.get(c.productId)?.priceWithVat ?? 0) * c.quantity, 0);
+  const goodQtyOf = (goodId: string) => goodLines.find((g) => g.supplierGoodId === goodId)?.quantity ?? 0;
+  const cartTotalQty = cart.reduce((n, c) => n + c.quantity, 0) + goodLines.reduce((n, g) => n + g.quantity, 0);
+  const cartTotalPrice = cart.reduce((sum, c) => sum + (productMap.get(c.productId)?.priceWithVat ?? 0) * c.quantity, 0)
+    + goodLines.reduce((sum, g) => sum + (goodUnitPrice(g.supplierGoodId) ?? 0) * g.quantity, 0);
 
   const clientOptions: ComboOption[] = useMemo(() => clientComboOptions(clients), [clients]);
   const selectedClient = clients.find((c) => c.id === clientId);
@@ -462,6 +622,23 @@ export function OrderEditor({
       .filter((c) => c.quantity > 0));
   };
   const removeProduct = (productId: string) => setCart((prev) => prev.filter((c) => c.productId !== productId));
+
+  // Supplier-good lines mirror the product handlers, keyed by good id. A line's `id`
+  // survives quantity edits so the backend patches the row rather than replacing it.
+  const addGood = (goodId: string) => {
+    if (!goodId) return;
+    setGoodLines((prev) => {
+      const existing = prev.find((g) => g.supplierGoodId === goodId);
+      if (existing) return prev.map((g) => (g.supplierGoodId === goodId ? { ...g, quantity: g.quantity + 1 } : g));
+      return [...prev, { supplierGoodId: goodId, quantity: 1 }];
+    });
+  };
+  const changeGoodQty = (goodId: string, delta: number) => {
+    setGoodLines((prev) => prev
+      .map((g) => (g.supplierGoodId === goodId ? { ...g, quantity: g.quantity + delta } : g))
+      .filter((g) => g.quantity > 0));
+  };
+  const removeGood = (goodId: string) => setGoodLines((prev) => prev.filter((g) => g.supplierGoodId !== goodId));
   const setCartNote = (productId: string, note: string) => setCart((prev) => prev
     .map((c) => (c.productId === productId ? { ...c, note } : c)));
 
@@ -496,14 +673,15 @@ export function OrderEditor({
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
-  const snapshot = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress);
+  const snapshot = serializeForm(clientId, requiredDate, cart, returns, notes, extras, deliveryAddress, goodLines);
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
   // Persist only (no navigation); returns the saved id or null on failure.
   const persist = async (): Promise<string | null> => {
     if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
-    if (cart.length === 0) { enqueueSnackbar('Přidejte alespoň jeden produkt', { variant: 'warning' }); return null; }
+    // Either kind of line counts: a client asking only for a CO₂ refill has ordered.
+    if (cart.length === 0 && goodLines.length === 0) { enqueueSnackbar('Přidejte alespoň jednu položku', { variant: 'warning' }); return null; }
     // Blank-name rows are scratch rows the user never filled in — drop them
     // rather than fail validation on save.
     const returnsPayload = returns
@@ -523,6 +701,15 @@ export function OrderEditor({
         note: e.note.trim() || undefined,
       }));
 
+    // Only the id, the good and the quantity are written; the name and price on the DTO
+    // are read-only fields the server resolves.
+    const supplierGoodsPayload = goodLines.map((g) => new OrderSupplierGoodItemDto({
+      id: g.id,
+      supplierGoodId: g.supplierGoodId,
+      quantity: g.quantity,
+      note: g.note?.trim() || undefined,
+    }));
+
     try {
       let savedId: string;
       if (mode === 'edit' && orderId) {
@@ -540,6 +727,7 @@ export function OrderEditor({
             returns: returnsPayload,
             notes: notesPayload,
             customExtraItems: extrasPayload,
+            supplierGoodItems: supplierGoodsPayload,
             deliveryAddressKind: deliveryAddress.kind,
             clientDeliveryPlaceId: deliveryAddress.placeId,
           }),
@@ -559,6 +747,7 @@ export function OrderEditor({
           returns: returnsPayload,
           notes: notesPayload,
           customExtraItems: extrasPayload,
+          supplierGoodItems: supplierGoodsPayload,
           deliveryAddressKind: deliveryAddress.kind,
           clientDeliveryPlaceId: deliveryAddress.placeId,
         }));
@@ -671,7 +860,7 @@ export function OrderEditor({
               exclusive
               size="small"
               value={catalogTab}
-              onChange={(_e, v: 'history' | 'browse' | null) => v && setCatalogTab(v)}
+              onChange={(_e, v: 'history' | 'browse' | 'suppliers' | null) => v && setCatalogTab(v)}
               sx={{ mb: 1.75, flexWrap: 'wrap' }}
             >
               <ToggleButton value="history" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
@@ -680,16 +869,51 @@ export function OrderEditor({
               <ToggleButton value="browse" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
                 <StorefrontIcon fontSize="small" />&nbsp;Procházet dle pivovaru
               </ToggleButton>
+              <ToggleButton value="suppliers" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
+                <LocalShippingOutlinedIcon fontSize="small" />&nbsp;Další zboží
+              </ToggleButton>
             </ToggleButtonGroup>
 
             <Box sx={{ mb: 1.75 }}>
-              <SearchField value={search} onChange={setSearch} placeholder="Hledat produkt…" width="100%" />
+              <SearchField
+                value={search}
+                onChange={setSearch}
+                placeholder={catalogTab === 'suppliers' ? 'Hledat zboží nebo dodavatele…' : 'Hledat produkt…'}
+                width="100%"
+              />
             </Box>
 
             {!clientId ? (
               // No "vpravo": the client card is above the catalog on a phone and
               // beside it on lg, so a positional word is wrong half the time.
               <EmptyState title="Vyberte klienta" description="Katalog produktů se zobrazí po výběru klienta." dense />
+            ) : catalogTab === 'suppliers' ? (
+              // Ahead of the history gate below: this tab reads the suppliers' price
+              // lists, not the client's order history, so it must not wait on it.
+              suppliersQuery.isLoading || (supplierIds.length > 0 && loadedSuppliers.length === 0) ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={28} /></Box>
+              ) : supplierGroups.length === 0 ? (
+                <EmptyState
+                  icon={<LocalShippingOutlinedIcon />}
+                  title={search.trim() ? 'Nic nenalezeno' : 'Žádné zboží dodavatelů'}
+                  description={search.trim() ? 'Zkuste jiné hledání.' : 'Dodavatelé zatím nemají v ceníku žádné zboží.'}
+                  dense
+                />
+              ) : (
+                supplierGroups.map((g) => (
+                  <SupplierGoodPanel
+                    key={g.supplierId}
+                    supplierName={g.supplierName}
+                    goods={g.goods}
+                    open={supOpen[g.supplierId] !== false}
+                    onToggle={() => setSupOpen((prev) => ({ ...prev, [g.supplierId]: prev[g.supplierId] === false }))}
+                    qtyOf={goodQtyOf}
+                    formatMoney={formatMoney}
+                    onAdd={addGood}
+                    onChange={changeGoodQty}
+                  />
+                ))
+              )
             ) : historyQuery.isLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={28} /></Box>
             ) : catalogTab === 'history' ? (
@@ -779,7 +1003,7 @@ export function OrderEditor({
               <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Košík</Typography>
               <Chip size="small" label={`${cartTotalQty} ks`} />
             </Stack>
-            {cart.length === 0 ? (
+            {cart.length === 0 && goodLines.length === 0 ? (
               <EmptyState icon={<ShoppingCartOutlinedIcon />} title="Košík je prázdný" description="Přidejte produkty z katalogu." dense />
             ) : (
               <>
@@ -840,6 +1064,40 @@ export function OrderEditor({
                             sx={{ mt: 1 }}
                           />
                         )}
+                      </Box>
+                    );
+                  })}
+                  {/* Supplier goods sit in the same cart, below the beer. No brewery dot
+                      and no note field: they carry no brewery, and the loading table they
+                      would instruct never shows them. */}
+                  {goodLines.map((g) => {
+                    const resolved = goodMap.get(g.supplierGoodId);
+                    const fallback = goodFallback[g.supplierGoodId];
+                    const name = resolved?.good.name ?? fallback?.goodName ?? '—';
+                    const size = resolved?.good.size ?? fallback?.goodSize;
+                    const supplierName = resolved?.supplierName ?? fallback?.supplierName ?? '';
+                    const lineTotal = (goodUnitPrice(g.supplierGoodId) ?? 0) * g.quantity;
+                    return (
+                      <Box key={g.supplierGoodId} sx={{ px: 2.5, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                          <PropaneOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {[supplierName, size, formatMoney(lineTotal)].filter(Boolean).join(' · ')}
+                            </Typography>
+                          </Box>
+                          <IconButton size="small" onClick={() => changeGoodQty(g.supplierGoodId, -1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Ubrat">
+                            <RemoveIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                          <Typography sx={{ minWidth: 18, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity}</Typography>
+                          <IconButton size="small" onClick={() => changeGoodQty(g.supplierGoodId, 1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26 }} aria-label="Přidat">
+                            <AddIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => removeGood(g.supplierGoodId)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 26, height: 26, color: 'error.main' }} aria-label="Odebrat">
+                            <DeleteIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Stack>
                       </Box>
                     );
                   })}

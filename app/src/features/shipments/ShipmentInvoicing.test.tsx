@@ -262,6 +262,97 @@ describe('provenance chips', () => {
   });
 });
 
+describe('supplier goods', () => {
+  /** A line off a supplier's price list: no product, no kind, no package size, no price. */
+  function supplierLine(over: Partial<ShipmentInvoiceLineDto> = {}): ShipmentInvoiceLineDto {
+    return line({
+      sourceKind: InvoiceLineSourceKind.SupplierGoodItem,
+      sourceItemId: 'sg-1',
+      productId: undefined,
+      name: 'CO₂ láhev 10 kg',
+      kind: undefined,
+      packageSize: undefined,
+      // Priced off the good's own list, so the row values like any other.
+      priceWithVat: 450,
+      quantity: 2,
+      ...over,
+    });
+  }
+
+  it('marks the row as a supplier good, since it has no kind or package to show', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [supplierLine()] })],
+    });
+
+    renderSection();
+
+    const row = screen.getByText('CO₂ láhev 10 kg').closest('tr') as HTMLElement;
+    expect(within(row).getByText('zboží dodavatele')).toBeInTheDocument();
+    expect(within(row).getByText('2 ks')).toBeInTheDocument();
+    // Valued like any other row — 2 × 450 — rather than showing the no-price dash.
+    expect(within(row).getByText('900 Kč')).toBeInTheDocument();
+  });
+
+  it('does not mark an ordinary product row', () => {
+    renderSection();
+
+    const row = screen.getByText('Albrecht 12°').closest('tr') as HTMLElement;
+    expect(within(row).queryByText('zboží dodavatele')).toBeNull();
+  });
+
+  // The move is the same control every other row has; what it must carry is this row's own source
+  // kind, or the server would look the id up among order items and 404.
+  it('moves like any other row, sending its own source kind', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ id: 'inv-a', lines: [supplierLine()] }),
+        invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [] }),
+      ],
+    });
+
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Faktura 1 — 0 ks' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: 'inv-a',
+      sourceKind: InvoiceLineSourceKind.SupplierGoodItem,
+      sourceItemId: 'sg-1',
+      toInvoiceId: 'inv-b',
+    });
+  });
+
+  it('can be taken off invoicing altogether, like the rest', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ id: 'inv-a', lines: [supplierLine()] })],
+    });
+
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Soukromé (nefakturovat)' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      sourceKind: InvoiceLineSourceKind.SupplierGoodItem,
+      sourceItemId: 'sg-1',
+      toPrivate: true,
+    });
+  });
+});
+
 describe('drift banner', () => {
   it('reports what reconciliation changed and can be dismissed', () => {
     invoicesResponse = new ShipmentInvoicesDto({

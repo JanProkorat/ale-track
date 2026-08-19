@@ -102,6 +102,12 @@ public sealed record SupplierGoodDto
     public string? Description { get; set; }
 
     /// <summary>
+    /// Where a run collects this good — our own garage, or the supplier's premises. Decides
+    /// which pickup stop a shipment carrying it grows.
+    /// </summary>
+    public SupplierGoodPickupSource PickupSource { get; set; }
+
+    /// <summary>
     /// Prices, one per charge kind
     /// </summary>
     public List<SupplierGoodPriceDto> Prices { get; set; } = [];

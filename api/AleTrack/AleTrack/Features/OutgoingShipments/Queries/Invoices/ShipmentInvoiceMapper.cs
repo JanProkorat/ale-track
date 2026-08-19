@@ -105,6 +105,7 @@ public static class ShipmentInvoiceMapper
         {
             InvoiceLineSourceKind.OrderItem => FromOrderItem(shipment, line),
             InvoiceLineSourceKind.CustomExtraItem => FromCustomExtra(shipment, line),
+            InvoiceLineSourceKind.SupplierGoodItem => FromSupplierGood(shipment, line),
             _ => null
         };
 
@@ -146,6 +147,43 @@ public static class ShipmentInvoiceMapper
             line.PackageSize);
     }
 
+
+    /// <summary>
+    /// A supplier good: billed to whoever ordered it, and — like a custom extra — carrying no
+    /// product, no kind and no price of its own.
+    /// </summary>
+    private static SortedLine? FromSupplierGood(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
+    {
+        var match = ShipmentInvoiceGraph.SupplierGoodsOf(shipment)
+            .FirstOrDefault(x => x.Item.Id == line.SupplierGoodItemId);
+        if (match.Item is null)
+            return null;
+
+        var (item, owningOrder) = match;
+
+        var dto = new ShipmentInvoiceLineDto
+        {
+            Id = line.PublicId,
+            SourceKind = line.SourceKind,
+            SourceItemId = item.PublicId,
+            // No product: a supplier good is a price-list entry, not a brewery product, so there
+            // is nothing for the UI to navigate to. Its name is what groups the row instead.
+            ProductId = null,
+            Name = line.ProductName,
+            Kind = null,
+            PackageSize = null,
+            // The price frozen onto the line, as for an order item — not the good's current one.
+            PriceWithVat = line.UnitPriceWithVat,
+            Quantity = line.Quantity,
+            OrderingClientId = owningOrder.Client?.PublicId ?? Guid.Empty,
+            OrderingClientName = owningOrder.Client?.Name ?? string.Empty,
+            // Pieces taken off our own shelf rather than collected at the supplier — the same
+            // distinction `IsFromStock` draws for an order item sourced from inventory.
+            IsFromStock = item.QuantityFromGarage > 0
+        };
+
+        return new SortedLine(dto, ProductType.Other, null, null);
+    }
 
     private static SortedLine? FromCustomExtra(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
     {

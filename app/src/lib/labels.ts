@@ -6,7 +6,7 @@ import {
   OutgoingShipmentState, DeliveryAddressKind, ProductDeliveryState, ShipmentLoadingState,
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
-  SupplierChargeKind, DayOfWeek, DeliveryStopKind,
+  SupplierChargeKind, SupplierGoodPickupSource, DayOfWeek, DeliveryStopKind,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -127,6 +127,19 @@ export const L = {
   deliveryStopKind: {
     Brewery: 'Pivovar',
     Custom: 'Vlastní',
+    Supplier: 'Dodavatel',
+  } as Record<string, string>,
+  // Where a run collects a supplier good. "Z garáže" matches the nakládka's own
+  // "Do garáže / Z garáže" wording for the same warehouse.
+  pickupSource: {
+    Garage: 'Z garáže',
+    Supplier: 'Od dodavatele',
+  } as Record<string, string>,
+  // The fourth outgoing-shipment stop kind, added with supplier pickups.
+  shipmentStopKind: {
+    Order: 'Objednávka',
+    Custom: 'Vlastní',
+    Company: 'Firemní sklad',
     Supplier: 'Dodavatel',
   } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
@@ -304,6 +317,17 @@ export function dayOfWeekName(d?: DayOfWeek | string | number): string | undefin
   return enumName(DayOfWeek as unknown as Record<string, string | number>, d);
 }
 
+/** Resolves either wire representation of SupplierGoodPickupSource to its enum name. */
+export function pickupSourceName(k?: SupplierGoodPickupSource | string | number): string | undefined {
+  return enumName(SupplierGoodPickupSource as unknown as Record<string, string | number>, k);
+}
+
+/** Czech label for where a supplier good is collected from. */
+export function pickupSourceLabel(k?: SupplierGoodPickupSource | string | number): string | undefined {
+  const name = pickupSourceName(k);
+  return name ? (L.pickupSource[name] ?? name) : undefined;
+}
+
 /** Resolves either wire representation of SupplierChargeKind to its Czech label. */
 export function chargeKindName(k?: SupplierChargeKind | string | number): string | undefined {
   return enumName(SupplierChargeKind as unknown as Record<string, string | number>, k);
@@ -417,6 +441,12 @@ export function startPointKindName(k?: ShipmentStartPointKind | string | number)
  * live (string-serialized) data. */
 export function stopKindName(k?: OutgoingShipmentStopKind | string | number): string | undefined {
   return enumName(OutgoingShipmentStopKind as unknown as Record<string, string | number>, k);
+}
+
+/** Czech label for a stop kind, for the screens that name one. */
+export function stopKindLabel(k?: OutgoingShipmentStopKind | string | number): string | undefined {
+  const name = stopKindName(k);
+  return name ? (L.shipmentStopKind[name] ?? name) : undefined;
 }
 
 /** The InvoiceAdjustmentKind member name, from either wire form — the shipment's drift banner

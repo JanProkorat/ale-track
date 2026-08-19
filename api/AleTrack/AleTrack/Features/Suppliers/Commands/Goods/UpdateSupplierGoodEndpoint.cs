@@ -83,6 +83,7 @@ public sealed class UpdateSupplierGoodEndpoint(AleTrackDbContext dbContext) : En
         good!.Name = req.Data.Name;
         good.Size = req.Data.Size;
         good.Description = req.Data.Description;
+        good.PickupSource = req.Data.PickupSource;
         good.Prices = req.Data.Prices
             .Select(p => new SupplierGoodPrice
             {

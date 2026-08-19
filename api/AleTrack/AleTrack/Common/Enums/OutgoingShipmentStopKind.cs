@@ -12,5 +12,11 @@ public enum OutgoingShipmentStopKind
     Custom = 1,
 
     /// <summary>The company's own warehouse — where goods bought for stock come off.</summary>
-    Company = 2
+    Company = 2,
+
+    /// <summary>
+    /// A supplier's own premises — where goods flagged
+    /// <see cref="SupplierGoodPickupSource.Supplier"/> are collected on the way round.
+    /// </summary>
+    Supplier = 3
 }

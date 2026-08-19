@@ -448,6 +448,12 @@ export interface IClient {
     deleteOutgoingShipmentEndpoint(id: string, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Sets how many of a supplier-good line's pieces come from the garage
+     * @return Sourcing stored
+     */
+    setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -482,6 +488,12 @@ export interface IClient {
      * @return State stored
      */
     setLoadingStateEndpoint(id: string, data: SetLoadingStateDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Reorders a shipment's stops
+     * @return New order stored
+     */
+    reorderShipmentStopsEndpoint(id: string, data: ReorderShipmentStopsDto, signal?: AbortSignal): Promise<string>;
 
     /**
      * Moves pieces of a shipment item to another invoice, or off invoicing
@@ -5427,6 +5439,81 @@ export class Client implements IClient {
     }
 
     /**
+     * Sets how many of a supplier-good line's pieces come from the garage
+     * @return Sourcing stored
+     */
+    setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/supplier-goods/{ItemId}/sourcing";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (itemId === undefined || itemId === null)
+            throw new globalThis.Error("The parameter 'itemId' must be defined.");
+        url_ = url_.replace("{ItemId}", encodeURIComponent("" + itemId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetSupplierGoodSourcingEndpoint(_response);
+        });
+    }
+
+    protected processSetSupplierGoodSourcingEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("More than was ordered, or the run is no longer editable", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Shipment or line not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -5855,6 +5942,78 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Reorders a shipment's stops
+     * @return New order stored
+     */
+    reorderShipmentStopsEndpoint(id: string, data: ReorderShipmentStopsDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/stops/order";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processReorderShipmentStopsEndpoint(_response);
+        });
+    }
+
+    protected processReorderShipmentStopsEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The run is no longer editable, or the list is not exactly its stops", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Shipment not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -10571,6 +10730,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
     name?: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices?: SupplierGoodPriceDto[];
 
     constructor(data?: ISupplierGoodDto) {
@@ -10588,6 +10748,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
             this.name = _data["name"];
             this.size = _data["size"];
             this.description = _data["description"];
+            this.pickupSource = _data["pickupSource"];
             if (Array.isArray(_data["prices"])) {
                 this.prices = [] as any;
                 for (let item of _data["prices"])
@@ -10609,6 +10770,7 @@ export class SupplierGoodDto implements ISupplierGoodDto {
         data["name"] = this.name;
         data["size"] = this.size;
         data["description"] = this.description;
+        data["pickupSource"] = this.pickupSource;
         if (Array.isArray(this.prices)) {
             data["prices"] = [];
             for (let item of this.prices)
@@ -10623,7 +10785,13 @@ export interface ISupplierGoodDto {
     name?: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices?: SupplierGoodPriceDto[];
+}
+
+export enum SupplierGoodPickupSource {
+    Garage = 0,
+    Supplier = 1,
 }
 
 export class SupplierGoodPriceDto implements ISupplierGoodPriceDto {
@@ -10942,6 +11110,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
     name!: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices!: SupplierGoodPriceUpsertDto[];
 
     constructor(data?: ISupplierGoodUpsertDto) {
@@ -10961,6 +11130,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
             this.name = _data["name"];
             this.size = _data["size"];
             this.description = _data["description"];
+            this.pickupSource = _data["pickupSource"];
             if (Array.isArray(_data["prices"])) {
                 this.prices = [] as any;
                 for (let item of _data["prices"])
@@ -10981,6 +11151,7 @@ export class SupplierGoodUpsertDto implements ISupplierGoodUpsertDto {
         data["name"] = this.name;
         data["size"] = this.size;
         data["description"] = this.description;
+        data["pickupSource"] = this.pickupSource;
         if (Array.isArray(this.prices)) {
             data["prices"] = [];
             for (let item of this.prices)
@@ -10994,6 +11165,7 @@ export interface ISupplierGoodUpsertDto {
     name: string;
     size?: string | undefined;
     description?: string | undefined;
+    pickupSource?: SupplierGoodPickupSource;
     prices: SupplierGoodPriceUpsertDto[];
 }
 
@@ -16430,6 +16602,7 @@ export interface IShipmentInvoiceLineDto {
 export enum InvoiceLineSourceKind {
     OrderItem = 0,
     CustomExtraItem = 2,
+    SupplierGoodItem = 3,
 }
 
 export class InvoiceAdjustmentDto implements IInvoiceAdjustmentDto {
@@ -16565,6 +16738,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
+    supplierGoods?: OutgoingShipmentSupplierGoodDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
@@ -16617,6 +16791,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
                 this.stockPurchases = [] as any;
                 for (let item of _data["stockPurchases"])
                     this.stockPurchases!.push(OutgoingShipmentStockPurchaseItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoods"])) {
+                this.supplierGoods = [] as any;
+                for (let item of _data["supplierGoods"])
+                    this.supplierGoods!.push(OutgoingShipmentSupplierGoodDto.fromJS(item));
             }
             if (Array.isArray(_data["purchaseInvoices"])) {
                 this.purchaseInvoices = [] as any;
@@ -16683,6 +16862,11 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
             for (let item of this.stockPurchases)
                 data["stockPurchases"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoods)) {
+            data["supplierGoods"] = [];
+            for (let item of this.supplierGoods)
+                data["supplierGoods"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.purchaseInvoices)) {
             data["purchaseInvoices"] = [];
             for (let item of this.purchaseInvoices)
@@ -16721,6 +16905,7 @@ export interface IOutgoingShipmentDetailDto {
     stops?: OutgoingShipmentStopDto[];
     routeViaPoints?: RoutePointDto[];
     stockPurchases?: OutgoingShipmentStockPurchaseItemDto[];
+    supplierGoods?: OutgoingShipmentSupplierGoodDto[];
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
@@ -16831,6 +17016,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
+    supplierId?: string | undefined;
+    supplierAddress?: AddressDto | undefined;
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
@@ -16864,6 +17051,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
             this.orderId = _data["orderId"];
+            this.supplierId = _data["supplierId"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
             this.selectedAddressKind = _data["selectedAddressKind"];
             this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.isAddressOverridden = _data["isAddressOverridden"];
@@ -16913,6 +17102,8 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
         data["orderId"] = this.orderId;
+        data["supplierId"] = this.supplierId;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
         data["selectedAddressKind"] = this.selectedAddressKind;
         data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["isAddressOverridden"] = this.isAddressOverridden;
@@ -16955,6 +17146,8 @@ export interface IOutgoingShipmentStopDto {
     officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
     orderId?: string | undefined;
+    supplierId?: string | undefined;
+    supplierAddress?: AddressDto | undefined;
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
@@ -16974,6 +17167,7 @@ export enum OutgoingShipmentStopKind {
     Order = 0,
     Custom = 1,
     Company = 2,
+    Supplier = 3,
 }
 
 export class ClientDeliveryPlaceDto implements IClientDeliveryPlaceDto {
@@ -17424,6 +17618,98 @@ export class OutgoingShipmentStockPurchaseItemDto extends OutgoingShipmentProduc
 
 export interface IOutgoingShipmentStockPurchaseItemDto extends IOutgoingShipmentProductDto {
     productId?: string;
+}
+
+export class OutgoingShipmentSupplierGoodDto implements IOutgoingShipmentSupplierGoodDto {
+    id?: string;
+    supplierGoodId?: string;
+    name?: string;
+    size?: string | undefined;
+    quantity?: number;
+    pickupSource?: SupplierGoodPickupSource;
+    quantityFromGarage?: number;
+    garageAvailable?: number | undefined;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    orderId?: string | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IOutgoingShipmentSupplierGoodDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.name = _data["name"];
+            this.size = _data["size"];
+            this.quantity = _data["quantity"];
+            this.pickupSource = _data["pickupSource"];
+            this.quantityFromGarage = _data["quantityFromGarage"];
+            this.garageAvailable = _data["garageAvailable"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.orderId = _data["orderId"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): OutgoingShipmentSupplierGoodDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OutgoingShipmentSupplierGoodDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["name"] = this.name;
+        data["size"] = this.size;
+        data["quantity"] = this.quantity;
+        data["pickupSource"] = this.pickupSource;
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        data["garageAvailable"] = this.garageAvailable;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["orderId"] = this.orderId;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IOutgoingShipmentSupplierGoodDto {
+    id?: string;
+    supplierGoodId?: string;
+    name?: string;
+    size?: string | undefined;
+    quantity?: number;
+    pickupSource?: SupplierGoodPickupSource;
+    quantityFromGarage?: number;
+    garageAvailable?: number | undefined;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
+    clientId?: string | undefined;
+    clientName?: string | undefined;
+    orderId?: string | undefined;
+    note?: string | undefined;
 }
 
 export class OutgoingShipmentPurchaseInvoiceDto implements IOutgoingShipmentPurchaseInvoiceDto {
@@ -17998,6 +18284,7 @@ export interface IExtraItemInfoDto {
 export class CustomStopDto implements ICustomStopDto {
     id?: string | undefined;
     kind?: OutgoingShipmentStopKind;
+    supplierId?: string | undefined;
     order?: number;
     label?: string;
     note?: string | undefined;
@@ -18017,6 +18304,7 @@ export class CustomStopDto implements ICustomStopDto {
         if (_data) {
             this.id = _data["id"];
             this.kind = _data["kind"];
+            this.supplierId = _data["supplierId"];
             this.order = _data["order"];
             this.label = _data["label"];
             this.note = _data["note"];
@@ -18036,6 +18324,7 @@ export class CustomStopDto implements ICustomStopDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["kind"] = this.kind;
+        data["supplierId"] = this.supplierId;
         data["order"] = this.order;
         data["label"] = this.label;
         data["note"] = this.note;
@@ -18048,6 +18337,7 @@ export class CustomStopDto implements ICustomStopDto {
 export interface ICustomStopDto {
     id?: string | undefined;
     kind?: OutgoingShipmentStopKind;
+    supplierId?: string | undefined;
     order?: number;
     label?: string;
     note?: string | undefined;
@@ -18240,6 +18530,42 @@ export interface IPreparationStepDto {
     id?: string | undefined;
     order?: number;
     label: string;
+}
+
+export class SetSupplierGoodSourcingDto implements ISetSupplierGoodSourcingDto {
+    quantityFromGarage?: number;
+
+    constructor(data?: ISetSupplierGoodSourcingDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.quantityFromGarage = _data["quantityFromGarage"];
+        }
+    }
+
+    static fromJS(data: any): SetSupplierGoodSourcingDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetSupplierGoodSourcingDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        return data;
+    }
+}
+
+export interface ISetSupplierGoodSourcingDto {
+    quantityFromGarage?: number;
 }
 
 export class SetStockPurchaseDto implements ISetStockPurchaseDto {
@@ -18482,6 +18808,50 @@ export interface ISetLoadingStateDto {
     state?: ShipmentLoadingState;
 }
 
+export class ReorderShipmentStopsDto implements IReorderShipmentStopsDto {
+    stopIds?: string[];
+
+    constructor(data?: IReorderShipmentStopsDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["stopIds"])) {
+                this.stopIds = [] as any;
+                for (let item of _data["stopIds"])
+                    this.stopIds!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): ReorderShipmentStopsDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ReorderShipmentStopsDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.stopIds)) {
+            data["stopIds"] = [];
+            for (let item of this.stopIds)
+                data["stopIds"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface IReorderShipmentStopsDto {
+    stopIds?: string[];
+}
+
 export class MoveInvoiceLineDto implements IMoveInvoiceLineDto {
     fromInvoiceId?: string | undefined;
     sourceKind?: InvoiceLineSourceKind;
@@ -18612,6 +18982,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     deliveryAddressKind?: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     items?: UnassignedOrderItemDto[];
+    supplierGoods?: UnassignedSupplierGoodDto[];
 
     constructor(data?: IOutgoingShipmentOrderDto) {
         if (data) {
@@ -18640,6 +19011,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
                 this.items = [] as any;
                 for (let item of _data["items"])
                     this.items!.push(UnassignedOrderItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoods"])) {
+                this.supplierGoods = [] as any;
+                for (let item of _data["supplierGoods"])
+                    this.supplierGoods!.push(UnassignedSupplierGoodDto.fromJS(item));
             }
         }
     }
@@ -18670,6 +19046,11 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
             for (let item of this.items)
                 data["items"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoods)) {
+            data["supplierGoods"] = [];
+            for (let item of this.supplierGoods)
+                data["supplierGoods"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -18684,6 +19065,7 @@ export interface IOutgoingShipmentOrderDto {
     deliveryAddressKind?: DeliveryAddressKind;
     clientDeliveryPlaceId?: string | undefined;
     items?: UnassignedOrderItemDto[];
+    supplierGoods?: UnassignedSupplierGoodDto[];
 }
 
 export class CreateOutgoingShipmentDto implements ICreateOutgoingShipmentDto {
@@ -18925,6 +19307,66 @@ export interface IUnassignedOrderItemDto {
     displayOrder?: number;
 }
 
+export class UnassignedSupplierGoodDto implements IUnassignedSupplierGoodDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    quantityFromGarage?: number;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
+
+    constructor(data?: IUnassignedSupplierGoodDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.quantity = _data["quantity"];
+            this.quantityFromGarage = _data["quantityFromGarage"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.supplierAddress = _data["supplierAddress"] ? AddressDto.fromJS(_data["supplierAddress"]) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): UnassignedSupplierGoodDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UnassignedSupplierGoodDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["quantity"] = this.quantity;
+        data["quantityFromGarage"] = this.quantityFromGarage;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["supplierAddress"] = this.supplierAddress ? this.supplierAddress.toJSON() : undefined as any;
+        return data;
+    }
+}
+
+export interface IUnassignedSupplierGoodDto {
+    id?: string;
+    name?: string;
+    quantity?: number;
+    quantityFromGarage?: number;
+    supplierId?: string;
+    supplierName?: string;
+    supplierAddress?: AddressDto | undefined;
+}
+
 export class GetOrdersListForOutgoingShipmentsRequest extends FilterableRequest implements IGetOrdersListForOutgoingShipmentsRequest {
 
     constructor(data?: IGetOrdersListForOutgoingShipmentsRequest) {
@@ -19036,6 +19478,7 @@ export class OrderDto implements IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
@@ -19075,6 +19518,11 @@ export class OrderDto implements IOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
             this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
@@ -19116,6 +19564,11 @@ export class OrderDto implements IOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
@@ -19133,6 +19586,7 @@ export interface IOrderDto {
     orderItems?: OrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 
@@ -19255,6 +19709,78 @@ export interface IOrderItemDto {
 export enum OrderItemReminderState {
     Added = 0,
     Resolved = 1,
+}
+
+export class OrderSupplierGoodItemDto implements IOrderSupplierGoodItemDto {
+    id?: string | undefined;
+    supplierGoodId?: string;
+    quantity?: number;
+    note?: string | undefined;
+    goodName?: string | undefined;
+    goodSize?: string | undefined;
+    supplierId?: string | undefined;
+    supplierName?: string | undefined;
+    unitPriceWithVat?: number | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
+
+    constructor(data?: IOrderSupplierGoodItemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.supplierGoodId = _data["supplierGoodId"];
+            this.quantity = _data["quantity"];
+            this.note = _data["note"];
+            this.goodName = _data["goodName"];
+            this.goodSize = _data["goodSize"];
+            this.supplierId = _data["supplierId"];
+            this.supplierName = _data["supplierName"];
+            this.unitPriceWithVat = _data["unitPriceWithVat"];
+            this.chargeKind = _data["chargeKind"];
+        }
+    }
+
+    static fromJS(data: any): OrderSupplierGoodItemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new OrderSupplierGoodItemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["supplierGoodId"] = this.supplierGoodId;
+        data["quantity"] = this.quantity;
+        data["note"] = this.note;
+        data["goodName"] = this.goodName;
+        data["goodSize"] = this.goodSize;
+        data["supplierId"] = this.supplierId;
+        data["supplierName"] = this.supplierName;
+        data["unitPriceWithVat"] = this.unitPriceWithVat;
+        data["chargeKind"] = this.chargeKind;
+        return data;
+    }
+}
+
+export interface IOrderSupplierGoodItemDto {
+    id?: string | undefined;
+    supplierGoodId?: string;
+    quantity?: number;
+    note?: string | undefined;
+    goodName?: string | undefined;
+    goodSize?: string | undefined;
+    supplierId?: string | undefined;
+    supplierName?: string | undefined;
+    unitPriceWithVat?: number | undefined;
+    chargeKind?: SupplierChargeKind | undefined;
 }
 
 export class OrderOutgoingShipmentDto implements IOrderOutgoingShipmentDto {
@@ -19400,6 +19926,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -19437,6 +19964,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
         }
     }
@@ -19476,6 +20008,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -19491,6 +20028,7 @@ export interface IUpdateOrderDto {
     orderItems?: UpdateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
@@ -19626,6 +20164,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -19661,6 +20200,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.customExtraItems = [] as any;
                 for (let item of _data["customExtraItems"])
                     this.customExtraItems!.push(OrderCustomExtraItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["supplierGoodItems"])) {
+                this.supplierGoodItems = [] as any;
+                for (let item of _data["supplierGoodItems"])
+                    this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
         }
     }
@@ -19698,6 +20242,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.customExtraItems)
                 data["customExtraItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.supplierGoodItems)) {
+            data["supplierGoodItems"] = [];
+            for (let item of this.supplierGoodItems)
+                data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
+        }
         return data;
     }
 }
@@ -19711,6 +20260,7 @@ export interface ICreateOrderDto {
     orderItems?: CreateOrderItemDto[];
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
+    supplierGoodItems?: OrderSupplierGoodItemDto[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {

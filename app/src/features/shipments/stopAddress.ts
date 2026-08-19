@@ -54,13 +54,16 @@ export function resolveStopAddress(
  * kind back as `isPlace` so callers don't re-derive it themselves. */
 export function resolveDetailStopAddress(
   stop: Pick<OutgoingShipmentStopDto, 'selectedAddressKind' | 'officialAddress' | 'contactAddress' | 'deliveryPlace'>,
-): { lat?: number; lng?: number; text: string; isPlace: boolean } {
+): { lat?: number; lng?: number; text: string; addressText: string; isPlace: boolean } {
   const kind = addrKindValue(stop.selectedAddressKind);
   if (kind === DeliveryAddressKind.DeliveryPlace && stop.deliveryPlace) {
+    const addressText = formatPlaceAddress(stop.deliveryPlace);
     return {
       lat: stop.deliveryPlace.address?.latitude,
       lng: stop.deliveryPlace.address?.longitude,
-      text: formatPlaceAddress(stop.deliveryPlace),
+      text: addressText,
+      // A place branch has no kind tail to begin with, so the two are the same string.
+      addressText,
       isPlace: true,
     };
   }

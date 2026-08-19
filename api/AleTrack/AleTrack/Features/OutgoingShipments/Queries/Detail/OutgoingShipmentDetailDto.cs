@@ -96,6 +96,18 @@ public sealed record OutgoingShipmentDetailDto
     public List<OutgoingShipmentStockPurchaseItemDto> StockPurchases { get; set; } = [];
 
     /// <summary>
+    /// Supplier goods the run's orders ask for — gas, packaging, sanitation — with where each
+    /// is collected from. Aggregated across every stop, because the card that shows them is a
+    /// picking list for the whole run rather than a per-stop breakdown.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not folded into <see cref="OutgoingShipmentStopDto.Products"/>: those are
+    /// brewery products the nakládka sections by brewery, and these have no brewery. Keeping
+    /// them apart is also what keeps them off the loading list.
+    /// </remarks>
+    public List<OutgoingShipmentSupplierGoodDto> SupplierGoods { get; set; } = [];
+
+    /// <summary>
     /// Invoices the brewery issues to us for this run, ordered by sequence. Empty when the run
     /// is covered by a single invoice — the normal case, which needs no split on screen.
     /// </summary>
@@ -296,6 +308,20 @@ public sealed record OutgoingShipmentStopDto
     public Guid? OrderId { get; set; }
 
     /// <summary>
+    /// Public ID of the supplier this stop collects from (supplier stops only).
+    /// </summary>
+    public Guid? SupplierId { get; set; }
+
+    /// <summary>
+    /// Registered seat of that supplier, which is where the stop is (supplier stops only).
+    /// </summary>
+    /// <remarks>
+    /// The stop stores its own label and coordinates too, so it keeps rendering if the
+    /// supplier is later removed; this carries the full address for the stop list.
+    /// </remarks>
+    public AddressDto? SupplierAddress { get; set; }
+
+    /// <summary>
     /// Kind of the selected address for the shipment (order stops only)
     /// </summary>
     public DeliveryAddressKind SelectedAddressKind { get; set; }
@@ -474,6 +500,73 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     /// Pieces currently on hand in that stock entry, for the over-draw warning.
     /// </summary>
     public int? InventoryItemAvailable { get; set; }
+}
+
+/// <summary>
+/// One supplier good the run has to bring, and where it comes from.
+/// </summary>
+public sealed record OutgoingShipmentSupplierGoodDto
+{
+    /// <summary>Public ID of the order line this came from.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>Public ID of the ordered good.</summary>
+    public Guid SupplierGoodId { get; set; }
+
+    /// <summary>Name of the good, such as "CO₂ láhev".</summary>
+    public string Name { get; set; } = null!;
+
+    /// <summary>Size as the supplier states it — "10 kg", "50 l".</summary>
+    public string? Size { get; set; }
+
+    /// <summary>Quantity the order asks for.</summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// The good's standing default, which seeded <see cref="QuantityFromGarage"/>. Carried so
+    /// the screen can say what the arrangement normally is, not to decide anything.
+    /// </summary>
+    public SupplierGoodPickupSource PickupSource { get; set; }
+
+    /// <summary>
+    /// How many of <see cref="Quantity"/> come off our own shelf; the rest is collected at the
+    /// supplier. This — not <see cref="PickupSource"/> — is what the run acts on.
+    /// </summary>
+    public int QuantityFromGarage { get; set; }
+
+    /// <summary>
+    /// Pieces of this good currently in the garage, for the over-draw warning. Null when the
+    /// warehouse does not track it at all, which is different from tracking zero.
+    /// </summary>
+    public int? GarageAvailable { get; set; }
+
+    /// <summary>Public ID of the supplier whose price list it is on.</summary>
+    public Guid SupplierId { get; set; }
+
+    /// <summary>Name of that supplier.</summary>
+    public string SupplierName { get; set; } = null!;
+
+    /// <summary>
+    /// That supplier's registered seat — where a pickup stop for it would be.
+    /// </summary>
+    /// <remarks>
+    /// Carried so the screen can render a pickup stop the moment the split calls for one, rather
+    /// than waiting for the run to be re-read to learn where it is. The server remains the
+    /// authority on whether the stop exists; this only spares the client a round trip to draw it.
+    /// </remarks>
+    public AddressDto? SupplierAddress { get; set; }
+
+    /// <summary>Public ID of the client who ordered it, so the card can say who it is for.</summary>
+    public Guid? ClientId { get; set; }
+
+    /// <summary>Name of that client.</summary>
+    public string? ClientName { get; set; }
+
+    /// <summary>Public ID of the order it sits on.</summary>
+    public Guid? OrderId { get; set; }
+
+    /// <summary>The order line's own note, when it carries one.</summary>
+    public string? Note { get; set; }
 }
 
 /// <summary>

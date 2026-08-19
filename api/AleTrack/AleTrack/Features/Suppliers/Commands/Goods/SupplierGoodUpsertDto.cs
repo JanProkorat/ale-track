@@ -32,6 +32,12 @@ public sealed record SupplierGoodUpsertDto
     public string? Description { get; set; }
 
     /// <summary>
+    /// Where a run collects this good — our own garage, or the supplier's premises. Decides
+    /// which pickup stop a shipment carrying it grows.
+    /// </summary>
+    public SupplierGoodPickupSource PickupSource { get; set; }
+
+    /// <summary>
     /// One price per charge kind. At least one, kinds unique.
     /// </summary>
     public List<SupplierGoodPriceUpsertDto> Prices { get; set; } = [];
@@ -76,6 +82,8 @@ public sealed class SupplierGoodUpsertDtoValidator : Validator<SupplierGoodUpser
             .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         RuleFor(r => r.Description).MaximumLength(200).When(x => x.Description != null)
             .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
+
+        RuleFor(r => r.PickupSource).IsInEnum().WithErrorCode(ErrorCodes.ValidationError);
 
         // A good with no price is not a price-list entry.
         RuleFor(r => r.Prices).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError)

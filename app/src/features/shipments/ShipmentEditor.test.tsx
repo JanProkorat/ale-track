@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { theme } from 'src/theme/theme';
 import {
   AddressDto, ClientDeliveryPlaceDto, ClientDto, Country, OutgoingShipmentDetailDto, OutgoingShipmentOrderDto,
+  UnassignedSupplierGoodDto,
   OutgoingShipmentState, DeliveryAddressKind, OutgoingShipmentStopDto,
   OutgoingShipmentPreparationStepDto, OutgoingShipmentStopKind,
 } from 'src/generated/api-client';
@@ -91,7 +92,14 @@ let startPoints: StartPointFixture[] = DEFAULT_START_POINTS;
 
 vi.mock('src/hooks/useShipments', () => ({
   useShipment: () => ({ data: shipmentResponse, isLoading: shipmentLoading, isError: shipmentError }),
-  useAvailableOrders: () => ({ data: availableOrders, isLoading: availableOrdersLoading, isError: availableOrdersError }),
+  // `data` is genuinely undefined while the query is pending, as TanStack Query leaves it —
+  // an empty array instead would be a claim ("no orders"), and the editor treats the two
+  // differently when deciding whether a loaded pickup stop is still called for.
+  useAvailableOrders: () => ({
+    data: availableOrdersLoading ? undefined : availableOrders,
+    isLoading: availableOrdersLoading,
+    isError: availableOrdersError,
+  }),
   useCreateShipment: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateShipment: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
   useAcknowledgeAddressChanges: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -640,6 +648,182 @@ describe('ShipmentEditor — company stop round-trip', () => {
           }),
         }),
       );
+    });
+  });
+});
+
+describe('ShipmentEditor — the pickup stops the orders require', () => {
+  const LINDE = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  /** A supplier-good line on the order already on the run, with the given split. */
+  function withSupplierGood(quantityFromGarage: number) {
+    availableOrders = [
+      new OutgoingShipmentOrderDto({
+        ...availableOrders[0],
+        supplierGoods: [
+          new UnassignedSupplierGoodDto({
+            id: 'line-1',
+            name: 'CO₂ láhev',
+            quantity: 2,
+            quantityFromGarage,
+            supplierId: LINDE,
+            supplierName: 'Linde Gas',
+            supplierAddress: new AddressDto({
+              streetName: 'Průmyslová', streetNumber: '3', city: 'Liberec', zip: '46001',
+              country: Country.Czechia, latitude: 50.77, longitude: 15.05,
+            }),
+          }),
+        ],
+      } as unknown as OutgoingShipmentOrderDto),
+    ];
+  }
+
+  const stopRows = () => screen.getAllByTestId('stop-row');
+  const rowFor = (text: string) => stopRows().find((r) => r.textContent?.includes(text))!;
+
+  // The complaint this exists for: adding an order that brings a CO₂ refill looked like it changed
+  // nothing about the route, because the stop only appeared once the server reconciled it on save.
+  it('drafts a supplier pickup for a good collected at the supplier', () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    const row = rowFor('Linde Gas');
+    expect(within(row).getByText('Vyzvednutí u dodavatele')).toBeInTheDocument();
+  });
+
+  it('drafts the warehouse instead for a good collected from the garage', () => {
+    withSupplierGood(2);
+    renderEditor({ mode: 'edit' });
+
+    expect(screen.queryByText('Linde Gas')).not.toBeInTheDocument();
+    expect(screen.getByText('Vyzvednutí z garáže')).toBeInTheDocument();
+  });
+
+  it('drafts both when the split is shared between them', () => {
+    withSupplierGood(1);
+    renderEditor({ mode: 'edit' });
+
+    expect(screen.getByText('Vyzvednutí u dodavatele')).toBeInTheDocument();
+    expect(screen.getByText('Vyzvednutí z garáže')).toBeInTheDocument();
+  });
+
+  it('drafts nothing when no picked order asks for supplier goods', () => {
+    renderEditor({ mode: 'edit' });
+
+    expect(screen.queryByText(/^Vyzvednutí/)).not.toBeInTheDocument();
+  });
+
+  // The map has to show the route that will be driven, or its distance and time describe a
+  // different journey than the one being planned.
+  it('draws the pickup on the map, numbered after the drafted stops', () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Hospoda U Netopýra'],
+      [2, 'Linde Gas'],
+    ]);
+  });
+
+  // Sent like the company stop is: the server authors the label and coordinates and decides whether
+  // the stop is needed at all, but it honours the position — which is the whole point of sending it.
+  it('sends the pickup as a Supplier stop on save', async () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    const { customStops } = updateMutateAsync.mock.calls.at(-1)![0].data;
+    expect(customStops).toContainEqual(expect.objectContaining({
+      kind: OutgoingShipmentStopKind.Supplier, supplierId: LINDE, order: 2,
+    }));
+  });
+
+  // The complaint: the stop landed at the end of the route and could not be moved out of it.
+  it('lets the planner move the pickup up the route, and saves it there', async () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    // By icon rather than by position: dnd-kit gives the drag handle role="button" too, so
+    // the first button in the row is the handle, not the arrow.
+    fireEvent.click(within(rowFor('Linde Gas')).getByTestId('ArrowUpwardOutlinedIcon').closest('button')!);
+
+    expect(stopRows()[0].textContent).toContain('Linde Gas');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    const { customStops, clientOrderShipments } = updateMutateAsync.mock.calls.at(-1)![0].data;
+    expect(customStops).toContainEqual(expect.objectContaining({ supplierId: LINDE, order: 1 }));
+    expect(clientOrderShipments).toContainEqual(expect.objectContaining({ clientOrderId: 'order-1', order: 2 }));
+  });
+
+  // Deleting it would be undone by the reconciler on the very next save, so the button is not
+  // offered — the two arrows are all this row gets.
+  it('offers no delete on a required pickup row', () => {
+    withSupplierGood(0);
+    renderEditor({ mode: 'edit' });
+
+    expect(within(rowFor('Linde Gas')).queryByTestId('DeleteOutlineOutlinedIcon')).not.toBeInTheDocument();
+    // The arrows stay: where the pickup sits in the route is still the planner's call.
+    expect(within(rowFor('Linde Gas')).getByTestId('ArrowUpwardOutlinedIcon')).toBeInTheDocument();
+    // And an ordinary stop still has its delete, so this asserts a difference, not a missing icon.
+    expect(within(rowFor('Hospoda U Netopýra')).getByTestId('DeleteOutlineOutlinedIcon')).toBeInTheDocument();
+  });
+
+  describe('a stop already on the run', () => {
+    function withLoadedSupplierStop() {
+      shipmentResponse!.stops = [
+        ...(shipmentResponse!.stops ?? []),
+        new OutgoingShipmentStopDto({
+          id: 'supplier-stop-1',
+          order: 2,
+          // The wire form, as the real backend sends this enum.
+          kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+          label: 'Linde Gas',
+          supplierId: LINDE,
+          latitude: 50.77,
+          longitude: 15.05,
+        }),
+      ];
+    }
+
+    // Sent back by its id, so the server updates the stored row rather than orphaning it and
+    // creating a second one.
+    it('is sent back by id rather than re-created', async () => {
+      withSupplierGood(0);
+      withLoadedSupplierStop();
+      renderEditor({ mode: 'edit' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Uložit' }));
+
+      await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+      const { customStops } = updateMutateAsync.mock.calls.at(-1)![0].data;
+      expect(customStops.filter((st: { supplierId?: string }) => st.supplierId === LINDE)).toEqual([
+        expect.objectContaining({ id: 'supplier-stop-1', kind: OutgoingShipmentStopKind.Supplier }),
+      ]);
+    });
+
+    it('is dropped once the orders no longer collect anything there', () => {
+      withLoadedSupplierStop(); // ...and no order asks for supplier goods
+      renderEditor({ mode: 'edit' });
+
+      expect(screen.queryByText('Linde Gas')).not.toBeInTheDocument();
+    });
+
+    // The trap in mirroring the server's rule on the client: with the orders query still pending
+    // there is nothing to judge the stop against, and "no orders ask for it" would read as
+    // "obsolete" — dropping the stop, then re-appending it at the end of the route once the query
+    // lands, undoing wherever the planner had put it.
+    it('is kept while the orders query is still pending', () => {
+      withLoadedSupplierStop();
+      availableOrdersLoading = true;
+
+      renderEditor({ mode: 'edit' });
+
+      expect(screen.getByText('Linde Gas')).toBeInTheDocument();
     });
   });
 });

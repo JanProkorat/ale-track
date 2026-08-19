@@ -40,7 +40,7 @@ import { apiErrorMessage } from 'src/api/errors';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import {
   InvoiceAdjustmentKind,
-  type InvoiceLineSourceKind,
+  InvoiceLineSourceKind,
   type ShipmentInvoiceDto,
   type ShipmentInvoicesDto,
   type OutgoingShipmentStopDto,
@@ -284,6 +284,9 @@ function GroupRow({ invoice, group, editable, onMove }: {
   const isPrivate = invoice === null;
   const merged = group.parts.length > 1;
   const chipText = `${kindLabel(group.kind) ?? ''}${group.packageSize != null ? ` · ${fmtLiters(group.packageSize)}` : ''}`.replace(/^ · /, '');
+  // A supplier good has no kind and no package size to chip, so without this the row would be a
+  // bare name among beers — and the office needs to see that this one is not a brewery's.
+  const isSupplierGood = group.sourceKind === InvoiceLineSourceKind.SupplierGoodItem;
 
   const { stockQuantity, foreign } = originChips(invoice, group);
 
@@ -293,6 +296,14 @@ function GroupRow({ invoice, group, editable, onMove }: {
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{group.name}</Typography>
           {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
+          {isSupplierGood && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label="zboží dodavatele"
+              sx={{ height: 19, fontSize: 10.5, fontWeight: 600, color: 'text.secondary' }}
+            />
+          )}
           {stockQuantity > 0 && (
             <OriginChip kind="stock" label={stockQuantity === group.quantity ? 'ze skladu' : `${stockQuantity} ks ze skladu`} />
           )}

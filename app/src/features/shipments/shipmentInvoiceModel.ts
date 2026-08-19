@@ -11,6 +11,7 @@ import type {
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
+  InvoiceLineSourceKind,
   ProductKind,
 } from 'src/generated/api-client';
 import { resolveDetailStopAddress } from './stopAddress';
@@ -19,6 +20,9 @@ import { resolveDetailStopAddress } from './stopAddress';
 export interface LineGroup {
   productKey: string;
   name: string;
+  /** What the pieces are: a brewery product, a supplier good, a free-text extra. Taken off the
+   *  first part — the key groups by product or by name, so a group is of one kind. */
+  sourceKind?: InvoiceLineSourceKind;
   kind?: ProductKind;
   packageSize?: number;
   priceWithVat?: number;
@@ -65,13 +69,14 @@ export function groupLineList(lines: ShipmentInvoiceLineDto[]): LineGroup[] {
   const map = new Map<string, LineGroup>();
   const order: string[] = [];
   for (const line of lines) {
-    // Custom extras have no product, so they group by name instead.
+    // Custom extras and supplier goods have no product, so they group by name instead.
     const key = line.productId ?? `name:${line.name}`;
     let group = map.get(key);
     if (!group) {
       group = {
         productKey: key,
         name: line.name ?? '—',
+        sourceKind: line.sourceKind,
         kind: line.kind,
         packageSize: line.packageSize,
         priceWithVat: line.priceWithVat,

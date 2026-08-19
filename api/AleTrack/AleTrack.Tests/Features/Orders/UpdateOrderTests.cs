@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Orders.Commands.Update;
@@ -7,6 +8,7 @@ using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace AleTrack.Tests.Features.Orders;
@@ -67,7 +69,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         // Verify that the order entity was updated with correct values
@@ -120,7 +122,7 @@ public sealed class UpdateOrderTests
         var data = ContentOnlyDto(client.PublicId,
             [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 4 }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.State.Should().Be(OrderState.Planning, "the editor edits content, not the lifecycle");
@@ -154,7 +156,7 @@ public sealed class UpdateOrderTests
             ],
             notes: [new OrderNoteDto { Text = "Reklamace vyřízena." }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -182,7 +184,7 @@ public sealed class UpdateOrderTests
             state: OrderState.Cancelled,
             orderItems: [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.State.Should().Be(OrderState.Cancelled);
@@ -199,7 +201,7 @@ public sealed class UpdateOrderTests
             Data = OrderBuilder.BuildUpdateDto()
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -259,7 +261,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Client.Should().Be(newClient);
@@ -295,7 +297,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -342,7 +344,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -433,7 +435,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems[0].Quantity = 99;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -453,7 +455,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems.Clear();
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -473,7 +475,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.State = OrderState.Planning;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -499,7 +501,7 @@ public sealed class UpdateOrderTests
         data.Notes = [new OrderNoteDto { Text = "Klient si stěžoval na teplotu." }];
         data.RequiredDeliveryDate = new DateOnly(2026, 8, 1);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -525,7 +527,7 @@ public sealed class UpdateOrderTests
         data.State = OrderState.New;
         data.OrderItems[0].Quantity = 7;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -543,7 +545,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems[0].Quantity = 3;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object);
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);

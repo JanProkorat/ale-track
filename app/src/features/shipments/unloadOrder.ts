@@ -8,8 +8,11 @@
 // Kept out of ShipmentDetail (already ~1720 lines) so the ordering can be checked
 // without a rendering harness, same as nakladkaGrouping.ts.
 
-import type { OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto } from 'src/generated/api-client';
-import { stopKindName } from 'src/lib/labels';
+import type {
+  OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto, OutgoingShipmentSupplierGoodDto,
+  ProductKind,
+} from 'src/generated/api-client';
+import { kindLabel, stopKindName } from 'src/lib/labels';
 import { fmtLiters } from 'src/lib/format';
 import { resolveDetailStopAddress } from './stopAddress';
 
@@ -17,6 +20,8 @@ import { resolveDetailStopAddress } from './stopAddress';
  * purchases both extend `OutgoingShipmentProductDto`, which has all of this. */
 interface ChippableProduct {
   name?: string;
+  /** Either wire shape: the numeric member (demo) or its name (real). */
+  kind?: ProductKind | string | number;
   platoDegree?: number;
   packageSize?: number;
   quantity?: number;
@@ -41,9 +46,25 @@ export function platoSizeChipText(platoDegree: number | undefined, packageSize: 
 /** One product to take off the van at a stop. */
 export interface UnloadLine {
   name: string;
-  /** Degree and package size, as on the loading list. */
+  /** What kind of thing it is, then how big and how strong. See {@link unloadChipText}. */
   chip: string;
   quantity: number;
+}
+
+/**
+ * The unload list's chip: kind first, then package size, then degree — 'Sud · 50 l · 12°'.
+ *
+ * Kind leads because it is what the driver is looking for: the same beer appears once per
+ * package it is sold in, and three lines reading 'Svijanský Kníže' are told apart by the sud
+ * and the basa, not by the degree they share. The loading list's own chip
+ * ({@link platoSizeChipText}) stays as it is — there the section heading already says the kind.
+ */
+export function unloadChipText(product: ChippableProduct): string {
+  return [
+    kindLabel(product.kind),
+    product.packageSize != null ? fmtLiters(product.packageSize) : '',
+    product.platoDegree != null ? `${product.platoDegree}°` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 /** One stop on the driver's run. */
@@ -53,17 +74,42 @@ export interface UnloadStop {
   kind: 'order' | 'custom' | 'company';
   /** Client name, custom label, or the company name. */
   title: string;
-  /** Resolved address line, when the stop has one. */
+  /** Resolved address line, when the stop has one. Without the address-kind tail: which of the
+   *  client's addresses it is only matters where it can be changed, and that is the editor. */
   subtitle?: string;
   note?: string;
+  /** The order behind a delivery stop, so the row can open it. */
+  orderId?: string;
+  /** Colour key for the numbered circle; only delivery stops are coloured per client. */
+  clientId?: string;
   lines: UnloadLine[];
+  /** Pieces coming off here, all lines together — the number to count the handover against. */
+  totalQuantity: number;
 }
 
 function lineFrom(product: ChippableProduct): UnloadLine {
   return {
     name: product.name ?? '—',
-    chip: platoSizeChipText(product.platoDegree, product.packageSize),
+    chip: unloadChipText(product),
     quantity: product.quantity ?? 0,
+  };
+}
+
+/**
+ * One supplier good handed over at its order's stop.
+ *
+ * The whole quantity, whichever way it was collected: the split between the garage and the
+ * supplier decides where the van picks the pieces up, never how many the client gets.
+ *
+ * Named as supplier goods in the chip, because that is what tells a CO₂ bottle apart from the
+ * beer around it — it has no kind, and its `size` is a free-text string ('10 kg') rather than
+ * the volume the beer lines carry, so it is appended as it stands.
+ */
+function supplierLineFrom(good: OutgoingShipmentSupplierGoodDto): UnloadLine {
+  return {
+    name: good.name ?? '—',
+    chip: ['Zboží dodavatele', good.size].filter(Boolean).join(' · '),
+    quantity: good.quantity ?? 0,
   };
 }
 
@@ -76,11 +122,16 @@ function lineFrom(product: ChippableProduct): UnloadLine {
  * the server), and Custom unloads nothing at all, only a note. Everything else is
  * an order stop, whose lines come straight off `stop.products` — already populated
  * from the live order while the run is still being planned, not only after loading.
+ *
+ * Supplier stops never reach here: {@link unloadOrder} drops them, so they must not be
+ * fed to this function directly either — the order branch would title one from a
+ * `clientName` it has never had.
  */
 function shapeStop(
   stop: OutgoingShipmentStopDto,
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
-): Omit<UnloadStop, 'seq'> {
+  supplierGoods: OutgoingShipmentSupplierGoodDto[],
+): Omit<UnloadStop, 'seq' | 'totalQuantity'> {
   const kind = stopKindName(stop.kind);
 
   if (kind === 'Company') {
@@ -103,25 +154,52 @@ function shapeStop(
   return {
     kind: 'order',
     title: stop.clientName ?? '—',
-    subtitle: resolveDetailStopAddress(stop).text,
-    lines: (stop.products ?? []).map(lineFrom),
+    subtitle: resolveDetailStopAddress(stop).addressText,
+    orderId: stop.orderId,
+    clientId: stop.clientId,
+    // The order's beer, then the supplier goods bought alongside it. Those are carried on the
+    // run rather than on the stop, so they are matched back to it by order — a stop with no
+    // order (a run may not have reconciled one yet) matches nothing rather than everything.
+    lines: [
+      ...(stop.products ?? []).map(lineFrom),
+      ...(stop.orderId != null
+        ? supplierGoods.filter((g) => g.orderId === stop.orderId).map(supplierLineFrom)
+        : []),
+    ],
   };
 }
 
 /**
- * Shapes a shipment's stops into the driver's unload order: route order, renumbered
- * 1..N, each stop carrying only what comes off there.
+ * Shapes a shipment's stops into the driver's unload order: route order, numbered
+ * from 1, each stop carrying only what comes off there.
  *
- * The start point is deliberately not among these — nothing is unloaded there, and
- * giving it a `seq` would put it in the driver's count. The caller (Task 11's
+ * Two kinds of stop are left out, both because the van calls there to *collect*: every
+ * supplier stop, and the warehouse when nothing is bought for stock — a run that only
+ * fetches garage-sourced supplier goods gets that stop too, and it unloads nothing (the
+ * goods themselves come off at the client's stop, which is where they are listed).
+ * A custom stop with no lines does stay: its note is the reason the driver is there.
+ *
+ * Both are numbered before being dropped, so the numbers here stay the numbers on the
+ * map pins and in Přehled zastávek (see stopOverview.ts) — the list skips a position
+ * rather than renaming every stop after it.
+ *
+ * The start point is deliberately not among these either — nothing is unloaded there,
+ * and giving it a `seq` would put it in the driver's count. The caller (Task 11's
  * component) takes it as a separate prop.
  */
 export function unloadOrder(
   stops: OutgoingShipmentStopDto[],
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
+  supplierGoods: OutgoingShipmentSupplierGoodDto[],
 ): UnloadStop[] {
   return stops
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((stop, index) => ({ ...shapeStop(stop, stockPurchases), seq: index + 1 }));
+    .map((stop, index) => ({ stop, seq: index + 1 }))
+    .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
+    .map(({ stop, seq }) => {
+      const shaped = shapeStop(stop, stockPurchases, supplierGoods);
+      return { ...shaped, seq, totalQuantity: shaped.lines.reduce((sum, l) => sum + l.quantity, 0) };
+    })
+    .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);
 }

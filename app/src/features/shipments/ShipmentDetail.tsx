@@ -1,4 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Backdrop,
   Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
@@ -22,6 +25,10 @@ import UndoIcon from '@mui/icons-material/UndoOutlined';
 import BlockIcon from '@mui/icons-material/BlockOutlined';
 import ReplayIcon from '@mui/icons-material/ReplayOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
+import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ArrowUpIcon from '@mui/icons-material/KeyboardArrowUpOutlined';
+import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
@@ -36,7 +43,8 @@ import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format'
 import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
   type OutgoingShipmentDetailDto,
-  type OutgoingShipmentStopDto,
+  OutgoingShipmentStopDto,
+  type OutgoingShipmentSupplierGoodDto,
   type OutgoingShipmentOrderItemDto,
   type OutgoingShipmentStockPurchaseItemDto,
   type ProductKind,
@@ -46,7 +54,8 @@ import {
 } from 'src/generated/api-client';
 import {
   useSetPreparationStep, useExportShipment, useShipmentStartPoints,
-  useSetShipmentState, useSetOrderItemSourcing, useSetStockPurchase,
+  useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
+  useReorderShipmentStops,
   type ShipmentExportFormat,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
@@ -67,10 +76,16 @@ import {
 import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
 import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
+import { StopAvatar } from './StopAvatar';
 import { routeEndpointFrom } from './startPointOption';
 import { overdrawnStock } from './nakladkaSourcing';
 import { stateChangeProgress, type StateChangeProgress } from './shipmentStateProgress';
 import { resolveDetailStopAddress } from './stopAddress';
+import {
+  aggregateSupplierGoods, nextSourcingWrite, type SupplierGoodRow,
+} from './supplierGoodSourcing';
+import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from './stopOverview';
+import { predictPickupStops, withSplitApplied } from './pickupStopPrediction';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -331,7 +346,7 @@ function breakdownSlots(
   ];
 }
 
-/** One aggregated product line on "Celková nakládka": what the product is, how many
+/** One aggregated product line on the nakládka: what the product is, how many
  * pieces and where they come from, then one group per brewery invoice carrying the
  * pieces on it and how far they have got through loading. Invoicing the client is not
  * this card's concern; it lives in the Fakturace section. */
@@ -566,7 +581,7 @@ function tableFloorWidth(columnCount: number): number {
 }
 
 /**
- * "Celková nakládka" — the loading list: one row per distinct product, sectioned by
+ * The nakládka view of "Rozpis zboží" — the loading list: one row per distinct product, sectioned by
  * brewery and then by kind, with the loading state living inside each brewery-invoice
  * column group.
  *
@@ -777,57 +792,48 @@ function AggLoadingTable({
   }
 }
 
-function ProductLine({ row }: { row: NakladkaRow }) {
-  const chipText = kindSizeChipText(row.kind, row.packageSize);
-  return (
-    <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ py: 0.75, px: 2.5, borderTop: 1, borderColor: 'divider' }}>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: 12.5 }} noWrap>{row.name}</Typography>
-        {chipText && <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600, mt: 0.25 }} />}
-        {/* The instruction the loader needs; owned and edited by the order. */}
-        {row.note && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{row.note}</Typography>
-        )}
-      </Box>
-      <Typography sx={{ fontWeight: 700, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{row.quantity} ks</Typography>
-    </Stack>
-  );
-}
-
-/** One expandable line in the orders overview: a collapsed header (avatar +
- * title, optionally a place chip beside it, plus a destination address line)
- * that reveals its product list on click. The item count that used to be the
- * sole subtitle moved to a trailing badge — see {@link OrdersOverviewCard} —
- * to make room for the destination address without losing it. */
-function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, onOpen }: {
+/** One line in the stops overview: avatar + client name, optionally a place chip
+ * beside it, and the destination address below.
+ *
+ * Flat, not expandable: what is on the truck for this stop is the nakládka's job, and
+ * repeating it here behind a chevron gave two places to read the same numbers from.
+ * The row's only action is opening its order. */
+function OverviewRow({ avatar, title, chip, addressLine, onOpen, reorder }: {
   avatar: ReactNode;
   title: string;
   /** Place chip rendered beside the title — only for a stop delivering to a
    *  client's saved place (see `DeliveryAddressKind.DeliveryPlace`). */
   chip?: ReactNode;
   /** The destination line below the title: the place's formatted address, or
-   *  the `address · kind` line for the two standard address kinds. Omitted
-   *  for the dokládka pseudo-row, which has no destination of its own. */
+   *  the `address · kind` line for the two standard address kinds. */
   addressLine?: string;
-  rows: NakladkaRow[];
-  open: boolean;
-  onToggle: () => void;
   /** Opens the row's source order — makes the client name a link. Omitted for
-   *  rows with no order behind them (the dokládka pseudo-row) and for users who
-   *  cannot see the Objednávky module, who then get the plain name back. */
+   *  users who cannot see the Objednávky module, who then get the plain name back. */
   onOpen?: () => void;
+  /** Reorder controls, present only while the route can still be resequenced. */
+  reorder?: {
+    /** Rendered by the sortable wrapper — the grab area. */
+    handle?: ReactNode;
+    onMove: (delta: number) => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
+  };
 }) {
   return (
     <Box data-testid="overview-row" sx={{ borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 'none' } }}>
-      {/* The header expands the row, but it is a plain Box rather than a
-          ButtonBase: the client name inside it is its own control, and a
-          button (or link) nested in a button is invalid markup. Keyboard users
-          reach the expander through the chevron's IconButton; the surrounding
-          click target is a mouse convenience on top of it. */}
+      {/* A plain Box rather than a ButtonBase even now that opening the order is the
+          only action: the client name inside it is its own control, and a button
+          nested in a button is invalid markup. The name carries the keyboard path;
+          the surrounding click target is a mouse convenience on top of it. */}
       <Box
-        onClick={onToggle}
-        sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+        onClick={onOpen}
+        sx={{
+          px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
+          cursor: onOpen ? 'pointer' : 'default',
+          '&:hover': onOpen ? { bgcolor: 'action.hover' } : undefined,
+        }}
       >
+        {reorder?.handle}
         {avatar}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -850,108 +856,193 @@ function OverviewRow({ avatar, title, chip, addressLine, rows, open, onToggle, o
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{addressLine}</Typography>
           )}
         </Box>
-        <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: 'text.disabled', flexShrink: 0 }}>
-          {rows.length} {plural(rows.length, 'položka', 'položky', 'položek')}
-        </Typography>
-        <IconButton
-          size="small"
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          aria-label={`${open ? 'Sbalit' : 'Rozbalit'} ${title}`}
-          sx={{ flexShrink: 0 }}
-        >
-          <ExpandMoreIcon sx={{ color: 'text.secondary', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
-        </IconButton>
+        {/* Stacked arrows beside the drag handle: a drag is quicker across several places, a
+            click is surer for one — and the only option on a touch screen where the pane
+            itself scrolls. `stopPropagation` so nudging a row does not also open its order. */}
+        {reorder && (
+          <Stack sx={{ flexShrink: 0 }}>
+            <IconButton
+              size="small"
+              disabled={!reorder.canMoveUp}
+              onClick={(e) => { e.stopPropagation(); reorder.onMove(-1); }}
+              aria-label={`Posunout výše — ${title}`}
+              sx={{ width: 22, height: 18, borderRadius: 1 }}
+            >
+              <ArrowUpIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+            <IconButton
+              size="small"
+              disabled={!reorder.canMoveDown}
+              onClick={(e) => { e.stopPropagation(); reorder.onMove(1); }}
+              aria-label={`Posunout níže — ${title}`}
+              sx={{ width: 22, height: 18, borderRadius: 1 }}
+            >
+              <ArrowDownIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+          </Stack>
+        )}
       </Box>
-      <Collapse in={open} unmountOnExit>
-        <Box sx={{ pb: 0.75 }}>
-          {rows.length > 0
-            ? rows.map((r) => <ProductLine key={r.key} row={r} />)
-            : <Typography color="text.secondary" sx={{ fontSize: 12, px: 2.5, py: 1 }}>Žádné položky.</Typography>}
-        </Box>
-      </Collapse>
     </Box>
   );
 }
 
-/** "Přehled objednávek" card — a collapsible list of the shipment's orders (one
- * row per client, expandable to its products), plus a stock-purchase row listing all
- * stock extras when present. Read-only; the loading workflow lives elsewhere. */
-function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
-  stops: OutgoingShipmentStopDto[];
-  extraRows: NakladkaRow[];
-  onOpenOrder?: (orderId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggle = (key: string) => setExpanded((prev) => {
-    const n = new Set(prev);
-    if (n.has(key)) n.delete(key); else n.add(key);
-    return n;
-  });
+/**
+ * One sortable row of the stop list: supplies the drag handle and the transform dnd-kit applies
+ * while it is being dragged.
+ *
+ * A wrapper rather than sortable logic inside OverviewRow, so the row itself stays a plain
+ * presentational component and the non-reorderable case pulls in no drag machinery at all.
+ */
+function SortableStopRow({ id, children }: { id: string; children: (handle: ReactNode) => ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
-  const numberAvatar = (color: string, n: number): ReactNode => (
-    <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0, bgcolor: color }}>{n}</Box>
+  const handle = (
+    <Box
+      {...attributes}
+      {...listeners}
+      aria-label="Přetáhnout zastávku"
+      sx={{
+        display: 'flex', flexShrink: 0, cursor: 'grab', color: 'text.disabled',
+        // Without this the browser's own touch scrolling wins and the drag never starts —
+        // which matters here because the pane the row sits in scrolls too.
+        touchAction: 'none',
+      }}
+    >
+      <DragIndicatorIcon sx={{ fontSize: 17 }} />
+    </Box>
   );
 
   return (
-    <Card sx={{ overflow: 'hidden' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+    <Box
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      sx={{ opacity: isDragging ? 0.6 : 1, bgcolor: isDragging ? 'action.hover' : undefined }}
+    >
+      {children(handle)}
+    </Box>
+  );
+}
+
+/** "Přehled zastávek" card — a flat list of the shipment's stops in route order, one
+ * row per stop in route order — client deliveries, supplier pickups, the warehouse and custom
+ * waypoints alike. Read-only; what is loaded at each stop belongs to the nakládka.
+ *
+ * Every kind, not just the orders: the number beside a row is the number on its map pin, and
+ * those are numbered over the whole route. Listing only order stops made the list and the map
+ * disagree about which stop was "3" as soon as the run gained a warehouse or pickup stop.
+ *
+ * Lives in the route map, folded away behind the trip stats' chevron — the route is
+ * what the map is looked at for, and the stop list is the follow-up question. */
+function OrdersOverviewCard({ stops, onOpenOrder, reorderable, onReorder }: {
+  stops: OutgoingShipmentStopDto[];
+  onOpenOrder?: (orderId: string) => void;
+  /** Whether the route may still be resequenced — content is only editable while planned. */
+  reorderable?: boolean;
+  /** Hands over the full new sequence, as stop ids. */
+  onReorder?: (stopIds: string[]) => void;
+}) {
+  const entries = stopOverviewEntries(stops);
+
+  // A pointer has to travel a few pixels before a drag begins, so a click on the arrow buttons
+  // or the client-name link inside a draggable row still reads as a click.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const move = (key: string, delta: number) => {
+    const ids = reorderedStopIds(entries, key, { delta });
+    if (ids) onReorder?.(ids);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const overKey = event.over?.id;
+    if (!overKey) return;
+    const ids = reorderedStopIds(entries, String(event.active.id), { dropOn: String(overKey) });
+    if (ids) onReorder?.(ids);
+  };
+
+  // Only when every stop carries its own id: the endpoint wants the run's whole sequence, so a
+  // list with a hole in it would be rejected — better to show no controls than a broken one.
+  const canReorder = Boolean(reorderable && onReorder)
+    && entries.length > 1
+    && entries.every((e) => e.stopId);
+
+  // A column whose header is outside the scrollport and whose list is inside it: the heading
+  // and the count stay put while the stops scroll under them. Sticky positioning would not do
+  // it — the Card clips, so a sticky header would have nothing to stick to.
+  return (
+    <Card sx={{ overflow: 'clip', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{ flex: '0 0 auto', px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}
+      >
         <ReceiptLongOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled objednávek</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Přehled zastávek</Typography>
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled' }}>
-          {stops.length} {plural(stops.length, 'objednávka', 'objednávky', 'objednávek')}
+          {entries.length} {plural(entries.length, 'zastávka', 'zastávky', 'zastávek')}
         </Typography>
       </Stack>
-      {stops.length > 0 || extraRows.length > 0 ? (
-        <Box>
-          {stops.map((stop, i) => {
-            const key = stop.orderId ?? `stop-${i}`;
-            // The chip carries the place name; the address line below never
-            // repeats it (formatPlaceAddress only formats the address part).
-            // `resolveDetailStopAddress` is the single place that normalizes
-            // the wire's string-enum `selectedAddressKind` — deriving `isPlace`
-            // separately here previously compared the raw field directly and
-            // was always false against real API data.
-            const detailAddress = resolveDetailStopAddress(stop);
-            const isPlace = detailAddress.isPlace && stop.deliveryPlace != null;
-            return (
+      {entries.length > 0 ? (
+        <Box
+          data-testid="stops-overview-body"
+          sx={{
+            flex: '1 1 auto',
+            minHeight: 0,
+            // contain, so reaching the last stop does not chain the scroll on to the document —
+            // the nested-pane trap app/CLAUDE.md warns about.
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          {(() => {
+            const row = (entry: StopOverviewEntry, i: number, handle?: ReactNode) => (
               <OverviewRow
-                key={key}
-                avatar={numberAvatar(colorForClient(stop.clientId ?? ''), i + 1)}
-                title={stop.clientName ?? '—'}
-                chip={isPlace ? (
+                avatar={<StopAvatar kind={entry.kind} seq={entry.seq} clientId={entry.clientId} />}
+                title={entry.title}
+                chip={entry.placeName ? (
                   <Chip
                     size="small"
                     variant="outlined"
                     icon={<PlaceOutlinedIcon sx={{ fontSize: '13px !important' }} />}
-                    label={stop.deliveryPlace!.name ?? '—'}
+                    label={entry.placeName}
                     sx={{ height: 19, fontSize: 10.5, fontWeight: 700, color: 'info.main', borderColor: 'info.main', '& .MuiChip-icon': { color: 'info.main' } }}
                   />
                 ) : undefined}
-                addressLine={detailAddress.text}
-                rows={(stop.products ?? []).map(productRowFrom)}
-                open={expanded.has(key)}
-                onToggle={() => toggle(key)}
-                onOpen={onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined}
+                // Address only, no "· Fakturační" tail: which of the client's addresses it is
+                // only matters where it can be changed, and that is the editor.
+                addressLine={entry.addressLine ?? entry.note}
+                onOpen={onOpenOrder && entry.orderId ? () => onOpenOrder(entry.orderId!) : undefined}
+                reorder={canReorder
+                  ? {
+                    handle,
+                    onMove: (delta) => move(entry.key, delta),
+                    canMoveUp: i > 0,
+                    canMoveDown: i < entries.length - 1,
+                  }
+                  : undefined}
               />
             );
-          })}
-          {extraRows.length > 0 && (
-            <OverviewRow
-              avatar={
-                <Box sx={{ width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: '#1A2B4C', color: '#fff', '& svg': { fontSize: 15 } }}>
-                  <WarehouseOutlinedIcon />
-                </Box>
-              }
-              title="Zboží na sklad"
-              rows={extraRows}
-              open={expanded.has('stockPurchase')}
-              onToggle={() => toggle('stockPurchase')}
-            />
-          )}
+
+            if (!canReorder) {
+              return entries.map((entry, i) => <Box key={entry.key}>{row(entry, i)}</Box>);
+            }
+
+            return (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={entries.map((e) => e.key)} strategy={verticalListSortingStrategy}>
+                  {entries.map((entry, i) => (
+                    <SortableStopRow key={entry.key} id={entry.key}>
+                      {(handle) => row(entry, i, handle)}
+                    </SortableStopRow>
+                  ))}
+                </SortableContext>
+              </DndContext>
+            );
+          })()}
         </Box>
       ) : (
-        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné objednávky.</Typography>
+        <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>Žádné zastávky.</Typography>
       )}
     </Card>
   );
@@ -961,22 +1052,30 @@ function OrdersOverviewCard({ stops, extraRows, onOpenOrder }: {
  * What the van exchanges with the garage: one card for the pieces coming off it,
  * one for the pieces going onto it.
  *
- * Both are read-only views of the nakládka's own numbers ("Do garáže" and
- * "Z garáže") — the counts are edited there. They exist as their own cards because
- * they are worked at a different moment than the loading list: at the garage door,
- * not at the brewery's pallet.
+ * Both are read-only views of numbers edited elsewhere — the nakládka's "Do garáže" and
+ * "Z garáže" columns, and (for "Doložit") the Další zboží card's own split. They exist as their
+ * own cards because they are worked at a different moment than the loading list: at the garage
+ * door, not at the brewery's pallet.
  */
 export function GarageCard({
-  title, icon, rows, quantityOf, emptyText,
+  title, icon, rows, quantityOf, emptyText, extraRows = [],
 }: {
   title: string;
   icon: ReactNode;
   rows: AggRow[];
   quantityOf: (row: AggRow) => number;
   emptyText: string;
+  /**
+   * Lines that are not brewery products — supplier goods sourced from the garage. Passed
+   * already shaped rather than as another AggRow, because they have no brewery, kind or
+   * package size, and inventing empty ones would put blank chips on the row.
+   */
+  extraRows?: { key: string; name: string; chipText?: string; quantity: number }[];
 }) {
   const listed = rows.filter((row) => quantityOf(row) > 0);
-  const total = listed.reduce((sum, row) => sum + quantityOf(row), 0);
+  const extras = extraRows.filter((row) => row.quantity > 0);
+  const total = listed.reduce((sum, row) => sum + quantityOf(row), 0)
+    + extras.reduce((sum, row) => sum + row.quantity, 0);
 
   return (
     <Card sx={{ overflow: 'hidden' }}>
@@ -984,13 +1083,13 @@ export function GarageCard({
         {icon}
         <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{title}</Typography>
         <Box sx={{ flex: 1 }} />
-        {listed.length > 0 && (
+        {(listed.length > 0 || extras.length > 0) && (
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
             {total} ks
           </Typography>
         )}
       </Stack>
-      {listed.length === 0 ? (
+      {listed.length === 0 && extras.length === 0 ? (
         <Typography color="text.secondary" sx={{ fontSize: 13, px: 2.5, py: 2 }}>{emptyText}</Typography>
       ) : (
         <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
@@ -1008,8 +1107,156 @@ export function GarageCard({
               </Stack>
             );
           })}
+          {extras.map((row) => (
+            <Stack key={row.key} direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 13.5 }} noWrap>{row.name}</Typography>
+                {row.chipText && <Chip size="small" label={row.chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
+              </Stack>
+              <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                {row.quantity} ks
+              </Typography>
+            </Stack>
+          ))}
         </Stack>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Supplier goods the run has to bring — gas, packaging, sanitation — one row per good with the
+ * total across every order that asked for it, and a stepper splitting that total between our
+ * own garage and a call at the supplier.
+ *
+ * Not read-only, unlike the two garage cards, because this split is a decision made here: the
+ * good's own pickup source only seeds it. Each click writes one underlying order line (see
+ * {@link nextSourcingWrite}) and the server re-derives the route from the result, which is what
+ * makes a stop appear or vanish as the last piece moves either way.
+ *
+ * No supplier or client column: those tell you where a piece came from and who it is for, and
+ * this card answers a different question — what has to be picked up, and from where.
+ */
+export function SupplierGoodsCard({ rows, editable, onAdjust }: {
+  /** Already aggregated by the page, which also feeds the garage side of these rows to
+   *  "Doložit" — one aggregation, so the two cards cannot report different totals. */
+  rows: SupplierGoodRow[];
+  /** Whether the split can still be changed — the run's loading has to be open. */
+  editable?: boolean;
+  /** Moves one piece of a row between the garage and the supplier. */
+  onAdjust?: (row: SupplierGoodRow, delta: number) => void;
+}) {
+  if (rows.length === 0) return null;
+
+  const total = rows.reduce((sum, r) => sum + r.quantity, 0);
+  const fromGarage = rows.reduce((sum, r) => sum + r.fromGarage, 0);
+
+  return (
+    <Card sx={{ overflow: 'hidden' }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+        <PropaneOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Další zboží</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+          {total} ks
+        </Typography>
+      </Stack>
+
+      {/* The two columns the stepper moves pieces between, named once at the top rather than on
+          every row. */}
+      <Stack
+        direction="row"
+        sx={{
+          px: 2.5, py: 0.75, borderBottom: 1, borderColor: 'divider',
+          bgcolor: 'action.hover',
+          '& > *': { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.3, color: 'text.secondary', textTransform: 'uppercase' },
+        }}
+      >
+        <Box sx={{ flex: 1 }}>Zboží</Box>
+        <Box sx={{ width: 104, textAlign: 'center' }}>Z garáže</Box>
+        <Box sx={{ width: 74, textAlign: 'right' }}>Od dodav.</Box>
+      </Stack>
+
+      <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
+        {rows.map((row) => {
+          const fromSupplier = row.quantity - row.fromGarage;
+          const overdrawn = row.garageAvailable != null && row.fromGarage > row.garageAvailable;
+          return (
+            <Stack key={row.key} data-testid="supplier-good-row" direction="row" alignItems="center" sx={{ px: 2.5, py: 1.25 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 600 }} noWrap>{row.name}</Typography>
+                  {row.size && <Chip size="small" label={row.size} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />}
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  {row.quantity} ks celkem
+                </Typography>
+                {/* Drawing more than the garage holds is allowed — a dovoz may still land before
+                    the truck is packed — so this warns rather than blocks, like the nakládka. */}
+                {overdrawn && (
+                  <Typography variant="caption" sx={{ display: 'block', color: 'warning.dark', fontWeight: 700 }}>
+                    Na skladě jen {row.garageAvailable} ks
+                  </Typography>
+                )}
+              </Box>
+
+              {/* minus · number · plus, so the number of every row sits in one column whether or
+                  not its buttons are shown. */}
+              <Stack direction="row" alignItems="center" spacing={0.25} sx={{ width: 104, justifyContent: 'center' }}>
+                {editable ? (
+                  <IconButton
+                    size="small"
+                    disabled={row.fromGarage <= 0}
+                    onClick={() => onAdjust?.(row, -1)}
+                    aria-label={`Ubrat z garáže — ${row.name}`}
+                    sx={{ width: 24, height: 24, color: 'info.main' }}
+                  >
+                    <RemoveIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                ) : <Box sx={{ width: 24 }} />}
+                <Typography sx={{
+                  minWidth: 26, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                  color: row.fromGarage > 0 ? (overdrawn ? 'warning.dark' : 'info.main') : 'text.disabled',
+                }}
+                >
+                  {row.fromGarage}
+                </Typography>
+                {editable ? (
+                  <IconButton
+                    size="small"
+                    disabled={row.fromGarage >= row.quantity}
+                    onClick={() => onAdjust?.(row, 1)}
+                    aria-label={`Přidat z garáže — ${row.name}`}
+                    sx={{ width: 24, height: 24, color: 'info.main' }}
+                  >
+                    <AddIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                ) : <Box sx={{ width: 24 }} />}
+              </Stack>
+
+              {/* Derived, never edited: the two always add up to the ordered quantity, so one
+                  stepper is the whole control. */}
+              <Typography sx={{
+                width: 74, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                color: fromSupplier > 0 ? 'text.primary' : 'text.disabled',
+              }}
+              >
+                {fromSupplier} ks
+              </Typography>
+            </Stack>
+          );
+        })}
+      </Stack>
+
+      <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.25, borderTop: 1, borderColor: 'divider' }}>
+        <Typography sx={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'text.secondary' }}>Celkem</Typography>
+        <Typography sx={{ width: 104, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: fromGarage > 0 ? 'info.main' : 'text.disabled' }}>
+          {fromGarage}
+        </Typography>
+        <Typography sx={{ width: 74, textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+          {total - fromGarage} ks
+        </Typography>
+      </Stack>
     </Card>
   );
 }
@@ -1095,6 +1342,8 @@ export function ShipmentDetail({
   const setPreparationStep = useSetPreparationStep(shipment.id);
   const setShipmentState = useSetShipmentState(shipment.id);
   const setOrderItemSourcing = useSetOrderItemSourcing(shipment.id);
+  const setSupplierGoodSourcing = useSetSupplierGoodSourcing(shipment.id);
+  const reorderShipmentStops = useReorderShipmentStops(shipment.id);
   const setStockPurchase = useSetStockPurchase(shipment.id);
   const exportShipment = useExportShipment();
 
@@ -1112,24 +1361,56 @@ export function ShipmentDetail({
 
   const nakladkaEditable = editable && !['Delivered', 'Cancelled'].includes(shipStateName(shipment.state) ?? '');
 
-  const stopsSorted = useMemo(
-    () => (shipment.stops ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [shipment.stops],
-  );
+  // The sequence a reorder is asking for, held until the write settles.
+  //
+  // The query cache is patched optimistically too, but that is not enough on its own: a cache
+  // write lands in a later commit than the drop, and dnd-kit animates the dragged row back to
+  // where it started unless the list order changes in the *same* render. That snap-back is the
+  // flicker. Holding the order here makes the move synchronous with the drop, and it also keeps
+  // the arrow buttons instant.
+  //
+  // Cleared on settle rather than on success: by then the cache holds the truth either way —
+  // the new order if the write took, the old one if it was rejected and rolled back.
+  const [pendingStopOrder, setPendingStopOrder] = useState<string[] | null>(null);
+
+  // The stops a pending sourcing write will leave behind, for the same reason: a supplier stop
+  // stops being needed the moment the last piece moves into the garage, and waiting for the run
+  // to be re-read to learn that leaves the list showing a stop nobody is driving to. Predicted
+  // by the mirror of the server's own two reconcilers — see pickupStopPrediction.
+  const [pendingStops, setPendingStops] = useState<OutgoingShipmentStopDto[] | null>(null);
+
+  const stopsSorted = useMemo(() => {
+    const stops = (pendingStops ?? shipment.stops ?? []).slice();
+
+    if (pendingStopOrder) {
+      const position = new Map(pendingStopOrder.map((id, i) => [id, i]));
+      // Anything the pending sequence does not name sorts after it rather than to the front,
+      // so a stop that appeared meanwhile cannot jump the queue.
+      const rank = (stop: OutgoingShipmentStopDto) =>
+        (stop.id ? position.get(stop.id) : undefined) ?? Number.MAX_SAFE_INTEGER;
+      return stops.sort((a, b) => rank(a) - rank(b));
+    }
+
+    return stops.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [shipment.stops, pendingStops, pendingStopOrder]);
   // Mirrors AddressChangedBanner's own "anything to show" check, so the
   // wrapper placing it directly under the map can skip its top margin when
   // the banner will render nothing (it returns null with no addressChangedAt
   // stops) rather than leave a stray gap.
   const hasAddressChanges = stopsSorted.some((s) => s.addressChangedAt);
-  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st): RouteStop => {
+  // `seq` is the stop's position on the route, handed over so the pins carry the same numbers
+  // the stop list does — without it the map numbers only the stops it can locate, and an
+  // ungeocoded address shifts every number after it.
+  const routeStops: RouteStop[] = useMemo(() => stopsSorted.map((st, i): RouteStop => {
+    const seq = i + 1;
     if (st.orderId == null) {
-      return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom' };
+      return { lat: st.latitude, lng: st.longitude, label: st.label ?? 'Zastávka', color: '#1A2B4C', kind: 'custom', seq };
     }
     // Shared with the stop header below so a DeliveryPlace stop pins at the
     // place, not the billing address (the previous inline check here only
     // ever branched on Contact vs Official and silently ignored a place).
     const { lat, lng } = resolveDetailStopAddress(st);
-    return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order' };
+    return { lat, lng, label: st.clientName ?? '—', color: colorForClient(st.clientId ?? ''), kind: 'order', seq };
   }), [stopsSorted]);
 
   // The detail DTO already carries the shipment's own resolved start point, so
@@ -1140,6 +1421,12 @@ export function ShipmentDetail({
   // plotted at (0, 0).
   const company = (startPoints.data ?? []).find((p) => startPointKindName(p.kind) === 'Company');
   const companyEnd = routeEndpointFrom(company);
+  // The same entry, in the shape a predicted warehouse stop needs. Undefined while the
+  // start-points query is still pending, in which case a predicted stop is drawn without
+  // coordinates and gains them on the refetch.
+  const companyPoint = company
+    ? { name: company.name, latitude: company.latitude, longitude: company.longitude }
+    : undefined;
   // A brewery whose address was never geocoded is a legal start point, so the
   // shipment's own resolved coordinates may be absent — in which case there is
   // nothing to plot and the map falls back to the company (always configured
@@ -1180,6 +1467,20 @@ export function ShipmentDetail({
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
 
+  // One row per supplier good, summed across orders. Computed here rather than inside the card
+  // because "Doložit" lists the garage side of the very same rows — hoisting it means there is
+  // one aggregation feeding both, instead of two that could be given different input.
+  // The split a pending write is asking for, so the stepper's own number and the stop list it
+  // drives cannot briefly disagree about how many pieces come from the garage.
+  const [pendingSupplierGoods, setPendingSupplierGoods] = useState<OutgoingShipmentSupplierGoodDto[] | null>(null);
+
+  const supplierGoodRows = useMemo(
+    () => aggregateSupplierGoods(pendingSupplierGoods ?? shipment.supplierGoods ?? []),
+    [shipment.supplierGoods, pendingSupplierGoods],
+  );
+
+
+
   // Two brewery-invoice columns are always on screen; the second usually has no
   // invoice behind it until a number is typed into it, which the server then
   // materialises. Anything beyond two comes from "+ Faktura pivovaru".
@@ -1194,7 +1495,9 @@ export function ShipmentDetail({
 
   const invoiceColumns = useMemo(() => columnsOf(purchaseInvoices), [purchaseInvoices]);
   const filterOptions = useMemo<SegOption<string>[]>(() => [
-    { value: ALL_INVOICES, label: 'Vše' },
+    // 'Nakládka', not 'Vše': it names what the view is rather than how much of it there is,
+    // which is the only reading that pairs with 'Vykládka' beside it.
+    { value: ALL_INVOICES, label: 'Nakládka' },
     ...invoiceColumns.map((column) => ({ value: String(column.sequence), label: `F${column.sequence}` })),
     { value: UNLOAD_VIEW, label: 'Vykládka' },
   ], [invoiceColumns]);
@@ -1210,8 +1513,8 @@ export function ShipmentDetail({
   // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
   // without a rendering harness — this screen only shapes it into rows.
   const unloadStops = useMemo(
-    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? []),
-    [stopsSorted, shipment.stockPurchases],
+    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? [], shipment.supplierGoods ?? []),
+    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods],
   );
 
   const visibleRows = useMemo(
@@ -1224,13 +1527,8 @@ export function ShipmentDetail({
   // Footers total what is on screen; a filtered table whose sum counts hidden rows
   // is worse than no sum at all.
   const purchaseTotals = useMemo(() => columnTotals(visibleRows, purchaseInvoices), [visibleRows, purchaseInvoices]);
-  // Progress pills report the whole run; the table's own footers report what it shows.
-  // Counted per (row, column) pair: a product split across two invoices is loaded
-  // twice, once for each pallet read out.
-  const progress = useMemo(
-    () => loadingProgress(aggRows, purchaseInvoices, loadingStates),
-    [aggRows, purchaseInvoices, loadingStates],
-  );
+  // Per-column, over what the table shows. Counted per (row, column) pair: a product split
+  // across two invoices is loaded twice, once for each pallet read out.
   const columnProgress = useMemo(
     () => columnsOf(purchaseInvoices).map((column) =>
       loadingProgress(visibleRows, purchaseInvoices, loadingStates, column.sequence)),
@@ -1373,6 +1671,59 @@ export function ShipmentDetail({
       inventoryItemId: quantityFromInventory > 0 ? stockItem?.id ?? target.inventoryItemId : undefined,
     }, {
       onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
+    });
+  }
+
+  // Writes a new stop sequence. Optimistic in the cache, so the row moves under the cursor and
+  // the map's pins renumber with it rather than after a round trip.
+  function reorderStops(stopIds: string[]) {
+    setPendingStopOrder(stopIds);
+    reorderShipmentStops.mutate(stopIds, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Pořadí zastávek se nepodařilo uložit'), { variant: 'error' }),
+      onSettled: () => setPendingStopOrder(null),
+    });
+  }
+
+  // Move one piece of a supplier good between the garage and the supplier. The row is a sum
+  // across orders, so the write lands on one underlying line — see nextSourcingWrite for which.
+  // The server re-derives the run's pickup stops from the result, so this is also what makes a
+  // stop appear or disappear.
+  function adjustSupplierGoodSourcing(row: SupplierGoodRow, delta: number) {
+    const write = nextSourcingWrite(row, delta);
+    if (!write) {
+      enqueueSnackbar(
+        delta > 0 ? 'Všechny kusy už jsou z garáže.' : 'Žádné kusy nejsou z garáže.',
+        { variant: 'info' },
+      );
+      return;
+    }
+
+    // The split as it will be, and the route that follows from it. Both are applied before the
+    // request goes out and dropped when it settles, by which point the cache holds the truth
+    // either way — the server reconciles the stops itself and is the authority on them.
+    const nextGoods = withSplitApplied(
+      pendingSupplierGoods ?? shipment.supplierGoods ?? [],
+      write.itemId,
+      write.quantityFromGarage,
+    );
+    setPendingSupplierGoods(nextGoods);
+    setPendingStops(predictPickupStops({
+      stops: pendingStops ?? shipment.stops ?? [],
+      supplierGoods: nextGoods,
+      hasStockPurchases: (shipment.stockPurchases ?? []).length > 0,
+      company: companyPoint,
+    }));
+
+    const settled = () => {
+      setPendingSupplierGoods(null);
+      setPendingStops(null);
+    };
+
+    // Deliberately no stock cap: drawing more than the garage holds is allowed and warned
+    // about on the row, because a dovoz may still land before the truck is packed.
+    setSupplierGoodSourcing.mutate(write, {
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Zdroj kusů se nepodařilo uložit'), { variant: 'error' }),
+      onSettled: settled,
     });
   }
 
@@ -1546,6 +1897,23 @@ export function ShipmentDetail({
           viaPoints={(shipment.routeViaPoints ?? []).map((p) => ({ lat: p.latitude ?? 0, lng: p.longitude ?? 0 }))}
           height={360}
           navigable
+          // Veiled while a write the screen has predicted is still being confirmed. Both pending
+          // values are cleared once the refetch has landed, so this covers exactly the window in
+          // which the drawn route is catching up — including the road route, which re-resolves
+          // whenever the stops change and would otherwise blink back to a straight line.
+          busy={pendingStops !== null || pendingStopOrder !== null}
+          overlay={(
+            <OrdersOverviewCard
+              stops={stopsSorted}
+              onOpenOrder={onOpenOrder}
+              // Sequence is content, so it follows the same freeze as the stock purchases:
+              // editable only while the run is still being planned.
+              reorderable={stockPurchaseEditable}
+              onReorder={reorderStops}
+            />
+          )}
+          overlayShowLabel="Zobrazit zastávky"
+          overlayHideLabel="Skrýt zastávky"
         />
       ) : (
         // Same dashed placeholder ShipmentEditor draws while it has no locatable
@@ -1579,48 +1947,41 @@ export function ShipmentDetail({
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Celková nakládka</Typography>
-              <Box sx={{ flex: 1 }} />
-              {nakladkaEditable && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {stockPurchaseEditable && (
-                    <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
-                      sx={ghostBtnSx}>
-                      Zboží na sklad
-                    </Button>
-                  )}
-                  <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
-                    disabled={addPurchaseInvoice.isPending}
-                    onClick={() => addPurchaseInvoice.mutate(undefined, {
-                      onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo přidat'), { variant: 'error' }),
-                    })}
-                    sx={ghostBtnSx}>
-                    Faktura pivovaru
-                  </Button>
-                </Stack>
-              )}
+              <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Rozpis zboží</Typography>
             </Stack>
             {/* Tighter gutters on a phone: 2.5 each side plus the inner card's own
                 border spends ~45px of a 390px screen on nothing. */}
             <Box sx={{ px: { xs: 1.25, compact: 2.5 }, py: 2 }}>
               <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
-                <StatusPill
-                  tone={progress.total > 0 && progress.dictated === progress.total ? 'ok' : 'grey'}
-                  label={`Nadiktováno ${progress.dictated}/${progress.total}`}
-                />
-                <StatusPill
-                  tone={progress.total > 0 && progress.checked === progress.total ? 'ok' : 'grey'}
-                  label={`Zkontrolováno ${progress.checked}/${progress.total}`}
-                />
-                <Box sx={{ flex: 1 }} />
                 {/* A one-option toggle is worse than none, so it goes entirely rather
                     than rendering a lone Vykládka button. */}
                 {canSeeLoadingBreakdown && (
                   <SegControl value={activeFilter} onChange={setInvoiceFilter} options={filterOptions} />
                 )}
+                <Box sx={{ flex: 1 }} />
+                {/* Beside the views rather than up in the card's head, because both act on the
+                    nakládka alone — hidden under Vykládka, where neither has anything to add. */}
+                {nakladkaEditable && activeFilter !== UNLOAD_VIEW && (
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {stockPurchaseEditable && (
+                      <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />} onClick={openStockPurchase}
+                        sx={ghostBtnSx}>
+                        Zboží na sklad
+                      </Button>
+                    )}
+                    <Button size="small" variant="outlined" startIcon={<AddIcon fontSize="small" />}
+                      disabled={addPurchaseInvoice.isPending}
+                      onClick={() => addPurchaseInvoice.mutate(undefined, {
+                        onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Fakturu se nepodařilo přidat'), { variant: 'error' }),
+                      })}
+                      sx={ghostBtnSx}>
+                      Faktura pivovaru
+                    </Button>
+                  </Stack>
+                )}
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
-                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} />
+                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
               ) : (
                 <AggLoadingTable
                   sections={sections}
@@ -1793,6 +2154,15 @@ export function ShipmentDetail({
             </Card>
           </Box>
 
+          {/* Directly under "kdo a čím": these are collected before or on the way round,
+              so they are read before the garage exchange further down. Renders nothing when
+              no order on the run asks for any. */}
+          <SupplierGoodsCard
+            rows={supplierGoodRows}
+            editable={nakladkaEditable}
+            onAdjust={adjustSupplierGoodSourcing}
+          />
+
           {/* Deliberately the whole loading list, not the invoice-filtered view: what
               the garage gives and takes has nothing to do with which brewery invoice
               the goods are billed on. */}
@@ -1810,12 +2180,14 @@ export function ShipmentDetail({
             rows={aggRows}
             quantityOf={(row) => row.fromInventory}
             emptyText="Nic se z garáže nenakládá."
-          />
-
-          <OrdersOverviewCard
-            stops={stopsSorted.filter((st) => st.orderId != null)}
-            extraRows={extraRows}
-            onOpenOrder={onOpenOrder}
+            // Supplier goods whose pieces were sourced from the garage come off the same shelf
+            // as the inventory-sourced beer, so the loader reads them off the same card.
+            extraRows={supplierGoodRows.map((row) => ({
+              key: row.key,
+              name: row.name,
+              chipText: row.size,
+              quantity: row.fromGarage,
+            }))}
           />
 
           <ReturnsCard stops={stopsSorted} />

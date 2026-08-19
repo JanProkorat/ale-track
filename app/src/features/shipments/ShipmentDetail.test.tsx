@@ -1,9 +1,10 @@
-// What ShipmentDetail decides about the stop header on "Přehled objednávek":
+// What ShipmentDetail decides about the stop header on "Přehled zastávek":
 // a stop delivering to a client's saved place shows a small chip with the
 // place name and its formatted address below (never repeating the name); any
 // other stop keeps the plain `address · kind` line unchanged. The pure
 // resolution behind both is covered directly in stopAddress.test.ts.
 
+import { type ReactNode } from 'react';
 import { render, screen, within, fireEvent, waitForElementToBeRemoved, act } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +19,7 @@ import {
   type IOutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   OutgoingShipmentStopKind,
+  OutgoingShipmentSupplierGoodDto,
   ProductKind,
   ShipmentDriverDto,
   ShipmentStartPointKind,
@@ -42,9 +44,17 @@ vi.mock('src/lib/download', () => ({ downloadBlob }));
 // actually catch a regression on it.
 const routeMapProps = vi.fn();
 vi.mock('src/components/common/RouteMap', () => ({
-  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[] }) => {
+  // The stub renders `overlay`, because on md+ (happy-dom's viewport is 1024 wide)
+  // that docked copy is the *only* rendered "Přehled zastávek" — the page-flow copy
+  // is display:none there. A stub that dropped the prop hid the card from every
+  // role-based query in this file.
+  RouteMap: (props: { stops: { lat?: number; lng?: number; label: string }[]; overlay?: ReactNode; busy?: boolean }) => {
     routeMapProps(props);
-    return <div data-testid="route-map-stub" />;
+    return (
+      <div data-testid="route-map-stub" data-busy={props.busy ? 'true' : 'false'}>
+        {props.overlay}
+      </div>
+    );
   },
 }));
 
@@ -53,6 +63,7 @@ vi.mock('src/components/common/RouteMap', () => ({
 const exportShipmentMutate = vi.hoisted(() => vi.fn());
 const setShipmentStateMutate = vi.hoisted(() => vi.fn());
 const setOrderItemSourcingMutate = vi.hoisted(() => vi.fn());
+const reorderStopsMutate = vi.hoisted(() => vi.fn());
 const setStockPurchaseMutate = vi.hoisted(() => vi.fn());
 const exportShipmentPending = vi.hoisted(() => ({ value: false }));
 // Mutable so the start-point test below can assert against a specific company
@@ -75,6 +86,9 @@ vi.mock('src/hooks/useShipments', () => ({
   // (ShipmentStateEndpointTests), the sourcing stepper in nakladkaSourcing.test.ts.
   useSetShipmentState: () => ({ mutate: setShipmentStateMutate, isPending: false }),
   useSetOrderItemSourcing: () => ({ mutate: setOrderItemSourcingMutate, isPending: false }),
+  // Feeds the Další zboží card's stepper; a click also re-derives the run's pickup stops.
+  useSetSupplierGoodSourcing: () => ({ mutate: vi.fn(), isPending: false }),
+  useReorderShipmentStops: () => ({ mutate: reorderStopsMutate, isPending: false }),
   useSetStockPurchase: () => ({ mutate: setStockPurchaseMutate, isPending: false }),
   useExportShipment: () => ({ mutate: exportShipmentMutate, isPending: exportShipmentPending.value }),
   // String "kind" here, deliberately not the numeric enum member — the real
@@ -198,6 +212,9 @@ function contactStop(): OutgoingShipmentStopDto {
 function renderDetail(
   input: OutgoingShipmentStopDto[] | (Partial<IOutgoingShipmentDetailDto> & { stops: OutgoingShipmentStopDto[] }),
   onOpenOrder?: (orderId: string) => void,
+  // Read-only by default, which is what most of this file asserts about. The reorder tests
+  // need the editable case, since the route may only be resequenced by someone who can edit.
+  opts: { editable?: boolean } = {},
 ) {
   const overrides: Partial<IOutgoingShipmentDetailDto> = Array.isArray(input) ? { stops: input } : input;
   const shipment = new OutgoingShipmentDetailDto({
@@ -208,7 +225,7 @@ function renderDetail(
     <MuiThemeProvider theme={theme}>
       <ShipmentDetail
         shipment={shipment}
-        editable={false}
+        editable={opts.editable ?? false}
         canSeeInvoicing
         canSeeLoadingBreakdown
         onBack={vi.fn()}
@@ -366,7 +383,7 @@ describe('ShipmentDetail — export', () => {
   });
 });
 
-describe('ShipmentDetail — stop header on Přehled objednávek', () => {
+describe('ShipmentDetail — stop header on Přehled zastávek', () => {
   it('shows the place chip and its formatted address for a DeliveryPlace stop', () => {
     renderDetail([placeStop()]);
 
@@ -378,51 +395,439 @@ describe('ShipmentDetail — stop header on Přehled objednávek', () => {
     expect(within(row).queryByText(/Letní zahrádka ·/)).not.toBeInTheDocument();
   });
 
-  it('keeps the plain address · kind line, and no chip, for a stop on the official address', () => {
+  // The address alone, with no "· Fakturační" tail: which of a client's addresses a stop
+  // uses only matters where it can be changed, and that is the shipment editor — which
+  // still shows the kind on its own rows.
+  it('shows the address without its kind label, and no chip, for a stop on the official address', () => {
     renderDetail([officialStop()]);
 
     const row = screen.getByTestId('overview-row');
-    expect(within(row).getByText('Náměstí 14, 02763 Žitava · Fakturační')).toBeInTheDocument();
+    expect(within(row).getByText('Náměstí 14, 02763 Žitava')).toBeInTheDocument();
+    expect(within(row).queryByText(/Fakturační/)).not.toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
 
   // Regression guard: the branch this review's fix replaced compared
   // `selectedAddressKind` directly against the numeric Contact member, which
   // never matches the server's string wire form and fell through to the
-  // official address instead — pinning and displaying the wrong stop.
-  it('shows the contact address · kind line, and no place chip, for a Contact stop', () => {
+  // official address instead — pinning and displaying the wrong stop. Still worth
+  // asserting now that the label is gone: the resolved *address* is the tell.
+  it('resolves a Contact stop to the contact address, and shows no place chip', () => {
     renderDetail([contactStop()]);
 
     const row = screen.getByTestId('overview-row');
-    expect(within(row).getByText('Dvůr 2a, 02763 Žitava · Kontaktní')).toBeInTheDocument();
+    expect(within(row).getByText('Dvůr 2a, 02763 Žitava')).toBeInTheDocument();
+    expect(within(row).queryByText(/Kontaktní/)).not.toBeInTheDocument();
     expect(within(row).queryByText('Letní zahrádka')).not.toBeInTheDocument();
   });
 });
 
+// Where "Přehled zastávek" lives: handed to the route map, which folds it away behind
+// the trip stats' chevron. That folding is RouteMap's own business and is covered in
+// RouteMap.test.tsx — the stub here renders the panel outright, so what these assert is
+// that the screen hands the map a populated list and keeps no second copy of it.
+/** The "Přehled zastávek" card, wherever it is currently placed. */
+function stopsOverviewCard(): HTMLElement {
+  return screen.getByText('Přehled zastávek').closest('.MuiCard-root') as HTMLElement;
+}
+
+describe('ShipmentDetail — where Přehled zastávek is placed', () => {
+  it('hands the stop list to the route map', () => {
+    renderDetail([officialStop()]);
+
+    const map = screen.getByTestId('route-map-stub');
+    expect(within(map).getByText('Přehled zastávek')).toBeInTheDocument();
+    // The rows come with it, rather than the heading alone.
+    expect(within(map).getByText('Restaurace B')).toBeInTheDocument();
+  });
+
+  it('keeps no second copy of the card outside the map', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.getAllByText('Přehled zastávek')).toHaveLength(1);
+  });
+
+  it('counts stops, not orders, beside the heading', () => {
+    renderDetail([officialStop()]);
+
+    expect(screen.getByText('1 zastávka')).toBeInTheDocument();
+  });
+
+  it('reports an empty run as having no stops', () => {
+    renderDetail([]);
+
+    expect(screen.getByText('Žádné zastávky.')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — Přehled zastávek scrolls under a fixed header', () => {
+  /** The element that actually scrolls: the one holding the stop rows. */
+  function scrollingBody(): HTMLElement {
+    return within(stopsOverviewCard()).getByTestId('stops-overview-body');
+  }
+
+  // The heading and the count have to stay put while the stops move under them, which they can
+  // only do by living outside the scrollport — sticky would have nothing to stick to, since the
+  // card clips.
+  it('scrolls the list, not the card', () => {
+    renderDetail([officialStop()]);
+
+    const body = getComputedStyle(scrollingBody());
+    expect(body.overflowY).toBe('auto');
+    // Reaching the last stop must not chain the scroll on to the page.
+    expect(body.overscrollBehavior).toBe('contain');
+
+    // The card itself does not scroll — otherwise the header would travel with the rows.
+    expect(getComputedStyle(stopsOverviewCard()).overflowY).not.toBe('auto');
+  });
+
+  it('keeps the header out of the scrolling element', () => {
+    renderDetail([officialStop()]);
+
+    const heading = within(stopsOverviewCard()).getByText('Přehled zastávek');
+    expect(scrollingBody().contains(heading)).toBe(false);
+  });
+});
+
+describe('ShipmentDetail — the route follows the garage split at once', () => {
+  const SUPPLIER_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  /**
+   * A run carrying one supplier good of 2 pieces, with the stops the server would actually have
+   * given that split: a pickup stop while anything is still fetched, the warehouse while anything
+   * comes off our shelf. Building it consistently matters — a fixture whose stops contradict its
+   * split would let a broken prediction look right.
+   */
+  function runWithSplit(quantityFromGarage: number) {
+    const stops = [officialStop()];
+
+    if (quantityFromGarage < 2) {
+      stops.push(new OutgoingShipmentStopDto({
+        id: 'supplier-stop-1',
+        order: stops.length + 1,
+        kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+        label: 'Linde Gas',
+        supplierId: SUPPLIER_ID,
+        latitude: 50.77,
+        longitude: 15.05,
+        products: [],
+        returns: [],
+      }));
+    }
+
+    if (quantityFromGarage > 0) {
+      stops.push(new OutgoingShipmentStopDto({
+        id: 'company-stop-1',
+        order: stops.length + 1,
+        kind: 'Company' as unknown as OutgoingShipmentStopKind,
+        label: 'Sklad AleTrack',
+        products: [],
+        returns: [],
+      }));
+    }
+
+    return {
+      state: OutgoingShipmentState.Created,
+      stops,
+      supplierGoods: [
+        new OutgoingShipmentSupplierGoodDto({
+          id: 'line-1',
+          supplierGoodId: 'g-co2',
+          name: 'CO₂ láhev',
+          quantity: 2,
+          quantityFromGarage,
+          supplierId: SUPPLIER_ID,
+          supplierName: 'Linde Gas',
+        }),
+      ],
+    };
+  }
+
+  // The complaint this guards: the stop list waited for the run to be re-read, so a stop nobody
+  // was driving to stayed on the list. The mocked mutation here never settles, so only the
+  // client-side prediction can move it.
+  it('drops the pickup stop as soon as the last piece moves to the garage', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).queryByText('Linde Gas')).not.toBeInTheDocument();
+    // The warehouse is still needed — every piece now comes off our shelf.
+    expect(within(stopsOverviewCard()).getByText('Sklad AleTrack')).toBeInTheDocument();
+  });
+
+  it('brings the pickup stop back as soon as a piece moves off the garage', () => {
+    renderDetail(runWithSplit(2), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).queryByText('Linde Gas')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ubrat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+  });
+
+  it('drops the warehouse stop when the last garage piece goes back to the supplier', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(within(stopsOverviewCard()).getByText('Sklad AleTrack')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ubrat z garáže — CO₂ láhev' }));
+
+    expect(within(stopsOverviewCard()).queryByText('Sklad AleTrack')).not.toBeInTheDocument();
+    expect(within(stopsOverviewCard()).getByText('Linde Gas')).toBeInTheDocument();
+  });
+
+  it('recounts the stops with it', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(screen.getByText('3 zastávky')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(screen.getByText('2 zastávky')).toBeInTheDocument();
+  });
+
+  // The map's road route re-resolves whenever the stops change, and the drawn line falls back to a
+  // straight one until it answers. The veil covers exactly the window in which the screen is
+  // showing a predicted route it has not had confirmed.
+  it('veils the map while the change is being confirmed', () => {
+    renderDetail(runWithSplit(1), undefined, { editable: true });
+    expect(screen.getByTestId('route-map-stub')).toHaveAttribute('data-busy', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    expect(screen.getByTestId('route-map-stub')).toHaveAttribute('data-busy', 'true');
+  });
+
+  it('moves the stepper number in the same breath', () => {
+    renderDetail(runWithSplit(0), undefined, { editable: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat z garáže — CO₂ láhev' }));
+
+    const row = screen.getAllByTestId('supplier-good-row')[0];
+    expect(within(row).getByText('1')).toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — reordering the stops', () => {
+  function supplierStop() {
+    return new OutgoingShipmentStopDto({
+      id: 'supplier-stop-1',
+      order: 2,
+      kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+      label: 'Linde Gas',
+      latitude: 50.77,
+      longitude: 15.05,
+      products: [],
+      returns: [],
+    });
+  }
+
+  /** An editable run — the route is content, so it only moves while still being planned. */
+  function renderPlanned() {
+    return renderDetail({
+      state: OutgoingShipmentState.Created,
+      stops: [officialStop(), supplierStop()],
+    }, undefined, { editable: true });
+  }
+
+  it('moves a stop down, posting the whole new sequence as stop ids', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    expect(reorderStopsMutate).toHaveBeenCalledTimes(1);
+    // The whole route, as *stop* ids — not the order id the row is keyed by.
+    expect(reorderStopsMutate.mock.calls[0][0]).toEqual(['supplier-stop-1', 'stop-2']);
+  });
+
+  it('moves a stop up', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout výše — Linde Gas' }));
+
+    expect(reorderStopsMutate.mock.calls[0][0]).toEqual(['supplier-stop-1', 'stop-2']);
+  });
+
+  // The flicker this guards against: the cache patch lands a commit *later* than the click, and
+  // dnd-kit animates a dropped row back to where it started unless the order changes in the same
+  // render. The rows must already be resequenced on the click, with no new data from the server —
+  // the mocked mutation never settles here, so nothing but the local pending order can do it.
+  it('shows the new order immediately, before the server answers', () => {
+    renderPlanned();
+
+    const before = within(stopsOverviewCard()).getAllByTestId('overview-row')
+      .map((r) => r.textContent);
+    expect(before[0]).toMatch(/Restaurace B/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    const after = within(stopsOverviewCard()).getAllByTestId('overview-row')
+      .map((r) => r.textContent);
+    expect(after[0]).toMatch(/Linde Gas/);
+    expect(after[1]).toMatch(/Restaurace B/);
+  });
+
+  // The list's numbers are the map pins' numbers, so they have to move together — otherwise the
+  // row says 2 while its pin still says 1 until the refetch lands.
+  it('renumbers the map pins in the same breath', () => {
+    renderPlanned();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Posunout níže — Restaurace B' }));
+
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Linde Gas'],
+      [2, 'Restaurace B'],
+    ]);
+  });
+
+  // Nothing to move past, so the control is dead rather than posting a no-op.
+  it('disables each direction at its end of the route', () => {
+    renderPlanned();
+
+    expect(screen.getByRole('button', { name: 'Posunout výše — Restaurace B' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Posunout níže — Linde Gas' })).toBeDisabled();
+  });
+
+  it('offers a drag handle beside the arrows', () => {
+    renderPlanned();
+
+    expect(screen.getAllByLabelText('Přetáhnout zastávku')).toHaveLength(2);
+  });
+
+  // The route is content: the export, the unload list and the invoice ordering read the stop
+  // order, and the snapshot taken when the truck is packed depends on it.
+  it('withdraws the controls once the run is loaded', () => {
+    renderDetail({
+      state: OutgoingShipmentState.Loaded,
+      stops: [officialStop(), supplierStop()],
+    }, undefined, { editable: true });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Přetáhnout zastávku')).not.toBeInTheDocument();
+  });
+
+  it('withdraws them from a read-only viewer', () => {
+    renderDetail({
+      state: OutgoingShipmentState.Created,
+      stops: [officialStop(), supplierStop()],
+    });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
+  });
+
+  // One stop is already in order; offering to move it is noise.
+  it('offers nothing on a single-stop run', () => {
+    renderDetail({ state: OutgoingShipmentState.Created, stops: [officialStop()] }, undefined, { editable: true });
+
+    expect(screen.queryByRole('button', { name: /Posunout/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShipmentDetail — non-delivery stops in Přehled zastávek', () => {
+  /** A supplier pickup stop as the backend sends one — enum as its string name. */
+  function supplierStop() {
+    return new OutgoingShipmentStopDto({
+      id: 'supplier-stop-1',
+      order: 2,
+      kind: 'Supplier' as unknown as OutgoingShipmentStopKind,
+      label: 'Linde Gas',
+      supplierId: 'aaaaaaaa-0000-0000-0000-000000000001',
+      supplierAddress: new AddressDto({
+        streetName: 'Průmyslová', streetNumber: '3', city: 'Liberec', zip: '46001',
+        country: Country.Czechia, latitude: 50.77, longitude: 15.05,
+      }),
+      latitude: 50.77,
+      longitude: 15.05,
+      products: [],
+      returns: [],
+    });
+  }
+
+  it('lists a supplier pickup stop with its address', () => {
+    renderDetail({ stops: [officialStop(), supplierStop()] });
+
+    const card = within(stopsOverviewCard());
+    expect(card.getByText('Linde Gas')).toBeInTheDocument();
+    expect(card.getByText('Průmyslová 3, 46001 Liberec')).toBeInTheDocument();
+  });
+
+  it('counts it among the stops', () => {
+    renderDetail({ stops: [officialStop(), supplierStop()] });
+
+    expect(screen.getByText('2 zastávky')).toBeInTheDocument();
+  });
+
+  // The reason the list carries every kind: its numbers are the map pins' numbers. With the
+  // list filtered to order stops, the second delivery read as "2" while its pin said "3".
+  it('numbers the stops the same way the map does', () => {
+    renderDetail({
+      stops: [
+        officialStop(),
+        supplierStop(),
+        new OutgoingShipmentStopDto({
+          id: 'order-stop-2', order: 3, orderId: 'order-9', clientId: 'client-c',
+          clientName: 'Hospoda C', officialAddress: new AddressDto({
+            streetName: 'Dlouhá', streetNumber: '1', city: 'Liberec', zip: '46001',
+            country: Country.Czechia, latitude: 50.7, longitude: 15.0,
+          }),
+          selectedAddressKind: 'Official' as unknown as DeliveryAddressKind,
+          products: [], returns: [],
+        }),
+      ],
+    });
+
+    // What the map was handed.
+    const { stops } = routeMapProps.mock.calls.at(-1)![0] as { stops: { label: string; seq?: number }[] };
+    expect(stops.map((st) => [st.seq, st.label])).toEqual([
+      [1, 'Restaurace B'],
+      [2, 'Linde Gas'],
+      [3, 'Hospoda C'],
+    ]);
+
+    // And the same numbers in the list beside them.
+    const rows = within(stopsOverviewCard()).getAllByTestId('overview-row');
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText('2')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('3')).toBeInTheDocument();
+  });
+
+  it('offers no order link on a pickup stop, which has no order behind it', () => {
+    renderDetail({ stops: [supplierStop()] }, vi.fn());
+
+    expect(screen.queryByRole('button', { name: 'Linde Gas' })).not.toBeInTheDocument();
+    expect(screen.getByText('Linde Gas')).toBeInTheDocument();
+  });
+});
+
 describe('ShipmentDetail — opening a stop\'s order', () => {
-  it('opens the order from the client name, without expanding the row', () => {
+  it('opens the order from the client name', () => {
     const onOpenOrder = vi.fn();
     renderDetail([officialStop()], onOpenOrder);
 
     fireEvent.click(screen.getByRole('button', { name: 'Restaurace B' }));
 
     expect(onOpenOrder).toHaveBeenCalledWith('order-2');
-    // The name sits inside the row's click target, so following the link must
-    // not also toggle the products underneath it.
-    expect(screen.queryByText('Žádné položky.')).not.toBeInTheDocument();
   });
 
-  it('still expands the row from the chevron and from the rest of the header', () => {
+  // Opening the order is the row's only action now that it no longer expands, so the
+  // whole row is the mouse target — not just the name inside it.
+  it('opens the order from anywhere in the row, including the address line', () => {
     const onOpenOrder = vi.fn();
     renderDetail([officialStop()], onOpenOrder);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rozbalit Restaurace B' }));
-    expect(screen.getByText('Žádné položky.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava'));
 
-    fireEvent.click(screen.getByText('Náměstí 14, 02763 Žitava · Fakturační'));
-    expect(screen.getByRole('button', { name: 'Rozbalit Restaurace B' })).toBeInTheDocument();
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+  });
 
-    expect(onOpenOrder).not.toHaveBeenCalled();
+  // The chevron and the per-row item count are gone: what is loaded for a stop is the
+  // nakládka's account, and repeating it here left two places to read it from.
+  it('offers no expander and no item count', () => {
+    renderDetail([officialStop()], vi.fn());
+
+    expect(screen.queryByRole('button', { name: /Rozbalit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Sbalit/ })).not.toBeInTheDocument();
+    expect(within(stopsOverviewCard()).queryByText(/položk/)).not.toBeInTheDocument();
   });
 
   // The page omits the callback for a user who cannot see the Objednávky
@@ -943,7 +1348,9 @@ describe('ShipmentDetail — the Vykládka tab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
 
-    expect(screen.getByText('Chrastava')).toBeInTheDocument();
+    // Scoped to the unload list: the stop list in the map names every stop too, so an
+    // unscoped query now finds this custom stop twice.
+    expect(within(screen.getByTestId('unload-list')).getByText('Chrastava')).toBeInTheDocument();
     expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
     // The tab exists to show what comes off at each stop — assert the payload
     // itself, not just that the tab swapped. Without these, a dropped quantity,
@@ -954,6 +1361,68 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     // The Custom stop (Chrastava) unloads nothing by construction — its own
     // placeholder, not a second copy of the order stop's content.
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
+  });
+
+  it("opens the stop's order from its name, and drops the address-kind tail", () => {
+    const onOpenOrder = vi.fn();
+    renderDetail(shipmentWithTwoStops, onOpenOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    fireEvent.click(list.getByRole('button', { name: 'Restaurace B' }));
+    expect(onOpenOrder).toHaveBeenCalledWith('order-2');
+
+    // Which of the client's addresses it is only matters where it can be changed, and that is
+    // the editor — the same reason Přehled zastávek drops the tail.
+    expect(list.queryByText(/Fakturační/)).toBeNull();
+  });
+
+  it('says what each line is and how much the stop takes', () => {
+    renderDetail(shipmentWithTwoStops);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    // Kind first: what the driver reaches for, and the only thing separating one package of a
+    // beer from another.
+    expect(list.getByText('Basa · 0,5 l · 12°')).toBeInTheDocument();
+    // And the stop's own count, to check the handover against.
+    expect(list.getByText('10 ks')).toBeInTheDocument();
+  });
+
+  it("hides the nakládka's own actions while the unload view is up", () => {
+    // Both buttons add to the loading list, which the unload view does not show — offering them
+    // there invites an edit whose effect is invisible on screen.
+    renderDetail(shipmentWithTwoStops, undefined, { editable: true });
+
+    expect(screen.getByRole('button', { name: /Zboží na sklad/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Faktura pivovaru/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(screen.queryByRole('button', { name: /Zboží na sklad/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Faktura pivovaru/ })).toBeNull();
+  });
+
+  it("reads out the order's supplier goods at its stop", () => {
+    // The wiring, not the shaping (unloadOrder.test.ts covers that): these goods hang off the
+    // shipment rather than off the stop, so a screen that forgot to hand them over would show
+    // the driver a stop missing half its delivery.
+    renderDetail({
+      ...shipmentWithTwoStops,
+      supplierGoods: [
+        new OutgoingShipmentSupplierGoodDto({
+          id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 2, orderId: 'order-2',
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    const list = within(screen.getByTestId('unload-list'));
+    expect(list.getByText('CO₂ láhev')).toBeInTheDocument();
+    expect(list.getByText('× 2')).toBeInTheDocument();
   });
 
   it('names the start point above the numbered stops', () => {
@@ -978,7 +1447,7 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     renderDetail(shipmentWithTwoStops);
 
     fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Vše' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nakládka' }));
 
     expect(screen.getAllByTestId('nakladka-row').length).toBeGreaterThan(0);
   });

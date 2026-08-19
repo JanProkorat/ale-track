@@ -80,6 +80,7 @@ public sealed class CreateSupplierGoodEndpoint(AleTrackDbContext dbContext) : En
             Name = req.Data.Name,
             Size = req.Data.Size,
             Description = req.Data.Description,
+            PickupSource = req.Data.PickupSource,
             Prices = req.Data.Prices
                 .Select(p => new SupplierGoodPrice
                 {

@@ -7,9 +7,11 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Entities;
 
 /// <summary>
-/// Represents a stop in an outgoing shipment. A stop is either tied to a client
-/// order (<see cref="OutgoingShipmentStopKind.Order"/>) or a free-form custom
-/// waypoint (<see cref="OutgoingShipmentStopKind.Custom"/>).
+/// Represents a stop in an outgoing shipment: a client order
+/// (<see cref="OutgoingShipmentStopKind.Order"/>), a free-form custom waypoint
+/// (<see cref="OutgoingShipmentStopKind.Custom"/>), the company's own warehouse
+/// (<see cref="OutgoingShipmentStopKind.Company"/>), or a supplier the run collects
+/// goods from (<see cref="OutgoingShipmentStopKind.Supplier"/>).
 /// </summary>
 [Table("outgoing_shipment_stops")]
 public sealed class OutgoingShipmentStop : PublicEntity
@@ -122,6 +124,24 @@ public sealed class OutgoingShipmentStop : PublicEntity
     /// Order associated with this stop. Null for custom stops.
     /// </summary>
     public Order? ClientOrder { get; set; }
+
+    /// <summary>
+    /// ID of the <see cref="Entities.Supplier"/> this stop calls at. Set only on a
+    /// <see cref="OutgoingShipmentStopKind.Supplier"/> stop.
+    /// </summary>
+    [Column("supplier_id")]
+    public long? SupplierId { get; set; }
+
+    /// <summary>
+    /// The supplier this stop collects from.
+    /// </summary>
+    /// <remarks>
+    /// Restrict, not the EF default: deleting a supplier must not take the shipments that
+    /// called on it with it. <see cref="Label"/> and the coordinates are written alongside,
+    /// so the stop still renders if the supplier is later removed.
+    /// </remarks>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
+    public Supplier? Supplier { get; set; }
 
     /// <summary>
     /// Delivery place associated with this stop. Deliberately resolvable even

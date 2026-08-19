@@ -121,6 +121,14 @@ public sealed class SetShipmentStateEndpoint(AleTrackDbContext dbContext, IDrive
             .Include(os => os.Stops)
                 .ThenInclude(s => s.ClientOrder!)
                     .ThenInclude(o => o.CustomExtraItems)
+            // Garage-sourced supplier goods draw their stock row down on the way into Loaded
+            // and put it back on the way out, so the row has to be here to be adjusted — and
+            // the good itself, because freeing the order reseeds the split from its default.
+            .Include(os => os.Stops)
+                .ThenInclude(s => s.ClientOrder!)
+                    .ThenInclude(o => o.SupplierGoodItems)
+                        .ThenInclude(i => i.SupplierGood)
+                            .ThenInclude(g => g.InventoryItem)
             .Include(os => os.Stops)
                 .ThenInclude(s => s.Items)
             .Include(os => os.StockPurchases)

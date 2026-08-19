@@ -101,3 +101,58 @@ describe('GarageCard', () => {
     expect(within(load.container).getAllByText('2 ks').length).toBeGreaterThan(0);
   });
 });
+
+// Supplier goods sourced from the garage come off the same shelf as inventory-sourced beer, so
+// "Doložit" lists them alongside it. Passed already shaped, because they have no brewery, kind
+// or package size to fill an AggRow with.
+describe('GarageCard — supplier goods from the garage', () => {
+  it('lists an extra row with its size chip and quantity', () => {
+    renderCard({
+      title: 'Doložit',
+      rows: [],
+      quantityOf: (r) => r.fromInventory,
+      extraRows: [{ key: 'g-co2', name: 'CO₂ láhev', chipText: '10 kg', quantity: 3 }],
+    });
+
+    expect(screen.getByText('CO₂ láhev')).toBeInTheDocument();
+    expect(screen.getByText('10 kg')).toBeInTheDocument();
+    // Twice with a single row: once on it, once as the header total.
+    expect(screen.getAllByText('3 ks')).toHaveLength(2);
+  });
+
+  it('counts extra rows in the header total alongside the product rows', () => {
+    renderCard({
+      title: 'Doložit',
+      rows: [row({ name: 'Albrecht 12°', fromInventory: 2 })],
+      quantityOf: (r) => r.fromInventory,
+      extraRows: [{ key: 'g-co2', name: 'CO₂ láhev', quantity: 3 }],
+    });
+
+    const header = screen.getByText('Doložit').parentElement as HTMLElement;
+    expect(within(header).getByText('5 ks')).toBeInTheDocument();
+  });
+
+  it('drops an extra row whose garage quantity is zero', () => {
+    renderCard({
+      title: 'Doložit',
+      rows: [],
+      quantityOf: (r) => r.fromInventory,
+      extraRows: [{ key: 'g-co2', name: 'CO₂ láhev', quantity: 0 }],
+    });
+
+    expect(screen.queryByText('CO₂ láhev')).not.toBeInTheDocument();
+    expect(screen.getByText('Nic se do garáže nevykládá.')).toBeInTheDocument();
+  });
+
+  // An extra row alone is still content: the empty text must not claim there is nothing.
+  it('does not report the card empty when only an extra row is present', () => {
+    renderCard({
+      title: 'Doložit',
+      rows: [],
+      quantityOf: (r) => r.fromInventory,
+      extraRows: [{ key: 'g-co2', name: 'CO₂ láhev', quantity: 1 }],
+    });
+
+    expect(screen.queryByText('Nic se do garáže nevykládá.')).not.toBeInTheDocument();
+  });
+});

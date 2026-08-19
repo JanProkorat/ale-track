@@ -71,6 +71,29 @@ public sealed class ShipmentInvoiceEndpointsTests
     }
 
     /// <summary>
+    /// What the office reads on the invoice for a supplier good: its name with the size, the price
+    /// the order line is quoted at, and no product to navigate to.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_SupplierGoodLine_CarriesItsNameAndPrice()
+    {
+        var scenario = Scenario.Build();
+        var supplierGood = scenario.AddSupplierGood(quantity: 3);
+        var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>.Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+
+        var line = endpoint.Response.Invoices
+            .SelectMany(i => i.Lines)
+            .Single(l => l.SourceKind == InvoiceLineSourceKind.SupplierGoodItem);
+        line.Name.Should().Be("CO₂ láhev 10 kg");
+        line.PriceWithVat.Should().Be(450m);
+        line.Quantity.Should().Be(3);
+        line.ProductId.Should().BeNull("a supplier good is not a brewery product");
+        line.SourceItemId.Should().Be(supplierGood.PublicId, "a move request addresses the line by this ID");
+    }
+
+    /// <summary>
     /// The billing correctness bug from #25. Correcting the Svijany seed data on 2026-07-28 moved
     /// Svijanský Vozka from 12.09 to 11.49, and every historical invoice containing it changed with
     /// it. Nothing flagged that.
@@ -316,6 +339,53 @@ public sealed class ShipmentInvoiceEndpointsTests
 
         scenario.InvoiceOf(Scenario.ClientBId).Lines
             .Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_SupplierGood_MovesToAnotherClientsInvoice()
+    {
+        var scenario = Scenario.Build();
+        var supplierGood = scenario.AddSupplierGood();
+        scenario.Materialise();
+        var from = scenario.InvoiceOf(Scenario.ClientAId);
+        var to = scenario.InvoiceOf(Scenario.ClientBId);
+
+        await Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = from.PublicId,
+            SourceKind = InvoiceLineSourceKind.SupplierGoodItem,
+            SourceItemId = supplierGood.PublicId,
+            Quantity = 2,
+            ToInvoiceId = to.PublicId
+        });
+
+        from.Lines.Single(l => l.SupplierGoodItemId == supplierGood.Id).Quantity.Should().Be(4);
+        to.Lines.Single(l => l.SupplierGoodItemId == supplierGood.Id).Quantity.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MoveInvoiceLine_SupplierGoodToPrivate_TakesItOffEveryInvoice()
+    {
+        var scenario = Scenario.Build();
+        var supplierGood = scenario.AddSupplierGood();
+        scenario.Materialise();
+        var from = scenario.InvoiceOf(Scenario.ClientAId);
+
+        var lines = await MoveTracked(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = from.PublicId,
+            SourceKind = InvoiceLineSourceKind.SupplierGoodItem,
+            SourceItemId = supplierGood.PublicId,
+            Quantity = 6,
+            ToPrivate = true
+        });
+
+        from.Lines.Should().NotContain(l => l.SupplierGoodItemId == supplierGood.Id);
+        // Asserted through the set, like the order-item case above: a private line hangs off no
+        // navigation, so adding it is an explicit call rather than a change in the graph.
+        lines.Verify(setOfLines => setOfLines.Add(It.Is<OutgoingShipmentInvoiceLine>(l =>
+                l.IsPrivate && l.SupplierGoodItemId == supplierGood.Id && l.Quantity == 6)),
+            Times.Once);
     }
 
     [Fact]
@@ -770,6 +840,30 @@ public sealed class ShipmentInvoiceEndpointsTests
 
         internal ShipmentInvoiceSplit Split() =>
             new() { Shipment = Shipment, PrivateLines = PrivateLines };
+
+        /// <summary>
+        /// Gives client A's order a line off a supplier's price list. Opt-in: every other test
+        /// here asserts client A's billed totals, which this would move.
+        /// </summary>
+        internal OrderSupplierGoodItem AddSupplierGood(int quantity = 6)
+        {
+            var item = new OrderSupplierGoodItem
+            {
+                Id = 21, PublicId = Guid.NewGuid(), Quantity = quantity,
+                SupplierGood = new SupplierGood
+                {
+                    Id = 61, PublicId = Guid.NewGuid(), Name = "CO₂ láhev", Size = "10 kg",
+                    Prices =
+                    [
+                        new SupplierGoodPrice { Kind = SupplierChargeKind.Fill, PriceWithVat = 450m }
+                    ]
+                }
+            };
+
+            Shipment.Stops.Single(st => st.ClientOrder?.ClientId == ClientAId)
+                .ClientOrder!.SupplierGoodItems.Add(item);
+            return item;
+        }
 
         /// <summary>
         /// Marks pieces of an item private without going through the endpoint, so tests can start

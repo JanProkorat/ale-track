@@ -129,6 +129,13 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     public long? CustomExtraItemId { get; set; }
 
     /// <summary>
+    /// ID of the billed <see cref="OrderSupplierGoodItem"/>. Set only when
+    /// <see cref="SourceKind"/> is <see cref="InvoiceLineSourceKind.SupplierGoodItem"/>.
+    /// </summary>
+    [Column("supplier_good_item_id")]
+    public long? SupplierGoodItemId { get; set; }
+
+    /// <summary>
     /// Invoice this line belongs to. Null when the pieces are private.
     /// </summary>
     public OutgoingShipmentInvoice? Invoice { get; set; }
@@ -147,4 +154,15 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public OrderCustomExtraItem? CustomExtraItem { get; set; }
+
+    /// <summary>
+    /// Billed supplier-good line. Null unless <see cref="SourceKind"/> is
+    /// <see cref="InvoiceLineSourceKind.SupplierGoodItem"/>.
+    /// </summary>
+    /// <remarks>
+    /// Cascade like the other two: the pieces stop being carried when the order line goes, so
+    /// there is nothing left to bill.
+    /// </remarks>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public OrderSupplierGoodItem? SupplierGoodItem { get; set; }
 }

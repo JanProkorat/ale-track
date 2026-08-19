@@ -969,6 +969,52 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.ToTable("order_returns");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.OrderSupplierGoodItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("public_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("QuantityFromGarage")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity_from_garage");
+
+                    b.Property<long>("SupplierGoodId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_good_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("SupplierGoodId");
+
+                    b.ToTable("order_supplier_good_items");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>
                 {
                     b.Property<long>("Id")
@@ -1147,6 +1193,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("source_kind");
 
+                    b.Property<long?>("SupplierGoodItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_good_item_id");
+
                     b.Property<decimal?>("UnitPriceWithVat")
                         .HasColumnType("numeric")
                         .HasColumnName("unit_price_with_vat");
@@ -1167,6 +1217,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("SupplierGoodItemId");
 
                     b.ToTable("outgoing_shipment_invoice_lines", t =>
                         {
@@ -1472,6 +1524,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("selected_address_kind");
 
+                    b.Property<long?>("SupplierId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("supplier_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClientDeliveryPlaceId");
@@ -1480,6 +1536,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PublicId")
                         .IsUnique();
+
+                    b.HasIndex("SupplierId");
 
                     b.ToTable("outgoing_shipment_stops");
                 });
@@ -2069,6 +2127,10 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("name");
+
+                    b.Property<int>("PickupSource")
+                        .HasColumnType("integer")
+                        .HasColumnName("pickup_source");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid")
@@ -2881,6 +2943,25 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("Order");
                 });
 
+            modelBuilder.Entity("AleTrack.Entities.OrderSupplierGoodItem", b =>
+                {
+                    b.HasOne("AleTrack.Entities.Order", "Order")
+                        .WithMany("SupplierGoodItems")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AleTrack.Entities.SupplierGood", "SupplierGood")
+                        .WithMany()
+                        .HasForeignKey("SupplierGoodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("SupplierGood");
+                });
+
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>
                 {
                     b.HasOne("AleTrack.Entities.Brewery", "StartBrewery")
@@ -2959,11 +3040,18 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AleTrack.Entities.OrderSupplierGoodItem", "SupplierGoodItem")
+                        .WithMany()
+                        .HasForeignKey("SupplierGoodItemId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.Navigation("CustomExtraItem");
 
                     b.Navigation("Invoice");
 
                     b.Navigation("OrderItem");
+
+                    b.Navigation("SupplierGoodItem");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentLoadingState", b =>
@@ -3069,9 +3157,16 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("AleTrack.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ClientDeliveryPlace");
 
                     b.Navigation("OutgoingShipment");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipmentStopItem", b =>
@@ -3494,6 +3589,8 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Navigation("OrderItems");
 
                     b.Navigation("Returns");
+
+                    b.Navigation("SupplierGoodItems");
                 });
 
             modelBuilder.Entity("AleTrack.Entities.OutgoingShipment", b =>

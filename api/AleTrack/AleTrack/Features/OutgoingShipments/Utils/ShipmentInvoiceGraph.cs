@@ -50,6 +50,8 @@ public static class ShipmentInvoiceGraph
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.InventoryItem)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.CustomExtraItems)
+            .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood).ThenInclude(g => g.Prices)
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client);
 
@@ -109,6 +111,12 @@ public static class ShipmentInvoiceGraph
             .Where(s => s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.CustomExtraItems.Select(e => (e, s.ClientOrder!)));
 
+    /// <summary>Order-owned supplier-good lines reachable from this shipment, with their order.</summary>
+    public static IEnumerable<(OrderSupplierGoodItem Item, Order Order)> SupplierGoodsOf(OutgoingShipment shipment) =>
+        shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .SelectMany(s => s.ClientOrder!.SupplierGoodItems.Select(i => (i, s.ClientOrder!)));
+
     public static long? ResolveSourceItemId(OutgoingShipment shipment, InvoiceLineSourceKind kind, Guid publicId) => kind switch
     {
         InvoiceLineSourceKind.OrderItem => shipment.Stops
@@ -117,6 +125,8 @@ public static class ShipmentInvoiceGraph
             .FirstOrDefault(i => i.PublicId == publicId)?.Id,
         InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(shipment)
             .Select(x => x.Extra).FirstOrDefault(e => e.PublicId == publicId)?.Id,
+        InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(shipment)
+            .Select(x => x.Item).FirstOrDefault(i => i.PublicId == publicId)?.Id,
         _ => null
     };
 
@@ -127,6 +137,7 @@ public static class ShipmentInvoiceGraph
     {
         InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
         InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
+        InvoiceLineSourceKind.SupplierGoodItem => line.SupplierGoodItemId ?? 0,
         _ => 0
     };
 
@@ -143,6 +154,9 @@ public static class ShipmentInvoiceGraph
                 break;
             case InvoiceLineSourceKind.CustomExtraItem:
                 line.CustomExtraItemId = itemId;
+                break;
+            case InvoiceLineSourceKind.SupplierGoodItem:
+                line.SupplierGoodItemId = itemId;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown invoice line source kind.");
