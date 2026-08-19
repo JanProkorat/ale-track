@@ -147,19 +147,27 @@ describe('RouteMap — the veil while the route is catching up', () => {
     expect(veil).toHaveAttribute('aria-live', 'polite');
   });
 
-  // The reorder controls live in the stop list, so a second nudge must not be swallowed by the
-  // veil that the first one raised.
-  it('swallows no clicks, and stays under the stop list', () => {
+  // While the route is being recomputed none of it is settled, so the docked stats bar and stop
+  // list are dimmed with the rest — leaving them bright made them look like the part that was.
+  it('covers the docked panel too', () => {
     renderMap(<div>Přehled zastávek</div>, { busy: true });
 
     const veil = screen.getByTestId('route-map-busy');
-    expect(getComputedStyle(veil).pointerEvents).toBe('none');
-    // 900 is below the overlay column's own 1000.
-    expect(Number(getComputedStyle(veil).zIndex)).toBeLessThan(1000);
+    // Above the overlay column's own 1000.
+    expect(Number(getComputedStyle(veil).zIndex)).toBeGreaterThan(1000);
   });
 
-  it('leaves the stop list reachable underneath it', () => {
+  // Dimming them must not disable them: the reorder arrows live in that list, and a second nudge
+  // has to land while the veil the first one raised is still up.
+  it('swallows no clicks despite covering them', () => {
     renderMap(<div>Přehled zastávek</div>, { busy: true });
+
+    expect(getComputedStyle(screen.getByTestId('route-map-busy')).pointerEvents).toBe('none');
+  });
+
+  it('leaves the controls underneath it working', () => {
+    renderMap(<div>Přehled zastávek</div>, { busy: true });
+
     fireEvent.click(screen.getByRole('button', { name: 'Zobrazit zastávky' }));
 
     expect(screen.getByText('Přehled zastávek')).toBeInTheDocument();

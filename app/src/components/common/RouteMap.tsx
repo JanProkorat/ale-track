@@ -426,9 +426,13 @@ export function RouteMap({
         </MuiTooltip>
       </Stack>
 
-      {/* Above the map, below the overlay column's own z-index (1000): the trip stats and the stop
-          list stay legible and clickable, which matters because the reorder controls live in that
-          list and a second nudge must not be swallowed. pointerEvents none for the same reason. */}
+      {/* Over everything the map draws, the docked stats bar and stop list included — while the
+          route is being recomputed, none of it is settled, and leaving the panel bright made it
+          look like the one part that was.
+
+          Above the column's own z-index (1000) but with pointerEvents none, so it dims those
+          controls without swallowing them: the reorder arrows live in that list, and a second
+          nudge has to land while the veil the first one raised is still up. */}
       {busy && (
         <Backdrop
           data-testid="route-map-busy"
@@ -438,7 +442,7 @@ export function RouteMap({
           // Backdrop rather than a hand-mixed rgba: it already resolves its scrim against the
           // active colour scheme, which a literal alpha would get wrong in one of the two.
           sx={{
-            position: 'absolute', inset: 0, zIndex: 900,
+            position: 'absolute', inset: 0, zIndex: 1100,
             display: 'grid', placeItems: 'center',
             pointerEvents: 'none',
             borderRadius: 2,
