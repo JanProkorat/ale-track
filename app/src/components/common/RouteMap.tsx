@@ -224,8 +224,15 @@ export function RouteMap({
     const element = statsRef.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
 
-    const observer = new ResizeObserver(([entry]) => setStatsHeight(entry.contentRect.height));
+    // The rendered height, border and padding included. Deliberately not the entry's
+    // `contentRect`, which is the *content* box: it omits the bar's own py and border, so the
+    // panel below came out ~20px too tall and hung over the map's bottom edge — the very
+    // thing measuring was meant to fix.
+    const measure = () => setStatsHeight(element.getBoundingClientRect().height);
+
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
+    measure();
     return () => observer.disconnect();
   }, [hasStatsBar, hasOverlay]);
 
