@@ -26,6 +26,14 @@ RUN apt-get update \
 
 COPY --from=build /app/publish .
 
+# fs.inotify.max_user_instances is a per-UID kernel limit that is NOT namespaced, so every
+# root container on a Render node shares one budget of 128. The appsettings watchers that
+# CreateBuilder registers by default claim instances from it, and when the node's budget is
+# momentarily exhausted startup dies in WebApplication.CreateBuilder. Nothing here reloads
+# configuration at runtime — Render restarts the service on a config change — so drop the
+# watchers and stop depending on a resource we neither control nor need.
+ENV DOTNET_hostBuilder__reloadConfigOnChange=false
+
 # DEBUG - list what ended up in the container
 RUN ls -la /app/*.json
 
