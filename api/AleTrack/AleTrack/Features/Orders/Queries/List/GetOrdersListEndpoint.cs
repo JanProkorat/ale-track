@@ -27,7 +27,7 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Get("orders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.View)
             .WithName(nameof(GetOrdersListEndpoint)));
         
         DontCatchExceptions();
@@ -49,7 +49,10 @@ public sealed class GetOrdersListEndpoint(AleTrackDbContext dbContext) : Endpoin
             {
                 State = o.State,
                 Id = o.PublicId,
+                CreatedDate = o.CreatedDate,
                 RequiredDeliveryDate = o.RequiredDeliveryDate,
+                ActualDeliveryDate = o.ActualDeliveryDate,
+                ClientId = o.Client.PublicId,
                 ClientName = o.Client.Name,
                 PlanningState = o.PlanningState
             })

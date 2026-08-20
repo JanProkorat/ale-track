@@ -1,62 +1,62 @@
-import { useTranslation } from 'react-i18next';
+import { type ReactNode } from 'react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  Box,
+  IconButton,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/CloseOutlined';
 
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import LoadingButton from '@mui/lab/LoadingButton';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-
-// ---------------------------------------------------------------------------
-// ConfirmDialog
-// ---------------------------------------------------------------------------
-
-interface ConfirmDialogProps {
-     open: boolean;
-     title: string;
-     message: string;
-     onConfirm: () => void;
-     onCancel: () => void;
-     confirmLabel?: string;
-     cancelLabel?: string;
-     loading?: boolean;
-}
-
-export default function ConfirmDialog({
-     open,
-     title,
-     message,
-     onConfirm,
-     onCancel,
-     confirmLabel,
-     cancelLabel,
-     loading = false,
-}: ConfirmDialogProps) {
-     const { t } = useTranslation();
-
-     return (
-          <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
-               <DialogTitle>{title}</DialogTitle>
-
-               <DialogContent>
-                    <DialogContentText>{message}</DialogContentText>
-               </DialogContent>
-
-               <DialogActions>
-                    <Button onClick={onCancel} disabled={loading}>
-                         {cancelLabel ?? t('common.cancel')}
-                    </Button>
-
-                    <LoadingButton
-                         onClick={onConfirm}
-                         loading={loading}
-                         color="error"
-                         variant="contained"
-                    >
-                         {confirmLabel ?? t('common.confirm')}
-                    </LoadingButton>
-               </DialogActions>
-          </Dialog>
-     );
+/** Confirmation for destructive/irreversible actions (delete, cancel). */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Smazat',
+  cancelLabel = 'Zrušit',
+  destructive = true,
+  busy = false,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>
+        <Box component="span" sx={{ flex: 1 }}>{title}</Box>
+        <IconButton onClick={onClose} disabled={busy} aria-label="Zavřít" size="small">
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ fontSize: 14 }}>{message}</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy} color="inherit">
+          {cancelLabel}
+        </Button>
+        <Button
+          onClick={onConfirm}
+          disabled={busy}
+          variant="contained"
+          color={destructive ? 'error' : 'primary'}
+        >
+          {busy ? 'Provádím…' : confirmLabel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }

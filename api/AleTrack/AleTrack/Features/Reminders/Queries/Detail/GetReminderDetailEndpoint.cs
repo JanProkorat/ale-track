@@ -31,7 +31,7 @@ public sealed class GetReminderDetailEndpoint(AleTrackDbContext dbContext) : End
     {
         Get("reminders/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetReminderDetailEndpoint)));
 

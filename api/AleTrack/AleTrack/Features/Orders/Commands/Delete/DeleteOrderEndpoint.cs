@@ -28,7 +28,7 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         Delete("orders/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteOrderEndpoint))

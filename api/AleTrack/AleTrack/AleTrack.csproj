@@ -9,13 +9,15 @@
 
     <ItemGroup>
         <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+        <PackageReference Include="ClosedXML" Version="0.105.1" />
+        <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
         <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
         <PackageReference Include="FastEndpoints" Version="8.0.1" />
         <PackageReference Include="FastEndpoints.Security" Version="8.0.1" />
         <PackageReference Include="FastEndpoints.Swagger" Version="8.0.1" />
         <PackageReference Include="FluentValidation" Version="12.1.1" />
         <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.3">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -31,12 +33,19 @@
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4" />
         <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.3" />
     </ItemGroup>
 
     <ItemGroup>
       <Folder Include="Infrastructure\Persistence\Migrations\" />
+    </ItemGroup>
+
+    <!-- Grants AleTrack.Tests access to internal sealed JwtService only, so its capability-claim
+         unit test can construct it directly against a stubbed policy/DbContext instead of going
+         through an integration test. Not a blanket licence to test internals generally. -->
+    <ItemGroup>
+      <InternalsVisibleTo Include="AleTrack.Tests" />
     </ItemGroup>
 
 </Project>

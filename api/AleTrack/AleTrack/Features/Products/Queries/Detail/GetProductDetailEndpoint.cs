@@ -27,7 +27,7 @@ public sealed class GetProductDetailEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Get("products/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetProductDetailEndpoint)));
 
@@ -45,13 +45,16 @@ public sealed class GetProductDetailEndpoint(AleTrackDbContext dbContext) : Endp
     public override async Task HandleAsync(GetProductDetailRequest req, CancellationToken ct)
     {
         var breweries = await dbContext.Products
-            .Where(c => c.PublicId == req.Id)
+            .Where(c => c.PublicId == req.Id && !c.IsDeleted)
             .Select(c => new ProductDto
             {
                 Id = c.PublicId,
                 Name = c.Name,
                 Description = c.Description,
                 Kind = c.Kind,
+                Container = c.Container,
+                SaleUnit = c.SaleUnit,
+                UnitsPerPackage = c.UnitsPerPackage,
                 AlcoholPercentage = c.AlcoholPercentage,
                 PlatoDegree = c.PlatoDegree,
                 Type = c.Type,

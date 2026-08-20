@@ -14,7 +14,7 @@ public sealed class GetProductDeliveryStateListEndpoint : EndpointWithoutRequest
     {
         Get("products/deliveries/states");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.View)
             .WithName(nameof(GetProductDeliveryStateListEndpoint)));
         
         DontCatchExceptions();

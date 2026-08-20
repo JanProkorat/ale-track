@@ -23,14 +23,16 @@ public sealed record DeleteOutgoingShipmentRequest
 /// Endpoint responsible for handling the deletion of an outgoing shipment.
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<DeleteOutgoingShipmentRequest>
+/// <param name="driverScope"></param>
+public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope)
+    : Endpoint<DeleteOutgoingShipmentRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
         Delete("outgoing-shipments/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteOutgoingShipmentEndpoint))
@@ -50,6 +52,12 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteOutgoingShipmentRequest req, CancellationToken ct)
     {
+        // Planning shipments is office work; a driver only executes the ones assigned to them.
+        if (driverScope.IsScoped)
+        {
+            ThrowHelper.DriverScopeForbidden();
+        }
+
         var outgoingShipment = await dbContext.OutgoingShipments
             .Include(os => os.Stops)
                 .ThenInclude(s => s.ClientOrder)
@@ -69,12 +77,10 @@ public sealed class DeleteOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                 break;
         }
 
-        foreach (var stop in outgoingShipment.Stops)
+        foreach (var stop in outgoingShipment.Stops.Where(s => s.ClientOrder != null))
         {
-            foreach (var orderItem in stop.ClientOrder.OrderItems)
+            foreach (var orderItem in stop.ClientOrder!.OrderItems)
             {
-                orderItem.FirstInvoiceQuantity = null;
-                orderItem.SecondInvoiceQuantity = null;
                 orderItem.IsShipmentLoadingConfirmed = false;
             }
         }

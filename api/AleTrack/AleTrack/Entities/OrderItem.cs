@@ -1,6 +1,8 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using AleTrack.Common.Enums;
 using AleTrack.Entities.BaseEntities;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Entities;
 
@@ -38,24 +40,52 @@ public sealed class OrderItem : PublicEntity
     /// </summary>
     [Column("reminder_state")]
     public OrderItemReminderState? ReminderState { get; set; }
-    
+
+    /// <summary>
+    /// Optional free-form note about this line — an instruction for whoever loads or
+    /// delivers it ("nechat u zadního vchodu").
+    /// </summary>
+    /// <remarks>
+    /// Not part of the frozen content: unlike <see cref="Quantity"/> it does not describe
+    /// what is on the truck, only what to do with it, and it is most useful precisely once
+    /// the shipment is already packed. So it is written by its own merge step rather than
+    /// by the item rebuild in <c>UpdateOrderEndpoint</c>, and stays editable at every state.
+    /// </remarks>
+    [MaxLength(500)]
+    [Column("note")]
+    public string? Note { get; set; }
+
+
     /// <summary>
     /// Flag indicating whether the loading in a related outgoing shipment is confirmed.
     /// </summary>
     [Column("is_shipment_loading_confirmed")]
     public bool IsShipmentLoadingConfirmed { get; set; }
-    
+
     /// <summary>
-    /// Number of pieces to be put on the first invoice
+    /// How many of this item's pieces are taken from our own inventory rather than
+    /// supplied by the brewery. The client still ordered — and is billed for —
+    /// <see cref="Quantity"/>; this only records where the goods came from.
     /// </summary>
-    [Column("first_invoice_quantity")]
-    public int? FirstInvoiceQuantity { get; set; }
-    
+    /// <remarks>
+    /// Like <see cref="IsShipmentLoadingConfirmed"/>, this describes the loading the
+    /// order currently sits on, and is cleared when the order is freed for another
+    /// shipment. Never greater than <see cref="Quantity"/>.
+    /// </remarks>
+    [Column("quantity_from_inventory")]
+    public int QuantityFromInventory { get; set; }
+
     /// <summary>
-    /// Number of pieces to be put on the second invoice
+    /// ID of the stock entry the inventory-sourced pieces come from. Null when none are.
     /// </summary>
-    [Column("second_invoice_quantity")]
-    public int? SecondInvoiceQuantity { get; set; }
+    [Column("inventory_item_id")]
+    public long? InventoryItemId { get; set; }
+
+    /// <summary>
+    /// Stock entry the inventory-sourced pieces come from.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.NoAction)]
+    public InventoryItem? InventoryItem { get; set; }
     
     /// <summary>
     /// The parent <see cref="Order"/> related to this item.
@@ -65,5 +95,12 @@ public sealed class OrderItem : PublicEntity
     /// <summary>
     /// Instance of related <see cref="Product"/> entity
     /// </summary>
+    /// <remarks>
+    /// Restrict, not the EF default Cascade: deleting a product used to cascade into
+    /// order_items and on into outgoing_shipment_invoice_lines, wiping the history of
+    /// everything ever sold. The incoming side (delivery_items.product_id) was already
+    /// Restrict, which is what showed the cascade had never been a deliberate choice.
+    /// </remarks>
+    [DeleteBehavior(DeleteBehavior.Restrict)]
     public Product Product { get; set; } = null!;
 }

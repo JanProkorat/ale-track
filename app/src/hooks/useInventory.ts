@@ -1,77 +1,44 @@
-import type { CreateInventoryItemDto, UpdateInventoryItemDto } from 'src/generated/api-client';
+// Inventory module hooks — copied from the useVehicles CRUD pattern. The list
+// endpoint returns brewery-grouped sections (not a flat item list); CRUD
+// operates on individual items nested inside those sections.
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
+import { type CreateInventoryItemDto, type UpdateInventoryItemDto } from 'src/generated/api-client';
 
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const INVENTORY_KEY = 'inventory';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useInventoryItems() {
-     return useQuery({
-          queryKey: [INVENTORY_KEY],
-          queryFn: ({ signal }) => apiClient.getInventoryItemsListEndpoint({}, signal),
-     });
+export function useInventory(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.inventory.list(params),
+    queryFn: ({ signal }) => ds.getInventoryItemsListEndpoint(params, signal),
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
-
 export function useCreateInventoryItem() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: (data: CreateInventoryItemDto) => apiClient.createInventoryItemEndpoint(data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [INVENTORY_KEY] });
-               notifyCreate('inventory');
-          },
-          onError: () => {
-               notifyCreateError('inventory');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateInventoryItemDto) => ds.createInventoryItemEndpoint(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.inventory.all }),
+  });
 }
 
 export function useUpdateInventoryItem() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateInventoryItemDto }) =>
-               apiClient.updateInventoryItemEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [INVENTORY_KEY] });
-               notifyUpdate('inventory');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateInventoryItemDto }) =>
+      ds.updateInventoryItemEndpoint(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.inventory.all }),
+  });
 }
 
 export function useDeleteInventoryItem() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteInventoryItemEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [INVENTORY_KEY] });
-               notifyDelete('inventory');
-          },
-          onError: () => {
-               notifyDeleteError('inventory');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ds.deleteInventoryItemEndpoint(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.inventory.all }),
+  });
 }

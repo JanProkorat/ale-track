@@ -32,7 +32,7 @@ public sealed class DeleteUserEndpoint(AleTrackDbContext dbContext, IAppContext 
     {
         Delete("users/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.Admin)
+            .RequirePermission(ModuleType.Users, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(DeleteUserEndpoint))

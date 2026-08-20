@@ -28,7 +28,7 @@ public sealed class DeleteClientEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Delete("clients/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .WithName(nameof(DeleteClientEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

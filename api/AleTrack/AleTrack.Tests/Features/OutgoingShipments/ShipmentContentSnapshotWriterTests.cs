@@ -1,0 +1,247 @@
+using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
+using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Utils;
+using AleTrack.Tests.Builders;
+using FluentAssertions;
+
+namespace AleTrack.Tests.Features.OutgoingShipments;
+
+/// <summary>
+/// Builds the rows the run owns. Everything the volume reports later read comes from here, so
+/// the values are asserted field by field rather than by count.
+/// </summary>
+public sealed class ShipmentContentSnapshotWriterTests
+{
+    private static readonly Dictionary<long, ClientPriceList> NoClientPrices = new();
+
+    [Fact]
+    public void Apply_CopiesProductAndBreweryFactsOntoTheStop()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        var item = f.Shipment.Stops.Single().Items.Should().ContainSingle().Subject;
+        item.ProductName.Should().Be("Albrecht 12°");
+        item.Kind.Should().Be(ProductKind.Bottle);
+        item.Type.Should().Be(ProductType.PaleLager);
+        item.PackageSize.Should().Be(0.5);
+        item.UnitsPerPackage.Should().Be(20);
+        item.Quantity.Should().Be(6);
+        item.UnitPriceWithVat.Should().Be(11.49m);
+        item.UnitPriceWithoutVat.Should().Be(9.50m);
+        item.BreweryName.Should().Be("Pivovar Zittau");
+        item.BreweryPublicId.Should().Be(f.Brewery.PublicId);
+        item.OrderItemId.Should().Be(f.Item.Id, "provenance is kept even though nothing reads it");
+        item.ProductId.Should().Be(f.Product.Id);
+    }
+
+    [Fact]
+    public void Apply_CopiesClientAttributionOntoTheStop()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        var stop = f.Shipment.Stops.Single();
+        stop.ClientPublicId.Should().Be(f.Client.PublicId);
+        stop.ClientName.Should().Be("Hospoda U Kotvy");
+        stop.ClientRegion.Should().Be(Region.ZittauCity);
+    }
+
+    /// <summary>
+    /// Editing the product afterwards must not reach back into the snapshot. This is the whole
+    /// point of the table.
+    /// </summary>
+    [Fact]
+    public void Apply_SnapshotIsIndependentOfLaterProductEdits()
+    {
+        var f = Fixture();
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        f.Product.Name = "Přejmenováno";
+        f.Product.PriceWithVat = 99m;
+        f.Product.PackageSize = 10;
+
+        var item = f.Shipment.Stops.Single().Items.Single();
+        item.ProductName.Should().Be("Albrecht 12°");
+        item.UnitPriceWithVat.Should().Be(11.49m);
+        item.PackageSize.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void Apply_IsIdempotent_ReplacingRatherThanAppending()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        f.Shipment.Stops.Single().Items.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Apply_SkipsCustomStops()
+    {
+        var f = Fixture();
+        f.Shipment.Stops.Add(new OutgoingShipmentStop
+        {
+            PublicId = Guid.NewGuid(),
+            Kind = OutgoingShipmentStopKind.Custom,
+            Order = 2,
+            Label = "Čerpací stanice",
+            Latitude = 49.2m,
+            Longitude = 16.6m
+        });
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        var custom = f.Shipment.Stops.Single(s => s.Kind == OutgoingShipmentStopKind.Custom);
+        custom.Items.Should().BeEmpty();
+        custom.ClientName.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A retired product must still snapshot: it is precisely the case the reports have to
+    /// survive, and part A made retirement the normal way products leave the price list.
+    /// </summary>
+    [Fact]
+    public void Apply_SnapshotsARetiredProduct()
+    {
+        var f = Fixture();
+        f.Product.IsDeleted = true;
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        f.Shipment.Stops.Single().Items.Single().ProductName.Should().Be("Albrecht 12°");
+    }
+
+    [Fact]
+    public void Clear_RemovesItemsAndClientAttribution()
+    {
+        var f = Fixture();
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        ShipmentContentSnapshotWriter.Clear(f.Shipment);
+
+        var stop = f.Shipment.Stops.Single();
+        stop.Items.Should().BeEmpty();
+        stop.ClientPublicId.Should().BeNull();
+        stop.ClientName.Should().BeNull();
+        stop.ClientRegion.Should().BeNull();
+    }
+
+    [Fact]
+    public void Apply_ClientWithOwnPrice_SnapshotsThatPriceNotTheCatalogOne()
+    {
+        var f = Fixture();
+        var priceLists = new Dictionary<long, ClientPriceList>
+        {
+            [f.Client.Id] = new(new Dictionary<long, decimal> { [f.Product.Id] = 1190m })
+        };
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
+
+        var item = f.Shipment.Stops.Single().Items.Single();
+        item.UnitPriceWithVat.Should().Be(1190m);
+        // The net price is scaled by the same ratio, not left at the catalog's own net price —
+        // the classic invoice bug is a gross/net pair that stops agreeing with each other.
+        item.UnitPriceWithoutVat.Should().Be(983.90m);
+    }
+
+    [Fact]
+    public void Apply_ClientWithoutOwnPrice_SnapshotsTheCatalogPrice()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, new Dictionary<long, ClientPriceList>());
+
+        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(11.49m);
+    }
+
+    /// <summary>
+    /// The freeze: re-running Apply is how a run rebuilds its snapshot, but a shipment that is
+    /// already Loaded is never re-applied, so the billed number cannot move even when the source
+    /// price does.
+    /// </summary>
+    [Fact]
+    public void Apply_RepricedAfterLoading_LeavesTheSnapshotAlone()
+    {
+        var f = Fixture();
+        var overridesByProductId = new Dictionary<long, decimal> { [f.Product.Id] = 1190m };
+        var priceLists = new Dictionary<long, ClientPriceList>
+        {
+            [f.Client.Id] = new(overridesByProductId)
+        };
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, priceLists);
+
+        var billed = f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat;
+        billed.Should().Be(1190m);
+
+        // The client is repriced afterwards — the source dictionary backing the price list
+        // changes — but nothing re-applies for an already-loaded run, so the snapshot row must
+        // not move.
+        overridesByProductId[f.Product.Id] = 1350m;
+
+        f.Shipment.Stops.Single().Items.Single().UnitPriceWithVat.Should().Be(billed,
+            "the snapshot was written once and nothing re-reads the price list afterwards");
+    }
+
+    private sealed record Graph(
+        OutgoingShipment Shipment, Client Client, Brewery Brewery, Product Product, OrderItem Item);
+
+    private static Graph Fixture()
+    {
+        var brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau", color: "#E69F00");
+        brewery.Id = 1;
+
+        var client = ClientBuilder.BuildEntity(
+            name: "Hospoda U Kotvy",
+            region: Region.ZittauCity,
+            officialAddress: AddressBuilder.BuildEntity());
+        client.Id = 1;
+
+        var product = ProductBuilder.BuildEntity(
+            name: "Albrecht 12°",
+            kind: ProductKind.Bottle,
+            type: ProductType.PaleLager,
+            packageSize: 0.5,
+            priceWithVat: 11.49m);
+        product.Id = 41;
+        product.UnitsPerPackage = 20;
+        product.PriceWithoutVat = 9.50m;
+        product.Brewery = brewery;
+        product.BreweryId = brewery.Id;
+
+        var item = new OrderItem
+        {
+            Id = 51,
+            PublicId = Guid.NewGuid(),
+            Product = product,
+            ProductId = product.Id,
+            Quantity = 6
+        };
+
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, orderItems: [item]);
+        order.Id = 101;
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: Guid.NewGuid(),
+            deliveryDate: DateTime.UtcNow.AddDays(1),
+            state: OutgoingShipmentState.Created,
+            stops:
+            [
+                new OutgoingShipmentStop
+                {
+                    PublicId = Guid.NewGuid(),
+                    Kind = OutgoingShipmentStopKind.Order,
+                    Order = 1,
+                    ClientOrder = order
+                }
+            ]);
+
+        return new Graph(shipment, client, brewery, product, item);
+    }
+}

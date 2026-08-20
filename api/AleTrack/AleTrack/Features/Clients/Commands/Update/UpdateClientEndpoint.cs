@@ -34,7 +34,7 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Put("clients/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateClientEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

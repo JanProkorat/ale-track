@@ -1,143 +1,90 @@
-import LoginPage from 'src/pages/LoginPage';
-import { screen, waitFor, userEvent, renderWithProviders } from 'src/test/test-utils';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material';
+import { theme } from 'src/theme/theme';
+import { LoginPage } from './LoginPage';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
+const enqueueSnackbar = vi.fn();
+vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
 
-vi.mock('react-i18next', () => ({
-     useTranslation: () => ({ t: (key: string) => key }),
-}));
+const signIn = vi.fn();
+vi.mock('src/auth/AuthProvider', () => ({ useAuth: () => ({ signIn }) }));
 
-const mockLogin = vi.fn();
-const mockNavigate = vi.fn();
-const mockShowError = vi.fn();
-
+const navigate = vi.fn();
 vi.mock('react-router-dom', async () => {
-     const actual = await vi.importActual('react-router-dom');
-     return { ...actual, useNavigate: () => mockNavigate };
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => navigate };
 });
 
-vi.mock('src/hooks/useAuth', () => ({
-     default: () => ({ login: mockLogin }),
-}));
+vi.mock('src/theme/ThemeProvider', () => ({ useThemeMode: () => ({ resolved: 'dark', toggle: vi.fn() }) }));
 
-vi.mock('src/hooks/useNotification', () => ({
-     useNotification: () => ({ showError: mockShowError }),
-}));
+function renderPage() {
+  return render(
+    <ThemeProvider theme={theme}>
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>
+    </ThemeProvider>
+  );
+}
 
-vi.mock('src/components/layout/LanguageSwitcher', () => ({
-     default: () => <div data-testid="language-switcher" />,
-}));
-
-vi.mock('src/components/layout/ThemeModeSwitcher', () => ({
-     default: () => <div data-testid="theme-switcher" />,
-}));
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function submit() {
+  fireEvent.click(screen.getByRole('button', { name: /Přihlásit se/ }));
+}
 
 describe('LoginPage', () => {
-     beforeEach(() => {
-          vi.clearAllMocks();
-     });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-     it('renders login form with username and password fields', () => {
-          renderWithProviders(<LoginPage />);
+  /**
+   * The regression this guards: the failure used to render as an inline Alert carrying
+   * whatever string the API sent — in practice .NET's "Exception of type '...' was thrown."
+   */
+  it('reports a failed sign-in as an error toast, not an inline banner', async () => {
+    signIn.mockRejectedValue(new Error('Nesprávné uživatelské jméno nebo heslo.'));
 
-          expect(screen.getByLabelText('auth.username')).toBeInTheDocument();
-          expect(screen.getByLabelText('auth.password')).toBeInTheDocument();
-     });
+    renderPage();
+    submit();
 
-     it('submit button is disabled when fields are empty', () => {
-          renderWithProviders(<LoginPage />);
+    await waitFor(() =>
+      expect(enqueueSnackbar).toHaveBeenCalledWith('Nesprávné uživatelské jméno nebo heslo.', {
+        variant: 'error',
+      })
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
 
-          const button = screen.getByRole('button', { name: 'auth.login' });
-          expect(button).toBeDisabled();
-     });
+  it('falls back to a Czech message when the failure carries none', async () => {
+    signIn.mockRejectedValue('not an Error');
 
-     it('submit button is disabled when only username is filled', async () => {
-          const user = userEvent.setup();
-          renderWithProviders(<LoginPage />);
+    renderPage();
+    submit();
 
-          await user.type(screen.getByLabelText('auth.username'), 'testuser');
+    await waitFor(() =>
+      expect(enqueueSnackbar).toHaveBeenCalledWith('Přihlášení selhalo.', { variant: 'error' })
+    );
+  });
 
-          const button = screen.getByRole('button', { name: 'auth.login' });
-          expect(button).toBeDisabled();
-     });
+  it('navigates on a successful sign-in without toasting', async () => {
+    signIn.mockResolvedValue(undefined);
 
-     it('submit button is enabled when both fields are filled', async () => {
-          const user = userEvent.setup();
-          renderWithProviders(<LoginPage />);
+    renderPage();
+    submit();
 
-          await user.type(screen.getByLabelText('auth.username'), 'testuser');
-          await user.type(screen.getByLabelText('auth.password'), 'password123');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }));
+    expect(enqueueSnackbar).not.toHaveBeenCalled();
+  });
 
-          const button = screen.getByRole('button', { name: 'auth.login' });
-          expect(button).toBeEnabled();
-     });
+  it('re-enables the submit button after a failure so the user can retry', async () => {
+    signIn.mockRejectedValue(new Error('Nesprávné uživatelské jméno nebo heslo.'));
 
-     it('toggles password visibility when clicking the eye icon', async () => {
-          const user = userEvent.setup();
-          renderWithProviders(<LoginPage />);
+    renderPage();
+    submit();
 
-          const passwordInput = screen.getByLabelText('auth.password');
-          expect(passwordInput).toHaveAttribute('type', 'password');
-
-          const toggleButton = passwordInput.closest('.MuiInputBase-root')!.querySelector('button')!;
-          await user.click(toggleButton);
-
-          expect(passwordInput).toHaveAttribute('type', 'text');
-
-          await user.click(toggleButton);
-
-          expect(passwordInput).toHaveAttribute('type', 'password');
-     });
-
-     it('calls login and navigates on successful submit', async () => {
-          mockLogin.mockResolvedValueOnce(undefined);
-          const user = userEvent.setup();
-          renderWithProviders(<LoginPage />);
-
-          await user.type(screen.getByLabelText('auth.username'), 'testuser');
-          await user.type(screen.getByLabelText('auth.password'), 'password123');
-          await user.click(screen.getByRole('button', { name: 'auth.login' }));
-
-          await waitFor(() => {
-               expect(mockLogin).toHaveBeenCalledWith('testuser', 'password123');
-          });
-
-          await waitFor(() => {
-               expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
-          });
-     });
-
-     it('shows error notification on login failure', async () => {
-          mockLogin.mockRejectedValueOnce(new Error('Invalid credentials'));
-          const user = userEvent.setup();
-          renderWithProviders(<LoginPage />);
-
-          await user.type(screen.getByLabelText('auth.username'), 'testuser');
-          await user.type(screen.getByLabelText('auth.password'), 'wrongpass');
-          await user.click(screen.getByRole('button', { name: 'auth.login' }));
-
-          await waitFor(() => {
-               expect(mockShowError).toHaveBeenCalledWith('auth.loginError');
-          });
-
-          expect(mockNavigate).not.toHaveBeenCalled();
-     });
-
-     it('renders theme mode switcher', () => {
-          renderWithProviders(<LoginPage />);
-
-          expect(screen.getByTestId('theme-switcher')).toBeInTheDocument();
-     });
-
-     it('renders language switcher', () => {
-          renderWithProviders(<LoginPage />);
-
-          expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
-     });
+    await waitFor(() => expect(enqueueSnackbar).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /Přihlásit se/ })).not.toBeDisabled();
+  });
 });

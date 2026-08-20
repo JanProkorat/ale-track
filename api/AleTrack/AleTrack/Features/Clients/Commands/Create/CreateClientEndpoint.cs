@@ -29,7 +29,7 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
     {
         Post("clients");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateClientEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

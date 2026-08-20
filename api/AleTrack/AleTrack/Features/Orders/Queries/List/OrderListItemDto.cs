@@ -17,12 +17,28 @@ public sealed record OrderListItemDto
     /// State of the order
     /// </summary>
     public OrderState State { get; set; }
+
+    /// <summary>
+    /// Date the order was created — the list's default newest-first ordering key
+    /// </summary>
+    public DateTime CreatedDate { get; set; }
     
     /// <summary>
     /// Latest date when order needs to be delivered to the client
     /// </summary>
     public DateOnly? RequiredDeliveryDate { get; set; }
-    
+
+    /// <summary>
+    /// Date the order was actually delivered (set when its shipment is delivered).
+    /// </summary>
+    public DateOnly? ActualDeliveryDate { get; set; }
+
+    /// <summary>
+    /// Public ID of the related client — lets the list be filtered down to one
+    /// client (the client detail's order tab) without matching on the name.
+    /// </summary>
+    public Guid ClientId { get; set; }
+
     /// <summary>
     /// Name of the related client
     /// </summary>

@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,7 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     {
         Post("orders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateOrderEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -62,6 +63,11 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             RequiredDeliveryDate = req.Data.RequiredDeliveryDate
         };
 
+        foreach (var note in req.Data.Notes)
+        {
+            order.Notes.Add(new OrderNote { Text = note.Text, DateCreated = DateTime.UtcNow });
+        }
+
         foreach (var orderItem in req.Data.OrderItems)
         {
             var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
@@ -72,10 +78,52 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             {
                 Product = relatedProduct!,
                 Quantity = orderItem.Quantity,
-                ReminderState = orderItem.ReminderState
+                ReminderState = orderItem.ReminderState,
+                Note = orderItem.Note
             });
         }
         
+        foreach (var orderReturn in req.Data.Returns)
+        {
+            order.Returns.Add(new OrderReturn
+            {
+                Name = orderReturn.Name,
+                Quantity = orderReturn.Quantity,
+                Note = orderReturn.Note
+            });
+        }
+
+        foreach (var extra in req.Data.CustomExtraItems)
+        {
+            order.CustomExtraItems.Add(new OrderCustomExtraItem
+            {
+                Description = extra.Description,
+                Quantity = extra.Quantity,
+                Note = extra.Note
+            });
+        }
+
+        var supplierGoods = await GetExistingSupplierGoodsAsync(req.Data.SupplierGoodItems, ct);
+
+        foreach (var item in req.Data.SupplierGoodItems)
+        {
+            var relatedGood = supplierGoods.FirstOrDefault(g => g.PublicId == item.SupplierGoodId);
+            if (relatedGood is null)
+                ThrowHelper.PublicEntityNotFound(nameof(SupplierGood), item.SupplierGoodId);
+
+            order.SupplierGoodItems.Add(new OrderSupplierGoodItem
+            {
+                SupplierGood = relatedGood!,
+                Quantity = item.Quantity,
+                Note = item.Note,
+                // The good's standing default; a shipment can move pieces either way later.
+                QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(relatedGood!, item.Quantity)
+            });
+        }
+
+        await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext, order, client!, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
+
         client!.Orders.Add(order);
 
         await dbContext.SaveChangesAsync(ct);
@@ -88,8 +136,22 @@ public sealed class CreateOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
             .Select(i => i.ProductId)
             .ToList();
 
+        // Retired products are excluded, so ordering one reports it as not found — a
+        // product taken off the price list must not enter a new order.
         return await dbContext.Products
-            .Where(p => productIds.Contains(p.PublicId))
+            .Where(p => productIds.Contains(p.PublicId) && !p.IsDeleted)
+            .ToListAsync(ct);
+    }
+
+    private async Task<List<SupplierGood>> GetExistingSupplierGoodsAsync(
+        List<OrderSupplierGoodItemDto> items, CancellationToken ct)
+    {
+        var goodIds = items
+            .Select(i => i.SupplierGoodId)
+            .ToList();
+
+        return await dbContext.SupplierGoods
+            .Where(g => goodIds.Contains(g.PublicId))
             .ToListAsync(ct);
     }
 }

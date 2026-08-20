@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Features.Products.Queries.List;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -34,7 +35,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
     {
         Get("products/client/{ClientId}/history");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetProductsByClientHistoryEndpoint)));
         
         DontCatchExceptions();
@@ -58,6 +59,7 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
 
         // Project products to DTOs in a single server-side query
         var productsQuery = dbContext.Products
+            .Where(p => !p.IsDeleted)
             .OrderBy(p => p.Brewery.DisplayOrder)
             .Select(p => new ProductListItemDto
             {
@@ -82,19 +84,61 @@ public sealed class GetProductsByClientHistoryEndpoint(AleTrackDbContext dbConte
 
         var filteredData = await productsQuery.ToListAsync(ct);
 
-        // Create lookup for order counts using product PublicId -> underlying product Id mapping is not available here,
-        // so we assume that OrderItem.ProductId points to the same entity as Product.Id used in the aggregation above.
-        // We need to load Product.Id with PublicId mapping to correctly map counts to DTOs.
-        var productIdByPublicId = await dbContext.Products
-            .Select(p => new { p.Id, p.PublicId })
-            .ToDictionaryAsync(x => x.PublicId, x => x.Id, ct);
+        // Single query carrying everything keyed off the product's PublicId that the rest of
+        // this handler needs: the internal Id (order counts and ClientPriceList key by it) and
+        // the catalog price fields Resolve reads. Loading it once here — rather than joining
+        // Product again per row — is what keeps this an N+1-free lookup.
+        var productDataByPublicId = await dbContext.Products
+            .Where(p => !p.IsDeleted)
+            .Select(p => new
+            {
+                p.Id,
+                p.PublicId,
+                p.PriceWithVat,
+                p.PriceWithoutVat,
+                p.PriceForUnitWithVat,
+                p.PriceForUnitWithoutVat
+            })
+            .ToDictionaryAsync(x => x.PublicId, x => x, ct);
 
         var orderCountLookup = filteredData.ToDictionary(
             dto => dto.Id,
-            dto => productIdByPublicId.TryGetValue(dto.Id, out var internalId) &&
-                   orderCountsByProductId.TryGetValue(internalId, out var count)
+            dto => productDataByPublicId.TryGetValue(dto.Id, out var data) &&
+                   orderCountsByProductId.TryGetValue(data.Id, out var count)
                 ? count
                 : 0);
+
+        // Resolve the client's own prices AFTER filtering and sorting have already run against
+        // catalog prices — ApplyFilterAndSort executes server-side, so resolving earlier would
+        // desync the sort order from the values actually returned.
+        var priceList = await ClientPriceResolver.LoadByPublicIdAsync(dbContext, req.ClientId, ct);
+
+        foreach (var item in filteredData)
+        {
+            if (!productDataByPublicId.TryGetValue(item.Id, out var data))
+            {
+                continue;
+            }
+
+            var resolved = priceList.Resolve(new Product
+            {
+                Id = data.Id,
+                PriceWithVat = data.PriceWithVat,
+                PriceWithoutVat = data.PriceWithoutVat,
+                PriceForUnitWithVat = data.PriceForUnitWithVat,
+                PriceForUnitWithoutVat = data.PriceForUnitWithoutVat
+            });
+
+            if (resolved.ListPriceWithVat is null)
+            {
+                continue;
+            }
+
+            item.PriceWithVat = resolved.PriceWithVat;
+            item.PriceForUnitWithVat = resolved.PriceForUnitWithVat;
+            item.PriceForUnitWithoutVat = resolved.PriceForUnitWithoutVat;
+            item.ListPriceWithVat = resolved.ListPriceWithVat;
+        }
 
         // Order products by their order count (most ordered first), then by name
         var orderedData = filteredData

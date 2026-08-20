@@ -49,6 +49,11 @@ public sealed class User : PublicEntity
     public ICollection<UserRole> UserRoles { get; set; } = [];
 
     /// <summary>
+    /// Granular per-module permissions (ignored for Admin-role users).
+    /// </summary>
+    public ICollection<UserPermission> Permissions { get; set; } = [];
+
+    /// <summary>
     /// List of refresh tokens issued to this user
     /// </summary>
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];

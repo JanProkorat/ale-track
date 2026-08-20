@@ -28,7 +28,7 @@ public sealed class GetClientRemindersListEndpoint(AleTrackDbContext dbContext) 
     {
         Get("clients/{id:guid}/reminders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.View)
             .WithName(nameof(GetClientRemindersListEndpoint)));
         
         DontCatchExceptions();

@@ -19,14 +19,14 @@ public sealed record CreateDriverRequest
     public CreateDriverDto Data { get; set; } = null!;
 }
 
-public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateDriverRequest>
+public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope) : Endpoint<CreateDriverRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
         Post("drivers");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateDriverEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -44,6 +44,12 @@ public sealed class CreateDriverEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(CreateDriverRequest req, CancellationToken ct)
     {
+        // Drivers do not manage the fleet roster — office staff do.
+        if (driverScope.IsScoped)
+        {
+            ThrowHelper.DriverScopeForbidden();
+        }
+
         var driver = new Driver
         {
             FirstName = req.Data.FirstName,

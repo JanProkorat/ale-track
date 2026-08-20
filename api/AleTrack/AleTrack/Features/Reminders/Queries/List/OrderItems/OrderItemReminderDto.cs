@@ -21,6 +21,11 @@ public record ClientOrderReminderDto
 public record OrderItemReminderDto
 {
     /// <summary>
+    /// Public ID of the order item itself (used to change its reminder state).
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
     /// ID of the related order
     /// </summary>
     public Guid OrderId { get; set; }

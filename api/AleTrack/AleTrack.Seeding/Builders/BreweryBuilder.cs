@@ -18,7 +18,9 @@ internal static class BreweryBuilder
                 StreetNumber = "25",
                 City = "Svijany",
                 Zip = "46346",
-                Country = Country.Czechia
+                Country = Country.Czechia,
+                Latitude = 50.553m,
+                Longitude = 15.049m
             },
             ContactAddress = new Address
             {
@@ -43,7 +45,9 @@ internal static class BreweryBuilder
                 StreetNumber = "29",
                 City = "Turnov",
                 Zip = "51101",
-                Country = Country.Czechia
+                Country = Country.Czechia,
+                Latitude = 50.6013m,
+                Longitude = 15.1389m
             }
         };
     
@@ -60,7 +64,9 @@ internal static class BreweryBuilder
                 StreetNumber = "130",
                 City = "Náchod",
                 Zip = "54701",
-                Country = Country.Czechia
+                Country = Country.Czechia,
+                Latitude = 50.4156m,
+                Longitude = 16.1656m
             }
         };
 }

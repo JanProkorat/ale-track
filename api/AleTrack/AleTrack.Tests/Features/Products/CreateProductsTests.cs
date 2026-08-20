@@ -44,7 +44,9 @@ public sealed class CreateProductsTests
             brewery.Products.Should().Contain(p => 
                 p.Name == expectedProduct.Name &&
                 p.Description == expectedProduct.Description &&
-                p.Kind == expectedProduct.Kind &&
+                p.Container == expectedProduct.Container &&
+                p.SaleUnit == expectedProduct.SaleUnit &&
+                p.UnitsPerPackage == expectedProduct.UnitsPerPackage &&
                 p.Type == expectedProduct.Type &&
                 Math.Abs(p.AlcoholPercentage!.Value - expectedProduct.AlcoholPercentage!.Value) < 0.001f &&
                 Math.Abs(p.PlatoDegree!.Value - expectedProduct.PlatoDegree!.Value) < 0.001f &&

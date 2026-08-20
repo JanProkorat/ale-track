@@ -24,7 +24,7 @@ public class GetExchangeRatesEndpoint(AleTrackDbContext dbContext) : EndpointWit
     {
         Get("exchange-rates");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetExchangeRatesEndpoint)));
         
         DontCatchExceptions();

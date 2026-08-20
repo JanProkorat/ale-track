@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +26,7 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
     {
         Get("outgoing-shipments/orders");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Orders, PermissionLevel.View)
             .WithName(nameof(GetOrdersListForOutgoingShipmentsEndpoint)));
         
         DontCatchExceptions();
@@ -52,8 +53,27 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                 ClientName = o.Client.Name,
                 ClientOfficialAddress = o.Client.OfficialAddress.ToDto(),
                 ClientContactAddress = o.Client.ContactAddress != null ? o.Client.ContactAddress.ToDto() : null,
+                ClientDeliveryPlaces = o.Client.DeliveryPlaces
+                    .Where(p => !p.IsDeleted)
+                    .OrderBy(p => p.Name)
+                    .Select(p => new ClientDeliveryPlaceDto
+                    {
+                        Id = p.PublicId,
+                        Name = p.Name,
+                        Note = p.Note,
+                        Address = p.Address.ToDto()
+                    })
+                    .ToList(),
+                DeliveryAddressKind = o.DeliveryAddressKind,
+                ClientDeliveryPlaceId = o.ClientDeliveryPlace != null ? o.ClientDeliveryPlace.PublicId : null,
+                // Product order per ProductOrdering.
                 Items = o.OrderItems
-                    .OrderBy(oi => oi.Product.Brewery.DisplayOrder)
+                    .OrderBy(oi => oi.Product.Brewery.DisplayOrder)                    .ThenBy(oi => oi.Product.Type == ProductType.Lemonade
+                         || oi.Product.Type == ProductType.Merchandise
+                         || oi.Product.Type == ProductType.Other ? 1 : 0)
+                    .ThenBy(oi => oi.Product.PlatoDegree == null)
+                    .ThenBy(oi => oi.Product.PlatoDegree)
+                    .ThenBy(oi => oi.Product.PackageSize)
                     .ThenBy(oi => oi.Product.Name)
                     .Select(oi => new UnassignedOrderItemDto
                     {
@@ -68,10 +88,22 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                         Kind = oi.Product.Kind,
                         Type = oi.Product.Type,
                         IsShipmentLoadingConfirmed = oi.IsShipmentLoadingConfirmed,
-                        FirstInvoiceQuantity = oi.FirstInvoiceQuantity,
-                        SecondInvoiceQuantity = oi.SecondInvoiceQuantity,
                         BreweryDisplayOrder = oi.Product.Brewery.DisplayOrder,
                         DisplayOrder = oi.Product.DisplayOrder
+                    })
+                    .ToList(),
+                SupplierGoods = o.SupplierGoodItems
+                    .OrderBy(i => i.SupplierGood.Supplier.Name)
+                    .ThenBy(i => i.SupplierGood.Name)
+                    .Select(i => new UnassignedSupplierGoodDto
+                    {
+                        Id = i.PublicId,
+                        Name = i.SupplierGood.Name,
+                        Quantity = i.Quantity,
+                        QuantityFromGarage = i.QuantityFromGarage,
+                        SupplierId = i.SupplierGood.Supplier.PublicId,
+                        SupplierName = i.SupplierGood.Supplier.Name,
+                        SupplierAddress = i.SupplierGood.Supplier.OfficialAddress.ToDto()
                     })
                     .ToList()
             })

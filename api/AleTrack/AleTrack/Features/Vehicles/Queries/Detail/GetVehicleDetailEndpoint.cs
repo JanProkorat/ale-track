@@ -26,7 +26,7 @@ public sealed class GetVehicleDetailEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Get("vehicles/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Vehicles, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetVehicleDetailEndpoint)));
 

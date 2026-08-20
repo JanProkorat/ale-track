@@ -1,5 +1,6 @@
 using AleTrack.Common.Enums;
 using AleTrack.Entities;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Update;
 
 namespace AleTrack.Features.Orders.Commands.Update;
@@ -14,28 +15,73 @@ public sealed record UpdateOrderDto
     /// ID of related <see cref="Client"/>
     /// </summary>
     public Guid ClientId { get; set; }
-    
+
+    /// <summary>
+    /// Where this order is delivered. Defaults to
+    /// <see cref="DeliveryAddressKind.Official"/>.
+    /// </summary>
+    public DeliveryAddressKind DeliveryAddressKind { get; set; }
+
+    /// <summary>
+    /// The client's saved delivery place. Required when
+    /// <see cref="DeliveryAddressKind"/> is
+    /// <see cref="Common.Enums.DeliveryAddressKind.DeliveryPlace"/>, and must
+    /// be null otherwise.
+    /// </summary>
+    public Guid? ClientDeliveryPlaceId { get; set; }
+
     /// <summary>
     /// Latest date when order needs to be delivered to the client
     /// </summary>
     public DateOnly? RequiredDeliveryDate { get; set; }
     
     /// <summary>
-    /// Date when the order was actually delivered to the client
-    /// Null if order has not been delivered yet
+    /// Date when the order was actually delivered to the client.
     /// </summary>
+    /// <remarks>
+    /// Omitting it leaves the stored date alone — see <see cref="State"/>. It is stamped
+    /// by the shipment on delivery, so a content save that left it out used to clear it.
+    /// </remarks>
     public DateOnly? ActualDeliveryDate { get; set; }
+
+    /// <summary>
+    /// State of the order. Omitting it leaves the stored state alone.
+    /// </summary>
+    /// <remarks>
+    /// Optional because the order lifecycle is driven by the shipment carrying the order,
+    /// not by the order editor: added to a run → Planning, in transit → Delivering,
+    /// delivered → Finished. The editor is a *content* editor and sends no state, so a
+    /// non-nullable field here defaulted to <see cref="OrderState.New"/> and every save
+    /// silently knocked a planned order back to new.
+    /// </remarks>
+    public OrderState? State { get; set; }
+
     
     /// <summary>
-    /// State of the order
+    /// Free-form notes about the order.
     /// </summary>
-    public OrderState State { get; set; }
-    
-    
+    public List<OrderNoteDto> Notes { get; set; } = [];
+
     /// <summary>
     /// List of items included in the order
     /// </summary>
     public List<UpdateOrderItemDto> OrderItems { get; set; } = [];
+
+    /// <summary>
+    /// Returnable items the client hands back against this order (empty kegs, bottles…).
+    /// </summary>
+    public List<OrderReturnDto> Returns { get; set; } = [];
+
+    /// <summary>
+    /// Items the client wants that no brewery supplies.
+    /// </summary>
+    public List<OrderCustomExtraItemDto> CustomExtraItems { get; set; } = [];
+
+    /// <summary>
+    /// Lines bought off a supplier's price list — gas, packaging, sanitation.
+    /// </summary>
+    public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
+
 }
 
 /// <summary>
@@ -58,4 +104,11 @@ public sealed record UpdateOrderItemDto
     /// State of the reminder for this item.
     /// </summary>
     public OrderItemReminderState? ReminderState { get; set; }
+
+    /// <summary>
+    /// Optional free-form note about this line. Applied by its own merge step, not by the
+    /// item rebuild, so a note-only save works even once the content is frozen — see
+    /// <see cref="UpdateOrderEndpoint"/>.
+    /// </summary>
+    public string? Note { get; set; }
 }

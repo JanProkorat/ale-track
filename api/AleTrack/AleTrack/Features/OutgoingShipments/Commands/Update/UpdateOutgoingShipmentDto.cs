@@ -12,7 +12,27 @@ public sealed record UpdateOutgoingShipmentDto
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;
-    
+
+    /// <summary>
+    /// Where the run is loaded before it sets off. Defaults to the company warehouse.
+    /// </summary>
+    public ShipmentStartPointKind StartPointKind { get; set; } = ShipmentStartPointKind.Company;
+
+    /// <summary>
+    /// Public ID of the brewery the run starts at. Required when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Brewery"/>,
+    /// and must be null otherwise.
+    /// </summary>
+    public Guid? StartBreweryId { get; set; }
+
+    /// <summary>
+    /// Which of the start brewery's addresses the run is loaded at. Meaningless when
+    /// <see cref="StartPointKind"/> is <see cref="ShipmentStartPointKind.Company"/>.
+    /// <see cref="DeliveryAddressKind.DeliveryPlace"/> is never valid — a brewery has
+    /// no delivery-place navigation.
+    /// </summary>
+    public DeliveryAddressKind StartBreweryAddressKind { get; set; } = DeliveryAddressKind.Official;
+
     /// <summary>
     /// Date when shipments are going to be delivered
     /// </summary>
@@ -34,6 +54,16 @@ public sealed record UpdateOutgoingShipmentDto
     public List<ClientOrderShipmentDto> ClientOrderShipments { get; set; } = [];
 
     /// <summary>
+    /// Custom (non-order) waypoints on the route
+    /// </summary>
+    public List<CustomStopDto> CustomStops { get; set; } = [];
+
+    /// <summary>
+    /// Via points that shape the road route (not visited stops)
+    /// </summary>
+    public List<RoutePointDto> RouteViaPoints { get; set; } = [];
+
+    /// <summary>
     /// State of the outgoing shipment
     /// </summary>
     public OutgoingShipmentState State { get; set; }
@@ -41,7 +71,7 @@ public sealed record UpdateOutgoingShipmentDto
     /// <summary>
     /// Extra products to be delivered to the inventory from the brewery
     /// </summary>
-    public List<InventoryExtraShipmentDto> InventoryExtraShipments { get; set; } = [];
+    public List<StockPurchaseDto> StockPurchases { get; set; } = [];
     
     /// <summary>
     /// Extra products to be delivered from the inventory to the client
@@ -52,4 +82,10 @@ public sealed record UpdateOutgoingShipmentDto
     /// Custom extra products to be delivered to the client
     /// </summary>
     public List<CustomExtraShipmentDto> CustomExtraShipments { get; set; } = [];
+
+    /// <summary>
+    /// Checklist of what has to be done while preparing the run. Steps already stored keep the
+    /// tick they have; steps missing from this list are removed.
+    /// </summary>
+    public List<PreparationStepDto> PreparationSteps { get; set; } = [];
 }

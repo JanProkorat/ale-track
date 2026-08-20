@@ -23,7 +23,22 @@ public sealed record ProductListItemDto
     /// Kind of the product
     /// </summary>
     public ProductKind Kind { get; set; }
-    
+
+    /// <summary>
+    /// The vessel the drink is in.
+    /// </summary>
+    public ProductContainer Container { get; set; }
+
+    /// <summary>
+    /// What one sellable unit of this product is.
+    /// </summary>
+    public ProductSaleUnit SaleUnit { get; set; }
+
+    /// <summary>
+    /// How many containers one sellable unit holds.
+    /// </summary>
+    public int UnitsPerPackage { get; set; }
+
     /// <summary>
     /// Type of the product
     /// </summary>
@@ -58,7 +73,14 @@ public sealed record ProductListItemDto
     /// Price for unit without VAT
     /// </summary>
     public decimal? PriceForUnitWithoutVat { get; set; }
-    
+
+    /// <summary>
+    /// The brewery's ceník price, present only when this row is priced specially for a
+    /// client. A non-null value is the signal that <see cref="PriceWithVat"/> is not the
+    /// list price; on the global product list it is always null.
+    /// </summary>
+    public decimal? ListPriceWithVat { get; set; }
+
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>

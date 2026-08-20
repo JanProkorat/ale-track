@@ -30,7 +30,7 @@ public sealed class CreateDriverTests
             )
         };
 
-        var endpoint = EndpointBuilder<CreateDriverRequest, CreateDriverEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<CreateDriverRequest, CreateDriverEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(command, CancellationToken.None);
         
         dbContext.Verify(e => e.Drivers.Add(It.Is<Driver>(d => 

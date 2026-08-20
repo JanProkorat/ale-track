@@ -29,7 +29,7 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         Get("clients/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.View)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(GetClientDetailEndpoint)));
         

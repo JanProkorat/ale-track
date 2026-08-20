@@ -51,7 +51,7 @@ public sealed class UpdateDriverTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateDriverRequest, UpdateDriverEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateDriverRequest, UpdateDriverEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         // Verify that the driver entity was updated with correct values
@@ -82,7 +82,7 @@ public sealed class UpdateDriverTests
             Data = DriverBuilder.BuildUpdateDto()
         };
 
-        var endpoint = EndpointBuilder<UpdateDriverRequest, UpdateDriverEndpoint>.Create(dbContext.Object);
+        var endpoint = EndpointBuilder<UpdateDriverRequest, UpdateDriverEndpoint>.Create(dbContext.Object, DriverScopeMockFactory.Unscoped());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);

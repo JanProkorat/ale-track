@@ -30,7 +30,11 @@ public sealed class UpdateProductDtoValidator : Validator<UpdateProductDto>
         RuleFor(r => r.PriceWithVat).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.PriceForUnitWithVat).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.PriceForUnitWithoutVat).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.Kind).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
+        RuleFor(r => r.Container).IsInEnum().WithErrorCode(ErrorCodes.ValidationEnumError);
+        RuleFor(r => r.SaleUnit).IsInEnum().WithErrorCode(ErrorCodes.ValidationEnumError);
+        RuleFor(r => r.UnitsPerPackage)
+            .GreaterThanOrEqualTo(1)
+            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
         RuleFor(r => r.Type).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Name).NotEmpty().WithErrorCode(ErrorCodes.ValidationNotEmptyError);
         RuleFor(r => r.Name).MaximumLength(50).WithErrorCode(ErrorCodes.ValidationMaxLengthError);

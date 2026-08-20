@@ -202,7 +202,7 @@ public static class PrimatorProductsBuilder
                 PriceWithoutVat = 572.73m,
                 PriceWithVat = 693.00m,
                 PriceForUnitWithoutVat = 19.09m,
-                PriceForUnitWithVat = 23.70m
+                PriceForUnitWithVat = 23.10m
             },
 
             // Dark
@@ -538,6 +538,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Keg,
                 Type = ProductType.PaleLager,
                 AlcoholPercentage = AlcoholPercentage.FourPointSeven,
+                PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = KegSize.FifteenLiters,
                 PriceWithoutVat = 652.07m,
                 PriceWithVat = 789.00m,
@@ -692,11 +693,11 @@ public static class PrimatorProductsBuilder
                 PriceForUnitWithVat = 21.80m
             },
 
-            // CHIPPER Grep
+            // Chipper Grep
             new()
             {
                 PublicId = Guid.Parse("26574c46-192a-44f6-9c76-a2061b98d4b5"),
-                Name ="Prim. CHIPPER Grep",
+                Name ="Prim. Chipper Grep",
                 Kind = ProductKind.Keg,
                 Type = ProductType.Radler,
                 AlcoholPercentage = AlcoholPercentage.Two,
@@ -804,6 +805,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Four,
                 PlatoDegree = PlatoDegree.Ten,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 248.60m,
                 PriceWithVat = 300.81m,
                 PriceForUnitWithoutVat = 12.43m,
@@ -819,6 +821,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSeven,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 298.60m,
                 PriceWithVat = 361.31m,
                 PriceForUnitWithoutVat = 14.93m,
@@ -834,6 +837,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 311.00m,
                 PriceWithVat = 376.31m,
                 PriceForUnitWithoutVat = 15.55m,
@@ -850,6 +854,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 348.24m,
                 PriceWithVat = 421.37m,
                 PriceForUnitWithoutVat = 14.51m,
@@ -865,6 +870,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointFive,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 311.00m,
                 PriceWithVat = 376.31m,
                 PriceForUnitWithoutVat = 15.55m,
@@ -880,6 +886,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FivePointFive,
                 PlatoDegree = PlatoDegree.Thirteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 325.20m,
                 PriceWithVat = 393.49m,
                 PriceForUnitWithoutVat = 16.26m,
@@ -895,6 +902,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.SevenPointFive,
                 PlatoDegree = PlatoDegree.Sixteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 359.20m,
                 PriceWithVat = 434.63m,
                 PriceForUnitWithoutVat = 17.96m,
@@ -910,6 +918,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Nine,
                 PlatoDegree = PlatoDegree.TwentyOne,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 431.00m,
                 PriceWithVat = 521.51m,
                 PriceForUnitWithoutVat = 21.55m,
@@ -925,6 +934,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.TenPointFive,
                 PlatoDegree = PlatoDegree.TwentyFour,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 484.00m,
                 PriceWithVat = 585.64m,
                 PriceForUnitWithoutVat = 24.20m,
@@ -940,6 +950,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 423.40m,
                 PriceWithVat = 512.31m,
                 PriceForUnitWithoutVat = 21.17m,
@@ -955,6 +966,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 420.80m,
                 PriceWithVat = 509.17m,
                 PriceForUnitWithoutVat = 21.04m,
@@ -970,6 +982,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.SixPointFive,
                 PlatoDegree = PlatoDegree.Fifteen,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 509.80m,
                 PriceWithVat = 616.86m,
                 PriceForUnitWithoutVat = 25.49m,
@@ -985,6 +998,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 420.00m,
                 PriceWithVat = 508.20m,
                 PriceForUnitWithoutVat = 21.00m,
@@ -1000,6 +1014,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointEight,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 433.20m,
                 PriceWithVat = 524.17m,
                 PriceForUnitWithoutVat = 21.66m,
@@ -1015,6 +1030,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSeven,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 367.20m,
                 PriceWithVat = 444.31m,
                 PriceForUnitWithoutVat = 18.36m,
@@ -1029,6 +1045,7 @@ public static class PrimatorProductsBuilder
                 Type = ProductType.NonAlcoholicBeer,
                 AlcoholPercentage = AlcoholPercentage.ZeroPointFive,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 330.00m,
                 PriceWithVat = 399.40m,
                 PriceForUnitWithoutVat = 16.50m,
@@ -1043,6 +1060,7 @@ public static class PrimatorProductsBuilder
                 Type = ProductType.NonAlcoholicFlavourBeer,
                 AlcoholPercentage = AlcoholPercentage.ZeroPointThree,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 336.00m,
                 PriceWithVat = 406.56m,
                 PriceForUnitWithoutVat = 16.80m,
@@ -1057,6 +1075,7 @@ public static class PrimatorProductsBuilder
                 Type = ProductType.NonAlcoholicBeer,
                 AlcoholPercentage = AlcoholPercentage.ZeroPointFive,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 239.20m,
                 PriceWithVat = 289.43m,
                 PriceForUnitWithoutVat = 11.96m,
@@ -1066,11 +1085,12 @@ public static class PrimatorProductsBuilder
             new()
             {
                 PublicId = Guid.Parse("da8a9414-80af-4511-9370-4e0c8538f722"),
-                Name ="Prim. Chipper Grap",
+                Name ="Prim. Chipper Grep",
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Radler,
                 AlcoholPercentage = AlcoholPercentage.Two,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 20,
                 PriceWithoutVat = 350.80m,
                 PriceWithVat = 424.47m,
                 PriceForUnitWithoutVat = 17.54m,
@@ -1085,6 +1105,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 144.00m,
                 PriceWithVat = 174.24m,
                 PriceForUnitWithoutVat = 6.00m,
@@ -1098,6 +1119,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 216.00m,
                 PriceWithVat = 261.36m,
                 PriceForUnitWithoutVat = 9.00m,
@@ -1111,6 +1133,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 216.00m,
                 PriceWithVat = 261.36m,
                 PriceForUnitWithoutVat = 9.00m,
@@ -1124,6 +1147,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 216.00m,
                 PriceWithVat = 261.36m,
                 PriceForUnitWithoutVat = 9.00m,
@@ -1137,6 +1161,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Bottle,
                 Type = ProductType.Lemonade,
                 PackageSize = BottleSize.ZeroPointThreeThreeLiters,
+                UnitsPerPackage = 24,
                 PriceWithoutVat = 216.00m,
                 PriceWithVat = 261.36m,
                 PriceForUnitWithoutVat = 9.00m,
@@ -1158,6 +1183,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.Five,
                 PlatoDegree = PlatoDegree.Twelve,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceWithVat = 159.72m
             },
 
@@ -1168,6 +1194,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceWithVat = 169.40m
             },
 
@@ -1178,6 +1205,7 @@ public static class PrimatorProductsBuilder
                 Kind = ProductKind.Multipack,
                 Type = ProductType.Mix,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceWithVat = 193.60m
             },
 
@@ -1190,6 +1218,7 @@ public static class PrimatorProductsBuilder
                 AlcoholPercentage = AlcoholPercentage.FourPointSeven,
                 PlatoDegree = PlatoDegree.Eleven,
                 PackageSize = BottleSize.ZeroPointFiveLiters,
+                UnitsPerPackage = 8,
                 PriceWithVat = 187.55m
             }
         ];

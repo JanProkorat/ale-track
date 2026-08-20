@@ -14,12 +14,16 @@ public static class OutgoingShipmentBuilder
         OutgoingShipmentState state = OutgoingShipmentState.Created,
         Vehicle? vehicle = null,
         List<OutgoingShipmentDriver>? drivers = null,
-        List<OutgoingShipmentStop>? stops = null)
+        List<OutgoingShipmentStop>? stops = null,
+        string name = "Vývoz",
+        DateTime? createdDate = null)
     {
         return new OutgoingShipment
         {
             PublicId = publicId ?? Guid.NewGuid(),
+            Name = name,
             DeliveryDate = deliveryDate,
+            CreatedDate = createdDate ?? DateTime.UtcNow,
             State = state,
             Vehicle = vehicle,
             Drivers = drivers ?? [],

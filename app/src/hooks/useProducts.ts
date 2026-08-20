@@ -1,100 +1,14 @@
-import type { UpdateProductDto, CreateProductsDto } from 'src/generated/api-client';
+// Products module hooks — read-only list, used by the Sklad (inventory)
+// product picker to resolve a brewery product into a new inventory item.
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
 
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const PRODUCTS_KEY = 'products';
-const PRODUCTS_BY_CLIENT_HISTORY_KEY = 'products-by-client-history';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useProducts(search?: string) {
-     return useQuery({
-          queryKey: [PRODUCTS_KEY, search],
-          queryFn: ({ signal }) =>
-               apiClient.getProductsListEndpoint(search ? { Name: `contains:${search}` } : {}, signal),
-     });
-}
-
-export function useProductsByClientHistory(clientId: string) {
-     return useQuery({
-          queryKey: [PRODUCTS_BY_CLIENT_HISTORY_KEY, clientId],
-          queryFn: ({ signal }) =>
-               apiClient.getProductsByClientHistoryEndpoint(clientId, {}, signal),
-          enabled: !!clientId,
-     });
-}
-
-export function useProduct(id: string) {
-     return useQuery({
-          queryKey: [PRODUCTS_KEY, id],
-          queryFn: ({ signal }) => apiClient.getProductDetailEndpoint(id, signal),
-          enabled: !!id,
-     });
-}
-
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
-
-export function useCreateProducts() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ breweryId, data }: { breweryId: string; data: CreateProductsDto }) =>
-               apiClient.createProductsEndpoint(breweryId, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [PRODUCTS_KEY] });
-               queryClient.invalidateQueries({ queryKey: ['breweries'] });
-               notifyCreate('products');
-          },
-          onError: () => {
-               notifyCreateError('products');
-          },
-     });
-}
-
-export function useUpdateProduct() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateProductDto }) =>
-               apiClient.updateProductEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [PRODUCTS_KEY] });
-               queryClient.invalidateQueries({ queryKey: ['breweries'] });
-               notifyUpdate('products');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
-}
-
-export function useDeleteProduct() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteProductEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [PRODUCTS_KEY] });
-               queryClient.invalidateQueries({ queryKey: ['breweries'] });
-               notifyDelete('products');
-          },
-          onError: () => {
-               notifyDeleteError('products');
-          },
-     });
+export function useProducts(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.products.list(params),
+    queryFn: ({ signal }) => ds.getProductsListEndpoint(params, signal),
+  });
 }

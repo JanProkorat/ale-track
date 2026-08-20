@@ -90,6 +90,42 @@ public static class ThrowHelper
             });
 
     /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when the price list being applied is not the one
+    /// the caller previewed.
+    /// </summary>
+    /// <param name="expected">Hash the caller says it reviewed.</param>
+    /// <param name="actual">Hash of the file it actually sent.</param>
+    /// <exception cref="AleTrackException">
+    /// Thrown with 409 Conflict. Applying a file other than the reviewed one would write prices
+    /// nobody approved, so it is refused rather than reconciled.
+    /// </exception>
+    [DoesNotReturn]
+    public static void PriceListSourceChanged(string expected, string actual)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.PriceListSourceChanged,
+            new Dictionary<string, object>
+            {
+                { nameof(expected), expected },
+                { nameof(actual), actual }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an uploaded price list cannot be read.
+    /// </summary>
+    /// <param name="errors">Every reason the file was rejected, so one upload reports them all.</param>
+    /// <exception cref="AleTrackException">Thrown with 400 Bad Request.</exception>
+    [DoesNotReturn]
+    public static void PriceListUnreadable(IReadOnlyCollection<object> errors)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.PriceListUnreadable,
+            new Dictionary<string, object>
+            {
+                { nameof(errors), errors }
+            });
+
+    /// <summary>
     /// Throws an <see cref="AleTrackException"/> when an order is already assigned to an outgoing shipment.
     /// </summary>
     /// <param name="orderIds">Ids of the orders that are already assigned to an outgoing shipment.</param>
@@ -155,5 +191,206 @@ public static class ThrowHelper
             new Dictionary<string, object>
             {
                 { nameof(shipmentId), shipmentId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a brewery still owns products and so
+    /// cannot be deleted.
+    /// </summary>
+    /// <param name="breweryId">ID of the brewery</param>
+    /// <param name="productCount">How many products still belong to it</param>
+    /// <remarks>
+    /// order_items.product_id is Restrict, so letting the delete through would surface as a
+    /// raw DbUpdateException. Refusing on any product at all — rather than only products
+    /// with history — keeps the outcome predictable and avoids a partial cascade that
+    /// removes the unused products and then fails on the used ones.
+    /// </remarks>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void BreweryHasProducts(Guid breweryId, int productCount)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.BreweryHasProducts,
+            new Dictionary<string, object>
+            {
+                { nameof(breweryId), breweryId },
+                { nameof(productCount), productCount }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a shipment state transition is not
+    /// permitted from the shipment's current state.
+    /// </summary>
+    /// <param name="from">The shipment's current state</param>
+    /// <param name="to">The requested state</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void ShipmentTransitionNotAllowed(OutgoingShipmentState from, OutgoingShipmentState to)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentTransitionNotAllowed,
+            new Dictionary<string, object>
+            {
+                { nameof(from), from },
+                { nameof(to), to }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an update would change content that
+    /// froze when the shipment left <see cref="OutgoingShipmentState.Created"/>.
+    /// </summary>
+    /// <param name="state">The shipment's current state</param>
+    /// <param name="fields">Names of the frozen fields the request would have changed</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void ShipmentContentFrozen(OutgoingShipmentState state, IReadOnlyCollection<string> fields)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.ShipmentContentFrozen,
+            new Dictionary<string, object>
+            {
+                { nameof(state), state },
+                { nameof(fields), fields }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an update would change the content of
+    /// an order that is closed, or already loaded onto a shipment.
+    /// </summary>
+    /// <param name="orderId">ID of the order</param>
+    /// <exception cref="AleTrackException"></exception>
+    [DoesNotReturn]
+    public static void OrderContentFrozen(Guid orderId)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.OrderContentFrozen,
+            new Dictionary<string, object>
+            {
+                { nameof(orderId), orderId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a driver account attempts an operation
+    /// reserved for office staff — creating or deleting driver records and shipments.
+    /// </summary>
+    /// <exception cref="AleTrackException">Thrown with 403 Forbidden.</exception>
+    /// <remarks>
+    /// Deliberately 403 rather than 404: these routes take no id whose existence could leak,
+    /// and the caller is being told the operation itself is not theirs.
+    /// </remarks>
+    [DoesNotReturn]
+    public static void DriverScopeForbidden()
+        => throw new AleTrackException(
+            StatusCodes.Status403Forbidden,
+            ErrorCodes.DriverScopeForbidden);
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a driver record is already linked to a
+    /// different user account.
+    /// </summary>
+    /// <param name="driverId">Public id of the driver already linked elsewhere.</param>
+    /// <exception cref="AleTrackException">Thrown with 400 Bad Request.</exception>
+    [DoesNotReturn]
+    public static void DriverAlreadyLinkedToUser(Guid driverId)
+        => throw new AleTrackException(
+            StatusCodes.Status400BadRequest,
+            ErrorCodes.DriverAlreadyLinkedToUser,
+            new Dictionary<string, object>
+            {
+                { nameof(driverId), driverId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an already completed sale would be changed.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// Completing a sale deducts its pieces from inventory, so editing, re-completing or deleting
+    /// it afterwards would desynchronise the stock ledger from what actually left the shelf.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleAlreadyCompleted(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleAlreadyCompleted,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a sale cannot be completed because a line
+    /// has no price.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// A draft may be saved before the price is agreed — free-form stock has no ceník entry to
+    /// fall back on — but it must not be handed over unpriced.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleLinePriceMissing(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleLinePriceMissing,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when there is not enough stock to complete a sale.
+    /// </summary>
+    /// <param name="items">Names of the lines that exceed what is on the shelf.</param>
+    /// <remarks>
+    /// Carries the offending line names so the UI can say which item is short rather than only
+    /// that something is.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleInsufficientStock(IReadOnlyCollection<string> items)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleInsufficientStock,
+            new Dictionary<string, object>
+            {
+                { nameof(items), string.Join(", ", items) }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a payment state is set on a sale that is not
+    /// paid by invoice.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleNotInvoiced(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleNotInvoiced,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when payment is confirmed on a sale that is not
+    /// waiting for one.
+    /// </summary>
+    /// <param name="saleId">Public id of the sale.</param>
+    /// <remarks>
+    /// Guards both directions: a draft has not been handed over yet, and an already completed sale
+    /// would have its settlement date overwritten.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void SaleNotAwaitingPayment(Guid saleId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.SaleNotAwaitingPayment,
+            new Dictionary<string, object>
+            {
+                { nameof(saleId), saleId }
             });
 }

@@ -24,7 +24,7 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         Get("products");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetProductsListEndpoint)));
         
         DontCatchExceptions();
@@ -40,13 +40,17 @@ public sealed class GetProductsListEndpoint(AleTrackDbContext dbContext) : Endpo
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
         var data = await dbContext.Products
-            .OrderBy(c => c.Brewery.DisplayOrder)
+            .Where(p => !p.IsDeleted)
+            .OrderForDisplay()
             .Select(c => new ProductListItemDto
             {
                 Id = c.PublicId,
                 Name = c.Name,
                 Description = c.Description,
                 Kind = c.Kind,
+                Container = c.Container,
+                SaleUnit = c.SaleUnit,
+                UnitsPerPackage = c.UnitsPerPackage,
                 AlcoholPercentage = c.AlcoholPercentage,
                 PlatoDegree = c.PlatoDegree,
                 Type = c.Type,

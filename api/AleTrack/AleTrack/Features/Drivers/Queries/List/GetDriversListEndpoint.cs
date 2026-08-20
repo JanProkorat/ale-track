@@ -1,20 +1,21 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Features.Drivers.Queries.List;
 
-public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoint<FilterableRequest, List<DriverListItemDto>>
+public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext, IDriverScope driverScope) : Endpoint<FilterableRequest, List<DriverListItemDto>>
 {
     /// <inheritdoc />
     public override void Configure()
     {
         Get("drivers");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Drivers, PermissionLevel.View)
             .WithName(nameof(GetDriversListEndpoint)));
         
         DontCatchExceptions();
@@ -29,7 +30,17 @@ public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoi
     /// <inheritdoc />
     public override async Task HandleAsync(FilterableRequest req, CancellationToken ct)
     {
-        var data = await dbContext.Drivers
+        IQueryable<Driver> query = dbContext.Drivers;
+
+        // A driver sees only themselves. An unlinked driver account matches no row and
+        // therefore sees nothing, rather than falling back to the full list.
+        if (driverScope.IsScoped)
+        {
+            var scopedDriverId = await driverScope.GetDriverIdAsync(ct);
+            query = query.Where(d => d.Id == scopedDriverId);
+        }
+
+        var data = await query
             .Select(c => new DriverListItemDto
             {
                 Id = c.PublicId,
@@ -37,14 +48,15 @@ public sealed class GetDriversListEndpoint(AleTrackDbContext dbContext) : Endpoi
                 LastName = c.LastName,
                 PhoneNumber = c.PhoneNumber,
                 Color = c.Color,
+                IsLinkedToUser = c.UserId != null,
                 AvailableDates = c.Availabilities
                     .Select(a => new DriverAvailabilityListItemDto(a.From, a.Until))
                     .ToList()
-                
+
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);
-        
+
         await Send.OkAsync(data, cancellation: ct);
     }
 }

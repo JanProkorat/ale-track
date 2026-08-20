@@ -1,0 +1,70 @@
+import { describe, expect, it } from 'vitest';
+import { userFromToken } from './jwt';
+
+const CLAIM_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+const CLAIM_NAME = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name';
+
+/** A token only has to survive jwtDecode, which reads the payload without verifying. */
+function tokenWith(payload: Record<string, unknown>): string {
+  const encode = (part: object) =>
+    btoa(JSON.stringify(part)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.signature`;
+}
+
+describe('userFromToken', () => {
+  it('keeps a Driver role claim', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_NAME]: 'novak', [CLAIM_ROLE]: 'Driver' }));
+
+    expect(user?.roles).toEqual(['Driver']);
+  });
+
+  // The regression this guards: the role filter used to accept only Admin|Manager, so a
+  // Driver claim was dropped and the ['Manager'] fallback took over — the account would be
+  // mislabelled as a manager anywhere the raw role list is read directly (roleOfRoles,
+  // Sidebar/AccountMenu). Capabilities aren't at risk here: they come from the token's own
+  // "cap" claims, not from this role list.
+  it('does not let a driver decode as a manager', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_NAME]: 'novak', [CLAIM_ROLE]: 'Driver' }));
+
+    expect(user?.roles).not.toContain('Manager');
+  });
+
+  it('decodes cap claims onto the user', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Invoicing'] }));
+
+    expect(user?.caps).toEqual({ Invoicing: false, LoadingBreakdown: true });
+  });
+
+  // Money is stamped as a claim by nothing today, but even if a future writer emitted one
+  // (e.g. a stale token from before the registry change), it must be ignored rather than
+  // resolved — it is not a key the frontend registry knows about.
+  it('ignores a Money claim, since Money is not in the registry', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Driver', cap: ['Money'] }));
+
+    expect(user?.caps).toEqual({ Invoicing: true, LoadingBreakdown: true });
+  });
+
+  it('keeps multiple role claims', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: ['Manager', 'Driver'] }));
+
+    expect(user?.roles).toEqual(['Manager', 'Driver']);
+  });
+
+  it('drops an unrecognised role and falls back to Manager when nothing survives', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'Wizard' }));
+
+    expect(user?.roles).toEqual(['Manager']);
+  });
+
+  it('falls back to Manager for a token carrying the pre-rename User claim', () => {
+    const user = userFromToken(tokenWith({ [CLAIM_ROLE]: 'User' }));
+
+    // "User" is no longer a known role, so it is dropped and the fallback applies.
+    // That lands old sessions on Manager, which is what they were — no forced re-login.
+    expect(user?.roles).toEqual(['Manager']);
+  });
+
+  it('returns null for a token it cannot decode', () => {
+    expect(userFromToken('not-a-token')).toBeNull();
+  });
+});

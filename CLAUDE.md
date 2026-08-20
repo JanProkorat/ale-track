@@ -63,11 +63,12 @@ Config is standard ASP.NET layering: `appsettings.json` → `appsettings.{ASPNET
 ### Local database, migrations, seeding
 
 ```bash
-# From api/AleTrack/ — Postgres 17 (user/pass postgres/postgres, db AleTrack, port 5432):
+# From api/AleTrack/ — Postgres 17 (user/pass postgres/postgres, db AleTrack) on host port
+# 5433, deliberately not the default 5432, which another project's Postgres often holds:
 docker compose up -d
 
 # Apply migrations (from api/AleTrack/AleTrack/); --connection overrides the design-time factory:
-dotnet ef database update --connection "Host=localhost;Port=5432;Database=AleTrack;Username=postgres;Password=postgres"
+dotnet ef database update --connection "Host=localhost;Port=5433;Database=AleTrack;Username=postgres;Password=postgres"
 
 # Seed demo data (3 breweries + ~230 products). The seeder needs an appsettings.json in its own
 # directory with a ConnectionStrings:AleTrack entry (it reads appsettings, not env vars):
@@ -88,3 +89,8 @@ GitHub Actions live only at the repo root (`.github/workflows/`) and are **path-
 ## Local secrets (never committed)
 
 Real connection strings and keys live only in git-ignored working-tree files: `api/AleTrack/AleTrack/appsettings.Development*.json`, `appsettings.Production.json`, and `app/.env*`. The committed baselines hold placeholders. This is a **public** repository — keep real secrets out of tracked files.
+
+## Claude: scope → stack
+
+- `api/**` → dotnet
+- `app/**` → react

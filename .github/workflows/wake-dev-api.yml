@@ -1,0 +1,54 @@
+name: Wake Dev API
+
+# Render free instances spin down after 15 minutes idle, and waking one takes a client
+# that sits through the boot: Render answers the request that triggers a spin-up with an
+# immediate 503. The single-shot cron-job.org keepalive (*/12 8-17 * * *) therefore can
+# never revive a sleeping service - it only keeps an already-running one warm. This job
+# is what does the waking, which is why it has to run every day. On Sunday 2026-07-26 it
+# was still scheduled Mon-Fri: nothing woke the service after it slept on Saturday
+# evening, and all 13 keepalive pings returned 503 over the following two and a half
+# hours until a request that held the connection open finally booted it.
+#
+# Note: GitHub disables scheduled workflows in repositories with no activity for 60 days.
+
+on:
+  schedule:
+    # Hourly at :50 UTC, 05:50-16:50. A single early run is not enough: it wakes the
+    # service, nothing touches it for the next 45 minutes, and it spins down again at
+    # ~07:15 - so cron-job.org's 08:00 ping is a cold trigger and the whole day fails.
+    # The run at :50 lands 10 minutes before an hour of pings, inside the 15-minute idle
+    # window, and every later run is a no-op costing one request while the service is up.
+    # The range covers 07:50-18:50 Prague in summer and 06:50-17:50 in winter, so the
+    # keepalive window (08:00-17:48 Prague) is preceded by a wake either way. Repeating
+    # hourly also absorbs GitHub delaying scheduled runs, which it does by 10-30 minutes.
+    - cron: "50 5-16 * * *"
+  workflow_dispatch:
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Wait for liveness, then warm the database connection
+        env:
+          BASE_URL: ${{ vars.DEV_API_BASE_URL || 'https://dev-aletrack.onrender.com' }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 "$BASE_URL/health/live" || true)
+            echo "attempt $attempt: /health/live -> $code"
+
+            if [ "$code" = "200" ]; then
+              # The first database connection on a fresh instance costs ~10s. Pay it here
+              # rather than leaving it for the first real user request.
+              curl -s -o /dev/null -w '/health/ready -> %{http_code} in %{time_total}s\n' \
+                --max-time 60 "$BASE_URL/health/ready" || true
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::$BASE_URL never returned 200 from /health/live - the service is not coming up."
+          exit 1

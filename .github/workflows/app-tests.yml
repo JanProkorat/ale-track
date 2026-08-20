@@ -19,15 +19,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The app is a yarn project — there is no package-lock.json, so the npm cache
+      # lookup failed the job before a single test ran. This workflow had therefore
+      # never passed since it was added.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache: yarn
+          cache-dependency-path: app/yarn.lock
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
+
+      # Cheapest check first. `yarn lint` alone exits 0 on warnings, so the count is
+      # ratcheted instead: the 4 existing react-refresh/only-export-components warnings
+      # are tolerated, a 5th fails the build. Clearing them means splitting the hook out
+      # of each provider file and touching ~30 import sites, which is its own change —
+      # lower this number when that happens.
+      - name: Lint
+        run: yarn lint --max-warnings 4
+
+      # `yarn build` is `tsc --noEmit && vite build`, so this is the typecheck as well as
+      # the bundle. Vitest transpiles through SWC and never checks types, so without this
+      # step a type error reaches dev unnoticed.
+      - name: Typecheck and build
+        run: yarn build
 
       - name: Run tests
-        run: npm run test:run
+        run: yarn test:run

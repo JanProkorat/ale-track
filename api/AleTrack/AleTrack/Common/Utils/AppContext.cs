@@ -31,8 +31,34 @@ public class AppContext(IHttpContextAccessor httpContextAccessor) : IAppContext
                 .FindAll(ClaimTypes.Role)
                 .Select(c => Enum.Parse<UserRoleType>(c.Value))
                 .ToList();
-            
+
             return roles ?? [];
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyDictionary<ModuleType, PermissionLevel> Permissions
+    {
+        get
+        {
+            // Admin ⇒ full access to every module.
+            if (Roles.Contains(UserRoleType.Admin))
+                return Enum.GetValues<ModuleType>().ToDictionary(m => m, _ => PermissionLevel.Edit);
+
+            var result = new Dictionary<ModuleType, PermissionLevel>();
+            var claims = User?.FindAll(JwtService.PermissionClaimType) ?? [];
+            foreach (var claim in claims)
+            {
+                var parts = claim.Value.Split(':');
+                if (parts.Length == 2
+                    && Enum.TryParse<ModuleType>(parts[0], out var module)
+                    && Enum.TryParse<PermissionLevel>(parts[1], out var level))
+                {
+                    result[module] = level;
+                }
+            }
+
+            return result;
         }
     }
 }

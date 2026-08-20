@@ -1,58 +1,431 @@
-import { useTranslation } from 'react-i18next';
+import { Fragment, useMemo, type ReactNode } from 'react';
+import { Box, Button, Card, Stack, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
+import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
+import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
+import dayjs, { type Dayjs } from 'dayjs';
+import { PageContainer, PageHeader } from 'src/components/common/PageHeader';
+import { StatCard } from 'src/components/common/StatCard';
+import { StatusPill } from 'src/components/common/StatusPill';
+import { QueryBoundary } from 'src/components/common/QueryBoundary';
+import { EmptyState } from 'src/components/common/EmptyState';
+import { useAuth } from 'src/auth/AuthProvider';
+import { useModuleCounts } from 'src/hooks/useReports';
+import { useDrivers } from 'src/hooks/useDrivers';
+import { useShipments } from 'src/hooks/useShipments';
+import { useDeliveries } from 'src/hooks/useDeliveries';
+import { useInventory } from 'src/hooks/useInventory';
+import { useSales } from 'src/hooks/useSales';
+import { useCurrency } from 'src/providers/CurrencyProvider';
+import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
+import { PATHS } from 'src/routes/paths';
+import { num, plural } from 'src/lib/format';
+import {
+  SHIP_STATUS, shipStateName, DELIVERY_STATUS, deliveryStateName, SALE_STATUS, saleStateName,
+  type StatusTone,
+} from 'src/lib/labels';
+import { type DriverListItemDto } from 'src/generated/api-client';
 
-import Box from '@mui/material/Box';
+const MONTHS_CS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
+const LOW_STOCK_THRESHOLD = 3;
 
-import StatCards from 'src/pages/dashboard/components/StatCards';
-import ExchangeRates from 'src/pages/dashboard/components/ExchangeRates';
-import ActiveShipments from 'src/pages/dashboard/components/ActiveShipments';
-import ActiveDeliveries from 'src/pages/dashboard/components/ActiveDeliveries';
-import UpcomingReminders from 'src/pages/dashboard/components/UpcomingReminders';
-import OrderItemReminders from 'src/pages/dashboard/components/OrderItemReminders';
-import DriverAvailabilityCalendar from 'src/pages/dashboard/components/DriverAvailabilityCalendar';
+/** A dated schedule row (shipment or delivery) on the "Tento týden" card. */
+function ScheduleRow({ date, icon, title, meta, href, tone, label }: {
+  date: Date; icon: ReactNode; title: string; meta: string; href: string; tone: StatusTone; label: string;
+}) {
+  const d = dayjs(date);
+  const isToday = d.isSame(dayjs(), 'day');
+  return (
+    <Box component={RouterLink} to={href} sx={{
+      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderColor: 'divider', borderRadius: 2,
+      bgcolor: 'background.default', textDecoration: 'none', color: 'inherit', '&:hover': { borderColor: 'text.disabled' },
+    }}>
+      <Box sx={{ textAlign: 'center', minWidth: 40, flexShrink: 0 }}>
+        <Typography sx={{ fontWeight: 800, fontSize: 17, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{d.date()}.</Typography>
+        <Typography sx={{ fontSize: 10.5, textTransform: 'uppercase', color: 'text.secondary' }}>{MONTHS_CS[d.month()]}</Typography>
+      </Box>
+      <Box sx={{ width: 34, height: 34, borderRadius: 1.5, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', color: 'text.secondary', flexShrink: 0, '& svg': { fontSize: 18 } }}>{icon}</Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>
+          {title}{isToday && <Box component="span" sx={{ ml: 0.75, fontSize: 11, color: 'warning.dark', fontWeight: 700 }}>dnes</Box>}
+        </Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{meta}</Typography>
+      </Box>
+      <StatusPill tone={tone} label={label} />
+    </Box>
+  );
+}
 
-import PageHeader from 'src/components/common/PageHeader';
+function DashCard({ icon, iconColor, title, action, children }: {
+  icon: ReactNode; iconColor: string; title: string; action?: ReactNode; children: ReactNode;
+}) {
+  return (
+    <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Box sx={{ color: iconColor, display: 'grid', placeItems: 'center', '& svg': { fontSize: 20 } }}>{icon}</Box>
+        <Typography variant="h6">{title}</Typography>
+        <Box sx={{ flex: 1 }} />
+        {action}
+      </Stack>
+      {children}
+    </Card>
+  );
+}
 
-export default function DashboardPage() {
-     const { t } = useTranslation();
+// The count fields of the reports DTO (spelled out rather than derived via
+// `keyof NumberOfRecordsInEachModuleDto`, which would also pull in class
+// methods like `init`/`toJSON`).
+type ModuleCountField =
+  | 'clientsCount'
+  | 'ordersCount'
+  | 'breweriesCount'
+  | 'inventoryItemsCount'
+  | 'driversCount'
+  | 'vehiclesCount'
+  | 'usersCount'
+  | 'outgoingShipmentsCount'
+  | 'productDeliveriesCount'
+  | 'salesCount';
 
-     return (
-          <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
-               <PageHeader title={t('dashboard.title')} />
+// Which count field on the reports DTO backs each module's KPI tile, and the
+// tile's tone. Tones are varied for visual rhythm, not semantic meaning.
+// Keyed by nav key rather than by ModuleKey: a nav item may gate on a module it does not name.
+const TILE_CONFIG: Partial<Record<string, { field: ModuleCountField; tone: StatusTone }>> = {
+  orders: { field: 'ordersCount', tone: 'amber' },
+  shipments: { field: 'outgoingShipmentsCount', tone: 'amber' },
+  deliveries: { field: 'productDeliveriesCount', tone: 'info' },
+  inventory: { field: 'inventoryItemsCount', tone: 'info' },
+  // Like the sidebar badge, this counts sales still open — the endpoint excludes completed
+  // ones, so a quiet counter reads 0 rather than every sale ever rung up.
+  sales: { field: 'salesCount', tone: 'ok' },
+  breweries: { field: 'breweriesCount', tone: 'ok' },
+  clients: { field: 'clientsCount', tone: 'ok' },
+  drivers: { field: 'driversCount', tone: 'grey' },
+  vehicles: { field: 'vehiclesCount', tone: 'grey' },
+  users: { field: 'usersCount', tone: 'grey' },
+};
 
-               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {/* Stats row */}
-                    <StatCards />
+const WEEKDAY_SHORT = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
 
-                    {/* Reminders row */}
-                    <Box
-                         sx={{
-                              display: 'grid',
-                              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                              gap: 3,
-                         }}
-                    >
-                         <UpcomingReminders />
-                         <OrderItemReminders />
+const fullName = (d: DriverListItemDto) => [d.firstName, d.lastName].filter(Boolean).join(' ');
+
+/** Hour label for an availability edge — "07", or "7:30" when not on the hour. */
+function hourLabel(d?: Date): string {
+  if (!d) return '';
+  const m = dayjs(d);
+  return m.minute() === 0 ? m.format('HH') : m.format('H:mm');
+}
+
+/** A driver's availability window on a given day (earliest start → latest end),
+ * or null if not available that day. */
+function daySlots(driver: DriverListItemDto, day: Dayjs): { from: Date; until: Date } | null {
+  const slots = (driver.availableDates ?? []).filter((a) => a.from && dayjs(a.from).isSame(day, 'day'));
+  if (slots.length === 0) return null;
+  const froms = slots.map((s) => s.from as Date).sort((a, b) => a.getTime() - b.getTime());
+  const untils = slots.map((s) => (s.until ?? s.from) as Date).sort((a, b) => a.getTime() - b.getTime());
+  return { from: froms[0], until: untils[untils.length - 1] };
+}
+
+export function DashboardPage() {
+  const { user, canSee } = useAuth();
+  const navigate = useNavigate();
+  const countsQuery = useModuleCounts();
+  const driversQuery = useDrivers();
+
+  const showWeek = canSee('shipments') || canSee('deliveries');
+  const showLowStock = canSee('inventory');
+  const showSales = canSee('sales');
+
+  const shipmentsQuery = useShipments();
+  const deliveriesQuery = useDeliveries();
+  const inventoryQuery = useInventory();
+  const salesQuery = useSales();
+  const { formatMoney } = useCurrency();
+
+  const today = useMemo(() => dayjs().startOf('day'), []);
+
+  const tiles = NAV_GROUPS.flatMap((g) => g.items).filter(
+    // Keyed by nav key, not by module: the garage-sale Reporty gates on `sales` but has no tile.
+    (it) => TILE_CONFIG[it.key] !== undefined && canSee(navPermModule(it))
+  );
+
+  // This week's 7 days, starting today (matching the prototype's availability grid).
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => today.add(i, 'day')), [today]);
+
+  // "Tento týden" — upcoming shipments + deliveries (from today on), by date.
+  const weekRows = useMemo(() => {
+    const ships = (shipmentsQuery.data ?? [])
+      .filter((s) => s.deliveryDate && !dayjs(s.deliveryDate).startOf('day').isBefore(today))
+      .map((s) => {
+        const st = SHIP_STATUS[shipStateName(s.state) ?? 'Created'] ?? SHIP_STATUS.Created;
+        return { key: `s-${s.id}`, date: s.deliveryDate!, kind: 'ship' as const, title: s.name ?? 'Vývoz', meta: 'Rozvoz ke klientům', href: `${PATHS.shipments}/${s.id}`, tone: st.tone, label: st.label };
+      });
+    const delivs = (deliveriesQuery.data ?? [])
+      .filter((d) => d.deliveryDate && deliveryStateName(d.state) !== 'Cancelled' && !dayjs(d.deliveryDate).startOf('day').isBefore(today))
+      .map((d) => {
+        const st = DELIVERY_STATUS[deliveryStateName(d.state) ?? 'InPlanning'] ?? DELIVERY_STATUS.InPlanning;
+        const n = (d.stopNames ?? []).length;
+        return { key: `d-${d.id}`, date: d.deliveryDate!, kind: 'deliv' as const, title: 'Dovoz z pivovarů', meta: `${n} ${plural(n, 'pivovar', 'pivovary', 'pivovarů')}`, href: `${PATHS.deliveries}/${d.id}`, tone: st.tone, label: st.label };
+      });
+    return [...ships, ...delivs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [shipmentsQuery.data, deliveriesQuery.data, today]);
+
+  // "Rozpracované prodeje" — counter sales that have not been completed yet, so the stock is
+  // still on the shelf and the money has not arrived. Oldest first: a draft left open for
+  // weeks is the one worth chasing, unlike the week card, where the nearest date leads.
+  const salesRows = useMemo(() => {
+    return (salesQuery.data ?? [])
+      .filter((s) => s.saleDate && saleStateName(s.state) !== 'Completed')
+      .map((s) => {
+        const status = SALE_STATUS[saleStateName(s.state) ?? 'Draft'] ?? SALE_STATUS.Draft;
+        const quantity = s.totalQuantity ?? 0;
+        return {
+          key: `sale-${s.id}`,
+          date: s.saleDate!,
+          // A walk-in may be recorded with no name at all — an anonymous cash sale needs none.
+          title: s.clientName || s.buyerName || 'Anonymní prodej',
+          meta: `${num(quantity)} ${plural(quantity, 'kus', 'kusy', 'kusů')} · ${formatMoney(s.totalPrice ?? 0)}`,
+          href: `${PATHS.sales}/${s.id}`,
+          tone: status.tone,
+          label: status.label,
+        };
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [salesQuery.data, formatMoney]);
+
+  // "Nízká zásoba" — inventory items at or below the low-stock threshold.
+  const lowStock = useMemo(() => {
+    const out: { key: string; name: string; section: string; quantity: number }[] = [];
+    for (const sec of inventoryQuery.data ?? []) {
+      for (const it of sec.items ?? []) {
+        if ((it.quantity ?? 0) <= LOW_STOCK_THRESHOLD) {
+          out.push({ key: it.id ?? `${sec.id}-${it.name}`, name: it.name ?? '—', section: sec.name ?? '', quantity: it.quantity ?? 0 });
+        }
+      }
+    }
+    return out.sort((a, b) => a.quantity - b.quantity);
+  }, [inventoryQuery.data]);
+
+  return (
+    <PageContainer>
+      <PageHeader
+        eyebrow="Přehled"
+        title="Nástěnka"
+        subtitle={user?.firstName ? `Vítejte zpět, ${user.firstName}.` : 'Vítejte zpět.'}
+      />
+
+      <Box sx={{ mb: 3 }}>
+        <QueryBoundary query={countsQuery}>
+          {(counts) => (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+                gap: 2,
+              }}
+            >
+              {tiles.map((it) => {
+                const cfg = TILE_CONFIG[it.key]!;
+                const value = counts[cfg.field] ?? 0;
+                return (
+                  <StatCard
+                    key={it.key}
+                    icon={it.icon}
+                    label={it.label}
+                    value={num(value)}
+                    tone={cfg.tone}
+                    onClick={() => navigate(it.path)}
+                  />
+                );
+              })}
+            </Box>
+          )}
+        </QueryBoundary>
+      </Box>
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {(showSales || showWeek) && (
+        <Box sx={{
+          // The pair share a row on desktop. `alignItems: start` rather than the default
+          // stretch: these two cards list independent things, so the shorter one should end
+          // where its content ends instead of trailing empty space to match its neighbour.
+          display: 'grid', gap: 2, alignItems: 'start',
+          gridTemplateColumns: { xs: '1fr', md: showSales && showWeek ? '1fr 1fr' : '1fr' },
+        }}>
+          {showSales && (
+            <DashCard
+              icon={<ShoppingCartOutlinedIcon />}
+              iconColor="success.main"
+              title="Rozpracované prodeje"
+              action={<Button component={RouterLink} to={PATHS.sales} size="small">Vše</Button>}
+            >
+              {salesRows.length > 0 ? (
+                <Stack spacing={1}>
+                  {salesRows.map((r) => (
+                    <ScheduleRow
+                      key={r.key}
+                      date={r.date}
+                      icon={<ShoppingCartOutlinedIcon />}
+                      title={r.title}
+                      meta={r.meta}
+                      href={r.href}
+                      tone={r.tone}
+                      label={r.label}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState title="Nic rozpracovaného" description="Všechny prodeje jsou dokončené." dense />
+              )}
+            </DashCard>
+          )}
+
+          {showWeek && (
+            <DashCard
+              icon={<RouteOutlinedIcon />}
+              iconColor="warning.main"
+              title="Tento týden — rozvozy a dovozy"
+              action={<Button component={RouterLink} to={PATHS.shipments} size="small">Vše</Button>}
+            >
+              {weekRows.length > 0 ? (
+                <Stack spacing={1}>
+                  {weekRows.map((r) => (
+                    <ScheduleRow
+                      key={r.key}
+                      date={r.date}
+                      icon={r.kind === 'ship' ? <LocalShippingOutlinedIcon /> : <WarehouseOutlinedIcon />}
+                      title={r.title}
+                      meta={r.meta}
+                      href={r.href}
+                      tone={r.tone}
+                      label={r.label}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState title="Nic naplánováno" description="Tento týden nejsou žádné rozvozy ani dovozy." dense />
+              )}
+            </DashCard>
+          )}
+        </Box>
+      )}
+
+      {/* Full width rather than beside another card: the grid below is 720px wide before it
+          starts scrolling, which a half-width column cannot give it on most screens. */}
+      <Card sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Stack direction="row" alignItems="center" spacing={1.25} flexWrap="wrap" sx={{ mb: 2 }}>
+          <CalendarMonthOutlinedIcon sx={{ color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ flex: 1 }}>Dostupnost řidičů tento týden</Typography>
+          <Button
+            component={RouterLink}
+            to={PATHS.drivers}
+            variant="contained"
+            size="small"
+            startIcon={<CalendarMonthOutlinedIcon />}
+          >
+            Celý kalendář
+          </Button>
+        </Stack>
+
+        <QueryBoundary
+          query={driversQuery}
+          isEmpty={(rows) => rows.length === 0}
+          emptyState={
+            <EmptyState
+              title="Žádní řidiči"
+              description="Zatím nejsou v evidenci žádní řidiči."
+              action={
+                <Button component={RouterLink} to={PATHS.drivers} variant="contained" size="small">
+                  Přidat řidiče
+                </Button>
+              }
+            />
+          }
+        >
+          {(drivers) => (
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box sx={{ minWidth: 720, display: 'grid', gridTemplateColumns: `minmax(130px, 1.4fr) repeat(7, minmax(72px, 1fr))` }}>
+                {/* Header row */}
+                <Box sx={{ px: 1.5, py: 1.25, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'flex-end' }}>
+                  <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.disabled' }}>Řidič</Typography>
+                </Box>
+                {weekDays.map((d) => {
+                  const isToday = d.isSame(today, 'day');
+                  return (
+                    <Box key={d.toISOString()} sx={{ px: 1, py: 1.25, borderBottom: 1, borderColor: 'divider', textAlign: 'center' }}>
+                      <Typography sx={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: isToday ? 'warning.main' : 'text.disabled' }}>
+                        {WEEKDAY_SHORT[d.day()]}
+                      </Typography>
+                      <Typography sx={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: isToday ? 'warning.dark' : 'text.primary' }}>
+                        {d.date()}.
+                      </Typography>
                     </Box>
+                  );
+                })}
 
-                    {/* Driver availability */}
-                    <DriverAvailabilityCalendar />
+                {/* One row per driver */}
+                {drivers.map((dr, i) => {
+                  const color = dr.color || '#8791A0';
+                  const rowBorder = i === 0 ? {} : { borderTop: 1, borderColor: 'divider' };
+                  return (
+                    <Fragment key={dr.id ?? fullName(dr)}>
+                      <Box sx={{ ...rowBorder, px: 1.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{fullName(dr)}</Typography>
+                      </Box>
+                      {weekDays.map((d) => {
+                        const slot = daySlots(dr, d);
+                        return (
+                          <Box key={d.toISOString()} sx={{ ...rowBorder, px: 1, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {slot ? (
+                              <Box component="span" sx={{ px: 1, py: 0.4, borderRadius: 1, fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums', bgcolor: alpha(color, 0.16), color, whiteSpace: 'nowrap' }}>
+                                {hourLabel(slot.from)}–{hourLabel(slot.until)}
+                              </Box>
+                            ) : (
+                              <Typography component="span" color="text.disabled">—</Typography>
+                            )}
+                          </Box>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
+        </QueryBoundary>
+      </Card>
 
-                    {/* Active shipments & deliveries */}
-                    <Box
-                         sx={{
-                              display: 'grid',
-                              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                              gap: 3,
-                         }}
-                    >
-                         <ActiveShipments />
-                         <ActiveDeliveries />
-                    </Box>
-
-                    {/* Exchange rates */}
-                    <ExchangeRates />
-               </Box>
-          </Box>
-     );
+      {showLowStock && (
+        <DashCard
+          icon={<ReportProblemOutlinedIcon />}
+          iconColor="error.main"
+          title="Nízká zásoba"
+          action={<Button component={RouterLink} to={PATHS.inventory} size="small">Sklad</Button>}
+        >
+          {lowStock.length > 0 ? (
+            <Stack spacing={1}>
+              {lowStock.map((i) => (
+                <Stack key={i.key} direction="row" alignItems="center" spacing={1} justifyContent="space-between">
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{i.name}</Typography>
+                    {i.section && <Typography sx={{ fontSize: 12, color: 'text.secondary' }} noWrap>{i.section}</Typography>}
+                  </Box>
+                  <StatusPill tone="crit" label={`${i.quantity} ks skladem`} />
+                </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <Typography color="text.secondary" sx={{ fontSize: 13.5 }}>Vše dostatečně naskladněno.</Typography>
+          )}
+        </DashCard>
+      )}
+      </Box>
+    </PageContainer>
+  );
 }

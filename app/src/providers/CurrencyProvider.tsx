@@ -1,122 +1,62 @@
-import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState, useContext, useCallback, createContext } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useAuth } from 'src/auth/AuthProvider';
+import { useExchangeRates, eurRateFromList } from 'src/hooks/useExchangeRates';
 
-import { apiClient } from 'src/api/apiClient';
+export type Currency = 'CZK' | 'EUR';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type CurrencyCode = 'CZK' | 'EUR';
-
-export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
-     CZK: 'Kč',
-     EUR: '€',
-};
-
-export function currencySymbol(code: string): string {
-     return CURRENCY_SYMBOLS[code as CurrencyCode] ?? code;
-}
+const STORAGE_KEY = 'aletrack.currency';
+const FALLBACK_EUR_RATE = 25.3;
 
 interface CurrencyContextValue {
-     /** Currently selected currency */
-     currency: CurrencyCode;
-     /** Switch to a different currency */
-     setCurrency: (code: CurrencyCode) => void;
-     /**
-      * Format a price value (assumed to be in CZK) to the selected currency.
-      * Returns a formatted string like "123.45 CZK" or "5.12 EUR".
-      */
-     formatPrice: (czk: number | undefined | null) => string;
-     /** Convert a CZK amount to the selected currency (raw number) */
-     convert: (czk: number) => number;
-     /** Convert an amount in the selected currency back to CZK */
-     toCzk: (amount: number) => number;
-     /** Whether exchange rates are still loading */
-     isLoading: boolean;
+  currency: Currency;
+  setCurrency: (c: Currency) => void;
+  /** CZK per 1 EUR — live from GET /exchange-rates when signed in, else fallback. */
+  eurRate: number;
+  rateUpdatedAt: string;
+  /** Format a CZK-base amount into the active display currency. */
+  formatMoney: (czk: number | null | undefined) => string;
 }
 
-const CurrencyContext = createContext<CurrencyContextValue>({
-     currency: 'CZK',
-     setCurrency: () => {},
-     formatPrice: () => '-',
-     convert: (v) => v,
-     toCzk: (v) => v,
-     isLoading: false,
-});
+const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
-export function useCurrency() {
-     return useContext(CurrencyContext);
+export function CurrencyProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
+  const { data: rates } = useExchangeRates(isAuthenticated);
+  const [currency, setCurrencyState] = useState<Currency>(
+    () => (localStorage.getItem(STORAGE_KEY) as Currency) || 'CZK'
+  );
+
+  const eurRate = eurRateFromList(rates, FALLBACK_EUR_RATE);
+
+  const value = useMemo<CurrencyContextValue>(() => {
+    const setCurrency = (c: Currency) => {
+      localStorage.setItem(STORAGE_KEY, c);
+      setCurrencyState(c);
+    };
+    const formatMoney = (czk: number | null | undefined) => {
+      if (czk == null) return '—';
+      if (currency === 'EUR') {
+        return `${new Intl.NumberFormat('cs-CZ', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(czk / eurRate)} €`;
+      }
+      return `${new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 2 }).format(czk)} Kč`;
+    };
+    return {
+      currency,
+      setCurrency,
+      eurRate,
+      rateUpdatedAt: new Date().toISOString().slice(0, 10),
+      formatMoney,
+    };
+  }, [currency, eurRate]);
+
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 }
 
-// ---------------------------------------------------------------------------
-// Storage key
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = 'preferredCurrency';
-
-function getInitialCurrency(): CurrencyCode {
-     const stored = localStorage.getItem(STORAGE_KEY);
-     if (stored === 'EUR' || stored === 'CZK') return stored;
-     return 'CZK';
-}
-
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-
-export default function CurrencyProvider({ children }: { children: React.ReactNode }) {
-     const [currency, setCurrencyState] = useState<CurrencyCode>(getInitialCurrency);
-
-     const { data: rates = [], isLoading } = useQuery({
-          queryKey: ['exchangeRates'],
-          queryFn: ({ signal }) => apiClient.getExchangeRatesEndpoint(signal),
-          staleTime: 1000 * 60 * 60, // 1 hour — rates update once per day
-     });
-
-     const eurRate = useMemo(() => {
-          const eur = rates.find((r) => r.currencyCode === 'EUR');
-          return eur?.rate ?? null;
-     }, [rates]);
-
-     const setCurrency = useCallback((code: CurrencyCode) => {
-          setCurrencyState(code);
-          localStorage.setItem(STORAGE_KEY, code);
-     }, []);
-
-     const convert = useCallback(
-          (czk: number): number => {
-               if (currency === 'CZK' || !eurRate) return czk;
-               return czk / eurRate;
-          },
-          [currency, eurRate],
-     );
-
-     const toCzk = useCallback(
-          (amount: number): number => {
-               if (currency === 'CZK' || !eurRate) return amount;
-               return amount * eurRate;
-          },
-          [currency, eurRate],
-     );
-
-     const formatPrice = useCallback(
-          (czk: number | undefined | null): string => {
-               if (czk == null) return '-';
-               const value = convert(czk);
-               return `${value.toFixed(2)} ${CURRENCY_SYMBOLS[currency]}`;
-          },
-          [convert, currency],
-     );
-
-     const value = useMemo<CurrencyContextValue>(
-          () => ({ currency, setCurrency, formatPrice, convert, toCzk, isLoading }),
-          [currency, setCurrency, formatPrice, convert, toCzk, isLoading],
-     );
-
-     return (
-          <CurrencyContext.Provider value={value}>
-               {children}
-          </CurrencyContext.Provider>
-     );
+export function useCurrency(): CurrencyContextValue {
+  const ctx = useContext(CurrencyContext);
+  if (!ctx) throw new Error('useCurrency must be used within <CurrencyProvider>');
+  return ctx;
 }

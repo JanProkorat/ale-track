@@ -1,206 +1,66 @@
-import type {
-     CreateBreweryDto,
-     UpdateBreweryDto,
-     CreateReminderDto,
-     UpdateReminderDto,
-} from 'src/generated/api-client';
+import { useCallback, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
+import { type CreateBreweryDto, type UpdateBreweryDto } from 'src/generated/api-client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-import { SetBreweryReminderResolvedDateRequest } from 'src/generated/api-client';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const BREWERIES_KEY = 'breweries';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useBreweries(search?: string) {
-     return useQuery({
-          queryKey: [BREWERIES_KEY, search],
-          queryFn: ({ signal }) =>
-               apiClient.getBreweriesListEndpoint(search ? { Name: `contains:${search}` } : {}, signal),
-     });
+export function useBreweries(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.breweries.list(params),
+    queryFn: ({ signal }) => ds.getBreweriesListEndpoint(params, signal),
+  });
 }
 
-export function useBrewery(id: string) {
-     return useQuery({
-          queryKey: [BREWERIES_KEY, id],
-          queryFn: ({ signal }) => apiClient.getBreweryDetailEndpoint(id, signal),
-          enabled: !!id,
-     });
+/** The brewery's own colour by id, for the square that marks a brewery across
+ * the catalog surfaces. Rides on the cached brewery list, so a screen that
+ * already loads breweries pays nothing extra. */
+export function useBreweryColors(): (breweryId?: string) => string | undefined {
+  const query = useBreweries();
+  const byId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const b of query.data ?? []) if (b.id && b.color) m.set(b.id, b.color);
+    return m;
+  }, [query.data]);
+  return useCallback((breweryId?: string) => (breweryId ? byId.get(breweryId) : undefined), [byId]);
 }
 
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
+export function useBrewery(id: string | undefined) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.breweries.detail(id ?? ''),
+    queryFn: ({ signal }) => ds.getBreweryDetailEndpoint(id!, signal),
+    enabled: Boolean(id),
+  });
+}
 
 export function useCreateBrewery() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: (data: CreateBreweryDto) => apiClient.createBreweryEndpoint(data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [BREWERIES_KEY] });
-               notifyCreate('breweries');
-          },
-          onError: () => {
-               notifyCreateError('breweries');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateBreweryDto) => ds.createBreweryEndpoint(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.breweries.all }),
+  });
 }
 
 export function useUpdateBrewery() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateBreweryDto }) =>
-               apiClient.updateBreweryEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [BREWERIES_KEY] });
-               notifyUpdate('breweries');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateBreweryDto }) =>
+      ds.updateBreweryEndpoint(id, data),
+    onSuccess: (_res, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.breweries.all });
+      qc.invalidateQueries({ queryKey: qk.breweries.detail(id) });
+    },
+  });
 }
 
 export function useDeleteBrewery() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteBreweryEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [BREWERIES_KEY] });
-               notifyDelete('breweries');
-          },
-          onError: () => {
-               notifyDeleteError('breweries');
-          },
-     });
-}
-
-// ---------------------------------------------------------------------------
-// Products
-// ---------------------------------------------------------------------------
-
-const productsKey = (breweryId: string) => [BREWERIES_KEY, breweryId, 'products'];
-
-export function useBreweryProducts(breweryId: string) {
-     return useQuery({
-          queryKey: productsKey(breweryId),
-          queryFn: ({ signal }) => apiClient.getBreweryProductsListEndpoint(breweryId, {}, signal),
-          enabled: !!breweryId,
-     });
-}
-
-// ---------------------------------------------------------------------------
-// Reminders
-// ---------------------------------------------------------------------------
-
-const remindersKey = (breweryId: string) => [BREWERIES_KEY, breweryId, 'reminders'];
-
-export function useBreweryReminders(breweryId: string) {
-     return useQuery({
-          queryKey: remindersKey(breweryId),
-          queryFn: ({ signal }) => apiClient.getBreweryRemindersListEndpoint(breweryId, {}, signal),
-          enabled: !!breweryId,
-     });
-}
-
-export function useCreateBreweryReminder() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ breweryId, data }: { breweryId: string; data: CreateReminderDto }) =>
-               apiClient.createBreweryReminderEndpoint(breweryId, data),
-          onSuccess: (_result, variables) => {
-               queryClient.invalidateQueries({ queryKey: remindersKey(variables.breweryId) });
-               notifyCreate('breweries');
-          },
-          onError: () => {
-               notifyCreateError('breweries');
-          },
-     });
-}
-
-export function useUpdateBreweryReminder() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({
-               breweryId,
-               reminderId,
-               data,
-          }: {
-               breweryId: string;
-               reminderId: string;
-               data: UpdateReminderDto;
-          }) => apiClient.updateBreweryReminderEndpoint(reminderId, data),
-          onSuccess: (_result, variables) => {
-               queryClient.invalidateQueries({ queryKey: remindersKey(variables.breweryId) });
-               notifyUpdate('breweries');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
-}
-
-export function useDeleteBreweryReminder() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ breweryId, reminderId }: { breweryId: string; reminderId: string }) =>
-               apiClient.deleteBreweryReminderEndpoint(reminderId),
-          onSuccess: (_result, variables) => {
-               queryClient.invalidateQueries({ queryKey: remindersKey(variables.breweryId) });
-               notifyDelete('breweries');
-          },
-          onError: () => {
-               notifyDeleteError('breweries');
-          },
-     });
-}
-
-export function useSetBreweryReminderResolved() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({
-               breweryId,
-               reminderId,
-               resolvedDate,
-          }: {
-               breweryId: string;
-               reminderId: string;
-               resolvedDate: Date | undefined;
-          }) => {
-               const request = new SetBreweryReminderResolvedDateRequest();
-               request.resolvedDate = resolvedDate;
-               return apiClient.setBreweryReminderResolvedDateEndpoint(reminderId, request);
-          },
-          onSuccess: (_result, variables) => {
-               queryClient.invalidateQueries({ queryKey: remindersKey(variables.breweryId) });
-               notifyUpdate('breweries');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ds.deleteBreweryEndpoint(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.breweries.all }),
+  });
 }

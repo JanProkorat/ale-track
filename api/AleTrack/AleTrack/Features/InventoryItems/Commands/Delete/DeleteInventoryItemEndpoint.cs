@@ -28,7 +28,7 @@ public sealed class DeleteInventoryItemEndpoint(AleTrackDbContext dbContext) : E
     {
         Delete("inventory-items/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Inventory, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .WithName(nameof(DeleteInventoryItemEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

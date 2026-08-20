@@ -27,7 +27,7 @@ public sealed class DeleteVehicleEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Delete("vehicles/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Vehicles, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .WithName(nameof(DeleteVehicleEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

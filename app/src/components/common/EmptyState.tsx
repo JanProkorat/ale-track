@@ -1,43 +1,42 @@
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import { Box, Typography } from '@mui/material';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 
-import { useTranslation } from 'react-i18next';
-
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import InboxIcon from '@mui/icons-material/InboxOutlined';
-
-// ---------------------------------------------------------------------------
-// EmptyState
-// ---------------------------------------------------------------------------
-
-interface EmptyStateProps {
-     message?: string;
-     icon?: ReactNode;
-     action?: ReactNode;
-}
-
-export default function EmptyState({ message, icon, action }: EmptyStateProps) {
-     const { t } = useTranslation();
-
-     return (
-          <Box
-               sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    py: 8,
-                    gap: 2,
-                    color: 'text.secondary',
-               }}
-          >
-               {icon ?? <InboxIcon sx={{ fontSize: 48 }} />}
-
-               <Typography variant="body1" color="text.secondary">
-                    {message ?? t('common.noData')}
-               </Typography>
-
-               {action}
-          </Box>
-     );
+/** Neutral "nothing here yet" panel — for empty lists and filtered-to-zero. */
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  dense = false,
+}: {
+  icon?: ReactNode;
+  title: string;
+  description?: ReactNode;
+  action?: ReactNode;
+  dense?: boolean;
+}) {
+  return (
+    <Box
+      sx={{
+        textAlign: 'center',
+        py: dense ? 4 : 7,
+        px: 3,
+        color: 'text.secondary',
+      }}
+    >
+      <Box sx={{ color: 'text.disabled', mb: 1, '& svg': { fontSize: 42 } }}>
+        {icon ?? <InboxOutlinedIcon />}
+      </Box>
+      <Typography fontWeight={700} color="text.primary">
+        {title}
+      </Typography>
+      {description && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 380, mx: 'auto' }}>
+          {description}
+        </Typography>
+      )}
+      {action && <Box sx={{ mt: 2 }}>{action}</Box>}
+    </Box>
+  );
 }

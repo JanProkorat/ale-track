@@ -22,7 +22,7 @@ public sealed class GetVehiclesListEndpoint(AleTrackDbContext dbContext) : Endpo
     {
         Get("vehicles");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Vehicles, PermissionLevel.View)
             .WithName(nameof(GetVehiclesListEndpoint)));
         
         DontCatchExceptions();

@@ -35,7 +35,7 @@ public sealed class UpdateClientNoteEndpoint(AleTrackDbContext dbContext) : Endp
     {
         Put("clients/notes/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(UpdateClientNoteEndpoint))

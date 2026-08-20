@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using FastEndpoints;
 using FluentValidation;
@@ -31,5 +32,17 @@ public sealed class ClientOrderShipmentDtoValidator : Validator<ClientOrderShipm
         RuleFor(dto => dto.SelectedAddressKind)
             .IsInEnum()
             .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        // The enum and the FK can disagree; the schema cannot express the
+        // pairing, so it is enforced here.
+        RuleFor(dto => dto.ClientDeliveryPlaceId)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError)
+            .When(dto => dto.SelectedAddressKind == DeliveryAddressKind.DeliveryPlace);
+
+        RuleFor(dto => dto.ClientDeliveryPlaceId)
+            .Null()
+            .WithErrorCode(ErrorCodes.ValidationError)
+            .When(dto => dto.SelectedAddressKind != DeliveryAddressKind.DeliveryPlace);
     }
 }

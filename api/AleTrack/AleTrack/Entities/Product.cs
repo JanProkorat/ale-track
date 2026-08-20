@@ -11,7 +11,7 @@ namespace AleTrack.Entities;
 /// Entity representing a product sold by a brewery
 /// </summary>
 [Table("products")]
-public sealed class Product : PublicEntity
+public sealed class Product : PublicSoftlyDeletableEntity
 {
     /// <summary>
     /// ID of related <see cref="Brewery"/>
@@ -35,11 +35,29 @@ public sealed class Product : PublicEntity
     public string? Description { get; set; }
     
     /// <summary>
-    /// Kind of the product
+    /// Kind of the product. Derived from <see cref="Container"/> and <see cref="SaleUnit"/> on every
+    /// write via <see cref="ProductPackaging.DeriveKind"/> — never set directly by a caller.
     /// </summary>
+    /// <remarks>
+    /// Still a real column rather than a computed property because the reporting projections select
+    /// it inside EF queries (see <c>DeliveredLineQuery</c>), and EF cannot translate an unmapped
+    /// property to SQL. It is a denormalisation of the packaging pair, kept for those queries.
+    /// </remarks>
     [Column("kind")]
     public ProductKind Kind { get; set; }
-    
+
+    /// <summary>
+    /// The vessel the drink is in.
+    /// </summary>
+    [Column("container")]
+    public ProductContainer Container { get; set; } = ProductContainer.Other;
+
+    /// <summary>
+    /// What one sellable unit of this product is.
+    /// </summary>
+    [Column("sale_unit")]
+    public ProductSaleUnit SaleUnit { get; set; } = ProductSaleUnit.Single;
+
     /// <summary>
     /// Type of the product
     /// </summary>
@@ -59,10 +77,22 @@ public sealed class Product : PublicEntity
     public float? PlatoDegree { get; set; }
     
     /// <summary>
-    /// Size of the whole package
+    /// Volume of a single container inside the package, in litres — the bottle, can or keg, not
+    /// the package total. Combine with <see cref="UnitsPerPackage"/> for the package as a whole.
     /// </summary>
     [Column("package_size")]
     public double? PackageSize { get; set; }
+
+    /// <summary>
+    /// How many individual containers make up one sellable unit: 20 for a 0.5 l crate, 24 for a
+    /// 0.33 l crate, 8 for an eight-pack, 1 for a keg or a single bottle.
+    /// </summary>
+    /// <remarks>
+    /// Recorded, never inferred. It used to be derived from the product name and a hardcoded crate
+    /// table, which could not express that a can tray is 24 at 0.5 l but 12 at 0.33 l.
+    /// </remarks>
+    [Column("units_per_package")]
+    public int UnitsPerPackage { get; set; } = 1;
     
     /// <summary>
     /// Price with VAT
@@ -89,6 +119,16 @@ public sealed class Product : PublicEntity
     public decimal? PriceForUnitWithoutVat { get; set; }
     
     /// <summary>
+    /// Date the price list that set this product's prices takes effect, when they came from one.
+    /// </summary>
+    /// <remarks>
+    /// Provenance for a single row, alongside the <see cref="PriceListImport"/> that records the
+    /// whole import: it answers "which list says this price" without joining anything.
+    /// </remarks>
+    [Column("price_effective_from")]
+    public DateOnly? PriceEffectiveFrom { get; set; }
+
+    /// <summary>
     /// Related Brewery
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
@@ -102,30 +142,7 @@ public sealed class Product : PublicEntity
     /// <summary>
     /// Weight of the product in kilograms
     /// </summary>
-    public double? Weight
-    {
-        get
-        {
-            if (PackageSize == null)
-                return null;
-
-            return Kind switch
-            {
-                ProductKind.Bottle when PackageSize == BottleSize.OneLiter => PackageWeight.OneKilo,
-                ProductKind.Bottle when PackageSize == BottleSize.TwoLiters => PackageWeight.TwoKilos,
-                ProductKind.Bottle when PackageSize == BottleSize.TenLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.FiveLiters => PackageWeight.FiveKilos,
-                ProductKind.Keg when PackageSize == KegSize.FifteenLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.TwentyLiters => PackageWeight.TwentyKilos,
-                ProductKind.Keg when PackageSize == KegSize.ThirtyLiters => PackageWeight.FortyTwoKilos,
-                ProductKind.Keg when PackageSize == KegSize.FiftyLiters => PackageWeight.SixtyTwoKilos,
-                ProductKind.Can when PackageSize == CanSize.ZeroPointThreeThreeLiters => PackageWeight.ZeroPointThree,
-                ProductKind.Can when PackageSize == CanSize.ZeroPointFiveLiters => PackageWeight.ZeroPointFive,
-                ProductKind.Can when PackageSize == CanSize.TwoLiters => PackageWeight.TwoKilos,
-                _ => null
-            };
-        }
-    }
+    public double? Weight => ProductWeightCalculator.Compute(Container, SaleUnit, PackageSize, UnitsPerPackage);
     
     /// <summary>
     /// Display order based on the Product kind

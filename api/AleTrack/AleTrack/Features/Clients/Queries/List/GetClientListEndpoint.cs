@@ -17,7 +17,7 @@ public sealed class GetClientListEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Get("clients");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Clients, PermissionLevel.View)
             .WithName(nameof(GetClientListEndpoint)));
         
         DontCatchExceptions();

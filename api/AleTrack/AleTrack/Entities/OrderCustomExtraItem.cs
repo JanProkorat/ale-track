@@ -1,0 +1,52 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using AleTrack.Entities.BaseEntities;
+
+namespace AleTrack.Entities;
+
+/// <summary>
+/// An item the client wants that no brewery supplies (beer mats, glassware…).
+/// Part of what was ordered, so it belongs to the order and is billed with it.
+/// </summary>
+[Table("order_custom_extra_items")]
+public sealed class OrderCustomExtraItem : PublicEntity
+{
+    /// <summary>
+    /// ID of related <see cref="Entities.Order"/>
+    /// </summary>
+    [Column("order_id")]
+    public long OrderId { get; set; }
+
+    /// <summary>
+    /// Description of the item
+    /// </summary>
+    [MaxLength(200)]
+    [Column("description")]
+    public string Description { get; set; } = null!;
+
+    /// <summary>
+    /// Quantity delivered to the client
+    /// </summary>
+    [Column("quantity")]
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// Optional free-form note about the item — an instruction for whoever packs
+    /// or delivers it ("s logem, ne generické").
+    /// </summary>
+    [MaxLength(500)]
+    [Column("note")]
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// Whether loading was confirmed on the shipment carrying this order.
+    /// Owned by the shipment, not by the order editor.
+    /// </summary>
+    [Column("is_shipment_loading_confirmed")]
+    public bool IsShipmentLoadingConfirmed { get; set; }
+
+    /// <summary>
+    /// The parent <see cref="Entities.Order"/> related to this item.
+    /// </summary>
+    public Order Order { get; set; } = null!;
+}

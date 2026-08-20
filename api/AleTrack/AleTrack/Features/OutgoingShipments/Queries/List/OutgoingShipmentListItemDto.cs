@@ -21,6 +21,11 @@ public sealed record OutgoingShipmentListItemDto
     /// Date when the shipment is scheduled for delivery
     /// </summary>
     public DateTime? DeliveryDate { get; set; }
+
+    /// <summary>
+    /// Date when the shipment was created — the list's default order
+    /// </summary>
+    public DateTime CreatedDate { get; set; }
     
     /// <summary>
     /// Name of the outgoing shipment

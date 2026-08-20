@@ -34,7 +34,7 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
     {
         Put("users/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.Admin)
+            .RequirePermission(ModuleType.Users, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateUserEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -56,14 +56,15 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
         var user = await dbContext.Users
             .Where(u => u.PublicId == req.Id)
             .Include(u => u.UserRoles)
+            .Include(u => u.Permissions)
             .FirstOrDefaultAsync(ct);
-        
+
         if (user is null)
             ThrowHelper.PublicEntityNotFound(nameof(User), req.Id);
-        
+
         user!.FirstName = req.Data.FirstName;
         user.LastName = req.Data.LastName;
-        
+
         user.UserRoles.Clear();
         user.UserRoles = req.Data.UserRoles
             .Select(r => new UserRole
@@ -71,10 +72,62 @@ public sealed class UpdateUserEndpoint(AleTrackDbContext dbContext, IPasswordHas
                 Type = r
             })
             .ToList();
-        
+
+        user.Permissions.Clear();
+        user.Permissions = req.Data.Permissions
+            .Where(p => p.Level != PermissionLevel.None)
+            .Select(p => new UserPermission
+            {
+                Module = p.Module,
+                Level = p.Level
+            })
+            .ToList();
+
+        await ApplyDriverLinkAsync(user, req.Data.DriverId, ct);
+
         dbContext.Users.Update(user);
         await dbContext.SaveChangesAsync(ct);
-        
+
         await Send.NoContentAsync(ct);
+    }
+
+    /// <summary>
+    /// Points <paramref name="driverPublicId"/> at <paramref name="user"/> and releases any
+    /// driver previously linked to that account, so one account never owns two driver records.
+    /// </summary>
+    /// <param name="user">Account being saved.</param>
+    /// <param name="driverPublicId">Driver to link, or null to unlink.</param>
+    /// <param name="ct">Cancellation token.</param>
+    private async Task ApplyDriverLinkAsync(User user, Guid? driverPublicId, CancellationToken ct)
+    {
+        var previous = await dbContext.Drivers.FirstOrDefaultAsync(d => d.UserId == user.Id, ct);
+
+        if (driverPublicId is null)
+        {
+            if (previous is not null)
+            {
+                previous.UserId = null;
+            }
+
+            return;
+        }
+
+        var driver = await dbContext.Drivers.FirstOrDefaultAsync(d => d.PublicId == driverPublicId, ct);
+        if (driver is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Driver), driverPublicId.Value);
+        }
+
+        if (driver!.UserId is not null && driver.UserId != user.Id)
+        {
+            ThrowHelper.DriverAlreadyLinkedToUser(driverPublicId.Value);
+        }
+
+        if (previous is not null && previous.Id != driver.Id)
+        {
+            previous.UserId = null;
+        }
+
+        driver.UserId = user.Id;
     }
 }

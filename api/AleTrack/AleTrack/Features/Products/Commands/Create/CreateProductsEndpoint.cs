@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Products.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +32,7 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
     {
         Post("breweries/{id}/products");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateProductsEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -64,8 +65,13 @@ public sealed class CreateProductsEndpoint(AleTrackDbContext dbContext) : Endpoi
                 Name = product.Name,
                 Description = product.Description,
                 Type = product.Type,
-                Kind = product.Kind,
+                Container = product.Container,
+                SaleUnit = product.SaleUnit,
+                // Denormalised from the pair above for the reporting projections, which select it
+                // in SQL and so cannot call a computed property.
+                Kind = ProductPackaging.DeriveKind(product.Container, product.SaleUnit),
                 PackageSize = product.PackageSize,
+                UnitsPerPackage = product.UnitsPerPackage,
                 PriceForUnitWithoutVat = product.PriceForUnitWithoutVat,
                 PriceForUnitWithVat = product.PriceForUnitWithVat,
                 PriceWithVat = product.PriceWithVat,

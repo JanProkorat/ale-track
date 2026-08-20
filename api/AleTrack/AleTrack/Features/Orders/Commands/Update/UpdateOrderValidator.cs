@@ -1,4 +1,6 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.Reminders.Commands.Update;
 using FastEndpoints;
 using FluentValidation;
@@ -41,11 +43,45 @@ public sealed class UpdateOrderDtoValidator : Validator<UpdateOrderDto>
         RuleFor(r => r.RequiredDeliveryDate)
             .GreaterThan(DateOnly.FromDateTime(DateTime.UtcNow))
             .When(d => d.RequiredDeliveryDate != null)
-            .WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
-        
+            .WithErrorCode(ErrorCodes.DeliveryDateInPast)
+            .WithMessage("Required delivery date must be in the future.");
+
+        RuleFor(r => r.DeliveryAddressKind)
+            .IsInEnum()
+            .WithErrorCode(ErrorCodes.ValidationEnumError);
+
+        // The enum and the FK can disagree; the schema cannot express the
+        // pairing, so it is enforced here — mirroring
+        // ClientOrderShipmentDtoValidator so the two surfaces stay identical.
+        RuleFor(r => r.ClientDeliveryPlaceId)
+            .NotNull()
+            .WithErrorCode(ErrorCodes.ValidationNotNullError)
+            .When(r => r.DeliveryAddressKind == DeliveryAddressKind.DeliveryPlace);
+
+        RuleFor(r => r.ClientDeliveryPlaceId)
+            .Null()
+            .WithErrorCode(ErrorCodes.ValidationError)
+            .When(r => r.DeliveryAddressKind != DeliveryAddressKind.DeliveryPlace);
+
+        RuleFor(r => r.Notes)
+            .ForEach(n => n.SetValidator(new OrderNoteDtoValidator()))
+            .When(r => r.Notes.Count > 0);
+
         RuleFor(r => r.OrderItems)
             .ForEach(i => i.SetValidator(new UpdateOrderItemDtoValidator()))
             .When(i => i.OrderItems.Count > 0);
+
+        RuleFor(r => r.Returns)
+            .ForEach(i => i.SetValidator(new OrderReturnDtoValidator()))
+            .When(i => i.Returns.Count > 0);
+
+        RuleFor(r => r.CustomExtraItems)
+            .ForEach(e => e.SetValidator(new OrderCustomExtraItemDtoValidator()))
+            .When(r => r.CustomExtraItems.Count > 0);
+
+        RuleFor(r => r.SupplierGoodItems)
+            .ForEach(e => e.SetValidator(new OrderSupplierGoodItemDtoValidator()))
+            .When(r => r.SupplierGoodItems.Count > 0);
     }
 }
 
@@ -64,5 +100,9 @@ public sealed class UpdateOrderItemDtoValidator : Validator<UpdateOrderItemDto>
         RuleFor(r => r.ProductId).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
         RuleFor(r => r.Quantity).GreaterThan(0).WithErrorCode(ErrorCodes.ValidationMinValueNotMatchedError);
         RuleFor(r => r.ReminderState).IsInEnum().When(r => r.ReminderState != null);
+        RuleFor(r => r.Note)
+            .MaximumLength(500)
+            .When(r => r.Note != null)
+            .WithErrorCode(ErrorCodes.ValidationMaxLengthError);
     }
 }

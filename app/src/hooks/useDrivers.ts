@@ -1,89 +1,57 @@
-import type { CreateDriverDto, UpdateDriverDto } from 'src/generated/api-client';
+// Drivers (Řidiči) module hooks — same CRUD pattern as useVehicles.ts.
+// list → useQuery, detail → useQuery(enabled), create/update/delete → useMutation
+// invalidating the resource root. Calls go through useDataSource() so the same
+// hooks serve both live (API) and demo (in-memory) sessions.
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
+import { type CreateDriverDto, type UpdateDriverDto } from 'src/generated/api-client';
 
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const DRIVERS_KEY = 'drivers';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useDrivers(search?: string) {
-     return useQuery({
-          queryKey: [DRIVERS_KEY, search],
-          queryFn: ({ signal }) =>
-               apiClient.getDriversListEndpoint(
-                    search ? { LastName: `contains:${search}` } : {},
-                    signal,
-               ),
-     });
+export function useDrivers(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.drivers.list(params),
+    queryFn: ({ signal }) => ds.getDriversListEndpoint(params, signal),
+  });
 }
 
-export function useDriver(id: string) {
-     return useQuery({
-          queryKey: [DRIVERS_KEY, id],
-          queryFn: ({ signal }) => apiClient.getDriverDetailEndpoint(id, signal),
-          enabled: !!id,
-     });
+export function useDriver(id: string | undefined) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.drivers.detail(id ?? ''),
+    queryFn: ({ signal }) => ds.getDriverDetailEndpoint(id!, signal),
+    enabled: Boolean(id),
+  });
 }
-
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
 
 export function useCreateDriver() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: (data: CreateDriverDto) => apiClient.createDriverEndpoint(data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [DRIVERS_KEY] });
-               notifyCreate('drivers');
-          },
-          onError: () => {
-               notifyCreateError('drivers');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateDriverDto) => ds.createDriverEndpoint(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.drivers.all }),
+  });
 }
 
 export function useUpdateDriver() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateDriverDto }) =>
-               apiClient.updateDriverEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [DRIVERS_KEY] });
-               notifyUpdate('drivers');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateDriverDto }) =>
+      ds.updateDriverEndpoint(id, data),
+    onSuccess: (_res, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.drivers.all });
+      qc.invalidateQueries({ queryKey: qk.drivers.detail(id) });
+    },
+  });
 }
 
 export function useDeleteDriver() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteDriverEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [DRIVERS_KEY] });
-               notifyDelete('drivers');
-          },
-          onError: () => {
-               notifyDeleteError('drivers');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ds.deleteDriverEndpoint(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.drivers.all }),
+  });
 }

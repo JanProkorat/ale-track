@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Create;
 
@@ -24,14 +26,18 @@ public record CreateOutgoingShipmentRequest
 /// Endpoint for creating a new outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<CreateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+/// <param name="driverScope"></param>
+public sealed class CreateOutgoingShipmentEndpoint(
+    AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
+    : Endpoint<CreateOutgoingShipmentRequest>
 {
     /// <inheritdoc />
     public override void Configure()
     {
         Post("outgoing-shipments");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status201Created)
             .WithName(nameof(CreateOutgoingShipmentEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -50,34 +56,140 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(CreateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        // Planning shipments is office work; a driver only executes the ones assigned to them.
+        if (driverScope.IsScoped)
+        {
+            ThrowHelper.DriverScopeForbidden();
+        }
+
+        var company = companyOptions.Value;
+
         var drivers = await GetDriversAsync(req.Data.DriverIds, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, ct);
         var orders = await GetOrdersAsync(req.Data.ClientOrderShipments, ct);
+
+        // The suppliers of any pickup stop the planner placed in the route. Resolved up front so
+        // the stop can take its label and coordinates from the supplier rather than the client.
+        var pickupSuppliers = await GetPickupSuppliersAsync(req.Data.CustomStops, ct);
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, req.Data.ClientOrderShipments, alreadyReferencedPlaceIds: null, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
 
         var outgoingShipment = new OutgoingShipment
         {
             Name = req.Data.Name,
             DeliveryDate = req.Data.DeliveryDate,
+            CreatedDate = DateTime.UtcNow,
             State = OutgoingShipmentState.Created,
             Vehicle = vehicle,
+            StartPointKind = req.Data.StartPointKind,
+            StartBrewery = startBrewery,
+            StartBreweryId = startBrewery?.Id,
+            StartBreweryAddressKind = req.Data.StartBreweryAddressKind,
             Drivers = [.. drivers
                 .Select(d => new OutgoingShipmentDriver 
                 {
                     Driver = d
                 })],
-            Stops = [.. req.Data.ClientOrderShipments
-                .OrderBy(cos => cos.Order)
-                .Select(cos => new OutgoingShipmentStop
+            Stops = [
+                .. req.Data.ClientOrderShipments
+                    .Select(cos =>
+                    {
+                        var order = orders.First(o => o.PublicId == cos.ClientOrderId);
+                        var stop = new OutgoingShipmentStop
+                        {
+                            Kind = OutgoingShipmentStopKind.Order,
+                            ClientOrder = order,
+                            Order = cos.Order,
+                            SelectedAddressKind = cos.SelectedAddressKind,
+                            ClientDeliveryPlaceId = cos.ClientDeliveryPlaceId.HasValue
+                                ? placeIds[cos.ClientDeliveryPlaceId.Value]
+                                : null
+                        };
+
+                        // Derived, never sent: a stale client-supplied flag would silently
+                        // disable propagation from the order.
+                        stop.DeriveAddressOverride(order);
+
+                        return stop;
+                    }),
+                .. req.Data.CustomStops
+                    .Select(cs =>
+                    {
+                        var isCompany = cs.Kind == OutgoingShipmentStopKind.Company;
+                        var isSupplier = cs.Kind == OutgoingShipmentStopKind.Supplier;
+                        var supplier = isSupplier ? pickupSuppliers[cs.SupplierId!.Value] : null;
+
+                        return new OutgoingShipmentStop
+                        {
+                            Kind = cs.Kind,
+                            Order = cs.Order,
+                            // A company or supplier stop's label and coordinates are the server's
+                            // to author, so a stale client cannot pin either somewhere else.
+                            Label = isCompany ? company.Name : isSupplier ? supplier!.Name : cs.Label,
+                            Note = cs.Note,
+                            Latitude = isCompany ? company.Latitude
+                                : isSupplier ? supplier!.OfficialAddress?.Latitude
+                                : cs.Latitude,
+                            Longitude = isCompany ? company.Longitude
+                                : isSupplier ? supplier!.OfficialAddress?.Longitude
+                                : cs.Longitude,
+                            Supplier = supplier,
+                            SupplierId = supplier?.Id
+                        };
+                    })
+            ],
+            RouteViaPoints = [.. req.Data.RouteViaPoints
+                .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })],
+            PreparationSteps = [.. req.Data.PreparationSteps
+                .Select(s => new OutgoingShipmentPreparationStep
                 {
-                    ClientOrder = orders.First(o => o.PublicId == cos.ClientOrderId),
-                    Order = cos.Order,
-                    SelectedAddressKind = cos.SelectedAddressKind
+                    PublicId = Guid.NewGuid(),
+                    Order = s.Order,
+                    Label = s.Label,
+                    IsDone = false
                 })]
         };
+
+        // Orders added to a shipment move into planning.
+        foreach (var order in orders.Where(o => o.State == OrderState.New))
+            order.State = OrderState.Planning;
+
+        // A created shipment is always Created, so the content is always open —
+        // no mutability gate needed here.
+        //
+        // Supplier stops first: it may add stops, and the company reconciler reads the same
+        // orders to decide whether the warehouse is also needed. Order between them does not
+        // actually matter today (neither looks at the other's stops), but running the one that
+        // can grow the route first keeps the resulting numbering readable.
+        SupplierPickupStopReconciler.Apply(outgoingShipment);
+        CompanyStopReconciler.Apply(outgoingShipment, company);
 
         dbContext.OutgoingShipments.Add(outgoingShipment);
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(outgoingShipment.PublicId, statusCode: StatusCodes.Status201Created, cancellation: ct);
+    }
+
+    private async Task<Dictionary<Guid, Supplier>> GetPickupSuppliersAsync(
+        List<CustomStopDto> customStops, CancellationToken ct)
+    {
+        var ids = customStops
+            .Where(c => c.Kind == OutgoingShipmentStopKind.Supplier)
+            .Select(c => c.SupplierId ?? Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+            return [];
+
+        var found = await dbContext.Suppliers
+            .Where(x => ids.Contains(x.PublicId))
+            .ToDictionaryAsync(x => x.PublicId, ct);
+
+        var missing = ids.Where(id => !found.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+            ThrowHelper.PublicEntitiesNotFound(nameof(Supplier), missing);
+
+        return found;
     }
 
     private async Task<List<Entities.Order>> GetOrdersAsync(List<ClientOrderShipmentDto> clientOrderShipments, CancellationToken ct)
@@ -92,6 +204,11 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         var orders = await dbContext.Orders
             .Where(o => orderIds.Contains(o.PublicId))
             .Include(o => o.OutgoingShipmentStop)
+            // The two stop reconcilers below decide which pickup stops the run needs from
+            // these lines; without the goods and their suppliers they read an empty set.
+            .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
+                .ThenInclude(g => g.Supplier)
             .ToListAsync(ct);
 
         if (orders.Count != orderIds.Count)
@@ -124,6 +241,35 @@ public sealed class CreateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             ThrowHelper.PublicEntityNotFound(nameof(Vehicle), vehicleId.Value);
 
         return vehicle;
+    }
+
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
+    {
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
+        {
+            return null;
+        }
+
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
+
+        if (brewery is null)
+        {
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
+        }
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
+        }
+
+        return brewery;
     }
 
     private async Task<List<Driver>> GetDriversAsync(List<Guid> driverIds, CancellationToken ct)

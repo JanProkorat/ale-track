@@ -27,7 +27,7 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
     {
         Get("products/deliveries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.View)
             .WithName(nameof(GetProductDeliveryListEndpoint)));
         
         DontCatchExceptions();
@@ -51,7 +51,8 @@ public sealed class GetProductDeliveryListEndpoint(AleTrackDbContext dbContext) 
                 DeliveryDate = d.Date,
                 State = d.State,
                 StopNames = d.Stops
-                    .Select(s => s.Brewery.Name)
+                    .OrderBy(s => s.Order)
+                    .Select(s => s.Brewery != null ? s.Brewery.Name : (s.Label ?? string.Empty))
                     .ToList(),
                 PlanningState = d.PlanningState
             })

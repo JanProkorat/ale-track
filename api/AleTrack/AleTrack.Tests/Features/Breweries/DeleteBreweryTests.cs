@@ -34,6 +34,40 @@ public sealed class DeleteBreweryTests
         dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
     
+    /// <summary>
+    /// Deleting a brewery used to cascade products -> order_items -> invoice lines, wiping
+    /// the history of everything it ever sold. order_items.product_id is now Restrict, so
+    /// this would otherwise surface as a raw DbUpdateException.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_DeleteBreweryWithProducts_Fails()
+    {
+        var breweryId = Guid.NewGuid();
+        var brewery = BreweryBuilder.BuildEntity(
+            publicId: breweryId,
+            officialAddress: AddressBuilder.BuildEntity()
+        );
+        brewery.Id = 7;
+
+        var product = ProductBuilder.BuildEntity(publicId: Guid.NewGuid());
+        product.Brewery = brewery;
+        product.BreweryId = brewery.Id;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            breweries: [brewery],
+            products: [product]);
+
+        var endpoint = EndpointBuilder<DeleteBreweryRequest, DeleteBreweryEndpoint>.Create(dbContext.Object);
+
+        var act = async () => await endpoint.HandleAsync(new DeleteBreweryRequest { Id = breweryId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.BreweryHasProducts);
+
+        dbContext.Verify(e => e.Breweries.Remove(It.IsAny<Brewery>()), Times.Never);
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task ProcessAsync_DeleteBrewery_NotFound()
     {

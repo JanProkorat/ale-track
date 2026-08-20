@@ -13,7 +13,7 @@ public sealed class GetCountriesEndpoint : EndpointWithoutRequest<List<Country>>
     {
         Get("master-data/countries");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequireAuthenticated()
             .WithName(nameof(GetCountriesEndpoint)));
         
         DontCatchExceptions();

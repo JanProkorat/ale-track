@@ -24,4 +24,14 @@ public sealed record BreweryListItemDto
     /// Represents the color associated with the brewery item.
     /// </summary>
     public string Color { get; set; } = null!;
+
+    /// <summary>
+    /// Latitude of the brewery's official address (for route maps). Null if not geocoded.
+    /// </summary>
+    public decimal? Latitude { get; set; }
+
+    /// <summary>
+    /// Longitude of the brewery's official address (for route maps). Null if not geocoded.
+    /// </summary>
+    public decimal? Longitude { get; set; }
 }

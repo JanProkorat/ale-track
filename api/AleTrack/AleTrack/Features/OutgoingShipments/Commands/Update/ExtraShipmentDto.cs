@@ -17,22 +17,12 @@ public record ExtraShipmentDto
     /// FLag indicating if the loading of the order item is confirmed
     /// </summary>
     public bool IsLoadingConfirmed { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the first invoice
-    /// </summary>
-    public int? FirstInvoiceQuantity { get; set; }
-    
-    /// <summary>
-    /// Number of pieces to be put on the second invoice
-    /// </summary>
-    public int? SecondInvoiceQuantity { get; set; }
 }
 
 /// <summary>
 /// Dto wrapper for extra products to be delivered to the inventory from the brewery
 /// </summary>
-public record InventoryExtraShipmentDto : ExtraShipmentDto
+public record StockPurchaseDto : ExtraShipmentDto
 {
     /// <summary>
     /// ID of related product

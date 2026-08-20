@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Products.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +35,7 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
     {
         Put("products/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Breweries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateProductEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -53,15 +54,19 @@ public sealed class UpdateProductEndpoint(AleTrackDbContext dbContext) : Endpoin
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateProductRequest req, CancellationToken ct)
     {
-        var product = await dbContext.Products.FirstOrDefaultAsync(p => p.PublicId == req.Id, ct);
+        var product = await dbContext.Products.FirstOrDefaultAsync(p => p.PublicId == req.Id && !p.IsDeleted, ct);
         if (product is null)
             ThrowHelper.PublicEntityNotFound(nameof(Product), req.Id);
         
         product!.Name = req.Data.Name;
         product.Description = req.Data.Description;
         product.Type = req.Data.Type;
-        product.Kind = req.Data.Kind;
+        product.Container = req.Data.Container;
+        product.SaleUnit = req.Data.SaleUnit;
+        // Re-derived whenever the packaging pair moves; see Product.Kind for why it is a column.
+        product.Kind = ProductPackaging.DeriveKind(req.Data.Container, req.Data.SaleUnit);
         product.PackageSize = req.Data.PackageSize;
+        product.UnitsPerPackage = req.Data.UnitsPerPackage;
         product.PriceForUnitWithoutVat = req.Data.PriceForUnitWithoutVat;
         product.PriceForUnitWithVat = req.Data.PriceForUnitWithVat;
         product.PriceWithVat = req.Data.PriceWithVat;

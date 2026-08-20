@@ -1,156 +1,190 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-
-import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import TextField from '@mui/material/TextField';
-import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
-import LoadingButton from '@mui/lab/LoadingButton';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
+import {
+  Box,
+  Stack,
+  TextField,
+  Button,
+  Typography,
+  IconButton,
+  InputAdornment,
+  FormControlLabel,
+  Checkbox,
+} from '@mui/material';
+import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import Visibility from '@mui/icons-material/Visibility';
-import InputAdornment from '@mui/material/InputAdornment';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import { useAuth } from 'src/auth/AuthProvider';
+import { Logo } from 'src/components/common/Logo';
+import { PATHS } from 'src/routes/paths';
+import { useThemeMode } from 'src/theme/ThemeProvider';
 
-import useAuth from 'src/hooks/useAuth';
-import { useNotification } from 'src/hooks/useNotification';
+const NAVY = '#1E2A3A';
 
-import LanguageSwitcher from 'src/components/layout/LanguageSwitcher';
-import ThemeModeSwitcher from 'src/components/layout/ThemeModeSwitcher';
+const FEATURES = [
+  { icon: <ReceiptLongOutlinedIcon fontSize="small" />, label: 'Objednávky s historií klienta' },
+  { icon: <RouteOutlinedIcon fontSize="small" />, label: 'Vývozy s plánováním trasy' },
+  { icon: <Inventory2OutlinedIcon fontSize="small" />, label: 'Sklad, dovozy a nakládka' },
+];
 
-// ---------------------------------------------------------------------------
-// Login Page
-// ---------------------------------------------------------------------------
+export function LoginPage() {
+  const { signIn } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { resolved, toggle } = useThemeMode();
 
-export default function LoginPage() {
-     const { t } = useTranslation();
-     const navigate = useNavigate();
-     const { login } = useAuth();
-     const { showError } = useNotification();
+  const from = (location.state as { from?: string } | null)?.from ?? PATHS.dashboard;
+  const [userName, setUserName] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-     const [userName, setUserName] = useState('');
-     const [password, setPassword] = useState('');
-     const [showPassword, setShowPassword] = useState(false);
-     const [loading, setLoading] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await signIn(userName, password, remember);
+      navigate(from, { replace: true });
+    } catch (e) {
+      // signIn already translates the failure through apiErrorMessage; the fallback covers
+      // the non-API failures it raises itself (a missing or unreadable token).
+      enqueueSnackbar(e instanceof Error ? e.message : 'Přihlášení selhalo.', { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
-     const handleSubmit = async (e: React.FormEvent) => {
-          e.preventDefault();
-          setLoading(true);
-          try {
-               await login(userName, password);
-               navigate('/', { replace: true });
-          } catch {
-               showError(t('auth.loginError'));
-          } finally {
-               setLoading(false);
-          }
-     };
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100dvh' }}>
+      {/* Brand panel */}
+      <Box
+        sx={{
+          flex: 1.1,
+          display: { xs: 'none', md: 'flex' },
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          p: 6,
+          position: 'relative',
+          overflow: 'hidden',
+          background: `linear-gradient(155deg, ${NAVY} 0%, #17212E 60%, #0c1420 100%)`,
+          color: '#cdd7e3',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: -140,
+            right: -120,
+            width: 460,
+            height: 460,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(240,140,0,.35), transparent 65%)',
+            filter: 'blur(10px)',
+          }}
+        />
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ position: 'relative' }}>
+          <Logo size={40} />
+          <Typography sx={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>
+            Ale<Box component="span" sx={{ color: 'primary.main' }}>Track</Box>
+          </Typography>
+        </Stack>
+        <Box sx={{ position: 'relative' }}>
+          <Typography sx={{ fontSize: 38, fontWeight: 800, color: '#fff', lineHeight: 1.1, mb: 2 }}>
+            Řízení distribuce piva
+            <br />
+            na jednom místě.
+          </Typography>
+          <Typography sx={{ fontSize: 15.5, color: '#9fb0c4', maxWidth: 440, mb: 3.5 }}>
+            Pivovary, klienti, objednávky, vývozy s optimalizací trasy a sklad — přehledně, rychle a bez papírů.
+          </Typography>
+          <Stack spacing={1.5}>
+            {FEATURES.map((f) => (
+              <Stack key={f.label} direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ color: 'primary.main' }}>{f.icon}</Box>
+                <Typography sx={{ fontWeight: 600, color: '#c7d2df', fontSize: 14.5 }}>{f.label}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+        <Typography sx={{ fontSize: 12.5, color: '#5f7185', position: 'relative' }}>© 2026 AleTrack</Typography>
+      </Box>
 
-     return (
-          <Box
-               sx={{
-                    display: 'flex',
-                    minHeight: '100dvh',
-                    width: '100%',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundImage: 'url(/assets/background/overlay.jpg)',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    position: 'relative',
-               }}
+      {/* Form */}
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4, position: 'relative', bgcolor: 'background.default' }}>
+        <IconButton onClick={toggle} sx={{ position: 'absolute', top: 22, right: 22 }} aria-label="Přepnout motiv">
+          {resolved === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
+        </IconButton>
+
+        <Box sx={{ width: '100%', maxWidth: 400 }}>
+          <Stack direction="row" spacing={1.25} alignItems="center" justifyContent="center" sx={{ display: { md: 'none' }, mb: 3 }}>
+            <Logo size={38} />
+            <Typography sx={{ fontSize: 24, fontWeight: 800 }}>
+              Ale<Box component="span" sx={{ color: 'primary.main' }}>Track</Box>
+            </Typography>
+          </Stack>
+
+          <Typography variant="h4" sx={{ fontSize: 26, mb: 0.5 }}>
+            Přihlášení
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 2.75 }}>
+            Zadejte přihlašovací údaje pro vstup do aplikace.
+          </Typography>
+
+          <Stack
+            component="form"
+            spacing={2}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
           >
-               {/* Language — top right */}
-               <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <LanguageSwitcher />
-               </Box>
+            <TextField
+              label="Uživatelské jméno"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              autoComplete="username"
+              fullWidth
+            />
+            <TextField
+              label="Heslo"
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowPw((v) => !v)} edge="end" size="small">
+                        {showPw ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <FormControlLabel
+                control={<Checkbox checked={remember} onChange={(e) => setRemember(e.target.checked)} size="small" />}
+                label="Zapamatovat si mě"
+                slotProps={{ typography: { fontSize: 13 } }}
+              />
+            </Stack>
+            <Button type="submit" variant="contained" size="large" startIcon={<LoginOutlinedIcon />} disabled={busy} sx={{ height: 46 }}>
+              {busy ? 'Přihlašuji…' : 'Přihlásit se'}
+            </Button>
+          </Stack>
 
-               {/* Theme mode — bottom right */}
-               <Box sx={{ position: 'absolute', bottom: 16, right: 16 }}>
-                    <ThemeModeSwitcher />
-               </Box>
-
-               {/* Login card */}
-               <Card
-                    sx={{
-                         width: '100%',
-                         maxWidth: 420,
-                         mx: 2,
-                         p: { xs: 3, sm: 5 },
-                         borderRadius: 3,
-                         boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
-                    }}
-               >
-                    {/* Logo */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 3 }}>
-                         <Box
-                              component="img"
-                              src="/assets/images/logo/logo-small.png"
-                              alt="AleTrack"
-                              sx={{ height: 48 }}
-                         />
-                         <Typography variant="h4" fontWeight={700}>
-                              AleTrack
-                         </Typography>
-                    </Box>
-
-                    <Typography variant="h6" align="center" sx={{ mb: 4 }}>
-                         {t('auth.login')}
-                    </Typography>
-
-                    <Box component="form" onSubmit={handleSubmit} noValidate>
-                         <TextField
-                              label={t('auth.username')}
-                              value={userName}
-                              onChange={(e) => setUserName(e.target.value)}
-                              fullWidth
-                              autoFocus
-                              autoComplete="username"
-                              sx={{ mb: 2.5 }}
-                         />
-
-                         <TextField
-                              label={t('auth.password')}
-                              type={showPassword ? 'text' : 'password'}
-                              value={password}
-                              onChange={(e) => setPassword(e.target.value)}
-                              fullWidth
-                              autoComplete="current-password"
-                              sx={{ mb: 3 }}
-                              slotProps={{
-                                   input: {
-                                        endAdornment: (
-                                             <InputAdornment position="end">
-                                                  <IconButton
-                                                       onClick={() => setShowPassword((v) => !v)}
-                                                       edge="end"
-                                                  >
-                                                       {showPassword ? <VisibilityOff /> : <Visibility />}
-                                                  </IconButton>
-                                             </InputAdornment>
-                                        ),
-                                   },
-                              }}
-                         />
-
-                         <LoadingButton
-                              type="submit"
-                              variant="contained"
-                              fullWidth
-                              size="large"
-                              loading={loading}
-                              disabled={!userName || !password}
-                              sx={{
-                                   py: 1.5,
-                                   bgcolor: 'grey.800',
-                                   borderRadius: 2,
-                                   '&:hover': { bgcolor: 'grey.700' },
-                              }}
-                         >
-                              {t('auth.login')}
-                         </LoadingButton>
-                    </Box>
-               </Card>
-          </Box>
-     );
+        </Box>
+      </Box>
+    </Box>
+  );
 }

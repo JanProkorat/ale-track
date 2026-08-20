@@ -65,6 +65,7 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
     {
         var user = await dbContext.Users
             .Include(u => u.UserRoles)
+            .Include(u => u.Permissions)
             .FirstOrDefaultAsync(u => u.UserName == req.Data.UserName, ct);
             
         if (user is null)
@@ -74,8 +75,8 @@ public sealed class LoginEndpoint(AleTrackDbContext dbContext, IPasswordHasher p
         if (!isPasswordValid)
             UserThrowHelper.InvalidPassword();
 
-        var (accessToken, rawRefreshToken) = RefreshTokenHelper.CreateTokens(
-            jwtService, dbContext, user, configuration);
+        var (accessToken, rawRefreshToken) = await RefreshTokenHelper.CreateTokensAsync(
+            jwtService, dbContext, user, configuration, ct);
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(new LoginResponse

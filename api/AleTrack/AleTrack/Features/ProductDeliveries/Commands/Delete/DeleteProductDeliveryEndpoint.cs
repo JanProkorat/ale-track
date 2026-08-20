@@ -28,7 +28,7 @@ public sealed class DeleteProductDeliveryEndpoint(AleTrackDbContext dbContext) :
     {
         Delete("products/deliveries/{id}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Deliveries, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status202Accepted)
             .WithName(nameof(DeleteProductDeliveryEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));

@@ -7,7 +7,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: AleTrack
     ports:
-      - "5432:5432"
+      # Host 5433, not 5432: the default port is routinely taken by another project's
+      # Postgres, and the clash surfaces as a confusing auth failure against the wrong
+      # database rather than as a port conflict. The container still listens on 5432.
+      - "5433:5432"
     volumes:
       - aletrack-data:/var/lib/postgresql/data
 

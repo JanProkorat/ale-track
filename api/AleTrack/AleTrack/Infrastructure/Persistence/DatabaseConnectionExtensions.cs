@@ -2,6 +2,7 @@ using System.Configuration;
 using AleTrack.Infrastructure.Interceptors.PublicEntity;
 using AleTrack.Infrastructure.Interceptors.SaveChangesCombine;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Serilog;
 
 namespace AleTrack.Infrastructure.Persistence;
@@ -47,6 +48,51 @@ public static class DatabaseConnectionExtensions
     }
 
     /// <summary>
+    /// Adds the pool-liveness settings Npgsql leaves off by default, unless the connection
+    /// string already sets them.
+    /// </summary>
+    /// <remarks>
+    /// Without these the pool can hand out a socket the server has already closed. Supabase's
+    /// pooler drops idle connections well inside Npgsql's 300-second default
+    /// <c>Connection Idle Lifetime</c>, and with <c>Keepalive</c> off by default nothing keeps
+    /// the connection alive or notices it died. The next command then fails on the first read
+    /// — on macOS as <c>SocketException (22): Invalid argument</c> out of
+    /// <c>NpgsqlReadBuffer.set_Timeout</c>, because setting a receive timeout on a dead socket
+    /// returns EINVAL.
+    ///
+    /// Retrying does not cover this: the socket error is raised before Npgsql can wrap it as a
+    /// transient <c>NpgsqlException</c>, so <c>EnableRetryOnFailure</c> never sees anything it
+    /// recognises. Keeping the connection alive, and dropping it early if it went idle, is what
+    /// actually prevents it.
+    ///
+    /// Anything already spelled out in the connection string wins — this only fills in defaults.
+    /// </remarks>
+    public static string WithPoolLivenessDefaults(this string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+
+        // Keys the caller actually wrote. NpgsqlConnectionStringBuilder.ContainsKey answers
+        // "is this a known keyword", which is true for every one of these whether set or not.
+        var configured = connectionString
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(pair => pair.Split('=', 2)[0].Replace(" ", string.Empty))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Well inside the idle window of every pooler we run against.
+        if (!configured.Contains("Keepalive"))
+            builder.KeepAlive = 30;
+
+        // Prune before the far end does, so a stale connection is never reused.
+        if (!configured.Contains("ConnectionIdleLifetime"))
+            builder.ConnectionIdleLifetime = 60;
+
+        if (!configured.Contains("TcpKeepalive"))
+            builder.TcpKeepAlive = true;
+
+        return builder.ConnectionString;
+    }
+
+    /// <summary>
     /// Applies any pending migrations to the application's database during runtime.
     /// Ensures that the database schema is up to date with the current application's data model.
     /// </summary>
@@ -89,16 +135,25 @@ public static class DatabaseConnectionExtensions
     /// <param name="connectionString">
     /// The database connection string used to connect to the specified database server.
     /// </param>
-    public static void CreateDbContext(this IServiceCollection services, string connectionString)
+    /// <param name="enableSensitiveDataLogging">
+    /// When true, enables detailed errors and sensitive data logging. These write query
+    /// parameter values into the log, so they must stay off outside local development.
+    /// </param>
+    public static void CreateDbContext(this IServiceCollection services, string connectionString, bool enableSensitiveDataLogging)
     {
         services.AddDbContext<AleTrackDbContext>(options =>
         {
-            options.UseNpgsql(connectionString, npgsqlOptions =>
+            options.UseNpgsql(connectionString.WithPoolLivenessDefaults(), npgsqlOptions =>
             {
-                npgsqlOptions.EnableRetryOnFailure();
+                // Covers the stock transient errors plus a connection that died in the pool.
+                npgsqlOptions.ExecutionStrategy(dependencies => new BrokenConnectionRetryStrategy(dependencies));
             });
-            
+
             options.UseCombineOf(new PublicEntityInterceptor());
+
+            if (!enableSensitiveDataLogging)
+                return;
+
             options.EnableDetailedErrors();
             options.EnableSensitiveDataLogging();
         });

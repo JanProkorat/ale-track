@@ -1,81 +1,47 @@
-import type { CreateUserDto, UpdateUserDto } from 'src/generated/api-client';
+// Users module hooks — copied from the useVehicles CRUD pattern. There is no
+// user-detail endpoint (the list item already carries everything), so this
+// module skips the `useVehicle`-style detail hook.
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
+import { type CreateUserDto, type UpdateUserDto } from 'src/generated/api-client';
 
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const USERS_KEY = 'users';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useUsers(search?: string) {
-     return useQuery({
-          queryKey: [USERS_KEY, search],
-          queryFn: ({ signal }) =>
-               apiClient.getUserListEndpoint(
-                    search ? { UserName: `contains:${search}` } : {},
-                    signal,
-               ),
-     });
+export function useUsers(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.users.list(params),
+    queryFn: ({ signal }) => ds.getUserListEndpoint(params, signal),
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
-
 export function useCreateUser() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: (data: CreateUserDto) => apiClient.createUserEndpoint(data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [USERS_KEY] });
-               notifyCreate('users');
-          },
-          onError: () => {
-               notifyCreateError('users');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateUserDto) => ds.createUserEndpoint(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.users.all }),
+  });
 }
 
 export function useUpdateUser() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateUserDto }) =>
-               apiClient.updateUserEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [USERS_KEY] });
-               notifyUpdate('users');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateUserDto }) =>
+      ds.updateUserEndpoint(id, data),
+    onSuccess: (_res, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.users.all });
+      qc.invalidateQueries({ queryKey: qk.users.detail(id) });
+    },
+  });
 }
 
 export function useDeleteUser() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteUserEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [USERS_KEY] });
-               notifyDelete('users');
-          },
-          onError: () => {
-               notifyDeleteError('users');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ds.deleteUserEndpoint(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.users.all }),
+  });
 }

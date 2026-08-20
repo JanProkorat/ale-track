@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AleTrack.Features.OutgoingShipments.Commands.Update;
 
@@ -29,22 +31,18 @@ public sealed record UpdateOutgoingShipmentRequest
 /// Endpoint for updating an existing outgoing shipment
 /// </summary>
 /// <param name="dbContext"></param>
-public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) : Endpoint<UpdateOutgoingShipmentRequest>
+/// <param name="companyOptions"></param>
+/// <param name="driverScope"></param>
+public sealed class UpdateOutgoingShipmentEndpoint(
+    AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
+    : Endpoint<UpdateOutgoingShipmentRequest>
 {
-    /// <summary>
-    /// States in which the OutgoingShipment has to have filled all data
-    /// </summary>
-    private readonly OutgoingShipmentState[] _statesWithFilledData = [
-        OutgoingShipmentState.Delivered, 
-        OutgoingShipmentState.InTransit
-    ];
-
     /// <inheritdoc />
     public override void Configure()
     {
         Put("outgoing-shipments/{Id:guid}");
         Description(b => b
-            .RequireRole(UserRoleType.User)
+            .RequirePermission(ModuleType.Shipments, PermissionLevel.Edit)
             .Produces<string>(StatusCodes.Status204NoContent)
             .WithName(nameof(UpdateOutgoingShipmentEndpoint))
             .ClearDefaultProduces(StatusCodes.Status200OK));
@@ -55,6 +53,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             {
                 s.Summary = "Updates an existing outgoing shipment";
                 s.Responses[StatusCodes.Status204NoContent] = "Outgoing shipment updated";
+                s.Responses[StatusCodes.Status400BadRequest] = "Illegal state transition, or frozen content changed";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment, vehicle, drivers or orders not found";
             }
         );
@@ -63,6 +62,8 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
     /// <inheritdoc />
     public override async Task HandleAsync(UpdateOutgoingShipmentRequest req, CancellationToken ct)
     {
+        await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
+
         var outgoingShipment = await dbContext.OutgoingShipments
         .Include(os => os.Drivers)
             .ThenInclude(od => od.Driver)
@@ -71,116 +72,196 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .ThenInclude(s => s.ClientOrder)
                 .ThenInclude(s => s.OrderItems)
                     .ThenInclude(oi => oi.Product)
-        .Include(os => os.InventoryExtraItems)
+        .Include(os => os.StockPurchases)
             .ThenInclude(ei => ei.Product)
-        .Include(os => os.ClientExtraItems)
-            .ThenInclude(ei => ei.InventoryItem)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.OrderItems)
+                    .ThenInclude(oi => oi.InventoryItem)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.CustomExtraItems)
+        // What the two pickup-stop reconcilers read to decide which stops the run needs.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.SupplierGoodItems)
+                    .ThenInclude(i => i.SupplierGood)
+                        .ThenInclude(g => g.Supplier)
+        .Include(os => os.RouteViaPoints)
+        // Needed by ShipmentContentGuard, which compares the stop's delivery place by
+        // public ID — without this the diff would read every place as removed.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientDeliveryPlace)
+        // The three below are what ShipmentContentSnapshotWriter reads and writes: the brewery
+        // and client it snapshots, and the existing rows a revert has to orphan.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p.Brewery)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.ClientOrder!)
+                .ThenInclude(o => o.Client)
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.Items)
+        .Include(os => os.PreparationSteps)
+        // Needed by ShipmentContentGuard, which compares the stored start brewery by
+        // public ID — without this every save of a brewery-started shipment would read
+        // the brewery as removed and be wrongly rejected as frozen content.
+        .Include(os => os.StartBrewery)
         .FirstOrDefaultAsync(os => os.PublicId == req.Id, ct);
 
         if (outgoingShipment is null)
             ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
 
+        // Both guards run before anything touches the entity: GetOrderStopsAsync below
+        // mutates existing stops in place, which would make the stored side of the content
+        // diff reflect the request instead of the database.
+        ShipmentStateTransition.EnsureAllowed(outgoingShipment!, req.Data.State);
+
+        if (!ShipmentMutability.IsContentEditable(outgoingShipment.State))
+        {
+            var frozenChanges = ShipmentContentGuard.ChangedFrozenFields(outgoingShipment, req.Data);
+            if (frozenChanges.Count > 0)
+                ThrowHelper.ShipmentContentFrozen(outgoingShipment.State, frozenChanges);
+        }
+
+        // Checked separately from the block above because the checklist freezes later than the
+        // truck's content does: preparing a run goes on while it is Loaded and InTransit, so the
+        // list stays editable until the shipment is a historical record.
+        if (!PurchaseInvoiceSplit.IsEditable(outgoingShipment)
+            && ShipmentContentGuard.PreparationStepsChanged(outgoingShipment, req.Data))
+        {
+            ThrowHelper.ShipmentContentFrozen(
+                outgoingShipment.State,
+                [nameof(req.Data.PreparationSteps)]);
+        }
+
+        // Snapshot the orders currently on the shipment so we can free any that get removed.
+        var previousStopOrders = outgoingShipment!.Stops
+            .Where(s => s.ClientOrder != null)
+            .Select(s => s.ClientOrder!)
+            .ToList();
+
         var drivers = await GetDriversAsync(req.Data.DriverIds, outgoingShipment, ct);
         var vehicle = await GetVehicleAsync(req.Data.VehicleId, outgoingShipment, ct);
         var stops = await GetOrderStopsAsync(req.Data.ClientOrderShipments, outgoingShipment, ct);
-        var inventoryExtraItems = await GetInventoryExtraItemsAsync(req.Data.InventoryExtraShipments, outgoingShipment, ct);
-        var clientExtraItems = await GetClientExtraItemsAsync(req.Data.ClientExtraShipments, outgoingShipment, ct);
-        var customExtraItems = GetCustomExtraItems(req.Data.CustomExtraShipments, outgoingShipment);
-        
+        var customStops = await BuildCustomStopsAsync(req.Data.CustomStops, outgoingShipment, ct);
+        var stockPurchases = await GetStockPurchasesAsync(req.Data.StockPurchases, outgoingShipment, ct);
+        var startBrewery = await GetStartBreweryAsync(req.Data.StartPointKind, req.Data.StartBreweryId, req.Data.StartBreweryAddressKind, ct);
+
         outgoingShipment.DeliveryDate = req.Data.DeliveryDate;
         outgoingShipment.Name = req.Data.Name;
         outgoingShipment.Vehicle = vehicle;
         outgoingShipment.Drivers = drivers;
-        outgoingShipment.Stops = stops;
-        outgoingShipment.InventoryExtraItems = inventoryExtraItems;
-        outgoingShipment.ClientExtraItems = clientExtraItems;
-        outgoingShipment.CustomExtraItems = customExtraItems;
+        outgoingShipment.StartPointKind = req.Data.StartPointKind;
+        outgoingShipment.StartBrewery = startBrewery;
+        outgoingShipment.StartBreweryId = startBrewery?.Id;
+        outgoingShipment.StartBreweryAddressKind = req.Data.StartBreweryAddressKind;
+        // Supplier stops arrive in CustomStops like the company stop does, so the planner can place
+        // one in the route before it exists. The reconciler below still decides whether each is
+        // needed; what the client contributes is only where it goes.
+        outgoingShipment.Stops = [.. stops, .. customStops];
+        outgoingShipment.RouteViaPoints = [.. req.Data.RouteViaPoints
+            .Select((p, i) => new OutgoingShipmentRoutePoint { Order = i, Latitude = p.Latitude, Longitude = p.Longitude })];
+        outgoingShipment.StockPurchases = stockPurchases;
+        outgoingShipment.PreparationSteps = BuildPreparationSteps(req.Data.PreparationSteps, outgoingShipment);
 
-        if (req.Data.State is OutgoingShipmentState.Loaded && outgoingShipment.Stops.Count == 0)
-            ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
+        // Only while the content is still open: past Created the stock purchases cannot
+        // change either, so there is nothing to reconcile and mutating a frozen run's
+        // stops would be a bug.
+        if (ShipmentMutability.IsContentEditable(outgoingShipment.State))
+        {
+            SupplierPickupStopReconciler.Apply(outgoingShipment);
+            CompanyStopReconciler.Apply(outgoingShipment, companyOptions.Value);
+        }
 
-        if (_statesWithFilledData.Contains(req.Data.State) && !outgoingShipment.HasFilledData)
-            ThrowHelper.ShipmentNotPrepared(req.Data.State);
-        
-        var isTransitioningToDelivered = outgoingShipment.State != OutgoingShipmentState.Delivered
-                                        && req.Data.State == OutgoingShipmentState.Delivered;
+        ShipmentStateTransition.EnsureReady(outgoingShipment, req.Data.State);
 
-        outgoingShipment.State = req.Data.State;
+        var requestedInventoryIds = req.Data.ClientOrderShipments
+            .SelectMany(cos => cos.OrderItems)
+            .Where(i => i.QuantityFromInventory > 0 && i.InventoryItemId is not null)
+            .Select(i => i.InventoryItemId!.Value)
+            .Distinct()
+            .ToList();
+
+        var inventoryByPublicId = requestedInventoryIds.Count == 0
+            ? []
+            : await dbContext.InventoryItems
+                .Where(i => requestedInventoryIds.Contains(i.PublicId))
+                .ToDictionaryAsync(i => i.PublicId, ct);
 
         foreach (var requestStop in req.Data.ClientOrderShipments)
         {
-            var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder.PublicId == requestStop.ClientOrderId);
+            var relatedStop = outgoingShipment.Stops.FirstOrDefault(s => s.ClientOrder != null && s.ClientOrder.PublicId == requestStop.ClientOrderId);
             if (relatedStop is null)
                 continue;
 
             foreach (var requestOrderItem in requestStop.OrderItems)
             {
                 var relatedItem = relatedStop.ClientOrder.OrderItems.FirstOrDefault(i => i.PublicId == requestOrderItem.OrderItemId);
-                relatedItem?.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
-                relatedItem?.FirstInvoiceQuantity = requestOrderItem.FirstInvoiceQuantity;
-                relatedItem?.SecondInvoiceQuantity = requestOrderItem.SecondInvoiceQuantity;
+                if (relatedItem is null)
+                    continue;
+
+                relatedItem.IsShipmentLoadingConfirmed = requestOrderItem.IsLoadingConfirmed;
+
+                // Sourcing: how many of the ordered pieces come out of our own stock.
+                // More than was ordered is nonsense; more than is *in* stock is allowed,
+                // because a booked-in delivery may still arrive before loading — the
+                // nakládka warns about it instead of blocking.
+                if (requestOrderItem.QuantityFromInventory > relatedItem.Quantity)
+                    ThrowHelper.BadRequest(
+                        $"Cannot source {requestOrderItem.QuantityFromInventory} pieces from inventory for an order item of {relatedItem.Quantity}.");
+
+                relatedItem.QuantityFromInventory = Math.Max(0, requestOrderItem.QuantityFromInventory);
+                relatedItem.InventoryItem = relatedItem.QuantityFromInventory > 0
+                    ? inventoryByPublicId.GetValueOrDefault(requestOrderItem.InventoryItemId ?? Guid.Empty)
+                    : null;
+                relatedItem.InventoryItemId = relatedItem.InventoryItem?.Id;
+
+                if (relatedItem.QuantityFromInventory > 0 && relatedItem.InventoryItem is null)
+                    ThrowHelper.PublicEntityNotFound(nameof(InventoryItem), requestOrderItem.InventoryItemId ?? Guid.Empty);
+            }
+
+            // Extras are the order's rows; the shipment only confirms them.
+            foreach (var info in requestStop.CustomExtraItems)
+            {
+                var extra = relatedStop.ClientOrder.CustomExtraItems.FirstOrDefault(e => e.PublicId == info.Id);
+                if (extra is not null)
+                    extra.IsShipmentLoadingConfirmed = info.IsLoadingConfirmed;
             }
         }
         
-        var isTransitioningToLoaded = outgoingShipment.State != OutgoingShipmentState.Loaded
-                                     && req.Data.State == OutgoingShipmentState.Loaded;
+        // An order dropped from the run is freed for reuse. Only this endpoint can drop one,
+        // so it stays here rather than in the shared transition.
+        var currentOrderIds = outgoingShipment.Stops
+            .Where(s => s.ClientOrder != null)
+            .Select(s => s.ClientOrder!.PublicId)
+            .ToHashSet();
 
-        if (req.Data.State == OutgoingShipmentState.Cancelled)
-            ResetOrderItemsForReuse(outgoingShipment);
+        foreach (var removed in previousStopOrders.Where(o => !currentOrderIds.Contains(o.PublicId)))
+            removed.State = OrderState.New;
 
-        if (isTransitioningToLoaded)
-            SubtractFromInventory(outgoingShipment.ClientExtraItems);
-
-        if (isTransitioningToDelivered && outgoingShipment.InventoryExtraItems.Count > 0)
-            await AddExtraItemsToInventoryAsync(outgoingShipment.InventoryExtraItems, ct);
+        // Assigns the state and applies every consequence — orders, stock, snapshot. Shared
+        // with SetShipmentStateEndpoint so the two cannot drift.
+        await ShipmentStateTransition.ApplyAsync(dbContext, outgoingShipment, req.Data.State, ct);
 
         await dbContext.SaveChangesAsync(ct);
 
         await Send.NoContentAsync(ct);
     }
 
-    private List<OutgoingShipmentCustomExtraItem> GetCustomExtraItems(List<CustomExtraShipmentDto> extraItems, OutgoingShipment outgoingShipment)
-    {
-        var newItems = extraItems
-            .Where(ei => ei.Id is null)
-            .ToList();
-        
-        var resultItems = newItems
-            .Select(i => new OutgoingShipmentCustomExtraItem
-            {
-                Description = i.Description,
-                FirstInvoiceQuantity = i.FirstInvoiceQuantity,
-                SecondInvoiceQuantity = i.SecondInvoiceQuantity,
-                IsShipmentLoadingConfirmed = i.IsLoadingConfirmed,
-                Quantity = i.Quantity
-            })
-            .ToList();
-        
-        var existingItems = extraItems
-            .Where(ei => ei.Id is not null 
-                         && outgoingShipment.CustomExtraItems.Any(ei2 => ei2.PublicId == ei.Id.Value))
-            .ToList();
-        
-        foreach (var item in existingItems)
-        {
-            var existing = outgoingShipment.CustomExtraItems.First(ei => ei.PublicId == item.Id!.Value);
-            existing.Description = item.Description;
-            existing.FirstInvoiceQuantity = item.FirstInvoiceQuantity;
-            existing.SecondInvoiceQuantity = item.SecondInvoiceQuantity;
-            existing.IsShipmentLoadingConfirmed = item.IsLoadingConfirmed;
-            existing.Quantity = item.Quantity;
-            
-            resultItems.Add(existing);
-        }
-        
-        return resultItems;
-    }
 
     private async Task<ICollection<OutgoingShipmentStop>> GetOrderStopsAsync(List<ClientOrderShipmentDto> clientOrderShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
+        // Work only with order stops here — custom stops are handled separately.
+        var orderStops = outgoingShipment.Stops
+            .Where(s => s.Kind == OutgoingShipmentStopKind.Order && s.ClientOrder != null)
+            .ToList();
+
         // Find orders present in the update request and not already linked to the outgoing shipment
-        var existingOrderIds = outgoingShipment.Stops
-            .Select(s => s.ClientOrder.PublicId)
+        var existingOrderIds = orderStops
+            .Select(s => s.ClientOrder!.PublicId)
             .ToHashSet();
 
         var newOrderIds = clientOrderShipments
@@ -188,14 +269,37 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             .Where(id => !existingOrderIds.Contains(id))
             .ToList();
 
-        var stops = new List<OutgoingShipmentStop>(outgoingShipment.Stops);
+        // Places already attached to this shipment's existing stops must stay
+        // acceptable even if they were soft-deleted since — otherwise a
+        // resave (e.g. flipping the nakládka checkboxes or advancing the
+        // shipment's state) 404s forever once the place they used is
+        // removed from the client. See ShipmentStopDeliveryPlaceResolver.
+        var alreadyReferencedPlaceIds = orderStops
+            .Where(s => s.ClientDeliveryPlaceId.HasValue)
+            .Select(s => s.ClientDeliveryPlaceId!.Value)
+            .Distinct()
+            .ToList();
+
+        var placeIds = await ShipmentStopDeliveryPlaceResolver.ResolveAsync(dbContext, clientOrderShipments, alreadyReferencedPlaceIds, ct);
+
+        var stops = new List<OutgoingShipmentStop>(orderStops);
 
         // Add new orders
         if (newOrderIds.Count > 0)
         {
+            // ShipmentContentSnapshotWriter.Apply runs on these same order entities when the
+            // shipment transitions into Loaded within this same request (e.g. attaching an order
+            // and setting the new state in one PUT) — it reads order.Client (for the client's own
+            // price list and the ClientName/ClientPublicId snapshot fields) and
+            // OrderItem.Product.Brewery (for BreweryName/BreweryPublicId). Without these includes
+            // both navigations come back null (no lazy-loading proxies here), so the writer
+            // silently degrades to ClientPriceList.Empty and bills the catalog price instead of
+            // the client's own.
             var fetchedOrders = await dbContext.Orders
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
+                        .ThenInclude(p => p.Brewery)
+                .Include(o => o.Client)
                 .Where(o => newOrderIds.Contains(o.PublicId))
                 .ToListAsync(ct);
 
@@ -216,27 +320,171 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
                     order = o,
                     requestOrder = clientOrderShipments.First(cos => cos.ClientOrderId == o.PublicId)
                 })
-                .Select(o => new OutgoingShipmentStop
+                .Select(o =>
                 {
-                    ClientOrder = o.order,
-                    Order = o.requestOrder.Order,
-                    SelectedAddressKind = o.requestOrder.SelectedAddressKind
+                    var stop = new OutgoingShipmentStop
+                    {
+                        Kind = OutgoingShipmentStopKind.Order,
+                        ClientOrder = o.order,
+                        Order = o.requestOrder.Order,
+                        SelectedAddressKind = o.requestOrder.SelectedAddressKind,
+                        ClientDeliveryPlaceId = o.requestOrder.ClientDeliveryPlaceId.HasValue
+                            ? placeIds[o.requestOrder.ClientDeliveryPlaceId.Value]
+                            : null
+                    };
+
+                    // Derived, never sent: a stale client-supplied flag would silently
+                    // disable propagation from the order.
+                    stop.DeriveAddressOverride(o.order);
+
+                    return stop;
                 }));
         }
 
         // Remove orders present on the entity but not in the update request
         stops = [.. stops.Where(s => clientOrderShipments
             .Select(cos => cos.ClientOrderId)
-            .Contains(s.ClientOrder.PublicId))];
-        
-        // Update order of the stops
-        foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder.PublicId)))
+            .Contains(s.ClientOrder!.PublicId))];
+
+        // Update already-linked stops. Before this feature only Order was
+        // written here, so changing a stop's address kind never persisted.
+        foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder!.PublicId)))
         {
-            var matchingDto = clientOrderShipments.First(cos => cos.ClientOrderId == stop.ClientOrder.PublicId);
+            var matchingDto = clientOrderShipments.First(cos => cos.ClientOrderId == stop.ClientOrder!.PublicId);
             stop.Order = matchingDto.Order;
+            stop.SelectedAddressKind = matchingDto.SelectedAddressKind;
+            stop.ClientDeliveryPlaceId = matchingDto.ClientDeliveryPlaceId.HasValue
+                ? placeIds[matchingDto.ClientDeliveryPlaceId.Value]
+                : null;
+
+            // Derived, never sent: a stale client-supplied flag would silently
+            // disable propagation from the order.
+            stop.DeriveAddressOverride(stop.ClientOrder!);
         }
 
+        // The planner has just been looking at this shipment; whatever the
+        // banner was announcing has been seen. Cleared for every stop, not
+        // only the re-assigned ones.
+        foreach (var stop in outgoingShipment.Stops)
+            stop.AddressChangedAt = null;
+
         return stops;
+    }
+
+    private async Task<List<OutgoingShipmentStop>> BuildCustomStopsAsync(
+        List<CustomStopDto> customStops, OutgoingShipment outgoingShipment, CancellationToken ct)
+    {
+        var company = companyOptions.Value;
+
+        // Every non-order kind lives in this list; filtering to Custom alone would make each
+        // Company or Supplier stop look new on every save and orphan the stored row.
+        var existingById = outgoingShipment.Stops
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom
+                or OutgoingShipmentStopKind.Company
+                or OutgoingShipmentStopKind.Supplier)
+            .ToDictionary(s => s.PublicId);
+
+        // A pickup stop's label and coordinates come from its supplier, never from the client —
+        // the same rule the company stop follows, so a stale client cannot pin either elsewhere.
+        var supplierIds = customStops
+            .Where(d => d.Kind == OutgoingShipmentStopKind.Supplier && d.SupplierId is not null)
+            .Select(d => d.SupplierId!.Value)
+            .Distinct()
+            .ToList();
+
+        var suppliersById = supplierIds.Count == 0
+            ? new Dictionary<Guid, Supplier>()
+            : await dbContext.Suppliers
+                .Where(x => supplierIds.Contains(x.PublicId))
+                .ToDictionaryAsync(x => x.PublicId, ct);
+
+        var result = new List<OutgoingShipmentStop>();
+        foreach (var dto in customStops)
+        {
+            var isCompany = dto.Kind == OutgoingShipmentStopKind.Company;
+            var isSupplier = dto.Kind == OutgoingShipmentStopKind.Supplier;
+
+            Supplier? supplier = null;
+            if (isSupplier)
+            {
+                if (dto.SupplierId is null || !suppliersById.TryGetValue(dto.SupplierId.Value, out supplier))
+                {
+                    ThrowHelper.PublicEntityNotFound(nameof(Supplier), dto.SupplierId ?? Guid.Empty);
+                }
+            }
+
+            var label = isCompany ? company.Name : isSupplier ? supplier!.Name : dto.Label;
+            var latitude = isCompany ? company.Latitude : isSupplier ? supplier!.OfficialAddress?.Latitude : dto.Latitude;
+            var longitude = isCompany ? company.Longitude : isSupplier ? supplier!.OfficialAddress?.Longitude : dto.Longitude;
+
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                existing.Kind = dto.Kind;
+                existing.Order = dto.Order;
+                existing.Label = label;
+                existing.Note = dto.Note;
+                existing.Latitude = latitude;
+                existing.Longitude = longitude;
+                existing.Supplier = supplier;
+                existing.SupplierId = supplier?.Id;
+                result.Add(existing);
+            }
+            else
+            {
+                result.Add(new OutgoingShipmentStop
+                {
+                    Kind = dto.Kind,
+                    Order = dto.Order,
+                    Label = label,
+                    Note = dto.Note,
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    Supplier = supplier,
+                    SupplierId = supplier?.Id
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reconciles the preparation checklist against what is stored.
+    /// </summary>
+    /// <remarks>
+    /// Existing steps are matched by public ID and keep their <c>IsDone</c>: the editor writes the
+    /// list, the detail screen writes the ticks, and a save from either must not undo the other.
+    /// Steps absent from the request are dropped — the collection is cascade-deleted, so severing
+    /// them here removes the rows.
+    /// </remarks>
+    private static List<OutgoingShipmentPreparationStep> BuildPreparationSteps(
+        List<PreparationStepDto> steps,
+        OutgoingShipment outgoingShipment)
+    {
+        var existingById = outgoingShipment.PreparationSteps.ToDictionary(s => s.PublicId);
+
+        var result = new List<OutgoingShipmentPreparationStep>();
+        foreach (var dto in steps)
+        {
+            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
+            {
+                existing.Order = dto.Order;
+                existing.Label = dto.Label;
+                result.Add(existing);
+            }
+            else
+            {
+                result.Add(new OutgoingShipmentPreparationStep
+                {
+                    PublicId = Guid.NewGuid(),
+                    Order = dto.Order,
+                    Label = dto.Label,
+                    IsDone = false
+                });
+            }
+        }
+
+        return result;
     }
 
     private async Task<List<OutgoingShipmentDriver>> GetDriversAsync(List<Guid> driverIds, OutgoingShipment outgoingShipment, CancellationToken ct)
@@ -299,130 +547,48 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         return vehicle;
     }
 
-    private static void SubtractFromInventory(ICollection<OutgoingShipmentClientExtraItem> extraItems)
+    /// <summary>
+    /// Resolves the brewery a run starts at, or null when it starts at the company.
+    /// </summary>
+    private async Task<Brewery?> GetStartBreweryAsync(
+        ShipmentStartPointKind kind, Guid? breweryId, DeliveryAddressKind addressKind, CancellationToken ct)
     {
-        foreach (var item in extraItems)
-            item.InventoryItem.Quantity -= item.Quantity;
-    }
-
-    private static void ResetOrderItemsForReuse(OutgoingShipment outgoingShipment)
-    {
-        foreach (var stop in outgoingShipment.Stops)
+        if (kind != ShipmentStartPointKind.Brewery || breweryId is null)
         {
-            foreach (var orderItem in stop.ClientOrder.OrderItems)
-            {
-                orderItem.FirstInvoiceQuantity = null;
-                orderItem.SecondInvoiceQuantity = null;
-                orderItem.IsShipmentLoadingConfirmed = false;
-            }
+            return null;
         }
-    }
 
-    private async Task AddExtraItemsToInventoryAsync(ICollection<OutgoingShipmentInventoryExtraItem> extraItems, CancellationToken ct)
-    {
-        var newInventoryItems = new List<InventoryItem>();
-        // Match product-linked extra items to existing inventory
-        
-        var productIds = extraItems
-            .Select(ei => ei.Product.Id)
-            .ToList();
-        
-        var existingInventory = await dbContext.InventoryItems
-            .Where(i => i.ProductId != null && productIds.Contains(i.ProductId.Value))
-            .ToListAsync(ct);
+        var brewery = await dbContext.Breweries
+            .FirstOrDefaultAsync(b => b.PublicId == breweryId, ct);
 
-        var inventoryByProductId = existingInventory.ToDictionary(i => i.ProductId!.Value);
-
-        foreach (var item in extraItems)
+        if (brewery is null)
         {
-            if (inventoryByProductId.TryGetValue(item.Product.Id, out var existing))
-                existing.Quantity += item.Quantity;
-            else
-            {
-                newInventoryItems.Add(new InventoryItem
-                {
-                    PublicId = Guid.NewGuid(),
-                    ProductId = item.Product.Id,
-                    Quantity = item.Quantity
-                });
-            }
+            ThrowHelper.PublicEntityNotFound(nameof(Brewery), breweryId.Value);
         }
-        
-        if (newInventoryItems.Count > 0)
-            dbContext.InventoryItems.AddRange(newInventoryItems);
+
+        // The frontend merely hides the option; nothing stops a direct caller
+        // from asking for a contact address the brewery does not have.
+        if (addressKind == DeliveryAddressKind.Contact && brewery!.ContactAddress is null)
+        {
+            ThrowHelper.BadRequest($"Brewery {brewery.PublicId} has no contact address.");
+        }
+
+        return brewery;
     }
 
-    private async Task<List<OutgoingShipmentClientExtraItem>> GetClientExtraItemsAsync(List<ClientExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
+    private async Task<List<OutgoingShipmentStockPurchaseItem>> GetStockPurchasesAsync(List<StockPurchaseDto> stockPurchaseDtos, OutgoingShipment outgoingShipment, CancellationToken ct)
     {
-        if (extraShipments.Count == 0)
+        if (stockPurchaseDtos.Count == 0)
             return [];
 
-        var existingById = outgoingShipment.ClientExtraItems
+        var existingById = outgoingShipment.StockPurchases
             .ToDictionary(ei => ei.PublicId);
 
-        // Fetch products for new items that reference a product
-        var newProductIds = extraShipments
-            .Select(es => es.InventoryItemId)
-            .Distinct()
-            .ToList();
-
-        var productsByPublicId = new Dictionary<Guid, InventoryItem>();
-        if (newProductIds.Count > 0)
-        {
-            var fetchedProducts = await dbContext.InventoryItems
-                .Where(p => newProductIds.Contains(p.PublicId))
-                .ToListAsync(ct);
-
-            if (fetchedProducts.Count != newProductIds.Count)
-            {
-                var notFound = newProductIds.Except(fetchedProducts.Select(p => p.PublicId)).ToList();
-                ThrowHelper.PublicEntitiesNotFound(nameof(Product), notFound);
-            }
-
-            productsByPublicId = fetchedProducts.ToDictionary(p => p.PublicId);
-        }
-
-        var result = new List<OutgoingShipmentClientExtraItem>();
-
-        foreach (var dto in extraShipments)
-        {
-            if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
-            {
-                // Update existing item
-                existing.Quantity = dto.Quantity;
-                existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
-                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
-                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
-                result.Add(existing);
-            }
-            else
-            {
-                // Create new item
-                result.Add(new OutgoingShipmentClientExtraItem
-                {
-                    PublicId = Guid.NewGuid(),
-                    InventoryItem = productsByPublicId[dto.InventoryItemId],
-                    IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
-                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
-                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
-                    Quantity = dto.Quantity
-                });
-            }
-        }
-
-        return result;
-    }
-    
-    private async Task<List<OutgoingShipmentInventoryExtraItem>> GetInventoryExtraItemsAsync(List<InventoryExtraShipmentDto> extraShipments, OutgoingShipment outgoingShipment, CancellationToken ct)
-    {
-        if (extraShipments.Count == 0)
-            return [];
-
-        var existingById = outgoingShipment.InventoryExtraItems
-            .ToDictionary(ei => ei.PublicId);
-
-        // Fetch products for new items that reference a product
-        var newProductIds = extraShipments
+        // Only new items need their product resolved — existing items are matched
+        // by Id and keep their already-linked product, so their (possibly not
+        // round-tripped) ProductId must not trigger a lookup.
+        var newProductIds = stockPurchaseDtos
+            .Where(es => es.Id is null || !existingById.ContainsKey(es.Id.Value))
             .Select(es => es.ProductId)
             .Distinct()
             .ToList();
@@ -431,7 +597,7 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
         if (newProductIds.Count > 0)
         {
             var fetchedProducts = await dbContext.Products
-                .Where(p => newProductIds.Contains(p.PublicId))
+                .Where(p => newProductIds.Contains(p.PublicId) && !p.IsDeleted)
                 .ToListAsync(ct);
 
             if (fetchedProducts.Count != newProductIds.Count)
@@ -443,29 +609,25 @@ public sealed class UpdateOutgoingShipmentEndpoint(AleTrackDbContext dbContext) 
             productsByPublicId = fetchedProducts.ToDictionary(p => p.PublicId);
         }
 
-        var result = new List<OutgoingShipmentInventoryExtraItem>();
+        var result = new List<OutgoingShipmentStockPurchaseItem>();
 
-        foreach (var dto in extraShipments)
+        foreach (var dto in stockPurchaseDtos)
         {
             if (dto.Id is not null && existingById.TryGetValue(dto.Id.Value, out var existing))
             {
                 // Update existing item
                 existing.Quantity = dto.Quantity;
                 existing.IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed;
-                existing.FirstInvoiceQuantity = dto.FirstInvoiceQuantity;
-                existing.SecondInvoiceQuantity = dto.SecondInvoiceQuantity;
                 result.Add(existing);
             }
             else
             {
                 // Create new item
-                result.Add(new OutgoingShipmentInventoryExtraItem
+                result.Add(new OutgoingShipmentStockPurchaseItem
                 {
                     PublicId = Guid.NewGuid(),
                     Product = productsByPublicId[dto.ProductId],
                     IsShipmentLoadingConfirmed = dto.IsLoadingConfirmed,
-                    FirstInvoiceQuantity = dto.FirstInvoiceQuantity,
-                    SecondInvoiceQuantity = dto.SecondInvoiceQuantity,
                     Quantity = dto.Quantity
                 });
             }

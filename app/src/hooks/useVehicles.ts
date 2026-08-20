@@ -1,86 +1,57 @@
-import type { CreateVehicleDto, UpdateVehicleDto } from 'src/generated/api-client';
+// TEMPLATE module hooks — the CRUD pattern every module copies (P4–P12).
+// list → useQuery, detail → useQuery(enabled), create/update/delete → useMutation
+// invalidating the resource root. Calls go through useDataSource() so the same
+// hooks serve both live (API) and demo (in-memory) sessions.
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataSource } from 'src/api/dataSource';
+import { qk } from 'src/api/queryKeys';
+import { type CreateVehicleDto, type UpdateVehicleDto } from 'src/generated/api-client';
 
-import { useNotification } from 'src/hooks/useNotification';
-
-import { apiClient } from 'src/api/apiClient';
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-const VEHICLES_KEY = 'vehicles';
-
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useVehicles(search?: string) {
-     return useQuery({
-          queryKey: [VEHICLES_KEY, search],
-          queryFn: ({ signal }) =>
-               apiClient.getVehiclesListEndpoint(search ? { Name: `contains:${search}` } : {}, signal),
-     });
+export function useVehicles(params: Record<string, string> = {}) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.vehicles.list(params),
+    queryFn: ({ signal }) => ds.getVehiclesListEndpoint(params, signal),
+  });
 }
 
-export function useVehicle(id: string) {
-     return useQuery({
-          queryKey: [VEHICLES_KEY, id],
-          queryFn: ({ signal }) => apiClient.getVehicleDetailEndpoint(id, signal),
-          enabled: !!id,
-     });
+export function useVehicle(id: string | undefined) {
+  const ds = useDataSource();
+  return useQuery({
+    queryKey: qk.vehicles.detail(id ?? ''),
+    queryFn: ({ signal }) => ds.getVehicleDetailEndpoint(id!, signal),
+    enabled: Boolean(id),
+  });
 }
-
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
 
 export function useCreateVehicle() {
-     const queryClient = useQueryClient();
-     const { notifyCreate, notifyCreateError } = useNotification();
-
-     return useMutation({
-          mutationFn: (data: CreateVehicleDto) => apiClient.createVehicleEndpoint(data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [VEHICLES_KEY] });
-               notifyCreate('vehicles');
-          },
-          onError: () => {
-               notifyCreateError('vehicles');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateVehicleDto) => ds.createVehicleEndpoint(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.vehicles.all }),
+  });
 }
 
 export function useUpdateVehicle() {
-     const queryClient = useQueryClient();
-     const { notifyUpdate, notifyApiError } = useNotification();
-
-     return useMutation({
-          mutationFn: ({ id, data }: { id: string; data: UpdateVehicleDto }) =>
-               apiClient.updateVehicleEndpoint(id, data),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [VEHICLES_KEY] });
-               notifyUpdate('vehicles');
-          },
-          onError: (error: unknown) => {
-               notifyApiError(error);
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateVehicleDto }) =>
+      ds.updateVehicleEndpoint(id, data),
+    onSuccess: (_res, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.vehicles.all });
+      qc.invalidateQueries({ queryKey: qk.vehicles.detail(id) });
+    },
+  });
 }
 
 export function useDeleteVehicle() {
-     const queryClient = useQueryClient();
-     const { notifyDelete, notifyDeleteError } = useNotification();
-
-     return useMutation({
-          mutationFn: (id: string) => apiClient.deleteVehicleEndpoint(id),
-          onSuccess: () => {
-               queryClient.invalidateQueries({ queryKey: [VEHICLES_KEY] });
-               notifyDelete('vehicles');
-          },
-          onError: () => {
-               notifyDeleteError('vehicles');
-          },
-     });
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ds.deleteVehicleEndpoint(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.vehicles.all }),
+  });
 }
