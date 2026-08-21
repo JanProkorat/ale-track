@@ -191,7 +191,17 @@ export function ClientDetail({
         <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
           <TitledCard
             title="Fakturační adresa"
-            action={client.officialAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
+            action={
+              // The payer chip is independent of whether this client also kept its own
+              // address — a sub-client linked by edit while an address was already on file
+              // must still show the relation, not just the no-address fallback text below.
+              <Stack direction="row" spacing={1} alignItems="center">
+                {client.invoicingClientName && (
+                  <Chip size="small" variant="outlined" label={client.invoicingClientName} />
+                )}
+                {client.officialAddress?.latitude != null && <Chip size="small" icon={<LocationOnIcon />} label="GPS" />}
+              </Stack>
+            }
           >
             {client.officialAddress ? (
               <Stack spacing={1.5}>

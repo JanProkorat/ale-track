@@ -74,12 +74,19 @@ const schema = z
       }
     }
 
-    // A client billed through a payer needs no billing address of its own. One that pays for
-    // itself still does, or nothing can be invoiced.
+    // A client billed through a payer needs no billing address of its own — but only when
+    // nothing was typed into it at all. A payer chosen alongside a half-filled address is
+    // still junk, same as an untouched one with no payer: either the address is complete, or
+    // it stays entirely blank and a payer covers it.
     const officialFilled = [val.official.streetName, val.official.streetNumber, val.official.city, val.official.zip]
       .some((s) => s?.trim());
-    if (!val.invoicingClientId && !officialFilled) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['official', 'streetName'], message: 'Zadejte adresu nebo propojeného klienta' });
+    if (!val.invoicingClientId || officialFilled) {
+      const r = addressSchema.safeParse(val.official);
+      if (!r.success) {
+        for (const issue of r.error.issues) {
+          ctx.addIssue({ ...issue, path: ['official', ...issue.path] });
+        }
+      }
     }
   });
 type FormValues = z.infer<typeof schema>;

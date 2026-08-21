@@ -193,4 +193,60 @@ describe('ClientFormDrawer', () => {
     await waitFor(() => expect(updateMutation).toHaveBeenCalledTimes(1));
     expect(updateMutation.mock.calls[0][0].data.invoicingClientId).toBe('payer-9');
   });
+
+  // The three halves of "official address required and complete unless a payer is chosen,
+  // and a payer never excuses a half-filled address": each must independently block submit.
+  it('rejects a blank official address when no payer is chosen', async () => {
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    fill('Název', 'Bez adresy a bez plátce');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat klienta' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Ulice')).toHaveAttribute('aria-invalid', 'true'));
+    expect(createMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a half-filled official address when no payer is chosen', async () => {
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    fill('Název', 'Napůl vyplněná adresa');
+    fill('Ulice', 'Lidická');
+    // Č.p., Město and PSČ deliberately left blank.
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat klienta' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Město')).toHaveAttribute('aria-invalid', 'true'));
+    expect(createMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a half-filled official address even when a payer is chosen', async () => {
+    useClientsMock.mockReturnValue({
+      data: [ClientListItemDto.fromJS({ id: 'payer-1', name: 'Hlavní kancelář' })],
+    });
+
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    fill('Název', 'Napůl vyplněná adresa s plátcem');
+    fill('Ulice', 'Lidická');
+    // Č.p., Město and PSČ deliberately left blank.
+    pickCombobox('Propojený klient', 'Hlavní kancelář');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat klienta' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Město')).toHaveAttribute('aria-invalid', 'true'));
+    expect(createMutation).not.toHaveBeenCalled();
+  });
 });

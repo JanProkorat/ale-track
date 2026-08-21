@@ -2,7 +2,7 @@
 // garage sale, whose buyer is a client. When it carries a back target in the router's location
 // state, the arrow must honour it instead of dropping the user on /clients.
 // fireEvent rather than user-event — not a dependency of this project.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -195,5 +195,29 @@ describe('ClientsPage back navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Zpět na klienty' }));
     expect(navigateMock).toHaveBeenCalledWith('/clients');
+  });
+});
+
+describe('ClientDetail — payer visibility', () => {
+  // Mutating the shared `client` fixture rather than swapping the mock: `useClient`'s factory
+  // already closes over it. Reset after each test so this doesn't bleed into the navigation
+  // tests above, which assume a client with no address or payer.
+  afterEach(() => {
+    client.officialAddress = undefined;
+    client.invoicingClientName = undefined;
+  });
+
+  it('shows the payer chip on a sub-client detail even though it kept its own official address', () => {
+    // Precisely the case that used to be missed: the fallback text only ever fired when
+    // officialAddress was absent, so a linked client that still had an address on file showed
+    // the relation nowhere on its own page.
+    client.officialAddress = new AddressDto({
+      streetName: 'Dlouhá', streetNumber: '14', city: 'Liberec', zip: '46001',
+    } as never);
+    client.invoicingClientName = 'Head Office';
+
+    renderDetail();
+
+    expect(screen.getByText('Head Office')).toBeInTheDocument();
   });
 });
