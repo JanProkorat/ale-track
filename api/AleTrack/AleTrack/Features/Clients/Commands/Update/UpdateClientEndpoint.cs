@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -61,10 +62,12 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         client!.Name = req.Data.Name;
         client.BusinessName = req.Data.BusinessName;
         client.Region = req.Data.Region;
-        client.OfficialAddress = req.Data.OfficialAddress.ToDbEntity();
-
-        if (req.Data.ContactAddress is not null)
-            client.ContactAddress = req.Data.ContactAddress.ToDbEntity();
+        // Assigned unconditionally: both addresses are now optional, so an absent one in the
+        // request means "clear it", not "leave it".
+        client.OfficialAddress = req.Data.OfficialAddress?.ToDbEntity();
+        client.ContactAddress = req.Data.ContactAddress?.ToDbEntity();
+        client.InvoicingClientId = await InvoicingClientResolver.ResolveAsync(
+            dbContext, req.Id, req.Data.InvoicingClientId, ct);
 
         client.Contacts = req.Data.Contacts
             .Select(c => new ClientContact

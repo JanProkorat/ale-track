@@ -24,15 +24,21 @@ public sealed record UpdateClientDto
     public Region Region { get; set; }
 
     /// <summary>
-    /// Info about clients' official address
+    /// Official (billing) address. Omit for a client invoiced through
+    /// <see cref="InvoicingClientId"/>.
     /// </summary>
-    public AddressDto OfficialAddress { get; set; } = null!;
-    
+    public AddressDto? OfficialAddress { get; set; }
+
     /// <summary>
     /// Info about clients' contact address
     /// </summary>
     public AddressDto? ContactAddress { get; set; }
-    
+
+    /// <summary>
+    /// Public ID of the client that receives this one's invoices, when another client pays.
+    /// </summary>
+    public Guid? InvoicingClientId { get; set; }
+
     /// <summary>
     /// List of contacts associated with the client.
     /// </summary>

@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 
@@ -47,13 +48,17 @@ public sealed class CreateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
     /// <inheritdoc />
     public override async Task HandleAsync(CreateClientRequest req, CancellationToken ct)
     {
+        var invoicingClientId = await InvoicingClientResolver.ResolveAsync(
+            dbContext, clientPublicId: null, req.Data.InvoicingClientId, ct);
+
         var client = new Client
         {
             Name = req.Data.Name,
             BusinessName = req.Data.BusinessName,
             Region = req.Data.Region,
-            OfficialAddress = req.Data.OfficialAddress.ToDbEntity(),
+            OfficialAddress = req.Data.OfficialAddress?.ToDbEntity(),
             ContactAddress = req.Data.ContactAddress?.ToDbEntity(),
+            InvoicingClientId = invoicingClientId,
             Contacts = req.Data.Contacts
                 .Select(c => new ClientContact
                 {

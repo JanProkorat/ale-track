@@ -40,15 +40,18 @@ public static class ClientBuilder
         Region region = Region.ZittauCity,
         AddressDto? officialAddress = null,
         AddressDto? contactAddress = null,
-        List<CreateClientContactDto>? contacts = null)
+        List<CreateClientContactDto>? contacts = null,
+        bool noOfficialAddress = false,
+        Guid? invoicingClientId = null)
     {
         return new CreateClientDto
         {
             Name = name ?? "Default Client",
             BusinessName = businessName,
             Region = region,
-            OfficialAddress = officialAddress ?? AddressBuilder.BuildDto(),
+            OfficialAddress = noOfficialAddress ? null : officialAddress ?? AddressBuilder.BuildDto(),
             ContactAddress = contactAddress,
+            InvoicingClientId = invoicingClientId,
             Contacts = contacts ??
             [
                 new CreateClientContactDto
@@ -67,20 +70,25 @@ public static class ClientBuilder
         Region region = Region.Berlin,
         AddressDto? officialAddress = null,
         AddressDto? contactAddress = null,
-        List<UpdateClientContactDto>? contacts = null)
+        List<UpdateClientContactDto>? contacts = null,
+        bool noOfficialAddress = false,
+        Guid? invoicingClientId = null)
     {
         return new UpdateClientDto
         {
             Name = name ?? "Updated Client",
             BusinessName = businessName ?? "Updated Business",
             Region = region,
-            OfficialAddress = officialAddress ?? AddressBuilder.BuildDto(
-                city: "Updated City",
-                streetName: "Updated Street",
-                streetNumber: "2",
-                zip: "11111"
-            ),
+            OfficialAddress = noOfficialAddress
+                ? null
+                : officialAddress ?? AddressBuilder.BuildDto(
+                    city: "Updated City",
+                    streetName: "Updated Street",
+                    streetNumber: "2",
+                    zip: "11111"
+                ),
             ContactAddress = contactAddress,
+            InvoicingClientId = invoicingClientId,
             Contacts = contacts ??
             [
                 new UpdateClientContactDto
