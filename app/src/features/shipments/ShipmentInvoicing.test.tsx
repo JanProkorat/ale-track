@@ -371,6 +371,41 @@ describe('invoice parties', () => {
     await waitFor(() => expect(screen.getByText('Pub B')).toBeInTheDocument());
     expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
   });
+
+  it('leaves an opened party open when the invoices query refetches', () => {
+    // Every invoicing mutation invalidates the invoice query, so an equal-but-fresh DTO
+    // arrives and the party memo recomputes. Seeding off `collapsed` slammed the party the
+    // user was working in shut, because a key missing from `collapsed` is an *open* party.
+    const build = () => new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        // A stable invoice id, as a real refetch returns: the party key is `<invoiceId>:<clientId>`.
+        invoice({
+          id: 'inv-stable', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    invoicesResponse = build();
+    const { rerender } = renderSection();
+
+    fireEvent.click(screen.getByText('Pub B'));
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    invoicesResponse = build();
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentInvoicing shipmentId="ship-1" editable stops={[]} />
+      </MuiThemeProvider>,
+    );
+
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
 });
 
 describe('provenance chips', () => {

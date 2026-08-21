@@ -29,8 +29,9 @@ public sealed record DeleteShipmentInvoiceRequest
 /// </summary>
 /// <remarks>
 /// No unwind logic: the invoice and its lines are dropped, then reconciliation puts the pieces
-/// back on the first invoice of whoever ordered them. That is the whole reason reconciliation
-/// exists as a separate step.
+/// back on the first invoice of whoever pays for them — the orderer's payer, which for a client
+/// with no payer link is the orderer itself. That is the whole reason reconciliation exists as a
+/// separate step.
 ///
 /// A client's first invoice cannot be deleted — every client receiving goods needs somewhere to
 /// be billed, and reconciliation would immediately recreate it.
@@ -58,7 +59,7 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, I
         Summary(s =>
             {
                 s.Summary = "Deletes an additional invoice of an outgoing shipment";
-                s.Responses[StatusCodes.Status204NoContent] = "Invoice deleted, its pieces returned to the ordering client";
+                s.Responses[StatusCodes.Status204NoContent] = "Invoice deleted, its pieces returned to the paying client";
                 s.Responses[StatusCodes.Status400BadRequest] = "Shipment no longer editable, or this is the client's first invoice";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment or invoice not found";
             }
@@ -106,7 +107,7 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, I
         dbContext.OutgoingShipmentInvoiceLines.RemoveRange(invoice.Lines);
         dbContext.OutgoingShipmentInvoices.Remove(invoice);
 
-        // Reconciliation returns the pieces the invoice held to their ordering client. Private
+        // Reconciliation returns the pieces the invoice held to their paying client. Private
         // pieces are untouched — they hang off the shipment, not off any invoice.
         var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
 

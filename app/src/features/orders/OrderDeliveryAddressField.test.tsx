@@ -60,12 +60,44 @@ describe('OrderDeliveryAddressField', () => {
   });
 
   it('hides Fakturační when the client has no official address', () => {
-    // A client billed through its payer has only a contact address (or none at all) — the
-    // backend rejects an Official-kind order for such a client, so the picker must not offer it.
+    // A client billed through its payer has only a contact address (or none at all), so the
+    // picker stops offering the option to orders that are not already on it.
     clientData = { officialAddress: undefined, contactAddress: undefined };
     render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.DeliveryPlace, placeId: 'p1' }} onChange={vi.fn()} />);
     fireEvent.mouseDown(screen.getByRole('combobox'));
     expect(screen.queryByText('Fakturační')).not.toBeInTheDocument();
+  });
+
+  describe('a kind the order is saved with but the client can no longer satisfy', () => {
+    // An order saved as Official before its client was linked to a payer and had its official
+    // address cleared. The backend still accepts that save (the read paths fall back to the
+    // contact address), so the picker has to show what the order says rather than go blank.
+    it('keeps a stored Fakturační selected, as a disabled entry', () => {
+      clientData = {
+        officialAddress: undefined,
+        contactAddress: { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763' },
+      };
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Fakturační (chybí adresa)');
+
+      fireEvent.mouseDown(screen.getByRole('combobox'));
+      const option = within(screen.getByRole('listbox')).getByText('Fakturační (chybí adresa)');
+      expect(option.closest('[role="option"]')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('keeps a stored Kontaktní selected, as a disabled entry', () => {
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Contact }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Kontaktní (chybí adresa)');
+    });
+
+    it('leaves an offerable kind alone', () => {
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Fakturační');
+      expect(screen.queryByText(/chybí adresa/)).not.toBeInTheDocument();
+    });
   });
 
   describe('the all-empty-client warning', () => {

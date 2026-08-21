@@ -52,6 +52,15 @@ export function OrderDeliveryAddressField({
     && value.placeId != null
     && !places.some((p) => p.id === value.placeId);
 
+  // The kind the order is already saved with, when the client can no longer satisfy it: an
+  // Official order whose client lost its official address on being linked to a payer. Same
+  // shape as `isGone` one level up — the backend accepts it (every read path falls back to the
+  // other address), so it stays visibly selected instead of leaving the <Select> blank.
+  const goneKind = clientQuery.isLoading ? null
+    : value.kind === DeliveryAddressKind.Official && !official ? DeliveryAddressKind.Official
+      : value.kind === DeliveryAddressKind.Contact && !contact ? DeliveryAddressKind.Contact
+        : null;
+
   // A client with none of the three hides every standard option — only "+ Nové místo…" is
   // left — while the form still defaults `value.kind` to `Official` (see `defaultAddressKind`
   // in deliveryAddress.ts), so the <Select> shows no visible text at all with nothing else on
@@ -80,6 +89,10 @@ export function OrderDeliveryAddressField({
       >
         {official && <MenuItem value="Official">Fakturační</MenuItem>}
         {contact && <MenuItem value="Contact">Kontaktní</MenuItem>}
+        {goneKind === DeliveryAddressKind.Official
+          && <MenuItem value="Official" disabled>Fakturační (chybí adresa)</MenuItem>}
+        {goneKind === DeliveryAddressKind.Contact
+          && <MenuItem value="Contact" disabled>Kontaktní (chybí adresa)</MenuItem>}
         {places.length > 0 && [
           <ListSubheader key="places-header">Vlastní místa</ListSubheader>,
           ...places.map((p) => (

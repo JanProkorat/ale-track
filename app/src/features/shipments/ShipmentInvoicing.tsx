@@ -15,7 +15,7 @@
 //   * one row per product, with chips carrying provenance — the same product can
 //     reach an invoice from several sources at once.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
   DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
@@ -428,16 +428,17 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
 
   // Parties open closed: the payer's band is read as one line per client first, and the
   // product detail only when a number looks wrong.
+  //
+  // Seeded from `seededParties`, not from `collapsed`: a key missing from `collapsed` is a
+  // party the user has *opened*, so re-seeding on it would slam it shut on every refetch —
+  // and every invoicing mutation invalidates this query, so the memo recomputes constantly.
+  // A party that leaves the response and comes back is treated as new again, hence collapsed.
+  const seededParties = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (partyKeys.length === 0) return;
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      for (const key of partyKeys) if (!prev.has(key)) next.add(key);
-      return next;
-    });
-    // This makes a newly-arrived party collapsed without re-closing one the user opened,
-    // because a key already in `prev` is left alone. A party the user opens and that then
-    // leaves and re-enters the response comes back collapsed.
+    const fresh = partyKeys.filter((key) => !seededParties.current.has(key));
+    seededParties.current = new Set(partyKeys);
+    if (fresh.length === 0) return;
+    setCollapsed((prev) => new Set([...prev, ...fresh]));
   }, [partyKeys]);
 
   const toggleBand = (clientId: string) => setCollapsed((prev) => {
@@ -467,7 +468,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
 
   const handleDelete = (invoice: ShipmentInvoiceDto) => {
     deleteInvoice.mutate(invoice.id!, {
-      onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny objednavateli', { variant: 'success' }),
+      onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny na fakturu plátce', { variant: 'success' }),
       onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
     });
     setConfirmDelete(null);
@@ -775,7 +776,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         title="Smazat fakturu?"
         message={
           confirmDelete && invoiceQuantity(confirmDelete) > 0
-            ? `Faktura obsahuje ${invoiceQuantity(confirmDelete)} ks. Položky se vrátí na 1. fakturu klienta, který je objednal.`
+            ? `Faktura obsahuje ${invoiceQuantity(confirmDelete)} ks. Položky se vrátí na 1. fakturu plátce — u propojeného klienta na klienta, přes kterého se fakturuje.`
             : 'Faktura je prázdná.'
         }
         confirmLabel="Smazat"
