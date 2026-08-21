@@ -177,7 +177,12 @@ export function ClientsPage() {
               {clientInitials(c.name ?? '?')}
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
+                {c.invoicingClientName && (
+                  <Chip size="small" variant="outlined" label={c.invoicingClientName} sx={{ height: 20, fontSize: 11 }} />
+                )}
+              </Stack>
               {c.businessName && (
                 <Typography variant="body2" color="text.secondary" noWrap>{c.businessName}</Typography>
               )}
@@ -191,9 +196,10 @@ export function ClientsPage() {
       header: 'Sídlo',
       // Address arrives from a per-row detail query, so this is blank until that resolves;
       // blanks sort last, which keeps the not-yet-loaded rows out of the way rather than
-      // heading the list.
-      sortValue: (c) => addrOneLine(detailFor(c.id)?.officialAddress),
-      render: (c) => <Typography color="text.secondary">{addrOneLine(detailFor(c.id)?.officialAddress)}</Typography>,
+      // heading the list. A client with no official address (billed through a payer, say)
+      // falls back to its contact address rather than showing blank.
+      sortValue: (c) => addrOneLine(detailFor(c.id)?.officialAddress ?? detailFor(c.id)?.contactAddress),
+      render: (c) => <Typography color="text.secondary">{addrOneLine(detailFor(c.id)?.officialAddress ?? detailFor(c.id)?.contactAddress)}</Typography>,
     },
     {
       key: 'contacts',
@@ -238,7 +244,7 @@ export function ClientsPage() {
     const detail = detailFor(c.id);
     const color = colorFor(c.id ?? c.name ?? '');
     const contacts = detail?.contacts ?? [];
-    const address = addrOneLine(detail?.officialAddress);
+    const address = addrOneLine(detail?.officialAddress ?? detail?.contactAddress);
     return (
       <Stack spacing={1.25}>
         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -251,7 +257,12 @@ export function ClientsPage() {
             {clientInitials(c.name ?? '?')}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
+              {c.invoicingClientName && (
+                <Chip size="small" variant="outlined" label={c.invoicingClientName} sx={{ height: 20, fontSize: 11 }} />
+              )}
+            </Stack>
             {c.businessName && (
               <Typography variant="body2" color="text.secondary" noWrap>{c.businessName}</Typography>
             )}

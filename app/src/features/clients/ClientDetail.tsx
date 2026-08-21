@@ -199,7 +199,11 @@ export function ClientDetail({
                 <PointMap lat={client.officialAddress.latitude} lng={client.officialAddress.longitude} color="#0E7C9B" />
               </Stack>
             ) : (
-              <Typography color="text.secondary">Bez adresy</Typography>
+              <Typography color="text.secondary">
+                {client.invoicingClientName
+                  ? `Bez fakturační adresy — fakturuje se přes ${client.invoicingClientName}.`
+                  : 'Bez adresy'}
+              </Typography>
             )}
           </TitledCard>
 
@@ -219,6 +223,18 @@ export function ClientDetail({
               <Typography color="text.secondary">Shodná s fakturační adresou.</Typography>
             )}
           </TitledCard>
+
+          {(client.invoicedClients?.length ?? 0) > 0 && (
+            <Box sx={{ gridColumn: '1 / -1' }}>
+              <TitledCard title="Propojení klienti">
+                <Stack spacing={0.5}>
+                  {client.invoicedClients!.map((sub) => (
+                    <Typography key={sub.id} sx={{ fontSize: 13 }}>{sub.name}</Typography>
+                  ))}
+                </Stack>
+              </TitledCard>
+            </Box>
+          )}
 
           <Box sx={{ gridColumn: '1 / -1' }}>
             <DeliveryPlacesPanel clientId={clientId} clientName={client.name} editable={editable} />

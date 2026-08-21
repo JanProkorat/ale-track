@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, useFieldArray, Controller, type Control, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,7 +22,8 @@ import {
   ContactType,
   type ClientDto,
 } from 'src/generated/api-client';
-import { useCreateClient, useUpdateClient } from 'src/hooks/useClients';
+import { useClients, useCreateClient, useUpdateClient } from 'src/hooks/useClients';
+import { clientComboOptions } from 'src/features/clients/clientOptions';
 
 const addressSchema = z.object({
   streetName: z.string().trim().min(1, 'Ulice'),
@@ -57,7 +58,8 @@ const schema = z
     name: z.string().trim().min(1, 'Zadejte název'),
     businessName: z.string().optional(),
     region: z.string().min(1, 'Vyberte region'),
-    official: addressSchema,
+    official: blankableAddressSchema,
+    invoicingClientId: z.string().optional(),
     hasContact: z.boolean(),
     contact: blankableAddressSchema,
     contacts: z.array(contactSchema),
@@ -70,6 +72,14 @@ const schema = z
           ctx.addIssue({ ...issue, path: ['contact', ...issue.path] });
         }
       }
+    }
+
+    // A client billed through a payer needs no billing address of its own. One that pays for
+    // itself still does, or nothing can be invoiced.
+    const officialFilled = [val.official.streetName, val.official.streetNumber, val.official.city, val.official.zip]
+      .some((s) => s?.trim());
+    if (!val.invoicingClientId && !officialFilled) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['official', 'streetName'], message: 'Zadejte adresu nebo propojeného klienta' });
     }
   });
 type FormValues = z.infer<typeof schema>;
@@ -85,7 +95,7 @@ const emptyAddr: AddressValues = {
   streetName: '', streetNumber: '', city: '', zip: '', country: Country[Country.Czechia],
 };
 const empty: FormValues = {
-  name: '', businessName: '', region: 'ZittauCity', official: emptyAddr, hasContact: false, contact: emptyAddr, contacts: [],
+  name: '', businessName: '', region: 'ZittauCity', official: emptyAddr, invoicingClientId: '', hasContact: false, contact: emptyAddr, contacts: [],
 };
 
 function addrToForm(a: { streetName?: string; streetNumber?: string; city?: string; zip?: string; country?: Country } | undefined): AddressValues {
@@ -162,6 +172,27 @@ export function ClientFormDrawer({ open, client, onClose }: {
   const hasContact = watch('hasContact');
   const { fields, append, remove } = useFieldArray({ control, name: 'contacts' });
 
+  const { data: clients } = useClients();
+
+  // Clients that already pay for someone are excluded by their own ids appearing as a payer
+  // on another row — the list DTO names the payer, so no extra call is needed.
+  const subClientIds = useMemo(
+    () => new Set((clients ?? []).map((c) => c.invoicingClientId).filter((id): id is string => Boolean(id))),
+    [clients],
+  );
+
+  // Only clients that can actually hold the bill: the relation is one hop, so a client that
+  // already has a payer or is itself one is not offered, and neither is this client.
+  const payerOptions = useMemo(
+    () => clientComboOptions(
+      (clients ?? []).filter((c) =>
+        c.id !== client?.id
+        && !c.invoicingClientId
+        && !subClientIds.has(c.id ?? '')),
+    ),
+    [clients, client?.id, subClientIds],
+  );
+
   useEffect(() => {
     if (!open) return;
     reset(
@@ -171,6 +202,7 @@ export function ClientFormDrawer({ open, client, onClose }: {
             businessName: client.businessName ?? '',
             region: regionName(client.region) ?? 'ZittauCity',
             official: addrToForm(client.officialAddress),
+            invoicingClientId: client.invoicingClientId ?? '',
             hasContact: Boolean(client.contactAddress),
             contact: addrToForm(client.contactAddress),
             contacts: (client.contacts ?? []).map((c) => ({
@@ -192,17 +224,20 @@ export function ClientFormDrawer({ open, client, onClose }: {
         value: c.value!.trim(),
       }));
 
+    const officialFilled = [v.official.streetName, v.official.streetNumber, v.official.city, v.official.zip]
+      .some((s) => s?.trim());
+
     // Coordinates are derived from the address, not entered by hand: geocode
     // each address on save and store the result. If geocoding fails, keep the
     // previously stored coords (edit) so we never lose a known location.
     setGeocoding(true);
-    let officialCoords: LatLng | null;
+    let officialCoords: LatLng | null = null;
     let contactCoords: LatLng | null = null;
     try {
       [officialCoords, contactCoords] = await Promise.all([
         // The form already holds the enum member name, which is also the
         // English country name Nominatim understands.
-        geocodeAddress(v.official),
+        officialFilled ? geocodeAddress(v.official) : Promise.resolve(null),
         v.hasContact ? geocodeAddress(v.contact) : Promise.resolve(null),
       ]);
     } finally {
@@ -210,7 +245,8 @@ export function ClientFormDrawer({ open, client, onClose }: {
     }
     officialCoords = officialCoords ?? coordsOf(client?.officialAddress);
     contactCoords = contactCoords ?? coordsOf(client?.contactAddress);
-    if (!officialCoords) {
+    // Only worth warning about an address that was actually entered.
+    if (officialFilled && !officialCoords) {
       enqueueSnackbar('Adresu se nepodařilo najít na mapě — GPS zůstane prázdné.', { variant: 'warning' });
     }
 
@@ -218,8 +254,9 @@ export function ClientFormDrawer({ open, client, onClose }: {
       name: v.name,
       businessName: v.businessName?.trim() || undefined,
       region: Region[v.region as keyof typeof Region] as Region,
-      officialAddress: toAddressDto(v.official, officialCoords),
+      officialAddress: officialFilled ? toAddressDto(v.official, officialCoords) : undefined,
       contactAddress: v.hasContact ? toAddressDto(v.contact, contactCoords) : undefined,
+      invoicingClientId: v.invoicingClientId || undefined,
     };
     try {
       if (client?.id) {
@@ -262,6 +299,16 @@ export function ClientFormDrawer({ open, client, onClose }: {
       <Controller control={control} name="region" render={({ field }) => (
         <Combobox label="Region" value={field.value || null} onChange={(v) => field.onChange(v ?? '')}
           options={REGION_OPTIONS} clearable={false} error={Boolean(errors.region)} helperText={errors.region?.message} />
+      )} />
+      <Controller control={control} name="invoicingClientId" render={({ field }) => (
+        <Combobox
+          label="Propojený klient"
+          value={field.value || null}
+          onChange={(v) => field.onChange(v ?? '')}
+          options={payerOptions}
+          placeholder="Fakturuje se přes jiného klienta…"
+          helperText="Faktury za tohoto klienta vystavíme na vybraného klienta."
+        />
       )} />
 
       <Typography variant="subtitle2" sx={{ mt: 1 }}>Fakturační adresa</Typography>

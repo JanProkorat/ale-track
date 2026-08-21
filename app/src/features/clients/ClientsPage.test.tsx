@@ -13,7 +13,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
 }));
 
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
-import { ClientDto, ClientListItemDto, Region } from 'src/generated/api-client';
+import { AddressDto, ClientDto, ClientListItemDto, Region } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 import { ClientsPage } from './ClientsPage';
 
@@ -26,14 +26,16 @@ const client = new ClientDto({
 } as never);
 
 vi.mock('src/hooks/useClients', () => ({
-  // Two rows, so a search can be observed narrowing rather than merely still showing
-  // something — one carries a trading name, the other does not.
+  // Three rows: one carries a trading name, one is billed through a payer, and one has no
+  // official address of its own — enough for a search to narrow and for the payer/fallback
+  // rows to be told apart from the plain one.
   useClients: () => ({
     data: [
       new ClientListItemDto({
         id: 'cl-1', name: 'Pivnice Na Rohu', businessName: 'Na Rohu gastro s.r.o.',
       } as never),
-      new ClientListItemDto({ id: 'cl-2', name: 'Pivnice U Kapra' } as never),
+      new ClientListItemDto({ id: 'cl-2', name: 'Pivnice U Kapra', invoicingClientName: 'Head Office' } as never),
+      new ClientListItemDto({ id: 'cl-3', name: 'Pivnice Bez Adresy' } as never),
     ],
     isPending: false,
     isError: false,
@@ -46,9 +48,13 @@ vi.mock('src/hooks/useClients', () => ({
 vi.mock('src/hooks/useClientReminders', () => ({
   useClientReminders: () => ({ data: [], isPending: false }),
 }));
+// A fn rather than a fixed `[]`, so one test can hand back real per-row detail data (the
+// address fallback needs `cl-3`'s detail to carry a contact address and no official one) while
+// every other test keeps the empty default.
+const useQueriesMock = vi.fn((): { data?: ClientDto }[] => []);
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
-  useQueries: () => [],
+  useQueries: () => useQueriesMock(),
 }));
 vi.mock('src/hooks/useOrders', () => ({
   useClientOrders: () => ({ data: [], isPending: false, isError: false }),
@@ -107,6 +113,10 @@ function renderList() {
  * it: this fails the moment the page goes back to the detail for it.
  */
 describe('ClientsPage rows', () => {
+  beforeEach(() => {
+    useQueriesMock.mockReturnValue([]);
+  });
+
   it('names the trading entity without waiting on a per-row detail fetch', () => {
     renderList();
 
@@ -126,11 +136,42 @@ describe('ClientsPage rows', () => {
     await waitFor(() => expect(screen.queryByText('Pivnice U Kapra')).not.toBeInTheDocument());
     expect(screen.getByText('Pivnice Na Rohu')).toBeInTheDocument();
   });
+
+  it('shows the payer on a sub-client row', async () => {
+    renderList();
+
+    // cl-2 ("Pivnice U Kapra") is billed through "Head Office" — the list DTO names the payer
+    // directly, so this needs no per-row detail fetch either.
+    expect(await screen.findByText('Head Office')).toBeInTheDocument();
+  });
+
+  it('falls back to the contact address for a client with no official one', async () => {
+    // cl-3 ("Pivnice Bez Adresy") has a contact address but no official one in its detail —
+    // the per-row detail queries line up with the client list order from the mock above.
+    useQueriesMock.mockReturnValue([
+      { data: undefined },
+      { data: undefined },
+      {
+        data: ClientDto.fromJS({
+          id: 'cl-3',
+          name: 'Pivnice Bez Adresy',
+          contactAddress: new AddressDto({
+            streetName: 'Dlouhá', streetNumber: '14', city: 'Liberec', zip: '46001',
+          } as never),
+        }),
+      },
+    ]);
+
+    renderList();
+
+    expect(await screen.findByText(/Dlouhá 14/)).toBeInTheDocument();
+  });
 });
 
 describe('ClientsPage back navigation', () => {
   beforeEach(() => {
     navigateMock.mockClear();
+    useQueriesMock.mockReturnValue([]);
   });
 
   it('returns to the clients list when opened from it', () => {
