@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { ProductListItemDto, ProductKind, ProductType } from 'src/generated/api-client';
-import { groupByName, inDisplayOrder } from './orderCatalogModel';
+import { groupByBrewery, groupByName, inDisplayOrder } from './orderCatalogModel';
 
 function product(fields: Partial<ProductListItemDto>): ProductListItemDto {
   return new ProductListItemDto({ id: fields.name, ...fields });
@@ -63,5 +63,62 @@ describe('groupByName', () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0].items).toHaveLength(2);
+  });
+});
+
+describe('groupByBrewery', () => {
+  const svijany = { breweryId: 'b-svijany', breweryName: 'Svijany', breweryDisplayOrder: 1 };
+  const kohout = { breweryId: 'b-kohout', breweryName: 'Kohout', breweryDisplayOrder: 2 };
+
+  it('nests products by brewery, then kind, then package size', () => {
+    const groups = groupByBrewery([
+      product({ ...svijany, name: 'Máz', kind: ProductKind.Keg, packageSize: 50 }),
+      product({ ...svijany, name: 'Desítka', kind: ProductKind.Keg, packageSize: 30 }),
+      product({ ...svijany, name: 'Máz plech', kind: ProductKind.Can, packageSize: 0.5 }),
+      product({ ...kohout, name: 'Ležák', kind: ProductKind.Keg, packageSize: 50 }),
+    ]);
+
+    expect(groups.map((g) => g.breweryName)).toEqual(['Svijany', 'Kohout']);
+
+    const kinds = groups[0].kinds ?? [];
+    expect(kinds).toHaveLength(2);
+    const kegs = kinds.find((k) => k.kind === ProductKind.Keg);
+    expect(kegs?.packageSizes?.map((s) => s.size)).toEqual([50, 30]);
+    expect(kegs?.packageSizes?.flatMap((s) => s.items ?? [])).toHaveLength(2);
+  });
+
+  it('orders breweries by display order, then by name', () => {
+    const groups = groupByBrewery([
+      product({ ...kohout, name: 'Ležák' }),
+      product({ ...svijany, name: 'Máz' }),
+      product({ breweryId: 'b-a', breweryName: 'Áčko', breweryDisplayOrder: 1, name: 'Pivo' }),
+    ]);
+
+    // Svijany and Áčko share display order 1, so the Czech collation splits them.
+    expect(groups.map((g) => g.breweryName)).toEqual(['Áčko', 'Svijany', 'Kohout']);
+  });
+
+  /** A product with no brewery would otherwise vanish from the one tab whose job is
+   * showing the whole catalog. */
+  it('keeps products with no brewery', () => {
+    const groups = groupByBrewery([product({ name: 'Bez pivovaru', kind: ProductKind.Other })]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].breweryId).toBeUndefined();
+    expect(groups[0].kinds?.[0].packageSizes?.[0].items?.[0].name).toBe('Bez pivovaru');
+  });
+
+  /** The real API sends enums as strings; the tab resolves either form through kindName,
+   * so the raw value must pass through untouched rather than being coerced. */
+  it('passes the kind through as it arrived', () => {
+    const groups = groupByBrewery([
+      product({ ...svijany, name: 'Máz', kind: 'Keg' as unknown as ProductKind }),
+    ]);
+
+    expect(groups[0].kinds?.[0].kind).toBe('Keg');
+  });
+
+  it('returns nothing for an empty list', () => {
+    expect(groupByBrewery([])).toEqual([]);
   });
 });

@@ -180,6 +180,17 @@ export const theme = createTheme({
         },
       },
     },
+    // iOS Safari force-zooms the viewport when a focused form control's font-size is
+    // under 16px, which the prototype's 14px body size makes every field. Bump the
+    // control itself on touch only, so pointer devices keep the design's 14px. Keyed
+    // on pointer rather than viewport width for the same reason MuiIconButton is.
+    MuiInputBase: {
+      styleOverrides: {
+        input: {
+          '@media (pointer: coarse)': { fontSize: 16 },
+        },
+      },
+    },
     // Sub-tabs (Info/Ceník/…) — match the prototype's .tabs button (13.5px/700).
     MuiTab: {
       styleOverrides: {
@@ -189,6 +200,19 @@ export const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: (t) => ({
         '::selection': { background: alpha(t.palette.primary.main, 0.28) },
+        // iOS Safari zooms the viewport on a double-tap, and two quick taps on a control —
+        // switching tabs, nudging a quantity — read as exactly that. `manipulation` opts out
+        // of the double-tap gesture only; pinch-zoom still works, unlike a maximum-scale or
+        // user-scalable viewport lock, which would fail WCAG 1.4.4.
+        //
+        // Deliberately NOT [role="button"]: dnd-kit spreads that role onto its drag handles,
+        // which set `touch-action: none` because without it the browser's own touch scrolling
+        // wins and the drag never starts. Both are one class of specificity, so the winner
+        // would come down to injection order — a silent way to break touch reordering.
+        // MuiButtonBase-root covers every MUI clickable, whatever element it renders as.
+        'button, a, label, summary, input, select, textarea, .MuiButtonBase-root': {
+          touchAction: 'manipulation',
+        },
         '*::-webkit-scrollbar': { width: 11, height: 11 },
         '*::-webkit-scrollbar-thumb': {
           background: alpha(t.palette.text.disabled, 0.5),

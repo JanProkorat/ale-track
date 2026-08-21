@@ -88,10 +88,11 @@ export function ClientsPage() {
   const [editingOpen, setEditingOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // The list endpoint only returns {id, name, region}; business name, address
-  // and contacts for the "Sídlo"/"Kontakty" columns come from the per-client
-  // detail (shares its cache with the detail view, like the brewery product
-  // counts on BreweriesPage).
+  // Address and contacts for the "Sídlo"/"Kontakty" columns come from the per-client
+  // detail (shares its cache with the detail view, like the brewery product counts on
+  // BreweriesPage). The business name used to be fetched this way too — it is on the
+  // list response now, which is what lets the search below match it without waiting
+  // for one request per row to land.
   const detailQueries = useQueries({
     queries: clients.map((c) => ({
       queryKey: qk.clients.detail(c.id ?? ''),
@@ -123,13 +124,10 @@ export function ClientsPage() {
     return clients.filter((c) => {
       if (region && regionName(c.region) !== region) return false;
       if (!q) return true;
-      const bn = detailFor(c.id)?.businessName ?? '';
+      const bn = c.businessName ?? '';
       return (c.name ?? '').toLowerCase().includes(q) || bn.toLowerCase().includes(q);
     });
-    // `detailQueries` is a dependency (not just `clients`) so business-name
-    // search re-filters once the per-row detail calls resolve.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, search, region, detailQueries]);
+  }, [clients, search, region]);
 
   const grouped = useMemo(() => {
     const byRegion: Record<string, ClientListItemDto[]> = {};
@@ -167,7 +165,6 @@ export function ClientsPage() {
       header: 'Klient',
       sortValue: (c) => c.name,
       render: (c) => {
-        const d = detailFor(c.id);
         const color = colorFor(c.id ?? c.name ?? '');
         return (
           <Stack direction="row" spacing={1.5} alignItems="center">
@@ -181,8 +178,8 @@ export function ClientsPage() {
             </Box>
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
-              {d?.businessName && (
-                <Typography variant="body2" color="text.secondary" noWrap>{d.businessName}</Typography>
+              {c.businessName && (
+                <Typography variant="body2" color="text.secondary" noWrap>{c.businessName}</Typography>
               )}
             </Box>
           </Stack>
@@ -255,8 +252,8 @@ export function ClientsPage() {
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontWeight: 700 }} noWrap>{c.name}</Typography>
-            {detail?.businessName && (
-              <Typography variant="body2" color="text.secondary" noWrap>{detail.businessName}</Typography>
+            {c.businessName && (
+              <Typography variant="body2" color="text.secondary" noWrap>{c.businessName}</Typography>
             )}
           </Box>
           <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', flexShrink: 0 }} />

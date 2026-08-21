@@ -11,13 +11,15 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto, ProductListItemDto, ProductType } from 'src/generated/api-client';
+import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto, ProductListItemDto, ProductKind, ProductType } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
 const createMutate = vi.fn();
 let orderResponse: OrderDto | undefined;
 let historyResponse: unknown = [];
+
+let allProducts: { data: unknown[] | undefined; isLoading: boolean } = { data: [], isLoading: false };
 
 vi.mock('src/hooks/useOrders', () => ({
   useOrder: () => ({ data: orderResponse, isLoading: false, isError: false }),
@@ -27,7 +29,12 @@ vi.mock('src/hooks/useOrders', () => ({
 }));
 
 vi.mock('src/hooks/useClients', () => ({
-  useClients: () => ({ data: [{ id: 'client-a', name: 'Hospoda A' }], isLoading: false }),
+  // Carries a trading name because that is what separates two clients of the same name;
+  // the editor shows it both in the picker and on the chosen-client card.
+  useClients: () => ({
+    data: [{ id: 'client-a', name: 'Hospoda A', businessName: 'Hospoda A gastro s.r.o.' }],
+    isLoading: false,
+  }),
   // Read by OrderDeliveryAddressField, rendered in the client card for
   // every client selection this file exercises.
   useClient: () => ({ data: { officialAddress: undefined, contactAddress: undefined, name: 'Hospoda A' }, isLoading: false }),
@@ -35,6 +42,13 @@ vi.mock('src/hooks/useClients', () => ({
 
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweries: () => ({ data: [], isLoading: false }),
+}));
+
+// Read by the catalog to build "Procházet dle pivovaru" when no client is chosen yet —
+// the client-history endpoint is disabled until then. Mocked because the real hook needs
+// a QueryClient, which would crash the editor on render.
+vi.mock('src/hooks/useProducts', () => ({
+  useProducts: () => allProducts,
 }));
 
 // Read by the catalog's "Další zboží" tab. Mocked empty: this file exercises vratky,
@@ -136,6 +150,21 @@ beforeEach(() => {
   createMutate.mockReset().mockResolvedValue('new-id');
   orderResponse = order([]);
   historyResponse = [];
+});
+
+/**
+ * Reported: two clients may share a name and differ only in their trading name, and the
+ * editor showed the name alone — in the picker's rows *and* on the card that replaces the
+ * picker once one is chosen. Either one alone leaves you unable to tell which of the pair
+ * the order is going to.
+ */
+describe('OrderEditor — the chosen client', () => {
+  it('names the trading entity beside the client', () => {
+    renderEditor();
+
+    expect(screen.getByText('Hospoda A')).toBeInTheDocument();
+    expect(screen.getByText('Hospoda A gastro s.r.o.')).toBeInTheDocument();
+  });
 });
 
 describe('OrderEditor — vratky a poznámky', () => {
@@ -471,5 +500,161 @@ describe('order state', () => {
 
     expect(screen.getByText('Vratky')).toBeInTheDocument();
     expect(within(returnsCard()).getByRole('button', { name: 'Přidat' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Reported: on the "Procházet dle pivovaru" tab only the "Vše" reset showed, with no kind
+ * buttons beside it. The counts Map was keyed by the raw wire value while KIND_TABS held
+ * the numeric enum members, so against real data — where the API serializes enums as
+ * strings (JsonStringEnumConverter) — every lookup missed and all five buttons were
+ * filtered out. Both wire forms must bucket the same, so this runs each.
+ */
+describe('OrderEditor — filtr dle druhu v katalogu', () => {
+  const catalogWith = (kind: unknown) => ({
+    recent: [],
+    breweries: [
+      {
+        breweryId: 'b-1',
+        breweryName: 'Svijany',
+        kinds: [
+          {
+            kind,
+            packageSizes: [
+              {
+                packageSize: 30,
+                items: [
+                  new ProductListItemDto({ id: 'p-1', name: 'Svijanský Máz', type: ProductType.PaleLager }),
+                  new ProductListItemDto({ id: 'p-2', name: 'Svijanská Desítka', type: ProductType.PaleDraftBeer }),
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  /** The string form the real API sends, and the numeric form demo data sends. */
+  for (const [label, kind] of [['string', 'Keg'], ['numeric', 1]] as const) {
+    it(`shows the kind filter with its count for the ${label} wire form`, () => {
+      historyResponse = catalogWith(kind);
+
+      renderEditor();
+      fireEvent.click(screen.getByRole('button', { name: /Procházet dle pivovaru/ }));
+
+      const sudy = screen.getByRole('button', { name: /^Sud/ });
+      expect(sudy).toBeInTheDocument();
+      expect(sudy).toHaveTextContent('2');
+    });
+  }
+
+  /** Every kind stays on the row whether or not this client's catalog has any, so the
+   * filter's width does not shift with the data. A kind with none reads 0. */
+  it('lists every kind, including the ones with nothing in them', () => {
+    historyResponse = catalogWith('Keg');
+
+    renderEditor();
+    fireEvent.click(screen.getByRole('button', { name: /Procházet dle pivovaru/ }));
+
+    expect(screen.getByRole('button', { name: /^Sud/ })).toHaveTextContent('2');
+    for (const label of ['Basa', 'Plechovka', 'Multipack', 'Ostatní']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toHaveTextContent('0');
+    }
+  });
+
+  it('narrows the list to the picked kind', () => {
+    historyResponse = catalogWith('Keg');
+
+    renderEditor();
+    fireEvent.click(screen.getByRole('button', { name: /Procházet dle pivovaru/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Sud/ }));
+
+    // Still listed — picking the kind those products are in must not empty the catalog,
+    // which is what comparing a string wire value against a numeric filter did.
+    expect(screen.getByText('Svijanský Máz')).toBeInTheDocument();
+    expect(screen.queryByText('Žádné produkty v této kategorii')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Reported: a new order showed "Vyberte klienta" in place of the whole catalog, so no
+ * product could be picked until a client was stored. Only "Dříve objednané" is about the
+ * client; the catalog and the suppliers' price lists are not, so the gate now sits on that
+ * one tab. Browsing without a client reads the plain product list, since the
+ * client-history endpoint stays disabled until there is one.
+ */
+describe('OrderEditor — katalog bez vybraného klienta', () => {
+  beforeEach(() => {
+    allProducts = {
+      data: [
+        new ProductListItemDto({
+          id: 'p-maz',
+          name: 'Svijanský Máz',
+          kind: ProductKind.Keg,
+          packageSize: 50,
+          breweryId: 'b-1',
+          breweryName: 'Svijany',
+          type: ProductType.PaleLager,
+          platoDegree: 11,
+          priceWithVat: 2140,
+        }),
+      ],
+      isLoading: false,
+    };
+    // Disabled without a client, so it resolves to nothing.
+    historyResponse = undefined;
+  });
+
+  /** The cart card, so a product name found there is not the catalog's own copy of it. */
+  function cart() {
+    return within(screen.getByText('Košík').closest('.MuiPaper-root') as HTMLElement);
+  }
+
+  /** The catalog card — "Přidat" also names the Vratky card's add-a-row button. */
+  function catalog() {
+    return within(screen.getByText('Katalog produktů').closest('.MuiPaper-root') as HTMLElement);
+  }
+
+  /**
+   * Reported: every line added before a client was picked read "—" and 0 Kč. The catalog
+   * became client-independent but the cart's name/price lookup did not — it was built out
+   * of the client-history query alone, which stays disabled until there is a client, so
+   * nothing added this way could be resolved. Asserting the catalog renders (above) never
+   * touched it.
+   */
+  it('names and prices a line added with no client chosen', () => {
+    renderEditor('create');
+    fireEvent.click(screen.getByRole('button', { name: /Procházet dle pivovaru/ }));
+    fireEvent.click(catalog().getByRole('button', { name: 'Přidat' }));
+
+    expect(cart().getByText('Svijanský Máz')).toBeInTheDocument();
+    expect(cart().queryByText('—')).not.toBeInTheDocument();
+    // The line's own money and the cart total, both off the same lookup.
+    expect(cart().getByText(/Sud · 50 l · 2140 Kč/)).toBeInTheDocument();
+    expect(cart().getByText('Celkem s DPH').parentElement?.textContent).toContain('2140 Kč');
+  });
+
+  it('browses the catalog with no client chosen', () => {
+    renderEditor('create');
+    fireEvent.click(screen.getByRole('button', { name: /Procházet dle pivovaru/ }));
+
+    expect(screen.getByText('Svijany')).toBeInTheDocument();
+    expect(screen.getByText('Svijanský Máz')).toBeInTheDocument();
+    expect(screen.queryByText('Vyberte klienta')).not.toBeInTheDocument();
+  });
+
+  it('still asks for a client on the "Dříve objednané" tab', () => {
+    renderEditor('create');
+
+    // That tab is the default, so the prompt is what a new order opens on.
+    expect(screen.getByText('Vyberte klienta')).toBeInTheDocument();
+  });
+
+  it('opens the suppliers tab with no client chosen', () => {
+    renderEditor('create');
+    fireEvent.click(screen.getByRole('button', { name: /Další zboží/ }));
+
+    expect(screen.queryByText('Vyberte klienta')).not.toBeInTheDocument();
   });
 });

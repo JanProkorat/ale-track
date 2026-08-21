@@ -24,6 +24,8 @@ let suppliersList: { id: string; name: string }[] = [];
 let supplierDetails = new Map<string, SupplierDto>();
 let suppliersLoading = false;
 
+const allProducts = { data: [] as unknown[], isLoading: false };
+
 vi.mock('src/hooks/useOrders', () => ({
   useOrder: () => ({ data: orderResponse, isLoading: false, isError: false }),
   useClientProductHistory: () => ({ data: { recent: [], breweries: [] }, isLoading: false }),
@@ -38,6 +40,13 @@ vi.mock('src/hooks/useClients', () => ({
 
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweries: () => ({ data: [], isLoading: false }),
+}));
+
+// Read by the catalog to build "Procházet dle pivovaru" when no client is chosen yet —
+// the client-history endpoint is disabled until then. Mocked because the real hook needs
+// a QueryClient, which would crash the editor on render.
+vi.mock('src/hooks/useProducts', () => ({
+  useProducts: () => allProducts,
 }));
 
 // The picker's own data source. Expressed as loading / empty / populated so the tab's

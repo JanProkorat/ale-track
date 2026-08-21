@@ -31,6 +31,32 @@ public sealed class GetOrdersListTests
     }
 
     [Fact]
+    public async Task HandleAsync_OrdersList_ProjectsClientTradingNameToSeparateSameNamedClients()
+    {
+        // The pair the list has to tell apart: one name, two subjects.
+        var gastro = ClientBuilder.BuildEntity(name: "Hospoda Na Rohu", businessName: "Na Rohu gastro s.r.o.");
+        var family = ClientBuilder.BuildEntity(name: "Hospoda Na Rohu", businessName: "Jan Vrána");
+        var noSubject = ClientBuilder.BuildEntity(name: "Pivnice U Kapra");
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(orders:
+        [
+            OrderBuilder.BuildEntity(client: gastro),
+            OrderBuilder.BuildEntity(client: family),
+            OrderBuilder.BuildEntity(client: noSubject)
+        ]);
+
+        var endpoint = EndpointWithResponseBuilder<FilterableRequest, List<OrderListItemDto>, GetOrdersListEndpoint>
+            .Create(dbContext.Object);
+
+        await endpoint.HandleAsync(new FilterableRequest(), CancellationToken.None);
+
+        // Null where the client has none, rather than an empty string the list would render
+        // as a blank second line.
+        endpoint.Response.Select(o => o.ClientBusinessName).Should()
+            .BeEquivalentTo(["Na Rohu gastro s.r.o.", "Jan Vrána", null]);
+    }
+
+    [Fact]
     public async Task HandleAsync_FilteredByClientId_ReturnsOnlyThatClientsOrders()
     {
         // Both clients share a name on purpose: a name-based filter would return both.

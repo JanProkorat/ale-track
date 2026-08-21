@@ -1,14 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
   Backdrop,
-  Box, Button, ButtonBase, Card, Chip, CircularProgress, Collapse, Dialog,
+  Box, Button, Card, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, ListItemIcon, ListItemText,
-  Menu, MenuItem, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
-  useMediaQuery, type Theme,
+  Menu, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -61,7 +59,6 @@ import {
 import { downloadBlob } from 'src/lib/download';
 import { useInventory } from 'src/hooks/useInventory';
 import { useProducts } from 'src/hooks/useProducts';
-import { useBreweryColors } from 'src/hooks/useBreweries';
 import {
   useAddPurchaseInvoice, useDeletePurchaseInvoice, useSetLoadingState, useSetPurchaseInvoiceLine,
 } from 'src/hooks/usePurchaseInvoices';
@@ -69,12 +66,10 @@ import { SegControl, type SegOption } from 'src/components/common/SegControl';
 import {
   columnsOf, columnTotals, loadingProgress, rowsOnInvoice, type LoadingStateName,
 } from './purchaseSplitModel';
-import {
-  PurchaseInvoiceFooterCells, PurchaseInvoiceHeaderCells, PurchaseInvoiceRowCells,
-  PurchaseInvoiceRowMetrics, PurchaseInvoiceTotalsLines,
-} from './PurchaseInvoiceColumns';
-import { METRIC_ROW_SX, MetricSlot, NakladkaMetric, type MetricAdjust } from './NakladkaMetric';
-import { groupByBreweryThenKind, type BrewerySection, type KindSection } from './nakladkaGrouping';
+import { PurchaseInvoiceChips, PurchaseInvoiceTotalsLines } from './PurchaseInvoiceColumns';
+import { NakladkaSource, NakladkaTable } from './NakladkaTable';
+import { type StepperAdjust } from './nakladkaControls';
+import { groupByBreweryThenKind } from './nakladkaGrouping';
 import { colorForClient } from './clientColor';
 import { StopAvatar } from './StopAvatar';
 import { routeEndpointFrom } from './startPointOption';
@@ -167,8 +162,6 @@ function extraRowFrom(e: OutgoingShipmentStockPurchaseItemDto): NakladkaRow {
     fromInventory: 0,
   };
 }
-const HEAD_SX = { fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const, letterSpacing: '0.03em', borderBottom: 'none' };
-
 /** Tab value for the unfiltered loading list; the rest are invoice sequences. */
 const ALL_INVOICES = 'all';
 
@@ -177,19 +170,6 @@ const ALL_INVOICES = 'all';
  * invoice tabs' values are `String(sequence)`, always numeric, so there is no
  * real collision risk, but this reads clearly in the SegControl regardless. */
 const UNLOAD_VIEW = 'unload';
-
-/** Wide enough for the longest breakdown line plus its stepper — none may wrap. */
-const QTY_CELL_SX = { width: 170, minWidth: 170 };
-
-/**
- * Produkt is the one elastic column: it takes whatever the fixed ones leave.
- *
- * Spelled out rather than left to the browser because the wide layout is several tables
- * (see `renderTable`) — the head, one per brewery, the totals. Every other column is a
- * fixed width in all of them, so declaring this one "as wide as possible" is what makes
- * their columns line up instead of each table sizing Produkt to its own content.
- */
-const PRODUCT_CELL_SX = { width: '100%' };
 
 function kindSizeChipText(kind: ProductKind | undefined, packageSize: number | undefined): string {
   return `${kindLabel(kind) ?? ''}${packageSize != null ? ` · ${fmtLiters(packageSize)}` : ''}`.replace(/^ · /, '');
@@ -243,46 +223,12 @@ function aggregateRows(rows: NakladkaRow[]): AggRow[] {
   return order.map((k) => map.get(k)!);
 }
 
-/**
- * One line of the Množství breakdown, laid out on the cell's shared grid:
- * label · minus · number · plus.
- *
- * The two button columns are reserved whether or not the line has a stepper, so the
- * numbers of every line sit in one column — without that, a line without buttons
- * pulls its number out of alignment with the ones that have them.
- */
-function BreakdownRow({ label, value, tone, adjust }: BreakdownEntry) {
-  const numberSx = {
-    fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' as const,
-    textAlign: 'center' as const, color: value > 0 ? tone ?? 'text.primary' : 'text.disabled',
-  };
-  const buttonSx = { width: 16, height: 16, color: 'info.main', justifySelf: 'center' };
 
-  return (
-    <>
-      <Typography sx={{ fontSize: 11, color: 'text.secondary', justifySelf: 'end' }}>{label}</Typography>
-      {adjust ? (
-        <IconButton size="small" onClick={() => adjust.onAdjust(-1)} disabled={!adjust.canDecrease} aria-label={adjust.decreaseLabel} sx={buttonSx}>
-          <RemoveIcon sx={{ fontSize: 12 }} />
-        </IconButton>
-      ) : <span />}
-      <Typography sx={numberSx}>{value}</Typography>
-      {adjust ? (
-        <IconButton size="small" onClick={() => adjust.onAdjust(1)} disabled={!adjust.canIncrease} aria-label={adjust.increaseLabel} sx={buttonSx}>
-          <AddIcon sx={{ fontSize: 12 }} />
-        </IconButton>
-      ) : <span />}
-    </>
-  );
-}
-
-/** One labelled number of the Množství breakdown, in either layout. */
+/** One labelled number of the Zdroj cluster. */
 interface BreakdownEntry {
   label: string;
   value: number;
-  /** Colour of the number; the ordered count is plain, sourced ones are tinted. */
-  tone?: string;
-  adjust?: MetricAdjust;
+  adjust?: StepperAdjust;
 }
 
 /**
@@ -290,19 +236,18 @@ interface BreakdownEntry {
  * our own shelf instead, and what we buy for the shelf.
  *
  * The three are addends of the row's total, not a total and its parts. Sourcing a
- * piece from the garage moves it out of the brewery line, which is why that entry
- * is ordered minus sourced.
+ * piece from the garage moves it out of the brewery line, which is why that entry is
+ * ordered minus sourced; buying for the shelf adds to the row rather than moving
+ * anything.
  *
- * Returned as three fixed slots — `null` where the row has nothing to say — rather
- * than a packed list, because the stacked layout gives each slot a reserved width
- * and a row that skipped "Do garáže" would otherwise pull the numbers of every
- * following slot left of its neighbours'. The table packs them itself: there a slot
- * is a line, and an empty one would be a blank line.
+ * All three come back on every row, zero included. They are the row's own partition,
+ * and a line that appears only once it is non-zero leaves the reader working out which
+ * of the three is missing before the numbers can be read as a sum — and puts the two
+ * that remain on a different line of the cluster than they sit on in the row above. A
+ * slot this run cannot change still comes back, just without its stepper.
  *
- * Returned as data rather than rendered, because the two layouts present them
- * differently — the table stacks them under the total in the Množství cell, the
- * phone lays them across the row's slots — and only the conditions for *which*
- * entries exist are worth sharing.
+ * Returned as data rather than rendered, because the table owns the tracks the three
+ * numbers line up on; which of them can be edited is this screen's business alone.
  */
 function breakdownSlots(
   agg: AggRow,
@@ -310,487 +255,45 @@ function breakdownSlots(
   adjustable: boolean,
   onAdjustSourcing?: (delta: number) => void,
   onAdjustStockPurchase?: (delta: number) => void,
-): Array<BreakdownEntry | null> {
+): BreakdownEntry[] {
   return [
-    agg.orderQuantity > 0
-      ? { label: 'Z pivovaru', value: agg.orderQuantity - agg.fromInventory }
-      : null,
-    sourceable || agg.fromInventory > 0
-      ? {
-        label: 'Z garáže',
-        value: agg.fromInventory,
-        tone: 'info.main',
-        adjust: sourceable ? {
-          onAdjust: onAdjustSourcing!,
-          canDecrease: agg.fromInventory > 0,
-          canIncrease: agg.fromInventory < agg.orderQuantity,
-          decreaseLabel: 'Ubrat kus z garáže',
-          increaseLabel: 'Přidat kus z garáže',
-        } : undefined,
-      }
-      : null,
-    agg.stockPurchaseQuantity > 0
-      ? {
-        label: 'Do garáže',
-        value: agg.stockPurchaseQuantity,
-        tone: 'info.main',
-        adjust: adjustable ? {
-          onAdjust: onAdjustStockPurchase!,
-          canDecrease: true,
-          canIncrease: true,
-          decreaseLabel: 'Ubrat kus do garáže',
-          increaseLabel: 'Přidat kus do garáže',
-        } : undefined,
-      }
-      : null,
+    { label: 'z pivovaru', value: agg.orderQuantity - agg.fromInventory },
+    {
+      label: 'z garáže',
+      value: agg.fromInventory,
+      adjust: sourceable ? {
+        onAdjust: onAdjustSourcing!,
+        canDecrease: agg.fromInventory > 0,
+        canIncrease: agg.fromInventory < agg.orderQuantity,
+        decreaseLabel: 'Ubrat kus z garáže',
+        increaseLabel: 'Přidat kus z garáže',
+      } : undefined,
+    },
+    {
+      label: 'do garáže',
+      value: agg.stockPurchaseQuantity,
+      adjust: adjustable ? {
+        onAdjust: onAdjustStockPurchase!,
+        // The write takes an absolute quantity keyed by product, so the row can open a
+        // stock purchase from zero as well as top one up — the dialog is for products the
+        // run is not already carrying.
+        canDecrease: agg.stockPurchaseQuantity > 0,
+        canIncrease: true,
+        decreaseLabel: 'Ubrat kus do garáže',
+        increaseLabel: 'Přidat kus do garáže',
+      } : undefined,
+    },
   ];
 }
 
-/** One aggregated product line on the nakládka: what the product is, how many
- * pieces and where they come from, then one group per brewery invoice carrying the
- * pieces on it and how far they have got through loading. Invoicing the client is not
- * this card's concern; it lives in the Fakturace section. */
-function AggLoadingRow({
-  agg, editable, onAdjustStockPurchase, onAdjustSourcing, invoiceCells,
-}: {
-  agg: AggRow;
-  editable: boolean;
-  onAdjustStockPurchase?: (delta: number) => void;
-  onAdjustSourcing?: (delta: number) => void;
-  /** Pieces and loading state, two cells per brewery invoice. */
-  invoiceCells: ReactNode;
-}) {
-  const chipText = platoSizeChipText(agg.platoDegree, agg.packageSize);
-  const adjustable = Boolean(onAdjustStockPurchase) && editable;
-  const sourceable = Boolean(onAdjustSourcing) && editable;
-  return (
-    <TableRow hover>
-      <TableCell sx={PRODUCT_CELL_SX}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{agg.name}</Typography>
-        {/* Only what the product *is* lives here; how many of it and where the pieces
-            come from is the Množství cell's job, so both steppers sit together there. */}
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
-          {chipText && <Chip size="small" label={chipText} sx={{ height: 19, fontSize: 10.5, fontWeight: 600 }} />}
-        </Stack>
-      </TableCell>
-      {/* What goes into the van, and where each piece comes from. The total is the sum
-          of the lines below it, every controllable number in one place. */}
-      <TableCell align="right" sx={QTY_CELL_SX}>
-        {/* The four-column grid keeps every number in one column whether or not its
-            line has a stepper — a line without buttons would otherwise pull its
-            number out of alignment with the ones that have them. */}
-        <Box
-          sx={{
-            display: 'inline-grid', gridTemplateColumns: 'auto 20px 22px 20px',
-            alignItems: 'center', columnGap: 0.5, rowGap: 0.25, whiteSpace: 'nowrap', textAlign: 'right',
-          }}
-        >
-          {/* Spans the whole grid, so the total ends on the same edge as the + buttons. */}
-          <Typography sx={{ gridColumn: '1 / -1', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>
-            {agg.quantity} ks
-          </Typography>
-          {breakdownSlots(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase)
-            .filter((entry): entry is BreakdownEntry => entry !== null)
-            .map((entry) => (
-              <BreakdownRow key={entry.label} {...entry} />
-            ))}
-        </Box>
-      </TableCell>
-      {invoiceCells}
-    </TableRow>
-  );
-}
-
-/**
- * One product of the loading list where the columns don't fit: the same row as
- * {@link AggLoadingRow}, stacked instead of spread across a table.
- *
- * Two blocks, nothing hidden. The head is what the ramp works from — what the product
- * is, how many pieces, and the loading control to tick it off, the last of these in
- * the same place down the whole list so it can be hit without looking. Below it sits
- * every number behind that total, laid across fixed slots rather than one per line: a
- * product carries up to five of them and the list runs to thirty-odd products, so a
- * line each made a screen's worth of mostly zeroes out of every three items.
- *
- * Sourcing and the invoice split get a run each, of the same slots, so the two read as
- * separate groups without a separator between them — the sourcing numbers never trail
- * off into an invoice group at whatever point the line happened to run out.
- *
- * The row does not collapse. An expander made each product cheap to skip but the list
- * is not skimmed, it is worked through, and paying a tap per product to see numbers
- * that fit on one line is the worse trade.
- */
-function AggLoadingStackedRow({
-  agg, editable, onAdjustStockPurchase, onAdjustSourcing, invoiceMetrics,
-}: {
-  agg: AggRow;
-  editable: boolean;
-  onAdjustStockPurchase?: (delta: number) => void;
-  onAdjustSourcing?: (delta: number) => void;
-  /** Pieces per brewery invoice, as inline metric groups — the loading-state
-   * control for a column lives right next to its own number, not up here. */
-  invoiceMetrics: ReactNode;
-}) {
-  const chipText = platoSizeChipText(agg.platoDegree, agg.packageSize);
-  const adjustable = Boolean(onAdjustStockPurchase) && editable;
-  const sourceable = Boolean(onAdjustSourcing) && editable;
-
-  return (
-    <Box data-testid="nakladka-row" sx={{ pl: 2, pr: 1, py: 0.75 }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{agg.name}</Typography>
-          {chipText && (
-            <Chip size="small" label={chipText} sx={{ height: 18, fontSize: 10, fontWeight: 600 }} />
-          )}
-        </Stack>
-        <Typography sx={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-          {agg.quantity} ks
-        </Typography>
-      </Stack>
-      {/* Wrapping rather than scrolling: where the row runs out of width the remaining
-          slots drop to a second line instead of hiding past the right edge. An absent
-          slot is still rendered, empty, which is what holds the slots after it under
-          the same ones on every other row — it costs its width but no height. */}
-      <Box sx={{ ...METRIC_ROW_SX, mt: 0.5 }}>
-        {breakdownSlots(agg, sourceable, adjustable, onAdjustSourcing, onAdjustStockPurchase).map((entry, index) => (
-          <MetricSlot key={entry?.label ?? index} index={index}>
-            {entry && <NakladkaMetric {...entry} />}
-          </MetricSlot>
-        ))}
-      </Box>
-      <Box sx={{ ...METRIC_ROW_SX, mt: 0.25 }}>{invoiceMetrics}</Box>
-    </Box>
-  );
-}
-
-/** The item count beside a section heading, brewery or kind. Shared by both layouts. */
-function sectionHeadingText(section: BrewerySection<AggRow> | KindSection<AggRow>): string {
-  return `${section.rows.length} ${plural(section.rows.length, 'položka', 'položky', 'položek')}`;
-}
-
-/** How long a section takes to open or shut. Shared by both layouts so the two feel the
- *  same, and by the table's delayed unmount so its rows leave when the fade ends. */
-const SECTION_MOTION_MS = 180;
 
 
-/**
- * The clickable head of one brewery's part of the loading list: the brewery's own colour,
- * its name and item count, and the chevron at the far end of the row.
- *
- * The colour square marks where a group starts — a run of thirty-odd rows split across
- * three breweries otherwise reads as one wall of products. It is the same square the
- * product picker uses (`ProductCombobox`), so a brewery is recognised by the same mark on
- * both screens, and it comes from the brewery list rather than from the shipment: a colour
- * is presentation and follows the brewery, exactly as in the volume reports.
- *
- * Collapsing hides rows and nothing else — the totals and the loading progress still count
- * the whole run, because what is on the pallet does not change with what is on screen.
- */
-function BreweryHeadingContent({
-  label, count, color, collapsed, onToggle,
-}: {
-  label: string;
-  count: string;
-  /** The brewery's own colour, or undefined for a brewery that has none recorded. */
-  color?: string;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <ButtonBase
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      aria-label={`${collapsed ? 'Rozbalit' : 'Sbalit'} ${label}`}
-      sx={{ width: '100%', justifyContent: 'flex-start', gap: 1, px: 2, py: 0.75 }}
-    >
-      <Box
-        data-testid="brewery-color"
-        sx={{ width: 9, height: 9, borderRadius: '2px', flexShrink: 0, bgcolor: color ?? 'text.disabled' }}
-      />
-      <Typography
-        sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.03em', textTransform: 'uppercase' }}
-        noWrap
-      >
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'text.disabled' }}>{count}</Typography>
-      {/* Pushes the chevron to the right edge, where it sits in the same place down the
-          whole list rather than a name's width in from the left. */}
-      <Box sx={{ flex: 1 }} />
-      <ExpandMoreIcon
-        fontSize="small"
-        sx={{
-          color: 'text.secondary', flexShrink: 0,
-          transition: `transform ${SECTION_MOTION_MS}ms ease`,
-          transform: collapsed ? 'rotate(-90deg)' : 'none',
-        }}
-      />
-    </ButtonBase>
-  );
-}
 
-/**
- * The width an element actually got, measured rather than inferred from the viewport.
- *
- * The nakládka's width is not a function of the viewport. From `md` up the detail
- * screen puts it in a 1.5fr track beside a 1fr column, so a 1000px tablet hands it
- * *less* room than an 800px one, where the page is still a single column. A media
- * query reads that backwards and leaves the table scrolling sideways at exactly the
- * widths where the split has squeezed it hardest.
- *
- * Reports 0 until the first observation, which callers must read as "not known yet"
- * rather than "zero wide" — a phone would otherwise paint the table for one frame
- * before the measurement lands.
- */
-function useMeasuredWidth() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
 
-  useEffect(() => {
-    const element = ref.current;
-    // happy-dom ships no ResizeObserver; tests that need the stacked layout either
-    // stub one or drive it off the media query instead.
-    if (!element || typeof ResizeObserver === 'undefined') {
-      return;
-    }
 
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
-  return [ref, width] as const;
-}
 
-/**
- * Narrowest content width the table is still worth rendering at.
- *
- * Produkt needs about 180px to keep the longest product names on one line, Množství
- * is fixed at {@link QTY_CELL_SX}'s 170, and every brewery invoice adds a 112px
- * column pair. Below this the table does not fail outright — it scrolls sideways,
- * which is precisely the failure worth swapping layouts to avoid.
- *
- * Two invoices puts the crossover at 574px of card content. A 1440px window clears
- * it by ~65px even with the detail screen's 1.5fr/1fr split taking its share; a
- * 1280px one does not, and stacks. That is deliberate — at 543px the table has
- * 149px for Produkt and wraps every second name onto three lines.
- */
-function tableFloorWidth(columnCount: number): number {
-  return 350 + columnCount * 112;
-}
 
-/**
- * The nakládka view of "Rozpis zboží" — the loading list: one row per distinct product, sectioned by
- * brewery and then by kind, with the loading state living inside each brewery-invoice
- * column group.
- *
- * When the card is too narrow for the columns the table is replaced by a stacked
- * list, the same swap `DataTable` makes: scrolling sideways to reach the loading
- * control is exactly the interaction the brewery ramp has no free hand for. Unlike
- * `DataTable` the trigger is the measured card width, not a breakpoint — see
- * {@link useMeasuredWidth} for why the viewport is the wrong thing to ask.
- *
- * One tree either way rather than two behind CSS: the DOM would double and every
- * text query in the page tests turn ambiguous.
- */
-function AggLoadingTable({
-  sections, totalQuantity, columnCount, renderRow, emptyText, invoiceHeaders, invoiceFooters,
-  renderStackedRow, stackedFooter,
-}: {
-  /** Rows grouped by brewery and, inside each, by product kind in loading order. */
-  sections: BrewerySection<AggRow>[];
-  totalQuantity: number;
-  /** Brewery-invoice columns, for the width of a section heading. */
-  columnCount: number;
-  renderRow: (a: AggRow) => ReactNode;
-  emptyText: string;
-  /** Brewery-invoice column headers and totals, two cells per invoice. */
-  invoiceHeaders: ReactNode;
-  invoiceFooters: (footSx: object) => ReactNode;
-  /** The same row as `renderRow`, stacked for when the columns don't fit. */
-  renderStackedRow: (a: AggRow) => ReactNode;
-  /** Per-invoice totals for the stacked layout's summary bar. */
-  stackedFooter: ReactNode;
-}) {
-  // Two signals for one decision: the media query answers before first paint so a
-  // phone never flashes the table, and the measurement catches the squeezed middle
-  // widths — a split-column tablet — that no viewport breakpoint can describe.
-  const isCompact = useMediaQuery((t: Theme) => t.breakpoints.down('compact'));
-  const [measureRef, measuredWidth] = useMeasuredWidth();
-  const stacked = isCompact || (measuredWidth > 0 && measuredWidth < tableFloorWidth(columnCount));
-
-  const colorForBrewery = useBreweryColors();
-  // Collapsed rather than expanded ids, so every brewery starts open: the list is worked
-  // through, and a run that arrives folded shut costs a tap per brewery before any of it
-  // can be read out. The set survives the invoice filter and both layouts, but not a
-  // different shipment — the screen is remounted for those.
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>());
-
-  function toggleBrewery(breweryId: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(breweryId)) next.add(breweryId);
-      return next;
-    });
-  }
-
-  // The wrapper is outside every branch, empty state included: the ref has to be
-  // attached on mount for the observer to ever start, and a branch that skipped it
-  // would leave the measurement stuck at 0 for as long as the list stayed empty.
-  return (
-    <Box ref={measureRef} sx={{ minWidth: 0 }}>
-      {sections.length === 0
-        ? <Typography color="text.secondary" sx={{ fontSize: 13, py: 2 }}>{emptyText}</Typography>
-        : stacked
-          ? renderStacked()
-          : renderTable()}
-    </Box>
-  );
-
-  function renderStacked() {
-    return (
-      <Card variant="outlined">
-        {sections.map((brewery) => (
-          <Fragment key={brewery.breweryId}>
-            {/* The brewery leads: the pallet is collected one brewery at a time, and the
-                kinds below it are how that pallet goes into the van. */}
-            <Box
-              sx={{
-                bgcolor: (t) => t.vars!.palette.brand.surface2,
-                borderTop: 1, borderColor: 'divider',
-              }}
-            >
-              <BreweryHeadingContent
-                label={brewery.label}
-                count={sectionHeadingText(brewery)}
-                color={colorForBrewery(brewery.breweryId)}
-                collapsed={collapsed.has(brewery.breweryId)}
-                onToggle={() => toggleBrewery(brewery.breweryId)}
-              />
-            </Box>
-            <Collapse in={!collapsed.has(brewery.breweryId)} timeout={SECTION_MOTION_MS} unmountOnExit>
-              {brewery.kinds.map((section) => (
-                <Fragment key={section.kind}>
-                  <Box
-                    sx={{
-                      pl: 3, pr: 2, py: 0.75, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
-                      textTransform: 'uppercase', color: 'text.secondary',
-                      bgcolor: (t) => t.vars!.palette.brand.surface3,
-                    }}
-                  >
-                    {section.label}
-                    <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
-                      {sectionHeadingText(section)}
-                    </Box>
-                  </Box>
-                  <Stack divider={<Divider />}>{section.rows.map(renderStackedRow)}</Stack>
-                </Fragment>
-              ))}
-            </Collapse>
-          </Fragment>
-        ))}
-        <Stack
-          spacing={0.5}
-          sx={{ px: 2, py: 1.25, borderTop: 1, borderColor: 'divider', bgcolor: (t) => t.vars!.palette.brand.surface2 }}
-        >
-          <Stack direction="row" alignItems="baseline" spacing={1}>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>Celkem k naložení</Typography>
-            <Box sx={{ flex: 1 }} />
-            <Typography sx={{ fontSize: 13.5, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-              {totalQuantity} ks
-            </Typography>
-          </Stack>
-          {stackedFooter}
-        </Stack>
-      </Card>
-    );
-  }
-
-  /**
-   * The wide layout: the column head, then one brewery block after another, then the totals.
-   *
-   * Deliberately several tables rather than one. A section has to sit in a box whose height
-   * can be animated for it to slide open, and a `<tbody>` is not one — a table row group
-   * ignores height. Splitting the sections into sibling tables gives `Collapse` a real box
-   * per section, and the columns still line up because every column but Produkt is a fixed
-   * width (Množství {@link QTY_CELL_SX}, 112px per brewery invoice) and Produkt takes what
-   * is left in each of them ({@link PRODUCT_CELL_SX}).
-   *
-   * The cost is that the columns are no longer announced with the rows by a screen reader,
-   * so each section table is labelled with its brewery instead.
-   */
-  function renderTable() {
-    const footSx = { fontWeight: 800, fontVariantNumeric: 'tabular-nums' as const, borderBottom: 'none', fontSize: 12.5 };
-    return (
-    <Card variant="outlined">
-      <TableContainer sx={{ overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <TableCell sx={{ ...HEAD_SX, ...PRODUCT_CELL_SX }}>Produkt</TableCell>
-              <TableCell align="center" sx={{ ...HEAD_SX, ...QTY_CELL_SX }}>Množství</TableCell>
-              {invoiceHeaders}
-            </TableRow>
-          </TableHead>
-        </Table>
-        {/* Sections rather than one flat list: the pallet is collected brewery by brewery,
-            and within one brewery the van is packed by kind — crates first, kegs last. */}
-        {sections.map((brewery) => (
-          <Fragment key={brewery.breweryId}>
-            {/* No border of its own: the last row above already draws that line, and two
-                1px borders from two tables do not collapse into one. */}
-            <Box sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <BreweryHeadingContent
-                label={brewery.label}
-                count={sectionHeadingText(brewery)}
-                color={colorForBrewery(brewery.breweryId)}
-                collapsed={collapsed.has(brewery.breweryId)}
-                onToggle={() => toggleBrewery(brewery.breweryId)}
-              />
-            </Box>
-            <Collapse in={!collapsed.has(brewery.breweryId)} timeout={SECTION_MOTION_MS} unmountOnExit>
-              <Table size="small" aria-label={brewery.label}>
-                <TableBody>
-                  {brewery.kinds.map((section) => (
-                    <Fragment key={section.kind}>
-                      <TableRow>
-                        <TableCell
-                          colSpan={2 + columnCount * 2}
-                          sx={{
-                            py: 0.5, pl: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
-                            textTransform: 'uppercase', color: 'text.secondary',
-                            bgcolor: (t) => t.vars!.palette.brand.surface3,
-                          }}
-                        >
-                          {section.label}
-                          <Box component="span" sx={{ ml: 1, fontWeight: 600, color: 'text.disabled' }}>
-                            {sectionHeadingText(section)}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                      {section.rows.map(renderRow)}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            </Collapse>
-          </Fragment>
-        ))}
-        <Table size="small">
-          <TableBody>
-            <TableRow sx={{ bgcolor: (t) => t.vars!.palette.brand.surface2 }}>
-              <TableCell sx={{ ...footSx, ...PRODUCT_CELL_SX, fontWeight: 700 }}>Celkem k naložení</TableCell>
-              <TableCell align="right" sx={{ ...footSx, ...QTY_CELL_SX }}>{totalQuantity} ks</TableCell>
-              {invoiceFooters(footSx)}
-            </TableRow>
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Card>
-    );
-  }
-}
 
 /** One line in the stops overview: avatar + client name, optionally a place chip
  * beside it, and the destination address below.
@@ -1944,15 +1447,23 @@ export function ShipmentDetail({
           the fr shares hold and the table scroll inside its own TableContainer. */}
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.5fr) minmax(0, 1fr)' }, alignItems: 'start', mt: 2.5 }}>
         <Stack spacing={2}>
-          <Card sx={{ overflow: 'hidden' }}>
+          {/* `clip`, not `hidden`: the table now runs to the card's edges, so the card is
+              what rounds off the summary bar's fill — and `hidden` on a card this tall
+              makes a scroll container that swallows the wheel and freezes the page. */}
+          <Card sx={{ overflow: 'clip' }}>
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Rozpis zboží</Typography>
             </Stack>
-            {/* Tighter gutters on a phone: 2.5 each side plus the inner card's own
-                border spends ~45px of a 390px screen on nothing. */}
-            <Box sx={{ px: { xs: 1.25, compact: 2.5 }, py: 2 }}>
-              <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+            {/* The gutters are the toolbar's, not the table's. The nakládka's tiers are
+                keyed on its container's width and the design's widths are the card's —
+                20px of padding each side would take an iPad's 521px card down to 479 and
+                drop it a whole tier, to the phone layout. So the table runs to the card's
+                own edges, as it does in the prototype, and pads its rows itself. */}
+            <Box sx={{ pt: 2, pb: activeFilter === UNLOAD_VIEW ? 2 : 0 }}>
+              <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap
+                sx={{ mb: 1.5, px: { xs: 1.25, compact: 2.5 } }}
+              >
                 {/* A one-option toggle is worse than none, so it goes entirely rather
                     than rendering a lone Vykládka button. */}
                 {canSeeLoadingBreakdown && (
@@ -1981,17 +1492,21 @@ export function ShipmentDetail({
                 )}
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
-                <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
+                <Box sx={{ px: { xs: 1.25, compact: 2.5 } }}>
+                  <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
+                </Box>
               ) : (
-                <AggLoadingTable
+                <NakladkaTable
                   sections={sections}
                   totalQuantity={totalQty}
-                  columnCount={invoiceColumns.length}
                   emptyText={activeFilter === ALL_INVOICES
                     ? 'Zatím žádné produkty k naložení.'
                     : `Na faktuře F${activeFilter} zatím nejsou žádné kusy.`}
-                  invoiceHeaders={(
-                    <PurchaseInvoiceHeaderCells
+                  chipOf={(agg) => platoSizeChipText(agg.platoDegree, agg.packageSize)}
+                  footer={(
+                    <PurchaseInvoiceTotalsLines
+                      totals={purchaseTotals}
+                      progress={columnProgress}
                       invoices={purchaseInvoices}
                       editable={nakladkaEditable}
                       onDelete={(invoiceId) => deletePurchaseInvoice.mutate(invoiceId, {
@@ -1999,48 +1514,27 @@ export function ShipmentDetail({
                       })}
                     />
                   )}
-                  invoiceFooters={(footSx) => (
-                    <PurchaseInvoiceFooterCells totals={purchaseTotals} progress={columnProgress} sx={footSx} />
-                  )}
-                  renderRow={(agg) => (
-                    <AggLoadingRow
-                      key={agg.key}
-                      agg={agg}
-                      editable={nakladkaEditable}
-                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 && stockPurchaseEditable ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                      invoiceCells={(
-                        <PurchaseInvoiceRowCells
-                          row={agg}
-                          invoices={purchaseInvoices}
-                          states={loadingStates}
-                          editable={nakladkaEditable}
-                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                        />
+                  renderSource={(agg) => (
+                    <NakladkaSource
+                      entries={breakdownSlots(
+                        agg,
+                        agg.orderQuantity > 0 && nakladkaEditable,
+                        stockPurchaseEditable && nakladkaEditable,
+                        (delta) => adjustSourcing(agg, delta),
+                        (delta) => adjustStockPurchase(agg, delta),
                       )}
                     />
                   )}
-                  renderStackedRow={(agg) => (
-                    <AggLoadingStackedRow
-                      key={agg.key}
-                      agg={agg}
+                  renderInvoices={(agg) => (
+                    <PurchaseInvoiceChips
+                      row={agg}
+                      invoices={purchaseInvoices}
+                      states={loadingStates}
                       editable={nakladkaEditable}
-                      onAdjustStockPurchase={agg.stockPurchaseQuantity > 0 && stockPurchaseEditable ? (delta) => adjustStockPurchase(agg, delta) : undefined}
-                      onAdjustSourcing={agg.orderQuantity > 0 ? (delta) => adjustSourcing(agg, delta) : undefined}
-                      invoiceMetrics={(
-                        <PurchaseInvoiceRowMetrics
-                          row={agg}
-                          invoices={purchaseInvoices}
-                          states={loadingStates}
-                          editable={nakladkaEditable}
-                          onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
-                          onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
-                        />
-                      )}
+                      onSet={(sequence, quantity) => commitInvoiceLine(agg.productId!, sequence, quantity)}
+                      onSetState={(sequence, state) => commitLoadingState(agg.productId!, sequence, state)}
                     />
                   )}
-                  stackedFooter={<PurchaseInvoiceTotalsLines totals={purchaseTotals} progress={columnProgress} />}
                 />
               )}
             </Box>
