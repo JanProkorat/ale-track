@@ -57,6 +57,7 @@ import {
   type ClientBand,
   type LineGroup,
 } from './shipmentInvoiceModel';
+import { BandBillingRecipients } from './BandBillingRecipients';
 import { kindLabel, invoiceAdjustmentKindName } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
@@ -584,6 +585,11 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                     <ExpandMoreIcon sx={{ fontSize: 17 }} />
                   </IconButton>
                 </Stack>
+
+                {/* Under the header rather than inside the Collapse: which addresses the
+                    payer should invoice is a property of the band, and stays answerable
+                    while the product rows are folded away. */}
+                <BandBillingRecipients shipmentId={shipmentId} band={band} canEdit={canEdit} />
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
                   <BandNotes band={band} stops={stops} />

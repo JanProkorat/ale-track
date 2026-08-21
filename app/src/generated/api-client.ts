@@ -21688,6 +21688,7 @@ export interface IClientDto {
 export class LinkedClientDto implements ILinkedClientDto {
     id?: string;
     name?: string;
+    officialAddress?: AddressDto | undefined;
 
     constructor(data?: ILinkedClientDto) {
         if (data) {
@@ -21702,6 +21703,7 @@ export class LinkedClientDto implements ILinkedClientDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
         }
     }
 
@@ -21716,6 +21718,7 @@ export class LinkedClientDto implements ILinkedClientDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         return data;
     }
 }
@@ -21723,6 +21726,7 @@ export class LinkedClientDto implements ILinkedClientDto {
 export interface ILinkedClientDto {
     id?: string;
     name?: string;
+    officialAddress?: AddressDto | undefined;
 }
 
 export class ClientContactDto implements IClientContactDto {

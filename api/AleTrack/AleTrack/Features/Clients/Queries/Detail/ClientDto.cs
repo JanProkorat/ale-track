@@ -66,6 +66,11 @@ public sealed record LinkedClientDto
     public Guid Id { get; set; }
 
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Official (billing) address, null when the client has none.
+    /// </summary>
+    public AddressDto? OfficialAddress { get; set; }
 }
 
 public record ClientContactDto

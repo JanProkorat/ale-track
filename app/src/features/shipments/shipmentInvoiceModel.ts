@@ -5,6 +5,8 @@
 // ordering client bands — can be tested without a rendering harness.
 
 import type {
+  ClientDto,
+  LinkedClientDto,
   OrderNoteDto,
   OrderReturnDto,
   OutgoingShipmentStopDto,
@@ -421,4 +423,30 @@ export function sectionTotals(data: ShipmentInvoicesDto, bands: ClientBand[]) {
     crossBilled: bands.reduce((s, b) => s + b.crossBilled, 0),
     privateQuantity: bands.reduce((s, b) => s + b.privateQuantity, 0),
   };
+}
+
+/**
+ * The sub-clients a payer may name as billing addresses on its invoice.
+ *
+ * Every sub-client of the payer qualifies, whether or not it has goods on this shipment —
+ * the payer may owe an address for something billed elsewhere. One with no official address
+ * never does: the endpoint rejects it, so offering it would only produce a 400.
+ */
+export function billingRecipientOptions(client: ClientDto | undefined): LinkedClientDto[] {
+  return (client?.invoicedClients ?? []).filter((sub) => Boolean(sub.id && sub.officialAddress));
+}
+
+/**
+ * The invoice a band's billing-recipient selection is saved on: the payer's first, which is
+ * the one the band is opened with and the only one a client normally has. A second invoice is
+ * a manual split of the same payer's goods, and the payer needs the addresses once, not per
+ * split.
+ */
+export function billingRecipientInvoice(band: ClientBand): ShipmentInvoiceDto | undefined {
+  return band.invoices[0];
+}
+
+/** Sub-client ids already saved on an invoice, in the order the server sends them. */
+export function billingRecipientIds(invoice: ShipmentInvoiceDto | undefined): string[] {
+  return (invoice?.billingRecipients ?? []).map((r) => r.clientId).filter((id): id is string => Boolean(id));
 }

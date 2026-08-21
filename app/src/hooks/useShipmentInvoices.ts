@@ -13,6 +13,7 @@ import { qk } from 'src/api/queryKeys';
 import {
   AddShipmentInvoiceDto,
   MoveInvoiceLineDto,
+  SetInvoiceBillingRecipientsDto,
   type InvoiceLineSourceKind,
 } from 'src/generated/api-client';
 
@@ -63,6 +64,26 @@ export function useDeleteShipmentInvoice(shipmentId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (invoiceId: string) => ds.deleteShipmentInvoiceEndpoint(shipmentId!, invoiceId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+  });
+}
+
+export interface SetInvoiceBillingRecipientsArgs {
+  invoiceId: string;
+  /** The whole selection — the endpoint replaces the invoice's list with it. */
+  clientIds: string[];
+}
+
+export function useSetInvoiceBillingRecipients(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invoiceId, clientIds }: SetInvoiceBillingRecipientsArgs) =>
+      ds.setInvoiceBillingRecipientsEndpoint(
+        shipmentId!,
+        invoiceId,
+        new SetInvoiceBillingRecipientsDto({ clientIds }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
   });
 }

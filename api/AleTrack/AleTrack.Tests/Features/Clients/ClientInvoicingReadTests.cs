@@ -56,6 +56,34 @@ public sealed class ClientInvoicingReadTests
     }
 
     [Fact]
+    public async Task Detail_Payer_CarriesEachSubClientsOfficialAddress()
+    {
+        var payer = ClientBuilder.BuildEntity(name: "Head Office");
+        payer.Id = 42;
+        var withAddress = ClientBuilder.BuildEntity(
+            name: "Pub A",
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Nadrazni", city: "Praha"),
+            invoicingClientId: payer.Id,
+            invoicingClient: payer);
+        withAddress.Id = 5;
+        var withoutAddress = ClientBuilder.BuildEntity(
+            name: "Pub B", noOfficialAddress: true, invoicingClientId: payer.Id, invoicingClient: payer);
+        withoutAddress.Id = 6;
+        payer.InvoicedClients.Add(withAddress);
+        payer.InvoicedClients.Add(withoutAddress);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [payer, withAddress, withoutAddress]);
+
+        var endpoint = EndpointWithResponseBuilder<GetClientDetailRequest, ClientDto, GetClientDetailEndpoint>
+            .Create(dbContext.Object);
+        await endpoint.HandleAsync(new GetClientDetailRequest { Id = payer.PublicId }, CancellationToken.None);
+
+        var subs = endpoint.Response.InvoicedClients;
+        subs.Single(s => s.Id == withAddress.PublicId).OfficialAddress.Should()
+            .BeEquivalentTo(new { StreetName = "Nadrazni", City = "Praha" });
+        subs.Single(s => s.Id == withoutAddress.PublicId).OfficialAddress.Should().BeNull();
+    }
+
+    [Fact]
     public async Task List_SubClient_CarriesItsPayerName()
     {
         var payer = ClientBuilder.BuildEntity(name: "Head Office");

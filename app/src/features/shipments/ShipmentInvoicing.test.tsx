@@ -9,9 +9,14 @@ import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within }
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AddressDto,
+  ClientDto,
+  Country,
   InvoiceAdjustmentKind,
   InvoiceLineSourceKind,
+  LinkedClientDto,
   ProductKind,
+  ShipmentInvoiceBillingRecipientDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
@@ -22,6 +27,9 @@ import { theme } from 'src/theme/theme';
 const moveMutate = vi.fn();
 const addMutate = vi.fn();
 const deleteMutate = vi.fn();
+const setRecipientsMutate = vi.fn();
+/** Client detail per id — the billing-recipient dropdown reads its options off it. */
+let clientDetails: Record<string, ClientDto> = {};
 let invoicesResponse: ShipmentInvoicesDto | undefined;
 // The query can also be loading or failed. An earlier version of the mock always handed
 // back a response, which is why it could not catch the crash on a missing one.
@@ -33,6 +41,11 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useMoveInvoiceLine: () => ({ mutate: moveMutate, isPending: false }),
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
+  useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
+}));
+
+vi.mock('src/hooks/useClients', () => ({
+  useClient: (id: string | undefined) => ({ data: id ? clientDetails[id] : undefined }),
 }));
 
 vi.mock('src/providers/CurrencyProvider', () => ({
@@ -87,6 +100,7 @@ function renderSection(editable = true, stops: OutgoingShipmentStopDto[] = []) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clientDetails = {};
   queryState = { isLoading: false, isError: false };
   invoicesResponse = new ShipmentInvoicesDto({
     isEditable: true,
@@ -1029,5 +1043,139 @@ describe('vratky', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
     await waitForElementToBeRemoved(() => screen.queryByTestId('band-returns'));
+  });
+});
+
+describe('fakturační adresy sub-klientů', () => {
+  const SUB_A = 'sub-a';
+  const SUB_B = 'sub-b';
+  const SUB_NO_ADDRESS = 'sub-none';
+
+  const address = (streetName: string, city: string) =>
+    new AddressDto({ streetName, streetNumber: '1', zip: '11000', city, country: Country.Czechia });
+
+  const sub = (id: string, name: string, officialAddress?: AddressDto) =>
+    new LinkedClientDto({ id, name, officialAddress });
+
+  /** Klient A pays for two sub-clients with an address and one without. */
+  function payerWithSubClients() {
+    clientDetails[CLIENT_A] = new ClientDto({
+      id: CLIENT_A,
+      name: 'Klient A',
+      invoicedClients: [
+        sub(SUB_A, 'Hospoda U Lípy', address('Nádražní', 'Praha')),
+        sub(SUB_B, 'Pivnice Na Rohu', address('Dlouhá', 'Brno')),
+        sub(SUB_NO_ADDRESS, 'Bez adresy'),
+      ],
+    });
+  }
+
+  const LABEL = 'Fakturační adresa pro Klient A';
+  const TOGGLE = 'Fakturační adresy sub-klientů';
+
+  it('offers no toggle when the payer has no sub-clients at all', () => {
+    renderSection();
+    expect(screen.queryByLabelText(TOGGLE)).not.toBeInTheDocument();
+  });
+
+  it('offers no toggle when every sub-client lacks an official address', () => {
+    clientDetails[CLIENT_A] = new ClientDto({
+      id: CLIENT_A,
+      name: 'Klient A',
+      invoicedClients: [sub(SUB_NO_ADDRESS, 'Bez adresy')],
+    });
+
+    renderSection();
+
+    expect(screen.queryByLabelText(TOGGLE)).not.toBeInTheDocument();
+  });
+
+  it('reveals the labelled multi-select only once the toggle is on', () => {
+    payerWithSubClients();
+    renderSection();
+
+    expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(TOGGLE));
+
+    expect(screen.getByLabelText(LABEL)).toBeInTheDocument();
+  });
+
+  it('lists every sub-client with an address and never one without', () => {
+    payerWithSubClients();
+    renderSection();
+    fireEvent.click(screen.getByLabelText(TOGGLE));
+
+    fireEvent.mouseDown(screen.getByLabelText(LABEL));
+    const menu = screen.getByRole('listbox');
+
+    // Both offered even though neither has goods on this shipment — a payer may owe
+    // an address for something billed elsewhere.
+    expect(within(menu).getByText('Hospoda U Lípy')).toBeInTheDocument();
+    expect(within(menu).getByText('Pivnice Na Rohu')).toBeInTheDocument();
+    // The address is what the office is actually choosing between.
+    expect(within(menu).getByText('Nádražní 1, 11000 Praha')).toBeInTheDocument();
+    // Offering it would only earn a 400 from the endpoint.
+    expect(within(menu).queryByText('Bez adresy')).not.toBeInTheDocument();
+  });
+
+  it('saves the whole selection through the invoice', () => {
+    payerWithSubClients();
+    const inv = invoice({ lines: [line({ quantity: 10 })] });
+    invoicesResponse = new ShipmentInvoicesDto({ isEditable: true, adjustments: [], invoices: [inv] });
+
+    renderSection();
+    fireEvent.click(screen.getByLabelText(TOGGLE));
+    fireEvent.mouseDown(screen.getByLabelText(LABEL));
+    fireEvent.click(within(screen.getByRole('listbox')).getByText('Pivnice Na Rohu'));
+
+    expect(setRecipientsMutate).toHaveBeenCalledWith(
+      { invoiceId: inv.id, clientIds: [SUB_B] },
+      expect.anything(),
+    );
+  });
+
+  it('starts open with the saved recipients ticked', () => {
+    payerWithSubClients();
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({
+        lines: [line({ quantity: 10 })],
+        billingRecipients: [
+          new ShipmentInvoiceBillingRecipientDto({
+            clientId: SUB_A, clientName: 'Hospoda U Lípy', address: address('Nádražní', 'Praha'),
+          }),
+        ],
+      })],
+    });
+
+    renderSection();
+
+    // Visible without touching the toggle — a saved selection hidden behind an off
+    // toggle would read as no selection at all.
+    expect(screen.getByLabelText(LABEL)).toBeInTheDocument();
+    expect(screen.getByText('Hospoda U Lípy')).toBeInTheDocument();
+  });
+
+  it('is read-only when the rest of the section is', () => {
+    payerWithSubClients();
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({
+        lines: [line({ quantity: 10 })],
+        billingRecipients: [
+          new ShipmentInvoiceBillingRecipientDto({
+            clientId: SUB_A, clientName: 'Hospoda U Lípy', address: address('Nádražní', 'Praha'),
+          }),
+        ],
+      })],
+    });
+
+    renderSection(false);
+
+    expect(screen.getByLabelText(TOGGLE)).toBeDisabled();
+    expect(screen.getByLabelText(LABEL)).toHaveAttribute('aria-disabled', 'true');
   });
 });

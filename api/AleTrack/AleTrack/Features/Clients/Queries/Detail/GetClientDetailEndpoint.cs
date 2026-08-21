@@ -62,7 +62,12 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
                 InvoicingClientId = c.InvoicingClient != null ? c.InvoicingClient.PublicId : null,
                 InvoicingClientName = c.InvoicingClient != null ? c.InvoicingClient.Name : null,
                 InvoicedClients = c.InvoicedClients
-                    .Select(sub => new LinkedClientDto { Id = sub.PublicId, Name = sub.Name })
+                    .Select(sub => new LinkedClientDto
+                    {
+                        Id = sub.PublicId,
+                        Name = sub.Name,
+                        OfficialAddress = sub.OfficialAddress != null ? sub.OfficialAddress.ToDto() : null
+                    })
                     .ToList(),
                 Contacts = c.Contacts
                     .Select(cc => new ClientContactDto
