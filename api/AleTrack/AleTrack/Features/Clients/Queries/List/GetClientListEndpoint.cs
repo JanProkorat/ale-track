@@ -37,6 +37,7 @@ public sealed class GetClientListEndpoint(AleTrackDbContext dbContext) : Endpoin
             {
                 Id = c.PublicId,
                 Name = c.Name,
+                BusinessName = c.BusinessName,
                 Region = c.Region
             })
             .ApplyFilterAndSort(req.Parameters)

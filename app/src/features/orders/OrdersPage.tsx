@@ -78,8 +78,12 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
 
   const filtered = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
-    const rows = orders.filter((o) => (filter === 'all' || orderStateName(o.state) === filter)
-      && (!q || (o.clientName ?? '').toLowerCase().includes(q)));
+    // Matched against the trading name too, the way the client list is: with two clients of
+    // one name, searching the name alone cannot narrow to the one being looked for.
+    const matches = (o: OrderListItemDto) => !q
+      || (o.clientName ?? '').toLowerCase().includes(q)
+      || (o.clientBusinessName ?? '').toLowerCase().includes(q);
+    const rows = orders.filter((o) => (filter === 'all' || orderStateName(o.state) === filter) && matches(o));
     return sortOrdersNewestFirst(rows);
   }, [orders, filter, clientSearch]);
 
@@ -122,7 +126,14 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
             <Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12, bgcolor: `${color}22`, color }}>
               {clientInitials(name)}
             </Box>
-            <Typography sx={{ fontWeight: 700 }} noWrap>{name}</Typography>
+            {/* The trading name under the name, as the client list has it: two clients may
+                share a name, and without it two rows of this list read identically. */}
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 700 }} noWrap>{name}</Typography>
+              {o.clientBusinessName && (
+                <Typography variant="body2" color="text.secondary" noWrap>{o.clientBusinessName}</Typography>
+              )}
+            </Box>
           </Stack>
         );
       },
@@ -189,6 +200,9 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontWeight: 700 }} noWrap>{name}</Typography>
+            {o.clientBusinessName && (
+              <Typography sx={{ fontSize: 12.5 }} color="text.secondary" noWrap>{o.clientBusinessName}</Typography>
+            )}
             <Typography sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
               {orderNumber(o.id)}
             </Typography>

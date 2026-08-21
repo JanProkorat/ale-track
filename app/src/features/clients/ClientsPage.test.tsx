@@ -3,7 +3,7 @@
 // state, the arrow must honour it instead of dropping the user on /clients.
 // fireEvent rather than user-event — not a dependency of this project.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const navigateMock = vi.fn();
@@ -26,7 +26,18 @@ const client = new ClientDto({
 } as never);
 
 vi.mock('src/hooks/useClients', () => ({
-  useClients: () => ({ data: [new ClientListItemDto({ id: 'cl-1', name: 'Pivnice Na Rohu' } as never)], isPending: false, isError: false }),
+  // Two rows, so a search can be observed narrowing rather than merely still showing
+  // something — one carries a trading name, the other does not.
+  useClients: () => ({
+    data: [
+      new ClientListItemDto({
+        id: 'cl-1', name: 'Pivnice Na Rohu', businessName: 'Na Rohu gastro s.r.o.',
+      } as never),
+      new ClientListItemDto({ id: 'cl-2', name: 'Pivnice U Kapra' } as never),
+    ],
+    isPending: false,
+    isError: false,
+  }),
   useClient: () => ({ data: client, isPending: false, isError: false }),
   useCreateClient: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useUpdateClient: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
@@ -75,6 +86,47 @@ function renderDetail(state?: unknown) {
     </MemoryRouter>
   );
 }
+
+/** The list route, where every row comes from the list response alone. */
+function renderList() {
+  return render(
+    <MemoryRouter initialEntries={['/clients']}>
+      <MuiThemeProvider theme={theme}>
+        <Routes>
+          <Route path="/clients" element={<ClientsPage />} />
+        </Routes>
+      </MuiThemeProvider>
+    </MemoryRouter>
+  );
+}
+
+/**
+ * The trading name used to be read out of a per-client *detail* query — one request per
+ * row, just for a subtitle — and the row stayed nameless until it landed. It is on the list
+ * response now. `useQueries` is mocked empty here, so nothing but the list can be supplying
+ * it: this fails the moment the page goes back to the detail for it.
+ */
+describe('ClientsPage rows', () => {
+  it('names the trading entity without waiting on a per-row detail fetch', () => {
+    renderList();
+
+    expect(screen.getByText('Pivnice Na Rohu')).toBeInTheDocument();
+    expect(screen.getByText('Na Rohu gastro s.r.o.')).toBeInTheDocument();
+  });
+
+  it('searches the trading name as well as the name', async () => {
+    renderList();
+
+    // "gastro" appears in a trading name and in no client's name.
+    fireEvent.change(screen.getByPlaceholderText(/Hledat/i), { target: { value: 'gastro' } });
+
+    // Waited on the row that must *go*, not the one that must stay: SearchField debounces,
+    // and `waitFor` passes on its first synchronous check — so waiting for something to
+    // remain true would succeed before the filter had run at all.
+    await waitFor(() => expect(screen.queryByText('Pivnice U Kapra')).not.toBeInTheDocument());
+    expect(screen.getByText('Pivnice Na Rohu')).toBeInTheDocument();
+  });
+});
 
 describe('ClientsPage back navigation', () => {
   beforeEach(() => {

@@ -69,11 +69,19 @@ built on TanStack Query. Query keys come from the central factory in
 `qk`; ad-hoc arrays break invalidation silently.
 
 Client defaults (`src/providers/QueryProvider.tsx`): `staleTime` 30 s, `retry` 1,
-no refetch on window focus.
+refetch on window focus. The last one is what lets an already-open screen catch up
+with data created elsewhere — a mounted query has no other trigger, since the
+editors do not remount and `staleTime` alone never fetches. It only refetches
+queries that have actually gone stale, so tab-flipping inside 30 s is free.
 
 Convention for mutations: invalidate `qk.<resource>.all` plus the specific
 `detail(id)` on success. Where the server recomputes state on read (the shipment
 invoice split does), invalidate rather than patching the cache locally.
+
+**Do not invalidate `qk.reports` from a mutation** — the client's `MutationCache`
+does it for every successful write. That key is the sidebar's badge counts, which
+almost every write moves; per-call-site invalidation was a list that only ever grew
+and failed silently (a wrong badge, no error) when someone forgot an entry.
 
 `QueryBoundary` (`src/components/common/QueryBoundary.tsx`) renders
 loading / error / empty / data for a query result so every module behaves the

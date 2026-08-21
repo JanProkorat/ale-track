@@ -1,8 +1,11 @@
-import { Fragment, useMemo, type ReactNode } from 'react';
-import { Box, Button, Card, Stack, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import {
+  Box, Button, ButtonBase, Card, Chip, Collapse, Stack, Typography, useMediaQuery,
+} from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
@@ -22,7 +25,7 @@ import { useDeliveries } from 'src/hooks/useDeliveries';
 import { useInventory } from 'src/hooks/useInventory';
 import { useSales } from 'src/hooks/useSales';
 import { useCurrency } from 'src/providers/CurrencyProvider';
-import { NAV_GROUPS, navPermModule } from 'src/layout/nav-config';
+import { NAV_GROUPS, navPermModule, type NavItem } from 'src/layout/nav-config';
 import { PATHS } from 'src/routes/paths';
 import { num, plural } from 'src/lib/format';
 import {
@@ -131,6 +134,67 @@ function daySlots(driver: DriverListItemDto, day: Dayjs): { from: Date; until: D
   return { from: froms[0], until: untils[untils.length - 1] };
 }
 
+/** The module KPI tiles. One grid, mounted either at the top of the page or — on a
+ * phone — inside the folded section below. */
+function ModuleTiles({ tiles, countsQuery, onOpen }: {
+  tiles: NavItem[];
+  countsQuery: ReturnType<typeof useModuleCounts>;
+  onOpen: (path: string) => void;
+}) {
+  return (
+    <QueryBoundary query={countsQuery}>
+      {(counts) => (
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 2 }}>
+          {tiles.map((it) => {
+            const cfg = TILE_CONFIG[it.key]!;
+            return (
+              <StatCard
+                key={it.key}
+                icon={it.icon}
+                label={it.label}
+                value={num(counts[cfg.field] ?? 0)}
+                tone={cfg.tone}
+                onClick={() => onOpen(it.path)}
+              />
+            );
+          })}
+        </Box>
+      )}
+    </QueryBoundary>
+  );
+}
+
+/** Phone-only fold for the module tiles. In one column ten of them stack to roughly
+ * 900px, so they would push the first actionable card more than a screen down. They
+ * are navigation shortcuts, and the drawer and search already cover that on a phone. */
+function ModuleTilesSection({ count, children }: { count: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card>
+      <ButtonBase
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls="module-tiles"
+        sx={{ width: '100%', gap: 1, p: 2, justifyContent: 'flex-start' }}
+      >
+        <ExpandMoreOutlinedIcon sx={{
+          color: 'text.secondary', transition: 'transform .15s',
+          transform: open ? 'rotate(180deg)' : 'none',
+        }} />
+        <Typography variant="h6" sx={{ flex: 1, textAlign: 'left' }}>Přehled modulů</Typography>
+        <Chip label={count} size="small" />
+      </ButtonBase>
+      {/* The id lives out here, not on the Collapse: `unmountOnExit` takes the Collapse
+          with it, and aria-controls must not dangle while the fold is shut. */}
+      <Box id="module-tiles">
+        <Collapse in={open} unmountOnExit>
+          <Box sx={{ p: 2, pt: 0 }}>{children}</Box>
+        </Collapse>
+      </Box>
+    </Card>
+  );
+}
+
 export function DashboardPage() {
   const { user, canSee } = useAuth();
   const navigate = useNavigate();
@@ -146,6 +210,11 @@ export function DashboardPage() {
   const inventoryQuery = useInventory();
   const salesQuery = useSales();
   const { formatMoney } = useCurrency();
+
+  // `noSsr` because the default is false in this MUI version: without it the hook
+  // reports "wide" on first paint and the tiles would render on top, then visibly jump
+  // to the bottom of the page. There is no SSR here, so reading synchronously is free.
+  const isCompact = useMediaQuery((t: Theme) => t.breakpoints.down('compact'), { noSsr: true });
 
   const today = useMemo(() => dayjs().startOf('day'), []);
 
@@ -219,36 +288,10 @@ export function DashboardPage() {
         subtitle={user?.firstName ? `Vítejte zpět, ${user.firstName}.` : 'Vítejte zpět.'}
       />
 
-      <Box sx={{ mb: 3 }}>
-        <QueryBoundary query={countsQuery}>
-          {(counts) => (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-                gap: 2,
-              }}
-            >
-              {tiles.map((it) => {
-                const cfg = TILE_CONFIG[it.key]!;
-                const value = counts[cfg.field] ?? 0;
-                return (
-                  <StatCard
-                    key={it.key}
-                    icon={it.icon}
-                    label={it.label}
-                    value={num(value)}
-                    tone={cfg.tone}
-                    onClick={() => navigate(it.path)}
-                  />
-                );
-              })}
-            </Box>
-          )}
-        </QueryBoundary>
-      </Box>
-
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {!isCompact && (
+        <ModuleTiles tiles={tiles} countsQuery={countsQuery} onOpen={(path) => navigate(path)} />
+      )}
       {(showSales || showWeek) && (
         <Box sx={{
           // The pair share a row on desktop. `alignItems: start` rather than the default
@@ -424,6 +467,12 @@ export function DashboardPage() {
             <Typography color="text.secondary" sx={{ fontSize: 13.5 }}>Vše dostatečně naskladněno.</Typography>
           )}
         </DashCard>
+      )}
+
+      {isCompact && (
+        <ModuleTilesSection count={tiles.length}>
+          <ModuleTiles tiles={tiles} countsQuery={countsQuery} onOpen={(path) => navigate(path)} />
+        </ModuleTilesSection>
       )}
       </Box>
     </PageContainer>

@@ -26,3 +26,7 @@
 .claude/settings.json
 .claude/.kit-manifest
 .claude/.build-state/
+
+# Data copied between Supabase projects — contains password hashes, never commit
+pgcopy/
+copy_reference_data.py

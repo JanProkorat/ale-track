@@ -13,6 +13,7 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { QueryBoundary } from 'src/components/common/QueryBoundary';
+import { TabActions } from 'src/components/common/DetailTabs';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { FormDrawer } from 'src/components/common/FormDrawer';
@@ -329,26 +330,28 @@ export function ProductPricesPanel({
   return (
     <Box>
       {editable && (
-        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-          <Button
-            startIcon={<WalletIcon />}
-            onClick={() => setBulkOpen(true)}
-            sx={{ bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint } }}
-          >
-            Hromadná úprava cen
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={openCreate}
-            sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
-          >
-            Přidat cenu
-          </Button>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+        <>
+          <TabActions>
+            <Button
+              startIcon={<WalletIcon />}
+              onClick={() => setBulkOpen(true)}
+              sx={{ bgcolor: (t) => t.vars!.palette.brand.amberSoft, color: 'primary.dark', '&:hover': { bgcolor: (t) => t.vars!.palette.brand.amberTint } }}
+            >
+              Hromadná úprava cen
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={openCreate}
+              sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+            >
+              Přidat cenu
+            </Button>
+          </TabActions>
+          <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
             Platí pro všechny objednávky i prodej u pultu tohoto klienta. Faktura si cenu zamrazí při naložení.
           </Typography>
-        </Stack>
+        </>
       )}
 
       <QueryBoundary

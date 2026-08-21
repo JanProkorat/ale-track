@@ -43,7 +43,13 @@ public sealed record OrderListItemDto
     /// Name of the related client
     /// </summary>
     public string ClientName { get; set; } = null!;
-    
+
+    /// <summary>
+    /// Trading name of the related client. Two clients may share a <see cref="ClientName"/>,
+    /// so the list needs this to say which one an order belongs to.
+    /// </summary>
+    public string? ClientBusinessName { get; set; }
+
     /// <summary>
     /// Planning state of the order
     /// </summary>

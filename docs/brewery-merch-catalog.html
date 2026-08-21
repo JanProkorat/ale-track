@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nepivní sortiment pivovarů — výběr do katalogu</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --text: #131a24;
+    --muted: #5d6b7e;
+    --border: #dde2e9;
+    --accent: #b8860b;
+    --accent-soft: #fdf3dc;
+    --ok: #1b7f4d;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151c;
+      --surface: #171e27;
+      --surface-2: #1e2732;
+      --text: #e7ecf3;
+      --muted: #96a3b5;
+      --border: #2b3644;
+      --accent: #e0a92a;
+      --accent-soft: #2a2314;
+      --ok: #4ec38a;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  header h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin: 20px 0 24px; padding: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+  .toolbar input[type=search] {
+    flex: 1 1 220px; min-width: 160px;
+    padding: 8px 12px; font-size: 14px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .toolbar input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+    color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  button:hover { background: var(--accent-soft); border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1204; }
+  .count {
+    margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700;
+    font-size: 14px; white-space: nowrap;
+  }
+  .count b { color: var(--accent); }
+
+  details.brewery { margin-bottom: 18px; }
+  details.brewery > summary {
+    cursor: pointer; list-style: none;
+    padding: 14px 16px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+    font-size: 17px; font-weight: 700;
+    display: flex; align-items: center; gap: 10px;
+  }
+  details.brewery > summary::-webkit-details-marker { display: none; }
+  details.brewery > summary::before { content: "▸"; color: var(--muted); font-size: 13px; }
+  details.brewery[open] > summary::before { content: "▾"; }
+  summary .tally { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  summary .tally.has { color: var(--ok); }
+
+  section.cat {
+    margin: 12px 0 0 0; padding: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  section.cat > h3 {
+    margin: 0; padding: 10px 14px; font-size: 14px; font-weight: 700;
+    background: var(--surface-2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  section.cat > h3 .tally { margin-left: auto; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  section.cat > h3 .tally.has { color: var(--ok); }
+  section.cat > h3 button { padding: 3px 8px; font-size: 12px; font-weight: 600; }
+
+  ul.items { list-style: none; margin: 0; padding: 4px 0; }
+  ul.items li { display: flex; align-items: center; gap: 10px; padding: 5px 14px; }
+  ul.items li:hover { background: var(--surface-2); }
+  ul.items li.hidden { display: none; }
+  ul.items li input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  ul.items li label { flex: 1; min-width: 0; cursor: pointer; }
+  ul.items li .price {
+    font-variant-numeric: tabular-nums; color: var(--muted);
+    font-size: 13px; white-space: nowrap;
+  }
+  ul.items li:has(input:checked) label { font-weight: 700; }
+  ul.items li:has(input:checked) { background: var(--accent-soft); }
+
+  .note {
+    margin: 24px 0; padding: 14px 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 8px;
+    font-size: 14px; color: var(--muted);
+  }
+  .note b { color: var(--text); }
+  .note ol { margin: 8px 0 0; padding-left: 20px; }
+  .note li { margin-bottom: 4px; }
+
+  dialog {
+    max-width: min(680px, 92vw); width: 100%; padding: 0;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--surface); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog .head { padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 700; }
+  dialog textarea {
+    width: 100%; height: 45vh; padding: 12px 16px; resize: vertical;
+    border: 0; background: transparent; color: var(--text);
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  dialog textarea:focus { outline: none; }
+  dialog .foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+  footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Nepivní sortiment pivovarů</h1>
+    <p>
+      Podklad pro rozšíření katalogu produktů. Zdroj: oficiální e-shopy Svijany, Primátor
+      a Rohozec, staženo 2. 8. 2026. Ceny jsou koncové e-shopové (vč. DPH) a slouží jen jako
+      orientace — nákupní ceny se budou lišit. Zaškrtnutý výběr se ukládá do prohlížeče.
+    </p>
+  </header>
+
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Hledat položku…" aria-label="Hledat položku">
+    <button id="expand">Rozbalit vše</button>
+    <button id="collapse">Sbalit vše</button>
+    <button id="clear">Odznačit vše</button>
+    <button id="export" class="primary">Zobrazit výběr</button>
+    <span class="count"><b id="sel">0</b> / <span id="tot">0</span> vybráno</span>
+  </div>
+
+  <div id="root"></div>
+
+  <div class="note">
+    <b>Než něco založíš — tři poznámky k datovému modelu:</b>
+    <ol>
+      <li><code>ProductType.Merchandise</code> už v enumu existuje, merch tedy katalog
+          podporuje bez zásahu do kódu. „Zboží na sklad“ na vývozu bere libovolný produkt
+          a při doručení ho přičte do skladu.</li>
+      <li><code>Product.Name</code> má limit <b>50 znaků</b> — pár názvů (např. „Náhradní
+          plachta na slunečník s průduchem 3,5 × 3,5 m“) ho přesahuje a bude potřeba zkrátit.</li>
+      <li><b>Váha bude nulová.</b> Výpočet hmotnosti zná jen sudy, lahve, plechovky
+          a multipacky; merch přispěje do odhadu zátěže vozu 0 kg. U tácků jedno,
+          u slunečníků a beden skla ne.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Zdroje:
+    <a href="https://eshop.pivovarsvijany.cz/">eshop.pivovarsvijany.cz</a> ·
+    <a href="https://eshop.primator.cz/">eshop.primator.cz</a> ·
+    <a href="https://eshop.pivorohozec.cz/">eshop.pivorohozec.cz</a><br>
+    Dárkové poukazy vynechány (nejde o fyzické zboží k rozvozu); kategorie Svijany „Hry“ je prázdná.
+  </footer>
+</div>
+
+<dialog id="dlg">
+  <div class="head">Vybrané položky</div>
+  <textarea id="out" readonly></textarea>
+  <div class="foot">
+    <button id="copy">Kopírovat</button>
+    <button id="close" class="primary">Zavřít</button>
+  </div>
+</dialog>
+
+<script>
+const DATA = [
+  { brewery: "Svijany", cats: [
+    { name: "Pivní sklo — sklenice", items: [
+      ["Sklenice Svijany 0,5 l", 98], ["Sklenice Svijany 0,3 l", 89],
+      ["Sklenice Dymytry", 180], ["Sklenice Dymytry – Tubinger 0,5 l", 180],
+      ["Půllitr Srdeční záležitost 0,5 l Vienna", 122],
+      ["Sklenice Vienna džbánek 0,5 l", 95], ["Sklenice Vienna džbánek 0,3 l", 81],
+      ["Sklenice pohár 0,5 l", 95], ["Sklenice pohár 0,3 l", 73],
+      ["Sklenice 0,5 l Trumpetka", 96],
+      ["Sklenice Tubinger 0,50 l", 80], ["Sklenice Tubinger 0,40 l", 78], ["Sklenice Tubinger 0,3 l", 72],
+      ["Sklenice 0,5 l limo Svijanela", 69], ["Sklenice 0,3 l limo Svijanela", 66],
+      ["Sklenice Denver 0,5 l", 77], ["Sklenice Denver 0,3 l", 69],
+      ["Sklenice Manheim 0,5 l", 82], ["Sklenice Manheim 0,3 l", 72],
+      ["Sklenice Bamberk 0,5 l", 67],
+      ["Sklenice Becher 0,5 l", 43], ["Sklenice Becher 0,3 l", 35],
+      ["Sklenice Trumpf 0,5 l", 79], ["Sklenice Raimund 0,4 l", 96],
+      ["Sklenice Kaiser 0,5 l – DUX", 80], ["Sklenice Eckenmaass 1 l tuplák", 125],
+      ["Sklenice Teku 0,25 l", 100], ["Panáky 2 ks v balení", 121],
+    ]},
+    { name: "Pivní sklo — korbely a keramika", items: [
+      ["Korbel (bílá keramika se zlatým lemem, 0,5 l)", 360],
+      ["Korbel keramika bílý (0,5 l)", 340],
+      ["Korbel keramika s cínovým víčkem bílý (0,5 l)", 675],
+      ["Korbel keramik", 639],
+      ["Tácek keramický", 290],
+      ["Tácek keramický pod pivo s logem", 101],
+    ]},
+    { name: "Hospodské vybavení", items: [
+      ["Slunečník zahradní", 1550], ["Slunečník malý zahradní 450", 1550],
+      ["Náhradní plachta na slunečník 3,5 × 3,5 m", 4710],
+      ["Náhradní plachta na slunečník – červená s průduchem", 4710],
+      ["Náhradní plachta na slunečník – béžová s průduchem", 4710],
+      ["Náhradní plachta na slunečník s průduchem", 4710],
+      ["Barová podložka", 200], ["Podnos", 232],
+      ["Jídelní a nápojový lístek koženka A4", 439],
+      ["Stojánek na příbory", 600], ["Stojánek na tácky", 53], ["Nápojový stojánek", 130],
+      ["Ubrus 140 × 140 červená", 538], ["Ubrus 120 × 120 béžová", 408],
+      ["Ubrus 75 × 75 (béžová / červená)", 180], ["Ubrus malý", 121],
+    ]},
+    { name: "Hospodské doplňky", items: [
+      ["Zástěra výčepní s koženými popruhy", 1795],
+      ["Zástěra na grilování (červená dlouhá)", 489],
+      ["Zástěra číšnická dlouhá", 380],
+      ["Zástěra číšnická dlouhá (červená)", 352],
+      ["Zástěra číšnická krátká", 330],
+    ]},
+    { name: "Reklamní — tácky a papír", items: [
+      ["Tácek papírový standardní", 1], ["Tácek papírový – „460“", 1], ["Tácek papírový – 450", 1],
+      ["Tácek papírový – Šlik", 1], ["Tácek papírový – Zámek", 1],
+      ["Tácek papírový – Sváteční ležák", 2], ["Tácek papírový – Svatý Václav (DUX)", 2],
+      ["Pivní tácky – sběratelská sada", 50], ["Balící papír – arch", 35], ["Účtenka", 96],
+    ]},
+    { name: "Reklamní — cedule a šipky", items: [
+      ["Cedule Svijanský Rytíř (ražená plechová)", 370], ["Cedule Svijany 450", 370],
+      ["Cedule erb", 474], ["Plechová cedule půllitr", 474],
+      ["Cedule retro plechová – pivo", 535], ["Cedule retro plechová – chmel", 535],
+      ["Cedule retro plechová – chmel (varianta)", 535], ["Cedule retro plechová – ječmen", 535],
+      ["Cedule retro lisovaná", 535],
+      ["Šipka „Točíme Svijany“ rovně", 305], ["Šipka plech vpravo", 305], ["Šipka plech vlevo", 305],
+    ]},
+    { name: "Reklamní — otvíráky, klíčenky, drobnosti", items: [
+      ["Otvírák na plechovky", 10], ["Otvírák na pivo – klíčenka", 17], ["Otvírák s magnetem", 96],
+      ["Klíčenka otvírák ve tvaru zátky 3D", 63], ["Klíčenka s kolečkem do košíku", 13],
+      ["Klíčenka na krk", 30], ["Klíčenka plechovka pivo se světýlkem", 71],
+      ["Zátka plechová", 399], ["Zapalovač", 15], ["Držák SPZ", 85], ["Autoškrabka", 21],
+      ["Reflexní páska CE", 27], ["Svinovací metr 5 m", 112], ["Odznak", 114],
+      ["Nášivka „Svijany“ černá", 42], ["Balonek nafukovací", 4],
+    ]},
+    { name: "Reklamní — magnetky, samolepky, sběratelské", items: [
+      ["Magnetka pivní půllitr Svijany", 35], ["Magnetka hořící srdce velká", 43],
+      ["Magnetka hořící srdce malá", 16],
+      ["Samolepka erb 3D 70 × 80 mm", 41], ["Samolepka erb 3D 57 × 65 mm", 31],
+      ["Samolepka erb 3D 43,9 × 50 mm", 24],
+      ["Samolepka srdíčko velká", 32], ["Samolepka srdíčko malá", 15],
+      ["Poštovní známka (varianta 1)", 79], ["Poštovní známka (varianta 2)", 79],
+      ["Turistická známka", 50], ["Stříbrná mince", 980],
+    ]},
+    { name: "Reklamní — psací potřeby a kancelář", items: [
+      ["Propisovací tužka", 23], ["Propisovací tužka (červená)", 23],
+      ["Roller tužka", 79], ["USB", 310], ["Kožená záložka do knihy", 90],
+    ]},
+    { name: "Reklamní — domácnost a kuchyně", items: [
+      ["Prkénko s rukojetí a jamkami na omáčky", 540], ["Prkénko s rukojetí", 430],
+      ["Prkénko bez rukojeti", 358], ["Sada nožů s logem Svijany", 590],
+      ["Kapesní nůž Camper", 790], ["Mini multifunkční nářadí", 189],
+      ["Plechový retro hrníček bílý", 165], ["Formička na pečení", 27],
+      ["Prostírání", 80], ["Polštářek", 263],
+      ["Věšák velký", 177], ["Věšák malý", 164],
+      ["Hodiny", 490], ["Hodiny Svijany masiv", 3400], ["Hodiny Dymytry masiv", 2999],
+      ["Svícen pivní soudek s čajovou svíčkou", 69], ["Svíčka proti hmyzu – pivní soudek", 175],
+      ["Svijanské grilovací koření", 44],
+    ]},
+    { name: "Reklamní — zahrada a volný čas", items: [
+      ["Slunečník malý zahradní červený", 1550], ["Slunečník malý zahradní Svijanela", 1550],
+      ["Lehátko", 1350], ["Deštník rozkládací", 460], ["Golfový míček (Call Warbird)", 120],
+    ]},
+    { name: "Tašky, batohy, peněženky", items: [
+      ["Taška bavlněná", 109], ["Taška bavlněná s logem", 74], ["Taška business", 1394],
+      ["Batoh rolovací OHIO", 569], ["Batůžek BagBase látkový", 210],
+      ["Peněženka sportovní", 435], ["Peněženka pánská tmavě hnědá", 840],
+    ]},
+    { name: "Kosmetika a textil", items: [
+      ["Osuška šedá s výšivkou", 439], ["Osuška (varianta 1)", 427], ["Osuška (varianta 2)", 427],
+      ["Osuška na pláž", 420], ["Ručník šedý s výšivkou", 269],
+      ["Kosmetický balíček (pěna, gel, mýdlo)", 281],
+      ["Kosmetický balíček (šampon, gel, sůl)", 200],
+      ["Mýdlo tekuté 500 ml", 69], ["Pilník na nehty skleněný bílý", 39],
+      ["Pouzdro na brýle černé", 210], ["Utěrák na brýle", 54],
+    ]},
+    { name: "Oblečení — pánské", items: [
+      ["Tričko pánské", 200], ["Tričko pánské klasické bavlněné", 201], ["Tričko pánské bílé", 201],
+      ["Tričko pánské červené oboustranný potisk", 201], ["Tričko pánské LOGO", "od 195"],
+      ["Tričko pánské Evoluce", 180], ["Tričko pánské Pivooo", 180], ["Tričko pánské (varianta)", 180],
+      ["Tričko pánské Technický výkres", 191], ["Tričko pánské Svijanela", 250],
+      ["Tričko pánské – chmel", 440], ["Tričko pánské Cesta za pivem", 550],
+      ["Tričko pánské cesta za pivem (varianta)", 550], ["Tričko pánské (509)", 509],
+      ["Tričko pánské funkční Dymytry", 800], ["Tričko pánské funkční sport", "od 579"],
+      ["Tričko pánské funkční sport 2", 579], ["Tílko pánské", 340],
+      ["Polokošile", 620], ["Polokošile pánská", 579], ["Polokošile pánská (varianta)", 535],
+      ["Polokošile pánská černá s výšivkou", 359],
+      ["Mikina pánská černá", 1400], ["Mikina pánská černá (varianta)", "od 799"],
+      ["Mikina pánská", 849], ["Mikina pánská – ječmen", 1210],
+      ["Mikina pánská zip fleece", 1180], ["Mikina pánská fleece šedá", 906],
+      ["Mikina pánská žlutá organic (vyprodáno)", 965],
+      ["Bunda pánská", 1020], ["Vesta pánská", "od 399"], ["Vesta prošívaná", 990],
+      ["Šortky pánské černé", 1000], ["Šortky pánské", 980], ["Plavky černé", 1495],
+      ["Pyžamo pánské s pivním potiskem", 930], ["Pánské boxerky", 320],
+      ["Ponožky", 139], ["Pánská kšiltovka", 325], ["Pánská černá kšiltovka", 489],
+      ["Pásek kožený", 617],
+    ]},
+    { name: "Oblečení — dámské", items: [
+      ["Tričko dámské (380)", 380], ["Tričko dámské (456)", 456], ["Tričko dámské (430)", 430],
+      ["Tričko dámské bílé", 185], ["Tričko dámské červené", 185], ["Tričko dámské černé", 185],
+      ["Tričko dámské béžové", 290], ["Tričko dámské s výstřihem V", 290],
+      ["Tričko dámské červené (379)", 379], ["Tričko dámské bílé (379)", 379],
+      ["Tričko dámské Technický výkres", 160], ["Tričko dámské Svijanela", 250],
+      ["Tričko dámské – chmel", 480], ["Tričko dámské Cesta za pivem", 425],
+      ["Tričko dámské Cesta za pivem (varianta)", 425], ["Tričko dámské funkční Dymytry", 800],
+      ["Tričko dámské funkční modré", 579], ["Tričko dámské funkční bílé", 579],
+      ["Triko funkční s krátkým rukávem", 662],
+      ["Tílko dámské červené", 269], ["Tílko dámské bílé", 269], ["Tílko dámské", 269],
+      ["Mikina dámská černá", 1400], ["Mikina dámská", 849], ["Mikina dámská béžová", 799],
+      ["Mikina dámská – Ječmen", 1210], ["Mikina dámská fleece", 427],
+      ["Mikina dámská světle zelená (vyprodáno)", 965],
+      ["Bunda černá dámská prošívaná", 1020], ["Vesta prošívaná", 990], ["Vesta dámská", 399],
+      ["Šaty zelené – Voda", 900], ["Šaty dámské mikinové", 655],
+      ["Sukně s integrovanými kraťasy", 399], ["Kalhoty 3/4 dámské černé", 645],
+      ["Noční košile dámská s pivním potiskem", 800], ["Ponožky", 139],
+      ["Dámská kšiltovka", 325], ["Kšiltovka dámská béžová", 489], ["Kšiltovka", 290],
+      ["Čepice funkční růžovo-bílá", 299], ["Čepice funkční černo-růžová", 299],
+      ["Pásek kožený", 617], ["Pásek kožený bílý", 617],
+    ]},
+    { name: "Čepice a doplňky", items: [
+      ["Čepice pletená (10842)", 300], ["Čepice pletená (10841)", 300], ["Čepice pletená (10840)", 300],
+      ["Čepice kšiltovka Tip", 290], ["Pánská černá kšiltovka", 489],
+      ["Klobouk slámový se stuhou", 199],
+      ["Čelenka funkční Jizerská 50", 160], ["Čelenka funkční bílá", 118], ["Čelenka funkční černá", 118],
+      ["Tubus funkční Jizerská 50", 280], ["Tubus funkční (10692)", 182],
+      ["Tubus funkční (10833)", 275], ["Tubus funkční (10832)", 275],
+      ["Tubus funkční kruhovo-bílý", 182], ["Tubus funkční černo-oranžový", 182],
+      ["Tubus funkční bílý", 182],
+      ["Kšandy", 336], ["Kšandy s koženými doplňky", 539], ["Pásek kožený hnědý", 617],
+      ["Kravata", 561], ["Pantofle", 420], ["Brýle sluneční šedé", 240],
+    ]},
+    { name: "Cyklo a sport — pánské", items: [
+      ["Cyklistický dres pánský černo-červený", "od 1 225"],
+      ["Cyklistický dres pánský žluto-červený", "od 1 225"],
+      ["Cyklistický dres pánský černo-žlutý", 1153],
+      ["Cyklistický dres pánský černo-oranžový", "od 1 153"],
+      ["Cyklistický dres Dymytry pánský", 1300],
+      ["Cyklistické kalhoty krátké", 889],
+      ["Cyklistické kalhoty krátké s laclem černo-oranžové", "od 1 733"],
+      ["Cyklistické kalhoty krátké s laclem černé", 1416],
+      ["Polotriko pánské funkční", 420],
+      ["Ponožky pánské PASSO (varianta 1)", 195], ["Ponožky pánské PASSO (varianta 2)", 195],
+      ["Ponožky", 139], ["Tubus funkční Jizerská 50", 280],
+      ["Tubus funkční černo-oranžový", 182], ["Tubus funkční bílý", 182],
+    ]},
+    { name: "Cyklo a sport — dámské", items: [
+      ["Cyklistický dres dámský černo-fialový", 1188], ["Cyklistický dres dámský růžovo-bílý", 1188],
+      ["Cyklistický dres dámský černo-růžový", 1153],
+      ["Cyklistický dres dámský růžovo-bílý (1 153)", 1153],
+      ["Cyklistický dres Dymytry dámský", 1300], ["Cyklistická bunda dámská", 2523],
+      ["Cyklistické kalhoty krátké (1 490)", 1490], ["Cyklistické kalhoty krátké (1 525)", 1525],
+      ["Cyklistické kalhoty krátké růžovo-bílé", 1525],
+      ["Šátek na kolo pod helmu růžovočerný", 363], ["Šátek na kolo pod helmu růžovobílý", 363],
+      ["Dámské ponožky PASSO (varianta 1)", 195], ["Dámské ponožky PASSO (varianta 2)", 195],
+      ["Ponožky", 139], ["Tubus funkční Jizerská 50", 280],
+      ["Tubus funkční růžovo-bílý", 182], ["Tubus funkční černo-oranžový", 182],
+      ["Tubus funkční bílý", 182],
+    ]},
+    { name: "Cyklo vybavení", items: [
+      ["Cyklistická lahev 0,7 l", 279], ["Cyklistická lahev 0,5 l", 239],
+    ]},
+  ]},
+
+  { brewery: "Primátor", cats: [
+    { name: "Sklo", items: [
+      ["Sklenice Elega 0,5 l", 85], ["Sklenice Elega 0,3 l", 70],
+      ["Sklenice Frankonia 0,5 l", 70], ["Sklenice Sensorik 0,3 l", 80],
+      ["Sklenice Tubinger 0,5 l", 85], ["Sklenice Tubinger 0,3 l", 70],
+      ["Sklenice Eibsee 0,5 l", 70], ["Sklenice Eibsee 0,3 l", 60],
+      ["Džbánek Vienna 0,5 l", 110], ["Tuplák sklenice na pivo", 130],
+      ["Skleněná láhev Alt Böhmen 2 l", 420],
+    ]},
+    { name: "Reklamní — plechové cedule", items: [
+      ["Plechová cedule na křídu – EXTERIÉR", 1050],
+      ["Plechová cedule na křídu – INTERIÉR 50 × 70", 750],
+      ["Plechová cedule na křídu – INTERIÉR 70 × 50", 750],
+      ["Plechová cedule OTEVÍRÁME CESTU CHUTI", 290],
+      ["Plechová cedule TCHYNĚ", 290], ["Plechová cedule MALINA", 290],
+      ["Plechová cedule INDIA PALE ALE", 290], ["Plechová cedule ENGLISH PALE ALE", 290],
+      ["Plechová cedule STOUT", 290], ["Plechová cedule ANTONÍN", 290],
+      ["Plechová cedule WEIZEN žlutá", 290], ["Plechová cedule WEIZEN zelená", 290],
+    ]},
+    { name: "Reklamní — ostatní", items: [
+      ["Slunečník malý", 1500], ["Skleněná láhev 2 l", 420],
+      ["Pamětní medaile PRIMÁTOR 150 let", 1490], ["Kniha 150 let pivovar PRIMÁTOR", 445],
+      ["Kartonové retro obrázky", 95], ["Vak na záda", 199], ["Látková taška", 150],
+      ["Šle TCHYNĚ", 350],
+      ["Multifunkční šátek light – světlý", 340], ["Multifunkční šátek light – tmavý", 340],
+      ["Aromatická visačka Free Tchyně", 45], ["Silikonový náramek Free Tchyně", 30],
+      ["Silikonový náramek PRIMÁTOR", 30], ["Klíčenka PRIMÁTOR", 30],
+      ["Klíčenka 12 Fest hořká", 30],
+    ]},
+    { name: "Oblečení", items: [
+      ["Cyklistický dres – dámský", 1490], ["Cyklistický dres – pánský", 1490],
+      ["Cyklistické kalhoty – dámské", 1890], ["Cyklistické kalhoty – pánské", 1890],
+      ["Mikina PRIMÁTOR", 1150],
+      ["Triko FREE TCHYNĚ – dámské", 350], ["Triko FREE TCHYNĚ – pánské", 350],
+      ["Triko TCHYNĚ – dámské", 350], ["Triko TCHYNĚ – UNI", 350],
+      ["Triko APA – dámské", 350], ["Triko APA – UNI", 350], ["Triko CRAFT – UNI", 350],
+      ["Triko JEDNO PIVO PROSÍM – UNI/šedé", 300],
+      ["Dámské triko KSICHTÍK", 300], ["Pánské triko KSICHTÍK", 300],
+      ["Dětské triko KSICHTÍK (zelené)", 290], ["Dětské triko KSICHTÍK (růžové)", 290],
+      ["Triko I LOVE PRIMÁTOR – dámské / černé", 230],
+      ["Triko I LOVE PRIMÁTOR – dámské / červené", 230],
+      ["Triko I LOVE PRIMÁTOR – dámské / bílé", 230],
+      ["Tílko dámské – černé", 290], ["Tílko dámské – bílé", 290],
+      ["Sportovní čepice – světlá", 480], ["Sportovní čepice – tmavá", 480],
+      ["Zimní čepice – červená", 430], ["Zimní čepice – zelená", 430],
+      ["Kšiltovka dětská", 150], ["Klobouk dětský", 190],
+      ["Multifunkční šátek light – světlý", 340], ["Multifunkční šátek light – tmavý", 340],
+      ["Ponožky FREE TCHYNĚ MOTORKA", 180], ["Ponožky FREE TCHYNĚ", 180],
+      ["Ponožky TCHYNĚ", 180], ["Šle TCHYNĚ", 350], ["Kravata", 510],
+    ]},
+  ]},
+
+  { brewery: "Rohozec", cats: [
+    { name: "Pivní sklo", items: [
+      ["Sklenice BECHER 0,3 l", 35], ["Sklenice BECHER 0,5 l", 43],
+      ["Sklenice GERMANIA 0,3 l", 45], ["Sklenice GERMANIA 0,5 l", 52],
+      ["Sklenice Nonic 0,3 l", 50], ["Sklenice Nonic 0,5 l", 60],
+      ["Sklenice ASPEN 0,5 l", 60],
+      ["Sklenice BAMBERG 0,3 l", 67], ["Sklenice BAMBERG 0,5 l", 75],
+      ["Sklenice PRAHA 0,3 l", 78], ["Sklenice PRAHA 0,5 l", 86],
+      ["Pohár VIENNA 0,3 l na nožičce", 70],
+    ]},
+    { name: "Reklamní předměty", items: [
+      ["Pivní tácky", 2], ["Propisovací tužka", 20], ["Stojánek na mobil", 25],
+      ["Šňůrka na krk", 30], ["Otvírák", 35],
+      ["Stojánek na tácky", 50], ["Stojánek na tácky dřevěný", 220],
+      ["Rohozecký kalendář 2026", 90],
+      ["Ručník ROHOZEC", 399], ["Deštník ROHOZEC", 549], ["Osuška ROHOZEC", 649],
+      ["Deka ROHOZEC", 1150], ["Kniha Pivní turistika po České republice", 590],
+    ]},
+    { name: "Oblečení", items: [
+      ["Pánské tričko ROHOZEC (černé)", 349], ["Pánské tričko ROHOZEC (šedé)", 349],
+      ["Dámské tričko ROHOZEC", 299], ["Dámské triko ROHOZEC (varianta)", 299],
+      ["Čepice", 290], ["Ponožky vysoké s logem", 190],
+    ]},
+  ]},
+];
+
+const STORE = 'aletrack-merch-pick';
+const saved = new Set(JSON.parse(localStorage.getItem(STORE) || '[]'));
+const root = document.getElementById('root');
+const fmt = (p) => typeof p === 'number' ? p.toLocaleString('cs-CZ') + ' Kč' : p + ' Kč';
+
+let total = 0;
+for (const b of DATA) {
+  const det = document.createElement('details');
+  det.className = 'brewery';
+  det.open = true;
+  const sum = document.createElement('summary');
+  const n = b.cats.reduce((s, c) => s + c.items.length, 0);
+  total += n;
+  sum.innerHTML = `<span>${b.brewery}</span><span class="tally" data-brewery="${b.brewery}">0 / ${n}</span>`;
+  det.appendChild(sum);
+
+  for (const c of b.cats) {
+    const sec = document.createElement('section');
+    sec.className = 'cat';
+    const h = document.createElement('h3');
+    h.innerHTML = `<span>${c.name}</span>
+      <button type="button" data-all>Vše</button>
+      <span class="tally">0 / ${c.items.length}</span>`;
+    sec.appendChild(h);
+
+    const ul = document.createElement('ul');
+    ul.className = 'items';
+    for (const [name, price] of c.items) {
+      const key = `${b.brewery}|${c.name}|${name}`;
+      const li = document.createElement('li');
+      li.dataset.search = name.toLowerCase();
+      const id = 'i' + Math.abs(hash(key));
+      li.innerHTML = `<input type="checkbox" id="${id}" data-key="${key}"${saved.has(key) ? ' checked' : ''}>
+        <label for="${id}">${name}</label>
+        <span class="price">${fmt(price)}</span>`;
+      ul.appendChild(li);
+    }
+    sec.appendChild(ul);
+    det.appendChild(sec);
+  }
+  root.appendChild(det);
+}
+document.getElementById('tot').textContent = total;
+
+function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
+
+function refresh() {
+  const boxes = [...document.querySelectorAll('input[type=checkbox]')];
+  const keys = boxes.filter(b => b.checked).map(b => b.dataset.key);
+  localStorage.setItem(STORE, JSON.stringify(keys));
+  document.getElementById('sel').textContent = keys.length;
+
+  for (const sec of document.querySelectorAll('section.cat')) {
+    const all = [...sec.querySelectorAll('input')];
+    const on = all.filter(i => i.checked).length;
+    const t = sec.querySelector('h3 .tally');
+    t.textContent = `${on} / ${all.length}`;
+    t.classList.toggle('has', on > 0);
+  }
+  for (const det of document.querySelectorAll('details.brewery')) {
+    const all = [...det.querySelectorAll('input')];
+    const on = all.filter(i => i.checked).length;
+    const t = det.querySelector('summary .tally');
+    t.textContent = `${on} / ${all.length}`;
+    t.classList.toggle('has', on > 0);
+  }
+}
+
+root.addEventListener('change', (e) => { if (e.target.matches('input[type=checkbox]')) refresh(); });
+root.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-all]');
+  if (!btn) return;
+  const boxes = [...btn.closest('section.cat').querySelectorAll('input')];
+  const turnOn = boxes.some(b => !b.checked);
+  boxes.forEach(b => { b.checked = turnOn; });
+  refresh();
+});
+
+document.getElementById('q').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  for (const li of document.querySelectorAll('ul.items li'))
+    li.classList.toggle('hidden', q !== '' && !li.dataset.search.includes(q));
+  for (const sec of document.querySelectorAll('section.cat')) {
+    const any = [...sec.querySelectorAll('li')].some(li => !li.classList.contains('hidden'));
+    sec.style.display = any ? '' : 'none';
+  }
+  if (q !== '') document.querySelectorAll('details.brewery').forEach(d => { d.open = true; });
+});
+
+document.getElementById('expand').onclick = () => document.querySelectorAll('details.brewery').forEach(d => d.open = true);
+document.getElementById('collapse').onclick = () => document.querySelectorAll('details.brewery').forEach(d => d.open = false);
+document.getElementById('clear').onclick = () => {
+  document.querySelectorAll('input[type=checkbox]').forEach(b => b.checked = false);
+  refresh();
+};
+
+const dlg = document.getElementById('dlg');
+document.getElementById('export').onclick = () => {
+  const lines = [];
+  for (const det of document.querySelectorAll('details.brewery')) {
+    const picked = [...det.querySelectorAll('input:checked')];
+    if (!picked.length) continue;
+    lines.push(`## ${det.querySelector('summary span').textContent}`);
+    for (const box of picked) {
+      const li = box.closest('li');
+      const [, cat, name] = box.dataset.key.split('|');
+      lines.push(`- ${name} — ${li.querySelector('.price').textContent}  (${cat})`);
+    }
+    lines.push('');
+  }
+  document.getElementById('out').value = lines.length ? lines.join('\n') : 'Zatím nic nevybráno.';
+  dlg.showModal();
+};
+document.getElementById('close').onclick = () => dlg.close();
+document.getElementById('copy').onclick = async () => {
+  const ta = document.getElementById('out');
+  try { await navigator.clipboard.writeText(ta.value); }
+  catch { ta.select(); document.execCommand('copy'); }
+  const btn = document.getElementById('copy');
+  btn.textContent = 'Zkopírováno';
+  setTimeout(() => { btn.textContent = 'Kopírovat'; }, 1500);
+};
+
+refresh();
+</script>
+</body>
+</html>

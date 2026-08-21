@@ -19402,6 +19402,7 @@ export class OrderListItemDto implements IOrderListItemDto {
     actualDeliveryDate?: Date | undefined;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     planningState?: PlanningState;
 
     constructor(data?: IOrderListItemDto) {
@@ -19422,6 +19423,7 @@ export class OrderListItemDto implements IOrderListItemDto {
             this.actualDeliveryDate = _data["actualDeliveryDate"] ? new Date(_data["actualDeliveryDate"].toString()) : undefined as any;
             this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
+            this.clientBusinessName = _data["clientBusinessName"];
             this.planningState = _data["planningState"];
         }
     }
@@ -19442,6 +19444,7 @@ export class OrderListItemDto implements IOrderListItemDto {
         data["actualDeliveryDate"] = this.actualDeliveryDate ? formatDate(this.actualDeliveryDate) : undefined as any;
         data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
+        data["clientBusinessName"] = this.clientBusinessName;
         data["planningState"] = this.planningState;
         return data;
     }
@@ -19455,6 +19458,7 @@ export interface IOrderListItemDto {
     actualDeliveryDate?: Date | undefined;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     planningState?: PlanningState;
 }
 
@@ -21248,6 +21252,7 @@ export interface IUpdateDriverAvailabilityDto {
 export class ClientListItemDto implements IClientListItemDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
     region?: Region;
 
     constructor(data?: IClientListItemDto) {
@@ -21263,6 +21268,7 @@ export class ClientListItemDto implements IClientListItemDto {
         if (_data) {
             this.id = _data["id"];
             this.name = _data["name"];
+            this.businessName = _data["businessName"];
             this.region = _data["region"];
         }
     }
@@ -21278,6 +21284,7 @@ export class ClientListItemDto implements IClientListItemDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["name"] = this.name;
+        data["businessName"] = this.businessName;
         data["region"] = this.region;
         return data;
     }
@@ -21286,6 +21293,7 @@ export class ClientListItemDto implements IClientListItemDto {
 export interface IClientListItemDto {
     id?: string;
     name?: string;
+    businessName?: string | undefined;
     region?: Region;
 }
 
