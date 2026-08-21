@@ -57,6 +57,17 @@ public sealed record ShipmentExportModel
     public List<ShipmentExportProduct> StockPurchases { get; init; } = [];
 
     /// <summary>
+    /// Invoice split of the run, one block per paying client, each block broken down by the
+    /// client whose goods are billed on it.
+    /// </summary>
+    /// <remarks>
+    /// Additive: the stop entries are untouched, because what the driver reads did not change.
+    /// This part exists for the office, and it is the only place a paying client with no
+    /// delivery of its own appears at all.
+    /// </remarks>
+    public List<ShipmentExportInvoice> Invoices { get; init; } = [];
+
+    /// <summary>
     /// Stops that deliver to a client, in route order. Counted on the overview as "Klientů", so the
     /// warehouse is deliberately not one of them.
     /// </summary>
@@ -151,6 +162,12 @@ public sealed record ShipmentExportStop
     public string? DeliveryPlaceName { get; init; }
 
     /// <summary>
+    /// Name of the client this stop's goods are invoiced to, when that is not the stop's own
+    /// client. Null in the ordinary case.
+    /// </summary>
+    public string? InvoicedToClientName { get; init; }
+
+    /// <summary>
     /// Notes on the order behind this stop, oldest first.
     /// </summary>
     public List<string> Notes { get; init; } = [];
@@ -221,6 +238,41 @@ public sealed record ShipmentExportProduct
     /// <see cref="Quantity"/> 0.
     /// </remarks>
     public int? InvoicedQuantity { get; init; }
+}
+
+/// <summary>
+/// One paying client's invoice on the run, broken down by whose goods it bills.
+/// </summary>
+public sealed record ShipmentExportInvoice
+{
+    public required string PayingClientName { get; init; }
+
+    /// <summary>Position among that client's invoices on this run, starting at 1.</summary>
+    public int Sequence { get; init; }
+
+    public List<ShipmentExportInvoiceParty> Parties { get; init; } = [];
+
+    public int TotalQuantity => Parties.Sum(p => p.TotalQuantity);
+}
+
+/// <summary>
+/// The goods of one client billed on an invoice.
+/// </summary>
+/// <remarks>
+/// Rows carry their billed pieces in <see cref="ShipmentExportProduct.Quantity"/> and leave
+/// <see cref="ShipmentExportProduct.InvoicedQuantity"/> null: inside an invoice block there is
+/// only one number to report.
+/// </remarks>
+public sealed record ShipmentExportInvoiceParty
+{
+    public required string ClientName { get; init; }
+
+    /// <summary>The paying client's own goods — listed first.</summary>
+    public bool IsPayer { get; init; }
+
+    public List<ShipmentExportProduct> Products { get; init; } = [];
+
+    public int TotalQuantity => Products.Sum(p => p.Quantity);
 }
 
 /// <summary>
