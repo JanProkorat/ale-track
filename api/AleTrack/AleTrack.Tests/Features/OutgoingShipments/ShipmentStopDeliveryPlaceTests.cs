@@ -482,6 +482,46 @@ public sealed class ShipmentStopDeliveryPlaceTests
         returnedStop.DeliveryPlace!.Name.Should().Be("Zrušená hospoda");
     }
 
+    // A client invoiced through its payer has neither an official nor a contact address, and no
+    // delivery place either — the exact case that used to NullReferenceException this endpoint.
+    [Fact]
+    public async Task ProcessAsync_ShipmentDetail_ClientWithNeitherAddress_ResolvesNullAddress()
+    {
+        var shipmentId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(noOfficialAddress: true);
+        var order = OrderBuilder.BuildEntity(client: client, deliveryAddressKind: DeliveryAddressKind.Official);
+
+        var stop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [stop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            orders: [order],
+            outgoingShipments: [outgoingShipment]
+        );
+
+        var request = new GetOutgoingShipmentDetailRequest { Id = shipmentId };
+        var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var returnedStop = endpoint.Response.Stops.Single();
+        returnedStop.OrderDeliveryAddress.Should().NotBeNull();
+        returnedStop.OrderDeliveryAddress!.Address.Should().BeNull();
+    }
+
     // IsAddressOverridden is derived, never accepted from the request: a stop
     // whose requested kind and place match the order's own choice is not an
     // override.

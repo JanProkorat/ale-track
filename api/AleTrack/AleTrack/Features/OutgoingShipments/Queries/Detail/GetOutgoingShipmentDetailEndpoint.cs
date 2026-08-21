@@ -164,7 +164,11 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                                         ? s.ClientOrder.ClientDeliveryPlace.Address.ToDto()
                                         : s.ClientOrder.DeliveryAddressKind == DeliveryAddressKind.Contact && s.ClientOrder.Client.ContactAddress != null
                                             ? s.ClientOrder.Client.ContactAddress.ToDto()
-                                            : s.ClientOrder.Client.OfficialAddress.ToDto()
+                                            : s.ClientOrder.Client.OfficialAddress != null
+                                                ? s.ClientOrder.Client.OfficialAddress.ToDto()
+                                                : s.ClientOrder.Client.ContactAddress != null
+                                                    ? s.ClientOrder.Client.ContactAddress.ToDto()
+                                                    : null
                             }
                             : null,
                         Label = s.Label,

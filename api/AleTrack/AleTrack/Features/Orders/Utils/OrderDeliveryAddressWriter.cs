@@ -32,6 +32,9 @@ public static class OrderDeliveryAddressWriter
         if (kind == DeliveryAddressKind.Contact && client.ContactAddress is null)
             ThrowHelper.BadRequest($"Client {client.PublicId} has no contact address.");
 
+        if (kind == DeliveryAddressKind.Official && client.OfficialAddress is null)
+            ThrowHelper.BadRequest($"Client {client.PublicId} has no official address.");
+
         var placeId = await ClientDeliveryPlaceResolver.ResolveForClientAsync(
             dbContext,
             client.PublicId,

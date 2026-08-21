@@ -363,17 +363,19 @@ public static class ShipmentExportQuery
     /// </summary>
     /// <remarks>
     /// Same rule as <c>resolveDetailStopAddress</c> / <c>resolveFromAddresses</c> on the client:
-    /// the chosen delivery place wins, a Contact kind falls back to Official when the client has no
-    /// contact address, and Official is the default.
+    /// the chosen delivery place wins, and the two client addresses stand in for each other in
+    /// either direction — a Contact kind falls back to Official as it always has, and an
+    /// Official kind now falls through to Contact, because a client invoiced through a payer has
+    /// no official address at all.
     /// </remarks>
     private static (string? Street, string? CityLine, string? City) ResolveAddress(RawStop stop)
     {
         if (stop.SelectedAddressKind == DeliveryAddressKind.DeliveryPlace && stop.DeliveryPlaceAddress is not null)
             return SplitAddress(stop.DeliveryPlaceAddress);
 
-        var address = stop.SelectedAddressKind == DeliveryAddressKind.Contact && stop.ContactAddress is not null
-            ? stop.ContactAddress
-            : stop.OfficialAddress;
+        var address = stop.SelectedAddressKind == DeliveryAddressKind.Contact
+            ? stop.ContactAddress ?? stop.OfficialAddress
+            : stop.OfficialAddress ?? stop.ContactAddress;
 
         return address is null ? (null, null, null) : SplitAddress(address);
     }

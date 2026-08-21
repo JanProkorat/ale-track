@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Commands.Create;
 using AleTrack.Features.Orders.Commands.Update;
 using AleTrack.Features.Orders.Queries.Detail;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -281,5 +283,41 @@ public sealed class OrderDeliveryAddressTests
         addr.PlaceName.Should().Be("Letní zahrádka");
         addr.PlaceNote.Should().Be("Vjezd zezadu");
         addr.Address.Should().NotBeNull();
+    }
+
+    // A client invoiced through its payer has neither an official nor a contact address. The
+    // final fallback in the projection used to read the (then non-nullable) official address
+    // unguarded, which NullReferenceException'd this endpoint for exactly this client.
+    [Fact]
+    public async Task OrderDetail_ClientWithNeitherAddress_ResolvesNullAddress()
+    {
+        var client = ClientBuilder.BuildEntity(noOfficialAddress: true);
+        var order = OrderBuilder.BuildEntity(client: client);
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetOrderDetailRequest { Id = order.PublicId }, CancellationToken.None);
+
+        var result = endpoint.Response;
+        result.DeliveryAddress.Kind.Should().Be(DeliveryAddressKind.Official);
+        result.DeliveryAddress.Address.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ApplyAsync_OfficialKindForClientWithoutOfficialAddress_Throws400()
+    {
+        // Mirrors the guard already in place for a Contact kind the client cannot satisfy: the
+        // frontend hides the option, but nothing stops a direct caller asking for it.
+        var client = ClientBuilder.BuildEntity(name: "Pub A", noOfficialAddress: true);
+        client.Id = 5;
+        var order = new Order { Id = 1, PublicId = Guid.NewGuid(), ClientId = client.Id };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var act = () => OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext.Object, order, client, DeliveryAddressKind.Official, placePublicId: null,
+            CancellationToken.None);
+
+        (await act.Should().ThrowAsync<AleTrackException>()).Which.StatusCode.Should().Be(400);
     }
 }

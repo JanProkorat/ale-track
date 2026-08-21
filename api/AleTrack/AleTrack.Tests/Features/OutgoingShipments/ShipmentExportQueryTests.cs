@@ -275,6 +275,44 @@ public sealed class ShipmentExportQueryTests
     }
 
     [Fact]
+    public async Task Build_StopWhoseClientHasOnlyAContactAddress_ExportsThatAddress()
+    {
+        // A client billed through its payer has no official address, and an Official-kind stop
+        // would otherwise export a blank street and city — on the driver's own sheet.
+        var shipmentId = Guid.NewGuid();
+
+        var invoicedClient = ClientBuilder.BuildEntity(
+            name: "Hospoda Pod Mostem",
+            noOfficialAddress: true,
+            contactAddress: AddressBuilder.BuildEntity(streetName: "Provozovna", streetNumber: "9", zip: "612 00", city: "Brno"));
+
+        var order = OrderBuilder.BuildEntity(client: invoicedClient);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop
+                {
+                    Order = 1, Kind = OutgoingShipmentStopKind.Order,
+                    ClientOrder = order, SelectedAddressKind = DeliveryAddressKind.Official
+                }
+            ]);
+
+        AssignInternalIds(shipment);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [invoicedClient],
+            orders: [order],
+            outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Stops[0].Street.Should().Be("Provozovna 9");
+        model.Stops[0].CityLine.Should().Be("612 00 Brno");
+    }
+
+    [Fact]
     public async Task LoadAsync_DeliveryPlaceStop_UsesThePlacesAddressAndNamesItOnlyWhenItDeliversThere()
     {
         var shipmentId = Guid.NewGuid();

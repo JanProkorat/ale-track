@@ -37,11 +37,9 @@ public sealed record OrderDeliveryAddressDto
     /// The resolved destination: the place's address for
     /// <see cref="DeliveryAddressKind.DeliveryPlace"/>, the client's contact
     /// address for <see cref="DeliveryAddressKind.Contact"/>, otherwise the
-    /// client's official address. Never null in practice — both projections
-    /// fall back to the (non-nullable) official address when the selected
-    /// kind's own address is unavailable (e.g. a <c>Contact</c> order whose
-    /// client has since lost its contact address), so this silently renders
-    /// the billing address rather than surfacing the mismatch.
+    /// client's official address. The two client addresses fall back to each
+    /// other when the selected kind's own address is unavailable; null only
+    /// when the client has neither (e.g. one invoiced through a payer).
     /// </summary>
     public AddressDto? Address { get; set; }
 }
