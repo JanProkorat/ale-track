@@ -29,19 +29,43 @@ public sealed record ClientDto
     public Region Region { get; set; }
     
     /// <summary>
-    /// Official address
+    /// Official (billing) address. Null for a client invoiced through
+    /// <see cref="InvoicingClientId"/>.
     /// </summary>
-    public AddressDto OfficialAddress { get; set; } = null!;
-    
+    public AddressDto? OfficialAddress { get; set; }
+
     /// <summary>
     /// Contact address
     /// </summary>
     public AddressDto? ContactAddress { get; set; }
-    
+
+    /// <summary>
+    /// Public ID of the client that receives this one's invoices, when another client pays.
+    /// </summary>
+    public Guid? InvoicingClientId { get; set; }
+
+    /// <inheritdoc cref="InvoicingClientId"/>
+    public string? InvoicingClientName { get; set; }
+
+    /// <summary>
+    /// Clients whose invoices come to this one. Empty unless this client is a payer.
+    /// </summary>
+    public List<LinkedClientDto> InvoicedClients { get; set; } = [];
+
     /// <summary>
     /// Related contacts of the client
     /// </summary>
     public List<ClientContactDto> Contacts { get; set; } = [];
+}
+
+/// <summary>
+/// A client named as the other end of the invoicing relation.
+/// </summary>
+public sealed record LinkedClientDto
+{
+    public Guid Id { get; set; }
+
+    public string Name { get; set; } = null!;
 }
 
 public record ClientContactDto

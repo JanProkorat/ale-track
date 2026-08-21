@@ -21254,6 +21254,8 @@ export class ClientListItemDto implements IClientListItemDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
 
     constructor(data?: IClientListItemDto) {
         if (data) {
@@ -21270,6 +21272,8 @@ export class ClientListItemDto implements IClientListItemDto {
             this.name = _data["name"];
             this.businessName = _data["businessName"];
             this.region = _data["region"];
+            this.invoicingClientId = _data["invoicingClientId"];
+            this.invoicingClientName = _data["invoicingClientName"];
         }
     }
 
@@ -21286,6 +21290,8 @@ export class ClientListItemDto implements IClientListItemDto {
         data["name"] = this.name;
         data["businessName"] = this.businessName;
         data["region"] = this.region;
+        data["invoicingClientId"] = this.invoicingClientId;
+        data["invoicingClientName"] = this.invoicingClientName;
         return data;
     }
 }
@@ -21295,6 +21301,8 @@ export interface IClientListItemDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
 }
 
 export class CreateDriverDto implements ICreateDriverDto {
@@ -21402,8 +21410,11 @@ export class ClientDto implements IClientDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
+    invoicedClients?: LinkedClientDto[];
     contacts?: ClientContactDto[];
 
     constructor(data?: IClientDto) {
@@ -21423,6 +21434,13 @@ export class ClientDto implements IClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
+            this.invoicingClientName = _data["invoicingClientName"];
+            if (Array.isArray(_data["invoicedClients"])) {
+                this.invoicedClients = [] as any;
+                for (let item of _data["invoicedClients"])
+                    this.invoicedClients!.push(LinkedClientDto.fromJS(item));
+            }
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21446,6 +21464,13 @@ export class ClientDto implements IClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
+        data["invoicingClientName"] = this.invoicingClientName;
+        if (Array.isArray(this.invoicedClients)) {
+            data["invoicedClients"] = [];
+            for (let item of this.invoicedClients)
+                data["invoicedClients"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21460,9 +21485,52 @@ export interface IClientDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
+    invoicedClients?: LinkedClientDto[];
     contacts?: ClientContactDto[];
+}
+
+export class LinkedClientDto implements ILinkedClientDto {
+    id?: string;
+    name?: string;
+
+    constructor(data?: ILinkedClientDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+        }
+    }
+
+    static fromJS(data: any): LinkedClientDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new LinkedClientDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        return data;
+    }
+}
+
+export interface ILinkedClientDto {
+    id?: string;
+    name?: string;
 }
 
 export class ClientContactDto implements IClientContactDto {
@@ -21573,8 +21641,9 @@ export class UpdateClientDto implements IUpdateClientDto {
     name!: string;
     businessName?: string | undefined;
     region!: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: UpdateClientContactDto[];
 
     constructor(data?: IUpdateClientDto) {
@@ -21593,6 +21662,7 @@ export class UpdateClientDto implements IUpdateClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21615,6 +21685,7 @@ export class UpdateClientDto implements IUpdateClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21628,8 +21699,9 @@ export interface IUpdateClientDto {
     name: string;
     businessName?: string | undefined;
     region: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: UpdateClientContactDto[];
 }
 
@@ -21749,8 +21821,9 @@ export class CreateClientDto implements ICreateClientDto {
     name!: string;
     businessName?: string | undefined;
     region!: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: CreateClientContactDto[];
 
     constructor(data?: ICreateClientDto) {
@@ -21769,6 +21842,7 @@ export class CreateClientDto implements ICreateClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21791,6 +21865,7 @@ export class CreateClientDto implements ICreateClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21804,8 +21879,9 @@ export interface ICreateClientDto {
     name: string;
     businessName?: string | undefined;
     region: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: CreateClientContactDto[];
 }
 
