@@ -211,18 +211,14 @@ public static class ShipmentExportWorkbookBuilder
             return;
 
         // Only a client holding more than one invoice on the run needs its blocks told apart.
-        var invoiceCountByClient = model.Invoices
-            .GroupBy(invoice => invoice.PayingClientName)
-            .ToDictionary(group => group.Key, group => group.Count());
+        var invoiceCountByClient = ShipmentExportLabels.InvoiceCountByPayer(model.Invoices);
 
         var sheet = workbook.Worksheets.Add(InvoiceSheetName);
         var row = 1;
 
         foreach (var invoice in model.Invoices)
         {
-            var heading = invoiceCountByClient[invoice.PayingClientName] > 1
-                ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
-                : invoice.PayingClientName;
+            var heading = ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient);
 
             sheet.Cell(row, 1).Value = heading;
             sheet.Cell(row, 1).Style.Font.Bold = true;
@@ -231,7 +227,7 @@ public static class ShipmentExportWorkbookBuilder
 
             foreach (var party in invoice.Parties)
             {
-                sheet.Cell(row, 1).Value = party.ClientName;
+                sheet.Cell(row, 1).Value = ShipmentExportLabels.PartyHeading(party);
                 sheet.Cell(row, 1).Style.Font.Italic = true;
                 sheet.Cell(row, 4).Value = party.TotalQuantity;
                 sheet.Cell(row, 4).Style.NumberFormat.Format = QuantityFormat;

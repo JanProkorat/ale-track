@@ -24,7 +24,7 @@ public record OutgoingShipmentOrderDto
     /// <summary>
     /// Official address of the client
     /// </summary>
-    public AddressDto ClientOfficialAddress { get; set; } = null!;
+    public AddressDto? ClientOfficialAddress { get; set; }
     
     /// <summary>
     /// Contact address of the client

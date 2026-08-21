@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using AleTrack.Common.Enums;
 using AleTrack.Features.OutgoingShipments.Queries.Export;
 using ClosedXML.Excel;
@@ -83,6 +85,24 @@ public sealed class ShipmentExportWorkbookBuilderTests
             ClientName = clientName,
             IsPayer = isPayer,
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
+        };
+
+    /// <summary>
+    /// Deterministic ID for a client name, so invoices built with the same
+    /// <paramref name="payingClientName"/> share an identity by default — pass
+    /// <paramref name="payingClientId"/> explicitly to test two distinct clients sharing a name.
+    /// </summary>
+    private static ShipmentExportInvoice BuildInvoice(
+        string payingClientName,
+        int sequence,
+        List<ShipmentExportInvoiceParty> parties,
+        Guid? payingClientId = null) =>
+        new()
+        {
+            PayingClientName = payingClientName,
+            PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
+            Sequence = sequence,
+            Parties = parties
         };
 
     private static XLWorkbook Open(ShipmentExportModel model) =>
@@ -645,12 +665,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
 
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties = [payerParty, otherParty]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [payerParty, otherParty])
         ]);
 
         using var workbook = Open(model);
@@ -658,11 +673,10 @@ public sealed class ShipmentExportWorkbookBuilderTests
         workbook.Worksheets.Select(s => s.Name).Should().Contain("Fakturace");
         var sheet = workbook.Worksheet("Fakturace");
 
-        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — it
-        // is the first "Hospoda U Kotvy" cell in the column, with the party row of the same name
-        // right behind it as the second occurrence.
+        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix. Its
+        // party row carries the "vlastní zboží" marker instead, matching the Word export.
         var headingRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 1);
-        var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 2);
+        var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
         payerPartyRow.Should().BeGreaterThan(headingRow);
 
         sheet.Cell(payerPartyRow, 4).GetValue<int>().Should().Be(24);
@@ -693,12 +707,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
             stops: [BuildStop(1, "Fakturace")],
             invoices:
             [
-                new ShipmentExportInvoice
-                {
-                    PayingClientName = "Fakturace",
-                    Sequence = 1,
-                    Parties = [payerParty]
-                }
+                BuildInvoice("Fakturace", sequence: 1, parties: [payerParty])
             ]);
 
         using var workbook = Open(model);
@@ -720,18 +729,13 @@ public sealed class ShipmentExportWorkbookBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
         ]);
 
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
-        var partyRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 2);
+        var partyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
         var productHeaderRow = RowOf(sheet, "PRODUKT");
 
         sheet.Row(partyRow).OutlineLevel.Should().Be(0, "the party's own row is not part of the group");
@@ -746,24 +750,9 @@ public sealed class ShipmentExportWorkbookBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
-            },
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 2,
-                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
-            },
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Pivnice Na Rohu",
-                Sequence = 1,
-                Parties = [BuildParty("Pivnice Na Rohu", isPayer: true)]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Hospoda U Kotvy", sequence: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Pivnice Na Rohu", sequence: 1, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
         ]);
 
         using var workbook = Open(model);
@@ -772,10 +761,35 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
         sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
 
-        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1". (Its own party
-        // row repeats the same bare name right underneath, since it is that invoice's payer.)
+        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1". Its own party row
+        // carries the "vlastní zboží" marker, matching the Word export.
         sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu").Should().HaveCount(2);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · vlastní zboží").Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// Two distinct clients can genuinely share a name (that is what <c>BusinessName</c> exists
+    /// for), and each holding exactly one invoice here must not be mistaken for the same client
+    /// holding two — which would wrongly suffix both with "Faktura 1".
+    /// </summary>
+    [Fact]
+    public void Build_TwoDistinctClientsSharingAName_NeitherGetsASequenceSuffix()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 1").Should().BeEmpty();
+        // Two bare headings — one per payer, neither suffixed — plus their two payer party rows,
+        // each carrying the "vlastní zboží" marker.
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy").Should().HaveCount(2);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · vlastní zboží").Should().HaveCount(2);
     }
 
     [Fact]

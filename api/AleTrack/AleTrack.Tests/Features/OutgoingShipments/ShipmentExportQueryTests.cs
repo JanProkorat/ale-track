@@ -830,6 +830,7 @@ public sealed class ShipmentExportQueryTests
 
         var block = model.Invoices.Single();
         block.PayingClientName.Should().Be("Skupina Sever");
+        block.PayingClientId.Should().Be(payer.PublicId);
         block.Sequence.Should().Be(1);
 
         // Broken down by whose goods it bills, so the office can still see who ordered what.

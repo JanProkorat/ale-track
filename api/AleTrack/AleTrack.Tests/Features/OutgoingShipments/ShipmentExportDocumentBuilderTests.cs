@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using AleTrack.Common.Enums;
 using AleTrack.Features.OutgoingShipments.Queries.Export;
 using DocumentFormat.OpenXml.Packaging;
@@ -88,6 +90,24 @@ public sealed class ShipmentExportDocumentBuilderTests
             ClientName = clientName,
             IsPayer = isPayer,
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
+        };
+
+    /// <summary>
+    /// Deterministic ID for a client name, so invoices built with the same
+    /// <paramref name="payingClientName"/> share an identity by default — pass
+    /// <paramref name="payingClientId"/> explicitly to test two distinct clients sharing a name.
+    /// </summary>
+    private static ShipmentExportInvoice BuildInvoice(
+        string payingClientName,
+        int sequence,
+        List<ShipmentExportInvoiceParty> parties,
+        Guid? payingClientId = null) =>
+        new()
+        {
+            PayingClientName = payingClientName,
+            PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
+            Sequence = sequence,
+            Parties = parties
         };
 
     private static Body Open(ShipmentExportModel model)
@@ -785,12 +805,7 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties = [payerParty, otherParty]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [payerParty, otherParty])
         ]);
 
         var body = Open(model);
@@ -811,24 +826,9 @@ public sealed class ShipmentExportDocumentBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
-            },
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 2,
-                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
-            },
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Pivnice Na Rohu",
-                Sequence = 1,
-                Parties = [BuildParty("Pivnice Na Rohu", isPayer: true)]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Hospoda U Kotvy", sequence: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Pivnice Na Rohu", sequence: 1, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
         ]);
 
         var paragraphs = Paragraphs(Open(model));
@@ -839,6 +839,26 @@ public sealed class ShipmentExportDocumentBuilderTests
         // The one-invoice payer gets a bare heading — no meaningless "Faktura 1".
         paragraphs.Should().Contain("Fakturace: Pivnice Na Rohu");
         paragraphs.Should().NotContain("Fakturace: Pivnice Na Rohu · Faktura 1");
+    }
+
+    /// <summary>
+    /// Two distinct clients can genuinely share a name (that is what <c>BusinessName</c> exists
+    /// for), and each holding exactly one invoice here must not be mistaken for the same client
+    /// holding two — which would wrongly suffix both with "Faktura 1".
+    /// </summary>
+    [Fact]
+    public void Build_TwoDistinctClientsSharingAName_NeitherGetsASequenceSuffix()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy");
+        paragraphs.Should().NotContain("Fakturace: Hospoda U Kotvy · Faktura 1");
     }
 
     [Fact]
@@ -859,16 +879,11 @@ public sealed class ShipmentExportDocumentBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            new ShipmentExportInvoice
-            {
-                PayingClientName = "Hospoda U Kotvy",
-                Sequence = 1,
-                Parties =
-                [
-                    BuildParty("Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]),
-                    BuildParty("Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
-                ]
-            }
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]),
+                BuildParty("Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
+            ])
         ]);
 
         var body = Open(model);

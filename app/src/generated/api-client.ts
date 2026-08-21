@@ -509,7 +509,7 @@ export interface IClient {
 
     /**
      * Deletes an additional invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the ordering client
+     * @return Invoice deleted, its pieces returned to the paying client
      */
     deleteShipmentInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string>;
 
@@ -6168,7 +6168,7 @@ export class Client implements IClient {
 
     /**
      * Deletes an additional invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the ordering client
+     * @return Invoice deleted, its pieces returned to the paying client
      */
     deleteShipmentInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoices/{InvoiceId}";
@@ -18976,7 +18976,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
-    clientOfficialAddress?: AddressDto;
+    clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     deliveryAddressKind?: DeliveryAddressKind;
@@ -19059,7 +19059,7 @@ export interface IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
-    clientOfficialAddress?: AddressDto;
+    clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     deliveryAddressKind?: DeliveryAddressKind;

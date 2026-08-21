@@ -250,6 +250,12 @@ public sealed record ShipmentExportInvoice
 {
     public required string PayingClientName { get; init; }
 
+    /// <summary>
+    /// Public ID of the paying client — the identity the "more than one invoice" heading rule
+    /// keys on, since names collide (that is what <c>BusinessName</c> exists for) but IDs don't.
+    /// </summary>
+    public required Guid PayingClientId { get; init; }
+
     /// <summary>Position among that client's invoices on this run, starting at 1.</summary>
     public int Sequence { get; init; }
 

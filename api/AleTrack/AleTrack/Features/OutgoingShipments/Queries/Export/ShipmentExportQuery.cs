@@ -254,6 +254,14 @@ public static class ShipmentExportQuery
                 g => g.Key,
                 g => g.Select(i => i.Client?.Name).FirstOrDefault(name => name is not null) ?? Missing);
 
+        // Public ID of each paying client — the identity the export's "more than one invoice"
+        // heading rule keys on, since two distinct clients can genuinely share a name.
+        var payerPublicIds = shipment.Invoices
+            .GroupBy(i => i.ClientId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(i => i.Client?.PublicId).FirstOrDefault(id => id is not null) ?? Guid.Empty);
+
         return new InvoicedSplit
         {
             ByPayer = lines
@@ -269,7 +277,7 @@ public static class ShipmentExportQuery
             // empty still resolves an identity — it just contributes no block.
             Invoices = shipment.Invoices.ToDictionary(
                 i => i.PublicId,
-                i => (PayerId: i.ClientId, Sequence: i.Sequence, Name: payerNames[i.ClientId])),
+                i => (PayerId: i.ClientId, PayerPublicId: payerPublicIds[i.ClientId], Sequence: i.Sequence, Name: payerNames[i.ClientId])),
             OrdererNames = lines
                 .GroupBy(x => x.OrdererId)
                 .ToDictionary(g => g.Key, g => g.Select(x => x.OrdererName).First())
@@ -353,11 +361,12 @@ public static class ShipmentExportQuery
 
     private static ShipmentExportInvoice BuildExportInvoice(
         InvoicedSplit split,
-        (long PayerId, int Sequence, string Name) invoice,
+        (long PayerId, Guid PayerPublicId, int Sequence, string Name) invoice,
         IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines) =>
         new()
         {
             PayingClientName = invoice.Name,
+            PayingClientId = invoice.PayerPublicId,
             Sequence = invoice.Sequence,
             Parties = lines
                 .GroupBy(entry => entry.Key.OrdererId)
@@ -386,8 +395,8 @@ public static class ShipmentExportQuery
     /// Who one invoice bills, its sequence and its name, falling back to a placeholder for an
     /// invoice the graph did not hand back — a block must still name somebody.
     /// </summary>
-    private static (long PayerId, int Sequence, string Name) InvoiceOf(InvoicedSplit split, Guid invoiceId) =>
-        split.Invoices.TryGetValue(invoiceId, out var found) ? found : (PayerId: 0, Sequence: 1, Name: Missing);
+    private static (long PayerId, Guid PayerPublicId, int Sequence, string Name) InvoiceOf(InvoicedSplit split, Guid invoiceId) =>
+        split.Invoices.TryGetValue(invoiceId, out var found) ? found : (PayerId: 0, PayerPublicId: Guid.Empty, Sequence: 1, Name: Missing);
 
     private static ShipmentExportStop ToStop(
         RawStop stop,
@@ -708,7 +717,7 @@ public static class ShipmentExportQuery
         public required Dictionary<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByInvoiceAndOrderer { get; init; }
 
         /// <summary>Who each invoice bills, its sequence and its name, by public ID.</summary>
-        public required Dictionary<Guid, (long PayerId, int Sequence, string Name)> Invoices { get; init; }
+        public required Dictionary<Guid, (long PayerId, Guid PayerPublicId, int Sequence, string Name)> Invoices { get; init; }
 
         /// <summary>Name of each client that ordered billed pieces.</summary>
         public required Dictionary<long, string> OrdererNames { get; init; }

@@ -26,6 +26,29 @@ public static class ShipmentExportLabels
     /// <summary>Label naming the client a stop's goods are billed to.</summary>
     public const string InvoicedTo = "Fakturováno na";
 
+    /// <summary>
+    /// Heading for one invoice block, suffixed with its sequence only when the paying client
+    /// holds more than one invoice on the run — otherwise a single invoice is not saddled with a
+    /// meaningless "1".
+    /// </summary>
+    /// <remarks>
+    /// Shared by both export writers so they cannot drift into disagreeing about which headings
+    /// need the suffix. Keyed on <see cref="ShipmentExportInvoice.PayingClientId"/> rather than
+    /// the name, because two distinct clients can genuinely share a name.
+    /// </remarks>
+    public static string InvoiceHeading(ShipmentExportInvoice invoice, IReadOnlyDictionary<Guid, int> invoiceCountByPayer) =>
+        invoiceCountByPayer[invoice.PayingClientId] > 1
+            ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
+            : invoice.PayingClientName;
+
+    /// <summary>How many invoices each paying client holds on the run, for <see cref="InvoiceHeading"/>.</summary>
+    public static Dictionary<Guid, int> InvoiceCountByPayer(IEnumerable<ShipmentExportInvoice> invoices) =>
+        invoices.GroupBy(i => i.PayingClientId).ToDictionary(g => g.Key, g => g.Count());
+
+    /// <summary>Heading for one invoice party's block, marking the payer's own goods.</summary>
+    public static string PartyHeading(ShipmentExportInvoiceParty party) =>
+        party.IsPayer ? $"{party.ClientName} · vlastní zboží" : party.ClientName;
+
     private static readonly Dictionary<ProductKind, string> KindLabels = new()
     {
         [ProductKind.Keg] = "Sud",

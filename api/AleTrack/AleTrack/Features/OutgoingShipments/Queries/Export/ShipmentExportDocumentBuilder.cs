@@ -285,8 +285,8 @@ public static class ShipmentExportDocumentBuilder
     /// <remarks>
     /// A document cannot collapse, so the subtotals carry the structure the workbook's row
     /// grouping does. Each invoice starts a fresh page for the same reason a stop does: this is
-    /// handed over per client. The sequence suffix mirrors <see cref="ShipmentExportWorkbookBuilder"/>'s
-    /// rule exactly — added only when the paying client holds more than one invoice on the run —
+    /// handed over per client. The heading (and its sequence suffix) comes from
+    /// <see cref="ShipmentExportLabels.InvoiceHeading"/>, shared with <see cref="ShipmentExportWorkbookBuilder"/>
     /// so the two exports of the same run cannot disagree about which headings need it.
     /// </remarks>
     private static void WriteInvoicePages(Body body, ShipmentExportModel model)
@@ -294,25 +294,19 @@ public static class ShipmentExportDocumentBuilder
         if (model.Invoices.Count == 0)
             return;
 
-        var invoiceCountByClient = model.Invoices
-            .GroupBy(invoice => invoice.PayingClientName)
-            .ToDictionary(group => group.Key, group => group.Count());
+        var invoiceCountByClient = ShipmentExportLabels.InvoiceCountByPayer(model.Invoices);
 
         foreach (var invoice in model.Invoices)
         {
             body.AppendChild(PageBreak());
 
-            var heading = invoiceCountByClient[invoice.PayingClientName] > 1
-                ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
-                : invoice.PayingClientName;
+            var heading = ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient);
 
             body.AppendChild(Heading($"{Invoicing}: {heading}"));
 
             foreach (var party in invoice.Parties)
             {
-                body.AppendChild(SectionHeading(party.IsPayer
-                    ? $"{party.ClientName} · vlastní zboží"
-                    : party.ClientName));
+                body.AppendChild(SectionHeading(ShipmentExportLabels.PartyHeading(party)));
 
                 WriteProductTable(body, party.Products);
 
