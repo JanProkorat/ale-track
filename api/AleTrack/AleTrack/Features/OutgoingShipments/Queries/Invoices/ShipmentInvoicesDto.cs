@@ -66,6 +66,30 @@ public sealed record ShipmentInvoiceDto
 
     /// <summary>Lines of this invoice.</summary>
     public List<ShipmentInvoiceLineDto> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Sub-clients the payer should raise its own invoices against, chosen by the office. Empty
+    /// unless someone picked any.
+    /// </summary>
+    public List<ShipmentInvoiceBillingRecipientDto> BillingRecipients { get; set; } = [];
+}
+
+/// <summary>
+/// A sub-client named on a payer's invoice, with the address to invoice.
+/// </summary>
+public sealed record ShipmentInvoiceBillingRecipientDto
+{
+    /// <summary>Public ID of the sub-client.</summary>
+    public Guid ClientId { get; set; }
+
+    /// <summary>Name of the sub-client.</summary>
+    public string ClientName { get; set; } = null!;
+
+    /// <summary>
+    /// The sub-client's official address as recorded on this invoice — live while the shipment's
+    /// invoicing is still editable, frozen afterwards.
+    /// </summary>
+    public AddressDto Address { get; set; } = null!;
 }
 
 /// <summary>

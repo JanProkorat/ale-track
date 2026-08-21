@@ -33,7 +33,18 @@ public static class ShipmentInvoiceMapper
                 ClientOfficialAddress = invoice.Client?.OfficialAddress?.ToDto(),
                 Sequence = invoice.Sequence,
                 StopOrder = stopOrders.TryGetValue(invoice.ClientId, out var order) ? order : null,
-                Lines = OrderForDisplay(invoice.Lines.Select(line => ToLine(shipment, line)))
+                Lines = OrderForDisplay(invoice.Lines.Select(line => ToLine(shipment, line))),
+                BillingRecipients = invoice.BillingRecipients
+                    .Select(r => new ShipmentInvoiceBillingRecipientDto
+                    {
+                        ClientId = r.Client?.PublicId ?? Guid.Empty,
+                        ClientName = r.Client?.Name ?? string.Empty,
+                        // The row's own copy, not the client's current address — that is the whole
+                        // point of storing it.
+                        Address = r.Address.ToDto()
+                    })
+                    .OrderBy(r => r.ClientName, StringComparer.CurrentCulture)
+                    .ToList()
             })
             .OrderBy(i => i.StopOrder ?? int.MaxValue)
             .ThenBy(i => i.Sequence)

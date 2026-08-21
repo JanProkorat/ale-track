@@ -54,7 +54,8 @@ public static class ShipmentInvoiceGraph
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.SupplierGoodItems)
                 .ThenInclude(i => i.SupplierGood).ThenInclude(g => g.Prices)
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
-            .Include(s => s.Invoices).ThenInclude(i => i.Client);
+            .Include(s => s.Invoices).ThenInclude(i => i.Client)
+            .Include(s => s.Invoices).ThenInclude(i => i.BillingRecipients).ThenInclude(r => r.Client);
 
         if (!tracked)
             shipments = shipments.AsNoTrackingWithIdentityResolution();

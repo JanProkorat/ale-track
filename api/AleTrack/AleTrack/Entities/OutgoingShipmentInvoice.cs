@@ -61,4 +61,10 @@ public sealed class OutgoingShipmentInvoice : PublicEntity
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public ICollection<OutgoingShipmentInvoiceLine> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Sub-clients the payer should invoice, with their addresses as recorded here.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentInvoiceBillingRecipient> BillingRecipients { get; set; } = [];
 }

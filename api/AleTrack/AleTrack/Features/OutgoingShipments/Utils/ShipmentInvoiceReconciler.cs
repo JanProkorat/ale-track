@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.Suppliers.Utils;
 
@@ -303,6 +304,19 @@ public static class ShipmentInvoiceReconciler
         {
             privateLines.Remove(line);
             removedLines.Add(line);
+        }
+
+        // 6. Named billing recipients follow their client's official address while the run's
+        //    invoicing is still adjustable, and are left alone once it is not — the same rule the
+        //    line snapshots above obey. The boundary is the invoicing one, not the content one: an
+        //    address correction must still reach a run that is already loaded or on the road.
+        if (ShipmentInvoiceGraph.IsEditable(shipment))
+        {
+            foreach (var recipient in shipment.Invoices.SelectMany(i => i.BillingRecipients))
+            {
+                if (recipient.Client?.OfficialAddress is { } official)
+                    recipient.Address = official.Copy();
+            }
         }
 
         return new ReconcileResult
