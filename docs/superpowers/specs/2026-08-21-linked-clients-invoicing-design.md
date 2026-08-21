@@ -369,6 +369,28 @@ Frontend (`react-verify`):
 the DTO changes (`app/CLAUDE.md`), then the full `dotnet test` and
 `react-verify` suites — not a filtered slice.
 
+## Found during implementation
+
+**The Fakturace sheet opens expanded, not collapsed.** The Exports section above
+prescribed `sheet.Rows(from, to).Group()` then `.Collapse()` so the file "opens
+collapsed and expands in place." A probe against the pinned ClosedXML 0.105.1
+established that `OutlineLevel` survives a save/reload round-trip but the
+`IsHidden` flag `.Collapse()` sets does not. The fallback this section itself
+anticipated was taken: plain `.Group()` plus the subtotal rows, no `.Collapse()`
+call, and no test asserting a collapsed sheet. Excel still shows the outline
+controls, so a reader collapses each client's detail by hand; no data is
+affected.
+
+**The invoice blocks are per invoice, not per paying client.** The Decisions
+table and this section both describe the Fakturace part as "one block per
+paying client" / "per payer." During implementation this changed to one block
+**per invoice**: the add-invoice and move-line endpoints let one client hold
+several invoices on a single run, and merging them into one block would
+discard a split the office deliberately made by moving lines. A client with
+one invoice still renders as one block, so the common case is unaffected;
+`ShipmentExportInvoice.Sequence` now carries each invoice's real position and
+is read by the block ordering.
+
 ## Known gaps
 
 - A payer's price list does not reach its sub-clients (out of scope above). If

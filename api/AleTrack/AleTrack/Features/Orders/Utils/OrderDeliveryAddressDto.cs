@@ -34,12 +34,9 @@ public sealed record OrderDeliveryAddressDto
     public string? PlaceNote { get; set; }
 
     /// <summary>
-    /// The resolved destination: the place's address for
-    /// <see cref="DeliveryAddressKind.DeliveryPlace"/>, the client's contact
-    /// address for <see cref="DeliveryAddressKind.Contact"/>, otherwise the
-    /// client's official address. The two client addresses fall back to each
-    /// other when the selected kind's own address is unavailable; null only
-    /// when the client has neither (e.g. one invoiced through a payer).
+    /// The resolved destination address for <see cref="Kind"/>, falling back between the
+    /// client's contact and official address when needed; null only when the client has
+    /// neither (e.g. one invoiced through a payer).
     /// </summary>
     public AddressDto? Address { get; set; }
 }

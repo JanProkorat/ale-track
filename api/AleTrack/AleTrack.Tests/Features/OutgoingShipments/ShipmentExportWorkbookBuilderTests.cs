@@ -684,6 +684,31 @@ public sealed class ShipmentExportWorkbookBuilderTests
         workbook.Worksheets.Select(s => s.Name).Should().NotContain("Fakturace");
     }
 
+    [Fact]
+    public void Build_ClientStopLiterallyNamedFakturace_DoesNotCollideWithTheReservedInvoiceSheetName()
+    {
+        var payerParty = BuildParty("Fakturace", isPayer: true);
+
+        var model = BuildModel(
+            stops: [BuildStop(1, "Fakturace")],
+            invoices:
+            [
+                new ShipmentExportInvoice
+                {
+                    PayingClientName = "Fakturace",
+                    Sequence = 1,
+                    Parties = [payerParty]
+                }
+            ]);
+
+        using var workbook = Open(model);
+
+        // "Fakturace" enters usedNames before the stop loop runs, so a client that happens to
+        // share the reserved sheet's name still keeps its own stop-numbered sheet rather than
+        // losing it to a duplicate-name clash with the invoicing sheet.
+        workbook.Worksheets.Select(s => s.Name).Should().Equal("Přehled", "Fakturace", "1. Fakturace");
+    }
+
     /// <summary>
     /// ClosedXML 0.105.1 preserves a grouped row's <c>OutlineLevel</c> through a save/reload
     /// round-trip, but not the <c>IsHidden</c> flag <c>.Collapse()</c> would set — confirmed by a

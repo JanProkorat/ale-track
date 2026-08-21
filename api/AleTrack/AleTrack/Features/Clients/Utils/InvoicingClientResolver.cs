@@ -49,9 +49,8 @@ public static class InvoicingClientResolver
 
         if (clientPublicId is not null)
         {
-            // Compare internal ids rather than following the InvoicingClient navigation: the
-            // mocked DbSet used in tests only has InvoicingClientId wired, not the object
-            // reference, so a navigation-based predicate silently matches nothing.
+            // Compare internal ids rather than following the InvoicingClient navigation: one
+            // indexed-column comparison, no join required.
             var clientId = await dbContext.Clients
                 .Where(c => c.PublicId == clientPublicId.Value)
                 .Select(c => (long?)c.Id)

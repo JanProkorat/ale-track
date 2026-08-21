@@ -57,10 +57,13 @@ public sealed record ShipmentExportModel
     public List<ShipmentExportProduct> StockPurchases { get; init; } = [];
 
     /// <summary>
-    /// Invoice split of the run, one block per paying client, each block broken down by the
-    /// client whose goods are billed on it.
+    /// Invoice split of the run, one block per invoice, each block broken down by the client
+    /// whose goods are billed on it.
     /// </summary>
     /// <remarks>
+    /// One block per invoice, not per paying client: a client holding invoices #1 and #2 on
+    /// this run yields two blocks, each carrying its own <see cref="ShipmentExportInvoice.Sequence"/>.
+    ///
     /// Additive: the stop entries are untouched, because what the driver reads did not change.
     /// This part exists for the office, and it is the only place a paying client with no
     /// delivery of its own appears at all.

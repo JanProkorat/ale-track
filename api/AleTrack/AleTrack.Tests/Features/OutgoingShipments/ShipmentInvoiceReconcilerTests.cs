@@ -977,10 +977,17 @@ public sealed class ShipmentInvoiceReconcilerTests
 
     /// <summary>
     /// The client whose order a line bills for, derived the way the mapper derives it — the line
-    /// does not store it.
+    /// does not store it. Order-item lines only: the two call sites never deal with a
+    /// supplier-good or custom-extra line, so support for those is deliberately not added here.
     /// </summary>
-    private static long OrderingClientIdOf(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
-        ShipmentInvoiceGraph.OrderOf(shipment, line.OrderItemId ?? 0)!.ClientId;
+    private static long OrderingClientIdOf(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
+    {
+        if (line.SourceKind != InvoiceLineSourceKind.OrderItem)
+            throw new NotSupportedException(
+                $"OrderingClientIdOf only supports {InvoiceLineSourceKind.OrderItem} lines, not {line.SourceKind}.");
+
+        return ShipmentInvoiceGraph.OrderOf(shipment, line.OrderItemId ?? 0)!.ClientId;
+    }
 
     /// <summary>
     /// Mimics what the move endpoint does, so the tests exercise reconciliation against splits

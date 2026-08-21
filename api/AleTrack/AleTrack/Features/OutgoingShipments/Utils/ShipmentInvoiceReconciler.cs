@@ -137,8 +137,8 @@ public static class ShipmentInvoiceReconciler
     /// <remarks>
     /// Guarantees on return:
     /// <list type="number">
-    /// <item>every client with a stake in the run — billed, ordering, or both — keeps at least
-    /// one invoice, and the pieces of every source have a home to sit on,</item>
+    /// <item>every client with a stake in the run — billed, ordering, or both — keeps any
+    /// invoice it already has, and the pieces of every source have a home to sit on,</item>
     /// <item>every line points at an item the shipment still carries,</item>
     /// <item>for every billable item, the quantities of its invoice lines <em>and</em> its
     /// private lines sum to the item's quantity.</item>

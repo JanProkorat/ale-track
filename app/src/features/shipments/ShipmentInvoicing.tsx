@@ -565,7 +565,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                   </Box>
                   {linked > 0 && (
                     <Pill tint="greyTint" color="text.secondary">
-                      {linked} propojených klientů
+                      {linked} {plural(linked, 'propojený klient', 'propojení klienti', 'propojených klientů')}
                     </Pill>
                   )}
                   {band.crossBilled > 0 && (

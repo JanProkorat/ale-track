@@ -204,8 +204,8 @@ public static class ShipmentExportQuery
     }
 
     /// <summary>
-    /// Pieces billed on the run, keyed both by payer and by (payer, orderer) — see
-    /// <see cref="InvoicedSplit"/> for which part reads which.
+    /// Pieces billed on the run, keyed three ways — by payer, by (payer, orderer) and by
+    /// (invoice, orderer) — see <see cref="InvoicedSplit"/> for which part reads which.
     /// </summary>
     /// <remarks>
     /// Reads the same graph the Fakturace section reads and reconciles it the same way, so the two

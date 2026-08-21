@@ -9,10 +9,10 @@ namespace AleTrack.Features.Clients.Commands.Update;
 public sealed record UpdateClientDto
 {
     /// <summary>
-    /// Name of the client
+    /// Name of the client.
     /// </summary>
     public string Name { get; set; } = null!;
-    
+
     /// <summary>
     /// Business name of the client. Can be null.
     /// </summary>
