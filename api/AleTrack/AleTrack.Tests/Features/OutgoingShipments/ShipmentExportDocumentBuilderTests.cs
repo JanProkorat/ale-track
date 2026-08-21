@@ -23,6 +23,7 @@ public sealed class ShipmentExportDocumentBuilderTests
         string? cityLine = "602 00 Brno",
         string? city = "Brno",
         string? deliveryPlaceName = null,
+        string? invoicedToClientName = null,
         List<string>? notes = null,
         List<ShipmentExportProduct>? products = null,
         List<ShipmentExportReturn>? returns = null) =>
@@ -34,6 +35,7 @@ public sealed class ShipmentExportDocumentBuilderTests
             CityLine = cityLine,
             City = city,
             DeliveryPlaceName = deliveryPlaceName,
+            InvoicedToClientName = invoicedToClientName,
             Notes = notes ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)],
             Returns = returns ?? []
@@ -64,7 +66,8 @@ public sealed class ShipmentExportDocumentBuilderTests
         string? vehicleName = "Iveco Daily",
         List<string>? driverNames = null,
         List<ShipmentExportStop>? stops = null,
-        List<ShipmentExportProduct>? stockPurchases = null) =>
+        List<ShipmentExportProduct>? stockPurchases = null,
+        List<ShipmentExportInvoice>? invoices = null) =>
         new()
         {
             ShipmentName = name,
@@ -72,7 +75,19 @@ public sealed class ShipmentExportDocumentBuilderTests
             VehicleName = vehicleName,
             DriverNames = driverNames ?? ["Jan Novák"],
             Stops = stops ?? [BuildStop(1, "Hospoda U Kotvy")],
-            StockPurchases = stockPurchases ?? []
+            StockPurchases = stockPurchases ?? [],
+            Invoices = invoices ?? []
+        };
+
+    private static ShipmentExportInvoiceParty BuildParty(
+        string clientName,
+        bool isPayer = false,
+        List<ShipmentExportProduct>? products = null) =>
+        new()
+        {
+            ClientName = clientName,
+            IsPayer = isPayer,
+            Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
     private static Body Open(ShipmentExportModel model)
@@ -758,5 +773,133 @@ public sealed class ShipmentExportDocumentBuilderTests
         ]));
 
         Paragraphs(body).Should().NotContain("2. Čerpací stanice");
+    }
+
+    [Fact]
+    public void Build_ModelWithInvoices_WritesAFakturaceSectionPerPayer()
+    {
+        var payerParty = BuildParty(
+            "Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]);
+        var otherParty = BuildParty(
+            "Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)]);
+
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties = [payerParty, otherParty]
+            }
+        ]);
+
+        var body = Open(model);
+        var paragraphs = Paragraphs(body);
+
+        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix —
+        // matching the workbook's rule exactly.
+        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy");
+        paragraphs.Should().Contain("HOSPODA U KOTVY · VLASTNÍ ZBOŽÍ");
+        paragraphs.Should().Contain("PIVNICE NA ROHU");
+        paragraphs.Should().Contain("Celkem Hospoda U Kotvy: 24 ks");
+        paragraphs.Should().Contain("Celkem Pivnice Na Rohu: 6 ks");
+        paragraphs.Should().Contain("Celkem faktura: 30 ks");
+    }
+
+    [Fact]
+    public void Build_ClientWithTwoInvoices_LabelsEachWithItsSequence()
+    {
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
+            },
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 2,
+                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
+            },
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Pivnice Na Rohu",
+                Sequence = 1,
+                Parties = [BuildParty("Pivnice Na Rohu", isPayer: true)]
+            }
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy · Faktura 1");
+        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy · Faktura 2");
+
+        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1".
+        paragraphs.Should().Contain("Fakturace: Pivnice Na Rohu");
+        paragraphs.Should().NotContain("Fakturace: Pivnice Na Rohu · Faktura 1");
+    }
+
+    [Fact]
+    public void Build_ModelWithoutInvoices_WritesNoFakturaceSection()
+    {
+        var body = Open(BuildModel());
+
+        body.InnerText.Should().NotContain("Fakturace");
+    }
+
+    /// <summary>
+    /// The load-bearing rule this file documents: Word merges two tables that touch. Checked over
+    /// the whole body, not just the invoice section — the invoice pages follow the stop pages, and
+    /// an adjacency slipping in at that seam would be missed by a check scoped to one section.
+    /// </summary>
+    [Fact]
+    public void Build_FakturaceTables_AreNeverAdjacent()
+    {
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties =
+                [
+                    BuildParty("Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]),
+                    BuildParty("Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
+                ]
+            }
+        ]);
+
+        var body = Open(model);
+
+        var children = body.ChildElements.ToList();
+        var adjacent = children
+            .Zip(children.Skip(1))
+            .Count(pair => pair.First is Table && pair.Second is Table);
+
+        adjacent.Should().Be(0);
+        children[^2].Should().NotBeOfType<Table>("a table cannot be the last content before sectPr");
+    }
+
+    [Fact]
+    public void Build_SubClientStopPage_NamesThePayer()
+    {
+        var body = Open(BuildModel(stops:
+        [
+            BuildStop(1, "Hospoda U Kotvy", invoicedToClientName: "Pivnice Na Rohu")
+        ]));
+
+        var details = TableRows(body, 2);
+        details.Should().Contain(row => row[0] == "Fakturováno na" && row[1] == "Pivnice Na Rohu");
+    }
+
+    [Fact]
+    public void Build_StopWithNoPayer_OmitsTheInvoicedToRow()
+    {
+        var body = Open(BuildModel(stops: [BuildStop(1, "Hospoda U Kotvy")]));
+
+        var details = TableRows(body, 2);
+        details.Should().NotContain(row => row[0] == "Fakturováno na");
     }
 }

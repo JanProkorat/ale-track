@@ -7,7 +7,7 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
 /// <summary>
 /// Writes a <see cref="ShipmentExportModel"/> out as a .docx document: the run's overview, then one
-/// page per client stop.
+/// page per client stop, then one page per invoice.
 /// </summary>
 /// <remarks>
 /// The same content as <see cref="ShipmentExportWorkbookBuilder"/>, laid out for a document rather
@@ -88,6 +88,8 @@ public static class ShipmentExportDocumentBuilder
 
             foreach (var stop in model.SheetStops)
                 WriteStopPage(body, stop);
+
+            WriteInvoicePages(body, model);
 
             // Last child of the body, as the schema requires. Without it the document declares no
             // page size or margins at all, and a reader with no page to lay out against pushes each
@@ -239,6 +241,9 @@ public static class ShipmentExportDocumentBuilder
         if (stop.DeliveryPlaceName is not null)
             details.AppendChild(LabelRow("Místo dodání", stop.DeliveryPlaceName));
 
+        if (stop.InvoicedToClientName is not null)
+            details.AppendChild(LabelRow(InvoicedTo, stop.InvoicedToClientName));
+
         // Nothing at all rather than an empty row: a blank "Poznámky" reads as "no instructions",
         // which is a claim this page has no business making.
         for (var i = 0; i < stop.Notes.Count; i++)
@@ -271,6 +276,53 @@ public static class ShipmentExportDocumentBuilder
         }
 
         AppendTable(body, returns);
+    }
+
+    /// <summary>
+    /// The run's invoice split, one page per invoice: its parties' goods as a table each, with a
+    /// subtotal, and the payer's total under them.
+    /// </summary>
+    /// <remarks>
+    /// A document cannot collapse, so the subtotals carry the structure the workbook's row
+    /// grouping does. Each invoice starts a fresh page for the same reason a stop does: this is
+    /// handed over per client. The sequence suffix mirrors <see cref="ShipmentExportWorkbookBuilder"/>'s
+    /// rule exactly — added only when the paying client holds more than one invoice on the run —
+    /// so the two exports of the same run cannot disagree about which headings need it.
+    /// </remarks>
+    private static void WriteInvoicePages(Body body, ShipmentExportModel model)
+    {
+        if (model.Invoices.Count == 0)
+            return;
+
+        var invoiceCountByClient = model.Invoices
+            .GroupBy(invoice => invoice.PayingClientName)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        foreach (var invoice in model.Invoices)
+        {
+            body.AppendChild(PageBreak());
+
+            var heading = invoiceCountByClient[invoice.PayingClientName] > 1
+                ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
+                : invoice.PayingClientName;
+
+            body.AppendChild(Heading($"{Invoicing}: {heading}"));
+
+            foreach (var party in invoice.Parties)
+            {
+                body.AppendChild(SectionHeading(party.IsPayer
+                    ? $"{party.ClientName} · vlastní zboží"
+                    : party.ClientName));
+
+                WriteProductTable(body, party.Products);
+
+                // A paragraph rather than a row on the table above: two tables in a row are
+                // merged by Word, and the next party's table follows immediately.
+                body.AppendChild(Paragraph($"Celkem {party.ClientName}: {Pieces(party.TotalQuantity)}"));
+            }
+
+            body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
+        }
     }
 
     /// <summary>
