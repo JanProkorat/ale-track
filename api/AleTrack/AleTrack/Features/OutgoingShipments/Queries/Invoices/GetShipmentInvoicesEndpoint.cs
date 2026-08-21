@@ -78,6 +78,9 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext, IDr
         if (reconcileResult.RemovedInvoices.Count > 0)
             dbContext.OutgoingShipmentInvoices.RemoveRange(reconcileResult.RemovedInvoices);
 
+        if (reconcileResult.RemovedRecipients.Count > 0)
+            dbContext.OutgoingShipmentInvoiceBillingRecipients.RemoveRange(reconcileResult.RemovedRecipients);
+
         await dbContext.SaveChangesAsync(ct);
 
         await Send.OkAsync(ShipmentInvoiceMapper.ToDto(split!, reconcileResult), cancellation: ct);

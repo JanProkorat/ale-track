@@ -246,9 +246,30 @@ public static class ShipmentExportWorkbookBuilder
             sheet.Cell(row, 1).Style.Border.TopBorder = XLBorderStyleValues.Thin;
             WriteTotalCell(sheet, row, 4, invoice.TotalQuantity);
             row += 2;
+
+            if (invoice.BillingRecipients.Count > 0)
+                row = WriteBillingRecipients(sheet, row, invoice);
         }
 
         sheet.Columns().AdjustToContents();
+    }
+
+    /// <summary>
+    /// The sub-clients named on this invoice, with the address recorded for the payer to invoice —
+    /// placed right after the invoice's own block, not as a stray appendix at the foot of the sheet.
+    /// </summary>
+    private static int WriteBillingRecipients(IXLWorksheet sheet, int row, ShipmentExportInvoice invoice)
+    {
+        WriteSectionHeading(sheet, row++, ShipmentExportLabels.BillingRecipientsHeading(invoice));
+
+        foreach (var recipient in invoice.BillingRecipients)
+        {
+            sheet.Cell(row, 1).Value = recipient.ClientName;
+            sheet.Cell(row, 2).Value = recipient.AddressLine;
+            row++;
+        }
+
+        return row + 1;
     }
 
     private static void WriteStopSheet(XLWorkbook workbook, ShipmentExportStop stop, ISet<string> usedNames)

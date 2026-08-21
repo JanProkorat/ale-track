@@ -262,6 +262,32 @@ public sealed record ShipmentExportInvoice
     public List<ShipmentExportInvoiceParty> Parties { get; init; } = [];
 
     public int TotalQuantity => Parties.Sum(p => p.TotalQuantity);
+
+    /// <summary>
+    /// Sub-clients whose official address the office chose to name on this invoice, for the
+    /// payer to raise its own invoices against. Empty when none were chosen, in which case
+    /// both writers render no section for it at all.
+    /// </summary>
+    public List<ShipmentExportBillingRecipient> BillingRecipients { get; init; } = [];
+}
+
+/// <summary>
+/// One sub-client named on a payer's invoice as an address to invoice, with the address as it was
+/// recorded on the invoice — never the client's current one.
+/// </summary>
+public sealed record ShipmentExportBillingRecipient
+{
+    public required string ClientName { get; init; }
+
+    /// <summary>Street line — <c>Hlavní 12</c>.</summary>
+    public string? Street { get; init; }
+
+    /// <summary>Zip and city line — <c>602 00 Brno</c>.</summary>
+    public string? CityLine { get; init; }
+
+    /// <summary>Street and city joined onto one line, for a writer with a single address column.</summary>
+    public string AddressLine =>
+        string.Join(", ", new[] { Street, CityLine }.Where(part => !string.IsNullOrWhiteSpace(part)));
 }
 
 /// <summary>

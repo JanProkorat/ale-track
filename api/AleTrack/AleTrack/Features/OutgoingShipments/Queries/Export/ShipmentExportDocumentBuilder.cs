@@ -67,6 +67,8 @@ public static class ShipmentExportDocumentBuilder
     /// <summary>Widths for a returns table whose items carry no notes — see WriteStopPage.</summary>
     private static readonly int[] ReturnColumnsWithoutNotes = [6600, 2400];
 
+    private static readonly int[] BillingRecipientColumns = [3000, 6000];
+
     /// <summary>Header-row fill, matching the workbook's.</summary>
     private const string HeaderFill = "F2F2F2";
 
@@ -316,7 +318,33 @@ public static class ShipmentExportDocumentBuilder
             }
 
             body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
+
+            // Placed with this invoice's page, not appended after the loop, so it reads as part of
+            // this payer's invoice rather than as a stray section at the end of the document.
+            if (invoice.BillingRecipients.Count > 0)
+            {
+                body.AppendChild(SectionHeading(ShipmentExportLabels.BillingRecipientsHeading(invoice)));
+                WriteBillingRecipientsTable(body, invoice.BillingRecipients);
+            }
         }
+    }
+
+    /// <summary>
+    /// The sub-clients named on an invoice, with the address recorded for the payer to invoice.
+    /// </summary>
+    /// <remarks>
+    /// Routed through <see cref="AppendTable"/> like every other table here, which is what keeps it
+    /// from ever landing directly against the next invoice's page-break paragraph or another table.
+    /// </remarks>
+    private static void WriteBillingRecipientsTable(Body body, List<ShipmentExportBillingRecipient> recipients)
+    {
+        var table = BuildTable(BillingRecipientColumns);
+        table.AppendChild(HeaderRow("Klient", "Adresa"));
+
+        foreach (var recipient in recipients)
+            table.AppendChild(DataRow(recipient.ClientName, recipient.AddressLine));
+
+        AppendTable(body, table);
     }
 
     /// <summary>

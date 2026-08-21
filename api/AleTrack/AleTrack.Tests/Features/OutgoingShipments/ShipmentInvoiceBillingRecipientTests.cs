@@ -192,6 +192,59 @@ public sealed class ShipmentInvoiceBillingRecipientTests
 
     #endregion
 
+    #region pruning a severed payer link
+
+    [Fact]
+    public async Task Get_RecipientStillLinkedToThePayer_Survives()
+    {
+        var scenario = Scenario.Build();
+        await Set(scenario, scenario.Mock(), [scenario.SubWithOrder.PublicId]);
+
+        var invoices = await GetInvoices(scenario);
+
+        invoices.Invoices.Single(i => i.ClientId == scenario.Payer.PublicId)
+            .BillingRecipients.Should().ContainSingle()
+            .Which.ClientId.Should().Be(scenario.SubWithOrder.PublicId);
+    }
+
+    /// <summary>
+    /// If the sub-client's payer link is later removed, the recipient row must go with it — a
+    /// surviving row would tell the payer to invoice a client that is no longer theirs.
+    /// </summary>
+    [Fact]
+    public async Task Get_RecipientWhosePayerLinkWasRemoved_IsDroppedWhileEditable()
+    {
+        var scenario = Scenario.Build();
+        await Set(scenario, scenario.Mock(), [scenario.SubWithOrder.PublicId]);
+
+        scenario.SubWithOrder.InvoicingClientId = null;
+        scenario.SubWithOrder.InvoicingClient = null;
+
+        var invoices = await GetInvoices(scenario);
+
+        invoices.Invoices.Single(i => i.ClientId == scenario.Payer.PublicId)
+            .BillingRecipients.Should().BeEmpty("the client is no longer billed through this payer");
+    }
+
+    [Fact]
+    public async Task Get_RecipientWhosePayerLinkWasRemoved_SurvivesUntouchedOnDeliveredShipment()
+    {
+        var scenario = Scenario.Build();
+        await Set(scenario, scenario.Mock(), [scenario.SubWithOrder.PublicId]);
+
+        scenario.SubWithOrder.InvoicingClientId = null;
+        scenario.SubWithOrder.InvoicingClient = null;
+        scenario.Shipment.State = OutgoingShipmentState.Delivered;
+
+        var invoices = await GetInvoices(scenario);
+
+        invoices.Invoices.Single(i => i.ClientId == scenario.Payer.PublicId)
+            .BillingRecipients.Should().ContainSingle("history stays exactly as it was sent")
+            .Which.ClientId.Should().Be(scenario.SubWithOrder.PublicId);
+    }
+
+    #endregion
+
     #region helpers
 
     private static async Task Set(

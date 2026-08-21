@@ -262,6 +262,24 @@ public static class ShipmentExportQuery
                 g => g.Key,
                 g => g.Select(i => i.Client?.PublicId).FirstOrDefault(id => id is not null) ?? Guid.Empty);
 
+        // The row's own stored address, never the client's current one — a delivered run must
+        // export what it was sent with, exactly as the Fakturace screen shows it.
+        var recipientsByInvoice = shipment.Invoices.ToDictionary(
+            i => i.PublicId,
+            i => i.BillingRecipients
+                .Select(r =>
+                {
+                    var (street, cityLine, _) = SplitAddress(r.Address.ToDto());
+                    return new ShipmentExportBillingRecipient
+                    {
+                        ClientName = r.Client?.Name ?? Missing,
+                        Street = street,
+                        CityLine = cityLine
+                    };
+                })
+                .OrderBy(r => r.ClientName, StringComparer.CurrentCulture)
+                .ToList());
+
         return new InvoicedSplit
         {
             ByPayer = lines
@@ -280,7 +298,8 @@ public static class ShipmentExportQuery
                 i => (PayerId: i.ClientId, PayerPublicId: payerPublicIds[i.ClientId], Sequence: i.Sequence, Name: payerNames[i.ClientId])),
             OrdererNames = lines
                 .GroupBy(x => x.OrdererId)
-                .ToDictionary(g => g.Key, g => g.Select(x => x.OrdererName).First())
+                .ToDictionary(g => g.Key, g => g.Select(x => x.OrdererName).First()),
+            RecipientsByInvoice = recipientsByInvoice
         };
     }
 
@@ -350,17 +369,18 @@ public static class ShipmentExportQuery
         Dictionary<long, int> firstStopOrderByClient) =>
         split.ByInvoiceAndOrderer
             .GroupBy(entry => entry.Key.InvoiceId)
-            .Select(invoiceGroup => (Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
+            .Select(invoiceGroup => (InvoiceId: invoiceGroup.Key, Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
             .OrderBy(x => firstStopOrderByClient.TryGetValue(x.Invoice.PayerId, out var stopOrder)
                 ? stopOrder
                 : int.MaxValue)
             .ThenBy(x => x.Invoice.Name, StringComparer.CurrentCulture)
             .ThenBy(x => x.Invoice.Sequence)
-            .Select(x => BuildExportInvoice(split, x.Invoice, x.Lines))
+            .Select(x => BuildExportInvoice(split, x.InvoiceId, x.Invoice, x.Lines))
             .ToList();
 
     private static ShipmentExportInvoice BuildExportInvoice(
         InvoicedSplit split,
+        Guid invoiceId,
         (long PayerId, Guid PayerPublicId, int Sequence, string Name) invoice,
         IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines) =>
         new()
@@ -368,6 +388,7 @@ public static class ShipmentExportQuery
             PayingClientName = invoice.Name,
             PayingClientId = invoice.PayerPublicId,
             Sequence = invoice.Sequence,
+            BillingRecipients = split.RecipientsByInvoice.GetValueOrDefault(invoiceId, []),
             Parties = lines
                 .GroupBy(entry => entry.Key.OrdererId)
                 // The payer's own goods lead; the rest follow by name.
@@ -722,9 +743,13 @@ public static class ShipmentExportQuery
         /// <summary>Name of each client that ordered billed pieces.</summary>
         public required Dictionary<long, string> OrdererNames { get; init; }
 
+        /// <summary>Billing recipients named on each invoice, by the invoice's public ID.</summary>
+        public required Dictionary<Guid, List<ShipmentExportBillingRecipient>> RecipientsByInvoice { get; init; }
+
         public static InvoicedSplit Empty => new()
         {
-            ByPayer = [], ByPayerAndOrderer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = []
+            ByPayer = [], ByPayerAndOrderer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = [],
+            RecipientsByInvoice = []
         };
     }
 }

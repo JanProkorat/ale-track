@@ -1129,6 +1129,77 @@ public sealed class ShipmentExportQueryTests
         model.Invoices.Should().NotContain(i => i.PayingClientName == "Skupina Sever");
     }
 
+    [Fact]
+    public async Task LoadAsync_InvoiceWithBillingRecipients_ExportsTheStoredAddressNotTheClientsCurrentOne()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        var payer = ClientBuilder.BuildEntity(name: "Skupina Sever");
+        var kotva = ClientBuilder.BuildEntity(
+            name: "Hospoda U Kotvy",
+            // The client's address today — deliberately different from what was recorded on the
+            // invoice, so a test that read this instead would be caught.
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Nová", streetNumber: "2", zip: "100 00", city: "Praha"));
+        BillThrough(kotva, payer, PayerInternalId);
+
+        var order = OrderBuilder.BuildEntity(
+            client: kotva, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Delivered,
+            stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
+
+        AssignInternalIds(shipment);
+
+        AddInvoice(shipment, payer, LineFor(order.OrderItems.Single(), 24));
+        shipment.Invoices.Single().BillingRecipients.Add(new OutgoingShipmentInvoiceBillingRecipient
+        {
+            PublicId = Guid.NewGuid(),
+            ClientId = kotva.Id,
+            Client = kotva,
+            // The row's own copy, recorded before the client's address changed.
+            Address = AddressBuilder.BuildEntity(streetName: "Stará", streetNumber: "1", zip: "602 00", city: "Brno")
+        });
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [payer, kotva],
+            orders: [order],
+            outgoingShipments: [shipment],
+            outgoingShipmentInvoiceBillingRecipients: shipment.Invoices.SelectMany(i => i.BillingRecipients).ToList());
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        var block = model!.Invoices.Single();
+        var recipient = block.BillingRecipients.Should().ContainSingle().Subject;
+        recipient.ClientName.Should().Be("Hospoda U Kotvy");
+        recipient.Street.Should().Be("Stará 1", "the export reads the invoice's own copy, not the client's current address");
+        recipient.CityLine.Should().Be("602 00 Brno");
+    }
+
+    [Fact]
+    public async Task LoadAsync_InvoiceWithNoBillingRecipients_LeavesTheListEmpty()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        var client = ClientBuilder.BuildEntity(name: "Hospoda U Kotvy");
+        var order = OrderBuilder.BuildEntity(
+            client: client, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
+
+        AssignInternalIds(shipment);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], orders: [order], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Single().BillingRecipients.Should().BeEmpty();
+    }
+
     /// <summary>
     /// Points a sub-client at its payer the way a saved row does — by ID as well as by navigation,
     /// because the split is keyed by ID.

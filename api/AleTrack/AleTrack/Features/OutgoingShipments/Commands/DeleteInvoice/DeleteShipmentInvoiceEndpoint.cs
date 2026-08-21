@@ -117,6 +117,9 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, I
         if (reconcileResult.RemovedInvoices.Count > 0)
             dbContext.OutgoingShipmentInvoices.RemoveRange(reconcileResult.RemovedInvoices);
 
+        if (reconcileResult.RemovedRecipients.Count > 0)
+            dbContext.OutgoingShipmentInvoiceBillingRecipients.RemoveRange(reconcileResult.RemovedRecipients);
+
         await dbContext.SaveChangesAsync(ct);
         await Send.NoContentAsync(ct);
     }

@@ -234,5 +234,8 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
 
         if (result.RemovedInvoices.Count > 0)
             dbContext.OutgoingShipmentInvoices.RemoveRange(result.RemovedInvoices);
+
+        if (result.RemovedRecipients.Count > 0)
+            dbContext.OutgoingShipmentInvoiceBillingRecipients.RemoveRange(result.RemovedRecipients);
     }
 }

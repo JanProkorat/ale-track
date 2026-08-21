@@ -101,14 +101,20 @@ public sealed class ShipmentExportDocumentBuilderTests
         string payingClientName,
         int sequence,
         List<ShipmentExportInvoiceParty> parties,
-        Guid? payingClientId = null) =>
+        Guid? payingClientId = null,
+        List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
             PayingClientName = payingClientName,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
-            Parties = parties
+            Parties = parties,
+            BillingRecipients = billingRecipients ?? []
         };
+
+    private static ShipmentExportBillingRecipient BuildRecipient(
+        string clientName, string street = "Hlavní 12", string cityLine = "602 00 Brno") =>
+        new() { ClientName = clientName, Street = street, CityLine = cityLine };
 
     private static Body Open(ShipmentExportModel model)
     {
@@ -868,6 +874,74 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         body.InnerText.Should().NotContain("Fakturace");
     }
+
+    [Fact]
+    public void Build_InvoiceWithBillingRecipients_WritesTheSectionWithNamesAndAddresses()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice(
+                "Hospoda U Kotvy", sequence: 1,
+                parties: [BuildParty("Hospoda U Kotvy", isPayer: true)],
+                billingRecipients:
+                [
+                    BuildRecipient("Bar Na Rohu", "Nádražní 5", "110 00 Praha"),
+                    BuildRecipient("Hospoda U Lípy", "Hlavní 12", "602 00 Brno")
+                ])
+        ]);
+
+        var body = Open(model);
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("FAKTURAČNÍ ADRESA PRO HOSPODA U KOTVY");
+
+        var recipients = TableRows(body, IndexOfRecipientsTable(body));
+        recipients[0].Should().Equal("KLIENT", "ADRESA");
+        recipients.Should().Contain(row => row[0] == "Bar Na Rohu" && row[1] == "Nádražní 5, 110 00 Praha");
+        recipients.Should().Contain(row => row[0] == "Hospoda U Lípy" && row[1] == "Hlavní 12, 602 00 Brno");
+    }
+
+    [Fact]
+    public void Build_InvoiceWithNoBillingRecipients_WritesNoSection()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        var body = Open(model);
+
+        body.InnerText.Should().NotContain("Fakturační adresa");
+    }
+
+    /// <summary>
+    /// Extends the load-bearing adjacency rule to the billing-recipients table: it must never sit
+    /// directly against the neighbouring party table, nor be the last element before sectPr.
+    /// </summary>
+    [Fact]
+    public void Build_BillingRecipientsTable_IsNeverAdjacentToAnotherTable()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice(
+                "Hospoda U Kotvy", sequence: 1,
+                parties: [BuildParty("Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)])],
+                billingRecipients: [BuildRecipient("Bar Na Rohu")])
+        ]);
+
+        var body = Open(model);
+
+        var children = body.ChildElements.ToList();
+        var adjacent = children
+            .Zip(children.Skip(1))
+            .Count(pair => pair.First is Table && pair.Second is Table);
+
+        adjacent.Should().Be(0);
+        children[^2].Should().NotBeOfType<Table>("a table cannot be the last content before sectPr");
+    }
+
+    /// <summary>Index of the first table after the last party-products table of the document.</summary>
+    private static int IndexOfRecipientsTable(Body body) => body.Elements<Table>().Count() - 1;
 
     /// <summary>
     /// The load-bearing rule this file documents: Word merges two tables that touch. Checked over

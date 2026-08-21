@@ -56,6 +56,9 @@ public sealed record ReconcileResult
 
     /// <summary>Lines detached from their invoice; the caller deletes them.</summary>
     public IReadOnlyList<OutgoingShipmentInvoiceLine> RemovedLines { get; init; } = [];
+
+    /// <summary>Billing recipients detached from their invoice; the caller deletes them.</summary>
+    public IReadOnlyList<OutgoingShipmentInvoiceBillingRecipient> RemovedRecipients { get; init; } = [];
 }
 
 /// <summary>
@@ -159,6 +162,7 @@ public static class ShipmentInvoiceReconciler
         var adjustments = new List<InvoiceAdjustment>();
         var removedInvoices = new List<OutgoingShipmentInvoice>();
         var removedLines = new List<OutgoingShipmentInvoiceLine>();
+        var removedRecipients = new List<OutgoingShipmentInvoiceBillingRecipient>();
 
         var sources = CollectSources(shipment);
         var sourceKeys = sources.Select(s => s.Key).ToHashSet();
@@ -310,12 +314,25 @@ public static class ShipmentInvoiceReconciler
         //    invoicing is still adjustable, and are left alone once it is not — the same rule the
         //    line snapshots above obey. The boundary is the invoicing one, not the content one: an
         //    address correction must still reach a run that is already loaded or on the road.
+        //    A recipient whose payer link was since removed no longer belongs on this invoice —
+        //    telling the payer to raise an invoice on a client that is no longer theirs defeats
+        //    the feature — so it is pruned under the same gate rather than merely left stale.
         if (ShipmentInvoiceGraph.IsEditable(shipment))
         {
-            foreach (var recipient in shipment.Invoices.SelectMany(i => i.BillingRecipients))
+            foreach (var invoice in shipment.Invoices)
             {
-                if (recipient.Client?.OfficialAddress is { } official)
-                    recipient.Address = official.Copy();
+                foreach (var recipient in invoice.BillingRecipients.ToList())
+                {
+                    if (recipient.Client?.InvoicingClientId != invoice.ClientId)
+                    {
+                        invoice.BillingRecipients.Remove(recipient);
+                        removedRecipients.Add(recipient);
+                        continue;
+                    }
+
+                    if (recipient.Client.OfficialAddress is { } official)
+                        recipient.Address = official.Copy();
+                }
             }
         }
 
@@ -323,7 +340,8 @@ public static class ShipmentInvoiceReconciler
         {
             Adjustments = adjustments,
             RemovedInvoices = removedInvoices,
-            RemovedLines = removedLines
+            RemovedLines = removedLines,
+            RemovedRecipients = removedRecipients
         };
     }
 

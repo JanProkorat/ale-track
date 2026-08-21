@@ -96,14 +96,20 @@ public sealed class ShipmentExportWorkbookBuilderTests
         string payingClientName,
         int sequence,
         List<ShipmentExportInvoiceParty> parties,
-        Guid? payingClientId = null) =>
+        Guid? payingClientId = null,
+        List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
             PayingClientName = payingClientName,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
-            Parties = parties
+            Parties = parties,
+            BillingRecipients = billingRecipients ?? []
         };
+
+    private static ShipmentExportBillingRecipient BuildRecipient(
+        string clientName, string street = "Hlavní 12", string cityLine = "602 00 Brno") =>
+        new() { ClientName = clientName, Street = street, CityLine = cityLine };
 
     private static XLWorkbook Open(ShipmentExportModel model) =>
         new(new MemoryStream(ShipmentExportWorkbookBuilder.Build(model)));
@@ -696,6 +702,45 @@ public sealed class ShipmentExportWorkbookBuilderTests
         using var workbook = Open(BuildModel());
 
         workbook.Worksheets.Select(s => s.Name).Should().NotContain("Fakturace");
+    }
+
+    [Fact]
+    public void Build_InvoiceWithBillingRecipients_WritesTheSectionWithNamesAndAddresses()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice(
+                "Hospoda U Kotvy", sequence: 1,
+                parties: [BuildParty("Hospoda U Kotvy", isPayer: true)],
+                billingRecipients:
+                [
+                    BuildRecipient("Bar Na Rohu", "Nádražní 5", "110 00 Praha"),
+                    BuildRecipient("Hospoda U Lípy", "Hlavní 12", "602 00 Brno")
+                ])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        var headingRow = RowOf(sheet, "FAKTURAČNÍ ADRESA PRO HOSPODA U KOTVY");
+        sheet.Cell(headingRow + 1, 1).GetString().Should().Be("Bar Na Rohu");
+        sheet.Cell(headingRow + 1, 2).GetString().Should().Be("Nádražní 5, 110 00 Praha");
+        sheet.Cell(headingRow + 2, 1).GetString().Should().Be("Hospoda U Lípy");
+        sheet.Cell(headingRow + 2, 2).GetString().Should().Be("Hlavní 12, 602 00 Brno");
+    }
+
+    [Fact]
+    public void Build_InvoiceWithNoBillingRecipients_WritesNoSection()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        sheet.Column(1).CellsUsed(c => c.GetString().StartsWith("FAKTURAČNÍ ADRESA")).Should().BeEmpty();
     }
 
     [Fact]

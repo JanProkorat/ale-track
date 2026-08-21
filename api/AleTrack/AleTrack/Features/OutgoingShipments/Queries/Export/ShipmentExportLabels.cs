@@ -49,6 +49,17 @@ public static class ShipmentExportLabels
     public static string PartyHeading(ShipmentExportInvoiceParty party) =>
         party.IsPayer ? $"{party.ClientName} · vlastní zboží" : party.ClientName;
 
+    /// <summary>
+    /// Heading of an invoice's billing-recipients section, naming the payer the office chose these
+    /// addresses for.
+    /// </summary>
+    /// <remarks>
+    /// Shared by both writers for the same reason <see cref="InvoiceHeading"/> and
+    /// <see cref="PartyHeading"/> are: the exact wording must not drift between them.
+    /// </remarks>
+    public static string BillingRecipientsHeading(ShipmentExportInvoice invoice) =>
+        $"Fakturační adresa pro {invoice.PayingClientName}";
+
     private static readonly Dictionary<ProductKind, string> KindLabels = new()
     {
         [ProductKind.Keg] = "Sud",
