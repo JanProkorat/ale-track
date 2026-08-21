@@ -5,14 +5,15 @@ import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
 
 const place = { id: 'p1', name: 'Letní zahrádka', address: { latitude: 50.7, longitude: 15.05 } };
 
+// Mutable so the "no official address" test below can exercise a client billed through its
+// payer (see the linked-clients-invoicing feature) without a mock that is always the happy path.
+let clientData: { officialAddress?: unknown; contactAddress?: unknown } = {
+  officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+  contactAddress: undefined,
+};
+
 vi.mock('src/hooks/useClients', () => ({
-  useClient: () => ({
-    data: {
-      officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
-      contactAddress: undefined,
-    },
-    isLoading: false,
-  }),
+  useClient: () => ({ data: clientData, isLoading: false }),
 }));
 
 // Mutable so individual tests can exercise the places query's in-flight state
@@ -33,6 +34,10 @@ vi.mock('src/hooks/useDeliveryPlaces', () => ({
 beforeEach(() => {
   placesData = [place];
   placesLoading = false;
+  clientData = {
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    contactAddress: undefined,
+  };
 });
 
 describe('OrderDeliveryAddressField', () => {
@@ -52,6 +57,15 @@ describe('OrderDeliveryAddressField', () => {
     render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
     fireEvent.mouseDown(screen.getByRole('combobox'));
     expect(screen.queryByText('Kontaktní')).not.toBeInTheDocument();
+  });
+
+  it('hides Fakturační when the client has no official address', () => {
+    // A client billed through its payer has only a contact address (or none at all) — the
+    // backend rejects an Official-kind order for such a client, so the picker must not offer it.
+    clientData = { officialAddress: undefined, contactAddress: undefined };
+    render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.DeliveryPlace, placeId: 'p1' }} onChange={vi.fn()} />);
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    expect(screen.queryByText('Fakturační')).not.toBeInTheDocument();
   });
 
   it('reports the decoded choice when a place is picked', () => {

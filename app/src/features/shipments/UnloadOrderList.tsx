@@ -5,6 +5,7 @@
 // line carries; this component only lays that shape out.
 
 import { Box, Card, Divider, Link, Stack, Typography } from '@mui/material';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import { StopAvatar } from './StopAvatar';
 import type { UnloadStop } from './unloadOrder';
 
@@ -94,6 +95,17 @@ function UnloadStopBlock({ stop, onOpenOrder }: {
           </Stack>
           {stop.subtitle && (
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{stop.subtitle}</Typography>
+          )}
+          {stop.addressMissing && (
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <WarningAmberOutlinedIcon
+                aria-label="Klient nemá vyplněnou dodací adresu"
+                sx={{ fontSize: 13, color: 'warning.main' }}
+              />
+              <Typography sx={{ fontSize: 11.5, color: 'warning.main' }}>
+                Klient nemá vyplněnou dodací adresu
+              </Typography>
+            </Stack>
           )}
           {stop.note && (
             <Typography variant="caption" color="text.secondary">{stop.note}</Typography>

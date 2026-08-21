@@ -1309,6 +1309,20 @@ describe('ShipmentDetail — the Vykládka tab', () => {
     expect(screen.getByText('Bez vykládky')).toBeInTheDocument();
   });
 
+  it('warns on a vykládka stop whose client has no address', async () => {
+    // Same stop as 'swaps the loading table for the stop-by-stop list' above, but its
+    // client has neither address at all — a sub-client billed through its payer (see the
+    // linked-clients-invoicing feature) can be saved that way.
+    const stop = unloadOrderStop();
+    stop.officialAddress = undefined;
+    stop.contactAddress = undefined;
+    renderDetail({ stops: [stop, chrastavaStop()] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vykládka' }));
+
+    expect(await screen.findByLabelText('Klient nemá vyplněnou dodací adresu')).toBeInTheDocument();
+  });
+
   it("opens the stop's order from its name, and drops the address-kind tail", () => {
     const onOpenOrder = vi.fn();
     renderDetail(shipmentWithTwoStops, onOpenOrder);

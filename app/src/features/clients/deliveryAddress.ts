@@ -10,27 +10,57 @@ import { formatPlaceAddress, formatStreetAddress } from 'src/features/clients/de
 import { addrKindLabel } from 'src/lib/labels';
 
 /** The `address · kind` tail shared by both resolvers below for the two
- * standard kinds (Contact falls back to Official when there's no contact
- * address). Neither resolver's place branch goes through here — they
+ * standard kinds. Neither resolver's place branch goes through here — they
  * legitimately differ: the editor prefixes the place's name (it has no
  * separate chip to carry it), the detail is address-only (its chip already
  * shows the name). Kept as one function so a wording/separator/fallback
  * change can't land on only one of the two screens the same stop renders on.
  *
+ * Either direction: Contact falls back to Official as it always has, and
+ * Official now falls through to Contact too — a client billed through its
+ * payer (see the linked-clients-invoicing feature) has no official address,
+ * and this fallback is what keeps its stop from rendering a blank line.
+ *
  * `addressText` is the same address without the ` · kind` tail, for the screens
  * that only need to say *where* — returned alongside rather than as a flag, so the
- * two can never be formatted from different address fields. */
+ * two can never be formatted from different address fields. It is the empty
+ * string (not `formatStreetAddress`'s '—' placeholder) when the client has
+ * neither address, so a caller can tell "no address" apart from "an address
+ * that formats oddly". */
 export function resolveFromAddresses(
   kind: DeliveryAddressKind,
   official: AddressDto | undefined,
   contact: AddressDto | undefined,
 ): { lat?: number; lng?: number; text: string; addressText: string } {
-  if (kind === DeliveryAddressKind.Contact && contact) {
-    const addressText = formatStreetAddress(contact);
-    return { lat: contact.latitude, lng: contact.longitude, text: `${addressText} · ${addrKindLabel(DeliveryAddressKind.Contact)}`, addressText };
+  const chosen = kind === DeliveryAddressKind.Contact ? contact ?? official : official ?? contact;
+  const isContact = chosen !== undefined && chosen === contact;
+  const addressText = chosen === undefined ? '' : formatStreetAddress(chosen);
+
+  return {
+    lat: chosen?.latitude,
+    lng: chosen?.longitude,
+    text: `${formatStreetAddress(chosen)} · ${addrKindLabel(isContact ? DeliveryAddressKind.Contact : DeliveryAddressKind.Official)}`,
+    addressText,
+  };
+}
+
+/** The delivery address a new order defaults to: the first kind the client can actually
+ *  satisfy. A client invoiced through a payer has no official address, and defaulting to it
+ *  produced an order whose stop rendered a blank destination.
+ *
+ *  Falls back to `Official` for a client with nothing at all — the picker needs a value, and
+ *  the shipment's own warning is what tells the user to fix the client. */
+export function defaultAddressKind(
+  official: AddressDto | undefined,
+  contact: AddressDto | undefined,
+  places: ClientDeliveryPlaceDto[],
+): { addressKind: DeliveryAddressKind; deliveryPlaceId?: string } {
+  if (official) return { addressKind: DeliveryAddressKind.Official };
+  if (contact) return { addressKind: DeliveryAddressKind.Contact };
+  if (places.length > 0) {
+    return { addressKind: DeliveryAddressKind.DeliveryPlace, deliveryPlaceId: places[0].id };
   }
-  const addressText = formatStreetAddress(official);
-  return { lat: official?.latitude, lng: official?.longitude, text: `${addressText} · ${addrKindLabel(DeliveryAddressKind.Official)}`, addressText };
+  return { addressKind: DeliveryAddressKind.Official };
 }
 
 /** Sentinel <Select> value for "+ Nové místo…". Every place id is encoded as

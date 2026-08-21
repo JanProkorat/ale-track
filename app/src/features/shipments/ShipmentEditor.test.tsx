@@ -241,6 +241,30 @@ describe('ShipmentEditor stop picker — listing places', () => {
   });
 });
 
+describe('ShipmentEditor stop row — missing-address warning', () => {
+  it('warns when the stop\'s client has neither address', () => {
+    // A sub-client billed through its payer (see the linked-clients-invoicing feature) can be
+    // saved with no official address, and if it also has no contact address the row's address
+    // line resolves to nothing — the case this warning exists to surface, on the one screen
+    // where the address can still be fixed.
+    availableOrders = [
+      new OutgoingShipmentOrderDto({
+        id: 'order-1', clientName: 'Hospoda U Netopýra', clientDeliveryPlaces: [], items: [],
+      }),
+    ];
+    shipmentResponse = new OutgoingShipmentDetailDto({
+      id: 'ship-1', name: 'Rozvoz Žitava', state: OutgoingShipmentState.Created, driverIds: [],
+      stops: [
+        new OutgoingShipmentStopDto({ id: 'stop-1', order: 1, orderId: 'order-1', selectedAddressKind: DeliveryAddressKind.Official }),
+      ],
+    });
+
+    renderEditor();
+
+    expect(screen.getByLabelText('Klient nemá vyplněnou dodací adresu')).toBeInTheDocument();
+  });
+});
+
 describe('ShipmentEditor stop picker — new place', () => {
   it('opens DeliveryPlaceDialog for the stop\'s client, not the sentinel', () => {
     renderEditor();

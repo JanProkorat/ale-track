@@ -77,6 +77,9 @@ export interface UnloadStop {
   /** Resolved address line, when the stop has one. Without the address-kind tail: which of the
    *  client's addresses it is only matters where it can be changed, and that is the editor. */
   subtitle?: string;
+  /** True when the stop's client has no resolvable address — nothing blocks saving such a
+   *  client, so the shipment is where it has to be visible. */
+  addressMissing: boolean;
   note?: string;
   /** The order behind a delivery stop, so the row can open it. */
   orderId?: string;
@@ -138,6 +141,7 @@ function shapeStop(
     return {
       kind: 'company',
       title: stop.label ?? '—',
+      addressMissing: false,
       lines: stockPurchases.map(lineFrom),
     };
   }
@@ -146,15 +150,18 @@ function shapeStop(
     return {
       kind: 'custom',
       title: stop.label ?? '—',
+      addressMissing: false,
       note: stop.note,
       lines: [],
     };
   }
 
+  const resolved = resolveDetailStopAddress(stop);
   return {
     kind: 'order',
     title: stop.clientName ?? '—',
-    subtitle: resolveDetailStopAddress(stop).addressText,
+    subtitle: resolved.addressText,
+    addressMissing: resolved.addressText.trim().length === 0,
     orderId: stop.orderId,
     clientId: stop.clientId,
     // The order's beer, then the supplier goods bought alongside it. Those are carried on the

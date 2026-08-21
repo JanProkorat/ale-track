@@ -67,7 +67,7 @@ export function OrderDeliveryAddressField({
         value={encodeStopChoice(value.kind, value.placeId)}
         onChange={(e) => handleChange(e.target.value)}
       >
-        <MenuItem value="Official">Fakturační</MenuItem>
+        {official && <MenuItem value="Official">Fakturační</MenuItem>}
         {contact && <MenuItem value="Contact">Kontaktní</MenuItem>}
         {places.length > 0 && [
           <ListSubheader key="places-header">Vlastní místa</ListSubheader>,

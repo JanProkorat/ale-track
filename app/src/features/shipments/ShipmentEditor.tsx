@@ -185,13 +185,13 @@ function SortableStopRow({
   const isGone = stop.addressKind === DeliveryAddressKind.DeliveryPlace
     && deletedPlaceName != null
     && !places.some((p) => p.id === stop.deliveryPlaceId);
-  const addressText = isOrder ? resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId).text : undefined;
+  const resolvedAddress = isOrder ? resolveStopAddress(order, stop.addressKind, stop.deliveryPlaceId) : undefined;
   const title = isCompany ? (stop.label || 'Firemní sklad')
     : isOrder ? (order?.clientName ?? '—')
       : (stop.label || 'Vlastní zastávka');
   const subtitle = isSupplier ? 'Vyzvednutí u dodavatele'
     : isCompany ? (requiredForPickup ? 'Vyzvednutí z garáže' : companyAddress)
-      : isOrder ? addressText : (stop.note || 'Vlastní zastávka');
+      : isOrder ? resolvedAddress?.text : (stop.note || 'Vlastní zastávka');
   const deleteTooltip = isCompany && hasStockPurchases
     ? 'Dokud je v nakládce zboží na sklad, zastávka se po uložení vrátí.'
     : '';
@@ -227,9 +227,17 @@ function SortableStopRow({
          * (`o.number + ' · '`); OutgoingShipmentOrderDto carries no such
          * field, so that prefix is dropped here — a data-model deviation,
          * not a design one. */}
-        <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
-          {subtitle}
-        </Typography>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Typography sx={{ fontSize: 11.5 }} color="text.secondary" noWrap>
+            {subtitle}
+          </Typography>
+          {resolvedAddress?.addressText.trim().length === 0 && (
+            <WarningAmberOutlinedIcon
+              aria-label="Klient nemá vyplněnou dodací adresu"
+              sx={{ fontSize: 13, color: 'warning.main' }}
+            />
+          )}
+        </Stack>
       </Box>
       {isOrder && (
         <Select

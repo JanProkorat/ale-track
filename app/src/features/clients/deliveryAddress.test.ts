@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DeliveryAddressKind, type AddressDto, type ClientDeliveryPlaceDto } from 'src/generated/api-client';
-import { decodeStopChoice, encodeStopChoice, resolveOrderDeliveryAddress } from './deliveryAddress';
+import {
+  decodeStopChoice, defaultAddressKind, encodeStopChoice, resolveFromAddresses, resolveOrderDeliveryAddress,
+} from './deliveryAddress';
 
 const official = { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' } as AddressDto;
 const contact = { streetName: 'Vedlejší', streetNumber: '2', city: 'Jablonec', zip: '46601' } as AddressDto;
@@ -51,5 +53,58 @@ describe('resolveOrderDeliveryAddress', () => {
     const r = resolveOrderDeliveryAddress(official, contact, [], DeliveryAddressKind.DeliveryPlace, 'gone');
     expect(r.text).toContain('Hlavní');
     expect(r.placeName).toBeUndefined();
+  });
+});
+
+describe('resolveFromAddresses', () => {
+  it('falls through to the contact address when there is no official one', () => {
+    // A sub-client billed through its payer has no official address, and an Official kind
+    // would otherwise render a blank line.
+    const contact = { streetName: 'Dlouhá', streetNumber: '14', city: 'Brno', zip: '60200', latitude: 49.2, longitude: 16.6 };
+
+    const r = resolveFromAddresses(DeliveryAddressKind.Official, undefined, contact as AddressDto);
+
+    expect(r.addressText).toContain('Dlouhá');
+    expect(r.lat).toBe(49.2);
+  });
+
+  it('returns an empty address text when the client has neither address', () => {
+    const r = resolveFromAddresses(DeliveryAddressKind.Official, undefined, undefined);
+
+    expect(r.addressText.trim()).toBe('');
+    expect(r.lat).toBeUndefined();
+  });
+});
+
+const address = (): AddressDto => ({
+  streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001', latitude: 50.7, longitude: 15.05,
+} as AddressDto);
+
+describe('defaultAddressKind', () => {
+  it('prefers the official address when the client has one', () => {
+    const r = defaultAddressKind(address(), address(), []);
+
+    expect(r.addressKind).toBe(DeliveryAddressKind.Official);
+    expect(r.deliveryPlaceId).toBeUndefined();
+  });
+
+  it('falls back to the contact address when there is no official one', () => {
+    const r = defaultAddressKind(undefined, address(), []);
+
+    expect(r.addressKind).toBe(DeliveryAddressKind.Contact);
+  });
+
+  it('falls back to the first delivery place when the client has neither address', () => {
+    const r = defaultAddressKind(undefined, undefined, [{ id: 'place-1' } as ClientDeliveryPlaceDto]);
+
+    expect(r.addressKind).toBe(DeliveryAddressKind.DeliveryPlace);
+    expect(r.deliveryPlaceId).toBe('place-1');
+  });
+
+  it('falls back to Official when the client has nothing at all', () => {
+    // The warning on the shipment is what tells the user; the picker still needs a value.
+    const r = defaultAddressKind(undefined, undefined, []);
+
+    expect(r.addressKind).toBe(DeliveryAddressKind.Official);
   });
 });
