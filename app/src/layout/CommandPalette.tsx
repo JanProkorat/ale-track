@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Dialog, Box, InputBase, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import {
+  Dialog, Box, IconButton, InputBase, List, ListItemButton, ListItemIcon, ListItemText,
+  Typography, useMediaQuery,
+} from '@mui/material';
+import { type Theme } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
 import SportsBarOutlinedIcon from '@mui/icons-material/SportsBarOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
@@ -31,6 +36,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Same switch DataTable uses: one render tree, the chrome absent rather than
+  // CSS-hidden, so it stays out of the a11y tree where it does not belong.
+  const isCompact = useMediaQuery((t: Theme) => t.breakpoints.down('compact'), { noSsr: true });
 
   // Record sources — fetched only while the palette is open (and the user may
   // see that module). Same query keys as the module hooks, so the cache is shared.
@@ -98,7 +106,27 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       open={open}
       onClose={onClose}
       slotProps={{
-        paper: { sx: { position: 'fixed', top: '11vh', m: 0, width: 'min(640px, 94vw)', borderRadius: 3 } },
+        // The Dialog's own flex container does the placing. `position: fixed` on the paper
+        // took it out of that flow, and with no `left` it fell back to its static position —
+        // which is why the panel sat off-centre and clipped on a phone.
+        container: { sx: { alignItems: 'flex-start' } },
+        paper: {
+          sx: (t: Theme) => ({
+            m: 0,
+            mt: '11vh',
+            width: 'min(640px, 94vw)',
+            borderRadius: 3,
+            // The theme already makes dialogs full-bleed below `compact`; the old local
+            // width and radius were overriding half of that rule. Go with it, and take the
+            // full height so the results scroll inside the sheet instead of off-screen.
+            [t.breakpoints.down('compact')]: {
+              mt: 0,
+              width: '100%',
+              height: '100%',
+              borderRadius: 0,
+            },
+          }),
+        },
       }}
       onKeyDown={(e) => {
         if (e.key === 'ArrowDown') {
@@ -126,8 +154,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           onChange={(e) => setQuery(e.target.value)}
           sx={{ fontSize: 16 }}
         />
+        {/* Full-bleed leaves no backdrop to tap and a phone has no Esc key, so the sheet
+            needs its own way out. The pointer layouts have both, and skip it. */}
+        {isCompact && (
+          <IconButton onClick={onClose} aria-label="Zavřít hledání" sx={{ mr: -1 }}>
+            <CloseIcon />
+          </IconButton>
+        )}
       </Box>
-      <List sx={{ maxHeight: 'min(60vh, 440px)', overflowY: 'auto', p: 1 }}>
+      <List sx={(t) => ({
+        maxHeight: 'min(60vh, 440px)', overflowY: 'auto', p: 1,
+        // In the sheet the cap would strand the list halfway down; fill what's left instead.
+        [t.breakpoints.down('compact')]: { maxHeight: 'none', flex: 1, minHeight: 0 },
+      })}>
         {items.length === 0 && (
           <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center', fontSize: 13.5 }}>
             Nic nenalezeno pro „{query}"

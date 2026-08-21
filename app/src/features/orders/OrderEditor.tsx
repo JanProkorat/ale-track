@@ -24,15 +24,14 @@ import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
 import { PriceWithList } from 'src/components/common/PriceWithList';
 import { clientComboOptions } from 'src/features/clients/clientOptions';
-import { groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
+import { groupByBrewery, groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { initials, plural, fmtLiters, orderNumber } from 'src/lib/format';
-import { kindLabel, addrKindValue, chargeKindLabel } from 'src/lib/labels';
+import { kindLabel, kindName, addrKindValue, chargeKindLabel } from 'src/lib/labels';
 import {
-  ProductKind,
   DeliveryAddressKind,
   CreateOrderDto,
   CreateOrderItemDto,
@@ -50,6 +49,7 @@ import {
 } from 'src/generated/api-client';
 import { useClients } from 'src/hooks/useClients';
 import { useBreweries } from 'src/hooks/useBreweries';
+import { useProducts } from 'src/hooks/useProducts';
 import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
 import { groupSupplierGoods, primaryPrice, resolvedGoodMap } from './supplierGoodCatalogModel';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
@@ -57,7 +57,11 @@ import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/com
 import { TOPBAR_H } from 'src/layout/Topbar';
 import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
 
-const KIND_TABS: ProductKind[] = [ProductKind.Keg, ProductKind.Bottle, ProductKind.Can, ProductKind.Multipack, ProductKind.Other];
+// Member names, not the numeric members: the real API serializes enums as strings
+// (JsonStringEnumConverter) while demo data sends numbers, so everything here buckets
+// and compares through kindName — the same convention as VolumeTab and productSort.
+const KIND_TABS = ['Keg', 'Bottle', 'Can', 'Multipack', 'Other'] as const;
+type KindTab = (typeof KIND_TABS)[number];
 
 interface CartLine {
   productId: string;
@@ -467,7 +471,7 @@ export function OrderEditor({
   const [goodFallback, setGoodFallback] = useState<Record<string, GoodFallback>>({});
   const [catalogTab, setCatalogTab] = useState<'history' | 'browse' | 'suppliers'>('history');
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<ProductKind | 'all'>('all');
+  const [kindFilter, setKindFilter] = useState<KindTab | 'all'>('all');
   const [brewOpen, setBrewOpen] = useState<Record<string, boolean>>({});
   const [supOpen, setSupOpen] = useState<Record<string, boolean>>({});
   const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
@@ -549,10 +553,21 @@ export function OrderEditor({
     return m;
   }, [breweriesQuery.data]);
 
-  // Full product lookup (recent + every browse item) so the cart can render
-  // names/prices/totals without any extra fetch per line.
+  const allProductsQuery = useProducts();
+
+  // Full product lookup, so the cart can render names/prices/totals without an extra
+  // fetch per line.
+  //
+  // Fed by *both* catalog sources, not just the history one. The catalog can be browsed
+  // with no client chosen, and then it reads the plain product list — a lookup that knew
+  // only the client-history query (disabled until there is a client) left every line added
+  // that way showing "—" and 0 Kč, cart total included.
+  //
+  // The plain list goes in first so a history entry overwrites it: that response is the
+  // only one carrying the client's negotiated price.
   const productMap = useMemo(() => {
     const m = new Map<string, ProductListItemDto>();
+    for (const p of allProductsQuery.data ?? []) if (p.id) m.set(p.id, p);
     const data = historyQuery.data;
     if (data) {
       for (const p of data.recent ?? []) if (p.id) m.set(p.id, p);
@@ -565,7 +580,7 @@ export function OrderEditor({
       }
     }
     return m;
-  }, [historyQuery.data]);
+  }, [historyQuery.data, allProductsQuery.data]);
 
   // Suppliers' price lists for the "Další zboží" tab. Two steps because the list
   // endpoint carries goods *names* but not their ids or prices; the same
@@ -656,13 +671,26 @@ export function OrderEditor({
   // one order — the same one "Procházet dle pivovaru" uses.
   const recentAll = useMemo(() => inDisplayOrder(historyQuery.data?.recent ?? []), [historyQuery.data]);
   const recent = recentAll.filter(matchesSearch);
-  const breweries = historyQuery.data?.breweries ?? [];
+  // Browsing the catalog does not depend on the client — only "Dříve objednané" does.
+  // Without one, the history endpoint is disabled, so the nesting is rebuilt from the
+  // unconditional product list. With one, the endpoint's own grouping wins: it is the only
+  // source carrying that client's negotiated prices.
+  const breweries = clientId
+    ? historyQuery.data?.breweries ?? []
+    : groupByBrewery(allProductsQuery.data ?? []);
+  // Whichever query actually backs the catalog right now. Keyed on the history query alone,
+  // the spinner never showed without a client — a disabled query does not report isLoading —
+  // and the browse tab flashed an empty catalog while the product list was still in flight.
+  const catalogLoading = clientId ? historyQuery.isLoading : allProductsQuery.isLoading;
 
   const kindCounts = useMemo(() => {
-    const counts = new Map<ProductKind, number>();
+    const counts = new Map<string, number>();
     for (const b of breweries) {
       for (const k of b.kinds ?? []) {
-        const kind = k.kind ?? ProductKind.Other;
+        // Keyed by member name. Keying by the raw wire value left every KIND_TABS lookup
+        // missing against real (string) data, which dropped all five buttons and left the
+        // "Vše" reset standing on its own.
+        const kind = kindName(k.kind) ?? 'Other';
         const n = flattenKind(k).filter(matchesSearch).length;
         if (n) counts.set(kind, (counts.get(kind) ?? 0) + n);
       }
@@ -808,7 +836,17 @@ export function OrderEditor({
                   <Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12, bgcolor: 'background.paper' }}>
                     {clientInitials(selectedClient.name)}
                   </Box>
-                  <Typography sx={{ fontWeight: 700, fontSize: 13.5, flex: 1, minWidth: 0 }} noWrap>{selectedClient.name}</Typography>
+                  {/* The trading name comes along for the same reason the picker shows it:
+                      two clients can share a name, and this card is the only thing standing
+                      between the reader and an order billed to the wrong one. */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{selectedClient.name}</Typography>
+                    {selectedClient.businessName && (
+                      <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>
+                        {selectedClient.businessName}
+                      </Typography>
+                    )}
+                  </Box>
                   {mode === 'create' && (
                     <Button size="small" onClick={() => changeClient(null)}>Změnit</Button>
                   )}
@@ -856,23 +894,50 @@ export function OrderEditor({
             <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Katalog produktů</Typography>
           </Stack>
           <Box sx={{ p: 2.5, flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+            {/* A container, not a viewport breakpoint: what decides whether the three tabs
+                fit is this column's width, and the column stays narrow even on a 1194px
+                iPad in landscape. Keyed on the viewport, the labels stayed long exactly
+                where they needed to shrink. */}
+            <Box sx={{ containerType: 'inline-size' }}>
             <ToggleButtonGroup
               exclusive
               size="small"
               value={catalogTab}
               onChange={(_e, v: 'history' | 'browse' | 'suppliers' | null) => v && setCatalogTab(v)}
-              sx={{ mb: 1.75, flexWrap: 'wrap' }}
+              sx={{
+                mb: 1.75,
+                // Fill the column instead of leaving a ragged tail. `display: flex` because
+                // the group is inline-flex by default, and flex-basis 0 so the three share
+                // the width evenly. Wrapping stays as the fallback: flex items will not
+                // shrink past their own content, so a very narrow column still breaks
+                // rather than overflowing.
+                display: 'flex',
+                flexWrap: 'wrap',
+                '& .MuiToggleButtonGroup-grouped': { flex: '1 1 0', minWidth: 'max-content' },
+              }}
             >
+              {/* Two labels per tab: the prototype's wording by default, swapped for a short
+                  form once this column is too narrow to hold all three side by side. The
+                  full label is the base so a browser without @container support — and
+                  happy-dom, which the tests query by label — keeps the prototype text. */}
               <ToggleButton value="history" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
-                <HistoryIcon fontSize="small" />&nbsp;Dříve objednané{recentAll.length > 0 ? ` (${recentAll.length})` : ''}
+                <HistoryIcon fontSize="small" />&nbsp;
+                <Box component="span" sx={{ display: 'inline', '@container (max-width: 519.98px)': { display: 'none' } }}>Dříve objednané</Box>
+                <Box component="span" sx={{ display: 'none', '@container (max-width: 519.98px)': { display: 'inline' } }}>Dříve</Box>
+                {recentAll.length > 0 ? `\u00a0(${recentAll.length})` : ''}
               </ToggleButton>
               <ToggleButton value="browse" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
-                <StorefrontIcon fontSize="small" />&nbsp;Procházet dle pivovaru
+                <StorefrontIcon fontSize="small" />&nbsp;
+                <Box component="span" sx={{ display: 'inline', '@container (max-width: 519.98px)': { display: 'none' } }}>Procházet dle pivovaru</Box>
+                <Box component="span" sx={{ display: 'none', '@container (max-width: 519.98px)': { display: 'inline' } }}>Dle pivovaru</Box>
               </ToggleButton>
               <ToggleButton value="suppliers" sx={{ gap: 0.75, textTransform: 'none', fontWeight: 700 }}>
-                <LocalShippingOutlinedIcon fontSize="small" />&nbsp;Další zboží
+                <LocalShippingOutlinedIcon fontSize="small" />&nbsp;
+                <Box component="span" sx={{ display: 'inline', '@container (max-width: 519.98px)': { display: 'none' } }}>Další zboží</Box>
+                <Box component="span" sx={{ display: 'none', '@container (max-width: 519.98px)': { display: 'inline' } }}>Zboží</Box>
               </ToggleButton>
             </ToggleButtonGroup>
+            </Box>
 
             <Box sx={{ mb: 1.75 }}>
               <SearchField
@@ -883,11 +948,7 @@ export function OrderEditor({
               />
             </Box>
 
-            {!clientId ? (
-              // No "vpravo": the client card is above the catalog on a phone and
-              // beside it on lg, so a positional word is wrong half the time.
-              <EmptyState title="Vyberte klienta" description="Katalog produktů se zobrazí po výběru klienta." dense />
-            ) : catalogTab === 'suppliers' ? (
+            {catalogTab === 'suppliers' ? (
               // Ahead of the history gate below: this tab reads the suppliers' price
               // lists, not the client's order history, so it must not wait on it.
               suppliersQuery.isLoading || (supplierIds.length > 0 && loadedSuppliers.length === 0) ? (
@@ -914,10 +975,19 @@ export function OrderEditor({
                   />
                 ))
               )
-            ) : historyQuery.isLoading ? (
+            ) : catalogLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress size={28} /></Box>
             ) : catalogTab === 'history' ? (
-              recent.length === 0 ? (
+              // The only client-dependent tab: it lists what this client ordered before.
+              // No "vpravo": the client card is above the catalog on a phone and beside it
+              // on lg, so a positional word would be wrong half the time.
+              !clientId ? (
+                <EmptyState
+                  title="Vyberte klienta"
+                  description="Dříve objednané se zobrazí po výběru klienta. Katalog můžete procházet i bez toho."
+                  dense
+                />
+              ) : recent.length === 0 ? (
                 recentAll.length === 0 ? (
                   <EmptyState
                     icon={<HistoryIcon />}
@@ -944,14 +1014,22 @@ export function OrderEditor({
                   exclusive
                   size="small"
                   value={kindFilter}
-                  onChange={(_e, v: ProductKind | 'all' | null) => v !== null && setKindFilter(v)}
-                  sx={{ mb: 1.75, flexWrap: 'wrap' }}
+                  onChange={(_e, v: KindTab | 'all' | null) => v !== null && setKindFilter(v)}
+                  sx={{
+                    mb: 1.75,
+                    // Fills the column, like the tab strip above. Every kind renders whether
+                    // or not this client's catalog has any, so the row is a fixed six buttons
+                    // and the widths do not shift as the data changes.
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    '& .MuiToggleButtonGroup-grouped': { flex: '1 1 0', minWidth: 'max-content' },
+                  }}
                 >
                   <ToggleButton value="all" sx={{ textTransform: 'none', fontWeight: 700 }}>Vše</ToggleButton>
-                  {KIND_TABS.filter((k) => (kindCounts.get(k) ?? 0) > 0).map((k) => (
+                  {KIND_TABS.map((k) => (
                     <ToggleButton key={k} value={k} sx={{ textTransform: 'none', fontWeight: 700 }}>
                       {kindLabel(k)}
-                      <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{kindCounts.get(k)}</Box>
+                      <Box component="span" sx={{ ml: 0.5, opacity: 0.6 }}>{kindCounts.get(k) ?? 0}</Box>
                     </ToggleButton>
                   ))}
                 </ToggleButtonGroup>
@@ -961,7 +1039,7 @@ export function OrderEditor({
                     .map((b) => ({
                       brewery: b,
                       items: inDisplayOrder((b.kinds ?? [])
-                        .filter((k) => kindFilter === 'all' || k.kind === kindFilter)
+                        .filter((k) => kindFilter === 'all' || kindName(k.kind) === kindFilter)
                         .flatMap(flattenKind)
                         .filter(matchesSearch)),
                     }))

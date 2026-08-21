@@ -5,7 +5,9 @@
 // resolution behind both is covered directly in stopAddress.test.ts.
 
 import { type ReactNode } from 'react';
-import { render, screen, within, fireEvent, waitForElementToBeRemoved, act } from '@testing-library/react';
+import {
+  render, screen, within, fireEvent, waitForElementToBeRemoved, act, cleanup,
+} from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -977,9 +979,10 @@ describe('ShipmentDetail — Vůz and Řidiči cards read from the inlined shipm
 // interaction the brewery ramp has no free hand for. What the swap must preserve:
 // the ramp's own control stays reachable without expanding anything, and the desk
 // controls stay reachable at all.
-describe('ShipmentDetail — nakládka when the columns do not fit', () => {
+describe('ShipmentDetail — the nakládka table', () => {
   /** MUI's useMediaQuery reads window.matchMedia; happy-dom resolves it against a
-   * 1024px window, so force the answer rather than depend on that default. */
+   * 1024px window. Only one test needs it now — the one proving the layout no longer
+   * forks on it. */
   function setCompact(compact: boolean) {
     window.matchMedia = ((query: string) => ({
       matches: compact && query.includes('max-width'),
@@ -991,23 +994,6 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
       removeEventListener: () => {},
       dispatchEvent: () => false,
     })) as unknown as typeof window.matchMedia;
-  }
-
-  /** happy-dom ships no ResizeObserver, so the card measures 0 (= "not known") and
-   * the layout falls back to the media query. Stubbing one lets a test say how much
-   * room the card actually got, which is the signal the tablet case turns on. */
-  function setCardWidth(width: number) {
-    vi.stubGlobal('ResizeObserver', class {
-      constructor(private readonly callback: ResizeObserverCallback) {}
-      observe() {
-        this.callback(
-          [{ contentRect: { width } } as ResizeObserverEntry],
-          this as unknown as ResizeObserver,
-        );
-      }
-      unobserve() {}
-      disconnect() {}
-    });
   }
 
   const originalMatchMedia = window.matchMedia;
@@ -1045,40 +1031,86 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     );
   }
 
-  it('stacks the loading list instead of rendering the table', () => {
-    setCompact(true);
+  it('heads the four columns and reads out the product', () => {
     renderNakladka();
 
+    expect(screen.getByText('Produkt')).toBeInTheDocument();
+    expect(screen.getByText('Ks')).toBeInTheDocument();
+    expect(screen.getByText('Zdroj')).toBeInTheDocument();
+    expect(screen.getByText('Faktury')).toBeInTheDocument();
     expect(screen.getByText('Roh. Cherry beer')).toBeInTheDocument();
-    expect(screen.getAllByText('3 ks').length).toBeGreaterThan(0);
-    // The Množství column header is table-only; its absence is what proves the swap.
-    expect(screen.queryByText('Množství')).not.toBeInTheDocument();
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * The regression this guards: the old layout forked on the viewport and on a measured
+   * card width, rendering either a table or a stacked list. Widths are the container
+   * query's business now, so a media query must not change what renders — a fork that
+   * crept back would show up here as a difference between the two runs.
+   */
+  it('renders one layout whatever the media query says', () => {
+    setCompact(true);
+    const { container: narrow } = renderNakladka();
+    const narrowRows = narrow.querySelectorAll('[data-testid="nakladka-row"]').length;
+    const narrowTables = narrow.querySelectorAll('table').length;
+
+    cleanup();
+    setCompact(false);
+    const { container: wide } = renderNakladka();
+
+    expect(wide.querySelectorAll('[data-testid="nakladka-row"]').length).toBe(narrowRows);
+    expect(narrowRows).toBe(1);
+    // No <table> in either: the columns are a grid, so a section can slide without the
+    // several sibling tables the old wide layout needed to keep its columns aligned.
+    expect(wide.querySelectorAll('table').length).toBe(narrowTables);
+    expect(narrowTables).toBe(0);
   });
 
   it('shows every control without an expander, so nothing costs a tap to reach', () => {
-    setCompact(true);
     renderNakladka();
 
-    // No expander at all: an earlier revision hid the numbers below behind one, and
-    // a list that is worked through rather than skimmed pays that tap on every item.
+    // No expander at all: an earlier revision hid the numbers behind one, and a list
+    // that is worked through rather than skimmed pays that tap on every item.
     expect(screen.queryByLabelText('Rozbalit Roh. Cherry beer')).not.toBeInTheDocument();
 
     // Scoped to the row — "F1" is also the filter tab and the summary bar's label.
     const row = within(screen.getByTestId('nakladka-row'));
     expect(row.getByLabelText('Přidat kus z garáže')).toBeInTheDocument();
-    expect(row.getByLabelText('Přidat kus na fakturu 2')).toBeInTheDocument();
+    // The invoice split is a typable field with steppers either side, the richer control
+    // the wide table always had — the stacked layout's ±1-only pair is gone with it.
+    expect(row.getByLabelText('Kusy na faktuře 2')).toBeInTheDocument();
+    expect(row.getByLabelText('Kusy na faktuře 2 — přidat')).toBeInTheDocument();
     expect(row.getByText('F1')).toBeInTheDocument();
-    expect(row.getByText('Z pivovaru')).toBeInTheDocument();
+    expect(row.getByText('z pivovaru')).toBeInTheDocument();
+  });
+
+  /**
+   * The three Zdroj lines are the row's own partition — what the brewery hands over,
+   * what comes off our shelf instead, what we buy for the shelf — so all three are
+   * there at zero too. Dropping the empty ones (which is what the shaping used to do)
+   * both hid which of the three a number was and moved the remaining lines up, so the
+   * same number sat on a different line of the cluster from one row to the next.
+   */
+  it('names all three sources on a row that only has one of them', () => {
+    renderNakladka();
+
+    // The product is ordered from the brewery outright: nothing off our shelf, nothing
+    // bought for it.
+    const row = within(screen.getByTestId('nakladka-row'));
+    expect(row.getByText('z pivovaru')).toBeInTheDocument();
+    expect(row.getByText('z garáže')).toBeInTheDocument();
+    expect(row.getByText('do garáže')).toBeInTheDocument();
+    // And the empty ones are steppable, so a piece can be moved onto them from here.
+    expect(row.getByLabelText('Přidat kus do garáže')).toBeInTheDocument();
+    expect(row.getByLabelText('Ubrat kus do garáže')).toBeDisabled();
   });
 
   it('gives every invoice its own state control, right next to its own number', () => {
-    setCompact(true);
     renderNakladka();
 
     // The product hasn't been split onto invoice 2 yet, so only F1 carries pieces —
-    // but the row still owes F2 a slot (a placeholder dash) alongside its stepper,
-    // same as the desktop table does. Losing that slot is what made only one
-    // control show up at all, off in the header rather than by its own invoice.
+    // but the row still owes F2 a chip, with a placeholder dash where its state control
+    // would go. Losing that is what once left a single control off in the header.
     const row = within(screen.getByTestId('nakladka-row'));
     expect(row.getByLabelText('Nakládka na faktuře 1: Nenaloženo')).toBeInTheDocument();
     expect(row.getByText('F1')).toBeInTheDocument();
@@ -1089,7 +1121,6 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
   });
 
   it('commits a loading state straight off the row', () => {
-    setCompact(true);
     renderNakladka();
 
     fireEvent.click(screen.getByLabelText('Nakládka na faktuře 1: Nenaloženo'));
@@ -1098,38 +1129,6 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     expect(setLoadingStateMutate.mock.calls[0][0]).toMatchObject({
       productId: 'product-1', sequence: 1, state: 'Dictated',
     });
-  });
-
-  it('still renders the table above the breakpoint', () => {
-    setCompact(false);
-    renderNakladka();
-
-    expect(screen.getByText('Množství')).toBeInTheDocument();
-    // The table's own split control is a typable field, not the phone's stepper pair.
-    expect(screen.getByLabelText('Kusy na faktuře 2')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Přidat kus na fakturu 2')).not.toBeInTheDocument();
-  });
-
-  // The tablet case, and the reason the swap is measured rather than a breakpoint:
-  // from `md` up the detail screen splits into 1.5fr/1.2fr, so a wide viewport can
-  // still hand the nakládka a card too narrow for its columns. A media query calls
-  // that viewport "desktop" and leaves the table scrolling sideways.
-  it('stacks when the card is squeezed, however wide the viewport says it is', () => {
-    setCompact(false);
-    setCardWidth(420);
-    renderNakladka();
-
-    expect(screen.queryByText('Množství')).not.toBeInTheDocument();
-    expect(screen.getByTestId('nakladka-row')).toBeInTheDocument();
-  });
-
-  it('keeps the table when the card has room for the columns', () => {
-    setCompact(false);
-    setCardWidth(900);
-    renderNakladka();
-
-    expect(screen.getByText('Množství')).toBeInTheDocument();
-    expect(screen.queryByTestId('nakladka-row')).not.toBeInTheDocument();
   });
 
   /** Two products of two breweries. Svijany's row is first in the data, while Frýdlant's
@@ -1162,61 +1161,23 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     );
   }
 
-  it('heads each brewery of the table, with that brewery’s kinds under it', () => {
-    setCompact(false);
-    setCardWidth(900);
+  it('heads each brewery, with that brewery’s kinds under it', () => {
     const { container } = renderTwoBreweries();
 
-    // Each brewery owns a table of its own, labelled with its name — that is what lets
-    // Collapse slide a section without the rows leaving the layout of the others.
-    const frydlant = screen.getByRole('table', { name: 'Pivovar Frýdlant' });
-    // The kind heading is the only cell in it that spans the columns.
-    expect([...frydlant.querySelectorAll('td[colspan]')].map((c) => c.textContent))
-      .toEqual(['Sud1 položka']);
-    expect(within(frydlant).getByText('Albrecht 12°')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sbalit Pivovar Frýdlant')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sbalit Pivovar Svijany')).toBeInTheDocument();
+    // One kind heading per brewery, each naming the kind its rows are of.
+    expect(screen.getByText('Sud')).toBeInTheDocument();
+    expect(screen.getByText('Basa')).toBeInTheDocument();
 
-    const svijany = screen.getByRole('table', { name: 'Pivovar Svijany' });
-    expect([...svijany.querySelectorAll('td[colspan]')].map((c) => c.textContent))
-      .toEqual(['Basa1 položka']);
-    expect(within(svijany).getByText('Vozka 11°')).toBeInTheDocument();
-
-    // Frýdlant's display order is the lower one, so its block comes first.
+    // Frýdlant's display order is the lower one, so its block comes first — and its own
+    // product with it.
     const text = container.textContent ?? '';
     expect(text.indexOf('Pivovar Frýdlant')).toBeLessThan(text.indexOf('Pivovar Svijany'));
-  });
-
-  it('keeps the brewery sections when the list stacks', () => {
-    setCompact(true);
-    const { container } = renderTwoBreweries();
-
-    // The brewery names appear nowhere else on the screen, so their positions in the
-    // rendered text are the section order.
-    const text = container.textContent ?? '';
-    expect(text).toContain('Pivovar Frýdlant');
-    expect(text.indexOf('Pivovar Frýdlant')).toBeLessThan(text.indexOf('Pivovar Svijany'));
-  });
-
-  it('keeps the columns of the head, the sections and the totals lined up', () => {
-    setCompact(false);
-    setCardWidth(900);
-    const { container } = renderTwoBreweries();
-
-    // The wide layout is four tables — head, one per brewery, totals — so that a section
-    // can slide. They line up only because Produkt is declared elastic in each of them
-    // while every other column is a fixed width; dropping that on any one table would
-    // knock its rows out of line with the head.
-    const tables = [...container.querySelectorAll('table')];
-    expect(tables).toHaveLength(4);
-    for (const table of tables) {
-      const firstColumnCell = [...table.querySelectorAll('th,td')]
-        .find((cell) => !cell.hasAttribute('colspan'));
-      expect(firstColumnCell).toHaveStyle({ width: '100%' });
-    }
+    expect(text.indexOf('Albrecht 12°')).toBeLessThan(text.indexOf('Vozka 11°'));
   });
 
   it('marks each brewery head with that brewery’s own colour', () => {
-    setCompact(false);
-    setCardWidth(900);
     renderTwoBreweries();
 
     // The square is what makes a group boundary visible mid-list.
@@ -1228,8 +1189,6 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
   });
 
   it('collapses a brewery to its head, and expands it again', async () => {
-    setCompact(false);
-    setCardWidth(900);
     renderTwoBreweries();
 
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
@@ -1248,17 +1207,14 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     expect(screen.getByText('Vozka 11°')).toBeInTheDocument();
 
     // Collapsing is presentation only — what is on the pallet has not changed, so the
-    // totals row still counts the hidden brewery's piece.
-    const totals = screen.getByText('Celkem k naložení').closest('tr');
-    expect(totals?.textContent).toContain('3 ks');
+    // summary bar still counts the hidden brewery's piece.
+    expect(screen.getByText('Celkem k naložení').parentElement?.textContent).toContain('3');
 
     fireEvent.click(screen.getByLabelText('Rozbalit Pivovar Frýdlant'));
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
   });
 
   it('keeps the rows when a brewery is reopened mid-slide', async () => {
-    setCompact(false);
-    setCardWidth(900);
     renderTwoBreweries();
 
     fireEvent.click(screen.getByLabelText('Sbalit Pivovar Frýdlant'));
@@ -1269,16 +1225,6 @@ describe('ShipmentDetail — nakládka when the columns do not fit', () => {
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
     // Long enough for the shut that was cancelled to have finished, had it kept running.
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)); });
-    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
-  });
-
-  it('collapses the stacked list the same way', async () => {
-    setCompact(true);
-    renderTwoBreweries();
-
-    fireEvent.click(screen.getByLabelText('Sbalit Pivovar Svijany'));
-
-    await waitForElementToBeRemoved(() => screen.queryByText('Vozka 11°'), { timeout: 5000 });
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
   });
 });

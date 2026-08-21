@@ -40,6 +40,31 @@ describe('clientComboOptions', () => {
     expect(rows.map((r) => r.label)).toEqual(['Bez', 'Jiny']);
   });
 
+  /** Reported: two clients may share a name and differ only in their trading name, and the
+   *  picker offered two rows that read identically. */
+  it('carries the trading name as the option’s second line', () => {
+    const rows = clientComboOptions([
+      ClientDto.fromJS({ id: 'gastro', name: 'Hospoda Na Rohu', businessName: 'Na Rohu gastro s.r.o.', region: 'Leipzig' }),
+      ClientDto.fromJS({ id: 'family', name: 'Hospoda Na Rohu', businessName: 'Jan Vrána', region: 'Leipzig' }),
+    ]);
+
+    // Same label, so the second line is the only thing telling them apart — and it decides
+    // their order, so the pair does not shuffle between renders.
+    expect(rows.map((r) => r.secondary)).toEqual(['Jan Vrána', 'Na Rohu gastro s.r.o.']);
+    expect(rows.map((r) => r.value)).toEqual(['family', 'gastro']);
+  });
+
+  it('leaves the second line off a client with no trading name', () => {
+    // Optional on the client. An empty string would render a blank line and make the row
+    // taller than its neighbours for nothing.
+    const rows = clientComboOptions([
+      ClientDto.fromJS({ id: 'a', name: 'Pivnice U Kapra', region: 'Leipzig' }),
+      ClientDto.fromJS({ id: 'b', name: 'Pivnice U Raka', businessName: '   ', region: 'Leipzig' }),
+    ]);
+
+    expect(rows.map((r) => r.secondary)).toEqual([undefined, undefined]);
+  });
+
   it('tolerates a client with no id or name', () => {
     const rows = clientComboOptions([ClientDto.fromJS({ region: 'Berlin' })]);
     expect(rows).toEqual([{ value: '', label: '', group: 'Berlín' }]);

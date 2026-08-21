@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="cs" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AleTrack — Rozpis zboží, návrh nové tabulky</title>
+<style>
+/* ============================================================
+   AleTrack — "Rozpis zboží" (nakládka) redesign proposal.
+
+   Tokens and component classes are lifted verbatim from
+   aletrack-prototype.html so this reads as the same product.
+   Everything under "NEW" is the proposal.
+   ============================================================ */
+:root{
+  --amber:#F08C00; --amber-600:#D97D00; --amber-700:#B4620A;
+  --amber-tint:#FDECD2; --amber-soft:#FBF4E8;
+  --navy:#1E2A3A; --navy-2:#17212E; --navy-3:#28394E;
+  --ground:#EEF1F6; --surface:#FFFFFF; --surface-2:#F6F8FB; --surface-3:#EEF2F7;
+  --border:#E1E6EE; --border-2:#D2D9E4;
+  --text:#1C2733; --text-2:#54606F; --text-3:#8791A0; --text-inv:#F3F6FA;
+  --ok:#15873F; --ok-tint:#DCF3E4; --info:#0E7C9B; --info-tint:#D3EFF6;
+  --warn:#B4620A; --warn-tint:#FBE7CC; --crit:#C22A2A; --crit-tint:#FBE0DE;
+  --grey-pill:#5A6675; --grey-tint:#E7EBF1;
+  --shadow-sm:0 1px 2px rgba(20,30,45,.06),0 1px 3px rgba(20,30,45,.05);
+  --shadow-md:0 2px 8px rgba(20,30,45,.08),0 8px 24px rgba(20,30,45,.06);
+  --r-sm:7px; --r:11px; --r-lg:16px; --r-pill:999px;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+:root[data-theme="dark"]{
+  --amber:#F5A62A; --amber-600:#E5941A; --amber-700:#C77B12; --amber-tint:#3A2C15; --amber-soft:#241B0F;
+  --navy:#131C28; --navy-2:#0E1620; --navy-3:#20303F;
+  --ground:#0D141E; --surface:#18222F; --surface-2:#1E2A38; --surface-3:#243343;
+  --border:#2A3A4C; --border-2:#33475C; --text:#E7EDF4; --text-2:#9DAABB; --text-3:#6C7A8C;
+  --ok:#3FBE6B; --ok-tint:#123021; --info:#33B7D6; --info-tint:#0E2C36;
+  --warn:#E5941A; --warn-tint:#33260F; --crit:#F0736B; --crit-tint:#361A1A;
+  --grey-pill:#8291A3; --grey-tint:#23303F;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 18px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--ground);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5;}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;}
+h1,h2,h3{line-height:1.25;}
+
+/* ---------- lifted from the prototype ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);}
+.card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);}
+.card-head h3{font-size:15px;} .card-head .sub{color:var(--text-3);font-size:12.5px;}
+.card-pad{padding:20px;}
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-sm);
+  font-weight:700;font-size:13.5px;border:1px solid transparent;transition:.15s;white-space:nowrap;}
+.btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border);}
+.btn-ghost:hover{background:var(--surface-3);border-color:var(--border-2);}
+.btn-sm{height:32px;padding:0 11px;font-size:12.5px;}
+.pill{display:inline-flex;align-items:center;gap:6px;height:23px;padding:0 10px;border-radius:var(--r-pill);
+  font-size:11.5px;font-weight:700;white-space:nowrap;}
+.pill .d{width:6px;height:6px;border-radius:99px;background:currentColor;}
+.pill.s-grey{background:var(--grey-tint);color:var(--grey-pill);}
+.pill.s-ok{background:var(--ok-tint);color:var(--ok);}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:2px 9px;
+  border-radius:var(--r-pill);background:var(--surface-3);color:var(--text-2);white-space:nowrap;}
+.t-strong{font-weight:700;color:var(--text);} .t-mut{color:var(--text-3);}
+.section-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);}
+
+/* ============================================================
+   NEW — the proposal
+   ============================================================ */
+
+/* The table is a grid, not a <table>: four tracks that stay four however many
+   invoices exist, and the same tracks collapse to one column on a phone. */
+/* Tracks are sized, not content-derived: every row is its own grid container (a section
+   has to sit in its own box to be collapsible), so max-content would come out a different
+   width per row and the columns would not line up.
+   Zdroj and Faktury share the slack on an equal footing and carry the same floor, so they
+   end up exactly as wide as each other instead of huddling on the right while Produkt
+   swallows everything spare. 120 + 176 + 176 = 472 px of floor, plus 54 for Ks. */
+.nk{--nk-cols:minmax(120px,1fr) 54px minmax(176px,1fr) minmax(176px,1fr);}
+.nk-head,.nk-row{display:grid;grid-template-columns:var(--nk-cols);align-items:center;gap:14px;
+  padding:10px 16px;}
+.nk-head{border-bottom:1px solid var(--border);background:var(--surface-2);
+  font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);}
+.nk-head .ar,.nk-row .ks{text-align:right;}
+.nk-row{border-bottom:1px solid var(--border);transition:background .12s;}
+.nk-row:hover{background:var(--surface-2);}
+.nk-row:last-of-type{border-bottom:0;}
+
+/* Group headings — brewery, then kind. */
+.nk-brew{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);
+  font-size:12.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;}
+.nk-brew .dotc{width:11px;height:11px;border-radius:3px;flex:0 0 auto;}
+.nk-brew .cnt{font-weight:600;text-transform:none;letter-spacing:0;color:var(--text-3);}
+.nk-brew .car{margin-left:auto;color:var(--text-3);transition:transform .18s var(--ease);}
+.nk-brew[aria-expanded="false"] .car{transform:rotate(-90deg);}
+.nk-kind{padding:6px 16px 6px 30px;background:var(--surface-3);border-bottom:1px solid var(--border);
+  font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);}
+.nk-kind .cnt{font-weight:600;text-transform:none;letter-spacing:0;opacity:.8;}
+
+/* Product identity. */
+/* Chip on its own line: side by side it set the column's width off the longest
+   name plus the longest chip, which is wider than either needs. */
+.nk-name{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}
+.nk-name{width:100%;}
+.nk-name .n{font-weight:700;font-size:13.5px;max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;}
+.nk-ks{font-weight:800;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.nk-ks .u{font-weight:600;font-size:11.5px;color:var(--text-3);margin-left:3px;}
+
+/* ZDROJ — the sourcing split: three labelled numbers, each with its own swatch.
+   z pivovaru (brewery → client), z garáže (our stock → client), do garáže
+   (brewery → our stock). Together they make the row's total. */
+.src{display:flex;flex-direction:column;gap:5px;min-width:0;}
+/* Four shared tracks — label, minus, value, plus — so every number sits in the same
+   column whatever its label is called. "z pivovaru" has no stepper and simply leaves
+   the two button cells empty. */
+.src-legend{display:grid;grid-template-columns:max-content max-content max-content max-content;
+  gap:6px 8px;align-items:center;justify-content:start;font-size:11.5px;color:var(--text-2);}
+.src-legend .lg{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.src-legend .sw{width:8px;height:8px;border-radius:2px;flex:0 0 auto;}
+.src-legend .val{font-weight:800;font-variant-numeric:tabular-nums;color:var(--text);
+  font-size:13px;text-align:center;min-width:22px;}
+
+/* FAKTURY — one chip per invoice, self-labelling, so the cell needs no column
+   header to be read. The chip is the loaded toggle; the stepper sets the amount. */
+/* Stacked, not wrapped: one invoice per line keeps the numbers under each other
+   however many invoices a run has. */
+.inv{display:flex;flex-direction:column;align-items:flex-start;gap:7px;}
+.inv-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 4px 0 10px;
+  border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface-3);
+  font-size:12px;font-weight:700;color:var(--text-2);transition:.15s;}
+.inv-chip .lbl{letter-spacing:.02em;}
+.inv-chip .q{font-variant-numeric:tabular-nums;font-weight:800;color:var(--text);min-width:18px;text-align:center;}
+/* Three states, matching ShipmentLoadingState: Nenaloženo → Nadiktováno →
+   Zkontrolováno, cycling. One control rather than two checkboxes, because nothing is
+   checked before it has been dictated. */
+.inv-chip.dictated{background:var(--info-tint);border-color:transparent;color:var(--info);}
+.inv-chip.checked{background:var(--ok-tint);border-color:transparent;color:var(--ok);}
+.inv-chip.dictated .q{color:var(--info);} .inv-chip.checked .q{color:var(--ok);}
+.inv-chip .tick{width:26px;height:26px;border-radius:99px;display:grid;place-items:center;flex:0 0 auto;
+  border:1px solid var(--border-2);color:var(--text-3);background:var(--surface);transition:.15s;}
+.inv-chip .tick:hover{border-color:var(--amber);color:var(--amber-700);}
+.inv-chip .tick .box{width:11px;height:11px;border-radius:3px;border:2px solid currentColor;}
+.inv-chip.dictated .tick{background:var(--info);border-color:var(--info);color:#fff;}
+.inv-chip.checked .tick{background:var(--ok);border-color:var(--ok);color:#fff;}
+.inv-add{display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 11px;border-radius:var(--r-pill);
+  border:1px dashed var(--border-2);color:var(--text-3);font-size:12px;font-weight:700;}
+.inv-add:hover{border-color:var(--amber);color:var(--amber-700);}
+
+/* One stepper, used by both clusters. 32px on a mouse, 44 under a coarse pointer. */
+.stp{display:inline-flex;align-items:center;gap:1px;}
+.sbt,.stp button{width:28px;height:28px;border-radius:var(--r-sm);border:1px solid var(--border);
+  background:var(--surface);color:var(--text-2);display:grid;place-items:center;font-size:15px;
+  font-weight:700;line-height:1;transition:.15s;}
+.sbt:hover:not(:disabled),.stp button:hover:not(:disabled){border-color:var(--amber);color:var(--amber-700);}
+.sbt:disabled,.stp button:disabled{opacity:.35;cursor:not-allowed;}
+.stp .v{min-width:26px;text-align:center;font-weight:800;font-variant-numeric:tabular-nums;font-size:13px;}
+@media (pointer:coarse){
+  .sbt,.stp button{width:44px;height:44px;}
+  .inv-chip{height:44px;} .inv-chip .tick{width:34px;height:34px;} .inv-add{height:44px;}
+}
+
+/* Totals. */
+.nk-foot{display:grid;grid-template-columns:var(--nk-cols);align-items:center;gap:14px;
+  padding:13px 16px;border-top:1px solid var(--border);background:var(--surface-2);}
+.nk-foot .lb{font-weight:800;font-size:12.5px;}
+.nk-foot .prog{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ---- three tiers, keyed on the card's own width ----------------------------
+   The card is 1.5fr of a 1.5fr/1fr page grid, so it is far narrower than the
+   window: 521 px on an iPad in landscape, 572 on a 1280 laptop, 956 only once a
+   1920 monitor lifts the 1500 px cap. Four tracks need 536 px, so they are the
+   exception, not the rule — tier 2 is where this card actually lives. */
+.nk-wrap{container:nk / inline-size;}
+.nk-row .top{display:contents;}
+
+/* Tighter at laptop and iPad widths: this is the "less space between the columns"
+   that buys the four-column alignment down to about 520 px. */
+@container nk (max-width:700px){
+  .nk-head,.nk-row,.nk-foot{gap:10px;padding-left:12px;padding-right:12px;}
+}
+
+/* Under 580 px — iPad in landscape gives the card 521 px — the four fixed tracks leave
+   only ~79 px for the name, which truncates it to "Svijanský…". Tightening the gaps does
+   not recover 60 px, so KS gives up its own column and joins the product cell under the
+   chip. ZDROJ and FAKTURY keep theirs, which is the alignment that actually matters. */
+@container nk (max-width:580px){
+  .nk-head{grid-template-columns:minmax(120px,1fr) minmax(176px,1fr) minmax(176px,1fr);}
+  .nk-head .ar{display:none;}
+  .nk-row,.nk-foot{grid-template-columns:minmax(120px,1fr) minmax(176px,1fr) minmax(176px,1fr);}
+  /* Name on its own line, chip and total sharing the next one. `display:contents` on the
+     name block hands the name and chip to this grid so the total can sit beside the chip
+     rather than dangling on a third line of its own. If the pair ever outgrows the column
+     it wraps, which is the old look as a fallback rather than an overflow. */
+  .nk-row .top{display:grid;grid-template-columns:auto auto;
+    grid-template-areas:"name name" "chip total";justify-content:start;
+    gap:3px 8px;align-items:center;}
+  .nk-row .nk-name{display:contents;}
+  .nk-row .nk-name .n{grid-area:name;}
+  .nk-row .nk-name .tag{grid-area:chip;}
+  .nk-row .ks{grid-area:total;text-align:left;}
+  .nk-foot{grid-template-columns:minmax(120px,1fr) auto;}
+  .nk-foot .lb{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+}
+
+/* Under 500 px — a phone. Name and total on their own line, then the two clusters side
+   by side: Faktury on the left, Zdroj under the total on the right. Stacking them full
+   width instead made the row four blocks tall, which is what this replaces.
+
+   Nothing here resizes a control or rearranges the legend — the clusters look exactly as
+   they do in the wide layout, only placed differently. The one thing it does undo is the
+   coarse-pointer bump: two clusters side by side at 44 px come to ~400 px against the
+   338 px a 390 px viewport leaves, so they stay at their pointer size. That is a real
+   loss of thumb comfort on a phone, and the alternative is stacking them again. */
+@container nk (max-width:500px){
+  .nk-head{display:none;}
+  .nk-row{grid-template-columns:auto minmax(0,1fr);
+    grid-template-areas:"top top" "inv src";gap:10px;padding:12px;}
+  /* Back to a plain row here: the phone keeps the total up on the header line, so the
+     name block goes back to owning its name and chip. */
+  .nk-row .top{display:flex;flex-direction:row;align-items:flex-start;gap:10px;
+    width:100%;grid-area:top;}
+  .nk-row .nk-name{display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+    min-width:0;}
+  .nk-row .ks{text-align:right;margin-left:auto;}
+  .nk-row .inv{grid-area:inv;}
+  .nk-row .src{grid-area:src;}
+
+  .sbt,.stp button{width:28px;height:28px;}
+  .inv-chip{height:34px;} .inv-chip .tick{width:26px;height:26px;}
+  /* Packed to the right edge of its column, so the block sits under the total rather
+     than floating in the middle of the row. */
+  .src-legend{gap:6px;justify-content:end;}
+  /* Only the total moves. Padding alone put "ks" where the number belongs and shoved the
+     number left of the axis, so instead the number gets the value column's own box
+     (22 px, centred) and the unit gets a box exactly as wide as the gap plus the plus
+     button (6 + 28), which lands the number right above 21 / 8 / 4. */
+  .nk-row .ks .qn{display:inline-block;min-width:22px;text-align:center;}
+  .nk-row .ks .u{display:inline-block;width:34px;margin-left:0;text-align:left;}
+
+  .nk-foot{grid-template-columns:minmax(0,1fr);gap:8px;padding:12px;}
+  .nk-foot .lb{display:flex;align-items:baseline;gap:8px;}
+}
+
+/* ---------- the demo scaffolding around the proposal ---------- */
+.wrap{max-width:1500px;margin:0 auto;padding:26px 24px 80px;}
+.hd{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:8px;}
+.hd .eyebrow{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--amber-700);margin-bottom:5px;}
+.hd h1{font-size:25px;} .hd .sub{color:var(--text-2);margin-top:6px;font-size:14px;max-width:70ch;}
+.hd .actions{margin-left:auto;display:flex;gap:8px;}
+.note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--amber);
+  border-radius:var(--r);padding:14px 16px;margin:22px 0;font-size:13.5px;color:var(--text-2);max-width:90ch;}
+.note b{color:var(--text);}
+.note ul{margin:8px 0 0 18px;} .note li{margin:4px 0;}
+.demo{margin:30px 0;}
+.demo > h2{font-size:14px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-3);margin-bottom:4px;}
+.demo > .cap{font-size:12.5px;color:var(--text-3);margin-bottom:12px;}
+.frame{border:1px solid var(--border-2);border-radius:var(--r-lg);background:var(--ground);
+  padding:14px;overflow:hidden;}
+.frame.ipad{width:834px;max-width:100%;} .frame.phone{width:390px;max-width:100%;}
+/* Card chrome above the table, as it appears in the app. */
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px 4px;}
+.seg{display:inline-flex;background:var(--surface-3);border-radius:var(--r-sm);padding:3px;gap:2px;}
+.seg button{height:32px;padding:0 13px;border-radius:5px;font-size:12.5px;font-weight:700;color:var(--text-2);}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+.bar .sp{flex:1 1 auto;}
+.wtbl{border-collapse:collapse;font-size:13px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;}
+.wtbl th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-3);padding:9px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);}
+.wtbl td{padding:8px 14px;border-bottom:1px solid var(--border);}
+.wtbl tr:last-child td{border-bottom:0;}
+.wtbl td:nth-child(2){font-variant-numeric:tabular-nums;}
+.slider-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;max-width:640px;}
+.slider-row input{flex:1;accent-color:var(--amber);}
+.wval{font-weight:800;font-variant-numeric:tabular-nums;font-size:13px;min-width:64px;}
+.livebox{max-width:100%;}
+.triple{display:flex;flex-direction:column;gap:22px;}
+.triple .lbl{font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.45;}
+/* 625 + 20 gap + 422 = the content width measured off the real screenshot. */
+.pagebox{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;
+  align-items:start;width:1067px;max-width:100%;overflow:hidden;}
+.pagebox .side{display:flex;flex-direction:column;gap:16px;}
+@media (max-width:760px){ .bar .sp{display:none;} .bar{gap:8px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hd">
+    <div>
+      <div class="eyebrow">Návrh · Vývozy › detail</div>
+      <h1>Rozpis zboží — nová tabulka</h1>
+      <p class="sub">Jedna tabulka pro všechna rozlišení. Počet sloupců je stálý, ať je faktur
+        kolik chce — přiřazení na fakturu se přesunulo ze sloupců do samopopisných čipů.</p>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost btn-sm" id="theme">Světlý režim</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Co se mění a proč.</b>
+    <ul>
+      <li><b>Počet sloupců je stálý.</b> Dnes každá faktura přidá sloupec ~112 px, takže
+        tabulka dřív nebo později přeteče a zlomí se do svislého výpisu. Nové
+        <em>Faktury</em> drží libovolný počet faktur v jedné buňce.</li>
+      <li><b>Čipy se popisují samy a stojí pod sebou.</b> „F1 24“ si nese svůj štítek, takže
+        se dá číst i bez hlavičky sloupce — přesně to na úzké obrazovce dnes chybí. Jedna
+        faktura na řádek drží čísla pod sebou, ať jich je kolik chce.</li>
+      <li><b>Stav nakládky má tři polohy, ne dvě.</b> Nenaloženo → <em>Nadiktováno</em>
+        (mikrofon, modrá) → <em>Zkontrolováno</em> (dvojité fajfky, zelená), pak zpět —
+        stejný cyklus, jaký ovládá dnešní kolečko. Je součástí čipu a pod dotykem má 44 px;
+        na rampě je to ten nejčastější pohyb. Do počítadla se počítá až
+        <em>zkontrolováno</em>, tedy „F1 45 ks · 1/3“.</li>
+      <li><b>Čísla zdroje jsou pod sebou.</b> Štítek, −, hodnota a + mají vlastní sloupce,
+        takže 21 / 8 / 4 stojí v jedné ose, i když se štítky jmenují jinak.</li>
+      <li><b>Zdroj jsou tři čísla, ne dvě.</b> <em>Z pivovaru</em> (pivovar → klient),
+        <em>z garáže</em> (náš sklad → klient) a <em>do garáže</em> (pivovar → náš sklad).
+        Dohromady dávají celek řádku. Na fakturu pivovaru přitom může jít jen to, co
+        pivovar opravdu dodá, tedy celek bez <em>z garáže</em>.</li>
+      <li><b>Čtyři sloupce všude kromě telefonu.</b> Sloupce mají danou podlahu, ne
+        šířku podle obsahu: každý řádek je vlastní grid — sekce musí sedět ve vlastním
+        boxu, aby se dala sbalit — a obsahem vyměřené sloupce by u každého řádku vyšly
+        jinak a nesrovnaly by se. <em>Zdroj</em> a <em>Faktury</em> mají stejnou podlahu
+        (176 px) a dělí si volné místo rovným dílem s <em>Produktem</em>, takže jsou vždy
+        stejně široké a netlačí se u sebe. Pod 700 px se navíc stáhnou mezery a odsazení,
+        jak jsi psal — to samo ale stačí až od ~572 px (notebook 1280). Na iPadu na šířku
+        (karta 521 px) by na název zbylo 79 px, takže tam <em>Ks</em> opustí vlastní
+        sloupec a jde k čipu na druhý řádek; <em>Zdroj</em> a <em>Faktury</em> si svoje sloupce
+        nechají, protože o to jde. Pod 500 px se přechází na jeden sloupec.</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <h2>Jak je karta ve skutečnosti široká</h2>
+    <p class="cap">Karta je 1,5fr mřížky 1,5fr / 1fr, takže je mnohem užší než okno:
+      šířka = (min(okno − 250 px panel, 1500 px strop) − 56 px odsazení − 20 px mezera) × 0,6.
+      Čtyři sloupce drží až k ~520 px, takže platí všude kromě telefonu.</p>
+    <table class="wtbl">
+      <thead><tr><th>Okno</th><th>Karta</th><th>Úroveň</th></tr></thead>
+      <tbody>
+        <tr><td>telefon 390</td><td>~362 px</td><td><span class="pill s-grey"><span class="d"></span>jeden sloupec</span></td></tr>
+        <tr><td>iPad na šířku 1194</td><td><b>521 px</b></td><td><span class="pill s-ok"><span class="d"></span>tři sloupce · KS u čipu</span></td></tr>
+        <tr><td>notebook 1280</td><td><b>572 px</b></td><td><span class="pill s-ok"><span class="d"></span>čtyři sloupce</span></td></tr>
+        <tr><td>okno z tvého snímku ~1373</td><td><b>625 px</b></td><td><span class="pill s-ok"><span class="d"></span>čtyři sloupce</span></td></tr>
+        <tr><td>notebook 1440</td><td><b>668 px</b></td><td><span class="pill s-ok"><span class="d"></span>čtyři sloupce</span></td></tr>
+        <tr><td>MBP 14" 1512</td><td><b>712 px</b></td><td><span class="pill s-ok"><span class="d"></span>čtyři sloupce</span></td></tr>
+        <tr><td>monitor 1920</td><td><b>956 px</b></td><td><span class="pill s-ok"><span class="d"></span>čtyři sloupce</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="demo">
+    <h2>Čtyři sloupce na třech reálných šířkách</h2>
+    <p class="cap">Podlaha sloupců je 472 px (+54 px pro Ks), mezery a odsazení dalších
+      54 px. Volné místo si <em>Produkt</em>, <em>Zdroj</em> a <em>Faktury</em> dělí
+      rovným dílem — Zdroj a Faktury mají stejnou podlahu, takže jsou vždy stejně široké.</p>
+    <div class="triple">
+      <div><div class="lbl">iPad na šířku · karta 521 px<br><span class="t-mut">KS jde k čipu na druhý řádek, na Produkt tak zbyde ~130 px</span></div>
+        <div id="d-521" style="width:521px"></div></div>
+      <div><div class="lbl">notebook 1280 · karta 572 px<br><span class="t-mut">na Produkt ~130 px</span></div>
+        <div id="d-572" style="width:572px"></div></div>
+      <div><div class="lbl">tvoje okno · karta 625 px<br><span class="t-mut">na Produkt ~183 px, pohodlné</span></div>
+        <div id="d-625" style="width:625px"></div></div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <h2>Posuvník šířky</h2>
+    <p class="cap">Přetažením se karta zúží přesně tak, jak ji zužuje stránka. Úroveň se
+      přepne sama — hlídá šířku karty, ne okna.</p>
+    <div class="slider-row">
+      <input type="range" id="w" min="360" max="1000" step="2" value="625">
+      <span class="wval" id="wval">625 px</span>
+    </div>
+    <div id="d-live" class="livebox"></div>
+  </div>
+
+  <div class="demo">
+    <h2>V kontextu stránky — přesně podle snímku</h2>
+    <p class="cap">Šířky odměřené ze snímku, panel 250 px jako měřítko: karta
+      <b>625 px</b>, pravý sloupec 422 px, okno ~1373 px. Platí druhá úroveň.</p>
+    <div class="pagebox">
+      <div id="d-page"></div>
+      <div class="side">
+        <div class="card"><div class="card-head"><h3>Vůz</h3></div>
+          <div class="card-pad"><div class="t-strong">Iveco</div>
+            <div class="t-mut" style="font-size:12.5px">Nosnost 4 000 kg</div>
+            <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:baseline">
+              <span class="t-mut" style="font-size:12.5px">Odhad. hmotnost</span>
+              <span class="t-strong" style="color:var(--ok)">2 928 kg</span></div></div></div>
+        <div class="card"><div class="card-head"><h3>Řidiči</h3></div>
+          <div class="card-pad t-mut" style="font-size:13px">Bez řidiče</div></div>
+        <div class="card"><div class="card-head"><h3>Vyložit</h3></div>
+          <div class="card-pad t-mut" style="font-size:13px">Nic se do garáže nevykládá.</div></div>
+        <div class="card"><div class="card-head"><h3>Checklist</h3>
+            <span class="pill s-grey" style="margin-left:auto"><span class="d"></span>0/11</span></div>
+          <div class="card-pad t-mut" style="font-size:13px">Rudlík · Tankovací karta · Soupis…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <h2>Telefon — 390 px</h2>
+    <p class="cap">Třetí úroveň. Bez vodorovného posouvání, bez skrytých ovládacích prvků.</p>
+    <div class="frame phone"><div id="d-phone"></div></div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- data, matching the screenshot ---------- */
+const INVOICES = [{ seq:1, label:'F1' }, { seq:2, label:'F2' }];
+
+/* ShipmentLoadingState, and the cycle the existing control already uses. */
+const STATE_LABEL = { NotLoaded:'Nenaloženo', Dictated:'Nadiktováno', Checked:'Zkontrolováno' };
+const NEXT_STATE = { NotLoaded:'Dictated', Dictated:'Checked', Checked:'NotLoaded' };
+/* qty = z pivovaru + z garáže + do garáže — the three partition the row, exactly as
+   orderQuantity + stockPurchaseQuantity does in AggRow. `garage` is the part of the
+   order picked up from our own stock (fromInventory); `toStock` is bought from the
+   brewery for our stock (stockPurchaseQuantity). One row carries all three, so the
+   design is shown doing the job it exists for. */
+const DATA = [
+  { brewery:'Svijany', color:'#E4572E', kind:'Sud', rows:[
+    { id:'maz',  name:'Svijanský Máz',    chip:'11° · 50 l', qty:33, garage:8, toStock:4, inv:{1:24,2:1}, loaded:{1:'Checked'} },
+    { id:'knez', name:'Svijanská Kněžna', chip:'13° · 30 l', qty:15, garage:0, toStock:0, inv:{1:15,2:0}, loaded:{1:'Dictated'} },
+  ]},
+  { brewery:'Primátor', color:'#2EC4B6', kind:'Sud', rows:[
+    { id:'tchyne', name:'Prim. FREE Tchyně', chip:'30 l', qty:6, garage:0, toStock:6, inv:{1:6,2:0}, loaded:{} },
+  ]},
+];
+
+const ICON = {
+  caret:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  // Nadiktováno — read out loud off the pallet. Zkontrolováno — counted a second time.
+  voice:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>',
+  double:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m1 13 4 4L15 7"/><path d="m9 13 4 4L23 7"/></svg>',
+  box:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v13H3z"/><path d="M3 11h18"/><path d="M9 7V4h6v3"/></svg>',
+  plus:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+};
+
+/* Each demo keeps its own copy of the state, so clicking in one frame does not
+   move the others — they are three views of the design, not one shared session. */
+function freshState(){ return JSON.parse(JSON.stringify(DATA)); }
+
+/* Only what the brewery actually supplies can sit on a brewery invoice — pieces taken
+   out of our own garage were never bought on this run, pieces bought for the garage were. */
+const invoiceable = (row) => row.qty - row.garage;
+
+function clampInvoices(row){
+  let left = invoiceable(row);
+  for(const inv of INVOICES){
+    const q = Math.min(row.inv[inv.seq] || 0, Math.max(0, left));
+    left -= q;
+    if(q) row.inv[inv.seq] = q; else { delete row.inv[inv.seq]; delete row.loaded[inv.seq]; }
+  }
+}
+
+function render(mountId, state, collapsed){
+  const mount = document.getElementById(mountId);
+  const totalKs = state.flatMap(g => g.rows).reduce((s,r) => s + r.qty, 0);
+
+  const invTotals = INVOICES.map(inv => {
+    const rows = state.flatMap(g => g.rows).filter(r => (r.inv[inv.seq]||0) > 0);
+    return {
+      inv,
+      ks: rows.reduce((s,r) => s + (r.inv[inv.seq]||0), 0),
+      done: rows.filter(r => r.loaded[inv.seq] === 'Checked').length,
+      of: rows.length,
+    };
+  });
+
+  const groups = state.map((g, gi) => {
+    const open = !collapsed.has(g.brewery);
+    const rows = g.rows.map((r, ri) => {
+      const fromBrew = r.qty - r.garage - r.toStock;
+
+      const chips = INVOICES.map(inv => {
+        const q = r.inv[inv.seq] || 0;
+        if(!q) return '';
+        const st = r.loaded[inv.seq] || 'NotLoaded';
+        const glyph = st === 'Checked' ? ICON.double : st === 'Dictated' ? ICON.voice : '<span class="box"></span>';
+        return `<span class="inv-chip ${st === 'NotLoaded' ? '' : st.toLowerCase()}">
+            <span class="lbl">${inv.label}</span>
+            <span class="stp">
+              <button data-act="inv" data-g="${gi}" data-r="${ri}" data-seq="${inv.seq}" data-d="-1"
+                aria-label="${inv.label}: ubrat kus">−</button>
+              <span class="v q">${q}</span>
+              <button data-act="inv" data-g="${gi}" data-r="${ri}" data-seq="${inv.seq}" data-d="1"
+                aria-label="${inv.label}: přidat kus">+</button>
+            </span>
+            <button class="tick" data-act="tick" data-g="${gi}" data-r="${ri}" data-seq="${inv.seq}"
+              aria-label="Nakládka na faktuře ${inv.seq}: ${STATE_LABEL[st]}"
+              title="${STATE_LABEL[st]} — klikněte pro další stav">${glyph}</button>
+          </span>`;
+      }).join('');
+
+      const unassigned = INVOICES.filter(inv => !(r.inv[inv.seq] > 0));
+      const add = unassigned.length
+        ? `<button class="inv-add" data-act="assign" data-g="${gi}" data-r="${ri}" data-seq="${unassigned[0].seq}"
+             title="Přiřadit na fakturu ${unassigned[0].label}">${ICON.plus}${unassigned[0].label}</button>`
+        : '';
+
+      return `<div class="nk-row">
+        <div class="top">
+          <div class="nk-name">
+            <span class="n">${r.name}</span>
+            <span class="tag">${r.chip}</span>
+          </div>
+          <div class="nk-ks ks"><span class="qn">${r.qty}</span><span class="u">ks</span></div>
+        </div>
+
+        <div class="src">
+          <div class="src-legend">
+            <span class="lg"><span class="sw" style="background:var(--amber)"></span>z pivovaru</span>
+            <span></span><span class="val">${fromBrew}</span><span></span>
+
+            <span class="lg"><span class="sw" style="background:var(--info)"></span>z garáže</span>
+            <button class="sbt" data-act="gar" data-g="${gi}" data-r="${ri}" data-d="-1"
+              ${r.garage<=0?'disabled':''} aria-label="Ubrat kus z garáže">−</button>
+            <span class="val">${r.garage}</span>
+            <button class="sbt" data-act="gar" data-g="${gi}" data-r="${ri}" data-d="1"
+              ${fromBrew<=0?'disabled':''} aria-label="Přidat kus z garáže">+</button>
+
+            <span class="lg"><span class="sw" style="background:var(--ok)"></span>do garáže</span>
+            <button class="sbt" data-act="tost" data-g="${gi}" data-r="${ri}" data-d="-1"
+              ${r.toStock<=0?'disabled':''} aria-label="Ubrat kus do garáže">−</button>
+            <span class="val">${r.toStock}</span>
+            <button class="sbt" data-act="tost" data-g="${gi}" data-r="${ri}" data-d="1"
+              aria-label="Přidat kus do garáže">+</button>
+          </div>
+        </div>
+
+        <div class="inv">${chips}${add}</div>
+      </div>`;
+    }).join('');
+
+    return `<button class="nk-brew" data-act="brew" data-brew="${g.brewery}" aria-expanded="${open}">
+        <span class="dotc" style="background:${g.color}"></span>${g.brewery}
+        <span class="cnt">${g.rows.length} ${g.rows.length===1?'položka':'položky'}</span>
+        <span class="car">${ICON.caret}</span>
+      </button>
+      ${open ? `<div class="nk-kind">${g.kind}<span class="cnt"> · ${g.rows.length} ${g.rows.length===1?'položka':'položky'}</span></div>${rows}` : ''}`;
+  }).join('');
+
+  mount.innerHTML = `<div class="card nk-wrap">
+    <div class="card-head">${ICON.box}<h3>Rozpis zboží</h3></div>
+    <div class="bar">
+      <span class="seg">
+        <button aria-pressed="true">Nakládka</button>
+        <button aria-pressed="false">F1</button>
+        <button aria-pressed="false">F2</button>
+        <button aria-pressed="false">Vykládka</button>
+      </span>
+      <span class="sp"></span>
+      <button class="btn btn-ghost btn-sm">${ICON.plus}Zboží na sklad</button>
+      <button class="btn btn-ghost btn-sm">${ICON.plus}Faktura pivovaru</button>
+    </div>
+    <div class="nk">
+      <div class="nk-head">
+        <span>Produkt</span><span class="ar">Ks</span><span>Zdroj</span><span>Faktury</span>
+      </div>
+      ${groups}
+      <div class="nk-foot">
+        <span class="lb">Celkem k naložení
+          <span class="nk-ks ks">${totalKs}<span class="u">ks</span></span></span>
+        <span class="prog">${invTotals.map(t => `
+          <span class="pill ${t.of && t.done===t.of ? 's-ok' : 's-grey'}"><span class="d"></span>
+            ${t.inv.label} ${t.ks} ks · ${t.done}/${t.of}</span>`).join('')}
+        </span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- wire the three demos ---------- */
+function mountDemo(id){
+  const state = freshState();
+  const collapsed = new Set();
+  const draw = () => render(id, state, collapsed);
+  draw();
+
+  document.getElementById(id).addEventListener('click', (e) => {
+    const el = e.target.closest('[data-act]');
+    if(!el) return;
+    const act = el.dataset.act;
+
+    if(act === 'brew'){
+      const key = el.dataset.brew;
+      collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key);
+      return draw();
+    }
+
+    const row = state[+el.dataset.g].rows[+el.dataset.r];
+
+    if(act === 'gar'){
+      // Moves one piece between "from the brewery" and "out of our own stock". The row
+      // total does not move — only where the piece is picked up.
+      row.garage = Math.min(row.qty - row.toStock, Math.max(0, row.garage + (+el.dataset.d)));
+      clampInvoices(row);
+    } else if(act === 'tost'){
+      // Buying for our own stock adds to the row: these pieces are on no client order.
+      const next = Math.max(0, row.toStock + (+el.dataset.d));
+      row.qty += next - row.toStock;
+      row.toStock = next;
+      row.garage = Math.min(row.garage, row.qty - row.toStock);
+      clampInvoices(row);
+    } else if(act === 'inv'){
+      const seq = +el.dataset.seq;
+      const other = INVOICES.filter(i => i.seq !== seq).reduce((s,i) => s + (row.inv[i.seq]||0), 0);
+      row.inv[seq] = Math.min(invoiceable(row) - other, Math.max(0, (row.inv[seq]||0) + (+el.dataset.d)));
+      if(!row.inv[seq]) delete row.loaded[seq];
+    } else if(act === 'tick'){
+      const seq = +el.dataset.seq;
+      const next = NEXT_STATE[row.loaded[seq] || 'NotLoaded'];
+      if(next === 'NotLoaded') delete row.loaded[seq]; else row.loaded[seq] = next;
+    } else if(act === 'assign'){
+      const seq = +el.dataset.seq;
+      const other = INVOICES.filter(i => i.seq !== seq).reduce((s,i) => s + (row.inv[i.seq]||0), 0);
+      row.inv[seq] = Math.max(1, invoiceable(row) - other);
+    }
+    draw();
+  });
+}
+
+['d-live','d-page','d-phone','d-521','d-572','d-625'].forEach(mountDemo);
+
+/* The slider drives the card's own width, so the tier switch is the real container
+   query doing its job rather than a picture of one. */
+const live = document.getElementById('d-live');
+const slider = document.getElementById('w');
+const readout = document.getElementById('wval');
+const setW = () => { live.style.width = slider.value + 'px'; readout.textContent = slider.value + ' px'; };
+slider.addEventListener('input', setW);
+setW();
+
+document.getElementById('theme').addEventListener('click', (e) => {
+  const dark = document.documentElement.dataset.theme !== 'light';
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  e.target.textContent = dark ? 'Tmavý režim' : 'Světlý režim';
+});
+</script>
+</body>
+</html>

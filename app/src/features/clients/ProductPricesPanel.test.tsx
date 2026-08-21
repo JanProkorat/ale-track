@@ -45,6 +45,7 @@ vi.mock('src/hooks/useClientProductPrices', () => ({
 }));
 
 const { ProductPricesPanel } = await import('./ProductPricesPanel');
+const { DetailTabs } = await import('src/components/common/DetailTabs');
 const { computePriceDiff } = await import('./productPriceDiff');
 
 function price(over: Partial<ClientProductPriceDto> = {}): ClientProductPriceDto {
@@ -66,6 +67,17 @@ function renderPanel(editable: boolean, clientName?: string) {
   return render(
     <MuiThemeProvider theme={theme}>
       <ProductPricesPanel clientId="client-1" clientName={clientName} editable={editable} />
+    </MuiThemeProvider>,
+  );
+}
+
+/** The panel as ClientDetail actually mounts it — inside the tab strip. */
+function renderInTabs(editable = true) {
+  return render(
+    <MuiThemeProvider theme={theme}>
+      <DetailTabs tabs={<div />}>
+        <ProductPricesPanel clientId="client-1" editable={editable} />
+      </DetailTabs>
     </MuiThemeProvider>,
   );
 }
@@ -233,5 +245,35 @@ describe('ProductPricesPanel delete flow', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Vrátit na ceník' }));
 
     await waitFor(() => expect(deleteMutateAsync).toHaveBeenCalledWith({ clientId: 'client-1', productId: 'product-1' }));
+  });
+});
+
+/**
+ * The regression this guards: this panel was the one tab-action holder that never moved to
+ * TabActions, so its two buttons stacked on their own line under the strip while every
+ * sibling tab put theirs on the strip's right edge.
+ */
+describe('ProductPricesPanel tab actions', () => {
+  it('delivers its buttons into the tab strip, not the panel body', () => {
+    renderInTabs();
+
+    const slot = screen.getByTestId('tab-actions-slot');
+    expect(within(slot).getByRole('button', { name: /Hromadná úprava cen/ })).toBeInTheDocument();
+    expect(within(slot).getByRole('button', { name: /Přidat cenu/ })).toBeInTheDocument();
+  });
+
+  it('leaves the strip empty when the user cannot edit', () => {
+    renderInTabs(false);
+
+    expect(screen.getByTestId('tab-actions-slot')).toBeEmptyDOMElement();
+  });
+
+  /** The explainer is copy, not an action — it belongs in the panel, not on the strip. */
+  it('keeps the pricing explainer out of the strip', () => {
+    renderInTabs();
+
+    const slot = screen.getByTestId('tab-actions-slot');
+    expect(within(slot).queryByText(/Platí pro všechny objednávky/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Platí pro všechny objednávky/)).toBeInTheDocument();
   });
 });

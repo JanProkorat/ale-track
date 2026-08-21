@@ -53,7 +53,12 @@ export function PreparationStepsEditor({
           <EmptyState title="Zatím žádné položky" description="Zapište, co zkontrolovat před odjezdem. Odškrtávat se budou v detailu vývozu." dense />
         ) : steps.map((step, i) => (
           <Stack key={step.key} direction="row" alignItems="center" spacing={0.5}>
-            <Stack sx={{ flexShrink: 0 }}>
+            {/* Stacked on a mouse, where the pair is ~18px tall and tucks beside the
+                one-line field. Side by side on touch: the theme lifts every IconButton to a
+                44px target there, and two of those stacked made an 88px column that set the
+                row height and strung the whole list out. Shrinking them back below 44px is
+                not the trade to make — 24px is the WCAG 2.5.8 floor. */}
+            <Stack sx={{ flexShrink: 0, '@media (pointer: coarse)': { flexDirection: 'row' } }}>
               <IconButton size="small" disabled={disabled || i === 0} onClick={() => move(i, -1)} aria-label="Posunout nahoru" sx={{ p: 0.25 }}>
                 <ArrowUpwardIcon sx={{ fontSize: 14 }} />
               </IconButton>

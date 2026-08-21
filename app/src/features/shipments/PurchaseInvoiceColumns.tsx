@@ -1,20 +1,19 @@
-// The "faktura pivovaru" columns of the nakládka table.
+// The "faktura pivovaru" side of the nakládka table.
 //
-// One column per invoice the brewery issues to us, two of them from the start
-// whether or not anything is stored behind them. The first is the remainder —
-// computed, grey, never editable — and the rest are steppers. Kept out of
-// ShipmentDetail because they are self-contained: give them a row and the
-// invoices, and they render and commit their own cells.
+// One chip per invoice the brewery issues to us, two from the start whether or not
+// anything is stored behind them, stacked one to a line inside a single cell. It
+// replaces the column pair the table used to spend per invoice: a chip carries its own
+// "F1" label, so a fourth invoice costs a line rather than 112px of table width, and
+// the cell reads without a column header above it.
 //
-// Below the `compact` breakpoint the nakládka is a stacked list rather than a
-// table, so the same controls also come in a phone form: the piece counts as
-// inline `F1 3` metric groups, the loading states as thumb-sized buttons on the
-// row's first line. Same model calls, same commits — only the frame differs.
+// The first chip is the remainder — computed, never editable — and the rest are steppers
+// capped by `capFor`. Every chip that physically carries pieces gets the three-state
+// loading control; the first one does even when it bills nothing, because pieces taken
+// out of our own garage ride along on no invoice at all and still have to be loaded.
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Box, ButtonBase, IconButton, InputBase, Stack, TableCell, Tooltip, Typography } from '@mui/material';
-import AddIcon from '@mui/icons-material/AddOutlined';
-import RemoveIcon from '@mui/icons-material/RemoveOutlined';
+import type { Theme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
 import DoneAllOutlinedIcon from '@mui/icons-material/DoneAllOutlined';
@@ -26,7 +25,8 @@ import {
   capFor, claimAt, columnsOf, loadingStateAt, nextLoadingState, piecesInColumn, purchasedTotal,
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
-import { MetricSlot, NakladkaMetric } from './NakladkaMetric';
+import { StatusPill } from 'src/components/common/StatusPill';
+import { StepperButton, stepperTracks } from './nakladkaControls';
 
 // The two cells of a column group are pulled together rather than each centred in
 // its own box: the pieces end on the right of theirs, the state starts on the left
@@ -40,6 +40,15 @@ const HEAD_SX = {
   fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' as const,
   letterSpacing: '0.03em', borderBottom: 'none', whiteSpace: 'nowrap' as const,
 };
+
+/**
+ * The value cell of an invoice stepper.
+ *
+ * Wider than the Zdroj cluster's 22px because this one holds a field, and the theme
+ * lifts a field to 16px under a coarse pointer — iOS Safari zooms the whole page for
+ * anything smaller.
+ */
+const INVOICE_VALUE = { value: 26, valueTouch: 34 } as const;
 
 /** Header cell per column: "F1", "F2"… plus a delete on the stored ones past the first. */
 export function PurchaseInvoiceHeaderCells({
@@ -146,28 +155,65 @@ export function PurchaseInvoiceRowCells({
   );
 }
 
-/** Thumb-sized hit area for the stacked layout. */
-const TOUCH_TARGET = 34;
+/**
+ * The chip: label, piece count and loading tick in one pill, tinted with the state it
+ * is in — grey while nothing has been dictated, info once it has, success once it has
+ * been counted a second time.
+ *
+ * One pill rather than a number and a control side by side, because on the ramp they
+ * are one thing: this many pieces of this product, on this invoice, loaded or not.
+ */
+const CHIP_SX = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '7px',
+  height: 34,
+  pl: '10px',
+  pr: '4px',
+  maxWidth: '100%',
+  borderRadius: 999,
+  border: 1,
+  // Thumb-sized on the ramp, back to the pointer size once the card is under 500px and
+  // Faktury shares the row with Zdroj — see nakladkaControls.
+  '@media (pointer: coarse)': {
+    height: 44,
+    '@container nakladka (max-width: 500px)': { height: 34 },
+  },
+} as const;
+
+/** The loading tick, and the box a chip carrying nothing yet leaves in its place. */
+const TICK_SX = {
+  width: 26,
+  height: 26,
+  flexShrink: 0,
+  '@media (pointer: coarse)': {
+    width: 34,
+    height: 34,
+    '@container nakladka (max-width: 500px)': { width: 26, height: 26 },
+  },
+} as const;
+
+/** The chip's fill: the state's own tint, or the plain surface before it has one. */
+function chipFill(t: Theme, tone?: Tone) {
+  if (!tone) return t.vars!.palette.brand.surface3;
+  return tone === 'success' ? t.vars!.palette.brand.okTint : t.vars!.palette.brand.infoTint;
+}
+
+type Tone = 'info' | 'success';
+
+function toneOf(state: LoadingStateName): Tone | undefined {
+  return state === 'Checked' ? 'success' : state === 'Dictated' ? 'info' : undefined;
+}
 
 /**
- * The same column pair as {@link PurchaseInvoiceRowCells}, as inline `F1 3` groups
- * for the stacked layout — a line each was four lines of mostly zeroes. Each group
- * carries its own loading-state control right after the number, same pairing as
- * the desktop table's two cells per column; a separate row of controls up in the
- * header read as unrelated to the invoice they belonged to and left the header
- * cramped besides. A column carrying nothing yet gets a "—" instead of the control
- * — nothing physically sits there to check off — rather than being skipped, so the
- * row still shows one slot per invoice.
+ * The invoice split of one nakládka row, as a chip per invoice stacked one to a line.
  *
- * The first column is the remainder and never editable, so it is a bare number;
- * it still gets the control, because pieces taken from our own garage ride along
- * on it with no invoice behind them at all and still have to be loaded.
- *
- * Rendered into the row's metric run (`METRIC_ROW_SX`), one slot per column: a
- * column with nothing to show still spends its slot, or the columns after it would
- * sit left of where the same invoice sits on every other row.
+ * Stacked rather than wrapped: one invoice per line keeps the numbers under each other
+ * however many invoices a run has. Each chip lays its number on the same `− value +`
+ * tracks (see {@link stepperTracks}), so the computed first column's bare number sits
+ * exactly above the editable ones below it.
  */
-export function PurchaseInvoiceRowMetrics({
+export function PurchaseInvoiceChips({
   row, invoices, states, editable, onSet, onSetState,
 }: {
   row: PurchasableRow;
@@ -180,86 +226,156 @@ export function PurchaseInvoiceRowMetrics({
   const columns = columnsOf(invoices);
   const carrying = columns.filter((column) => piecesInColumn(row, invoices, column.sequence) > 0);
 
-  // Nothing physically goes onto any brewery invoice column — the row is served
-  // entirely off our own shelf, with nothing left here to bill or to check off.
+  // Nothing goes onto any brewery invoice — nothing here to bill or to check off. Still a
+  // pill rather than a bare dash, so the cell reads as an empty slot in the same language
+  // as the chips on every row around it.
   if (carrying.length === 0) {
-    return null;
+    return (
+      <Box
+        sx={{
+          ...CHIP_SX, borderStyle: 'dashed', borderColor: 'divider', color: 'text.disabled',
+          pr: '10px', fontSize: 12.5,
+        }}
+      >
+        —
+      </Box>
+    );
   }
 
   return (
-    <>
+    <Stack spacing={0.875} alignItems="flex-start">
       {columns.map((column, index) => {
         const claimed = index === 0 ? remainderOf(row, invoices) : claimAt(invoices, column.sequence, row.productId);
         const carries = piecesInColumn(row, invoices, column.sequence) > 0;
-        // A later column with nothing in it is worth a stepper only while the row can
-        // still be split; read-only it would be a permanent zero taking up the line.
-        // Its slot stays, so the columns after it keep their place.
+        const cap = capFor(row, invoices, column.sequence);
+        const stepper = index > 0 && editable;
+
+        // A later column holding nothing is worth a chip only while the row can still be
+        // split; read-only it would be a permanent zero taking up a line.
         if (index > 0 && claimed === 0 && !editable) {
-          return <MetricSlot key={column.sequence} index={index} />;
+          return null;
         }
 
+        const state = loadingStateAt(states, row.productId, column.sequence);
+        const tone = toneOf(state);
+
         return (
-          <MetricSlot key={column.sequence} index={index}>
-            <Stack direction="row" alignItems="center" spacing={0.5}>
-              <NakladkaMetric
-                label={`F${column.sequence}`}
+          <Box
+            key={column.sequence}
+            sx={{
+              ...CHIP_SX,
+              // Tinted with the state's own colour; the border goes with it so the chip
+              // reads as one filled thing rather than a filled thing inside a box.
+              borderColor: tone ? 'transparent' : 'divider',
+              bgcolor: (t) => chipFill(t, tone),
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', whiteSpace: 'nowrap',
+                // Tabular so F1 and F2 measure the same and the numbers after them line up.
+                fontVariantNumeric: 'tabular-nums',
+                color: tone ? `${tone}.main` : 'text.secondary',
+              }}
+            >
+              F{column.sequence}
+            </Typography>
+            {stepper ? (
+              <QuantityStepper
                 value={claimed}
-                tone={index === 0 ? 'text.secondary' : undefined}
-                adjust={index > 0 && editable ? {
-                  onAdjust: (delta) => onSet(
-                    column.sequence,
-                    Math.max(0, Math.min(claimed + delta, capFor(row, invoices, column.sequence))),
-                  ),
-                  canDecrease: claimed > 0,
-                  canIncrease: claimed < capFor(row, invoices, column.sequence),
-                  decreaseLabel: `Ubrat kus z faktury ${column.sequence}`,
-                  increaseLabel: `Přidat kus na fakturu ${column.sequence}`,
-                } : undefined}
+                max={cap}
+                onCommit={(quantity) => onSet(column.sequence, quantity)}
+                label={`Kusy na faktuře ${column.sequence}`}
               />
-              {carries ? (
-                <LoadingStateControl
-                  state={loadingStateAt(states, row.productId, column.sequence)}
-                  editable={editable}
-                  onChange={(next) => onSetState(column.sequence, next)}
-                  label={`Nakládka na faktuře ${column.sequence}`}
-                  size={TOUCH_TARGET}
-                />
-              ) : (
-                <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>
-              )}
-            </Stack>
-          </MetricSlot>
+            ) : (
+              // The same three tracks the steppers use, with the button cells left empty —
+              // what keeps the remainder's number above theirs instead of beside its label.
+              <StepperCells>
+                <span />
+                <Typography
+                  sx={{
+                    fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                    textAlign: 'center',
+                    color: tone ? `${tone}.main` : 'text.primary',
+                  }}
+                >
+                  {claimed}
+                </Typography>
+                <span />
+              </StepperCells>
+            )}
+            {carries ? (
+              <LoadingStateControl
+                state={state}
+                editable={editable}
+                onChange={(next) => onSetState(column.sequence, next)}
+                label={`Nakládka na faktuře ${column.sequence}`}
+              />
+            ) : (
+              // A column with nothing in it yet keeps the tick's place — nothing physically
+              // sits there to check off, and letting the pill shrink would put the chips
+              // below it at a different width.
+              <Box sx={{ ...TICK_SX, display: 'grid', placeItems: 'center', color: 'text.disabled', fontSize: 12.5 }}>
+                —
+              </Box>
+            )}
+          </Box>
         );
       })}
-    </>
+    </Stack>
   );
 }
 
-/** Per-invoice totals for the stacked layout's summary bar. */
+/**
+ * Per-invoice totals and loading progress, for the table's summary bar.
+ *
+ * Also where an invoice is deleted from. It used to hang off the column header, and the
+ * table no longer has one per invoice — the split moved into the row's chips. This is the
+ * only other place that still names every invoice once, which is what a per-invoice
+ * action needs; on a chip it would have read as deleting that row's pieces.
+ */
 export function PurchaseInvoiceTotalsLines({
-  totals, progress,
+  totals, progress, invoices, editable, onDelete,
 }: {
   totals: number[];
   progress: Array<{ dictated: number; checked: number; total: number }>;
+  /** Only needed for the delete: which columns are stored, and under what id. */
+  invoices?: OutgoingShipmentPurchaseInvoiceDto[];
+  editable?: boolean;
+  onDelete?: (invoiceId: string) => void;
 }) {
+  const columns = invoices ? columnsOf(invoices) : [];
+
   return (
     <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
-      {totals.map((total, index) => (
-        <Stack key={index} direction="row" spacing={0.5} alignItems="baseline">
-          <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>{`F${index + 1}`}</Typography>
-          <Typography sx={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{total} ks</Typography>
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: (progress[index]?.total ?? 0) > 0 && progress[index]?.checked === progress[index]?.total
-                ? 'success.main'
-                : 'text.secondary',
-            }}
-          >
-            {progress[index]?.checked ?? 0}/{progress[index]?.total ?? 0}
-          </Typography>
-        </Stack>
-      ))}
+      {totals.map((total, index) => {
+        const column = columns[index];
+        // Only a materialised invoice past the first can go; an empty extra column has
+        // nothing behind it to remove.
+        const deletable = editable && onDelete && column && column.sequence > 1 && column.id;
+
+        const checked = progress[index]?.checked ?? 0;
+        const of = progress[index]?.total ?? 0;
+        // Green only once every pair carrying pieces has been counted a second time —
+        // the bar is read to answer "is this invoice done", so a partial count is not it.
+        const done = of > 0 && checked === of;
+
+        return (
+          <Stack key={index} direction="row" spacing={0.25} alignItems="center">
+            <StatusPill tone={done ? 'ok' : 'grey'} label={`F${index + 1} ${total} ks · ${checked}/${of}`} />
+            {deletable && (
+              <IconButton
+                size="small"
+                onClick={() => onDelete(column.id!)}
+                aria-label={`Smazat fakturu ${column.sequence}`}
+                sx={{ width: 20, height: 20, alignSelf: 'center' }}
+              >
+                <CloseIcon sx={{ fontSize: 13 }} />
+              </IconButton>
+            )}
+          </Stack>
+        );
+      })}
     </Stack>
   );
 }
@@ -276,36 +392,44 @@ const STATE_LABEL: Record<LoadingStateName, string> = {
  *
  * A pair of checkboxes per column would have doubled the width every new invoice adds,
  * and the two were never independent anyway — nothing is checked before it is loaded.
+ *
+ * Filled once it has a state rather than merely re-coloured: it sits inside a chip that
+ * is itself tinted with the same state, and a tinted glyph on a tinted pill reads as
+ * decoration instead of the row's most-pressed control.
  */
 function LoadingStateControl({
-  state, editable, onChange, label, size = 26,
+  state, editable, onChange, label,
 }: {
   state: LoadingStateName;
   editable: boolean;
   onChange: (next: LoadingStateName) => void;
   label: string;
-  /** Diameter of the hit area. The stacked layout uses a thumb-sized one. */
-  size?: number;
 }) {
-  const done = state === 'Checked';
-  const glyph = Math.round(size * 0.65);
-  const icon = state === 'NotLoaded'
-    ? <Box sx={{ width: glyph - 4, height: glyph - 4, borderRadius: '4px', border: 2, borderColor: 'text.disabled' }} />
-    : done
-      ? <DoneAllOutlinedIcon sx={{ fontSize: glyph }} />
-      : <RecordVoiceOverOutlinedIcon sx={{ fontSize: glyph }} />;
+  const tone = toneOf(state);
+  const icon = state === 'Checked'
+    ? <DoneAllOutlinedIcon sx={{ fontSize: 15 }} />
+    : state === 'Dictated'
+      ? <RecordVoiceOverOutlinedIcon sx={{ fontSize: 14 }} />
+      : <Box sx={{ width: 11, height: 11, borderRadius: '3px', border: 2, borderColor: 'currentColor' }} />;
 
   return (
     <Tooltip title={editable ? `${STATE_LABEL[state]} — klikněte pro další stav` : STATE_LABEL[state]}>
-      <Box component="span">
+      <Box component="span" sx={{ display: 'inline-flex', flexShrink: 0 }}>
         <ButtonBase
           disabled={!editable}
           onClick={() => onChange(nextLoadingState(state))}
           aria-label={`${label}: ${STATE_LABEL[state]}`}
           sx={{
-            width: size, height: size, borderRadius: '50%',
-            color: done ? 'success.main' : state === 'Dictated' ? 'info.main' : 'text.disabled',
-            '&:hover': { bgcolor: 'action.hover' },
+            ...TICK_SX,
+            borderRadius: '50%',
+            border: 1,
+            borderColor: tone ? `${tone}.main` : 'divider',
+            bgcolor: tone ? `${tone}.main` : 'background.paper',
+            color: tone ? 'common.white' : 'text.disabled',
+            '&:hover': tone ? undefined : {
+              borderColor: 'primary.main',
+              color: (t: Theme) => t.vars!.palette.brand.amberStrong,
+            },
           }}
         >
           {icon}
@@ -321,6 +445,15 @@ function remainderOf(row: PurchasableRow, invoices: OutgoingShipmentPurchaseInvo
     .reduce((sum, column) => sum + claimAt(invoices, column.sequence, row.productId), 0);
 
   return Math.max(0, purchasedTotal(row) - claimed);
+}
+
+/** The `− value +` block every chip's number sits on, stepper or not. */
+function StepperCells({ children }: { children: ReactNode }) {
+  return (
+    <Box sx={{ display: 'inline-grid', alignItems: 'center', columnGap: '1px', ...stepperTracks(INVOICE_VALUE) }}>
+      {children}
+    </Box>
+  );
 }
 
 /**
@@ -350,74 +483,35 @@ function QuantityStepper({
   }
 
   return (
-    <Stack direction="row" spacing={0.25} alignItems="center" justifyContent="center">
-      <IconButton
-        size="small"
+    <StepperCells>
+      <StepperButton
+        sign={-1}
         onClick={() => commit(value - 1)}
         disabled={value <= 0}
-        aria-label={`${label} — ubrat`}
-        sx={{ width: 18, height: 18 }}
-      >
-        <RemoveIcon sx={{ fontSize: 13 }} />
-      </IconButton>
+        label={`${label} — ubrat`}
+      />
       <InputBase
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => commit(parseInt(text, 10) || 0)}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        inputProps={{
-          'aria-label': label,
-          inputMode: 'numeric',
-          style: { textAlign: 'center', fontSize: 13, padding: 0, fontVariantNumeric: 'tabular-nums' },
+        inputProps={{ 'aria-label': label, inputMode: 'numeric' }}
+        // The size lives on the root so the field inherits it — the theme lifts the input
+        // itself to 16px under a coarse pointer, and an inline size here would beat that
+        // rule and hand iOS Safari a reason to zoom the page on focus.
+        sx={{
+          fontSize: 13,
+          fontWeight: 700,
+          minWidth: 0,
+          '& input': { textAlign: 'center', p: 0, fontVariantNumeric: 'tabular-nums' },
         }}
-        sx={{ width: 28 }}
       />
-      <IconButton
-        size="small"
+      <StepperButton
+        sign={1}
         onClick={() => commit(value + 1)}
         disabled={value >= max}
-        aria-label={`${label} — přidat`}
-        sx={{ width: 18, height: 18 }}
-      >
-        <AddIcon sx={{ fontSize: 13 }} />
-      </IconButton>
-    </Stack>
-  );
-}
-
-/** Footer cells: what each column adds up to across the whole nakládka. */
-export function PurchaseInvoiceFooterCells({
-  totals, progress, sx,
-}: {
-  totals: number[];
-  /** Loaded/checked out of the pairs that carry pieces, per column. */
-  progress: Array<{ dictated: number; checked: number; total: number }>;
-  sx: object;
-}) {
-  return (
-    <>
-      {totals.map((total, index) => (
-        <Fragment key={index}>
-          <TableCell align="right" sx={{ ...sx, ...CELL_SX }}>
-            <Box component="span" sx={{ color: index === 0 ? 'text.secondary' : 'text.primary' }}>{total} ks</Box>
-          </TableCell>
-          <TableCell align="left" sx={{ ...sx, ...STATE_CELL_SX }}>
-            <Tooltip title={`Nadiktováno ${progress[index]?.dictated ?? 0}/${progress[index]?.total ?? 0}, zkontrolováno ${progress[index]?.checked ?? 0}/${progress[index]?.total ?? 0}`}>
-              <Box
-                component="span"
-                sx={{
-                  fontSize: 11,
-                  color: (progress[index]?.total ?? 0) > 0 && progress[index]?.checked === progress[index]?.total
-                    ? 'success.main'
-                    : 'text.secondary',
-                }}
-              >
-                {progress[index]?.checked ?? 0}/{progress[index]?.total ?? 0}
-              </Box>
-            </Tooltip>
-          </TableCell>
-        </Fragment>
-      ))}
-    </>
+        label={`${label} — přidat`}
+      />
+    </StepperCells>
   );
 }

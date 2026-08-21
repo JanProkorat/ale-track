@@ -86,7 +86,11 @@ async function authorizedFetch(url: RequestInfo, init?: RequestInit): Promise<Re
   const doFetch = () => {
     const headers = new Headers(init?.headers);
     if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-    return fetch(target, { ...init, headers });
+    // `no-store`: the API sends no cache headers of its own, so nothing but this stops a
+    // browser (or anything between us and it) from answering a GET out of the HTTP cache
+    // and showing one user another's stale counts after a plain reload. Nothing here is
+    // revalidatable anyway — there are no ETags to make a conditional request with.
+    return fetch(target, { ...init, headers, cache: 'no-store' });
   };
 
   let res = await doFetch();

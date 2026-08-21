@@ -9,6 +9,14 @@ export interface ComboOption {
   label: string;
   /** Optional group heading (e.g. region, brewery) for sectioned lists. */
   group?: string;
+  /**
+   * Dimmed second line under the label, and matched by the typeahead alongside it.
+   *
+   * For the cases where the label alone is ambiguous: two clients may share a name and be
+   * told apart only by their trading name. Kept out of the label so the closed field stays
+   * short — a caller that needs it visible after picking shows it itself.
+   */
+  secondary?: string;
 }
 
 /** App-wide filterable typeahead. Every select in the app is one of these —
@@ -63,7 +71,16 @@ export function Combobox({
   // Only the choices are matched against the query; headers are rebuilt around
   // the survivors afterwards, so the search behaves exactly as it does for a
   // flat list (MUI's own matcher, accents ignored).
-  const matchOptions = useMemo(() => createFilterOptions<ComboRow>(), []);
+  //
+  // `stringify` is the one departure from MUI's default, which matches the label alone:
+  // a second line the reader can see but not search for would be a worse trap than not
+  // showing it — you would type the trading name you are looking at and get nothing.
+  const matchOptions = useMemo(
+    () => createFilterOptions<ComboRow>({
+      stringify: (o) => (o.secondary ? `${o.label} ${o.secondary}` : o.label),
+    }),
+    [],
+  );
 
   const toggleGroup = (group: string) => {
     setCollapsed((prev) => {
@@ -88,52 +105,59 @@ export function Combobox({
       filterOptions={
         collapsible
           ? (opts, state) => buildGroupRows(matchOptions(opts, state), collapsed, Boolean(state.inputValue))
-          : undefined
+          : matchOptions
       }
       // Headers sit in the same list as the choices, so they have to be skipped
       // by arrow-key navigation and refused as a value. Disabling them does
       // both; the row itself re-enables pointer events to stay clickable.
       getOptionDisabled={collapsible ? (o) => Boolean(o.header) : undefined}
-      renderOption={
-        collapsible
-          ? (props, option) => {
-              const { key, ...liProps } = props;
-              if (!option.header) {
-                return <li key={key} {...liProps}>{option.label}</li>;
-              }
-              return (
-                <Box
-                  component="li"
-                  key={key}
-                  {...liProps}
-                  aria-expanded={!option.collapsed}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleGroup(option.label);
-                  }}
-                  sx={{
-                    // MUI dims disabled options and kills their pointer events;
-                    // a header is only "disabled" to keep it out of keyboard
-                    // navigation and out of the value, so undo both.
-                    '&.Mui-disabled': { opacity: 1, pointerEvents: 'auto' },
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    cursor: 'pointer',
-                    bgcolor: 'action.hover',
-                  }}
-                >
-                  {option.collapsed ? <ChevronRightIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                  <Typography sx={{ fontWeight: 700, fontSize: 12.5, flex: 1, minWidth: 0 }} noWrap>
-                    {option.label}
+      renderOption={(props, option) => {
+        const { key, ...liProps } = props;
+        if (!collapsible || !option.header) {
+          return (
+            <li key={key} {...liProps}>
+              {option.secondary ? (
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13.5 }} noWrap>{option.label}</Typography>
+                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>
+                    {option.secondary}
                   </Typography>
-                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>{option.count}</Typography>
                 </Box>
-              );
-            }
-          : undefined
-      }
+              ) : option.label}
+            </li>
+          );
+        }
+        return (
+          <Box
+            component="li"
+            key={key}
+            {...liProps}
+            aria-expanded={!option.collapsed}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleGroup(option.label);
+            }}
+            sx={{
+              // MUI dims disabled options and kills their pointer events;
+              // a header is only "disabled" to keep it out of keyboard
+              // navigation and out of the value, so undo both.
+              '&.Mui-disabled': { opacity: 1, pointerEvents: 'auto' },
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              cursor: 'pointer',
+              bgcolor: 'action.hover',
+            }}
+          >
+            {option.collapsed ? <ChevronRightIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            <Typography sx={{ fontWeight: 700, fontSize: 12.5, flex: 1, minWidth: 0 }} noWrap>
+              {option.label}
+            </Typography>
+            <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>{option.count}</Typography>
+          </Box>
+        );
+      }}
       disabled={disabled}
       fullWidth={fullWidth}
       size={size}
