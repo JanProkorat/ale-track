@@ -15,6 +15,7 @@ import type {
   ProductKind,
 } from 'src/generated/api-client';
 import { resolveDetailStopAddress } from './stopAddress';
+import { formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 
 /** One product on one invoice, with the exact per-source breakdown behind it. */
 export interface LineGroup {
@@ -348,19 +349,28 @@ function stopForBand(
  * The driver's note on a delivery place is deliberately not returned: it routes
  * a van through a gate, and means nothing to the office doing the billing. The
  * order's own notes are a different thing — see {@link bandNotes}.
+ *
+ * A payer linked to another client's order (see the linked-clients-invoicing
+ * feature) holds no stop of its own, so there is nothing here to derive a
+ * delivery address from. It falls back to the payer's own official address,
+ * plain and unlabelled like every other band's line — the invoice is what's
+ * actually addressed there, even though nothing is delivered to it.
  */
 export function bandAddress(
   band: ClientBand,
   stops: OutgoingShipmentStopDto[],
 ): { text: string; placeName?: string } | undefined {
   const stop = stopForBand(band, stops);
-  if (!stop) return undefined;
+  if (stop) {
+    const resolved = resolveDetailStopAddress(stop);
+    return {
+      text: resolved.text,
+      placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
+    };
+  }
 
-  const resolved = resolveDetailStopAddress(stop);
-  return {
-    text: resolved.text,
-    placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
-  };
+  const officialAddress = band.invoices[0]?.clientOfficialAddress;
+  return officialAddress ? { text: formatStreetAddress(officialAddress) } : undefined;
 }
 
 /** The notes on the order behind a band, oldest first as the backend sends them.

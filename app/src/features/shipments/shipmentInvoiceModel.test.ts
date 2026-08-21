@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AddressDto,
+  Country,
   InvoiceLineSourceKind,
   ProductKind,
   ShipmentInvoiceDto,
@@ -543,6 +545,42 @@ describe('bandAddress', () => {
   // briefly disagree — no address beats a confidently wrong one.
   it('returns nothing when no stop matches', () => {
     expect(bandAddress(band({ stopOrder: 7 }), [stop()])).toBeUndefined();
+  });
+
+  // A payer linked to another client's order (linked-clients-invoicing) holds
+  // no stop of its own, so the band falls back to its own official address —
+  // plain text, no place chip, no kind tail.
+  it('falls back to the payer\'s official address when it has no stop', () => {
+    const inv = invoice({
+      clientOfficialAddress: new AddressDto({
+        streetName: 'Nádražní', streetNumber: '5', city: 'Ústí', zip: '40001', country: Country.Czechia,
+      }),
+    });
+
+    const result = bandAddress(band({ stopOrder: undefined, invoices: [inv] }), []);
+
+    expect(result?.text).toBe('Nádražní 5, 40001 Ústí');
+    expect(result?.placeName).toBeUndefined();
+  });
+
+  it('renders nothing for a payer with no stop and no official address either', () => {
+    const inv = invoice({ clientOfficialAddress: undefined });
+
+    const result = bandAddress(band({ stopOrder: undefined, invoices: [inv] }), []);
+
+    expect(result).toBeUndefined();
+  });
+
+  it('prefers the matched stop\'s address over the invoice\'s official address', () => {
+    const inv = invoice({
+      clientOfficialAddress: new AddressDto({
+        streetName: 'Nádražní', streetNumber: '5', city: 'Ústí', zip: '40001', country: Country.Czechia,
+      }),
+    });
+
+    const result = bandAddress(band({ invoices: [inv] }), [stop()]);
+
+    expect(result?.text).toContain('Hlavní 1');
   });
 });
 

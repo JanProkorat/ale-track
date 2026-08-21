@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Models;
 using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Invoices;
@@ -44,6 +45,12 @@ public sealed record ShipmentInvoiceDto
 
     /// <summary>Name of the client this invoice is issued to.</summary>
     public string ClientName { get; set; } = null!;
+
+    /// <summary>
+    /// Official (billing) address of the client this invoice is issued to, when it has one — the
+    /// client may have none, e.g. when it only ever pays for others' goods.
+    /// </summary>
+    public AddressDto? ClientOfficialAddress { get; set; }
 
     /// <summary>
     /// Position among that client's invoices on this shipment, starting at 1. Ordering only —
