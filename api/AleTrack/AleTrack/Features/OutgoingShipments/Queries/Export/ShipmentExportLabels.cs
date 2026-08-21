@@ -20,6 +20,12 @@ public static class ShipmentExportLabels
     /// </summary>
     public const string Missing = "—";
 
+    /// <summary>Heading of the invoice part, in both writers.</summary>
+    public const string Invoicing = "Fakturace";
+
+    /// <summary>Label naming the client a stop's goods are billed to.</summary>
+    public const string InvoicedTo = "Fakturováno na";
+
     private static readonly Dictionary<ProductKind, string> KindLabels = new()
     {
         [ProductKind.Keg] = "Sud",

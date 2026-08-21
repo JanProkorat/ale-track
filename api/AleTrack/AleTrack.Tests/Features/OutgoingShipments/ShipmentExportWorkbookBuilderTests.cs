@@ -18,6 +18,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         string? cityLine = "602 00 Brno",
         string? city = "Brno",
         string? deliveryPlaceName = null,
+        string? invoicedToClientName = null,
         List<string>? notes = null,
         List<ShipmentExportProduct>? products = null,
         List<ShipmentExportReturn>? returns = null) =>
@@ -29,6 +30,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
             CityLine = cityLine,
             City = city,
             DeliveryPlaceName = deliveryPlaceName,
+            InvoicedToClientName = invoicedToClientName,
             Notes = notes ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)],
             Returns = returns ?? []
@@ -59,7 +61,8 @@ public sealed class ShipmentExportWorkbookBuilderTests
         string? vehicleName = "Iveco Daily",
         List<string>? driverNames = null,
         List<ShipmentExportStop>? stops = null,
-        List<ShipmentExportProduct>? stockPurchases = null) =>
+        List<ShipmentExportProduct>? stockPurchases = null,
+        List<ShipmentExportInvoice>? invoices = null) =>
         new()
         {
             ShipmentName = name,
@@ -67,7 +70,19 @@ public sealed class ShipmentExportWorkbookBuilderTests
             VehicleName = vehicleName,
             DriverNames = driverNames ?? ["Jan Novák"],
             Stops = stops ?? [BuildStop(1, "Hospoda U Kotvy")],
-            StockPurchases = stockPurchases ?? []
+            StockPurchases = stockPurchases ?? [],
+            Invoices = invoices ?? []
+        };
+
+    private static ShipmentExportInvoiceParty BuildParty(
+        string clientName,
+        bool isPayer = false,
+        List<ShipmentExportProduct>? products = null) =>
+        new()
+        {
+            ClientName = clientName,
+            IsPayer = isPayer,
+            Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
     private static XLWorkbook Open(ShipmentExportModel model) =>
@@ -76,10 +91,10 @@ public sealed class ShipmentExportWorkbookBuilderTests
     /// <summary>
     /// Finds the row a label sits on, so a test does not break when a block above it grows a line.
     /// </summary>
-    private static int RowOf(IXLWorksheet sheet, string label)
+    private static int RowOf(IXLWorksheet sheet, string label, int occurrence = 1)
     {
-        var cell = sheet.Column(1).CellsUsed(c => c.GetString() == label).FirstOrDefault();
-        cell.Should().NotBeNull($"the sheet should carry a \"{label}\" row");
+        var cell = sheet.Column(1).CellsUsed(c => c.GetString() == label).ElementAtOrDefault(occurrence - 1);
+        cell.Should().NotBeNull($"the sheet should carry occurrence {occurrence} of a \"{label}\" row");
         return cell!.Address.RowNumber;
     }
 
@@ -618,5 +633,146 @@ public sealed class ShipmentExportWorkbookBuilderTests
             "Přehled",
             "1. Hospoda U Kotvy",
             "4. Hospoda U Kotvy");
+    }
+
+    [Fact]
+    public void Build_ModelWithInvoices_AddsTheFakturaceSheet()
+    {
+        var payerParty = BuildParty(
+            "Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]);
+        var otherParty = BuildParty(
+            "Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)]);
+
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties = [payerParty, otherParty]
+            }
+        ]);
+
+        using var workbook = Open(model);
+
+        workbook.Worksheets.Select(s => s.Name).Should().Contain("Fakturace");
+        var sheet = workbook.Worksheet("Fakturace");
+
+        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — it
+        // is the first "Hospoda U Kotvy" cell in the column, with the party row of the same name
+        // right behind it as the second occurrence.
+        var headingRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 1);
+        var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 2);
+        payerPartyRow.Should().BeGreaterThan(headingRow);
+
+        sheet.Cell(payerPartyRow, 4).GetValue<int>().Should().Be(24);
+
+        // Each party carries its own subtotal in column 4 …
+        var otherPartyRow = RowOf(sheet, "Pivnice Na Rohu");
+        sheet.Cell(otherPartyRow, 4).GetValue<int>().Should().Be(6);
+
+        // … and the block ends with the payer's own total across both parties.
+        var totalRow = RowOf(sheet, "Celkem");
+        sheet.Cell(totalRow, 4).GetValue<int>().Should().Be(30);
+    }
+
+    [Fact]
+    public void Build_ModelWithoutInvoices_OmitsTheFakturaceSheet()
+    {
+        using var workbook = Open(BuildModel());
+
+        workbook.Worksheets.Select(s => s.Name).Should().NotContain("Fakturace");
+    }
+
+    /// <summary>
+    /// ClosedXML 0.105.1 preserves a grouped row's <c>OutlineLevel</c> through a save/reload
+    /// round-trip, but not the <c>IsHidden</c> flag <c>.Collapse()</c> would set — confirmed by a
+    /// throwaway probe test before this one was written. The sheet therefore opens expanded; only
+    /// the outline level is asserted here.
+    /// </summary>
+    [Fact]
+    public void Build_PartyProductRows_AreGrouped()
+    {
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
+            }
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        var partyRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 2);
+        var productHeaderRow = RowOf(sheet, "PRODUKT");
+
+        sheet.Row(partyRow).OutlineLevel.Should().Be(0, "the party's own row is not part of the group");
+        // The grouped range starts at the product table's own header, so it shares the group with
+        // the rows beneath it.
+        sheet.Row(productHeaderRow).OutlineLevel.Should().Be(1, "the product header is part of the group");
+        sheet.Row(productHeaderRow + 1).OutlineLevel.Should().Be(1, "the product row is grouped under its party");
+    }
+
+    [Fact]
+    public void Build_ClientWithTwoInvoices_LabelsEachWithItsSequence()
+    {
+        var model = BuildModel(invoices:
+        [
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 1,
+                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
+            },
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Hospoda U Kotvy",
+                Sequence = 2,
+                Parties = [BuildParty("Hospoda U Kotvy", isPayer: true)]
+            },
+            new ShipmentExportInvoice
+            {
+                PayingClientName = "Pivnice Na Rohu",
+                Sequence = 1,
+                Parties = [BuildParty("Pivnice Na Rohu", isPayer: true)]
+            }
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
+
+        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1". (Its own party
+        // row repeats the same bare name right underneath, since it is that invoice's payer.)
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Build_SubClientStopSheet_NamesThePayer()
+    {
+        var model = BuildModel(stops:
+        [
+            BuildStop(1, "Pivnice Na Rohu", invoicedToClientName: "Hospoda U Kotvy")
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("1. Pivnice Na Rohu");
+
+        sheet.Cell(RowOf(sheet, "Fakturováno na"), 2).GetString().Should().Be("Hospoda U Kotvy");
+    }
+
+    [Fact]
+    public void Build_StopNotInvoicedElsewhere_OmitsTheInvoicedToRow()
+    {
+        using var workbook = Open(BuildModel());
+        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Fakturováno na").Should().BeEmpty();
     }
 }

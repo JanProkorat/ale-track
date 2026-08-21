@@ -20,6 +20,9 @@ public static class ShipmentExportWorkbookBuilder
     /// <summary>Name of the sheet carrying the run's own summary.</summary>
     public const string OverviewSheetName = "Přehled";
 
+    /// <summary>Name of the sheet carrying the run's invoice split.</summary>
+    public const string InvoiceSheetName = Invoicing;
+
     /// <summary>Excel's hard limit on the length of a worksheet name.</summary>
     private const int MaxSheetNameLength = 31;
 
@@ -47,7 +50,10 @@ public static class ShipmentExportWorkbookBuilder
 
         // Excel rejects a duplicate sheet name outright, and one client can hold two stops on a
         // route, so names are tracked as they are handed out rather than assumed unique.
-        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { OverviewSheetName };
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { OverviewSheetName, InvoiceSheetName };
+
+        WriteInvoiceSheet(workbook, model);
 
         foreach (var stop in model.SheetStops)
             WriteStopSheet(workbook, stop, usedNames);
@@ -179,6 +185,76 @@ public static class ShipmentExportWorkbookBuilder
         return row;
     }
 
+    /// <summary>
+    /// The run's invoice split: a heading per invoice, then its parties' goods with a subtotal
+    /// each and the invoice's total.
+    /// </summary>
+    /// <remarks>
+    /// One block per <see cref="ShipmentExportInvoice"/> — a client holding two invoices on the
+    /// run produces two blocks, so the heading names the invoice's sequence whenever that client
+    /// holds more than one, mirroring the Fakturace screen's own "Faktura N" rule, and omits it
+    /// otherwise so a client with a single invoice is not saddled with a meaningless "1".
+    ///
+    /// The parties' product rows are grouped so the sheet's outline lets the office collapse a
+    /// party down to its subtotal — the totals are read first and the detail only when a number
+    /// looks wrong. ClosedXML's row grouping does not preserve <c>IsHidden</c> through a
+    /// save/reload round-trip in this version, so the sheet opens with every row expanded rather
+    /// than pre-collapsed; the outline itself still round-trips and the office can collapse it by
+    /// hand.
+    ///
+    /// Omitted entirely for a run whose split is empty: an empty sheet reads as data that failed
+    /// to load rather than as "nothing to bill".
+    /// </remarks>
+    private static void WriteInvoiceSheet(XLWorkbook workbook, ShipmentExportModel model)
+    {
+        if (model.Invoices.Count == 0)
+            return;
+
+        // Only a client holding more than one invoice on the run needs its blocks told apart.
+        var invoiceCountByClient = model.Invoices
+            .GroupBy(invoice => invoice.PayingClientName)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        var sheet = workbook.Worksheets.Add(InvoiceSheetName);
+        var row = 1;
+
+        foreach (var invoice in model.Invoices)
+        {
+            var heading = invoiceCountByClient[invoice.PayingClientName] > 1
+                ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
+                : invoice.PayingClientName;
+
+            sheet.Cell(row, 1).Value = heading;
+            sheet.Cell(row, 1).Style.Font.Bold = true;
+            sheet.Cell(row, 1).Style.Fill.BackgroundColor = XLColor.FromArgb(0xF2, 0xF2, 0xF2);
+            row++;
+
+            foreach (var party in invoice.Parties)
+            {
+                sheet.Cell(row, 1).Value = party.ClientName;
+                sheet.Cell(row, 1).Style.Font.Italic = true;
+                sheet.Cell(row, 4).Value = party.TotalQuantity;
+                sheet.Cell(row, 4).Style.NumberFormat.Format = QuantityFormat;
+                sheet.Cell(row, 4).Style.Font.Bold = true;
+                row++;
+
+                var first = row;
+                WriteProductTable(sheet, ref row, party.Products, withTotal: false);
+
+                if (row > first)
+                    sheet.Rows(first, row - 1).Group();
+            }
+
+            sheet.Cell(row, 1).Value = "Celkem";
+            sheet.Cell(row, 1).Style.Font.Bold = true;
+            sheet.Cell(row, 1).Style.Border.TopBorder = XLBorderStyleValues.Thin;
+            WriteTotalCell(sheet, row, 4, invoice.TotalQuantity);
+            row += 2;
+        }
+
+        sheet.Columns().AdjustToContents();
+    }
+
     private static void WriteStopSheet(XLWorkbook workbook, ShipmentExportStop stop, ISet<string> usedNames)
     {
         var sheet = workbook.AddWorksheet(SheetNameFor(stop, usedNames));
@@ -204,6 +280,9 @@ public static class ShipmentExportWorkbookBuilder
 
         if (stop.DeliveryPlaceName is not null)
             WriteLabel(sheet, row++, "Místo dodání", stop.DeliveryPlaceName);
+
+        if (stop.InvoicedToClientName is not null)
+            WriteLabel(sheet, row++, InvoicedTo, stop.InvoicedToClientName);
 
         // Nothing at all rather than an empty row: a blank "Poznámky" reads as "no instructions",
         // which is a claim this sheet has no business making.
