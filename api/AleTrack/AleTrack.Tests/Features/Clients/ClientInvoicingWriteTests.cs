@@ -92,6 +92,25 @@ public sealed class ClientInvoicingWriteTests
     }
 
     [Fact]
+    public async Task Update_ClearingContactAddress_SetsItBackToNull()
+    {
+        var client = ClientBuilder.BuildEntity(name: "Pub A", contactAddress: AddressBuilder.BuildEntity());
+        client.Id = 5;
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [client]);
+
+        var command = new UpdateClientRequest
+        {
+            Id = client.PublicId,
+            Data = ClientBuilder.BuildUpdateDto(name: "Pub A", contactAddress: null)
+        };
+
+        var endpoint = EndpointBuilder<UpdateClientRequest, UpdateClientEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(command, CancellationToken.None);
+
+        client.ContactAddress.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Delete_ClientWithSubClients_Throws400()
     {
         var payer = ClientBuilder.BuildEntity(name: "Head Office");

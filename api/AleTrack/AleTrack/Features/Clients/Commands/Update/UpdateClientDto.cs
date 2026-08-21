@@ -25,12 +25,12 @@ public sealed record UpdateClientDto
 
     /// <summary>
     /// Official (billing) address. Omit for a client invoiced through
-    /// <see cref="InvoicingClientId"/>.
+    /// <see cref="InvoicingClientId"/>. An absent value clears the client's existing address.
     /// </summary>
     public AddressDto? OfficialAddress { get; set; }
 
     /// <summary>
-    /// Info about clients' contact address
+    /// Info about clients' contact address. An absent value clears the client's existing address.
     /// </summary>
     public AddressDto? ContactAddress { get; set; }
 
