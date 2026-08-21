@@ -224,10 +224,14 @@ invoice must reconcile to the same shape.
 ## Frontend
 
 **`ClientFormDrawer`** — a "Propojený klient" autocomplete. Options exclude the
-client itself, clients that already have a payer, and clients that have
-sub-clients. The official-address fields stop being required. Selecting a payer
-does not hide the official address (a sub-client may still have one), but the
-helper text says it is optional.
+client itself and clients that already have a payer. They do **not** exclude a
+client that is already a payer for somebody else — one payer with many
+sub-clients is the whole point, so a payer must stay selectable. The "no chains
+upward" rule constrains the *subject* instead: a client that already has
+sub-clients cannot be given a payer, so its picker is disabled with an
+explanation rather than the option list being filtered. The official-address
+fields stop being required. Selecting a payer does not hide the official address
+(a sub-client may still have one), but the helper text says it is optional.
 
 **`ClientDetail`** — a sub-client shows `Propojený klient: <name>` linking to
 the payer. A payer shows a `Propojení klienti` list. The official-address card
