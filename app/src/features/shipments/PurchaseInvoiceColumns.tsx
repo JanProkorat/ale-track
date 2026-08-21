@@ -26,7 +26,8 @@ import {
   type LoadingStateName, type PurchasableRow,
 } from './purchaseSplitModel';
 import { StatusPill } from 'src/components/common/StatusPill';
-import { StepperButton, stepperTracks } from './nakladkaControls';
+import { stepperTracks } from './nakladkaControls';
+import { StepperButton } from './StepperButton';
 
 // The two cells of a column group are pulled together rather than each centred in
 // its own box: the pieces end on the right of theirs, the state starts on the left

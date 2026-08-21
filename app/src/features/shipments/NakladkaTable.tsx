@@ -17,7 +17,8 @@ import { Box, ButtonBase, Collapse, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import { useBreweryColors } from 'src/hooks/useBreweries';
 import { plural } from 'src/lib/format';
-import { StepperButton, stepperTracks, type StepperAdjust } from './nakladkaControls';
+import { stepperTracks, type StepperAdjust } from './nakladkaControls';
+import { StepperButton } from './StepperButton';
 import type { BrewerySection } from './nakladkaGrouping';
 
 /** What the table itself reads off a row; everything else goes through the renderers.

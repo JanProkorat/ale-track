@@ -4,7 +4,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { qk } from 'src/api/queryKeys';
-import { createQueryClient } from './QueryProvider';
+import { createQueryClient } from './queryClient';
 
 /** Runs one mutation to completion through the client, the way a hook would. */
 async function mutate(client: QueryClient, fn: () => Promise<unknown> = () => Promise.resolve('ok')) {
