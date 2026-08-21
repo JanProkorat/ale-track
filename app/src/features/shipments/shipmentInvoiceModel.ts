@@ -96,6 +96,53 @@ export function groupValue(group: LineGroup): number {
   return (group.priceWithVat ?? 0) * group.quantity;
 }
 
+/** A client whose goods are billed on one invoice, and the rows that bill them. */
+export interface InvoiceParty {
+  clientId: string;
+  clientName: string;
+  /** True for the paying client's own lines, which sort first. */
+  isPayer: boolean;
+  quantity: number;
+  value: number;
+  groups: LineGroup[];
+}
+
+const PARTY_COLLATOR = new Intl.Collator('cs');
+
+/**
+ * Split one invoice by who ordered its pieces: the payer's own goods first, then the clients
+ * billed through it, by name.
+ *
+ * Returns a single party for an ordinary invoice, so nothing changes for a client that pays
+ * for its own goods — the UI only renders party rows once there is more than one. Returns an
+ * empty array for an invoice with no lines at all, rather than a lone empty party.
+ */
+export function invoiceParties(invoice: ShipmentInvoiceDto): InvoiceParty[] {
+  const map = new Map<string, ShipmentInvoiceLineDto[]>();
+  for (const line of invoice.lines ?? []) {
+    const key = line.orderingClientId ?? '';
+    const lines = map.get(key);
+    if (lines) lines.push(line);
+    else map.set(key, [line]);
+  }
+
+  const payerId = invoice.clientId ?? '';
+
+  return [...map.entries()]
+    .map(([clientId, lines]) => ({
+      clientId,
+      clientName: lines[0].orderingClientName ?? '—',
+      isPayer: clientId === payerId,
+      quantity: lines.reduce((s, l) => s + (l.quantity ?? 0), 0),
+      value: lines.reduce((s, l) => s + (l.priceWithVat ?? 0) * (l.quantity ?? 0), 0),
+      groups: groupLineList(lines),
+    }))
+    .sort((a, b) => {
+      if (a.isPayer !== b.isPayer) return a.isPayer ? -1 : 1;
+      return PARTY_COLLATOR.compare(a.clientName, b.clientName);
+    });
+}
+
 export function invoiceQuantity(invoice: ShipmentInvoiceDto): number {
   return (invoice.lines ?? []).reduce((s, l) => s + (l.quantity ?? 0), 0);
 }
@@ -117,8 +164,13 @@ export function isCrossBilled(
 }
 
 /**
- * Group invoices into client bands, in route order. Clients without a stop — they only
- * hold cross-billed lines after their own order left the shipment — sort last.
+ * Group invoices into client bands, in route order. Clients without a stop sort last —
+ * either they only hold cross-billed lines after their own order left the shipment, or
+ * (since the payer redirect) they are a payer band whose invoice bills goods ordered by
+ * other clients on the route. `stopOrder` is keyed on the invoice's own client — the
+ * payer — never on the line-level ordering client, so a payer with no stop of its own
+ * has no better position to sort by; this mirrors the same call already made for the
+ * shipment export (see `ShipmentExportQuery`).
  *
  * Private pieces join the band of whoever ordered them, not of whoever would have been
  * billed: there is no invoice to belong to, and the order is what the office recognises
@@ -331,6 +383,19 @@ export function bandReturns(
   stops: OutgoingShipmentStopDto[],
 ): OrderReturnDto[] {
   return stopForBand(band, stops)?.returns ?? [];
+}
+
+/** How many other clients' goods this band's invoices bill for. */
+export function linkedClientCount(band: ClientBand): number {
+  const ids = new Set<string>();
+  for (const invoice of band.invoices) {
+    for (const line of invoice.lines ?? []) {
+      if (line.orderingClientId && line.orderingClientId !== invoice.clientId) {
+        ids.add(line.orderingClientId);
+      }
+    }
+  }
+  return ids.size;
 }
 
 /** Totals for the section header. */

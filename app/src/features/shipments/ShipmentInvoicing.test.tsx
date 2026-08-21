@@ -202,6 +202,155 @@ describe('client bands', () => {
   });
 });
 
+describe('invoice parties', () => {
+  it('shows a payer invoice as collapsed party rows and expands one on click', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    // Both sub-clients show as party headers...
+    expect(screen.getByText('Pub B')).toBeInTheDocument();
+    expect(screen.getByText('Pub C')).toBeInTheDocument();
+    // ...but no product row until a party is opened.
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lager 50')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Pub B'));
+
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+    expect(screen.queryByText('Lager 50')).not.toBeInTheDocument();
+  });
+
+  it('counts the linked clients on the band header', async () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    expect(await screen.findByText('2 propojených klientů')).toBeInTheDocument();
+  });
+
+  // A client can hold two invoices on a run, and a payer can hold its own possibly-empty
+  // invoice alongside one billing another client — both existing rules have to keep working
+  // once party rows are in the mix.
+  it('shows party rows alongside the per-invoice header, and the empty-invoice row', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          id: 'inv-1', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({ id: 'inv-2', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 2, lines: [] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('Faktura 1')).toBeInTheDocument();
+    expect(screen.getByText('Faktura 2')).toBeInTheDocument();
+    expect(screen.getByText('Pub B')).toBeInTheDocument();
+    expect(screen.getByText('Pub C')).toBeInTheDocument();
+    expect(screen.getByText(/Zatím bez položek/)).toBeInTheDocument();
+  });
+
+  it('moves a party row using its own source line, not the whole invoice', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          id: 'inv-a', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ id: 'l-pubb', sourceItemId: 'pubb-item', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ id: 'l-pubc', sourceItemId: 'pubc-item', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [] }),
+      ],
+    });
+
+    renderSection();
+    fireEvent.click(screen.getByText('Pub B'));
+    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Faktura 1 — 0 ks' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: 'inv-a',
+      sourceItemId: 'pubb-item',
+      quantity: 3,
+    });
+  });
+
+  it('re-collapses an opened party when "Sbalit vše" is pressed, not just the bands', async () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({
+          clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2,
+          lines: [line({ name: 'Pilsner 10°', quantity: 1, orderingClientId: CLIENT_B })],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    // Open the party by hand.
+    fireEvent.click(screen.getByText('Pub B'));
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    // Collapse-all closes every band, hiding the still-open party along with it.
+    fireEvent.click(screen.getByRole('button', { name: /Sbalit vše/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rozbalit vše/ })).toBeInTheDocument());
+
+    // Reopen just Klient A's band — not through "Rozbalit vše" — and check the party came
+    // back collapsed too. Before the fix, `setAll` rebuilt `collapsed` from band ids only,
+    // so the already-open party key was dropped from the set and read back as open.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rozbalit' })[0]);
+    await waitFor(() => expect(screen.getByText('Pub B')).toBeInTheDocument());
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+  });
+});
+
 describe('provenance chips', () => {
   it('marks a fully stock-sourced row', () => {
     invoicesResponse = new ShipmentInvoicesDto({
@@ -231,6 +380,9 @@ describe('provenance chips', () => {
     expect(screen.getByText('14 ks')).toBeInTheDocument();
   });
 
+  // Two distinct orderers on one invoice split into party rows (see 'invoice parties'),
+  // so the cross-billed piece now sits behind its own collapsed party header rather than
+  // as an inline chip on a merged row.
   it('marks a cross-billed portion with its ordering client and count', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true, adjustments: [],
@@ -245,7 +397,11 @@ describe('provenance chips', () => {
 
     renderSection();
 
-    expect(screen.getByText('2 ks z obj. Klient B')).toBeInTheDocument();
+    // Collapsed by default — the chip only appears once the party is opened.
+    expect(screen.queryByText('z obj. Klient B')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Klient B'));
+
+    expect(screen.getByText('z obj. Klient B')).toBeInTheDocument();
     expect(screen.getByText('1 položka fakturována jinému klientovi')).toBeInTheDocument();
     expect(screen.getByText('1× přefakturováno')).toBeInTheDocument();
   });
@@ -430,6 +586,10 @@ describe('read-only state', () => {
 });
 
 describe('move dialog', () => {
+  // Both lines order through the same client on purpose — a merged row spanning two
+  // *different* orderers is now split into party rows before it ever reaches this dialog
+  // (see the 'invoice parties' describe block), so a same-client, mixed-source merge (an
+  // order plus a stock top-up) is what still exercises the origin picker here.
   beforeEach(() => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
@@ -439,7 +599,7 @@ describe('move dialog', () => {
           id: 'inv-a', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 1,
           lines: [
             line({ id: 'l-own', sourceItemId: 'own', quantity: 5 }),
-            line({ id: 'l-foreign', sourceItemId: 'foreign', quantity: 3, orderingClientId: CLIENT_B, orderingClientName: 'Klient B' }),
+            line({ id: 'l-stock', sourceItemId: 'stock', quantity: 3, isFromStock: true }),
           ],
         }),
         invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, sequence: 1, lines: [] }),
@@ -464,7 +624,7 @@ describe('move dialog', () => {
 
     const dialog = screen.getByRole('dialog');
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Původ kusů' }));
-    fireEvent.click(screen.getByRole('option', { name: 'z obj. Klient B — 3 ks' }));
+    fireEvent.click(screen.getByRole('option', { name: 'ze skladu — 3 ks' }));
 
     expect(within(dialog).getByText(/nejvýš 3 ks/)).toBeInTheDocument();
   });

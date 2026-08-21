@@ -8,7 +8,8 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  invoiceValue, isCrossBilled, linkedClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
 } from './shipmentInvoiceModel';
@@ -405,6 +406,87 @@ describe('private pieces', () => {
     expect(isCrossBilled(null, foreign)).toBe(false);
     expect(partOrigin(null, foreign)).toBe('z vlastní objednávky');
     expect(partOrigin(null, line({ isFromStock: true }))).toBe('ze skladu');
+  });
+});
+
+describe('invoiceParties', () => {
+  it('returns a single party for an ordinary invoice', () => {
+    const inv = invoice({ clientId: 'head', lines: [line({ orderingClientId: 'head', quantity: 4 })] });
+
+    const parties = invoiceParties(inv);
+
+    expect(parties).toHaveLength(1);
+    expect(parties[0].isPayer).toBe(true);
+    expect(parties[0].quantity).toBe(4);
+  });
+
+  it('splits an invoice by ordering client, payer first', () => {
+    const inv = invoice({
+      clientId: 'head',
+      lines: [
+        line({ orderingClientId: 'pubB', orderingClientName: 'Pub B', quantity: 2 }),
+        line({ orderingClientId: 'head', orderingClientName: 'Head', quantity: 5 }),
+        line({ orderingClientId: 'pubA', orderingClientName: 'Pub A', quantity: 3 }),
+      ],
+    });
+
+    const parties = invoiceParties(inv);
+
+    expect(parties.map((p) => p.clientName)).toEqual(['Head', 'Pub A', 'Pub B']);
+    expect(parties[0].isPayer).toBe(true);
+    expect(parties.slice(1).every((p) => !p.isPayer)).toBe(true);
+  });
+
+  it('merges a party rows by product and sums its value', () => {
+    const inv = invoice({
+      clientId: 'head',
+      lines: [
+        line({ orderingClientId: 'pubA', productId: 'p1', quantity: 2, priceWithVat: 10 }),
+        line({ orderingClientId: 'pubA', productId: 'p1', quantity: 3, priceWithVat: 10 }),
+      ],
+    });
+
+    const [party] = invoiceParties(inv);
+
+    expect(party.groups).toHaveLength(1);
+    expect(party.groups[0].quantity).toBe(5);
+    expect(party.quantity).toBe(5);
+    expect(party.value).toBe(50);
+  });
+
+  // A payer can hold its own, possibly empty, invoice on a run — the UI must not render a
+  // stray party header for it. Returning [] (rather than one empty party) is what lets the
+  // component fall into its ordinary "single party" / empty-invoice path unchanged.
+  it('returns no parties for an invoice with no lines', () => {
+    const inv = invoice({ clientId: 'head', lines: [] });
+
+    expect(invoiceParties(inv)).toEqual([]);
+  });
+});
+
+describe('linkedClientCount', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+  });
+
+  it('is zero for a band billing only its own client', () => {
+    const inv = invoice({ clientId: CLIENT_A, lines: [line({ orderingClientId: CLIENT_A, quantity: 3 })] });
+
+    expect(linkedClientCount(band({ invoices: [inv] }))).toBe(0);
+  });
+
+  it('counts each distinct ordering client billed through this band, not lines', () => {
+    const inv = invoice({
+      clientId: CLIENT_A,
+      lines: [
+        line({ orderingClientId: CLIENT_B, orderingClientName: 'Klient B', quantity: 2 }),
+        line({ orderingClientId: CLIENT_B, orderingClientName: 'Klient B', quantity: 1 }),
+        line({ orderingClientId: 'client-c', orderingClientName: 'Klient C', quantity: 4 }),
+      ],
+    });
+
+    expect(linkedClientCount(band({ invoices: [inv] }))).toBe(2);
   });
 });
 

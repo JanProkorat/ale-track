@@ -15,7 +15,7 @@
 //   * one row per product, with chips carrying provenance — the same product can
 //     reach an invoice from several sources at once.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
   DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
@@ -50,7 +50,8 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  invoiceValue, linkedClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
   type ClientBand,
@@ -411,14 +412,48 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const canEdit = editable && (data.isEditable ?? false);
   const totals = useMemo(() => sectionTotals(data, bands), [bands, data]);
 
+  // Every party key across every multi-party invoice — an invoice with one party renders no
+  // party row at all, so it contributes nothing here. Shared by the seeding effect below and
+  // by `setAll`: collapse-all has to close these too, not just the bands.
+  const partyKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const invoice of data.invoices ?? []) {
+      const parties = invoiceParties(invoice);
+      if (parties.length > 1) {
+        for (const party of parties) keys.push(`${invoice.id}:${party.clientId}`);
+      }
+    }
+    return keys;
+  }, [data.invoices]);
+
+  // Parties open closed: the payer's band is read as one line per client first, and the
+  // product detail only when a number looks wrong.
+  useEffect(() => {
+    if (partyKeys.length === 0) return;
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      for (const key of partyKeys) if (!prev.has(key)) next.add(key);
+      return next;
+    });
+    // This makes a newly-arrived party collapsed without re-closing one the user opened,
+    // because a key already in `prev` is left alone. A party the user opens and that then
+    // leaves and re-enters the response comes back collapsed.
+  }, [partyKeys]);
+
   const toggleBand = (clientId: string) => setCollapsed((prev) => {
     const next = new Set(prev);
     if (next.has(clientId)) next.delete(clientId);
     else next.add(clientId);
     return next;
   });
+  // Band-scoped on purpose: the header count means bands, not parties, so opening one
+  // party out of a collapsed band must not flip "Rozbalit vše" to "Sbalit vše".
   const openCount = bands.filter((b) => !collapsed.has(b.clientId)).length;
-  const setAll = (close: boolean) => setCollapsed(close ? new Set(bands.map((b) => b.clientId)) : new Set());
+  // Extends to every party key too — rebuilding the closed set from band ids alone would
+  // drop any party key already sitting in `collapsed` (every party starts collapsed) and
+  // thereby *expand* it, the opposite of what "Sbalit vše" claims to do.
+  const setAll = (close: boolean) =>
+    setCollapsed(close ? new Set([...bands.map((b) => b.clientId), ...partyKeys]) : new Set());
 
   const handleAdd = (clientId: string) => {
     addInvoice.mutate(clientId, {
@@ -500,7 +535,9 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
               Vývoz nemá žádné položky k fakturaci.
             </Typography>
           ) : (
-            bands.map((band, index) => (
+            bands.map((band, index) => {
+              const linked = linkedClientCount(band);
+              return (
               <Box
                 key={band.clientId}
                 sx={{ py: 1.5, ...(index > 0 ? { borderTop: 1, borderColor: 'divider' } : null) }}
@@ -526,6 +563,11 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                         down, and where the goods went is part of that scan. */}
                     <BandAddressLine band={band} stops={stops} />
                   </Box>
+                  {linked > 0 && (
+                    <Pill tint="greyTint" color="text.secondary">
+                      {linked} propojených klientů
+                    </Pill>
+                  )}
                   {band.crossBilled > 0 && (
                     <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
                   )}
@@ -599,16 +641,70 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                 </TableRow>,
                               );
                             }
-                            for (const group of groups) {
+                            const parties = invoiceParties(invoice);
+                            // One party is an ordinary invoice — render its rows directly, as
+                            // before. Party headers appear only where there is something to
+                            // separate, so an empty invoice (parties.length === 0) falls
+                            // through here too and renders no product row at all.
+                            if (parties.length <= 1) {
+                              for (const group of groups) {
+                                rows.push(
+                                  <GroupRow
+                                    key={`${invoice.id}-${group.productKey}`}
+                                    invoice={invoice}
+                                    group={group}
+                                    editable={canEdit}
+                                    onMove={() => setMoveTarget({ invoice, group })}
+                                  />,
+                                );
+                              }
+                              return rows;
+                            }
+
+                            for (const party of parties) {
+                              const partyKey = `${invoice.id}:${party.clientId}`;
+                              const open = !collapsed.has(partyKey);
                               rows.push(
-                                <GroupRow
-                                  key={`${invoice.id}-${group.productKey}`}
-                                  invoice={invoice}
-                                  group={group}
-                                  editable={canEdit}
-                                  onMove={() => setMoveTarget({ invoice, group })}
-                                />,
+                                <TableRow
+                                  key={`${partyKey}-head`}
+                                  hover
+                                  onClick={() => toggleBand(partyKey)}
+                                  sx={{ cursor: 'pointer', bgcolor: (t) => t.vars!.palette.brand.surface2 }}
+                                >
+                                  <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>
+                                    <Stack direction="row" spacing={0.75} alignItems="center">
+                                      <ExpandMoreIcon
+                                        sx={{
+                                          fontSize: 15,
+                                          transform: open ? 'rotate(180deg)' : 'none',
+                                        }}
+                                      />
+                                      <span>{party.clientName}</span>
+                                    </Stack>
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                    {num(party.quantity)} ks
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatMoney(party.value)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>,
                               );
+
+                              if (!open) continue;
+
+                              for (const group of party.groups) {
+                                rows.push(
+                                  <GroupRow
+                                    key={`${partyKey}-${group.productKey}`}
+                                    invoice={invoice}
+                                    group={group}
+                                    editable={canEdit}
+                                    onMove={() => setMoveTarget({ invoice, group })}
+                                  />,
+                                );
+                              }
                             }
                             return rows;
                           })}
@@ -648,7 +744,8 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                   <BandReturns band={band} stops={stops} />
                 </Collapse>
               </Box>
-            ))
+              );
+            })
           )}
         </Box>
       </Card>
