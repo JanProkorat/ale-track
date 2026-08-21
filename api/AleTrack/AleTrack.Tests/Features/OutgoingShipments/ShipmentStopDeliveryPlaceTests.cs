@@ -732,6 +732,32 @@ public sealed class ShipmentStopDeliveryPlaceTests
             .Which.Name.Should().Be("Aktivní místo");
     }
 
+    // The orders-list projection also carries the client's business name, so the shipment
+    // editor's picker can distinguish two clients that share a plain Name.
+    [Fact]
+    public async Task ProcessAsync_OrdersForShipments_CarriesClientBusinessName()
+    {
+        var withBusinessName = ClientBuilder.BuildEntity(name: "Luděk Pachl", businessName: "Pivovar s.r.o.", officialAddress: AddressBuilder.BuildEntity());
+        var withoutBusinessName = ClientBuilder.BuildEntity(name: "Chorvatka", officialAddress: AddressBuilder.BuildEntity());
+
+        var orderWithBusinessName = OrderBuilder.BuildEntity(client: withBusinessName);
+        var orderWithoutBusinessName = OrderBuilder.BuildEntity(client: withoutBusinessName);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [withBusinessName, withoutBusinessName],
+            orders: [orderWithBusinessName, orderWithoutBusinessName]
+        );
+
+        var request = new GetOrdersListForOutgoingShipmentsRequest();
+        var endpoint = EndpointWithResponseBuilder<GetOrdersListForOutgoingShipmentsRequest, List<OutgoingShipmentOrderDto>, GetOrdersListForOutgoingShipmentsEndpoint>
+            .Create(dbContext.Object);
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        endpoint.Response.Single(o => o.ClientName == "Luděk Pachl").ClientBusinessName.Should().Be("Pivovar s.r.o.");
+        endpoint.Response.Single(o => o.ClientName == "Chorvatka").ClientBusinessName.Should().BeNull();
+    }
+
     [Fact]
     public async Task ProcessAsync_AcknowledgeAddressChanges_ClearsEveryStopOfThatShipmentOnly()
     {

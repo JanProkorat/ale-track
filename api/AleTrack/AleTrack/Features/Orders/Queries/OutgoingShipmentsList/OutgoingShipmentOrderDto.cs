@@ -22,6 +22,11 @@ public record OutgoingShipmentOrderDto
     public string ClientName { get; set; } = null!;
 
     /// <summary>
+    /// Business name of the related client, when it has one distinct from <see cref="ClientName"/>.
+    /// </summary>
+    public string? ClientBusinessName { get; set; }
+
+    /// <summary>
     /// Official address of the client
     /// </summary>
     public AddressDto? ClientOfficialAddress { get; set; }

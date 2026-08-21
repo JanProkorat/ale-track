@@ -18976,6 +18976,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
@@ -18998,6 +18999,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
             this.id = _data["id"];
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.clientName = _data["clientName"];
+            this.clientBusinessName = _data["clientBusinessName"];
             this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
             this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
             if (Array.isArray(_data["clientDeliveryPlaces"])) {
@@ -19032,6 +19034,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
         data["id"] = this.id;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["clientName"] = this.clientName;
+        data["clientBusinessName"] = this.clientBusinessName;
         data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
         data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
         if (Array.isArray(this.clientDeliveryPlaces)) {
@@ -19059,6 +19062,7 @@ export interface IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];

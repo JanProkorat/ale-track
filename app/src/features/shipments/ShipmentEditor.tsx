@@ -1054,7 +1054,14 @@ export function ShipmentEditor({
                     <Checkbox checked={inRoute} disabled={structureLocked} size="small" sx={{ p: 0 }} />
                     <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: colorForClient(order.clientName ?? order.id ?? ''), flexShrink: 0 }} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{order.clientName}</Typography>
+                      <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>
+                        {order.clientName}
+                        {order.clientBusinessName && (
+                          <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary' }}>
+                            {' · '}{order.clientBusinessName}
+                          </Box>
+                        )}
+                      </Typography>
                       <Typography sx={{ fontSize: 12 }} color="text.secondary">
                         {(order.items ?? []).length} položek · {order.requiredDeliveryDate ? fmtDate(order.requiredDeliveryDate) : 'bez termínu'}
                       </Typography>

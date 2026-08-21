@@ -51,6 +51,7 @@ public class GetOrdersListForOutgoingShipmentsEndpoint(AleTrackDbContext dbConte
                 Id = o.PublicId,
                 RequiredDeliveryDate = o.RequiredDeliveryDate,
                 ClientName = o.Client.Name,
+                ClientBusinessName = o.Client.BusinessName,
                 ClientOfficialAddress = o.Client.OfficialAddress != null ? o.Client.OfficialAddress.ToDto() : null,
                 ClientContactAddress = o.Client.ContactAddress != null ? o.Client.ContactAddress.ToDto() : null,
                 ClientDeliveryPlaces = o.Client.DeliveryPlaces

@@ -265,6 +265,44 @@ describe('ShipmentEditor stop row — missing-address warning', () => {
   });
 });
 
+describe('ShipmentEditor — "Objednávky k rozvozu" picker row', () => {
+  it('shows the client\'s business name beside its name when the client has one', () => {
+    // Two clients can share a plain Name (see ClientBusinessName's own doc
+    // comment) — the row must surface the business name too so they're not
+    // indistinguishable in this list.
+    availableOrders = [
+      ...availableOrders,
+      new OutgoingShipmentOrderDto({
+        id: 'order-2',
+        clientName: 'Luděk Pachl',
+        clientBusinessName: 'Pivovar s.r.o.',
+        clientOfficialAddress: officialAddress(),
+        items: [],
+      }),
+    ];
+
+    renderEditor();
+
+    // The name and the muted business-name suffix are separate DOM nodes (the
+    // suffix is its own <span> so it can be coloured), so getByText only
+    // matches the outer element's own direct text — assert the full line via
+    // its textContent instead.
+    const nameEl = screen.getByText('Luděk Pachl');
+    expect(nameEl.textContent).toBe('Luděk Pachl · Pivovar s.r.o.');
+  });
+
+  it('renders the bare client name with no leftover separator when it has no business name', () => {
+    // Default fixture's order-1 (clientName 'Hospoda U Netopýra') carries no
+    // clientBusinessName. Scoped to the picker card: the same name also
+    // appears in the already-loaded stop row above it.
+    renderEditor();
+
+    const pickerCard = screen.getByText('Objednávky k rozvozu').closest('.MuiCard-root') as HTMLElement;
+    expect(within(pickerCard).getByText('Hospoda U Netopýra')).toBeInTheDocument();
+    expect(within(pickerCard).queryByText(/Hospoda U Netopýra\s*·/)).not.toBeInTheDocument();
+  });
+});
+
 describe('ShipmentEditor stop picker — new place', () => {
   it('opens DeliveryPlaceDialog for the stop\'s client, not the sentinel', () => {
     renderEditor();
