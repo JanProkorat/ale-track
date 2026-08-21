@@ -137,7 +137,8 @@ public static class ShipmentInvoiceReconciler
     /// <remarks>
     /// Guarantees on return:
     /// <list type="number">
-    /// <item>every client with billable items has at least one invoice,</item>
+    /// <item>every client with a stake in the run — billed, ordering, or both — keeps at least
+    /// one invoice, and the pieces of every source have a home to sit on,</item>
     /// <item>every line points at an item the shipment still carries,</item>
     /// <item>for every billable item, the quantities of its invoice lines <em>and</em> its
     /// private lines sum to the item's quantity.</item>
@@ -160,12 +161,21 @@ public static class ShipmentInvoiceReconciler
 
         var sources = CollectSources(shipment);
         var sourceKeys = sources.Select(s => s.Key).ToHashSet();
-        var billableClientIds = sources.Select(s => s.PayingClientId).Distinct().ToList();
+        // Both ends of the payer redirect have a stake in the run. The client billed obviously
+        // does; so does the one ordering, even though it is no longer the one billed — it may hold
+        // an invoice a user opened for it, or one that predates the relation, and step 3 would
+        // otherwise prune that the moment it fell empty and never open another.
+        var stakeholderClientIds = sources
+            .SelectMany(s => new[] { s.PayingClientId, s.OrderingClientId })
+            .Distinct()
+            .ToList();
 
         // 1. Every client who is billed gets an invoice to be billed on. A split made before the
-        //    payer relation existed counts as one: the orderer's own invoice is a home too, so
-        //    setting a payer does not open an empty second invoice beside it. Only pieces that
-        //    still need a home from here on follow the payer.
+        //    payer relation existed counts as one: an ordering client's own invoice is a home too,
+        //    so setting a payer does not open an empty second invoice beside it. `homes` holds
+        //    every orderer in the payer-keyed group, so a sibling sub-client's invoice suppresses
+        //    the payer's as well — deliberately coarse, because step 4 gives any pieces still
+        //    without a home one on the payer anyway.
         foreach (var group in sources.GroupBy(s => s.PayingClientId))
         {
             var homes = group.Select(s => s.OrderingClientId).Append(group.Key).ToHashSet();
@@ -204,7 +214,7 @@ public static class ShipmentInvoiceReconciler
         //    deliberate decision by the user, not leftover state.
         foreach (var invoice in shipment.Invoices.ToList())
         {
-            if (billableClientIds.Contains(invoice.ClientId) || invoice.Lines.Count > 0)
+            if (stakeholderClientIds.Contains(invoice.ClientId) || invoice.Lines.Count > 0)
                 continue;
 
             shipment.Invoices.Remove(invoice);
