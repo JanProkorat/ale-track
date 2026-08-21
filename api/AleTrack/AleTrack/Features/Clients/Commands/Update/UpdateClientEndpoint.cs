@@ -59,6 +59,15 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         if (client == null)
             ThrowHelper.PublicEntityNotFound(nameof(Client), req.Id);
 
+        // Mirrors InvoicingClientResolver's rule 5 (a payer must have an official address) on
+        // the other side: a client cannot clear the address it is being invoiced against while
+        // it still invoices for other clients — that would leave the arrangement invalid without
+        // ever going through the resolver.
+        if (req.Data.OfficialAddress is null
+            && await dbContext.Clients.AnyAsync(c => c.InvoicingClientId == client!.Id, ct))
+            ThrowHelper.BadRequest(
+                $"Client {req.Id} invoices for other clients and cannot have its official address cleared.");
+
         client!.Name = req.Data.Name;
         client.BusinessName = req.Data.BusinessName;
         client.Region = req.Data.Region;

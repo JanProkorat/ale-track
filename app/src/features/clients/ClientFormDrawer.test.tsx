@@ -144,18 +144,60 @@ describe('ClientFormDrawer', () => {
     });
   });
 
-  it('offers only clients that can be a payer', async () => {
+  it('offers a client that is already a payer for someone else', async () => {
+    // The user's bug: client A is linked to payer B, then client C tries to link to B too —
+    // B must still show up, since one payer with several sub-clients is the normal case.
     useClientsMock.mockReturnValue({
       data: [
-        // Eligible: no payer of its own, not itself a payer, not the client being edited.
+        ClientListItemDto.fromJS({ id: 'payer-b', name: 'Plátce B' }),
+        ClientListItemDto.fromJS({ id: 'sub-a', name: 'Klient A', invoicingClientId: 'payer-b' }),
+      ],
+    });
+
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open client={existingClient()} onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    const input = screen.getByLabelText('Propojený klient');
+    const root = input.closest('.MuiAutocomplete-root') as HTMLElement;
+    fireEvent.click(within(root).getByRole('button', { name: /open/i }));
+
+    // Only payer-b is offered: sub-a already has a payer of its own (payer-b), so it is
+    // correctly excluded from being a payer target in turn — but payer-b itself is not.
+    const listbox = screen.getByRole('listbox');
+    expect(within(listbox).getAllByRole('option')).toHaveLength(1);
+    expect(within(listbox).getByText('Plátce B')).toBeInTheDocument();
+  });
+
+  it('does not offer a client that already has a payer of its own', async () => {
+    useClientsMock.mockReturnValue({
+      data: [
         ClientListItemDto.fromJS({ id: 'plain-1', name: 'Volný klient' }),
-        // Ineligible: already has a payer.
         ClientListItemDto.fromJS({ id: 'has-payer-1', name: 'Má plátce', invoicingClientId: 'someone-else' }),
-        // Ineligible: is itself a payer — named as another row's invoicingClientId, which is
-        // the only signal the list DTO carries for that.
-        ClientListItemDto.fromJS({ id: 'is-payer-1', name: 'Je plátce' }),
-        ClientListItemDto.fromJS({ id: 'sub-1', name: 'Podřízený', invoicingClientId: 'is-payer-1' }),
-        // Ineligible: the client being edited itself.
+      ],
+    });
+
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open client={existingClient()} onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    const input = screen.getByLabelText('Propojený klient');
+    const root = input.closest('.MuiAutocomplete-root') as HTMLElement;
+    fireEvent.click(within(root).getByRole('button', { name: /open/i }));
+
+    const listbox = screen.getByRole('listbox');
+    expect(within(listbox).getAllByRole('option')).toHaveLength(1);
+    expect(within(listbox).getByText('Volný klient')).toBeInTheDocument();
+  });
+
+  it('does not offer the client being edited itself', async () => {
+    useClientsMock.mockReturnValue({
+      data: [
+        ClientListItemDto.fromJS({ id: 'plain-1', name: 'Volný klient' }),
         ClientListItemDto.fromJS({ id: 'c1', name: 'Standa Dlouhý' }),
       ],
     });
@@ -173,6 +215,27 @@ describe('ClientFormDrawer', () => {
     const listbox = screen.getByRole('listbox');
     expect(within(listbox).getAllByRole('option')).toHaveLength(1);
     expect(within(listbox).getByText('Volný klient')).toBeInTheDocument();
+  });
+
+  it('disables the payer picker for a client that already has sub-clients of its own', () => {
+    const clientWithSubClients = ClientDto.fromJS({
+      ...existingClient().toJSON(),
+      invoicedClients: [{ id: 'sub-a', name: 'Klient A' }],
+    });
+    useClientsMock.mockReturnValue({
+      data: [ClientListItemDto.fromJS({ id: 'payer-b', name: 'Plátce B' })],
+    });
+
+    render(
+      <MuiThemeProvider theme={theme}>
+        <ClientFormDrawer open client={clientWithSubClients} onClose={vi.fn()} />
+      </MuiThemeProvider>,
+    );
+
+    expect(screen.getByLabelText('Propojený klient')).toBeDisabled();
+    expect(screen.getByText(
+      'Tento klient je sám plátcem pro jiné klienty, a proto mu nelze přiřadit vlastního plátce.',
+    )).toBeInTheDocument();
   });
 
   it('sends the chosen payer', async () => {

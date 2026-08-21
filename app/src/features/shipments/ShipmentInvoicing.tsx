@@ -51,7 +51,7 @@ import {
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
   bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
-  invoiceValue, linkedClientCount,
+  invoiceValue, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
   type ClientBand,
@@ -537,7 +537,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
             </Typography>
           ) : (
             bands.map((band, index) => {
-              const linked = linkedClientCount(band);
+              const other = otherClientCount(band);
               return (
               <Box
                 key={band.clientId}
@@ -564,9 +564,9 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                         down, and where the goods went is part of that scan. */}
                     <BandAddressLine band={band} stops={stops} />
                   </Box>
-                  {linked > 0 && (
+                  {other > 0 && (
                     <Pill tint="greyTint" color="text.secondary">
-                      {linked} {plural(linked, 'propojený klient', 'propojení klienti', 'propojených klientů')}
+                      {other} {plural(other, 'jiný klient', 'jiní klienti', 'jiných klientů')}
                     </Pill>
                   )}
                   {band.crossBilled > 0 && (
@@ -609,7 +609,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                         </TableHead>
                         <TableBody>
                           {band.invoices.flatMap((invoice) => {
-                            const groups = groupLines(invoice);
+                            const parties = invoiceParties(invoice);
                             const rows = [];
                             // Only label individual invoices once the client has more than one.
                             if (band.invoices.length > 1) {
@@ -633,7 +633,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                 </TableRow>,
                               );
                             }
-                            if (groups.length === 0) {
+                            if (parties.length === 0) {
                               rows.push(
                                 <TableRow key={`${invoice.id}-empty`}>
                                   <TableCell colSpan={4} sx={{ fontSize: 12.5, color: 'text.secondary' }}>
@@ -642,13 +642,12 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                 </TableRow>,
                               );
                             }
-                            const parties = invoiceParties(invoice);
                             // One party is an ordinary invoice — render its rows directly, as
                             // before. Party headers appear only where there is something to
                             // separate, so an empty invoice (parties.length === 0) falls
                             // through here too and renders no product row at all.
                             if (parties.length <= 1) {
-                              for (const group of groups) {
+                              for (const group of groupLines(invoice)) {
                                 rows.push(
                                   <GroupRow
                                     key={`${invoice.id}-${group.productKey}`}

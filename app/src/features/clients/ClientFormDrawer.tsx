@@ -181,24 +181,21 @@ export function ClientFormDrawer({ open, client, onClose }: {
 
   const { data: clients } = useClients();
 
-  // Clients that already pay for someone are excluded by their own ids appearing as a payer
-  // on another row — the list DTO names the payer, so no extra call is needed.
-  const subClientIds = useMemo(
-    () => new Set((clients ?? []).map((c) => c.invoicingClientId).filter((id): id is string => Boolean(id))),
-    [clients],
-  );
-
-  // Only clients that can actually hold the bill: the relation is one hop, so a client that
-  // already has a payer or is itself one is not offered, and neither is this client.
+  // Only clients that can actually hold the bill: a client that already has a payer of its
+  // own is not offered (rule 4, no chains downward), and neither is this client. A client that
+  // is itself already a payer for someone else IS offered — one payer with several sub-clients
+  // is the normal case.
   const payerOptions = useMemo(
     () => clientComboOptions(
-      (clients ?? []).filter((c) =>
-        c.id !== client?.id
-        && !c.invoicingClientId
-        && !subClientIds.has(c.id ?? '')),
+      (clients ?? []).filter((c) => c.id !== client?.id && !c.invoicingClientId),
     ),
-    [clients, client?.id, subClientIds],
+    [clients, client?.id],
   );
+
+  // Rule 6 (no chains upward) constrains the client being edited, not the picker's options: if
+  // it already invoices for other clients, it cannot itself be given a payer. The detail DTO
+  // carries that as `invoicedClients`; skip the check on create, where there is nothing yet.
+  const hasSubClients = Boolean(client?.invoicedClients?.length);
 
   useEffect(() => {
     if (!open) return;
@@ -313,12 +310,22 @@ export function ClientFormDrawer({ open, client, onClose }: {
           value={field.value || null}
           onChange={(v) => field.onChange(v ?? '')}
           options={payerOptions}
+          disabled={hasSubClients}
           placeholder="Fakturuje se přes jiného klienta…"
-          helperText="Faktury za tohoto klienta vystavíme na vybraného klienta."
+          helperText={
+            hasSubClients
+              ? 'Tento klient je sám plátcem pro jiné klienty, a proto mu nelze přiřadit vlastního plátce.'
+              : 'Faktury za tohoto klienta vystavíme na vybraného klienta.'
+          }
         />
       )} />
 
       <Typography variant="subtitle2" sx={{ mt: 1 }}>Fakturační adresa</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {watch('invoicingClientId')
+          ? 'Adresa je nepovinná, protože faktury vystavujeme na vybraného plátce.'
+          : 'Adresa je nepovinná, pokud vyberete plátce, na kterého se budou vystavovat faktury.'}
+      </Typography>
       <AddressFields control={control} prefix="official" errors={errors} />
 
       <FormControlLabel

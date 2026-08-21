@@ -9,7 +9,7 @@ import {
 } from 'src/generated/api-client';
 import {
   bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
-  invoiceValue, isCrossBilled, linkedClientCount,
+  invoiceValue, isCrossBilled, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
 } from './shipmentInvoiceModel';
@@ -464,7 +464,7 @@ describe('invoiceParties', () => {
   });
 });
 
-describe('linkedClientCount', () => {
+describe('otherClientCount', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
@@ -473,7 +473,7 @@ describe('linkedClientCount', () => {
   it('is zero for a band billing only its own client', () => {
     const inv = invoice({ clientId: CLIENT_A, lines: [line({ orderingClientId: CLIENT_A, quantity: 3 })] });
 
-    expect(linkedClientCount(band({ invoices: [inv] }))).toBe(0);
+    expect(otherClientCount(band({ invoices: [inv] }))).toBe(0);
   });
 
   it('counts each distinct ordering client billed through this band, not lines', () => {
@@ -486,7 +486,7 @@ describe('linkedClientCount', () => {
       ],
     });
 
-    expect(linkedClientCount(band({ invoices: [inv] }))).toBe(2);
+    expect(otherClientCount(band({ invoices: [inv] }))).toBe(2);
   });
 });
 

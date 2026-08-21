@@ -385,8 +385,11 @@ export function bandReturns(
   return stopForBand(band, stops)?.returns ?? [];
 }
 
-/** How many other clients' goods this band's invoices bill for. */
-export function linkedClientCount(band: ClientBand): number {
+/** How many other clients' goods this band's invoices bill for. Deliberately not called
+ * "linked" — a client billed through a payer is a standing arrangement, but a line the office
+ * moved onto this invoice by hand is not one, and this count cannot tell the two apart. It
+ * states the fact (goods for N other clients are on here), not a relationship. */
+export function otherClientCount(band: ClientBand): number {
   const ids = new Set<string>();
   for (const invoice of band.invoices) {
     for (const line of invoice.lines ?? []) {

@@ -233,7 +233,7 @@ describe('invoice parties', () => {
     expect(screen.queryByText('Lager 50')).not.toBeInTheDocument();
   });
 
-  it('counts the linked clients on the band header, using the Czech paucal for 2', async () => {
+  it('counts the other clients on the band header, using the Czech paucal for 2', async () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -250,10 +250,10 @@ describe('invoice parties', () => {
 
     renderSection();
 
-    expect(await screen.findByText('2 propojení klienti')).toBeInTheDocument();
+    expect(await screen.findByText('2 jiní klienti')).toBeInTheDocument();
   });
 
-  it('keeps the Czech paucal for a linked-client count of 4', async () => {
+  it('keeps the Czech paucal for an other-client count of 4', async () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -272,7 +272,7 @@ describe('invoice parties', () => {
 
     renderSection();
 
-    expect(await screen.findByText('4 propojení klienti')).toBeInTheDocument();
+    expect(await screen.findByText('4 jiní klienti')).toBeInTheDocument();
   });
 
   // A client can hold two invoices on a run, and a payer can hold its own possibly-empty
