@@ -33,15 +33,31 @@ public sealed class Client : PublicSoftlyDeletableEntity
     public Region Region { get; set; }
     
     /// <summary>
-    /// Official address of the client
+    /// Official (billing) address. Null for a client billed through its payer — see
+    /// <see cref="InvoicingClient"/>.
     /// </summary>
-    public Address OfficialAddress { get; set; } = null!;
+    public Address? OfficialAddress { get; set; }
 
     /// <summary>
     /// Contact address of the client, which can be null
     /// </summary>
     public Address? ContactAddress { get; set; }
-    
+
+    /// <summary>
+    /// Client that receives the invoices for this one's goods, when another client pays.
+    /// </summary>
+    [Column("invoicing_client_id")]
+    public long? InvoicingClientId { get; set; }
+
+    /// <inheritdoc cref="InvoicingClientId"/>
+    public Client? InvoicingClient { get; set; }
+
+    /// <summary>
+    /// Clients whose goods are invoiced to this one. Kept flat: a client with any of these
+    /// cannot itself have an <see cref="InvoicingClient"/>.
+    /// </summary>
+    public List<Client> InvoicedClients { get; set; } = [];
+
     /// <summary>
     /// List of orders from this client
     /// </summary>

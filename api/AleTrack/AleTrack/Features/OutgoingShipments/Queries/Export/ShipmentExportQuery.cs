@@ -65,7 +65,9 @@ public static class ShipmentExportQuery
                         ClientName = s.ClientOrder != null ? s.ClientOrder.Client.Name : null,
                         Label = s.Label,
                         SelectedAddressKind = s.SelectedAddressKind,
-                        OfficialAddress = s.ClientOrder != null ? s.ClientOrder.Client.OfficialAddress.ToDto() : null,
+                        OfficialAddress = s.ClientOrder != null && s.ClientOrder.Client.OfficialAddress != null
+                            ? s.ClientOrder.Client.OfficialAddress.ToDto()
+                            : null,
                         ContactAddress = s.ClientOrder != null && s.ClientOrder.Client.ContactAddress != null
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,

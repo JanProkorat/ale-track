@@ -55,7 +55,7 @@ public sealed class GetClientDetailEndpoint(AleTrackDbContext dbContext) : Endpo
                 Name = c.Name,
                 BusinessName = c.BusinessName,
                 Region = c.Region,
-                OfficialAddress = c.OfficialAddress.ToDto(),
+                OfficialAddress = c.OfficialAddress != null ? c.OfficialAddress.ToDto() : null,
                 ContactAddress = c.ContactAddress != null
                     ? c.ContactAddress.ToDto()
                     : null,
