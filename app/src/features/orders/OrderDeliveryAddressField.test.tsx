@@ -68,6 +68,40 @@ describe('OrderDeliveryAddressField', () => {
     expect(screen.queryByText('Fakturační')).not.toBeInTheDocument();
   });
 
+  describe('the all-empty-client warning', () => {
+    // A client with no official address, no contact address and no delivery place hides every
+    // standard option (only "+ Nové místo…" is left), while the caller still defaults the
+    // form to `Official` — the <Select> then shows no visible text at all, with nothing on
+    // screen to tell the dispatcher the order cannot be saved as drafted. This is the one
+    // screen that actually causes that state, so it is the one that warns about it.
+    it('warns when the client has none of the three', () => {
+      clientData = { officialAddress: undefined, contactAddress: undefined };
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+      expect(screen.getByLabelText('Klient nemá vyplněnou dodací adresu')).toBeInTheDocument();
+    });
+
+    it('does not warn when the client has an official address', () => {
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
+
+    it('does not warn when the client has a contact address', () => {
+      clientData = { officialAddress: undefined, contactAddress: { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763' } };
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Contact }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
+
+    it('does not warn when the client has a delivery place', () => {
+      clientData = { officialAddress: undefined, contactAddress: undefined };
+      // placesData keeps the default [place] fixture from beforeEach.
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.DeliveryPlace, placeId: 'p1' }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
+  });
+
   it('reports the decoded choice when a place is picked', () => {
     const onChange = vi.fn();
     render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={onChange} />);
