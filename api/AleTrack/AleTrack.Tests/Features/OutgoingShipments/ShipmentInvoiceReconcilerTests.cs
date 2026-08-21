@@ -656,6 +656,109 @@ public sealed class ShipmentInvoiceReconcilerTests
 
     #endregion
 
+    #region payer redirect
+
+    [Fact]
+    public void Reconcile_SubClientItems_OpenTheInvoiceForItsPayer()
+    {
+        var payer = Payer(ClientC);
+        var shipment = Shipment(OrderStop(ClientA, order: 1, SubClient(ClientA, payer), (itemId: 1, qty: 10)));
+
+        Reconcile(shipment);
+
+        shipment.Invoices.Should().ContainSingle().Which.ClientId.Should().Be(ClientC);
+        InvoiceFor(shipment, ClientC).Lines.Should()
+            .OnlyContain(l => OrderingClientIdOf(shipment, l) == ClientA,
+                "the pieces are still the sub-client's; only the bill moved");
+        AssertBalanced(shipment);
+    }
+
+    [Fact]
+    public void Reconcile_TwoSubClientsOfOnePayer_ShareOneInvoice()
+    {
+        var payer = Payer(ClientC);
+        var shipment = Shipment(
+            OrderStop(ClientA, order: 1, SubClient(ClientA, payer), (itemId: 1, qty: 4)),
+            OrderStop(ClientB, order: 2, SubClient(ClientB, payer), (itemId: 2, qty: 6)));
+
+        Reconcile(shipment);
+
+        shipment.Invoices.Should().ContainSingle().Which.ClientId.Should().Be(ClientC);
+        InvoiceFor(shipment, ClientC).Lines.Sum(l => l.Quantity).Should().Be(10);
+        InvoiceFor(shipment, ClientC).Lines.Select(l => OrderingClientIdOf(shipment, l))
+            .Should().BeEquivalentTo(new[] { ClientA, ClientB });
+        AssertBalanced(shipment);
+    }
+
+    [Fact]
+    public void Reconcile_PayerInvoiceGetsThePayerClientNavigation()
+    {
+        // The response is mapped from this same graph, so a payer invoice with only ClientId set
+        // would surface as a blank client name on the first read.
+        var payer = Payer(ClientC);
+        var shipment = Shipment(OrderStop(ClientA, order: 1, SubClient(ClientA, payer), (itemId: 1, qty: 3)));
+
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientC).Client.Should().BeSameAs(payer);
+    }
+
+    [Fact]
+    public void Reconcile_ExistingSubClientInvoice_IsLeftAlone()
+    {
+        // A run split before the relation existed must not have its invoices re-pointed
+        // mid-flight: that would move money between clients without anyone asking.
+        var payer = Payer(ClientC);
+        var shipment = Shipment(OrderStop(ClientA, order: 1, (itemId: 1, qty: 5)));
+        Reconcile(shipment);
+        var existing = InvoiceFor(shipment, ClientA).PublicId;
+
+        shipment.Stops.Single().ClientOrder!.Client = SubClient(ClientA, payer);
+        var result = Reconcile(shipment);
+
+        shipment.Invoices.Should().ContainSingle().Which.PublicId.Should().Be(existing);
+        InvoiceFor(shipment, ClientA).ClientId.Should().Be(ClientA);
+        result.Adjustments.Should().BeEmpty();
+        AssertBalanced(shipment);
+    }
+
+    [Fact]
+    public void Reconcile_SubClientQuantityDrops_TrimsItsOwnPayerInvoiceLast()
+    {
+        // TrimRank must rank the payer's invoice as the sub-client's *own* home, not as
+        // "somebody else's" — otherwise a drop empties the line that should survive. The
+        // cross-billed pieces on B are what makes the ranking observable: with a single
+        // placement the trim order cannot be seen at all.
+        var payer = Payer(ClientC);
+        var sub = SubClient(ClientA, payer);
+        var stop = OrderStop(ClientA, order: 1, sub, (itemId: 1, qty: 10));
+        var shipment = Shipment(stop, OrderStop(ClientB, order: 2));
+        Reconcile(shipment);
+        MovePieces(shipment, itemId: 1, from: ClientC, to: ClientB, quantity: 3, targetSequence: 1);
+
+        stop.ClientOrder!.OrderItems.Single().Quantity = 4;
+        Reconcile(shipment);
+
+        InvoiceFor(shipment, ClientC).Lines.Single().Quantity.Should()
+            .Be(4, "the payer's invoice is the sub-client's own home, trimmed last");
+        LinesOn(shipment, ClientB, sequence: 1).Should()
+            .BeEmpty("the cross-billed exception is what no longer fits");
+        AssertBalanced(shipment);
+    }
+
+    [Fact]
+    public void Reconcile_ClientWithoutPayer_IsUnchanged()
+    {
+        var shipment = Shipment(OrderStop(ClientA, order: 1, Payer(ClientA), (itemId: 1, qty: 7)));
+
+        Reconcile(shipment);
+
+        shipment.Invoices.Should().ContainSingle().Which.ClientId.Should().Be(ClientA);
+        AssertBalanced(shipment);
+    }
+
+    #endregion
+
     #region helpers
 
     /// <summary>
@@ -779,6 +882,40 @@ public sealed class ShipmentInvoiceReconcilerTests
             ClientOrder = clientOrder
         };
     }
+
+
+    /// <summary>Same stop, with the ordering client's entity loaded on its order.</summary>
+    private static OutgoingShipmentStop OrderStop(
+        long clientId,
+        int order,
+        Client? client,
+        params (long itemId, int qty)[] items)
+    {
+        var stop = OrderStop(clientId, order, items);
+        stop.ClientOrder!.Client = client!;
+        return stop;
+    }
+
+    /// <summary>A client billed through <paramref name="payer"/>.</summary>
+    private static Client SubClient(long id, Client payer) =>
+        new()
+        {
+            Id = id,
+            PublicId = Guid.NewGuid(),
+            Name = $"Sub {id}",
+            InvoicingClientId = payer.Id,
+            InvoicingClient = payer
+        };
+
+    private static Client Payer(long id) =>
+        new() { Id = id, PublicId = Guid.NewGuid(), Name = $"Payer {id}" };
+
+    /// <summary>
+    /// The client whose order a line bills for, derived the way the mapper derives it — the line
+    /// does not store it.
+    /// </summary>
+    private static long OrderingClientIdOf(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
+        ShipmentInvoiceGraph.OrderOf(shipment, line.OrderItemId ?? 0)!.ClientId;
 
     /// <summary>
     /// Mimics what the move endpoint does, so the tests exercise reconciliation against splits

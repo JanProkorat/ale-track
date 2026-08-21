@@ -9,7 +9,7 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 /// </summary>
 public enum InvoiceAdjustmentKind
 {
-    /// <summary>Pieces appeared and were added to the ordering client's first invoice.</summary>
+    /// <summary>Pieces appeared and were added to the paying client's first invoice.</summary>
     QuantityAdded = 0,
 
     /// <summary>Pieces disappeared and were trimmed off the split.</summary>
@@ -79,6 +79,13 @@ public static class ShipmentInvoiceReconciler
         public required InvoiceLineSourceKind Kind { get; init; }
         public required long ItemId { get; init; }
         public required long OrderingClientId { get; init; }
+
+        /// <summary>
+        /// Client the invoice is issued to: the ordering client's payer when it has one,
+        /// otherwise the ordering client itself.
+        /// </summary>
+        public required long PayingClientId { get; init; }
+
         public required int Quantity { get; init; }
 
         /// <summary>
@@ -100,6 +107,13 @@ public static class ShipmentInvoiceReconciler
         /// graph, and a null navigation would surface as a blank client name.
         /// </summary>
         public Client? OrderingClient { get; init; }
+
+        /// <summary>
+        /// The paying client entity when the graph had it loaded. Carried for the same reason
+        /// as <see cref="OrderingClient"/>: a created invoice with a null navigation surfaces
+        /// as a blank client name.
+        /// </summary>
+        public Client? PayingClient { get; init; }
 
         public (InvoiceLineSourceKind, long) Key => (Kind, ItemId);
     }
@@ -146,14 +160,18 @@ public static class ShipmentInvoiceReconciler
 
         var sources = CollectSources(shipment);
         var sourceKeys = sources.Select(s => s.Key).ToHashSet();
-        var billableClientIds = sources.Select(s => s.OrderingClientId).Distinct().ToList();
+        var billableClientIds = sources.Select(s => s.PayingClientId).Distinct().ToList();
 
-        // 1. Every client receiving something gets an invoice to receive it on.
-        foreach (var group in sources.GroupBy(s => s.OrderingClientId))
+        // 1. Every client who is billed gets an invoice to be billed on. A split made before the
+        //    payer relation existed counts as one: the orderer's own invoice is a home too, so
+        //    setting a payer does not open an empty second invoice beside it. Only pieces that
+        //    still need a home from here on follow the payer.
+        foreach (var group in sources.GroupBy(s => s.PayingClientId))
         {
-            if (shipment.Invoices.All(i => i.ClientId != group.Key))
+            var homes = group.Select(s => s.OrderingClientId).Append(group.Key).ToHashSet();
+            if (shipment.Invoices.All(i => !homes.Contains(i.ClientId)))
                 shipment.Invoices.Add(BuildInvoice(shipment, group.Key,
-                    group.Select(s => s.OrderingClient).FirstOrDefault(c => c is not null), sequence: 1));
+                    group.Select(s => s.PayingClient).FirstOrDefault(c => c is not null), sequence: 1));
         }
 
         // 2. Lines whose source item is no longer on the shipment — private ones included: the
@@ -235,7 +253,7 @@ public static class ShipmentInvoiceReconciler
                     var over = -diff;
                     adjustments.Add(Adjustment(InvoiceAdjustmentKind.QuantityRemoved, source, over));
 
-                    // Private pieces go first, then other clients' invoices, then the ordering
+                    // Private pieces go first, then other clients' invoices, then the paying
                     // client's extra invoices, and their first invoice last. Taking from the owner
                     // first would make the product vanish from the invoice of whoever ordered it
                     // and survive only on someone else's — worse than losing the exception. Losing
@@ -302,12 +320,15 @@ public static class ShipmentInvoiceReconciler
         {
             foreach (var item in stop.ClientOrder!.OrderItems)
             {
+                var payer = PayerOf(stop.ClientOrder.ClientId, stop.ClientOrder.Client);
                 sources.Add(new BillableSource
                 {
                     Kind = InvoiceLineSourceKind.OrderItem,
                     ItemId = RequirePersisted(item.Id, nameof(OrderItem)),
                     OrderingClientId = stop.ClientOrder.ClientId,
                     OrderingClient = stop.ClientOrder.Client,
+                    PayingClientId = payer.Id,
+                    PayingClient = payer.Entity,
                     Quantity = item.Quantity,
                     Snapshot = SnapshotFor(shipment, stop, item)
                 });
@@ -320,12 +341,15 @@ public static class ShipmentInvoiceReconciler
         // our own shelf.
         foreach (var (item, order) in ShipmentInvoiceGraph.SupplierGoodsOf(shipment))
         {
+            var payer = PayerOf(order.ClientId, order.Client);
             sources.Add(new BillableSource
             {
                 Kind = InvoiceLineSourceKind.SupplierGoodItem,
                 ItemId = RequirePersisted(item.Id, nameof(OrderSupplierGoodItem)),
                 OrderingClientId = order.ClientId,
                 OrderingClient = order.Client,
+                PayingClientId = payer.Id,
+                PayingClient = payer.Entity,
                 Quantity = item.Quantity,
                 Snapshot = SupplierGoodSnapshot(item)
             });
@@ -335,12 +359,15 @@ public static class ShipmentInvoiceReconciler
         // by the order item they fulfil, so billing them again would double-charge.
         foreach (var (item, order) in ShipmentInvoiceGraph.CustomExtrasOf(shipment))
         {
+            var payer = PayerOf(order.ClientId, order.Client);
             sources.Add(new BillableSource
             {
                 Kind = InvoiceLineSourceKind.CustomExtraItem,
                 ItemId = RequirePersisted(item.Id, nameof(OrderCustomExtraItem)),
                 OrderingClientId = order.ClientId,
                 OrderingClient = order.Client,
+                PayingClientId = payer.Id,
+                PayingClient = payer.Entity,
                 Quantity = item.Quantity,
                 // A custom extra has no product, so it carries a description and no prices —
                 // which is what the invoice already showed for these lines.
@@ -350,6 +377,16 @@ public static class ShipmentInvoiceReconciler
 
         return sources;
     }
+
+    /// <summary>
+    /// Who is billed for an ordering client's pieces. Falls back to the ordering client when the
+    /// graph has no <c>Client</c> navigation loaded — the relation is unknowable then, and billing
+    /// the orderer is what happened before the relation existed.
+    /// </summary>
+    private static (long Id, Client? Entity) PayerOf(long orderingClientId, Client? orderingClient) =>
+        orderingClient?.InvoicingClientId is { } payerId
+            ? (payerId, orderingClient.InvoicingClient)
+            : (orderingClientId, orderingClient);
 
     /// <summary>
     /// What a supplier-good line records: the good's name with its size, and the price the order
@@ -428,20 +465,20 @@ public static class ShipmentInvoiceReconciler
     }
 
     /// <summary>
-    /// The invoice a client's pieces default onto — their lowest-sequence one.
+    /// The invoice a source's pieces default onto — the paying client's lowest-sequence one.
     /// </summary>
     private static OutgoingShipmentInvoice HomeInvoiceFor(OutgoingShipment shipment, BillableSource source)
     {
         var home = shipment.Invoices
-            .Where(i => i.ClientId == source.OrderingClientId)
+            .Where(i => i.ClientId == source.PayingClientId)
             .OrderBy(i => i.Sequence)
             .FirstOrDefault();
 
         if (home is not null)
             return home;
 
-        home = BuildInvoice(shipment, source.OrderingClientId, source.OrderingClient,
-            sequence: NextSequenceFor(shipment, source.OrderingClientId));
+        home = BuildInvoice(shipment, source.PayingClientId, source.PayingClient,
+            sequence: NextSequenceFor(shipment, source.PayingClientId));
         shipment.Invoices.Add(home);
         return home;
     }
@@ -466,12 +503,17 @@ public static class ShipmentInvoiceReconciler
         };
 
     /// <summary>
-    /// Where a placement sits in the trim order: private pieces first, then other clients'
-    /// invoices, then the ordering client's own.
+    /// Where a placement sits in the trim order: private pieces first, then invoices that are not
+    /// the source's own home, then its home.
     /// </summary>
+    /// <remarks>
+    /// Compares against the <em>paying</em> client, not the ordering one. A sub-client's home
+    /// invoice belongs to its payer, so an orderer comparison would rank that home as "somebody
+    /// else's" and empty the very line that should survive a drop.
+    /// </remarks>
     private static int TrimRank(OutgoingShipmentInvoice? invoice, BillableSource source) =>
         invoice is null ? 0
-        : invoice.ClientId != source.OrderingClientId ? 1
+        : invoice.ClientId != source.PayingClientId ? 1
         : 2;
 
     private static InvoiceAdjustment SourceRemoved(OutgoingShipmentInvoiceLine line) =>

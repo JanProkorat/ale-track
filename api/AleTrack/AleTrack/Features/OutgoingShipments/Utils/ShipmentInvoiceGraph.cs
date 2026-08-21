@@ -47,6 +47,7 @@ public static class ShipmentInvoiceGraph
     {
         IQueryable<OutgoingShipment> shipments = dbContext.OutgoingShipments
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.Client)
+                .ThenInclude(c => c.InvoicingClient)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.Product)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.OrderItems).ThenInclude(i => i.InventoryItem)
             .Include(s => s.Stops).ThenInclude(st => st.ClientOrder!).ThenInclude(o => o.CustomExtraItems)
@@ -164,16 +165,23 @@ public static class ShipmentInvoiceGraph
     }
 
     /// <summary>
-    /// Clients that may hold an invoice on this shipment: those with a stop on the route, plus
-    /// any that already hold one (a client can keep a cross-billed invoice after their own
-    /// order leaves the shipment).
+    /// Clients that may hold an invoice on this shipment: those with a stop on the route, their
+    /// payers, plus any that already hold one (a client can keep a cross-billed invoice after
+    /// their own order leaves the shipment).
     /// </summary>
     public static HashSet<long> EligibleClientIds(OutgoingShipment shipment)
     {
-        var ids = shipment.Stops
+        var orders = shipment.Stops
             .Where(s => s.ClientOrder is not null)
-            .Select(s => s.ClientOrder!.ClientId)
-            .ToHashSet();
+            .Select(s => s.ClientOrder!)
+            .ToList();
+
+        var ids = orders.Select(o => o.ClientId).ToHashSet();
+
+        // A payer holds the invoices for its sub-clients' goods without necessarily having a
+        // stop or an order of its own, so it must be a legal move target too.
+        foreach (var payerId in orders.Select(o => o.Client?.InvoicingClientId).OfType<long>())
+            ids.Add(payerId);
 
         // Extras need no pass of their own: each hangs off a stop's order, whose client
         // is already in the set above.
