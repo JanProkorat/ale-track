@@ -975,6 +975,159 @@ public sealed class ShipmentExportQueryTests
         model.Stops[1].TotalInvoicedQuantity.Should().Be(30);
     }
 
+    [Fact]
+    public async Task Build_PayerWithTwoInvoices_ReportsABlockPerInvoiceRatherThanOneMergedOne()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        var payer = ClientBuilder.BuildEntity(name: "Skupina Sever", officialAddress: AddressBuilder.BuildEntity());
+        var kotva = ClientBuilder.BuildEntity(name: "Hospoda U Kotvy", officialAddress: AddressBuilder.BuildEntity());
+        var pivnice = ClientBuilder.BuildEntity(name: "Pivnice Sever", officialAddress: AddressBuilder.BuildEntity());
+
+        BillThrough(kotva, payer, PayerInternalId);
+        BillThrough(pivnice, payer, PayerInternalId);
+
+        var kotvaOrder = OrderBuilder.BuildEntity(
+            client: kotva, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var pivniceOrder = OrderBuilder.BuildEntity(
+            client: pivnice, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = kotvaOrder },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = pivniceOrder }
+            ]);
+
+        AssignInternalIds(shipment);
+
+        // The office opened a second invoice for the payer and put one sub-client's goods on each —
+        // a state AddShipmentInvoiceEndpoint and MoveInvoiceLineEndpoint both reach.
+        AddInvoice(shipment, payer, LineFor(kotvaOrder.OrderItems.Single(), 24));
+        AddInvoice(shipment, payer, LineFor(pivniceOrder.OrderItems.Single(), 6));
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [payer, kotva, pivnice],
+            orders: [kotvaOrder, pivniceOrder],
+            outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        // Merging them into one block labelled #1 would discard the split the office deliberately
+        // made, and the export could no longer be reconciled against the invoices actually issued.
+        model!.Invoices.Should().HaveCount(2);
+        model.Invoices.Select(i => (i.PayingClientName, i.Sequence, i.TotalQuantity)).Should().Equal(
+            ("Skupina Sever", 1, 24),
+            ("Skupina Sever", 2, 6));
+
+        // Each block carries only the goods on its own invoice.
+        model.Invoices[0].Parties.Single().ClientName.Should().Be("Hospoda U Kotvy");
+        model.Invoices[0].Parties.Single().Products.Select(p => p.Name).Should().Equal("Pilsner Urquell");
+        model.Invoices[1].Parties.Single().ClientName.Should().Be("Pivnice Sever");
+        model.Invoices[1].Parties.Single().Products.Select(p => p.Name).Should().Equal("Kozel 11");
+    }
+
+    [Fact]
+    public async Task Build_PayerThatAlsoOrders_ListsItsOwnGoodsFirst()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        // The payer's name deliberately sorts after the sub-client's, so only the IsPayer rule can
+        // put its party first.
+        var payer = ClientBuilder.BuildEntity(name: "Zamecky pivovar", officialAddress: AddressBuilder.BuildEntity());
+        var kotva = ClientBuilder.BuildEntity(name: "Hospoda U Kotvy", officialAddress: AddressBuilder.BuildEntity());
+
+        BillThrough(kotva, payer, PayerInternalId);
+
+        var payerOrder = OrderBuilder.BuildEntity(
+            client: payer, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+        var kotvaOrder = OrderBuilder.BuildEntity(
+            client: kotva, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = payerOrder },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = kotvaOrder }
+            ]);
+
+        AssignInternalIds(shipment);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [payer, kotva], orders: [payerOrder, kotvaOrder], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        var block = model!.Invoices.Single();
+        block.PayingClientName.Should().Be("Zamecky pivovar");
+
+        // Whoever pays reads their own goods first; the rest follow by name.
+        block.Parties.Select(p => (p.ClientName, p.IsPayer)).Should().Equal(
+            ("Zamecky pivovar", true),
+            ("Hospoda U Kotvy", false));
+
+        block.Parties[0].Products.Select(p => p.Name).Should().Equal("Kozel 11");
+        block.Parties[1].Products.Select(p => p.Name).Should().Equal("Pilsner Urquell");
+        block.TotalQuantity.Should().Be(30);
+    }
+
+    [Fact]
+    public async Task Build_SubClientLineMovedOntoAThirdClient_StillNamesThePayerOnTheStop()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        var payer = ClientBuilder.BuildEntity(name: "Skupina Sever", officialAddress: AddressBuilder.BuildEntity());
+        var kotva = ClientBuilder.BuildEntity(name: "Hospoda U Kotvy", officialAddress: AddressBuilder.BuildEntity());
+        var third = ClientBuilder.BuildEntity(name: "Pivnice Sever", officialAddress: AddressBuilder.BuildEntity());
+
+        BillThrough(kotva, payer, PayerInternalId);
+
+        var kotvaOrder = OrderBuilder.BuildEntity(
+            client: kotva, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var thirdOrder = OrderBuilder.BuildEntity(
+            client: third, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = kotvaOrder },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = thirdOrder }
+            ]);
+
+        AssignInternalIds(shipment);
+
+        // The sub-client's goods were moved by hand onto a client that is neither it nor its payer.
+        AddInvoice(
+            shipment, third,
+            LineFor(kotvaOrder.OrderItems.Single(), 24),
+            LineFor(thirdOrder.OrderItems.Single(), 6));
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [payer, kotva, third],
+            orders: [kotvaOrder, thirdOrder],
+            outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        var stop = model!.ClientStops.Single(s => s.ClientName == "Hospoda U Kotvy");
+
+        // The label states the standing relation, not where these particular pieces went: this
+        // client is billed through its payer, and that stays true when a line is moved off it.
+        stop.InvoicedToClientName.Should().Be("Skupina Sever");
+
+        // So a sheet can legitimately name a recipient that is billed nothing on this run.
+        stop.Products.Single().Quantity.Should().Be(24);
+        stop.Products.Single().InvoicedQuantity.Should().Be(0);
+
+        // The payer does hold an invoice here, but an empty one — so it contributes no block.
+        model.Invoices.Should().HaveCount(1);
+        model.Invoices.Single().PayingClientName.Should().Be("Pivnice Sever");
+        model.Invoices.Should().NotContain(i => i.PayingClientName == "Skupina Sever");
+    }
+
     /// <summary>
     /// Points a sub-client at its payer the way a saved row does — by ID as well as by navigation,
     /// because the split is keyed by ID.
@@ -992,7 +1145,8 @@ public sealed class ShipmentExportQueryTests
     }
 
     /// <summary>
-    /// A stored invoice for a client, as the Fakturace section leaves one behind.
+    /// A stored invoice for a client, as the Fakturace section leaves one behind. Called twice for
+    /// the same client it numbers the second one #2, the way <c>AddShipmentInvoiceEndpoint</c> does.
     /// </summary>
     private static void AddInvoice(OutgoingShipment shipment, Client client, params OutgoingShipmentInvoiceLine[] lines)
     {
@@ -1003,7 +1157,7 @@ public sealed class ShipmentExportQueryTests
             OutgoingShipmentId = shipment.Id,
             ClientId = client.Id,
             Client = client,
-            Sequence = 1,
+            Sequence = shipment.Invoices.Count(i => i.ClientId == client.Id) + 1,
             Lines = [.. lines]
         };
 

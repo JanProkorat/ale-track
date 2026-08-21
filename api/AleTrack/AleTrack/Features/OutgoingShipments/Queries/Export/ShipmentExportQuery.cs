@@ -241,8 +241,18 @@ public static class ShipmentExportQuery
                 (line.SourceKind, sourceItemId),
                 (ClientId: invoice.ClientId, Name: invoice.Client?.Name ?? Missing));
 
-            return new BilledLine(invoice.ClientId, orderer.ClientId, orderer.Name, line.SourceKind, sourceItemId, line);
+            return new BilledLine(
+                invoice.ClientId, invoice.PublicId, orderer.ClientId, orderer.Name,
+                line.SourceKind, sourceItemId, line);
         })).ToList();
+
+        // One name per paying client, so an invoice whose own Client navigation happens to be null
+        // still resolves through a sibling invoice of the same client rather than printing a dash.
+        var payerNames = shipment.Invoices
+            .GroupBy(i => i.ClientId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(i => i.Client?.Name).FirstOrDefault(name => name is not null) ?? Missing);
 
         return new InvoicedSplit
         {
@@ -252,14 +262,14 @@ public static class ShipmentExportQuery
             ByPayerAndOrderer = lines
                 .GroupBy(x => (x.PayerId, x.OrdererId, x.SourceKind, x.SourceItemId))
                 .ToDictionary(g => g.Key, ToInvoicedItem),
-            // Read off the invoices rather than off the lines, so a client holding an invoice that
-            // is currently empty still resolves to a name.
-            Payers = shipment.Invoices
-                .GroupBy(i => i.ClientId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (Sequence: g.Min(i => i.Sequence),
-                        Name: g.Select(i => i.Client?.Name).FirstOrDefault(name => name is not null) ?? Missing)),
+            ByInvoiceAndOrderer = lines
+                .GroupBy(x => (x.InvoiceId, x.OrdererId, x.SourceKind, x.SourceItemId))
+                .ToDictionary(g => g.Key, ToInvoicedItem),
+            // Read off the invoices rather than off the lines, so an invoice that is currently
+            // empty still resolves an identity — it just contributes no block.
+            Invoices = shipment.Invoices.ToDictionary(
+                i => i.PublicId,
+                i => (PayerId: i.ClientId, Sequence: i.Sequence, Name: payerNames[i.ClientId])),
             OrdererNames = lines
                 .GroupBy(x => x.OrdererId)
                 .ToDictionary(g => g.Key, g => g.Select(x => x.OrdererName).First())
@@ -312,43 +322,52 @@ public static class ShipmentExportQuery
         };
 
     /// <summary>
-    /// The run's invoice blocks, in route order of the paying client's first stop.
+    /// The run's invoice blocks: one per invoice, in route order of the paying client's first stop
+    /// and then by that client's own invoice sequence.
     /// </summary>
     /// <remarks>
+    /// One block per invoice rather than per paying client, because a client can genuinely hold
+    /// several on one run — <c>AddShipmentInvoiceEndpoint</c> and <c>MoveInvoiceLineEndpoint</c>
+    /// both open them through <see cref="ShipmentInvoiceReconciler.NextSequenceFor"/> — and merging
+    /// them would discard a split the office deliberately made. The usual single invoice renders as
+    /// one block either way.
+    ///
     /// A payer with no stop of its own sorts last, deliberately: <paramref name="firstStopOrderByClient"/>
     /// is keyed on clients the van calls on, and a payer need not be one of them — that is the whole
-    /// point of the part. Names break the tie so two such payers keep a stable order.
+    /// point of the part. The name breaks the tie so two such payers keep a stable order, and the
+    /// sequence keeps one payer's own invoices adjacent and in the order it issues them.
     /// </remarks>
     private static List<ShipmentExportInvoice> BuildInvoices(
         InvoicedSplit split,
         Dictionary<long, int> firstStopOrderByClient) =>
-        split.ByPayerAndOrderer
-            .GroupBy(entry => entry.Key.PayerId)
-            .OrderBy(g => firstStopOrderByClient.TryGetValue(g.Key, out var stopOrder) ? stopOrder : int.MaxValue)
-            .ThenBy(g => PayerOf(split, g.Key).Name, StringComparer.CurrentCulture)
-            .Select(payerGroup => BuildExportInvoice(split, payerGroup.Key, payerGroup))
+        split.ByInvoiceAndOrderer
+            .GroupBy(entry => entry.Key.InvoiceId)
+            .Select(invoiceGroup => (Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
+            .OrderBy(x => firstStopOrderByClient.TryGetValue(x.Invoice.PayerId, out var stopOrder)
+                ? stopOrder
+                : int.MaxValue)
+            .ThenBy(x => x.Invoice.Name, StringComparer.CurrentCulture)
+            .ThenBy(x => x.Invoice.Sequence)
+            .Select(x => BuildExportInvoice(split, x.Invoice, x.Lines))
             .ToList();
 
     private static ShipmentExportInvoice BuildExportInvoice(
         InvoicedSplit split,
-        long payerId,
-        IEnumerable<KeyValuePair<(long PayerId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines)
-    {
-        var payer = PayerOf(split, payerId);
-
-        return new ShipmentExportInvoice
+        (long PayerId, int Sequence, string Name) invoice,
+        IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines) =>
+        new()
         {
-            PayingClientName = payer.Name,
-            Sequence = payer.Sequence,
+            PayingClientName = invoice.Name,
+            Sequence = invoice.Sequence,
             Parties = lines
                 .GroupBy(entry => entry.Key.OrdererId)
                 // The payer's own goods lead; the rest follow by name.
-                .OrderByDescending(g => g.Key == payerId)
+                .OrderByDescending(g => g.Key == invoice.PayerId)
                 .ThenBy(g => split.OrdererNames.GetValueOrDefault(g.Key, Missing), StringComparer.CurrentCulture)
                 .Select(ordererGroup => new ShipmentExportInvoiceParty
                 {
                     ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
-                    IsPayer = ordererGroup.Key == payerId,
+                    IsPayer = ordererGroup.Key == invoice.PayerId,
                     Products = ordererGroup
                         .Select(entry => new ShipmentExportProduct
                         {
@@ -362,14 +381,13 @@ public static class ShipmentExportQuery
                 })
                 .ToList()
         };
-    }
 
     /// <summary>
-    /// Invoice identity of a paying client, falling back to a placeholder for a payer whose
+    /// Who one invoice bills, its sequence and its name, falling back to a placeholder for an
     /// invoice the graph did not hand back — a block must still name somebody.
     /// </summary>
-    private static (int Sequence, string Name) PayerOf(InvoicedSplit split, long payerId) =>
-        split.Payers.TryGetValue(payerId, out var found) ? found : (Sequence: 1, Name: Missing);
+    private static (long PayerId, int Sequence, string Name) InvoiceOf(InvoicedSplit split, Guid invoiceId) =>
+        split.Invoices.TryGetValue(invoiceId, out var found) ? found : (PayerId: 0, Sequence: 1, Name: Missing);
 
     private static ShipmentExportStop ToStop(
         RawStop stop,
@@ -661,6 +679,7 @@ public static class ShipmentExportQuery
     /// </summary>
     private sealed record BilledLine(
         long PayerId,
+        Guid InvoiceId,
         long OrdererId,
         string OrdererName,
         InvoiceLineSourceKind SourceKind,
@@ -668,25 +687,35 @@ public static class ShipmentExportQuery
         OutgoingShipmentInvoiceLine Line);
 
     /// <summary>
-    /// The reconciled split, in the two shapes the export reads it in: per (payer, item) for the
-    /// stop tables, and grouped by (payer, orderer, item) for the Fakturace part.
+    /// The reconciled split, in the three shapes the export reads it in.
     /// </summary>
     private sealed record InvoicedSplit
     {
+        /// <summary>
+        /// Billed pieces keyed by (payer, item) — what a stop table reports for its own client, and
+        /// what the cross-billed-in rows are found by.
+        /// </summary>
         public required Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByPayer { get; init; }
 
-        /// <summary>Billed pieces keyed by (payer, orderer, item) — what a party row reports.</summary>
+        /// <summary>
+        /// Billed pieces keyed by (payer, orderer, item), aggregated across that payer's invoices —
+        /// what a sub-client's "Fakturačně" column reports, since its pieces may be spread over
+        /// several of its payer's invoices.
+        /// </summary>
         public required Dictionary<(long PayerId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByPayerAndOrderer { get; init; }
 
-        /// <summary>Invoice identity per payer: its sequence and the payer's name.</summary>
-        public required Dictionary<long, (int Sequence, string Name)> Payers { get; init; }
+        /// <summary>Billed pieces keyed by (invoice, orderer, item) — what a party row reports.</summary>
+        public required Dictionary<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByInvoiceAndOrderer { get; init; }
+
+        /// <summary>Who each invoice bills, its sequence and its name, by public ID.</summary>
+        public required Dictionary<Guid, (long PayerId, int Sequence, string Name)> Invoices { get; init; }
 
         /// <summary>Name of each client that ordered billed pieces.</summary>
         public required Dictionary<long, string> OrdererNames { get; init; }
 
         public static InvoicedSplit Empty => new()
         {
-            ByPayer = [], ByPayerAndOrderer = [], Payers = [], OrdererNames = []
+            ByPayer = [], ByPayerAndOrderer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = []
         };
     }
 }
