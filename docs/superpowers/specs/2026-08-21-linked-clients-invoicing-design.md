@@ -261,12 +261,14 @@ partition through the existing `groupLineList`. Returns a single party when the
 invoice has one ordering client, so ordinary invoices are unaffected.
 
 **`ShipmentInvoicing.tsx`** — when `invoiceParties` yields more than one party,
-the invoice body renders collapsed party rows (name · ks · value) that expand in
-place into their product rows, **collapsed by default**. Reuses the existing
+the invoice body renders party rows (name · ks · value) that collapse in place
+over their product rows, **expanded by default**. Reuses the existing
 `collapsed: Set<string>` pattern, keyed `` `${invoiceId}:${clientId}` ``, and
 the existing expand-all / collapse-all control extends to them. The payer's band
 header gains an `N propojených klientů` chip. A move stays available on the
 expanded product rows, unchanged — `LineGroup.parts` still names the source.
+This also matches the Excel export, which opens expanded too since ClosedXML
+cannot round-trip a collapsed row group (see "Found during implementation").
 
 ## Exports
 
@@ -360,8 +362,8 @@ Frontend (`react-verify`):
 
 - `invoiceParties` — a single party for an ordinary invoice, payer-first ordering,
   per-party quantity and value, product merging inside a party.
-- `ShipmentInvoicing` — parties collapsed by default, expanding reveals rows,
-  expand-all covers them, a move still works from an expanded row.
+- `ShipmentInvoicing` — parties expanded by default, collapsing hides rows,
+  expand-all/collapse-all covers them, a move still works from an expanded row.
 - Vykládka and the shipment editor — the warning appears exactly when the
   address resolves to nothing.
 - `ClientFormDrawer` — payer options exclude self, payers and sub-clients;

@@ -203,7 +203,7 @@ describe('client bands', () => {
 });
 
 describe('invoice parties', () => {
-  it('shows a payer invoice as collapsed party rows and expands one on click', () => {
+  it('shows a payer invoice as expanded party rows and collapses one on click', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -220,17 +220,17 @@ describe('invoice parties', () => {
 
     renderSection();
 
-    // Both sub-clients show as party headers...
+    // Both sub-clients show as party headers, already expanded — their product rows are
+    // visible without a click.
     expect(screen.getByText('Pub B')).toBeInTheDocument();
     expect(screen.getByText('Pub C')).toBeInTheDocument();
-    // ...but no product row until a party is opened.
-    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lager 50')).not.toBeInTheDocument();
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+    expect(screen.getByText('Lager 50')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Pub B'));
 
-    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
-    expect(screen.queryByText('Lager 50')).not.toBeInTheDocument();
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+    expect(screen.getByText('Lager 50')).toBeInTheDocument();
   });
 
   it('counts the other clients on the band header, using the Czech paucal for 2', async () => {
@@ -320,8 +320,10 @@ describe('invoice parties', () => {
     });
 
     renderSection();
-    fireEvent.click(screen.getByText('Pub B'));
-    fireEvent.click(screen.getByRole('button', { name: 'Přesunout kusy na jinou fakturu' }));
+    // Both party rows are already expanded by default, so both move actions are on screen
+    // without opening anything first. Parties sort alphabetically by client name (see
+    // `invoiceParties`), so Pub B's button is the first of the two.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Přesunout kusy na jinou fakturu' })[0]);
 
     const dialog = screen.getByRole('dialog');
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
@@ -356,8 +358,7 @@ describe('invoice parties', () => {
 
     renderSection();
 
-    // Open the party by hand.
-    fireEvent.click(screen.getByText('Pub B'));
+    // Parties are expanded by default, so the product row is already visible.
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
 
     // Collapse-all closes every band, hiding the still-open party along with it.
@@ -374,8 +375,11 @@ describe('invoice parties', () => {
 
   it('leaves an opened party open when the invoices query refetches', () => {
     // Every invoicing mutation invalidates the invoice query, so an equal-but-fresh DTO
-    // arrives and the party memo recomputes. Seeding off `collapsed` slammed the party the
-    // user was working in shut, because a key missing from `collapsed` is an *open* party.
+    // arrives and the party memo recomputes. A seeding effect used to re-collapse a party
+    // the user had opened, because it re-seeded off `collapsed` rather than off "have we
+    // ever seen this key". That seeding is gone now that parties start expanded, so this
+    // passes trivially — but keep it anyway: it is the guard against anyone reintroducing
+    // auto-collapse-on-refetch later.
     const build = () => new ShipmentInvoicesDto({
       isEditable: true,
       adjustments: [],
@@ -394,7 +398,7 @@ describe('invoice parties', () => {
     invoicesResponse = build();
     const { rerender } = renderSection();
 
-    fireEvent.click(screen.getByText('Pub B'));
+    // Already open by default — no click needed to get here.
     expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
 
     invoicesResponse = build();
@@ -438,8 +442,8 @@ describe('provenance chips', () => {
   });
 
   // Two distinct orderers on one invoice split into party rows (see 'invoice parties'),
-  // so the cross-billed piece now sits behind its own collapsed party header rather than
-  // as an inline chip on a merged row.
+  // so the cross-billed piece now sits behind its own party header rather than as an
+  // inline chip on a merged row — but that party header is expanded by default.
   it('marks a cross-billed portion with its ordering client and count', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true, adjustments: [],
@@ -454,13 +458,14 @@ describe('provenance chips', () => {
 
     renderSection();
 
-    // Collapsed by default — the chip only appears once the party is opened.
-    expect(screen.queryByText('z obj. Klient B')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Klient B'));
-
+    // Expanded by default — the chip is visible without opening the party.
     expect(screen.getByText('z obj. Klient B')).toBeInTheDocument();
     expect(screen.getByText('1 položka fakturována jinému klientovi')).toBeInTheDocument();
     expect(screen.getByText('1× přefakturováno')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Klient B'));
+
+    expect(screen.queryByText('z obj. Klient B')).not.toBeInTheDocument();
   });
 
   it('omits the piece count on an unmerged cross-billed row', () => {

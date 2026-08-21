@@ -15,7 +15,7 @@
 //   * one row per product, with chips carrying provenance — the same product can
 //     reach an invoice from several sources at once.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
   DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
@@ -426,20 +426,11 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
     return keys;
   }, [data.invoices]);
 
-  // Parties open closed: the payer's band is read as one line per client first, and the
-  // product detail only when a number looks wrong.
-  //
-  // Seeded from `seededParties`, not from `collapsed`: a key missing from `collapsed` is a
-  // party the user has *opened*, so re-seeding on it would slam it shut on every refetch —
-  // and every invoicing mutation invalidates this query, so the memo recomputes constantly.
-  // A party that leaves the response and comes back is treated as new again, hence collapsed.
-  const seededParties = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const fresh = partyKeys.filter((key) => !seededParties.current.has(key));
-    seededParties.current = new Set(partyKeys);
-    if (fresh.length === 0) return;
-    setCollapsed((prev) => new Set([...prev, ...fresh]));
-  }, [partyKeys]);
+  // Parties open expanded by default: `collapsed` starts empty and a key's absence means
+  // "expanded", so a party key simply never gets added until the user collapses it by hand.
+  // No seeding effect is needed here, and that is what keeps a party the user opened from
+  // being slammed shut when an invoicing mutation invalidates the query and this component
+  // re-renders with an equal-but-fresh DTO.
 
   const toggleBand = (clientId: string) => setCollapsed((prev) => {
     const next = new Set(prev);
