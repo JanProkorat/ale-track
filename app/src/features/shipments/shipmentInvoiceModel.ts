@@ -172,13 +172,16 @@ export function isCrossBilled(
 }
 
 /**
- * Group invoices into client bands, in route order. Clients without a stop sort last —
- * either they only hold cross-billed lines after their own order left the shipment, or
- * (since the payer redirect) they are a payer band whose invoice bills goods ordered by
- * other clients on the route. `stopOrder` is keyed on the invoice's own client — the
- * payer — never on the line-level ordering client, so a payer with no stop of its own
- * has no better position to sort by; this mirrors the same call already made for the
- * shipment export (see `ShipmentExportQuery`).
+ * Group invoices into client bands: the rows the office has confirmed first, in the order
+ * it confirmed them, then the rest in route order.
+ *
+ * Clients without a stop sort last among the unconfirmed — either they only hold
+ * cross-billed lines after their own order left the shipment, or (since the payer
+ * redirect) they are a payer band whose invoice bills goods ordered by other clients on
+ * the route. `stopOrder` is keyed on the invoice's own client — the payer — never on the
+ * line-level ordering client, so a payer with no stop of its own has no better position
+ * to sort by; this mirrors the same call already made for the shipment export (see
+ * `ShipmentExportQuery`).
  *
  * Private pieces join the band of whoever ordered them, not of whoever would have been
  * billed: there is no invoice to belong to, and the order is what the office recognises
@@ -231,9 +234,18 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
 
   const bands = [...map.values()];
   for (const band of bands) band.invoices.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-  return bands.sort(
-    (a, b) => (a.stopOrder ?? Number.MAX_SAFE_INTEGER) - (b.stopOrder ?? Number.MAX_SAFE_INTEGER),
-  );
+
+  // Confirmed rows first, by their number, so the screen reads in the same order as the export
+  // file — which is what the office holds beside it. A row that was un-ticked keeps its number and
+  // keeps its place with it: the number never moves, and neither should the row.
+  //
+  // The rest follow in route order, the only order they have until somebody ticks them.
+  return bands.sort((a, b) => {
+    const byNumber = (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
+    if (byNumber !== 0) return byNumber;
+
+    return (a.stopOrder ?? Number.MAX_SAFE_INTEGER) - (b.stopOrder ?? Number.MAX_SAFE_INTEGER);
+  });
 }
 
 /** Where one part's pieces came from, in the wording the move dialog uses. */

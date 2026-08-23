@@ -210,12 +210,28 @@ describe('toBands', () => {
 
     const bands = toBands(data);
 
-    // Still ordered by the route — the number says when the office confirmed the row, and the
-    // table is read down the route regardless.
+    // Ordered by the number, not the route: the number is what the office reads the table and the
+    // export file by, and the two have to agree. A kept number still sorts by it — un-ticking a row
+    // must not move it.
     expect(bands.map((b) => [b.clientId, b.number, b.isReady])).toEqual([
-      [CLIENT_A, 2, false],
       [CLIENT_B, 1, true],
+      [CLIENT_A, 2, false],
     ]);
+  });
+
+  it('sorts the rows nobody has confirmed after the numbered ones, in route order', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: 'client-c', clientName: 'Klient C', stopOrder: 1, lines: [line({ quantity: 1, orderingClientId: 'client-c' })] }),
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 2, lines: [line({ quantity: 1 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 3, lines: [line({ quantity: 1, orderingClientId: CLIENT_B })] }),
+      ],
+      confirmations: [new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_B, number: 1, isReady: true })],
+    });
+
+    // The confirmed row leads whatever its stop; the rest keep the route order they had, which is
+    // the only order they have.
+    expect(toBands(data).map((b) => b.clientId)).toEqual([CLIENT_B, 'client-c', CLIENT_A]);
   });
 
   it('reads a band nobody has confirmed as unready with no number', () => {
