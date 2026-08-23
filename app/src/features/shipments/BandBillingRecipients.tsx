@@ -35,7 +35,10 @@ import {
 } from './shipmentInvoiceModel';
 
 export interface BandBillingRecipientsSlots {
-  /** The header pill — absent entirely when the payer has no addressable sub-clients. */
+  /**
+   * The header pill — absent when the payer has no addressable sub-clients, and also
+   * while read-only with nothing chosen (it would show empty state that can never be filled).
+   */
   chip: ReactNode;
   /** The "Fakturovat na: …" line — absent whenever nothing is chosen. */
   invoicedToLine: ReactNode;
@@ -97,7 +100,11 @@ export function BandBillingRecipients({ shipmentId, band, canEdit, children }: {
     ? 'Fakturační adresy'
     : `${selectedNames.length} ${plural(selectedNames.length, 'fakturační adresa', 'fakturační adresy', 'fakturačních adres')}`;
 
-  const chip = (
+  // Read-only and nothing chosen: the chip could never be filled in from here, so it
+  // would only ever state an empty value. Keep it once it carries a real selection.
+  const showChip = canEdit || selectedNames.length > 0;
+
+  const chip = !showChip ? null : (
     <>
       <Pill
         tint="infoTint"

@@ -1204,4 +1204,13 @@ describe('fakturační adresy sub-klientů', () => {
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('renders no chip at all when read-only and nothing was ever chosen', () => {
+    payerWithSubClients();
+
+    renderSection(false);
+
+    // Read-only and empty: a chip here could never be filled in, so it is pure clutter.
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
 });
