@@ -19,9 +19,9 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// loading states, no preparation checklist and no sourcing detail, so it projects only the stops,
 /// their goods and the run's own summary fields.
 ///
-/// It does read the invoice split, though, because every product row reports both what is
-/// delivered and what is billed — see <see cref="LoadInvoicedItemsAsync"/> for how, and why the
-/// read reconciles without saving.
+/// It does read the invoice split, though — that is the body of the file, and only the rows the
+/// office has confirmed reach it. See <see cref="LoadInvoicedItemsAsync"/> for how, and why the read
+/// reconciles without saving.
 ///
 /// Split from the endpoint so the shaping — address resolution, product ordering, invoice
 /// attribution — is testable against a mocked <c>DbContext</c> without going through HTTP or
@@ -65,10 +65,6 @@ public static class ShipmentExportQuery
                         Kind = s.Kind,
                         ClientId = s.ClientOrder != null ? s.ClientOrder.ClientId : null,
                         ClientName = s.ClientOrder != null ? s.ClientOrder.Client.Name : null,
-                        PayerId = s.ClientOrder != null ? s.ClientOrder.Client.InvoicingClientId : null,
-                        PayerName = s.ClientOrder != null && s.ClientOrder.Client.InvoicingClient != null
-                            ? s.ClientOrder.Client.InvoicingClient.Name
-                            : null,
                         Label = s.Label,
                         SelectedAddressKind = s.SelectedAddressKind,
                         OfficialAddress = s.ClientOrder != null && s.ClientOrder.Client.OfficialAddress != null
@@ -104,8 +100,6 @@ public static class ShipmentExportQuery
                                 .ThenBy(oi => oi.Product.Name)
                                 .Select(oi => new RawProduct
                                 {
-                                    SourceKind = InvoiceLineSourceKind.OrderItem,
-                                    SourceItemId = oi.Id,
                                     Name = oi.Product.Name,
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
@@ -122,8 +116,6 @@ public static class ShipmentExportQuery
                                 .OrderBy(e => e.Description)
                                 .Select(e => new RawProduct
                                 {
-                                    SourceKind = InvoiceLineSourceKind.CustomExtraItem,
-                                    SourceItemId = e.Id,
                                     Name = e.Description,
                                     Quantity = e.Quantity
                                 })
@@ -170,24 +162,14 @@ public static class ShipmentExportQuery
 
         var invoicedSplit = await LoadInvoicedItemsAsync(dbContext, shipmentId, ct);
 
-        // Which items each client delivers somewhere on this route, so a line billed to them can be
-        // told apart from a line billed to them for goods they never receive.
-        var deliveredKeysByClient = shipment.Stops
+        // Where each client's goods went, for the parties of the invoice part. The per-stop sheets
+        // that used to carry the address, the order's notes and its vratky are gone, so the party
+        // whose goods they are carries them instead. A client with two stops on one run takes the
+        // first, exactly as the Fakturace screen does.
+        var deliveryByClient = shipment.Stops
             .Where(s => s.ClientId is not null)
             .GroupBy(s => s.ClientId!.Value)
-            .ToDictionary(
-                g => g.Key,
-                g => g.SelectMany(s => s.Products.Concat(s.CustomExtras))
-                    .Select(p => (p.SourceKind, p.SourceItemId))
-                    .ToHashSet());
-
-        // A client can hold two stops on one route while holding one set of invoices. Pieces they
-        // are billed for but receive nowhere on the route have no delivering stop to sit under, so
-        // they go on the first stop that client has.
-        var firstStopOrderByClient = shipment.Stops
-            .Where(s => s.ClientId is not null)
-            .GroupBy(s => s.ClientId!.Value)
-            .ToDictionary(g => g.Key, g => g.Min(s => s.Order));
+            .ToDictionary(g => g.Key, g => ToDelivery(g.OrderBy(s => s.Order).First()));
 
         return new ShipmentExportModel
         {
@@ -196,10 +178,10 @@ public static class ShipmentExportQuery
             VehicleName = shipment.VehicleName,
             DriverNames = shipment.DriverNames,
             Stops = shipment.Stops
-                .Select(stop => ToStop(stop, company, shipment.StockPurchases, invoicedSplit, deliveredKeysByClient, firstStopOrderByClient))
+                .Select(stop => ToStop(stop, company, shipment.StockPurchases))
                 .ToList(),
             StockPurchases = shipment.StockPurchases,
-            Invoices = BuildInvoices(invoicedSplit, firstStopOrderByClient)
+            Invoices = BuildInvoices(invoicedSplit, deliveryByClient)
         };
     }
 
@@ -282,12 +264,12 @@ public static class ShipmentExportQuery
 
         return new InvoicedSplit
         {
-            ByPayer = lines
-                .GroupBy(x => (ClientId: x.PayerId, x.SourceKind, x.SourceItemId))
-                .ToDictionary(g => g.Key, ToInvoicedItem),
-            ByPayerAndOrderer = lines
-                .GroupBy(x => (x.PayerId, x.OrdererId, x.SourceKind, x.SourceItemId))
-                .ToDictionary(g => g.Key, ToInvoicedItem),
+            // The office's own numbering, and what decides which invoices reach the file at all. An
+            // un-marked row keeps its number so re-marking gives it back, so readiness is read here
+            // rather than the number's mere presence.
+            ReadyNumberByPayer = shipment.InvoiceConfirmations
+                .Where(c => c.IsReady)
+                .ToDictionary(c => c.ClientId, c => c.Number),
             ByInvoiceAndOrderer = lines
                 .GroupBy(x => (x.InvoiceId, x.OrdererId, x.SourceKind, x.SourceItemId))
                 .ToDictionary(g => g.Key, ToInvoicedItem),
@@ -349,42 +331,43 @@ public static class ShipmentExportQuery
         };
 
     /// <summary>
-    /// The run's invoice blocks: one per invoice, in route order of the paying client's first stop
-    /// and then by that client's own invoice sequence.
+    /// The run's invoice blocks: one per invoice of a client whose row the office has confirmed, in
+    /// the order those rows were confirmed.
     /// </summary>
     /// <remarks>
     /// One block per invoice rather than per paying client, because a client can genuinely hold
     /// several on one run — <c>AddShipmentInvoiceEndpoint</c> and <c>MoveInvoiceLineEndpoint</c>
     /// both open them through <see cref="ShipmentInvoiceReconciler.NextSequenceFor"/> — and merging
     /// them would discard a split the office deliberately made. The usual single invoice renders as
-    /// one block either way.
+    /// one block either way. Two blocks of one client share its number and are told apart by their
+    /// sequence, which is why the sequence still breaks the tie.
     ///
-    /// A payer with no stop of its own sorts last, deliberately: <paramref name="firstStopOrderByClient"/>
-    /// is keyed on clients the van calls on, and a payer need not be one of them — that is the whole
-    /// point of the part. The name breaks the tie so two such payers keep a stable order, and the
-    /// sequence keeps one payer's own invoices adjacent and in the order it issues them.
+    /// An unconfirmed client contributes nothing: the number is what the file is read by, and a row
+    /// nobody has finished has none.
     /// </remarks>
     private static List<ShipmentExportInvoice> BuildInvoices(
         InvoicedSplit split,
-        Dictionary<long, int> firstStopOrderByClient) =>
+        Dictionary<long, PartyDelivery> deliveryByClient) =>
         split.ByInvoiceAndOrderer
             .GroupBy(entry => entry.Key.InvoiceId)
             .Select(invoiceGroup => (InvoiceId: invoiceGroup.Key, Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
-            .OrderBy(x => firstStopOrderByClient.TryGetValue(x.Invoice.PayerId, out var stopOrder)
-                ? stopOrder
-                : int.MaxValue)
-            .ThenBy(x => x.Invoice.Name, StringComparer.CurrentCulture)
+            .Where(x => split.ReadyNumberByPayer.ContainsKey(x.Invoice.PayerId))
+            .OrderBy(x => split.ReadyNumberByPayer[x.Invoice.PayerId])
             .ThenBy(x => x.Invoice.Sequence)
-            .Select(x => BuildExportInvoice(split, x.InvoiceId, x.Invoice, x.Lines))
+            .Select(x => BuildExportInvoice(
+                split, x.InvoiceId, split.ReadyNumberByPayer[x.Invoice.PayerId], x.Invoice, x.Lines, deliveryByClient))
             .ToList();
 
     private static ShipmentExportInvoice BuildExportInvoice(
         InvoicedSplit split,
         Guid invoiceId,
+        int number,
         (long PayerId, Guid PayerPublicId, int Sequence, string Name) invoice,
-        IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines) =>
+        IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines,
+        Dictionary<long, PartyDelivery> deliveryByClient) =>
         new()
         {
+            Number = number,
             PayingClientName = invoice.Name,
             PayingClientId = invoice.PayerPublicId,
             Sequence = invoice.Sequence,
@@ -394,23 +377,66 @@ public static class ShipmentExportQuery
                 // The payer's own goods lead; the rest follow by name.
                 .OrderByDescending(g => g.Key == invoice.PayerId)
                 .ThenBy(g => split.OrdererNames.GetValueOrDefault(g.Key, Missing), StringComparer.CurrentCulture)
-                .Select(ordererGroup => new ShipmentExportInvoiceParty
-                {
-                    ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
-                    IsPayer = ordererGroup.Key == invoice.PayerId,
-                    Products = ordererGroup
-                        .Select(entry => new ShipmentExportProduct
-                        {
-                            Name = entry.Value.Name,
-                            Kind = entry.Value.Kind,
-                            PackageSize = entry.Value.PackageSize,
-                            Quantity = entry.Value.Quantity
-                        })
-                        .OrderBy(p => p.Name, StringComparer.CurrentCulture)
-                        .ToList()
-                })
+                .Select(ordererGroup => BuildParty(
+                    split, invoice.PayerId, ordererGroup, deliveryByClient.GetValueOrDefault(ordererGroup.Key)))
                 .ToList()
         };
+
+    /// <summary>
+    /// One party of a block: whose goods these are, where they went, and what the order said.
+    /// </summary>
+    /// <remarks>
+    /// A null <paramref name="delivery"/> is a party with no stop on this run — a client whose
+    /// pieces were moved onto this invoice while its own delivery went out on another. It gets no
+    /// address, no notes and no vratky, because it has none here.
+    /// </remarks>
+    private static ShipmentExportInvoiceParty BuildParty(
+        InvoicedSplit split,
+        long payerId,
+        IGrouping<long, KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> ordererGroup,
+        PartyDelivery? delivery) =>
+        new()
+        {
+            ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
+            IsPayer = ordererGroup.Key == payerId,
+            Street = delivery?.Street,
+            CityLine = delivery?.CityLine,
+            DeliveryPlaceName = delivery?.DeliveryPlaceName,
+            Notes = delivery?.Notes ?? [],
+            Returns = delivery?.Returns ?? [],
+            Products = ordererGroup
+                .Select(entry => new ShipmentExportProduct
+                {
+                    Name = entry.Value.Name,
+                    Kind = entry.Value.Kind,
+                    PackageSize = entry.Value.PackageSize,
+                    Quantity = entry.Value.Quantity
+                })
+                .OrderBy(p => p.Name, StringComparer.CurrentCulture)
+                .ToList()
+        };
+
+    /// <summary>
+    /// Where one client's goods went on this run, as its invoice parties report it.
+    /// </summary>
+    private static PartyDelivery ToDelivery(RawStop stop)
+    {
+        var (street, cityLine, _) = ResolveAddress(stop);
+
+        return new PartyDelivery
+        {
+            Street = street,
+            CityLine = cityLine,
+            // Only when the stop actually delivers there — a stop pointed back at the client's own
+            // address still carries the place it once chose, and naming it would claim a
+            // destination the van is not going to.
+            DeliveryPlaceName = stop.SelectedAddressKind == DeliveryAddressKind.DeliveryPlace
+                ? stop.DeliveryPlaceName
+                : null,
+            Notes = stop.Notes,
+            Returns = stop.Returns
+        };
+    }
 
     /// <summary>
     /// Who one invoice bills, its sequence and its name, falling back to a placeholder for an
@@ -422,37 +448,20 @@ public static class ShipmentExportQuery
     private static ShipmentExportStop ToStop(
         RawStop stop,
         CompanyOptions company,
-        List<ShipmentExportProduct> stockPurchases,
-        InvoicedSplit split,
-        Dictionary<long, HashSet<(InvoiceLineSourceKind SourceKind, long SourceItemId)>> deliveredKeysByClient,
-        Dictionary<long, int> firstStopOrderByClient)
+        List<ShipmentExportProduct> stockPurchases)
     {
         if (stop.Kind == OutgoingShipmentStopKind.Company)
             return ToWarehouseStop(stop, company, stockPurchases);
 
-        var (street, cityLine, city) = ResolveAddress(stop);
+        var (_, _, city) = ResolveAddress(stop);
 
         return new ShipmentExportStop
         {
             Order = stop.Order,
             ClientName = stop.ClientName,
             Label = stop.Label,
-            Street = street,
-            CityLine = cityLine,
             City = city,
-            // Only reported when the stop actually delivers there. A stop that once picked a place
-            // and was later pointed back at the client's own address still carries the place, and
-            // naming it would claim a destination the van is not going to.
-            DeliveryPlaceName = stop.SelectedAddressKind == DeliveryAddressKind.DeliveryPlace
-                ? stop.DeliveryPlaceName
-                : null,
-            // Off the client row rather than off the split: a client billed through a payer is a
-            // standing arrangement, while a line the office moved by hand is not one and must not
-            // print as one.
-            InvoicedToClientName = stop.PayerName,
-            Notes = stop.Notes,
-            Products = BuildProducts(stop, split, deliveredKeysByClient, firstStopOrderByClient),
-            Returns = stop.Returns
+            Products = BuildProducts(stop)
         };
     }
 
@@ -460,14 +469,10 @@ public static class ShipmentExportQuery
     /// The call at our own warehouse: the goods bought for stock come off here.
     /// </summary>
     /// <remarks>
-    /// Its address is configuration rather than a row — the stop carries a label and coordinates
-    /// and nothing else — so it is spelled out from <see cref="CompanyOptions"/> the same way the
-    /// route's start point is. Without it the overview listed the stop with no town and no piece
-    /// count, and the goods it exists to unload appeared nowhere but a block at the foot of the
-    /// overview.
-    ///
-    /// Nobody is billed for stock goods, so the rows keep their null billed count and the sheet
-    /// renders the single quantity column.
+    /// Its town is configuration rather than a row — the stop carries a label and coordinates and
+    /// nothing else — so it comes from <see cref="CompanyOptions"/> the same way the route's start
+    /// point does. Without it the overview listed the stop with no town and no piece count, and the
+    /// goods it exists to unload appeared nowhere but a block at the foot of the overview.
     /// </remarks>
     private static ShipmentExportStop ToWarehouseStop(
         RawStop stop,
@@ -480,23 +485,21 @@ public static class ShipmentExportQuery
             // The stop's own label is what the route was planned with; the configured name is the
             // fallback for a stop saved before it had one.
             Label = string.IsNullOrWhiteSpace(stop.Label) ? company.Name : stop.Label,
-            Street = $"{company.StreetName} {company.StreetNumber}".Trim(),
-            CityLine = $"{company.Zip} {company.City}".Trim(),
             City = company.City,
             Products = stockPurchases
         };
 
     /// <summary>
-    /// The stop's product table: what it delivers, each row carrying what its client is billed for,
-    /// then the rows that are billed here without being delivered here.
+    /// The stop's product table: what the van drops there, custom extras last.
     /// </summary>
-    private static List<ShipmentExportProduct> BuildProducts(
-        RawStop stop,
-        InvoicedSplit split,
-        Dictionary<long, HashSet<(InvoiceLineSourceKind SourceKind, long SourceItemId)>> deliveredKeysByClient,
-        Dictionary<long, int> firstStopOrderByClient)
-    {
-        var products = stop.Products
+    /// <remarks>
+    /// Delivered pieces only. The stop used to carry a billed count beside each one, for the
+    /// per-stop sheets that no longer exist — the office reads what is billed off the invoice part
+    /// now, where the pieces are grouped by the invoice that bills them rather than by the van's
+    /// route. What is left here feeds the overview's route table and the run's totals.
+    /// </remarks>
+    private static List<ShipmentExportProduct> BuildProducts(RawStop stop) =>
+        stop.Products
             .Concat(stop.CustomExtras)
             .Select(product => new ShipmentExportProduct
             {
@@ -504,73 +507,9 @@ public static class ShipmentExportQuery
                 Kind = product.Kind,
                 PackageSize = product.PackageSize,
                 Weight = product.Weight,
-                Quantity = product.Quantity,
-                // A custom stop has no client and so no invoice — and no products either, so this
-                // only guards the shape.
-                InvoicedQuantity = stop.ClientId is null
-                    ? null
-                    : InvoicedQuantityFor(split, stop, product.SourceKind, product.SourceItemId)
+                Quantity = product.Quantity
             })
             .ToList();
-
-        if (stop.ClientId is null || firstStopOrderByClient[stop.ClientId.Value] != stop.Order)
-            return products;
-
-        var delivered = deliveredKeysByClient[stop.ClientId.Value];
-
-        // Cross-billed in: another client ordered the pieces, this one pays for them. They belong in
-        // this table because it answers "what goes on this client's invoice", and they carry no
-        // delivered count or weight because this van hands them to somebody else.
-        var crossBilled = split.ByPayer
-            .Where(entry => entry.Key.ClientId == stop.ClientId.Value
-                            && !delivered.Contains((entry.Key.SourceKind, entry.Key.SourceItemId)))
-            .Select(entry => new ShipmentExportProduct
-            {
-                Name = entry.Value.Name,
-                Kind = entry.Value.Kind,
-                PackageSize = entry.Value.PackageSize,
-                Weight = null,
-                Quantity = 0,
-                InvoicedQuantity = entry.Value.Quantity
-            })
-            .OrderBy(product => product.Name, StringComparer.CurrentCulture);
-
-        products.AddRange(crossBilled);
-        return products;
-    }
-
-    /// <summary>
-    /// Pieces of one delivered item the "Fakturačně" column reports on this stop's sheet.
-    /// </summary>
-    /// <remarks>
-    /// A client with no payer reads its own invoices, whatever their orderer — which preserves the
-    /// manual-move semantics this column has always had: a line moved onto somebody else's invoice
-    /// leaves this one at 0, and a line moved in adds to it.
-    ///
-    /// A sub-client reads its own invoices <em>plus</em> the lines its own goods put on its payer's,
-    /// or the column would be 0 for every row on its sheet. Both are counted rather than one
-    /// preferred, because the office can move a single line back onto the sub-client's own invoice
-    /// and the pieces on either side are disjoint — an invoice belongs to one client.
-    /// </remarks>
-    private static int InvoicedQuantityFor(
-        InvoicedSplit split, RawStop stop, InvoiceLineSourceKind sourceKind, long sourceItemId)
-    {
-        var clientId = stop.ClientId!.Value;
-
-        var onOwnInvoices = split.ByPayer.TryGetValue((clientId, sourceKind, sourceItemId), out var own)
-            ? own.Quantity
-            : 0;
-
-        if (stop.PayerId is null || stop.PayerId == clientId)
-            return onOwnInvoices;
-
-        var onPayersInvoices = split.ByPayerAndOrderer
-            .TryGetValue((stop.PayerId.Value, clientId, sourceKind, sourceItemId), out var billed)
-            ? billed.Quantity
-            : 0;
-
-        return onOwnInvoices + onPayersInvoices;
-    }
 
     /// <summary>
     /// Picks the address this stop actually delivers to and splits it into the sheet's lines.
@@ -656,14 +595,6 @@ public static class ShipmentExportQuery
 
         public string? ClientName { get; init; }
 
-        /// <summary>
-        /// Internal ID of the client this stop's goods are invoiced to, when the stop's own client
-        /// is billed through another. Null in the ordinary case — and the only thing that tells a
-        /// sub-client apart from a client whose line was moved by hand.
-        /// </summary>
-        public long? PayerId { get; init; }
-
-        public string? PayerName { get; init; }
         public string? Label { get; init; }
         public DeliveryAddressKind SelectedAddressKind { get; init; }
         public AddressDto? OfficialAddress { get; init; }
@@ -677,13 +608,10 @@ public static class ShipmentExportQuery
     }
 
     /// <summary>
-    /// A delivered row before its billed count is known, carrying the identity an invoice line
-    /// refers to it by.
+    /// One delivered row, as the projection reads it.
     /// </summary>
     private sealed record RawProduct
     {
-        public required InvoiceLineSourceKind SourceKind { get; init; }
-        public required long SourceItemId { get; init; }
         public required string Name { get; init; }
         public ProductKind? Kind { get; init; }
         public double? PackageSize { get; init; }
@@ -717,22 +645,27 @@ public static class ShipmentExportQuery
         OutgoingShipmentInvoiceLine Line);
 
     /// <summary>
-    /// The reconciled split, in the three shapes the export reads it in.
+    /// Where one client's goods went on this run — the delivery its invoice parties report.
+    /// </summary>
+    private sealed record PartyDelivery
+    {
+        public string? Street { get; init; }
+        public string? CityLine { get; init; }
+        public string? DeliveryPlaceName { get; init; }
+        public List<string> Notes { get; init; } = [];
+        public List<ShipmentExportReturn> Returns { get; init; } = [];
+    }
+
+    /// <summary>
+    /// The reconciled split, in the shapes the export reads it in.
     /// </summary>
     private sealed record InvoicedSplit
     {
         /// <summary>
-        /// Billed pieces keyed by (payer, item) — what a stop table reports for its own client, and
-        /// what the cross-billed-in rows are found by.
+        /// Confirmation number of each client whose row is currently marked finished. Absence is
+        /// what keeps an invoice out of the file.
         /// </summary>
-        public required Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByPayer { get; init; }
-
-        /// <summary>
-        /// Billed pieces keyed by (payer, orderer, item), aggregated across that payer's invoices —
-        /// what a sub-client's "Fakturačně" column reports, since its pieces may be spread over
-        /// several of its payer's invoices.
-        /// </summary>
-        public required Dictionary<(long PayerId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByPayerAndOrderer { get; init; }
+        public required Dictionary<long, int> ReadyNumberByPayer { get; init; }
 
         /// <summary>Billed pieces keyed by (invoice, orderer, item) — what a party row reports.</summary>
         public required Dictionary<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByInvoiceAndOrderer { get; init; }
@@ -748,7 +681,7 @@ public static class ShipmentExportQuery
 
         public static InvoicedSplit Empty => new()
         {
-            ByPayer = [], ByPayerAndOrderer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = [],
+            ReadyNumberByPayer = [], ByInvoiceAndOrderer = [], Invoices = [], OrdererNames = [],
             RecipientsByInvoice = []
         };
     }

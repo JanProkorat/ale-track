@@ -8,53 +8,35 @@ using FluentAssertions;
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
 /// <summary>
-/// What the shipment export workbook actually contains: sheet names Excel will accept, the run's
-/// overview, and one product table per client.
+/// What the shipment export workbook actually contains: the run's overview and route, and the
+/// confirmed invoice rows that follow it.
 /// </summary>
 public sealed class ShipmentExportWorkbookBuilderTests
 {
     private static ShipmentExportStop BuildStop(
         int order,
         string clientName,
-        string? street = "Dlouhá 14",
-        string? cityLine = "602 00 Brno",
         string? city = "Brno",
-        string? deliveryPlaceName = null,
-        string? invoicedToClientName = null,
-        List<string>? notes = null,
-        List<ShipmentExportProduct>? products = null,
-        List<ShipmentExportReturn>? returns = null) =>
+        List<ShipmentExportProduct>? products = null) =>
         new()
         {
             Order = order,
             ClientName = clientName,
-            Street = street,
-            CityLine = cityLine,
             City = city,
-            DeliveryPlaceName = deliveryPlaceName,
-            InvoicedToClientName = invoicedToClientName,
-            Notes = notes ?? [],
-            Products = products ?? [BuildProduct("Pilsner Urquell", 24)],
-            Returns = returns ?? []
+            Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
-    /// <summary>
-    /// A product row. <paramref name="invoicedQuantity"/> left null makes it a row nobody is billed
-    /// for — the run's own stock purchases, which is the only shape that has no invoice behind it.
-    /// </summary>
     private static ShipmentExportProduct BuildProduct(
         string name,
         int quantity,
         ProductKind? kind = ProductKind.Bottle,
-        double? packageSize = 0.5,
-        int? invoicedQuantity = null) =>
+        double? packageSize = 0.5) =>
         new()
         {
             Name = name,
             Quantity = quantity,
             Kind = kind,
-            PackageSize = packageSize,
-            InvoicedQuantity = invoicedQuantity
+            PackageSize = packageSize
         };
 
     private static ShipmentExportModel BuildModel(
@@ -76,14 +58,28 @@ public sealed class ShipmentExportWorkbookBuilderTests
             Invoices = invoices ?? []
         };
 
+    /// <summary>
+    /// One party of an invoice. The delivery details default to none, which is the shape of a party
+    /// whose goods this run only bills.
+    /// </summary>
     private static ShipmentExportInvoiceParty BuildParty(
         string clientName,
         bool isPayer = false,
-        List<ShipmentExportProduct>? products = null) =>
+        List<ShipmentExportProduct>? products = null,
+        string? street = null,
+        string? cityLine = null,
+        string? deliveryPlaceName = null,
+        List<string>? notes = null,
+        List<ShipmentExportReturn>? returns = null) =>
         new()
         {
             ClientName = clientName,
             IsPayer = isPayer,
+            Street = street,
+            CityLine = cityLine,
+            DeliveryPlaceName = deliveryPlaceName,
+            Notes = notes ?? [],
+            Returns = returns ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
@@ -96,10 +92,12 @@ public sealed class ShipmentExportWorkbookBuilderTests
         string payingClientName,
         int sequence,
         List<ShipmentExportInvoiceParty> parties,
+        int number = 1,
         Guid? payingClientId = null,
         List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
+            Number = number,
             PayingClientName = payingClientName,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
@@ -124,23 +122,28 @@ public sealed class ShipmentExportWorkbookBuilderTests
         return cell!.Address.RowNumber;
     }
 
+    /// <summary>
+    /// Two sheets and no more: the route is a table on the overview, and the goods are read off the
+    /// invoice rows. A per-stop sheet duplicated both and was never what the office asked for.
+    /// </summary>
     [Fact]
-    public void Build_ClientStops_ProducesAnOverviewSheetPlusOneSheetPerClientStop()
+    public void Build_Model_ProducesTheOverviewAndTheInvoiceSheetOnly()
     {
-        var model = BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy"),
-            new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" },
-            BuildStop(3, "Pivnice Na Růhu")
-        ]);
+        var model = BuildModel(
+            stops:
+            [
+                BuildStop(1, "Hospoda U Kotvy"),
+                new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" },
+                BuildStop(3, "Pivnice Na Růhu")
+            ],
+            invoices:
+            [
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+            ]);
 
         using var workbook = Open(model);
 
-        // The custom stop gets no sheet — it has no client and no goods.
-        workbook.Worksheets.Select(s => s.Name).Should().Equal(
-            "Přehled",
-            "1. Hospoda U Kotvy",
-            "3. Pivnice Na Růhu");
+        workbook.Worksheets.Select(s => s.Name).Should().Equal("Přehled", "Fakturace");
     }
 
     [Fact]
@@ -179,6 +182,29 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Cell(tableHeaderRow + 3, 3).GetString().Should().Be("Olomouc");
     }
 
+    /// <summary>
+    /// The route table is the driver's page, so it lists the whole run — including a client whose
+    /// row nobody has confirmed and which therefore reaches no invoice block at all.
+    /// </summary>
+    [Fact]
+    public void Build_OverviewSheet_ListsEveryStopIncludingUnconfirmedOnes()
+    {
+        var model = BuildModel(
+            stops: [BuildStop(1, "Hospoda U Kotvy"), BuildStop(2, "Pivnice Na Růhu")],
+            invoices:
+            [
+                BuildInvoice("Pivnice Na Růhu", sequence: 1, parties: [BuildParty("Pivnice Na Růhu", isPayer: true)])
+            ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Přehled");
+        var tableHeaderRow = RowOf(sheet, "ZASTÁVKA");
+
+        sheet.Cell(tableHeaderRow + 1, 2).GetString().Should().Be("Hospoda U Kotvy");
+        sheet.Cell(tableHeaderRow + 2, 2).GetString().Should().Be("Pivnice Na Růhu");
+        sheet.Cell(RowOf(sheet, "Zastávek"), 2).GetValue<int>().Should().Be(2);
+    }
+
     // The run's internal number means nothing to whoever reads this file, and the date plus the name
     // already identify which run it is.
     [Fact]
@@ -192,30 +218,36 @@ public sealed class ShipmentExportWorkbookBuilderTests
     }
 
     [Fact]
-    public void Build_StopSheet_WritesTheClientAddressItsProductsAndATotal()
+    public void Build_InvoiceParty_WritesWhereTheGoodsWentItsProductsAndATotal()
     {
-        var model = BuildModel(stops:
+        var model = BuildModel(invoices:
         [
-            BuildStop(
-                1,
+            BuildInvoice(
                 "Hospoda U Kotvy",
-                deliveryPlaceName: "Zahrádka",
-                notes: ["Volat 30 min předem", "Brána z boku"],
-                products:
+                sequence: 1,
+                parties:
                 [
-                    BuildProduct("Pilsner Urquell", 24),
-                    BuildProduct("Kozel 11", 6, ProductKind.Keg, 30),
-                    // A custom extra: ordered all the same, but with no product behind it.
-                    BuildProduct("Slunečník", 2, kind: null, packageSize: null)
+                    BuildParty(
+                        "Hospoda U Kotvy",
+                        isPayer: true,
+                        street: "Dlouhá 14",
+                        cityLine: "602 00 Brno",
+                        deliveryPlaceName: "Zahrádka",
+                        notes: ["Volat 30 min předem", "Brána z boku"],
+                        products:
+                        [
+                            BuildProduct("Pilsner Urquell", 24),
+                            BuildProduct("Kozel 11", 6, ProductKind.Keg, 30),
+                            // A custom extra: ordered all the same, but with no product behind it.
+                            BuildProduct("Slunečník", 2, kind: null, packageSize: null)
+                        ])
                 ])
         ]);
 
         using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+        var sheet = workbook.Worksheet("Fakturace");
 
-        sheet.Cell(RowOf(sheet, "Klient"), 2).GetString().Should().Be("Hospoda U Kotvy");
-        sheet.Cell(RowOf(sheet, "Ulice"), 2).GetString().Should().Be("Dlouhá 14");
-        sheet.Cell(RowOf(sheet, "PSČ a město"), 2).GetString().Should().Be("602 00 Brno");
+        sheet.Cell(RowOf(sheet, "Adresa"), 2).GetString().Should().Be("Dlouhá 14, 602 00 Brno");
         sheet.Cell(RowOf(sheet, "Místo dodání"), 2).GetString().Should().Be("Zahrádka");
 
         // The second note continues under the first with no repeated label.
@@ -248,22 +280,46 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Cell(headerRow + 1, 4).DataType.Should().Be(XLDataType.Number);
     }
 
+    /// <summary>
+    /// A party the run only bills — its own delivery went out on another run — has no address, no
+    /// notes and no vratky, and gets no empty rows claiming otherwise.
+    /// </summary>
     [Fact]
-    public void Build_StopWithReturns_WritesThemBelowTheProducts()
+    public void Build_PartyWithNoDelivery_WritesNoDeliveryRowsAtAll()
     {
-        var model = BuildModel(stops:
+        var model = BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", returns:
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Adresa").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Místo dodání").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Poznámky").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "VRACÍ").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Build_PartyWithReturns_WritesThemBelowTheProducts()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
             [
-                new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" }
+                BuildParty("Hospoda U Kotvy", isPayer: true, returns:
+                [
+                    new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" }
+                ])
             ])
         ]);
 
         using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+        var sheet = workbook.Worksheet("Fakturace");
 
         var headingRow = RowOf(sheet, "VRACÍ");
-        RowOf(sheet, "Celkem").Should().BeLessThan(headingRow, "what goes back reads after what is delivered");
+        RowOf(sheet, "PRODUKT").Should().BeLessThan(headingRow, "what goes back reads after what is delivered");
 
         // Contiguous columns. The quantity deliberately does not line up with the products table's:
         // these pieces travel the other way and must never be summed into the delivered total.
@@ -281,17 +337,20 @@ public sealed class ShipmentExportWorkbookBuilderTests
     [Fact]
     public void Build_ReturnsWithNoNotes_DropTheNoteColumnEntirely()
     {
-        var model = BuildModel(stops:
+        var model = BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", returns:
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
             [
-                new ShipmentExportReturn { Name = "Basa", Quantity = 25 },
-                new ShipmentExportReturn { Name = "Velký sud", Quantity = 3 }
+                BuildParty("Hospoda U Kotvy", isPayer: true, returns:
+                [
+                    new ShipmentExportReturn { Name = "Basa", Quantity = 25 },
+                    new ShipmentExportReturn { Name = "Velký sud", Quantity = 3 }
+                ])
             ])
         ]);
 
         using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+        var sheet = workbook.Worksheet("Fakturace");
 
         var headingRow = RowOf(sheet, "VRACÍ");
 
@@ -312,11 +371,14 @@ public sealed class ShipmentExportWorkbookBuilderTests
     public void Build_HeadingBands_AreShadedWithNoGaps()
     {
         var model = BuildModel(
-            stops:
+            invoices:
             [
-                BuildStop(1, "Hospoda U Kotvy", returns:
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
                 [
-                    new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }
+                    BuildParty("Hospoda U Kotvy", isPayer: true, returns:
+                    [
+                        new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }
+                    ])
                 ])
             ],
             stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
@@ -329,14 +391,14 @@ public sealed class ShipmentExportWorkbookBuilderTests
         var expected = XLColor.FromArgb(0xF2, 0xF2, 0xF2);
 
         var overview = workbook.Worksheet("Přehled");
-        var stopSheet = workbook.Worksheet("1. Hospoda U Kotvy");
+        var invoiceSheet = workbook.Worksheet("Fakturace");
 
         foreach (var (sheet, headerRow, columns) in new[]
                  {
                      (overview, RowOf(overview, "ZASTÁVKA"), 4),
                      (overview, RowOf(overview, "PRODUKT"), 4),
-                     (stopSheet, RowOf(stopSheet, "PRODUKT"), 4),
-                     (stopSheet, RowOf(stopSheet, "POLOŽKA"), 3)
+                     (invoiceSheet, RowOf(invoiceSheet, "PRODUKT"), 4),
+                     (invoiceSheet, RowOf(invoiceSheet, "POLOŽKA"), 3)
                  })
         {
             for (var column = 1; column <= columns; column++)
@@ -348,7 +410,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         }
 
         // Proof the assertion above can fail: the rows under a band are not shaded.
-        stopSheet.Cell(RowOf(stopSheet, "PRODUKT") + 1, 1).Style.Fill.BackgroundColor
+        invoiceSheet.Cell(RowOf(invoiceSheet, "PRODUKT") + 1, 1).Style.Fill.BackgroundColor
             .Should().NotBe(expected, "only the heading band is shaded");
     }
 
@@ -359,17 +421,28 @@ public sealed class ShipmentExportWorkbookBuilderTests
     [Fact]
     public void Build_Numbers_AreRealNumbersCarryingAFormat()
     {
-        var model = BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy", products:
+        var model = BuildModel(
+            stops:
             [
-                new ShipmentExportProduct
-                {
-                    Name = "Pilsner Urquell", Kind = ProductKind.Bottle,
-                    PackageSize = 0.5, Weight = 15.7, Quantity = 1200
-                }
-            ])
-        ]);
+                BuildStop(1, "Hospoda U Kotvy", products:
+                [
+                    new ShipmentExportProduct
+                    {
+                        Name = "Pilsner Urquell", Kind = ProductKind.Bottle,
+                        PackageSize = 0.5, Weight = 15.7, Quantity = 1200
+                    }
+                ])
+            ],
+            invoices:
+            [
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+                [
+                    BuildParty("Hospoda U Kotvy", isPayer: true, products:
+                    [
+                        BuildProduct("Pilsner Urquell", 1200)
+                    ])
+                ])
+            ]);
 
         using var workbook = Open(model);
 
@@ -379,7 +452,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         weight.Style.NumberFormat.Format.Should().Be("#,##0.0");
         weight.GetValue<double>().Should().BeApproximately(18840, 0.01);
 
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
+        var sheet = workbook.Worksheet("Fakturace");
         var headerRow = RowOf(sheet, "PRODUKT");
 
         // Package size carries no explicit format on purpose: General renders 0,5 and 30 in the
@@ -442,91 +515,28 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Column(1).CellsUsed(c => c.GetString() == expected).Should().HaveCount(1);
     }
 
-    [Fact]
-    public void Build_StopWithNoReturnsOrNotes_LeavesThoseSectionsOutEntirely()
-    {
-        using var workbook = Open(BuildModel());
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
-
-        // An empty "Poznámky" row reads as "no instructions", which is a claim this sheet cannot
-        // make; an empty "Vrací" heading reads the same way about returns.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Poznámky").Should().BeEmpty();
-        sheet.Column(1).CellsUsed(c => c.GetString() == "VRACÍ").Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Build_StopSheet_ReportsDeliveredAndBilledPiecesSideBySide()
-    {
-        var model = BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy", products:
-            [
-                // Delivered and billed to the same client — the ordinary row.
-                BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
-                // Half of it billed to somebody else.
-                BuildProduct("Kozel 11", 6, ProductKind.Keg, 30, invoicedQuantity: 2),
-                // Cross-billed in: this client pays for pieces another stop receives.
-                BuildProduct("Radegast", 0, ProductKind.Keg, 50, invoicedQuantity: 4)
-            ])
-        ]);
-
-        using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
-
-        var headerRow = RowOf(sheet, "PRODUKT");
-        sheet.Cell(headerRow, 4).GetString().Should().Be("SKUTEČNĚ (KS)");
-        sheet.Cell(headerRow, 5).GetString().Should().Be("FAKTURAČNĚ (KS)");
-
-        sheet.Cell(headerRow + 1, 4).GetValue<int>().Should().Be(24);
-        sheet.Cell(headerRow + 1, 5).GetValue<int>().Should().Be(24);
-
-        sheet.Cell(headerRow + 2, 4).GetValue<int>().Should().Be(6);
-        sheet.Cell(headerRow + 2, 5).GetValue<int>().Should().Be(2);
-
-        // Billed here, handed over somewhere else.
-        sheet.Cell(headerRow + 3, 4).GetValue<int>().Should().Be(0);
-        sheet.Cell(headerRow + 3, 5).GetValue<int>().Should().Be(4);
-
-        var totalRow = RowOf(sheet, "Celkem");
-        sheet.Cell(totalRow, 4).GetValue<int>().Should().Be(30);
-        sheet.Cell(totalRow, 5).GetValue<int>().Should().Be(30);
-
-        // Both columns are numbers, so the office can sum either in Excel itself.
-        sheet.Cell(headerRow + 1, 5).DataType.Should().Be(XLDataType.Number);
-    }
-
     /// <summary>
-    /// Nobody is billed for goods bought into our own warehouse, and a column of nothing but dashes
-    /// reads as data that failed to load.
-    /// </summary>
-    /// <summary>
-    /// The run calls at our own warehouse to drop the goods bought for stock, so that stop reads
-    /// like any other: a sheet of its own, a town and a piece count on the overview.
+    /// The run calls at our own warehouse to drop the goods bought for stock, so the route table
+    /// reports that stop's town and piece count like any other.
     /// </summary>
     [Fact]
-    public void Build_WarehouseStop_GetsItsOwnSheetAndTakesTheStockGoodsOffTheOverview()
+    public void Build_WarehouseStop_ReportsItsGoodsOnTheRouteTableInsteadOfTheStockBlock()
     {
         var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
 
         var model = BuildModel(
             stops:
             [
-                BuildStop(1, "Hospoda U Kotvy",
-                    products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)]),
+                BuildStop(1, "Hospoda U Kotvy"),
                 new ShipmentExportStop
                 {
                     Order = 2, IsWarehouse = true, Label = "AleTrack s.r.o.",
-                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
-                    Products = stockGoods
+                    City = "Liberec", Products = stockGoods
                 }
             ],
             stockPurchases: stockGoods);
 
         using var workbook = Open(model);
-
-        workbook.Worksheets.Select(s => s.Name).Should().Equal(
-            "Přehled", "1. Hospoda U Kotvy", "2. AleTrack s.r.o.");
-
         var overview = workbook.Worksheet("Přehled");
         var stopsHeader = RowOf(overview, "ZASTÁVKA");
 
@@ -535,22 +545,12 @@ public sealed class ShipmentExportWorkbookBuilderTests
         overview.Cell(stopsHeader + 2, 3).GetString().Should().Be("Liberec");
         overview.Cell(stopsHeader + 2, 4).GetValue<int>().Should().Be(3);
 
-        // Not printed twice: the goods are the warehouse sheet's table now.
+        // Not counted twice: the route table above already reports these pieces.
         overview.Column(1).CellsUsed(c => c.GetString() == "ZBOŽÍ NA SKLAD").Should().BeEmpty();
-
-        var sheet = workbook.Worksheet("2. AleTrack s.r.o.");
-        sheet.Cell(RowOf(sheet, "Místo"), 2).GetString().Should().Be("AleTrack s.r.o.", "the warehouse is not a customer");
-        sheet.Cell(RowOf(sheet, "Ulice"), 2).GetString().Should().Be("Skladová 7");
-        sheet.Cell(RowOf(sheet, "PSČ a město"), 2).GetString().Should().Be("460 01 Liberec");
-
-        var productsHeader = RowOf(sheet, "PRODUKT");
-        sheet.Cell(productsHeader, 4).GetString().Should().Be("MNOŽSTVÍ (KS)", "nobody is billed for stock goods");
-        sheet.Cell(productsHeader + 1, 1).GetString().Should().Be("Radegast");
-        sheet.Cell(productsHeader + 1, 4).GetValue<int>().Should().Be(3);
     }
 
     [Fact]
-    public void Build_StockPurchases_KeepTheSingleQuantityColumn()
+    public void Build_StockPurchasesBlock_HasASingleQuantityColumn()
     {
         var model = BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
 
@@ -559,7 +559,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         var headingRow = RowOf(sheet, "ZBOŽÍ NA SKLAD");
 
         sheet.Cell(headingRow + 1, 4).GetString().Should().Be("MNOŽSTVÍ (KS)");
-        sheet.Cell(headingRow + 1, 5).GetString().Should().BeEmpty("there is no billed column to head");
+        sheet.Cell(headingRow + 1, 5).GetString().Should().BeEmpty("there is no fifth column to head");
         sheet.Cell(headingRow + 2, 5).GetString().Should().BeEmpty();
     }
 
@@ -574,8 +574,6 @@ public sealed class ShipmentExportWorkbookBuilderTests
         var model = BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
 
         using var workbook = Open(model);
-
-        workbook.Worksheets.Select(s => s.Name).Should().Equal("Přehled", "1. Hospoda U Kotvy");
 
         var sheet = workbook.Worksheet("Přehled");
         var headingRow = RowOf(sheet, "ZBOŽÍ NA SKLAD");
@@ -595,70 +593,20 @@ public sealed class ShipmentExportWorkbookBuilderTests
     }
 
     [Fact]
-    public void Build_StopWithNoProducts_SaysSoRatherThanLeavingTheTableBlank()
+    public void Build_PartyWithNoProducts_SaysSoRatherThanLeavingTheTableBlank()
     {
-        var model = BuildModel(stops: [BuildStop(1, "Hospoda U Kotvy", products: [])]);
-
-        using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
-
-        sheet.Cell(RowOf(sheet, "PRODUKT") + 1, 1).GetString().Should().Be("Bez položek");
-    }
-
-    [Fact]
-    public void SheetNameFor_NameWithCharactersExcelForbids_StripsThem()
-    {
-        var name = ShipmentExportWorkbookBuilder.SheetNameFor(
-            BuildStop(1, "Hospoda [U Kotvy]: pivo/pivo"),
-            new HashSet<string>());
-
-        name.Should().Be("1. Hospoda U Kotvy pivo pivo");
-        name.Should().NotContainAny("[", "]", ":", "/", "\\", "*", "?");
-    }
-
-    [Fact]
-    public void SheetNameFor_NameLongerThanExcelAllows_TruncatesToThirtyOneCharacters()
-    {
-        var name = ShipmentExportWorkbookBuilder.SheetNameFor(
-            BuildStop(12, "Restaurace a penzion U Zeleného stromu"),
-            new HashSet<string>());
-
-        name.Should().HaveLength(31);
-        name.Should().StartWith("12. Restaurace a penzion");
-    }
-
-    [Fact]
-    public void SheetNameFor_TwoStopsTruncatingToTheSameName_SuffixesWithoutExceedingTheLimit()
-    {
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var longName = "Restaurace a penzion U Zeleného stromu";
-
-        var first = ShipmentExportWorkbookBuilder.SheetNameFor(BuildStop(1, longName), used);
-        var second = ShipmentExportWorkbookBuilder.SheetNameFor(BuildStop(1, longName), used);
-        var third = ShipmentExportWorkbookBuilder.SheetNameFor(BuildStop(1, longName), used);
-
-        // Excel rejects a duplicate name outright, so the suffix has to displace characters rather
-        // than push the name past 31.
-        new[] { first, second, third }.Should().OnlyHaveUniqueItems();
-        second.Should().EndWith(" (2)").And.HaveLength(31);
-        third.Should().EndWith(" (3)").And.HaveLength(31);
-    }
-
-    [Fact]
-    public void Build_OneClientOnTwoStops_NamesBothSheetsByStopSoNeitherIsLost()
-    {
-        var model = BuildModel(stops:
+        var model = BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy"),
-            BuildStop(4, "Hospoda U Kotvy")
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products: [])
+            ])
         ]);
 
         using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
 
-        workbook.Worksheets.Select(s => s.Name).Should().Equal(
-            "Přehled",
-            "1. Hospoda U Kotvy",
-            "4. Hospoda U Kotvy");
+        sheet.Cell(RowOf(sheet, "PRODUKT") + 1, 1).GetString().Should().Be("Bez položek");
     }
 
     [Fact]
@@ -671,7 +619,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
 
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [payerParty, otherParty])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 2, parties: [payerParty, otherParty])
         ]);
 
         using var workbook = Open(model);
@@ -679,9 +627,10 @@ public sealed class ShipmentExportWorkbookBuilderTests
         workbook.Worksheets.Select(s => s.Name).Should().Contain("Fakturace");
         var sheet = workbook.Worksheet("Fakturace");
 
-        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix. Its
-        // party row carries the "vlastní zboží" marker instead, matching the Word export.
-        var headingRow = RowOf(sheet, "Hospoda U Kotvy", occurrence: 1);
+        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — but
+        // it does lead with the number the office confirmed the row under. Its party row carries the
+        // "vlastní zboží" marker instead, matching the Word export.
+        var headingRow = RowOf(sheet, "2 · Hospoda U Kotvy");
         var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
         payerPartyRow.Should().BeGreaterThan(headingRow);
 
@@ -694,6 +643,25 @@ public sealed class ShipmentExportWorkbookBuilderTests
         // … and the block ends with the payer's own total across both parties.
         var totalRow = RowOf(sheet, "Celkem");
         sheet.Cell(totalRow, 4).GetValue<int>().Should().Be(30);
+    }
+
+    /// <summary>
+    /// The blocks come out in the order the office confirmed the rows, which is the order the model
+    /// hands them over in — the sheet must not reorder them by name or by anything else.
+    /// </summary>
+    [Fact]
+    public void Build_InvoiceBlocks_FollowTheConfirmationNumbers()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Pivnice Na Rohu", sequence: 1, number: 1, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)]),
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        RowOf(sheet, "1 · Pivnice Na Rohu").Should().BeLessThan(RowOf(sheet, "2 · Hospoda U Kotvy"));
     }
 
     [Fact]
@@ -743,26 +711,6 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Column(1).CellsUsed(c => c.GetString().StartsWith("FAKTURAČNÍ ADRESA")).Should().BeEmpty();
     }
 
-    [Fact]
-    public void Build_ClientStopLiterallyNamedFakturace_DoesNotCollideWithTheReservedInvoiceSheetName()
-    {
-        var payerParty = BuildParty("Fakturace", isPayer: true);
-
-        var model = BuildModel(
-            stops: [BuildStop(1, "Fakturace")],
-            invoices:
-            [
-                BuildInvoice("Fakturace", sequence: 1, parties: [payerParty])
-            ]);
-
-        using var workbook = Open(model);
-
-        // "Fakturace" enters usedNames before the stop loop runs, so a client that happens to
-        // share the reserved sheet's name still keeps its own stop-numbered sheet rather than
-        // losing it to a duplicate-name clash with the invoicing sheet.
-        workbook.Worksheets.Select(s => s.Name).Should().Equal("Přehled", "Fakturace", "1. Fakturace");
-    }
-
     /// <summary>
     /// ClosedXML 0.105.1 preserves a grouped row's <c>OutlineLevel</c> through a save/reload
     /// round-trip, but not the <c>IsHidden</c> flag <c>.Collapse()</c> would set — confirmed by a
@@ -770,22 +718,27 @@ public sealed class ShipmentExportWorkbookBuilderTests
     /// the outline level is asserted here.
     /// </summary>
     [Fact]
-    public void Build_PartyProductRows_AreGrouped()
+    public void Build_PartyDetailRows_AreGrouped()
     {
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
         ]);
 
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
         var partyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
+        var addressRow = RowOf(sheet, "Adresa");
         var productHeaderRow = RowOf(sheet, "PRODUKT");
 
         sheet.Row(partyRow).OutlineLevel.Should().Be(0, "the party's own row is not part of the group");
-        // The grouped range starts at the product table's own header, so it shares the group with
-        // the rows beneath it.
+        sheet.Row(addressRow).OutlineLevel.Should().Be(1, "where the goods went collapses with the detail");
+        // The grouped range starts at the party's first detail row, so the product table's own
+        // header shares the group with the rows beneath it.
         sheet.Row(productHeaderRow).OutlineLevel.Should().Be(1, "the product header is part of the group");
         sheet.Row(productHeaderRow + 1).OutlineLevel.Should().Be(1, "the product row is grouped under its party");
     }
@@ -795,21 +748,23 @@ public sealed class ShipmentExportWorkbookBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
-            BuildInvoice("Hospoda U Kotvy", sequence: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
-            BuildInvoice("Pivnice Na Rohu", sequence: 1, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Hospoda U Kotvy", sequence: 2, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Pivnice Na Rohu", sequence: 1, number: 2, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
         ]);
 
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
+        // Both blocks of one client share its number — it is one confirmed row — so the sequence is
+        // what tells them apart.
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
 
-        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1". Its own party row
-        // carries the "vlastní zboží" marker, matching the Word export.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu").Should().HaveCount(1);
+        // The one-invoice payer gets no meaningless "Faktura 1". Its own party row carries the
+        // "vlastní zboží" marker, matching the Word export.
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Pivnice Na Rohu").Should().HaveCount(1);
         sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · vlastní zboží").Should().HaveCount(1);
     }
 
@@ -823,40 +778,17 @@ public sealed class ShipmentExportWorkbookBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
         ]);
 
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · Faktura 1").Should().BeEmpty();
-        // Two bare headings — one per payer, neither suffixed — plus their two payer party rows,
-        // each carrying the "vlastní zboží" marker.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy").Should().HaveCount(2);
+        sheet.Column(1).CellsUsed(c => c.GetString().Contains("Faktura")).Should().BeEmpty();
+        // Their own numbers are what keep them apart, not a sequence suffix neither has earned.
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Hospoda U Kotvy").Should().HaveCount(1);
         sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · vlastní zboží").Should().HaveCount(2);
-    }
-
-    [Fact]
-    public void Build_SubClientStopSheet_NamesThePayer()
-    {
-        var model = BuildModel(stops:
-        [
-            BuildStop(1, "Pivnice Na Rohu", invoicedToClientName: "Hospoda U Kotvy")
-        ]);
-
-        using var workbook = Open(model);
-        var sheet = workbook.Worksheet("1. Pivnice Na Rohu");
-
-        sheet.Cell(RowOf(sheet, "Fakturováno na"), 2).GetString().Should().Be("Hospoda U Kotvy");
-    }
-
-    [Fact]
-    public void Build_StopNotInvoicedElsewhere_OmitsTheInvoicedToRow()
-    {
-        using var workbook = Open(BuildModel());
-        var sheet = workbook.Worksheet("1. Hospoda U Kotvy");
-
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Fakturováno na").Should().BeEmpty();
     }
 }

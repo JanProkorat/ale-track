@@ -3,18 +3,18 @@ using AleTrack.Common.Enums;
 namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
 /// <summary>
-/// Presentation-ready shape of one shipment export workbook: the run's own summary plus one
-/// entry per stop.
+/// Presentation-ready shape of one shipment export workbook: the run's summary and route, then the
+/// confirmed rows of its invoice split.
 /// </summary>
 /// <remarks>
 /// Deliberately free of entity and DTO types. The workbook builder receives nothing but strings,
 /// numbers and enums, so it can be exercised without a database and the query can be exercised
 /// without opening a spreadsheet.
 ///
-/// Carries no money, but it does carry invoice attribution: every product row reports both what
-/// the van drops at the stop and what lands on that client's invoices, which is the pair the
-/// office reads the file for. The quantities come from the same reconciled split the Fakturace
-/// section shows — see <see cref="ShipmentExportProduct.InvoicedQuantity"/>.
+/// Two audiences, in this order. <see cref="Stops"/> is the driver's page — the whole route, ready
+/// or not. <see cref="Invoices"/> is the office's, and holds only the rows somebody has confirmed
+/// as finished; the quantities in it come from the same reconciled split the Fakturace section
+/// shows. Carries no money either way.
 /// </remarks>
 public sealed record ShipmentExportModel
 {
@@ -39,9 +39,9 @@ public sealed record ShipmentExportModel
     public List<string> DriverNames { get; init; } = [];
 
     /// <summary>
-    /// Every stop on the route in route order, custom waypoints and the warehouse included — the
-    /// overview sheet lists all of them, while only the ones that hand goods over get a sheet of
-    /// their own.
+    /// Every stop on the route in route order, custom waypoints and the warehouse included. The
+    /// overview lists all of them — including a stop whose row nobody has confirmed, since the van
+    /// still calls there.
     /// </summary>
     public List<ShipmentExportStop> Stops { get; init; } = [];
 
@@ -61,12 +61,14 @@ public sealed record ShipmentExportModel
     /// whose goods are billed on it.
     /// </summary>
     /// <remarks>
-    /// One block per invoice, not per paying client: a client holding invoices #1 and #2 on
-    /// this run yields two blocks, each carrying its own <see cref="ShipmentExportInvoice.Sequence"/>.
+    /// Only the rows the office has confirmed as finished, in the order it confirmed them — see
+    /// <see cref="ShipmentExportInvoice.Number"/>. An unconfirmed client is absent from here
+    /// entirely, which is the point of the flag: the file is not to be read as final for a row
+    /// still being edited.
     ///
-    /// Additive: the stop entries are untouched, because what the driver reads did not change.
-    /// This part exists for the office, and it is the only place a paying client with no
-    /// delivery of its own appears at all.
+    /// One block per invoice, not per paying client: a client holding invoices #1 and #2 on
+    /// this run yields two blocks under the same number, each carrying its own
+    /// <see cref="ShipmentExportInvoice.Sequence"/>.
     /// </remarks>
     public List<ShipmentExportInvoice> Invoices { get; init; } = [];
 
@@ -75,18 +77,10 @@ public sealed record ShipmentExportModel
     /// warehouse is deliberately not one of them.
     /// </summary>
     /// <remarks>
-    /// One client holding two stops yields two sheets, not one merged sheet. The two deliveries go
-    /// to different addresses and are genuinely separate drops; the stop number in the sheet name
-    /// keeps them apart.
+    /// One client holding two stops counts twice. The two deliveries go to different addresses and
+    /// are genuinely separate drops, which is what the count is of.
     /// </remarks>
     public IEnumerable<ShipmentExportStop> ClientStops => Stops.Where(s => s.ClientName is not null);
-
-    /// <summary>
-    /// Stops that get a sheet of their own: every client delivery, plus the warehouse when the run
-    /// calls at it. A custom waypoint hands nothing over and so has nothing to list.
-    /// </summary>
-    public IEnumerable<ShipmentExportStop> SheetStops =>
-        Stops.Where(s => s.ClientName is not null || s.IsWarehouse);
 
     /// <summary>
     /// Whether the run calls at our own warehouse — which is where its stock purchases come off.
@@ -116,6 +110,12 @@ public sealed record ShipmentExportModel
 /// <summary>
 /// One stop of the run — a client delivery, our own warehouse, or a custom waypoint.
 /// </summary>
+/// <remarks>
+/// Carries what the overview's route table reports and nothing else. Where the goods went, what the
+/// order said and what comes back travel on <see cref="ShipmentExportInvoiceParty"/> instead: those
+/// are read per client being billed, not per call the van makes, ever since the per-stop sheets went
+/// away.
+/// </remarks>
 public sealed record ShipmentExportStop
 {
     /// <summary>
@@ -137,64 +137,26 @@ public sealed record ShipmentExportStop
     /// Whether this is the call at our own warehouse, where the run's stock purchases come off.
     /// </summary>
     /// <remarks>
-    /// It hands goods over like a client stop and so gets a sheet, but nobody is billed for them
-    /// and it is not a client — the overview's client count leaves it out.
+    /// It hands goods over like a client stop and reports them on the route table, but nobody is
+    /// billed for them and it is not a client — the overview's client count leaves it out.
     /// </remarks>
     public bool IsWarehouse { get; init; }
 
     /// <summary>
-    /// Street line of the destination — <c>Dlouhá 14</c>. Null when the stop delivers to a place
-    /// pinned on the map, which has no street.
-    /// </summary>
-    public string? Street { get; init; }
-
-    /// <summary>
-    /// Zip and city of the destination — <c>602 00 Brno</c>. Coordinates when the destination is
-    /// a place pinned on the map.
-    /// </summary>
-    public string? CityLine { get; init; }
-
-    /// <summary>
-    /// City alone, for the overview sheet's stop table.
+    /// Town the stop is in, for the overview's route table.
     /// </summary>
     public string? City { get; init; }
 
     /// <summary>
-    /// Name of the client delivery place this stop delivers to, when it delivers to one.
-    /// </summary>
-    public string? DeliveryPlaceName { get; init; }
-
-    /// <summary>
-    /// Name of the client this stop's goods are invoiced to, when that is not the stop's own
-    /// client. Null in the ordinary case.
-    /// </summary>
-    public string? InvoicedToClientName { get; init; }
-
-    /// <summary>
-    /// Notes on the order behind this stop, oldest first.
-    /// </summary>
-    public List<string> Notes { get; init; } = [];
-
-    /// <summary>
     /// What is delivered here, in the app-wide product order, with the order's custom extra items
-    /// last.
+    /// last. Reported as a piece count on the route table, and weighed into the run's totals.
     /// </summary>
     public List<ShipmentExportProduct> Products { get; init; } = [];
-
-    /// <summary>
-    /// Returnable items the client hands back at this stop.
-    /// </summary>
-    public List<ShipmentExportReturn> Returns { get; init; } = [];
 
     /// <summary>
     /// Pieces delivered at this stop.
     /// </summary>
     public int TotalQuantity => Products.Sum(p => p.Quantity);
-
-    /// <summary>
-    /// Pieces billed to this stop's client, across every invoice they hold on the run.
-    /// </summary>
-    public int TotalInvoicedQuantity => Products.Sum(p => p.InvoicedQuantity ?? 0);
 }
 
 /// <summary>
@@ -228,19 +190,6 @@ public sealed record ShipmentExportProduct
     /// </summary>
     public required int Quantity { get; init; }
 
-    /// <summary>
-    /// Pieces of this item that land on the invoices of the client whose table this is —
-    /// "fakturačně" — or null where the question does not apply, which is the run's own stock
-    /// purchases: nobody is billed for goods bought into our warehouse.
-    /// </summary>
-    /// <remarks>
-    /// Differs from <see cref="Quantity"/> exactly where the Fakturace section was edited: pieces
-    /// moved onto another client's invoice, or kept off every invoice as soukromé, bill less than
-    /// they deliver, and pieces moved in from another client's order bill more. A row that bills
-    /// pieces this stop does not deliver at all — cross-billed in — carries
-    /// <see cref="Quantity"/> 0.
-    /// </remarks>
-    public int? InvoicedQuantity { get; init; }
 }
 
 /// <summary>
@@ -248,6 +197,12 @@ public sealed record ShipmentExportProduct
 /// </summary>
 public sealed record ShipmentExportInvoice
 {
+    /// <summary>
+    /// Number the office confirmed this client's row under, from 1 per run. What the office reads
+    /// the file by, and the only ordering the invoice part uses.
+    /// </summary>
+    public required int Number { get; init; }
+
     public required string PayingClientName { get; init; }
 
     /// <summary>
@@ -291,12 +246,17 @@ public sealed record ShipmentExportBillingRecipient
 }
 
 /// <summary>
-/// The goods of one client billed on an invoice.
+/// The goods of one client billed on an invoice, with the delivery they came from.
 /// </summary>
 /// <remarks>
-/// Rows carry their billed pieces in <see cref="ShipmentExportProduct.Quantity"/> and leave
-/// <see cref="ShipmentExportProduct.InvoicedQuantity"/> null: inside an invoice block there is
-/// only one number to report.
+/// The delivery details sit here rather than on the invoice because of the groups: a payer's
+/// sub-clients are parties inside its invoice and have no block of their own, so an invoice-level
+/// address would print the payer's — or none at all, since a payer need not take a delivery — and
+/// lose every sub-client's note and vratka. For an ordinary single-party invoice the two are the
+/// same.
+///
+/// Null address and empty lists for a party with no stop on this run: one whose goods the run only
+/// bills, delivered on another. Both writers render nothing for it rather than a dash.
 /// </remarks>
 public sealed record ShipmentExportInvoiceParty
 {
@@ -304,6 +264,25 @@ public sealed record ShipmentExportInvoiceParty
 
     /// <summary>The paying client's own goods — listed first.</summary>
     public bool IsPayer { get; init; }
+
+    /// <summary>Street line of where this party's goods went — <c>Dlouhá 14</c>.</summary>
+    public string? Street { get; init; }
+
+    /// <summary>Zip and city of the same — <c>602 00 Brno</c>, or coordinates for a pinned place.</summary>
+    public string? CityLine { get; init; }
+
+    /// <summary>Street and city on one line, for a writer with a single address column.</summary>
+    public string AddressLine =>
+        string.Join(", ", new[] { Street, CityLine }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+    /// <summary>Name of the client's saved delivery place, when the goods went to one.</summary>
+    public string? DeliveryPlaceName { get; init; }
+
+    /// <summary>Notes on the order behind that delivery, oldest first.</summary>
+    public List<string> Notes { get; init; } = [];
+
+    /// <summary>Returnable items the client hands back against that order.</summary>
+    public List<ShipmentExportReturn> Returns { get; init; } = [];
 
     public List<ShipmentExportProduct> Products { get; init; } = [];
 

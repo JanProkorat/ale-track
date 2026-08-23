@@ -27,19 +27,23 @@ public static class ShipmentExportLabels
     public const string InvoicedTo = "Fakturováno na";
 
     /// <summary>
-    /// Heading for one invoice block, suffixed with its sequence only when the paying client
-    /// holds more than one invoice on the run — otherwise a single invoice is not saddled with a
-    /// meaningless "1".
+    /// Heading for one invoice block, led by the number the office confirmed the row under and
+    /// suffixed with the invoice's sequence only when the paying client holds more than one on the
+    /// run — otherwise a single invoice is not saddled with a meaningless "1".
     /// </summary>
     /// <remarks>
     /// Shared by both export writers so they cannot drift into disagreeing about which headings
     /// need the suffix. Keyed on <see cref="ShipmentExportInvoice.PayingClientId"/> rather than
     /// the name, because two distinct clients can genuinely share a name.
+    ///
+    /// The number leads because it is what the office writes onto the paper invoice and reads the
+    /// file by. Two blocks of one client share it, which is exactly why the sequence is still what
+    /// tells them apart.
     /// </remarks>
     public static string InvoiceHeading(ShipmentExportInvoice invoice, IReadOnlyDictionary<Guid, int> invoiceCountByPayer) =>
         invoiceCountByPayer[invoice.PayingClientId] > 1
-            ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
-            : invoice.PayingClientName;
+            ? $"{invoice.Number} · {invoice.PayingClientName} · Faktura {invoice.Sequence}"
+            : $"{invoice.Number} · {invoice.PayingClientName}";
 
     /// <summary>How many invoices each paying client holds on the run, for <see cref="InvoiceHeading"/>.</summary>
     public static Dictionary<Guid, int> InvoiceCountByPayer(IEnumerable<ShipmentExportInvoice> invoices) =>

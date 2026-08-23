@@ -53,6 +53,13 @@ public sealed class ShipmentExportQueryTests
         ShipmentExportQuery.LoadAsync(dbContext, shipmentId, Company, CancellationToken.None);
 
     /// <summary>
+    /// The one party billing a named client's goods, wherever in the invoice part it sits — the
+    /// delivery details live there now rather than on the stop.
+    /// </summary>
+    private static ShipmentExportInvoiceParty PartyOf(ShipmentExportModel model, string clientName) =>
+        model.Invoices.SelectMany(i => i.Parties).Single(p => p.ClientName == clientName);
+
+    /// <summary>
     /// Stamps the internal IDs a graph read out of the database would already carry.
     /// </summary>
     /// <remarks>
@@ -133,7 +140,7 @@ public sealed class ShipmentExportQueryTests
     }
 
     [Fact]
-    public async Task LoadAsync_OrderAndCustomStops_ListsEveryStopButOnlyGivesClientStopsASheet()
+    public async Task LoadAsync_OrderAndCustomStops_ListsEveryStopAndCountsOnlyTheClientOnes()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -170,16 +177,14 @@ public sealed class ShipmentExportQueryTests
         model.Should().NotBeNull();
         model!.Stops.Select(s => s.Order).Should().Equal(1, 2, 3);
 
-        // The custom stop appears in the run's stop list — it is part of the route — but has no
-        // client and no goods, so it can never carry a sheet.
+        // The custom stop is part of the route and is listed, but it has no client and no goods,
+        // so the overview's client count leaves it out.
         model.Stops[1].ClientName.Should().BeNull();
         model.Stops[1].Label.Should().Be("Čerpací stanice");
 
         model.ClientStops.Select(s => s.ClientName).Should().Equal("Hospoda U Kotvy", "Pivnice Na Růhu");
 
         var first = model.ClientStops.First();
-        first.Street.Should().Be("Dlouhá 14");
-        first.CityLine.Should().Be("602 00 Brno");
         first.City.Should().Be("Brno");
         first.TotalQuantity.Should().Be(24);
     }
@@ -245,8 +250,10 @@ public sealed class ShipmentExportQueryTests
             name: "Bez kontaktní",
             officialAddress: AddressBuilder.BuildEntity(streetName: "Sídlo", streetNumber: "2", city: "Zlín"));
 
-        var orderWith = OrderBuilder.BuildEntity(client: withContact);
-        var orderWithout = OrderBuilder.BuildEntity(client: withoutContact);
+        var orderWith = OrderBuilder.BuildEntity(
+            client: withContact, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var orderWithout = OrderBuilder.BuildEntity(
+            client: withoutContact, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
 
         var shipment = OutgoingShipmentBuilder.BuildEntity(
             publicId: shipmentId,
@@ -265,6 +272,8 @@ public sealed class ShipmentExportQueryTests
             ]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, withContact, number: 1);
+        Confirm(shipment, withoutContact, number: 2);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [withContact, withoutContact],
@@ -273,18 +282,18 @@ public sealed class ShipmentExportQueryTests
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        model!.Stops[0].Street.Should().Be("Provozovna 9");
-        model.Stops[0].CityLine.Should().Be("612 00 Brno");
+        PartyOf(model!, "S kontaktní").Street.Should().Be("Provozovna 9");
+        PartyOf(model!, "S kontaktní").CityLine.Should().Be("612 00 Brno");
 
-        model.Stops[1].Street.Should().Be("Sídlo 2");
-        model.Stops[1].City.Should().Be("Zlín");
+        PartyOf(model!, "Bez kontaktní").Street.Should().Be("Sídlo 2");
+        PartyOf(model!, "Bez kontaktní").CityLine.Should().Be("00000 Zlín");
     }
 
     [Fact]
-    public async Task Build_StopWhoseClientHasOnlyAContactAddress_ExportsThatAddress()
+    public async Task Build_ClientWithOnlyAContactAddress_ExportsThatAddress()
     {
         // A client billed through its payer has no official address, and an Official-kind stop
-        // would otherwise export a blank street and city — on the driver's own sheet.
+        // would otherwise export a blank street and city.
         var shipmentId = Guid.NewGuid();
 
         var invoicedClient = ClientBuilder.BuildEntity(
@@ -292,7 +301,8 @@ public sealed class ShipmentExportQueryTests
             noOfficialAddress: true,
             contactAddress: AddressBuilder.BuildEntity(streetName: "Provozovna", streetNumber: "9", zip: "612 00", city: "Brno"));
 
-        var order = OrderBuilder.BuildEntity(client: invoicedClient);
+        var order = OrderBuilder.BuildEntity(
+            client: invoicedClient, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
 
         var shipment = OutgoingShipmentBuilder.BuildEntity(
             publicId: shipmentId,
@@ -306,6 +316,7 @@ public sealed class ShipmentExportQueryTests
             ]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, invoicedClient, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [invoicedClient],
@@ -314,8 +325,9 @@ public sealed class ShipmentExportQueryTests
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        model!.Stops[0].Street.Should().Be("Provozovna 9");
-        model.Stops[0].CityLine.Should().Be("612 00 Brno");
+        var party = PartyOf(model!, "Hospoda Pod Mostem");
+        party.Street.Should().Be("Provozovna 9");
+        party.CityLine.Should().Be("612 00 Brno");
     }
 
     [Fact]
@@ -334,8 +346,14 @@ public sealed class ShipmentExportQueryTests
             Address = AddressBuilder.BuildEntity(streetName: "Nábřeží", streetNumber: "7", zip: "603 00", city: "Brno")
         };
 
-        var deliveringOrder = OrderBuilder.BuildEntity(client: client);
-        var officialOrder = OrderBuilder.BuildEntity(client: client);
+        var sentBack = ClientBuilder.BuildEntity(
+            name: "Hospoda Vrácená",
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Sídlo", streetNumber: "1", city: "Praha"));
+
+        var deliveringOrder = OrderBuilder.BuildEntity(
+            client: client, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var officialOrder = OrderBuilder.BuildEntity(
+            client: sentBack, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
 
         var shipment = OutgoingShipmentBuilder.BuildEntity(
             publicId: shipmentId,
@@ -357,21 +375,25 @@ public sealed class ShipmentExportQueryTests
             ]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
+        Confirm(shipment, sentBack, number: 2);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
-            clients: [client],
+            clients: [client, sentBack],
             orders: [deliveringOrder, officialOrder],
             outgoingShipments: [shipment],
             clientDeliveryPlaces: [place]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        model!.Stops[0].Street.Should().Be("Nábřeží 7");
-        model.Stops[0].CityLine.Should().Be("603 00 Brno");
-        model.Stops[0].DeliveryPlaceName.Should().Be("Zahrádka");
+        var delivering = PartyOf(model!, "Hospoda");
+        delivering.Street.Should().Be("Nábřeží 7");
+        delivering.CityLine.Should().Be("603 00 Brno");
+        delivering.DeliveryPlaceName.Should().Be("Zahrádka");
 
-        model.Stops[1].Street.Should().Be("Sídlo 1");
-        model.Stops[1].DeliveryPlaceName.Should().BeNull();
+        var back = PartyOf(model!, "Hospoda Vrácená");
+        back.Street.Should().Be("Sídlo 1");
+        back.DeliveryPlaceName.Should().BeNull();
     }
 
     [Fact]
@@ -413,7 +435,7 @@ public sealed class ShipmentExportQueryTests
     }
 
     [Fact]
-    public async Task LoadAsync_OrderWithNotesReturnsAndCustomExtras_CarriesAllThreeOntoTheStop()
+    public async Task LoadAsync_OrderWithNotesReturnsAndCustomExtras_CarriesAllThreeOntoTheParty()
     {
         var shipmentId = Guid.NewGuid();
         var client = ClientBuilder.BuildEntity(officialAddress: AddressBuilder.BuildEntity());
@@ -450,24 +472,29 @@ public sealed class ShipmentExportQueryTests
             stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client], orders: [order], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
-        var stop = model!.Stops[0];
+        var party = model!.Invoices.Single().Parties.Single();
 
-        stop.Notes.Should().Equal("Starší", "Novější");
+        // Oldest first, as the order records them.
+        party.Notes.Should().Equal("Starší", "Novější");
 
-        // A custom extra is an ordered item too, so it joins the product table — last, and with no
-        // kind or package, because no product stands behind it.
-        stop.Products.Select(p => p.Name).Should().Equal("Pilsner Urquell", "Slunečník");
-        stop.Products[1].Kind.Should().BeNull();
-        stop.Products[1].PackageSize.Should().BeNull();
-        stop.TotalQuantity.Should().Be(26);
+        // A custom extra is an ordered item too, so it is billed like one — with no kind and no
+        // package, because no product stands behind it.
+        party.Products.Select(p => p.Name).Should().Equal("Pilsner Urquell", "Slunečník");
+        party.Products[1].Kind.Should().BeNull();
+        party.Products[1].PackageSize.Should().BeNull();
+        party.TotalQuantity.Should().Be(26);
 
-        stop.Returns.Select(r => r.Name).Should().Equal("Přepravka", "Sud 30l KEG");
-        stop.Returns.Single(r => r.Name == "Sud 30l KEG").Note.Should().Be("poškozený ventil");
+        party.Returns.Select(r => r.Name).Should().Equal("Přepravka", "Sud 30l KEG");
+        party.Returns.Single(r => r.Name == "Sud 30l KEG").Note.Should().Be("poškozený ventil");
+
+        // The van's own page still counts what it drops.
+        model.Stops[0].TotalQuantity.Should().Be(26);
     }
 
     [Fact]
@@ -532,7 +559,7 @@ public sealed class ShipmentExportQueryTests
         var model = await Load(dbContext.Object, shipmentId);
 
         model!.StockPurchases.Select(p => p.Name).Should().Equal("Radegast");
-        model.ClientStops.Should().HaveCount(1, "nobody ordered the stock goods, so they get no sheet");
+        model.ClientStops.Should().HaveCount(1, "nobody ordered the stock goods, so they belong to no stop");
         model.TotalQuantity.Should().Be(7, "4 ordered plus 3 bought for our own warehouse");
 
         var expectedWeight =
@@ -541,14 +568,10 @@ public sealed class ShipmentExportQueryTests
 
         model.TotalWeight.Should().BeApproximately(expectedWeight, 0.001);
         model.TotalWeight.Should().BeGreaterThan(0, "kegs of a known size have a derivable weight");
-
-        // Nobody is billed for goods bought into our own warehouse, so the question does not apply
-        // — which is a different answer from "billed nothing".
-        model.StockPurchases.Single().InvoicedQuantity.Should().BeNull();
     }
 
     [Fact]
-    public async Task LoadAsync_NobodyHasTouchedFakturaceYet_BillsEveryDeliveredPieceToTheClientWhoOrderedIt()
+    public async Task LoadAsync_NobodyHasTouchedFakturaceYet_StillBillsEveryDeliveredPiece()
     {
         var shipmentId = Guid.NewGuid();
         var client = ClientBuilder.BuildEntity(name: "Hospoda", officialAddress: AddressBuilder.BuildEntity());
@@ -560,22 +583,23 @@ public sealed class ShipmentExportQueryTests
             stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client], orders: [order], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        // The run has no stored split at all. Reading the stored lines alone would export "delivers
-        // 24, bills 0" for every row on every run nobody has opened Fakturace on — which is why the
-        // query reconciles first, exactly as that screen does.
-        var product = model!.ClientStops.Single().Products.Single();
-        product.Quantity.Should().Be(24);
-        product.InvoicedQuantity.Should().Be(24);
+        // The run has no stored split at all. Reading the stored lines alone would bill nothing on
+        // every run nobody has opened Fakturace on — which is why the query reconciles first,
+        // exactly as that screen does.
+        var party = model!.Invoices.Single().Parties.Single();
+        party.Products.Select(p => (p.Name, p.Quantity)).Should().Equal(("Pilsner Urquell", 24));
+        model.Stops.Single().TotalQuantity.Should().Be(24, "the van still drops all of it");
     }
 
     [Fact]
-    public async Task LoadAsync_PiecesBilledToAnotherClient_LeaveTheDeliveringStopAndAppearOnThePayers()
+    public async Task LoadAsync_PiecesBilledToAnotherClient_AppearOnThePayersBlockAsTheirOwnParty()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -602,30 +626,27 @@ public sealed class ShipmentExportQueryTests
         var crossBilled = orderingOrder.OrderItems.Single();
         AddInvoice(shipment, payer, LineFor(crossBilled, 24), LineFor(payerOrder.OrderItems.Single(), 6));
 
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [ordering, payer], orders: [orderingOrder, payerOrder], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        var delivering = model!.Stops[0];
-        var paying = model.Stops[1];
+        // One block, the payer's — the client that ordered the cross-billed pieces holds no invoice
+        // of its own and so has no block, only a party inside this one.
+        var block = model!.Invoices.Should().ContainSingle().Subject;
+        block.PayingClientName.Should().Be("Pivnice Sever");
 
-        // Delivered here, billed elsewhere — the van still drops 24.
-        delivering.Products.Single().Quantity.Should().Be(24);
-        delivering.Products.Single().InvoicedQuantity.Should().Be(0);
-        delivering.TotalQuantity.Should().Be(24);
-        delivering.TotalInvoicedQuantity.Should().Be(0);
+        block.Parties.Select(p => (p.ClientName, p.IsPayer, p.TotalQuantity)).Should().Equal(
+            ("Pivnice Sever", true, 6),
+            ("Hospoda U Kotvy", false, 24));
 
-        // The payer's own goods, plus a row for pieces they pay for and never receive.
-        paying.Products.Select(p => (p.Name, p.Quantity, p.InvoicedQuantity)).Should().Equal(
-            ("Kozel 11", 6, 6),
-            ("Pilsner Urquell", 0, 24));
+        block.TotalQuantity.Should().Be(30);
 
-        paying.TotalQuantity.Should().Be(6, "the cross-billed row is not delivered here");
-        paying.TotalInvoicedQuantity.Should().Be(30);
-
-        // A row nobody hands over carries no weight either — the pieces are already weighed at the
-        // stop that receives them.
+        // The van's own page is unchanged: each stop still reports what is dropped there, whoever
+        // ends up being billed for it.
+        model.Stops.Select(s => s.TotalQuantity).Should().Equal(24, 6);
         model.TotalQuantity.Should().Be(30);
     }
 
@@ -650,6 +671,8 @@ public sealed class ShipmentExportQueryTests
         var privateLine = LineFor(item, 4);
         privateLine.IsPrivate = true;
 
+        Confirm(shipment, client, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client],
             orders: [order],
@@ -658,13 +681,15 @@ public sealed class ShipmentExportQueryTests
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        var product = model!.ClientStops.Single().Products.Single();
-        product.Quantity.Should().Be(24);
-        product.InvoicedQuantity.Should().Be(20);
+        // The private pieces are exactly what makes the billed number fall short of the delivered
+        // one: the stop drops 24, the invoice bills 20, and the four appear nowhere in the file.
+        model!.ClientStops.Single().TotalQuantity.Should().Be(24);
+        model.Invoices.Single().Parties.Single().Products
+            .Select(p => (p.Name, p.Quantity)).Should().Equal(("Pilsner Urquell", 20));
     }
 
     [Fact]
-    public async Task LoadAsync_OneClientOnTwoStops_BillsEachStopForWhatItDelivers()
+    public async Task LoadAsync_OneClientOnTwoStops_BillsBothDropsOnOneBlockWithoutDoubling()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -684,22 +709,24 @@ public sealed class ShipmentExportQueryTests
             ]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client], orders: [morning, afternoon], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        // One client, one set of invoices, two drops. Attributing the client's whole invoice to each
-        // of their stops would bill the run twice; each line lands on the stop that delivers it.
-        model!.Stops[0].Products.Select(p => (p.Name, p.InvoicedQuantity)).Should().Equal(("Pilsner Urquell", 24));
-        model.Stops[1].Products.Select(p => (p.Name, p.InvoicedQuantity)).Should().Equal(("Kozel 11", 6));
+        // One client, one confirmed row, two drops: both orders bill on the one block, each piece
+        // once. The route table still shows the two calls separately.
+        var party = model!.Invoices.Should().ContainSingle().Subject.Parties.Should().ContainSingle().Subject;
+        party.Products.Select(p => (p.Name, p.Quantity)).Should().Equal(("Kozel 11", 6), ("Pilsner Urquell", 24));
+        party.TotalQuantity.Should().Be(30);
 
-        model.Stops.Sum(s => s.TotalInvoicedQuantity).Should().Be(30);
+        model.Stops.Select(s => s.TotalQuantity).Should().Equal(24, 6);
     }
 
     [Fact]
-    public async Task LoadAsync_WarehouseStop_CarriesOurOwnAddressAndTheGoodsThatComeOffThere()
+    public async Task LoadAsync_WarehouseStop_CarriesOurOwnTownAndTheGoodsThatComeOffThere()
     {
         var shipmentId = Guid.NewGuid();
         var client = ClientBuilder.BuildEntity(name: "Hospoda", officialAddress: AddressBuilder.BuildEntity(city: "Brno"));
@@ -739,17 +766,13 @@ public sealed class ShipmentExportQueryTests
 
         // Spelled out from configuration — the stop has no address row behind it, which is why the
         // overview used to list it with no town at all.
-        warehouse.Street.Should().Be("Skladová 7");
-        warehouse.CityLine.Should().Be("460 01 Liberec");
         warehouse.City.Should().Be("Liberec");
 
         // And it hands goods over, so it reports a count rather than a dash.
         warehouse.Products.Select(p => p.Name).Should().Equal("Radegast");
         warehouse.TotalQuantity.Should().Be(3);
-        warehouse.Products.Single().InvoicedQuantity.Should().BeNull("nobody is billed for stock goods");
 
-        // It gets a sheet like a client stop, without being counted as a client.
-        model.SheetStops.Select(s => s.Order).Should().Equal(1, 2);
+        // It is a call on the route without being a client.
         model.ClientStops.Select(s => s.Order).Should().Equal(1);
         model.HasWarehouseStop.Should().BeTrue();
 
@@ -816,6 +839,9 @@ public sealed class ShipmentExportQueryTests
         // than as one with no lines and nobody's name on it.
         AddInvoice(shipment, kotva);
 
+        // The payer is the row the office confirms — one tick for the whole group.
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva, pivnice],
             orders: [payerOrder, kotvaOrder, pivniceOrder],
@@ -866,13 +892,14 @@ public sealed class ShipmentExportQueryTests
             stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, payer, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva], orders: [order], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        // The van never calls on the payer, so it gets no stop and no sheet.
+        // The van never calls on the payer, so it gets no stop of its own.
         model!.ClientStops.Select(s => s.ClientName).Should().Equal("Hospoda U Kotvy");
         model.ClientStops.Should().NotContain(s => s.ClientName == "Skupina Sever");
 
@@ -885,7 +912,7 @@ public sealed class ShipmentExportQueryTests
     }
 
     [Fact]
-    public async Task Build_SubClientStop_ReportsItsOwnPiecesAsInvoicedAndNamesThePayer()
+    public async Task Build_SubClientGoods_AreBilledOnThePayersBlockAndStillDeliveredToTheSubClient()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -908,25 +935,30 @@ public sealed class ShipmentExportQueryTests
 
         AssignInternalIds(shipment);
 
+        // The payer is the row the office confirms — the sub-client has none of its own, which is
+        // what makes one tick cover the whole group.
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva], orders: [order], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        var stop = model!.ClientStops.Single();
-        stop.InvoicedToClientName.Should().Be("Skupina Sever");
+        var block = model!.Invoices.Should().ContainSingle().Subject;
+        block.PayingClientName.Should().Be("Skupina Sever");
 
-        // Every piece is billed, just not to this client — reading only its own invoices would
-        // print 0 down the whole Fakturačně column of a sub-client's sheet.
-        stop.Products.Select(p => (p.Name, p.Quantity, p.InvoicedQuantity)).Should().Equal(
-            ("Pilsner Urquell", 24, 24),
-            ("Kozel 11", 6, 6));
+        // Every piece is billed, just not to the client that ordered it — and the party is where the
+        // office reads whose goods they were.
+        var party = block.Parties.Should().ContainSingle().Subject;
+        party.ClientName.Should().Be("Hospoda U Kotvy");
+        party.Products.Select(p => (p.Name, p.Quantity)).Should().Equal(("Kozel 11", 6), ("Pilsner Urquell", 24));
 
-        stop.TotalInvoicedQuantity.Should().Be(30);
+        // The van still drops all of it at the sub-client.
+        model.ClientStops.Single().TotalQuantity.Should().Be(30);
     }
 
     [Fact]
-    public async Task Build_ClientWithoutPayer_KeepsTodaysInvoicedAttribution()
+    public async Task Build_HandMovedLine_BillsOnTheTargetsBlockWithoutAPayerRelation()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -955,25 +987,24 @@ public sealed class ShipmentExportQueryTests
             LineFor(orderingOrder.OrderItems.Single(), 24),
             LineFor(payerOrder.OrderItems.Single(), 6));
 
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [ordering, payer], orders: [orderingOrder, payerOrder], outgoingShipments: [shipment]);
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        // Neither client is billed through anybody, so neither sheet claims it is.
-        model!.Stops[0].InvoicedToClientName.Should().BeNull();
-        model.Stops[1].InvoicedToClientName.Should().BeNull();
+        // No payer relation anywhere: this is one line the office moved by hand. It bills on the
+        // target's block as the ordering client's own party, and the ordering client — holding no
+        // invoice of its own — gets no block.
+        var block = model!.Invoices.Should().ContainSingle().Subject;
+        block.PayingClientName.Should().Be("Pivnice Sever");
+        block.Parties.Select(p => (p.ClientName, p.IsPayer)).Should().Equal(
+            ("Pivnice Sever", true),
+            ("Hospoda U Kotvy", false));
 
-        // And the column reads exactly what it read before the payer feature existed: a client with
-        // no payer reports the lines on its own invoices, whoever ordered them.
-        model.Stops[0].Products.Select(p => (p.Name, p.Quantity, p.InvoicedQuantity)).Should().Equal(
-            ("Pilsner Urquell", 24, 0));
-        model.Stops[1].Products.Select(p => (p.Name, p.Quantity, p.InvoicedQuantity)).Should().Equal(
-            ("Kozel 11", 6, 6),
-            ("Pilsner Urquell", 0, 24));
-
-        model.Stops[0].TotalInvoicedQuantity.Should().Be(0);
-        model.Stops[1].TotalInvoicedQuantity.Should().Be(30);
+        // Its own delivery is untouched, and so is the other client's.
+        model.Stops.Select(s => s.TotalQuantity).Should().Equal(24, 6);
     }
 
     [Fact]
@@ -1007,6 +1038,9 @@ public sealed class ShipmentExportQueryTests
         // a state AddShipmentInvoiceEndpoint and MoveInvoiceLineEndpoint both reach.
         AddInvoice(shipment, payer, LineFor(kotvaOrder.OrderItems.Single(), 24));
         AddInvoice(shipment, payer, LineFor(pivniceOrder.OrderItems.Single(), 6));
+
+        // One confirmed row, two invoices on it — both blocks share its number.
+        Confirm(shipment, payer, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva, pivnice],
@@ -1056,6 +1090,8 @@ public sealed class ShipmentExportQueryTests
 
         AssignInternalIds(shipment);
 
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva], orders: [payerOrder, kotvaOrder], outgoingShipments: [shipment]);
 
@@ -1075,7 +1111,7 @@ public sealed class ShipmentExportQueryTests
     }
 
     [Fact]
-    public async Task Build_SubClientLineMovedOntoAThirdClient_StillNamesThePayerOnTheStop()
+    public async Task Build_SubClientLineMovedOntoAThirdClient_BillsOnThatClientsBlockOnly()
     {
         var shipmentId = Guid.NewGuid();
 
@@ -1106,6 +1142,11 @@ public sealed class ShipmentExportQueryTests
             LineFor(kotvaOrder.OrderItems.Single(), 24),
             LineFor(thirdOrder.OrderItems.Single(), 6));
 
+        // Both the third client and the payer are confirmed, so nothing but the split itself
+        // decides which of them the pieces appear under.
+        Confirm(shipment, third, number: 1);
+        Confirm(shipment, payer, number: 2);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva, third],
             orders: [kotvaOrder, thirdOrder],
@@ -1113,20 +1154,14 @@ public sealed class ShipmentExportQueryTests
 
         var model = await Load(dbContext.Object, shipmentId);
 
-        var stop = model!.ClientStops.Single(s => s.ClientName == "Hospoda U Kotvy");
-
-        // The label states the standing relation, not where these particular pieces went: this
-        // client is billed through its payer, and that stays true when a line is moved off it.
-        stop.InvoicedToClientName.Should().Be("Skupina Sever");
-
-        // So a sheet can legitimately name a recipient that is billed nothing on this run.
-        stop.Products.Single().Quantity.Should().Be(24);
-        stop.Products.Single().InvoicedQuantity.Should().Be(0);
-
-        // The payer does hold an invoice here, but an empty one — so it contributes no block.
-        model.Invoices.Should().HaveCount(1);
+        // The payer holds an invoice here, but an empty one — the line went elsewhere — so it
+        // contributes no block even though its row is confirmed.
+        model!.Invoices.Should().ContainSingle();
         model.Invoices.Single().PayingClientName.Should().Be("Pivnice Sever");
         model.Invoices.Should().NotContain(i => i.PayingClientName == "Skupina Sever");
+
+        // The sub-client is still delivered to, whoever ended up being billed.
+        model.ClientStops.Single(st => st.ClientName == "Hospoda U Kotvy").TotalQuantity.Should().Be(24);
     }
 
     [Fact]
@@ -1162,6 +1197,8 @@ public sealed class ShipmentExportQueryTests
             Address = AddressBuilder.BuildEntity(streetName: "Stará", streetNumber: "1", zip: "602 00", city: "Brno")
         });
 
+        Confirm(shipment, payer, number: 1);
+
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [payer, kotva],
             orders: [order],
@@ -1191,6 +1228,7 @@ public sealed class ShipmentExportQueryTests
             stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
 
         AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             clients: [client], orders: [order], outgoingShipments: [shipment]);
@@ -1236,7 +1274,230 @@ public sealed class ShipmentExportQueryTests
         shipment.Invoices.Add(invoice);
     }
 
+    #region readiness and the export's own numbering
+
     /// <summary>
+    /// Marks a client's row as confirmed, as <c>SetInvoiceReadinessEndpoint</c> leaves it. Called
+    /// after <see cref="AssignInternalIds"/>, which is what gives the client its ID.
+    /// </summary>
+    private static void Confirm(OutgoingShipment shipment, Client client, int number, bool isReady = true) =>
+        shipment.InvoiceConfirmations.Add(new OutgoingShipmentInvoiceConfirmation
+        {
+            PublicId = Guid.NewGuid(),
+            OutgoingShipmentId = shipment.Id,
+            ClientId = client.Id,
+            Client = client,
+            Number = number,
+            IsReady = isReady
+        });
+
+    /// <summary>
+    /// Two clients, each ordering for itself — the fixture the numbering tests share.
+    /// </summary>
+    private static (OutgoingShipment Shipment, Client Kout, Client Lva, Order KoutOrder, Order LvaOrder)
+        TwoClientRun(Guid shipmentId)
+    {
+        var kout = ClientBuilder.BuildEntity(name: "Pivovar Kout", officialAddress: AddressBuilder.BuildEntity());
+        var lva = ClientBuilder.BuildEntity(name: "Hospoda U Lva", officialAddress: AddressBuilder.BuildEntity());
+
+        var koutOrder = OrderBuilder.BuildEntity(
+            client: kout, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var lvaOrder = OrderBuilder.BuildEntity(
+            client: lva, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = koutOrder },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = lvaOrder }
+            ]);
+
+        AssignInternalIds(shipment);
+
+        return (shipment, kout, lva, koutOrder, lvaOrder);
+    }
+
+    [Fact]
+    public async Task LoadAsync_UnconfirmedClient_IsAbsentFromTheInvoicePart()
+    {
+        var shipmentId = Guid.NewGuid();
+        var (shipment, kout, lva, koutOrder, lvaOrder) = TwoClientRun(shipmentId);
+
+        Confirm(shipment, lva, number: 1);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [kout, lva], orders: [koutOrder, lvaOrder], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Should().ContainSingle()
+            .Which.PayingClientName.Should().Be("Hospoda U Lva");
+    }
+
+    /// <summary>
+    /// The number is the office's own, so it leads the ordering: U Lva was confirmed first and
+    /// prints as 1 even though Kout is ahead of it on the route.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_ConfirmedClients_CarryTheirNumberAndSortByIt()
+    {
+        var shipmentId = Guid.NewGuid();
+        var (shipment, kout, lva, koutOrder, lvaOrder) = TwoClientRun(shipmentId);
+
+        Confirm(shipment, lva, number: 1);
+        Confirm(shipment, kout, number: 2);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [kout, lva], orders: [koutOrder, lvaOrder], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Select(i => (i.Number, i.PayingClientName)).Should()
+            .Equal((1, "Hospoda U Lva"), (2, "Pivovar Kout"));
+    }
+
+    /// <summary>
+    /// A row un-marked after being confirmed keeps its number but leaves the file — the number is
+    /// held so re-marking gives it back, not so the export prints it anyway.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_UnmarkedRow_IsAbsentDespiteHoldingItsNumber()
+    {
+        var shipmentId = Guid.NewGuid();
+        var (shipment, kout, lva, koutOrder, lvaOrder) = TwoClientRun(shipmentId);
+
+        Confirm(shipment, lva, number: 1, isReady: false);
+        Confirm(shipment, kout, number: 2);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [kout, lva], orders: [koutOrder, lvaOrder], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Select(i => (i.Number, i.PayingClientName)).Should().Equal((2, "Pivovar Kout"));
+    }
+
+    /// <summary>
+    /// Nothing confirmed is not nothing to export: the route is still the driver's page, so the
+    /// stops stay and only the invoice part is empty.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_NothingConfirmed_LeavesTheInvoicePartEmptyAndKeepsEveryStop()
+    {
+        var shipmentId = Guid.NewGuid();
+        var (shipment, kout, lva, koutOrder, lvaOrder) = TwoClientRun(shipmentId);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [kout, lva], orders: [koutOrder, lvaOrder], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Should().BeEmpty();
+        model.Stops.Should().HaveCount(2);
+        model.TotalQuantity.Should().Be(30);
+    }
+
+    /// <summary>
+    /// The stop sheets are gone, so what they carried — where the goods went, what the order said,
+    /// what comes back — has to travel on the party that ordered them.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_Party_CarriesTheOrderingClientsAddressNotesAndReturns()
+    {
+        var shipmentId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(
+            name: "Hospoda U Lva",
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Dlouhá", streetNumber: "14", city: "Brno", zip: "60200"));
+
+        var order = OrderBuilder.BuildEntity(
+            client: client,
+            orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)],
+            returns: [new OrderReturn { PublicId = Guid.NewGuid(), Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" }],
+            notes:
+            [
+                new OrderNote
+                {
+                    PublicId = Guid.NewGuid(), Text = "Dovézt dopoledne",
+                    DateCreated = new DateTime(2026, 7, 18, 9, 0, 0, DateTimeKind.Utc)
+                }
+            ]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops: [new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = order }]);
+
+        AssignInternalIds(shipment);
+        Confirm(shipment, client, number: 1);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client], orders: [order], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+        var party = model!.Invoices.Single().Parties.Single();
+
+        party.Street.Should().Be("Dlouhá 14");
+        party.CityLine.Should().Be("60200 Brno");
+        party.Notes.Should().Equal("Dovézt dopoledne");
+        party.Returns.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new { Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" });
+    }
+
+    /// <summary>
+    /// The reason the delivery details sit on the party rather than on the invoice: a payer with no
+    /// delivery of its own has no address to print, while the sub-clients inside its invoice each
+    /// have their own.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_PartiesOfAGroup_CarryEachSubClientsOwnDelivery()
+    {
+        var shipmentId = Guid.NewGuid();
+        var payer = ClientBuilder.BuildEntity(name: "Skupina Sever", officialAddress: AddressBuilder.BuildEntity());
+        var kotva = ClientBuilder.BuildEntity(
+            name: "Hospoda U Kotvy",
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Krátká", streetNumber: "2", city: "Zlín", zip: "76001"));
+        var pivnice = ClientBuilder.BuildEntity(
+            name: "Pivnice Sever",
+            officialAddress: AddressBuilder.BuildEntity(streetName: "Nádražní", streetNumber: "5", city: "Praha", zip: "11000"));
+
+        BillThrough(kotva, payer, PayerInternalId);
+        BillThrough(pivnice, payer, PayerInternalId);
+
+        var kotvaOrder = OrderBuilder.BuildEntity(
+            client: kotva, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var pivniceOrder = OrderBuilder.BuildEntity(
+            client: pivnice, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = kotvaOrder },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = pivniceOrder }
+            ]);
+
+        AssignInternalIds(shipment);
+        Confirm(shipment, payer, number: 1);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [payer, kotva, pivnice],
+            orders: [kotvaOrder, pivniceOrder],
+            outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+        var parties = model!.Invoices.Single().Parties;
+
+        parties.Select(p => p.ClientName).Should().Equal("Hospoda U Kotvy", "Pivnice Sever");
+        parties[0].Street.Should().Be("Krátká 2");
+        parties[0].CityLine.Should().Be("76001 Zlín");
+        parties[1].Street.Should().Be("Nádražní 5");
+        parties[1].CityLine.Should().Be("11000 Praha");
+    }
+
+    #endregion
+
+    /// <summary>
+
     /// One invoice line billing an order item, with the snapshot a real line records.
     /// </summary>
     private static OutgoingShipmentInvoiceLine LineFor(OrderItem item, int quantity) =>
