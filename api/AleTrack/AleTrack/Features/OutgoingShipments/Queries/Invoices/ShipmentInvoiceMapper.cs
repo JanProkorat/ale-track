@@ -61,7 +61,8 @@ public static class ShipmentInvoiceMapper
                 {
                     ClientId = c.Client?.PublicId ?? Guid.Empty,
                     Number = c.Number,
-                    IsReady = c.IsReady
+                    IsReady = c.IsReady,
+                    LastExportedAt = c.LastExportedAt
                 })
                 .OrderBy(c => c.Number)
                 .ToList(),

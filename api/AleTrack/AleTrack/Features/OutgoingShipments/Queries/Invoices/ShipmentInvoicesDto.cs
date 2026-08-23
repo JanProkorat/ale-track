@@ -59,6 +59,12 @@ public sealed record ShipmentInvoiceConfirmationDto
 
     /// <summary>Whether the row is currently marked finished.</summary>
     public bool IsReady { get; set; }
+
+    /// <summary>
+    /// When an export last carried this row, or null while none has — what the export drawer reads
+    /// to preselect the rows that have not gone out yet.
+    /// </summary>
+    public DateTime? LastExportedAt { get; set; }
 }
 
 /// <summary>

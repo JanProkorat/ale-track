@@ -119,8 +119,13 @@ office's invoicing document, and the drawer's own query is capability-guarded se
 Backend:
 
 - `ExportSelectionTests` — the selection narrows the invoice sections; the stamp lands on exactly the
-  chosen rows; re-exporting refreshes it; an empty selection and an unconfirmed client are both 400;
-  an unknown shipment is 404 and stamps nothing.
+  chosen rows; re-exporting refreshes it; both formats stamp alike; an empty selection, an
+  unconfirmed client and a since-unticked row are all 400; an unknown shipment is 404 and stamps
+  nothing.
+
+  Not covered: that a build which throws stamps nothing. The ordering in the handler is what
+  guarantees it and there is no cheap way to make the writers fail on a valid model — worth a test
+  the day one of them can.
 - `ShipmentExportQueryTests` — a selection excluding a confirmed row leaves it out of `Invoices`; no
   selection still means every confirmed row.
 - The confirmations DTO carries `lastExportedAt`.

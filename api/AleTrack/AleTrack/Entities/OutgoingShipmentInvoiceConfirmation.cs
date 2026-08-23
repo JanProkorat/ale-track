@@ -51,6 +51,17 @@ public sealed class OutgoingShipmentInvoiceConfirmation : PublicEntity
     public bool IsReady { get; set; }
 
     /// <summary>
+    /// When an export last carried this row, or null while none has. Refreshed by every export that
+    /// includes it — the last one is the file the office is holding.
+    /// </summary>
+    /// <remarks>
+    /// Never cleared. Un-marking the row does not unsend the file that carried it, and an edit
+    /// afterwards does not either; the office reads the date and decides whether to send it again.
+    /// </remarks>
+    [Column("last_exported_at")]
+    public DateTime? LastExportedAt { get; set; }
+
+    /// <summary>
     /// Shipment this confirmation belongs to
     /// </summary>
     public OutgoingShipment OutgoingShipment { get; set; } = null!;

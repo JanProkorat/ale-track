@@ -49,8 +49,12 @@ public sealed class ShipmentExportQueryTests
         Longitude = 15.06m
     };
 
+    /// <summary>
+    /// Loads with no selection — every confirmed row. Choosing a subset is covered by
+    /// <see cref="ExportSelectionTests"/>.
+    /// </summary>
     private static Task<ShipmentExportModel?> Load(AleTrackDbContext dbContext, Guid shipmentId) =>
-        ShipmentExportQuery.LoadAsync(dbContext, shipmentId, Company, CancellationToken.None);
+        ShipmentExportQuery.LoadAsync(dbContext, shipmentId, Company, null, CancellationToken.None);
 
     /// <summary>
     /// The one party billing a named client's goods, wherever in the invoice part it sits — the

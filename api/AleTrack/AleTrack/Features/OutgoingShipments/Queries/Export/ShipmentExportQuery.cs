@@ -38,11 +38,16 @@ public static class ShipmentExportQuery
     /// Our own address, for the warehouse stop — it is configuration, not a row, so the stop itself
     /// carries only a label and coordinates.
     /// </param>
+    /// <param name="clientIds">
+    /// Public IDs of the confirmed rows to carry, or null for every one of them. The office picks
+    /// them in the export drawer, so a run confirmed over a morning can send only what is new.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     public static async Task<ShipmentExportModel?> LoadAsync(
         AleTrackDbContext dbContext,
         Guid shipmentId,
         CompanyOptions company,
+        IReadOnlyCollection<Guid>? clientIds,
         CancellationToken ct)
     {
         var shipment = await dbContext.OutgoingShipments
@@ -160,7 +165,7 @@ public static class ShipmentExportQuery
         if (shipment is null)
             return null;
 
-        var invoicedSplit = await LoadInvoicedItemsAsync(dbContext, shipmentId, ct);
+        var invoicedSplit = await LoadInvoicedItemsAsync(dbContext, shipmentId, clientIds, ct);
 
         // Where each client's goods went, for the parties of the invoice part. The per-stop sheets
         // that used to carry the address, the order's notes and its vratky are gone, so the party
@@ -202,7 +207,10 @@ public static class ShipmentExportQuery
     /// invoice, so they are exactly what makes a billed number fall short of a delivered one.
     /// </remarks>
     private static async Task<InvoicedSplit> LoadInvoicedItemsAsync(
-        AleTrackDbContext dbContext, Guid shipmentId, CancellationToken ct)
+        AleTrackDbContext dbContext,
+        Guid shipmentId,
+        IReadOnlyCollection<Guid>? clientIds,
+        CancellationToken ct)
     {
         var split = await ShipmentInvoiceGraph.LoadReadOnlyAsync(dbContext, shipmentId, ct);
         if (split is null)
@@ -267,8 +275,11 @@ public static class ShipmentExportQuery
             // The office's own numbering, and what decides which invoices reach the file at all. An
             // un-marked row keeps its number so re-marking gives it back, so readiness is read here
             // rather than the number's mere presence.
+            // Ready *and* chosen. A null selection means every ready row, which is what a caller
+            // that does not choose — the query's own tests — reads.
             ReadyNumberByPayer = shipment.InvoiceConfirmations
                 .Where(c => c.IsReady)
+                .Where(c => clientIds is null || clientIds.Contains(c.Client?.PublicId ?? Guid.Empty))
                 .ToDictionary(c => c.ClientId, c => c.Number),
             ByInvoiceAndOrderer = lines
                 .GroupBy(x => (x.InvoiceId, x.OrdererId, x.SourceKind, x.SourceItemId))
