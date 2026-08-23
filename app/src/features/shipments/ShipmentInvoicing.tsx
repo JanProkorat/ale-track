@@ -58,6 +58,7 @@ import {
   type LineGroup,
 } from './shipmentInvoiceModel';
 import { BandBillingRecipients } from './BandBillingRecipients';
+import { Pill } from './Pill';
 import { kindLabel, invoiceAdjustmentKindName } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
@@ -74,27 +75,6 @@ const NOTE_LINE = '19px';
 /** Indent that lines a vratka row up with the "Vrací" header's text: the 14px
  *  icon plus the 7px (0.875) gap that follows it. */
 const RETURN_INDENT = '21px';
-
-function Pill({ tint, color, icon, children }: {
-  tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
-  color: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box
-      sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 23, px: 1.25,
-        borderRadius: 99, fontSize: 11.5, fontWeight: 700, color,
-        bgcolor: (t) => t.vars!.palette.brand[tint],
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {icon}
-      {children}
-    </Box>
-  );
-}
 
 /** Small provenance chip on a product row. */
 function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string }) {
@@ -535,61 +515,69 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                 key={band.clientId}
                 sx={{ py: 1.5, ...(index > 0 ? { borderTop: 1, borderColor: 'divider' } : null) }}
               >
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                  <Box
-                    sx={{
-                      width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
-                      bgcolor: colorForClient(band.clientId), color: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700,
-                    }}
-                  >
-                    {band.stopOrder ?? '?'}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
-                    {/* The client's rollup used to sit here. It is deliberately
-                        gone: the counts repeat on every invoice sub-header and
-                        in the section total, while the destination appears
-                        nowhere else on this screen. Outside the Collapse on
-                        purpose — the collapsed header is what the office scans
-                        down, and where the goods went is part of that scan. */}
-                    <BandAddressLine band={band} stops={stops} />
-                  </Box>
-                  {other > 0 && (
-                    <Pill tint="greyTint" color="text.secondary">
-                      {other} {plural(other, 'jiný klient', 'jiní klienti', 'jiných klientů')}
-                    </Pill>
+                {/* The billing-recipients chip and the "Fakturovat na" line both come off
+                    one hook instance (one query, one mutation) inside BandBillingRecipients,
+                    but land in two different spots of this header — the chip in the pill
+                    cluster, the line under the address. A render-prop keeps that single
+                    instance while letting each piece sit where the layout needs it. */}
+                <BandBillingRecipients shipmentId={shipmentId} band={band} canEdit={canEdit}>
+                  {(billing) => (
+                    <>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Box
+                          sx={{
+                            width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
+                            bgcolor: colorForClient(band.clientId), color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 12, fontWeight: 700,
+                          }}
+                        >
+                          {band.stopOrder ?? '?'}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
+                          {/* The client's rollup used to sit here. It is deliberately
+                              gone: the counts repeat on every invoice sub-header and
+                              in the section total, while the destination appears
+                              nowhere else on this screen. Outside the Collapse on
+                              purpose — the collapsed header is what the office scans
+                              down, and where the goods went is part of that scan. */}
+                          <BandAddressLine band={band} stops={stops} />
+                          {billing.invoicedToLine}
+                        </Box>
+                        {other > 0 && (
+                          <Pill tint="greyTint" color="text.secondary">
+                            {other} {plural(other, 'jiný klient', 'jiní klienti', 'jiných klientů')}
+                          </Pill>
+                        )}
+                        {band.crossBilled > 0 && (
+                          <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
+                        )}
+                        {billing.chip}
+                        {canEdit && (
+                          <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
+                            onClick={() => handleAdd(band.clientId)}>
+                            Faktura
+                          </Button>
+                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleBand(band.clientId)}
+                          aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
+                          sx={{
+                            width: 28, height: 28,
+                            transition: (t) => t.transitions.create('transform', {
+                              duration: t.transitions.duration.shortest,
+                            }),
+                            transform: collapsed.has(band.clientId) ? 'none' : 'rotate(180deg)',
+                          }}
+                        >
+                          <ExpandMoreIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Stack>
+                    </>
                   )}
-                  {band.crossBilled > 0 && (
-                    <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
-                  )}
-                  {canEdit && (
-                    <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
-                      onClick={() => handleAdd(band.clientId)}>
-                      Faktura
-                    </Button>
-                  )}
-                  <IconButton
-                    size="small"
-                    onClick={() => toggleBand(band.clientId)}
-                    aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
-                    sx={{
-                      width: 28, height: 28,
-                      transition: (t) => t.transitions.create('transform', {
-                        duration: t.transitions.duration.shortest,
-                      }),
-                      transform: collapsed.has(band.clientId) ? 'none' : 'rotate(180deg)',
-                    }}
-                  >
-                    <ExpandMoreIcon sx={{ fontSize: 17 }} />
-                  </IconButton>
-                </Stack>
-
-                {/* Under the header rather than inside the Collapse: which addresses the
-                    payer should invoice is a property of the band, and stays answerable
-                    while the product rows are folded away. */}
-                <BandBillingRecipients shipmentId={shipmentId} band={band} canEdit={canEdit} />
+                </BandBillingRecipients>
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
                   <BandNotes band={band} stops={stops} />

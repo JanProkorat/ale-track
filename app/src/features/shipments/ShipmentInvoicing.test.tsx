@@ -1070,15 +1070,28 @@ describe('fakturační adresy sub-klientů', () => {
     });
   }
 
-  const LABEL = 'Fakturační adresa pro Klient A';
-  const TOGGLE = 'Fakturační adresy sub-klientů';
+  function withSavedRecipients(...recipients: { clientId: string; clientName: string; addr: AddressDto }[]) {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({
+        lines: [line({ quantity: 10 })],
+        billingRecipients: recipients.map((r) =>
+          new ShipmentInvoiceBillingRecipientDto({
+            clientId: r.clientId, clientName: r.clientName, address: r.addr,
+          })),
+      })],
+    });
+  }
 
-  it('offers no toggle when the payer has no sub-clients at all', () => {
+  const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /fakturační adres/i }));
+
+  it('shows no chip when the payer has no sub-clients at all', () => {
     renderSection();
-    expect(screen.queryByLabelText(TOGGLE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
   });
 
-  it('offers no toggle when every sub-client lacks an official address', () => {
+  it('shows no chip when every sub-client lacks an official address', () => {
     clientDetails[CLIENT_A] = new ClientDto({
       id: CLIENT_A,
       name: 'Klient A',
@@ -1087,27 +1100,43 @@ describe('fakturační adresy sub-klientů', () => {
 
     renderSection();
 
-    expect(screen.queryByLabelText(TOGGLE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
   });
 
-  it('reveals the labelled multi-select only once the toggle is on', () => {
+  it('reads "Fakturační adresy" with nothing chosen', () => {
     payerWithSubClients();
     renderSection();
 
-    expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText(TOGGLE));
-
-    expect(screen.getByLabelText(LABEL)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fakturační adresy' })).toBeInTheDocument();
   });
 
-  it('lists every sub-client with an address and never one without', () => {
+  it('declines the count as "1 fakturační adresa" for one chosen address', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection();
+
+    expect(screen.getByRole('button', { name: '1 fakturační adresa' })).toBeInTheDocument();
+  });
+
+  it('declines the count as "2 fakturační adresy" for a 2-4 count', () => {
+    payerWithSubClients();
+    withSavedRecipients(
+      { clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') },
+      { clientId: SUB_B, clientName: 'Pivnice Na Rohu', addr: address('Dlouhá', 'Brno') },
+    );
+
+    renderSection();
+
+    expect(screen.getByRole('button', { name: '2 fakturační adresy' })).toBeInTheDocument();
+  });
+
+  it('lists every sub-client with an address and never one without, once opened', () => {
     payerWithSubClients();
     renderSection();
-    fireEvent.click(screen.getByLabelText(TOGGLE));
 
-    fireEvent.mouseDown(screen.getByLabelText(LABEL));
-    const menu = screen.getByRole('listbox');
+    openMenu();
+    const menu = screen.getByRole('menu');
 
     // Both offered even though neither has goods on this shipment — a payer may owe
     // an address for something billed elsewhere.
@@ -1119,15 +1148,14 @@ describe('fakturační adresy sub-klientů', () => {
     expect(within(menu).queryByText('Bez adresy')).not.toBeInTheDocument();
   });
 
-  it('saves the whole selection through the invoice', () => {
+  it('saves the whole selection through the invoice when a row is ticked', () => {
     payerWithSubClients();
     const inv = invoice({ lines: [line({ quantity: 10 })] });
     invoicesResponse = new ShipmentInvoicesDto({ isEditable: true, adjustments: [], invoices: [inv] });
 
     renderSection();
-    fireEvent.click(screen.getByLabelText(TOGGLE));
-    fireEvent.mouseDown(screen.getByLabelText(LABEL));
-    fireEvent.click(within(screen.getByRole('listbox')).getByText('Pivnice Na Rohu'));
+    openMenu();
+    fireEvent.click(within(screen.getByRole('menu')).getByText('Pivnice Na Rohu'));
 
     expect(setRecipientsMutate).toHaveBeenCalledWith(
       { invoiceId: inv.id, clientIds: [SUB_B] },
@@ -1135,47 +1163,45 @@ describe('fakturační adresy sub-klientů', () => {
     );
   });
 
-  it('starts open with the saved recipients ticked', () => {
+  it('opens with the saved recipients already ticked', () => {
     payerWithSubClients();
-    invoicesResponse = new ShipmentInvoicesDto({
-      isEditable: true,
-      adjustments: [],
-      invoices: [invoice({
-        lines: [line({ quantity: 10 })],
-        billingRecipients: [
-          new ShipmentInvoiceBillingRecipientDto({
-            clientId: SUB_A, clientName: 'Hospoda U Lípy', address: address('Nádražní', 'Praha'),
-          }),
-        ],
-      })],
-    });
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection();
+    openMenu();
+
+    const checkbox = within(screen.getByRole('menu')).getByRole('checkbox', { name: 'Hospoda U Lípy' });
+    expect(checkbox).toBeChecked();
+  });
+
+  it('shows the "Fakturovat na" line once something is chosen, none when nothing is', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
 
     renderSection();
 
-    // Visible without touching the toggle — a saved selection hidden behind an off
-    // toggle would read as no selection at all.
-    expect(screen.getByLabelText(LABEL)).toBeInTheDocument();
-    expect(screen.getByText('Hospoda U Lípy')).toBeInTheDocument();
+    expect(screen.getByText('Fakturovat na: Hospoda U Lípy')).toBeInTheDocument();
   });
 
-  it('is read-only when the rest of the section is', () => {
+  it('renders no "Fakturovat na" line when nothing is chosen', () => {
     payerWithSubClients();
-    invoicesResponse = new ShipmentInvoicesDto({
-      isEditable: true,
-      adjustments: [],
-      invoices: [invoice({
-        lines: [line({ quantity: 10 })],
-        billingRecipients: [
-          new ShipmentInvoiceBillingRecipientDto({
-            clientId: SUB_A, clientName: 'Hospoda U Lípy', address: address('Nádražní', 'Praha'),
-          }),
-        ],
-      })],
-    });
+    renderSection();
+
+    expect(screen.queryByText(/Fakturovat na/)).not.toBeInTheDocument();
+  });
+
+  it('with canEdit false the chip shows state but does not open', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
 
     renderSection(false);
 
-    expect(screen.getByLabelText(TOGGLE)).toBeDisabled();
-    expect(screen.getByLabelText(LABEL)).toHaveAttribute('aria-disabled', 'true');
+    // A plain span carrying the count, not a button — nothing to click.
+    expect(screen.queryByRole('button', { name: '1 fakturační adresa' })).not.toBeInTheDocument();
+    const chip = screen.getByText('1 fakturační adresa');
+
+    fireEvent.click(chip);
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
