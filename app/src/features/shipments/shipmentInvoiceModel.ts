@@ -44,6 +44,9 @@ export interface ClientBand {
   number?: number;
   /** Whether the office has marked this row finished — which is what puts it in the export. */
   isReady: boolean;
+  /** When an export last carried this row, or undefined while none has. What the export drawer
+   *  preselects by. */
+  lastExportedAt?: Date;
   invoices: ShipmentInvoiceDto[];
   /** Billed pieces only — private ones are counted separately. */
   quantity: number;
@@ -204,6 +207,7 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
         stopOrder,
         number: confirmation?.number,
         isReady: confirmation?.isReady ?? false,
+        lastExportedAt: confirmation?.lastExportedAt,
         invoices: [],
         quantity: 0,
         value: 0,

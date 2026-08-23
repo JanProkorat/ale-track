@@ -47,6 +47,10 @@ vi.mock('src/components/common/RouteMap', () => ({ RouteMap: () => <div data-tes
 vi.mock('./ShipmentInvoicing', () => ({
   ShipmentInvoicing: () => <div data-testid="shipment-invoicing" />,
 }));
+// Same reason: it reads the invoices query, which this file has no business standing up.
+vi.mock('./ExportSelectionDrawer', () => ({
+  ExportSelectionDrawer: () => <div data-testid="export-drawer" />,
+}));
 
 const shipment = new OutgoingShipmentDetailDto({
   id: '11111111-1111-1111-1111-111111111111',
@@ -106,5 +110,19 @@ describe('ShipmentDetail for a driver', () => {
     expect(screen.getByTestId('shipment-invoicing')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Nakládka' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Vykládka' })).toBeInTheDocument();
+  });
+
+  /** The file's body is the invoice split, and the rows it carries are chosen off the
+   *  capability-guarded invoices endpoint — so a driver has nothing to export. */
+  it('drops the export button along with the Fakturace section', () => {
+    renderDetail({ canSeeInvoicing: false, canSeeLoadingBreakdown: false });
+
+    expect(screen.queryByRole('button', { name: /^Export/ })).toBeNull();
+  });
+
+  it('keeps the export button for a user who can see the invoicing', () => {
+    renderDetail({ canSeeInvoicing: true, canSeeLoadingBreakdown: true });
+
+    expect(screen.getByRole('button', { name: /^Export/ })).toBeInTheDocument();
   });
 });

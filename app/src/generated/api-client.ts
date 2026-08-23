@@ -421,13 +421,13 @@ export interface IClient {
      * Exports an outgoing shipment to an .xlsx workbook
      * @return Workbook generated
      */
-    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+    exportOutgoingShipmentExcelEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse>;
 
     /**
      * Exports an outgoing shipment to a .docx document
      * @return Document generated
      */
-    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+    exportOutgoingShipmentWordEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse>;
 
     /**
      * Retrieves details of an existing outgoing shipment
@@ -5128,17 +5128,21 @@ export class Client implements IClient {
      * Exports an outgoing shipment to an .xlsx workbook
      * @return Workbook generated
      */
-    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+    exportOutgoingShipmentExcelEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/excel";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
+        const content_ = JSON.stringify(data);
+
         let options_: RequestInit = {
-            method: "GET",
+            body: content_,
+            method: "POST",
             signal,
             headers: {
+                "Content-Type": "application/json",
                 "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             }
         };
@@ -5162,6 +5166,10 @@ export class Client implements IClient {
                 fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
             }
             return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Nothing was chosen, or a chosen client has no confirmed row on the shipment", status, _responseText, _headers);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
             let result401: any = null;
@@ -5195,17 +5203,21 @@ export class Client implements IClient {
      * Exports an outgoing shipment to a .docx document
      * @return Document generated
      */
-    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+    exportOutgoingShipmentWordEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/word";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
+        const content_ = JSON.stringify(data);
+
         let options_: RequestInit = {
-            method: "GET",
+            body: content_,
+            method: "POST",
             signal,
             headers: {
+                "Content-Type": "application/json",
                 "Accept": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             }
         };
@@ -5229,6 +5241,10 @@ export class Client implements IClient {
                 fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
             }
             return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Nothing was chosen, or a chosen client has no confirmed row on the shipment", status, _responseText, _headers);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
             let result401: any = null;
@@ -16897,6 +16913,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
     clientId?: string;
     number?: number;
     isReady?: boolean;
+    lastExportedAt?: Date | undefined;
 
     constructor(data?: IShipmentInvoiceConfirmationDto) {
         if (data) {
@@ -16912,6 +16929,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
             this.clientId = _data["clientId"];
             this.number = _data["number"];
             this.isReady = _data["isReady"];
+            this.lastExportedAt = _data["lastExportedAt"] ? new Date(_data["lastExportedAt"].toString()) : undefined as any;
         }
     }
 
@@ -16927,6 +16945,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
         data["clientId"] = this.clientId;
         data["number"] = this.number;
         data["isReady"] = this.isReady;
+        data["lastExportedAt"] = this.lastExportedAt ? this.lastExportedAt.toISOString() : undefined as any;
         return data;
     }
 }
@@ -16935,6 +16954,7 @@ export interface IShipmentInvoiceConfirmationDto {
     clientId?: string;
     number?: number;
     isReady?: boolean;
+    lastExportedAt?: Date | undefined;
 }
 
 export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
@@ -16965,36 +16985,6 @@ export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
 }
 
 export interface IGetShipmentInvoicesRequest {
-}
-
-export class ExportOutgoingShipmentRequest implements IExportOutgoingShipmentRequest {
-
-    constructor(data?: IExportOutgoingShipmentRequest) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-    }
-
-    static fromJS(data: any): ExportOutgoingShipmentRequest {
-        data = typeof data === 'object' ? data : {};
-        let result = new ExportOutgoingShipmentRequest();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        return data;
-    }
-}
-
-export interface IExportOutgoingShipmentRequest {
 }
 
 export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
@@ -17187,6 +17177,53 @@ export interface IOutgoingShipmentDetailDto {
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
+}
+
+export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
+    clientIds!: string[];
+
+    constructor(data?: IExportOutgoingShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.clientIds = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["clientIds"])) {
+                this.clientIds = [] as any;
+                for (let item of _data["clientIds"])
+                    this.clientIds!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): ExportOutgoingShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExportOutgoingShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.clientIds)) {
+            data["clientIds"] = [];
+            for (let item of this.clientIds)
+                data["clientIds"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface IExportOutgoingShipmentDto {
+    clientIds: string[];
 }
 
 export class ShipmentVehicleDto implements IShipmentVehicleDto {
