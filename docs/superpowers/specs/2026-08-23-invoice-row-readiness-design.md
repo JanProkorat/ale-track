@@ -1,7 +1,7 @@
 # Fakturace — per-order readiness and the export's own numbering
 
 **Date:** 2026-08-23
-**Status:** Design approved, implementing
+**Status:** Implemented
 **Branch:** `feature/invoice-row-readiness` (off `dev`)
 **Extends:** `2026-08-21-linked-clients-invoicing-design.md`
 
@@ -159,8 +159,15 @@ writers keep sharing it, for the reason they always did.
 
 `ShipmentExportProduct.InvoicedQuantity`, `ShipmentExportStop.TotalInvoicedQuantity` and
 `ShipmentExportQuery.InvoicedQuantityFor` exist for the stop sheets' delivered-vs-billed pair and
-have no other reader once those sheets are gone; they are deleted rather than left dangling.
-`LoadInvoicedItemsAsync` stays — the invoice sections are built from its split.
+have no other reader once those sheets are gone; they are deleted rather than left dangling. With
+them go the two lookups that fed them (`InvoicedSplit.ByPayer`, `ByPayerAndOrderer`) and the
+cross-billed-in rows a stop table used to append. `LoadInvoicedItemsAsync` stays — the invoice
+sections are built from its split.
+
+`ShipmentExportStop` is trimmed to what the route table actually reports — order, client or label,
+warehouse flag, town, products — since street, city line, delivery place, notes, returns and
+"invoiced to" now travel on the party. `RawStop.PayerId`/`PayerName` and
+`RawProduct.SourceKind`/`SourceItemId` fed only the deleted attribution and go with it.
 
 ## Frontend
 
