@@ -490,6 +490,12 @@ export interface IClient {
     setLoadingStateEndpoint(id: string, data: SetLoadingStateDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Marks one client's invoice split on a shipment as finished
+     * @return Readiness stored
+     */
+    setInvoiceReadinessEndpoint(id: string, clientId: string, data: SetInvoiceReadinessDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets which sub-clients an invoice names as addresses to invoice
      * @return Selection saved
      */
@@ -5948,6 +5954,81 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment or product not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Marks one client's invoice split on a shipment as finished
+     * @return Readiness stored
+     */
+    setInvoiceReadinessEndpoint(id: string, clientId: string, data: SetInvoiceReadinessDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoices/clients/{ClientId}/readiness";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{ClientId}", encodeURIComponent("" + clientId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetInvoiceReadinessEndpoint(_response);
+        });
+    }
+
+    protected processSetInvoiceReadinessEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment invoicing can no longer be changed", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found, or the client has no row on its invoice split", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -16468,6 +16549,7 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
     privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
+    confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
 
     constructor(data?: IShipmentInvoicesDto) {
@@ -16495,6 +16577,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                 this.adjustments = [] as any;
                 for (let item of _data["adjustments"])
                     this.adjustments!.push(InvoiceAdjustmentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["confirmations"])) {
+                this.confirmations = [] as any;
+                for (let item of _data["confirmations"])
+                    this.confirmations!.push(ShipmentInvoiceConfirmationDto.fromJS(item));
             }
             this.isEditable = _data["isEditable"];
         }
@@ -16524,6 +16611,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
             for (let item of this.adjustments)
                 data["adjustments"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.confirmations)) {
+            data["confirmations"] = [];
+            for (let item of this.confirmations)
+                data["confirmations"].push(item ? item.toJSON() : undefined as any);
+        }
         data["isEditable"] = this.isEditable;
         return data;
     }
@@ -16533,6 +16625,7 @@ export interface IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
     privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
+    confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
 }
 
@@ -16798,6 +16891,50 @@ export enum InvoiceAdjustmentKind {
     QuantityAdded = 0,
     QuantityRemoved = 1,
     SourceRemoved = 2,
+}
+
+export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmationDto {
+    clientId?: string;
+    number?: number;
+    isReady?: boolean;
+
+    constructor(data?: IShipmentInvoiceConfirmationDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientId = _data["clientId"];
+            this.number = _data["number"];
+            this.isReady = _data["isReady"];
+        }
+    }
+
+    static fromJS(data: any): ShipmentInvoiceConfirmationDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentInvoiceConfirmationDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientId"] = this.clientId;
+        data["number"] = this.number;
+        data["isReady"] = this.isReady;
+        return data;
+    }
+}
+
+export interface IShipmentInvoiceConfirmationDto {
+    clientId?: string;
+    number?: number;
+    isReady?: boolean;
 }
 
 export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
@@ -18947,6 +19084,42 @@ export interface ISetLoadingStateDto {
     productId?: string;
     sequence?: number;
     state?: ShipmentLoadingState;
+}
+
+export class SetInvoiceReadinessDto implements ISetInvoiceReadinessDto {
+    isReady?: boolean;
+
+    constructor(data?: ISetInvoiceReadinessDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.isReady = _data["isReady"];
+        }
+    }
+
+    static fromJS(data: any): SetInvoiceReadinessDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetInvoiceReadinessDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["isReady"] = this.isReady;
+        return data;
+    }
+}
+
+export interface ISetInvoiceReadinessDto {
+    isReady?: boolean;
 }
 
 export class SetInvoiceBillingRecipientsDto implements ISetInvoiceBillingRecipientsDto {

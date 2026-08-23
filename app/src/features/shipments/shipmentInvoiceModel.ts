@@ -39,6 +39,11 @@ export interface ClientBand {
   clientId: string;
   clientName: string;
   stopOrder?: number;
+  /** Number the row was confirmed under, or undefined while nobody has confirmed it. Assigned by
+   *  the order the office ticks rows, never by the route, and kept if a row is un-ticked. */
+  number?: number;
+  /** Whether the office has marked this row finished — which is what puts it in the export. */
+  isReady: boolean;
   invoices: ShipmentInvoiceDto[];
   /** Billed pieces only — private ones are counted separately. */
   quantity: number;
@@ -182,13 +187,20 @@ export function isCrossBilled(
 export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
   const map = new Map<string, ClientBand>();
 
+  // A client the office has never ticked has no entry at all, which reads as unready with no
+  // number yet — the same absence the backend sends.
+  const confirmations = new Map((data.confirmations ?? []).map((c) => [c.clientId ?? '', c]));
+
   const bandFor = (clientId: string, clientName: string, stopOrder?: number) => {
     let band = map.get(clientId);
     if (!band) {
+      const confirmation = confirmations.get(clientId);
       band = {
         clientId,
         clientName,
         stopOrder,
+        number: confirmation?.number,
+        isReady: confirmation?.isReady ?? false,
         invoices: [],
         quantity: 0,
         value: 0,

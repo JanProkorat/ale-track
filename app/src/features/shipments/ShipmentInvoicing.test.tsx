@@ -17,6 +17,7 @@ import {
   LinkedClientDto,
   ProductKind,
   ShipmentInvoiceBillingRecipientDto,
+  ShipmentInvoiceConfirmationDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
@@ -28,6 +29,7 @@ const moveMutate = vi.fn();
 const addMutate = vi.fn();
 const deleteMutate = vi.fn();
 const setRecipientsMutate = vi.fn();
+const setReadinessMutate = vi.fn();
 /** Client detail per id — the billing-recipient dropdown reads its options off it. */
 let clientDetails: Record<string, ClientDto> = {};
 let invoicesResponse: ShipmentInvoicesDto | undefined;
@@ -42,6 +44,7 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
   useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
+  useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, isPending: false }),
 }));
 
 vi.mock('src/hooks/useClients', () => ({
@@ -1212,5 +1215,80 @@ describe('fakturační adresy sub-klientů', () => {
 
     // Read-only and empty: a chip here could never be filled in, so it is pure clutter.
     expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('marking a row finished', () => {
+  function confirmation(clientId: string, number: number, isReady = true) {
+    return new ShipmentInvoiceConfirmationDto({ clientId, number, isReady });
+  }
+
+  it('shows the row\'s own number on the badge, not the stop it is on', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ stopOrder: 4, lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 2)],
+    });
+
+    renderSection();
+
+    // The number the office writes onto the invoice — the route position it used to show has
+    // moved to the address line, which needs a stop to render at all.
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+  });
+
+  it('shows a dash while the row has never been marked', () => {
+    renderSection();
+
+    expect(screen.getByText('–')).toBeInTheDocument();
+  });
+
+  it('marks the row ready through the endpoint, keyed on the client', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hotovo – Klient A' }));
+
+    expect(setReadinessMutate).toHaveBeenCalledTimes(1);
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: true });
+  });
+
+  it('un-marks a row that is already ready', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection();
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Hotovo – Klient A' });
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(checkbox);
+
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: false });
+  });
+
+  it('offers no tick to a viewer who cannot edit, and reports a ready row as a chip', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection(false);
+
+    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Hotovo')).toBeInTheDocument();
+  });
+
+  it('says nothing about an unmarked row to a viewer who cannot edit', () => {
+    renderSection(false);
+
+    expect(screen.queryByText('Hotovo')).not.toBeInTheDocument();
   });
 });

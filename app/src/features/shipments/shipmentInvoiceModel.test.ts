@@ -4,6 +4,7 @@ import {
   Country,
   InvoiceLineSourceKind,
   ProductKind,
+  ShipmentInvoiceConfirmationDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
@@ -193,6 +194,39 @@ describe('toBands', () => {
     expect(bands.map((b) => b.clientName)).toEqual(['Klient A', 'Klient B']);
     expect(bands[0].invoices.map((i) => i.sequence)).toEqual([1, 2]);
     expect(bands[0].quantity).toBe(10);
+  });
+
+  it('attaches the confirmation number and readiness to the band it belongs to', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, lines: [line({ quantity: 1 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ quantity: 1, orderingClientId: CLIENT_B })] }),
+      ],
+      confirmations: [
+        new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_B, number: 1, isReady: true }),
+        new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_A, number: 2, isReady: false }),
+      ],
+    });
+
+    const bands = toBands(data);
+
+    // Still ordered by the route — the number says when the office confirmed the row, and the
+    // table is read down the route regardless.
+    expect(bands.map((b) => [b.clientId, b.number, b.isReady])).toEqual([
+      [CLIENT_A, 2, false],
+      [CLIENT_B, 1, true],
+    ]);
+  });
+
+  it('reads a band nobody has confirmed as unready with no number', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [invoice({ clientId: CLIENT_A, stopOrder: 1, lines: [line({ quantity: 1 })] })],
+    });
+
+    const band = toBands(data)[0];
+
+    expect(band.number).toBeUndefined();
+    expect(band.isReady).toBe(false);
   });
 
   it('sorts a client with no stop last — they only hold cross-billed lines', () => {
@@ -468,7 +502,7 @@ describe('invoiceParties', () => {
 
 describe('otherClientCount', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 
@@ -494,7 +528,7 @@ describe('otherClientCount', () => {
 
 describe('bandAddress', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 
@@ -586,7 +620,7 @@ describe('bandAddress', () => {
 
 describe('bandNotes', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 
@@ -629,7 +663,7 @@ describe('bandNotes', () => {
 
 describe('bandReturns', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 

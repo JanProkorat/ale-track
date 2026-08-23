@@ -17,9 +17,9 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TextField, Typography,
+  Box, Button, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions,
+  DialogContent, DialogTitle, FormControlLabel, IconButton, ListSubheader, MenuItem, Stack, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
@@ -46,7 +46,8 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useShipmentInvoices,
+  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useSetInvoiceReadiness,
+  useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
@@ -96,6 +97,13 @@ function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string })
 
 /** Where this client's goods actually go, under their name in the band header.
  *  Renders nothing when the address can't be resolved — see `bandAddress`. */
+/** Where this band's goods go, led by the stop's position on the route.
+ *
+ *  The route position used to be the badge; the badge now carries the row's own
+ *  fakturační number, which is what the office writes onto the invoice. It moves
+ *  here rather than being dropped, because the route is still how the office and
+ *  the driver talk about a stop. A payer with no delivery of its own has no
+ *  position to show. */
 function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
   const address = bandAddress(band, stops);
   if (!address) return null;
@@ -104,6 +112,7 @@ function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShi
     <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0 }}>
       <PlaceOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
       <Typography sx={{ fontSize: 11.5, color: 'text.secondary', minWidth: 0 }} noWrap>
+        {band.stopOrder !== undefined && `Zastávka ${band.stopOrder} · `}
         {address.text}
       </Typography>
       {address.placeName && (
@@ -382,6 +391,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const move = useMoveInvoiceLine(shipmentId);
   const addInvoice = useAddShipmentInvoice(shipmentId);
   const deleteInvoice = useDeleteShipmentInvoice(shipmentId);
+  const setReadiness = useSetInvoiceReadiness(shipmentId);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [driftDismissed, setDriftDismissed] = useState(false);
@@ -434,6 +444,15 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         setCollapsed((prev) => { const n = new Set(prev); n.delete(clientId); return n; });
         enqueueSnackbar('Faktura vytvořena', { variant: 'success' });
       },
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+    });
+  };
+
+  const handleReadiness = (band: ClientBand, isReady: boolean) => {
+    setReadiness.mutate({ clientId: band.clientId, isReady }, {
+      onSuccess: () => enqueueSnackbar(
+        isReady ? 'Objednávka označena jako hotová' : 'Označení hotovo zrušeno',
+        { variant: 'success' }),
       onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
     });
   };
@@ -532,7 +551,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                             fontSize: 12, fontWeight: 700,
                           }}
                         >
-                          {band.stopOrder ?? '?'}
+                          {band.number ?? '–'}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
@@ -554,6 +573,28 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                           <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
                         )}
                         {billing.chip}
+                        {/* What puts the row in the export file, and what gives it its number. A
+                            payer's tick covers its whole group — the sub-clients have no row of
+                            their own. Deliberately not a lock: the office can still fix a mistake
+                            found after ticking, exactly as before. */}
+                        {canEdit ? (
+                          <FormControlLabel
+                            sx={{ mr: 0, ml: 0.5, '& .MuiFormControlLabel-label': { fontSize: 12.5 } }}
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={band.isReady}
+                                disabled={setReadiness.isPending}
+                                onChange={(e) => handleReadiness(band, e.target.checked)}
+                                inputProps={{ 'aria-label': `Hotovo – ${band.clientName}` }}
+                                sx={{ p: 0.5 }}
+                              />
+                            }
+                            label="Hotovo"
+                          />
+                        ) : (
+                          band.isReady && <Pill tint="okTint" color="success.main">Hotovo</Pill>
+                        )}
                         {canEdit && (
                           <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
                             onClick={() => handleAdd(band.clientId)}>

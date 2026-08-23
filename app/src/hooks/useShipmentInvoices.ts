@@ -1,4 +1,4 @@
-// Invoice split of an outgoing shipment (Fakturace) — read plus the three edits
+// Invoice split of an outgoing shipment (Fakturace) — read plus the edits
 // the section offers. Deliberately its own query rather than part of the shipment
 // detail: nakládka and fakturace answer different questions for different people,
 // so they load independently.
@@ -14,6 +14,7 @@ import {
   AddShipmentInvoiceDto,
   MoveInvoiceLineDto,
   SetInvoiceBillingRecipientsDto,
+  SetInvoiceReadinessDto,
   type InvoiceLineSourceKind,
 } from 'src/generated/api-client';
 
@@ -64,6 +65,22 @@ export function useDeleteShipmentInvoice(shipmentId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (invoiceId: string) => ds.deleteShipmentInvoiceEndpoint(shipmentId!, invoiceId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+  });
+}
+
+export interface SetInvoiceReadinessArgs {
+  /** Client whose row is being ticked — the payer, which is what covers a whole sub-client group. */
+  clientId: string;
+  isReady: boolean;
+}
+
+export function useSetInvoiceReadiness(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, isReady }: SetInvoiceReadinessArgs) =>
+      ds.setInvoiceReadinessEndpoint(shipmentId!, clientId, new SetInvoiceReadinessDto({ isReady })),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
   });
 }
