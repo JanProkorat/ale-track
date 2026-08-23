@@ -1,7 +1,7 @@
 # Choosing what goes into the export, and remembering what went
 
 **Date:** 2026-08-23
-**Status:** Design approved, implementing
+**Status:** Implemented
 **Branch:** `feature/invoice-row-readiness`
 **Extends:** `2026-08-23-invoice-row-readiness-design.md`
 
