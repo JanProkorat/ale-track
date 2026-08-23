@@ -135,6 +135,27 @@ describe('client bands', () => {
     expect(screen.queryByText(/1 faktura · 10 ks/)).not.toBeInTheDocument();
   });
 
+  it("shows the client's trading name in the band header when it has one", () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientName: 'Luděk Pachl', clientBusinessName: 'Pachl s.r.o.', lines: [line({ quantity: 3 })] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/Pachl s\.r\.o\./)).toBeInTheDocument();
+  });
+
+  it('shows the client name alone when there is no trading name', () => {
+    renderSection();
+
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+    expect(screen.queryByText(/Klient A ·/)).not.toBeInTheDocument();
+  });
+
   it('omits the per-invoice sub-header when the client has only one invoice', () => {
     renderSection();
 

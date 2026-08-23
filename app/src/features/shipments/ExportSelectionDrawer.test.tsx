@@ -32,11 +32,17 @@ const KOUT = 'client-kout';
 const LVA = 'client-lva';
 const BESEDA = 'client-beseda';
 
-function invoice(clientId: string, clientName: string, quantity: number): ShipmentInvoiceDto {
+function invoice(
+  clientId: string,
+  clientName: string,
+  quantity: number,
+  clientBusinessName?: string,
+): ShipmentInvoiceDto {
   return new ShipmentInvoiceDto({
     id: `inv-${clientId}`,
     clientId,
     clientName,
+    clientBusinessName,
     sequence: 1,
     stopOrder: 1,
     lines: [
@@ -63,7 +69,7 @@ function split(over: { lvaExportedAt?: Date; koutExportedAt?: Date } = {}) {
     isEditable: true,
     adjustments: [],
     invoices: [
-      invoice(LVA, 'Hospoda U Lva', 10),
+      invoice(LVA, 'Hospoda U Lva', 10, 'U Lva gastro s.r.o.'),
       invoice(KOUT, 'Pivovar Kout', 7),
       invoice(BESEDA, 'Beseda', 4),
     ],
@@ -126,6 +132,17 @@ describe('which rows it offers', () => {
 
     expect(screen.getByText(/Žádná objednávka není označená jako hotová/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Excel' })).toBeDisabled();
+  });
+
+  // Two clients can genuinely share a name; the trading name is what tells them apart, and the
+  // office has to be able to read it before ticking a row into a file.
+  it("shows the client's trading name beside its name, and nothing when it has none", () => {
+    renderDrawer();
+
+    expect(within(screen.getByTestId(`export-row-${LVA}`)).getByText(/U Lva gastro s\.r\.o\./))
+      .toBeInTheDocument();
+    // Kout has none, so its row carries its name alone — no separator, nothing after it.
+    expect(within(screen.getByTestId(`export-row-${KOUT}`)).queryByText(/·/)).not.toBeInTheDocument();
   });
 
   it('reports a failed load rather than an empty list', () => {
@@ -256,7 +273,7 @@ describe('exporting', () => {
   it('shows each row with its number, pieces and value', () => {
     renderDrawer();
 
-    const row = screen.getByRole('checkbox', { name: 'Hospoda U Lva' }).closest('div')!.parentElement!;
+    const row = screen.getByTestId(`export-row-${LVA}`);
     expect(within(row).getByText('1')).toBeInTheDocument();
     expect(within(row).getByText('10 ks')).toBeInTheDocument();
     expect(within(row).getByText('1000 Kč')).toBeInTheDocument();

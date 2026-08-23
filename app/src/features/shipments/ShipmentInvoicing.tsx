@@ -554,7 +554,20 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                           {band.number ?? '–'}
                         </Box>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
+                          {/* The trading name follows the client's own, dimmer and on the same
+                              line: two clients can genuinely share a name, and the band header is
+                              where the office recognises which one it is looking at. */}
+                          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>
+                            {band.clientName}
+                            {band.clientBusinessName && (
+                              <Typography
+                                component="span"
+                                sx={{ fontSize: 12, fontWeight: 500, color: 'text.secondary' }}
+                              >
+                                {` · ${band.clientBusinessName}`}
+                              </Typography>
+                            )}
+                          </Typography>
                           {/* The client's rollup used to sit here. It is deliberately
                               gone: the counts repeat on every invoice sub-header and
                               in the section total, while the destination appears

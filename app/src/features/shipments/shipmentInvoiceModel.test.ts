@@ -234,6 +234,26 @@ describe('toBands', () => {
     expect(toBands(data).map((b) => b.clientId)).toEqual([CLIENT_B, 'client-c', CLIENT_A]);
   });
 
+  it("carries the client's trading name onto the band", () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Luděk Pachl', clientBusinessName: 'Pachl s.r.o.',
+          stopOrder: 1, lines: [line({ quantity: 1 })],
+        }),
+        invoice({
+          clientId: CLIENT_B, clientName: 'Rebner', stopOrder: 2,
+          lines: [line({ quantity: 1, orderingClientId: CLIENT_B })],
+        }),
+      ],
+    });
+
+    const bands = toBands(data);
+
+    expect(bands[0].clientBusinessName).toBe('Pachl s.r.o.');
+    expect(bands[1].clientBusinessName).toBeUndefined();
+  });
+
   it('reads a band nobody has confirmed as unready with no number', () => {
     const data = new ShipmentInvoicesDto({
       invoices: [invoice({ clientId: CLIENT_A, stopOrder: 1, lines: [line({ quantity: 1 })] })],

@@ -43,6 +43,7 @@ function ExportRow({ band, checked, onToggle }: {
       spacing={1.25}
       alignItems="center"
       onClick={onToggle}
+      data-testid={`export-row-${band.clientId}`}
       sx={{
         px: 1.25, py: 1, borderRadius: 2, border: 1, cursor: 'pointer',
         // The app's selected-row idiom — amber border over the amber tint, as the order
@@ -72,7 +73,16 @@ function ExportRow({ band, checked, onToggle }: {
         {band.number ?? '–'}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700 }} noWrap>{band.clientName}</Typography>
+        {/* Trading name on the same line rather than a third one: the row is two lines by design,
+            and the export stamp needs the second. */}
+        <Typography sx={{ fontSize: 13.5, fontWeight: 700 }} noWrap>
+          {band.clientName}
+          {band.clientBusinessName && (
+            <Typography component="span" sx={{ fontSize: 12, fontWeight: 500, color: 'text.secondary' }}>
+              {` · ${band.clientBusinessName}`}
+            </Typography>
+          )}
+        </Typography>
         <Typography sx={{ fontSize: 11.5, color: exported ? 'warning.dark' : 'text.secondary' }}>
           {exported ? `Exportováno ${fmtStamp(exported)}` : 'Zatím neexportováno'}
         </Typography>

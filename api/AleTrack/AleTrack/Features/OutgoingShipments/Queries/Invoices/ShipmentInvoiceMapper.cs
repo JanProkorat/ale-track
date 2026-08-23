@@ -30,6 +30,7 @@ public static class ShipmentInvoiceMapper
                 Id = invoice.PublicId,
                 ClientId = invoice.Client?.PublicId ?? Guid.Empty,
                 ClientName = invoice.Client?.Name ?? string.Empty,
+                ClientBusinessName = invoice.Client?.BusinessName,
                 ClientOfficialAddress = invoice.Client?.OfficialAddress?.ToDto(),
                 Sequence = invoice.Sequence,
                 StopOrder = stopOrders.TryGetValue(invoice.ClientId, out var order) ? order : null,

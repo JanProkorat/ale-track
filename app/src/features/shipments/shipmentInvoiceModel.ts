@@ -38,6 +38,9 @@ export interface LineGroup {
 export interface ClientBand {
   clientId: string;
   clientName: string;
+  /** The client's trading name, when it has one — what tells two clients of the same name apart.
+   *  Read off the band's first invoice; a band holding only private pieces has none to read. */
+  clientBusinessName?: string;
   stopOrder?: number;
   /** Number the row was confirmed under, or undefined while nobody has confirmed it. Assigned by
    *  the order the office ticks rows, never by the route, and kept if a row is un-ticked. */
@@ -197,13 +200,19 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
   // number yet — the same absence the backend sends.
   const confirmations = new Map((data.confirmations ?? []).map((c) => [c.clientId ?? '', c]));
 
-  const bandFor = (clientId: string, clientName: string, stopOrder?: number) => {
+  const bandFor = (
+    clientId: string,
+    clientName: string,
+    stopOrder?: number,
+    clientBusinessName?: string,
+  ) => {
     let band = map.get(clientId);
     if (!band) {
       const confirmation = confirmations.get(clientId);
       band = {
         clientId,
         clientName,
+        clientBusinessName,
         stopOrder,
         number: confirmation?.number,
         isReady: confirmation?.isReady ?? false,
@@ -221,7 +230,12 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
   };
 
   for (const invoice of data.invoices ?? []) {
-    const band = bandFor(invoice.clientId ?? '', invoice.clientName ?? '—', invoice.stopOrder);
+    const band = bandFor(
+      invoice.clientId ?? '',
+      invoice.clientName ?? '—',
+      invoice.stopOrder,
+      invoice.clientBusinessName,
+    );
     band.invoices.push(invoice);
     band.quantity += invoiceQuantity(invoice);
     band.value += invoiceValue(invoice);

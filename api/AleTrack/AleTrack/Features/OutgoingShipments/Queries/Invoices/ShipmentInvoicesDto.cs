@@ -82,6 +82,11 @@ public sealed record ShipmentInvoiceDto
     public string ClientName { get; set; } = null!;
 
     /// <summary>
+    /// The client's trading name, when it has one — what tells two clients of the same name apart.
+    /// </summary>
+    public string? ClientBusinessName { get; set; }
+
+    /// <summary>
     /// Official (billing) address of the client this invoice is issued to, when it has one — the
     /// client may have none, e.g. when it only ever pays for others' goods.
     /// </summary>

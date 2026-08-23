@@ -16649,6 +16649,7 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
     id?: string;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     clientOfficialAddress?: AddressDto | undefined;
     sequence?: number;
     stopOrder?: number | undefined;
@@ -16669,6 +16670,7 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
             this.id = _data["id"];
             this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
+            this.clientBusinessName = _data["clientBusinessName"];
             this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
             this.sequence = _data["sequence"];
             this.stopOrder = _data["stopOrder"];
@@ -16697,6 +16699,7 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
         data["id"] = this.id;
         data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
+        data["clientBusinessName"] = this.clientBusinessName;
         data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
         data["sequence"] = this.sequence;
         data["stopOrder"] = this.stopOrder;
@@ -16718,6 +16721,7 @@ export interface IShipmentInvoiceDto {
     id?: string;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
     clientOfficialAddress?: AddressDto | undefined;
     sequence?: number;
     stopOrder?: number | undefined;
