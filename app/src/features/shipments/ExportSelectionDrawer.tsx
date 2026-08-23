@@ -44,11 +44,13 @@ function ExportRow({ band, checked, onToggle }: {
       alignItems="center"
       onClick={onToggle}
       sx={{
-        px: 1.25, py: 1, borderRadius: 1.5, border: 1, cursor: 'pointer',
-        borderColor: exported ? 'transparent' : 'divider',
-        // Tinted rather than dimmed: an already-exported row is a normal choice, not a
-        // disabled one, and greying it out would say otherwise.
-        bgcolor: (t) => (exported ? t.vars!.palette.brand.amberTint : 'transparent'),
+        px: 1.25, py: 1, borderRadius: 2, border: 1, cursor: 'pointer',
+        // The app's selected-row idiom — amber border over the amber tint, as the order
+        // editor's product rows use (`ProductRow` in OrderEditor.tsx). It marks what is
+        // ticked, never what has already been exported: that is what the line under the
+        // client's name says, and one colour cannot mean two things on one row.
+        borderColor: checked ? 'warning.main' : 'divider',
+        bgcolor: (t) => (checked ? t.vars!.palette.brand.amberTint : 'transparent'),
       }}
     >
       <Checkbox
