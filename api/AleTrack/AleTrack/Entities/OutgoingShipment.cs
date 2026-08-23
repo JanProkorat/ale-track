@@ -105,6 +105,13 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentInvoice> Invoices { get; set; } = [];
 
     /// <summary>
+    /// Rows of the invoice split the office has confirmed as finished, with the numbers they were
+    /// confirmed under. A row nobody has ever marked has no entry here.
+    /// </summary>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ICollection<OutgoingShipmentInvoiceConfirmation> InvoiceConfirmations { get; set; } = [];
+
+    /// <summary>
     /// Invoices the brewery issues to us for the goods picked up on this run.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]

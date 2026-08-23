@@ -27,9 +27,38 @@ public sealed record ShipmentInvoicesDto
     public List<InvoiceAdjustmentDto> Adjustments { get; set; } = [];
 
     /// <summary>
+    /// Rows the office has confirmed as finished, with the numbers they were confirmed under. A
+    /// client that was never marked is simply absent — read that as unready, with no number yet.
+    /// </summary>
+    public List<ShipmentInvoiceConfirmationDto> Confirmations { get; set; } = [];
+
+    /// <summary>
     /// Whether the split may still be edited (false once the shipment is delivered or cancelled).
     /// </summary>
     public bool IsEditable { get; set; }
+}
+
+/// <summary>
+/// One client's row of the split, marked finished and numbered.
+/// </summary>
+/// <remarks>
+/// Its own list rather than a field on <see cref="ShipmentInvoiceDto"/>: readiness belongs to the
+/// client's row, and repeating it on each of a client's invoices would invite the copies to
+/// disagree.
+/// </remarks>
+public sealed record ShipmentInvoiceConfirmationDto
+{
+    /// <summary>Public ID of the client whose row this is.</summary>
+    public Guid ClientId { get; set; }
+
+    /// <summary>
+    /// Number the export prints the row under, from 1 per shipment. Kept when the row is
+    /// un-marked, so re-marking gives the same number back.
+    /// </summary>
+    public int Number { get; set; }
+
+    /// <summary>Whether the row is currently marked finished.</summary>
+    public bool IsReady { get; set; }
 }
 
 /// <summary>
