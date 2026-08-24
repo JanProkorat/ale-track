@@ -1029,18 +1029,33 @@ describe("a payer's band: each sub-client's own order", () => {
 
   /// The payer takes no delivery of its own, so reading the band's own stop found nothing at all —
   /// which is how every sub-client's note and vratka went missing from this screen.
-  it("shows each sub-client's notes and vratky, named", () => {
+  it("shows each sub-client's notes and vratky under its own goods", () => {
     renderSection(true, payerBand());
 
-    // Named, because two clients' orders are on this one band and a bare note or vratka could
-    // belong to either.
-    const hohmann = screen.getByTestId(`party-details-${CLIENT_A}`);
-    expect(within(hohmann).getByText('Andreas Hohmann')).toBeInTheDocument();
-    expect(within(hohmann).getByText('Platí za pivo 822 EUR')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`party-details-${CLIENT_A}`)).getByText('Platí za pivo 822 EUR'))
+      .toBeInTheDocument();
+    expect(within(screen.getByTestId(`party-details-${CLIENT_B}`)).getByText('Sud 30l KEG'))
+      .toBeInTheDocument();
+  });
 
-    const chorvatka = screen.getByTestId(`party-details-${CLIENT_B}`);
-    expect(within(chorvatka).getByText('Chorvatka')).toBeInTheDocument();
-    expect(within(chorvatka).getByText('Sud 30l KEG')).toBeInTheDocument();
+  /// The client's group in the table already names it; a second block underneath named it again,
+  /// which is what made a payer's band read as two lists of the same clients.
+  it('names each sub-client exactly once', () => {
+    renderSection(true, payerBand());
+
+    expect(screen.getAllByText('Andreas Hohmann')).toHaveLength(1);
+    expect(screen.getAllByText('Chorvatka')).toHaveLength(1);
+  });
+
+  // Its detail closes its own group, so it sits between that client's goods and the next client.
+  it("keeps a sub-client's detail inside its group", () => {
+    renderSection(true, payerBand());
+
+    const hohmannDetail = screen.getByTestId(`party-details-${CLIENT_A}`);
+    const chorvatka = screen.getByText('Chorvatka');
+
+    expect(hohmannDetail.compareDocumentPosition(chorvatka) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 
   // A client with neither note nor vratka has nothing to show, and an empty block headed by its
@@ -1065,7 +1080,7 @@ describe("a payer's band: each sub-client's own order", () => {
     renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], [])]);
 
     expect(screen.getByTestId(`party-details-${CLIENT_A}`)).toBeInTheDocument();
-    // Chorvatka has neither, so it gets no block — an empty one under its name would read as "no
+    // Chorvatka has neither, so its group closes with its goods — an empty block would read as "no
     // instructions".
     expect(screen.queryByTestId(`party-details-${CLIENT_B}`)).not.toBeInTheDocument();
     expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();

@@ -53,7 +53,7 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandPartyDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  bandAddress, bandOrderDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
   invoiceValue, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
@@ -529,7 +529,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
           ) : (
             bands.map((band, index) => {
               const other = otherClientCount(band);
-              const partyDetails = bandPartyDetails(band, stops);
+              const orderDetails = bandOrderDetails(band, stops);
               return (
               <Box
                 key={band.clientId}
@@ -744,6 +744,25 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                   />,
                                 );
                               }
+
+                              // What the client's own order said and what it hands back, closing
+                              // its group. Inside the table because the party row above already
+                              // names the client: a block of its own underneath named it twice.
+                              const detail = orderDetails.inTable.get(partyKey);
+                              if (detail) {
+                                rows.push(
+                                  <TableRow key={`${partyKey}-detail`}>
+                                    <TableCell
+                                      colSpan={4}
+                                      sx={{ py: 1, borderBottom: 0 }}
+                                      data-testid={`party-details-${party.clientId}`}
+                                    >
+                                      <BandNotes notes={detail.notes} />
+                                      <BandReturns returns={detail.returns} />
+                                    </TableCell>
+                                  </TableRow>,
+                                );
+                              }
                             }
                             return rows;
                           })}
@@ -778,18 +797,14 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                       </Table>
                     </TableContainer>
                   </Card>
-                  {/* Below the products, not above: what the order said and what the client
-                      hands back both read after what is being billed.
+                  {/* Below the products, not above: what the order said and what the client hands
+                      back both read after what is being billed.
 
-                      One block per client whose goods this band bills, not one for the band: a
-                      payer's band carries several clients' orders, and every note and vratka on it
-                      belongs to one of them. The client is named only when there is more than one
-                      to tell apart — an ordinary band reads exactly as it always did. */}
-                  {partyDetails.map((party) => (
+                      Only for a client the table never names — an ordinary band, whose whole table
+                      is that one client's. Where the table does name clients, each one's detail sits
+                      inside its own group instead. */}
+                  {orderDetails.below.map((party) => (
                     <Box key={party.clientId} data-testid={`party-details-${party.clientId}`}>
-                      {partyDetails.length > 1 && (
-                        <Typography sx={{ ...HEAD_SX, mt: 1.5 }}>{party.clientName}</Typography>
-                      )}
                       <BandNotes notes={party.notes} />
                       <BandReturns returns={party.returns} />
                     </Box>

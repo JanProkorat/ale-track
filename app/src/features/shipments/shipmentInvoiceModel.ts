@@ -488,6 +488,57 @@ export function bandPartyDetails(
   return [...seen.values()].filter((party) => party.notes.length > 0 || party.returns.length > 0);
 }
 
+/** Where a band's per-client order detail belongs. */
+export interface BandOrderDetails {
+  /**
+   * Detail that renders inside the invoice table, under the party block that already names the
+   * client. Keyed by `${invoiceId}:${clientId}`, the key the table builds its party rows with.
+   */
+  inTable: Map<string, PartyOrderDetails>;
+  /**
+   * Detail of a client the table never names — an ordinary band's single client, whose whole table
+   * is its own. It renders under the table instead.
+   */
+  below: PartyOrderDetails[];
+}
+
+/**
+ * Splits a band's order detail into the two places it can go, so no client is named twice.
+ *
+ * The table names a client only where an invoice bills more than one — that is where its party
+ * rows appear — and that heading is the client's group. Its notes and vratky belong inside that
+ * group, not in a second block underneath repeating the name.
+ *
+ * A client billed on two of the band's invoices is named by both, and its order is still one order:
+ * the detail goes under the first block that names it, never under each.
+ */
+export function bandOrderDetails(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): BandOrderDetails {
+  const details = new Map(bandPartyDetails(band, stops).map((party) => [party.clientId, party]));
+  const inTable = new Map<string, PartyOrderDetails>();
+  const claimed = new Set<string>();
+
+  for (const invoice of band.invoices) {
+    const parties = invoiceParties(invoice);
+    if (parties.length <= 1) continue;
+
+    for (const party of parties) {
+      const detail = details.get(party.clientId);
+      if (!detail || claimed.has(party.clientId)) continue;
+
+      claimed.add(party.clientId);
+      inTable.set(`${invoice.id}:${party.clientId}`, detail);
+    }
+  }
+
+  return {
+    inTable,
+    below: [...details.values()].filter((party) => !claimed.has(party.clientId)),
+  };
+}
+
 /** How many other clients' goods this band's invoices bill for. Deliberately not called
  * "linked" — a client billed through a payer is a standing arrangement, but a line the office
  * moved onto this invoice by hand is not one, and this count cannot tell the two apart. It
