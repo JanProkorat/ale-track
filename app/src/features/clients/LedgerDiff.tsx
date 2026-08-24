@@ -96,22 +96,26 @@ export function DiffNew({ children }: { children: ReactNode }) {
  * struck-through zero reads as an error rather than as "this was never ordered".
  */
 export function QuantityDiff({ row, unit = 'ks' }: { row: DecoratedRow; unit?: string }) {
+  // '×' binds to the number it multiplies; 'ks' is a word and takes a space. Getting this
+  // wrong reads as "20 ×" where the rest of the app writes "20×".
+  const amount = (n: number) => (unit === '×' ? `${n}${unit}` : `${n} ${unit}`);
+
   if (row.status === 'unchanged') {
     return (
       <Box component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-        {row.plannedQuantity} {unit}
+        {amount(row.plannedQuantity)}
       </Box>
     );
   }
 
   if (row.status === 'added') {
-    return <DiffNew>{row.actualQuantity} {unit}</DiffNew>;
+    return <DiffNew>{amount(row.actualQuantity)}</DiffNew>;
   }
 
   return (
     <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-      <DiffOld>{row.plannedQuantity} {unit}</DiffOld>{' '}
-      <DiffNew>{row.actualQuantity} {unit}</DiffNew>
+      <DiffOld>{amount(row.plannedQuantity)}</DiffOld>{' '}
+      <DiffNew>{amount(row.actualQuantity)}</DiffNew>
     </Box>
   );
 }

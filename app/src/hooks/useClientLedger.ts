@@ -6,11 +6,12 @@
 // has to be done", which the order editor's preview and the client card read. Using 'open' to
 // display a handover would put the plan back on screen the moment somebody settled the entry.
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
   ClientLedgerQueryState,
+  type ClientLedgerEntryDto,
   type SaveClientLedgerEntriesDto,
   type SetClientLedgerEntryResolutionDto,
   type UpdateClientLedgerEntryDto,
@@ -30,6 +31,34 @@ export function useClientLedger(clientId: string | undefined, state: LedgerState
     queryFn: ({ signal }) => ds.getClientLedgerEntriesEndpoint(clientId!, WIRE_STATE[state], signal),
     enabled: Boolean(clientId),
   });
+}
+
+/**
+ * Several clients' ledgers at once, keyed by client id.
+ *
+ * A run calls on many clients, so the shipment detail cannot call {@link useClientLedger} per
+ * stop — the same reason useSuppliersMany exists. Shares the cache with the single-client hook,
+ * and returns a fresh Map per render.
+ */
+export function useClientLedgersMany(clientIds: string[], state: LedgerState = 'all') {
+  const ds = useDataSource();
+  const results = useQueries({
+    queries: clientIds.map((id) => ({
+      queryKey: qk.clientLedger(id, state),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        ds.getClientLedgerEntriesEndpoint(id, WIRE_STATE[state], signal),
+    })),
+  });
+
+  const byClient = new Map<string, ClientLedgerEntryDto[]>();
+  const loading = new Set<string>();
+  clientIds.forEach((id, i) => {
+    const r = results[i];
+    if (r?.data) byClient.set(id, r.data);
+    if (r?.isLoading) loading.add(id);
+  });
+
+  return { byClient, loading };
 }
 
 /**

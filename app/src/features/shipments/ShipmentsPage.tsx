@@ -148,6 +148,9 @@ export function ShipmentsPage({ view }: { view?: 'create' | 'edit' }) {
               // the screen stays renderable without an auth provider.
               canSeeInvoicing={can('Invoicing')}
               canSeeLoadingBreakdown={can('LoadingBreakdown')}
+              // The ledger is a client record, so recording a deviation needs Clients : Edit —
+              // a driver phones the dispatcher, who writes it down.
+              canRecordLedger={canEdit('clients')}
               onBack={() => navigate(backTarget?.backTo ?? PATHS.shipments)}
               backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.shipments}/${id}/edit`)}
