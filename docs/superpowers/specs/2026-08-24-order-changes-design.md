@@ -177,6 +177,20 @@ disputed debt raises — and `IAppContext.UserId` (`Common/Utils/AppContext.cs:1
 editor preview and therefore the hottest one. Plus the partial unique index enforcing the upsert
 invariant: one unresolved entry per `(order_id, target, line id)`.
 
+**Two lookups, not one.** Conflating them double-bills, which the prototype demonstrated
+before this was written down:
+
+- *What was delivered on this line* — a permanent fact about that handover, so
+  `resolved_at` is irrelevant. Feeds the inline diffs **and** the invoice. Prefer the
+  unresolved entry, fall back to the most recent resolved one.
+- *What is still open on this line* — unresolved only. Feeds the upsert, which may
+  rewrite only a row nobody has settled. A settled row is history and gets a new row
+  beside it, which is exactly what the partial unique index (`WHERE resolved_at IS NULL`)
+  permits.
+
+Using the open-only lookup for display is the silent-failure case: closing an entry would
+restore the plan, and the pieces already billed short would be billed again in full.
+
 **Pairing key.** Beer lines pair on `order_item_id`, stable once the prerequisite lands.
 `product_id` + `product_name` remain as a display snapshot and as a fallback for the one edge case
 where a line is removed and re-added — the FK goes null and the delta would otherwise surface as a
@@ -394,6 +408,10 @@ Backend, invoice:
 16. An added product bills through `InvoiceLineSourceKind.LedgerEntry`.
 17. Resolving an entry does **not** change the invoice.
 18. A `Money` entry does not touch the invoice.
+19. Every invoice's total equals the sum of its own rendered rows — a ledger-sourced line
+    that is counted but cannot be resolved back to something displayable is the failure
+    this catches.
+20. A resolved entry still renders as a diff on its order's detail.
 
 Frontend: `applyLedger` unit tests per row state, including the appended-row case; the drawer's
 prefill after a previous save; the preview's shortfall warning; the tab count; a dark-mode render of

@@ -387,6 +387,37 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:poin
 .login-divider::before,.login-divider::after{content:"";flex:1;height:1px;background:var(--border);}
 @media (max-width:900px){ .login-brand{display:none;} .login-logo-sm{display:flex;} }
 
+/* ---- Změny objednávek (ledger diffs) ------------------------------------
+   The struck-through old value and the highlighted new one are the primary
+   signal, but never the ONLY one: every changed row also carries a .chg-tag,
+   because colour and strike alone are invisible to a colour-blind reader and
+   in a black-and-white print. */
+.diff-old{text-decoration:line-through;color:var(--text-3);font-weight:600;}
+.diff-new{color:var(--warn);font-weight:800;}
+.chg-tag{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;
+  letter-spacing:.02em;text-transform:uppercase;padding:1px 6px;border-radius:var(--r-pill);
+  border:1px solid currentColor;white-space:nowrap;}
+.chg-tag.t-less{color:var(--crit);background:var(--crit-tint);}
+.chg-tag.t-more{color:var(--ok);background:var(--ok-tint);}
+.chg-tag.t-new{color:var(--info);background:var(--info-tint);}
+.chg-tag.t-info{color:var(--warn);background:var(--warn-tint);}
+tr.row-chg>td{background:var(--warn-tint);}
+tr.row-added>td{background:var(--info-tint);}
+tr.row-removed>td{background:var(--crit-tint);}
+/* Only the name is struck, never the numbers beside it — a struck "0 Kč" reads as
+   "not zero" and is exactly the wrong thing to say. */
+tr.row-removed td:first-child .t-strong{text-decoration:line-through;}
+.led-item{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--border);
+  border-radius:var(--r);background:var(--surface);}
+.led-item.is-open{border-left:3px solid var(--warn);}
+.led-item.is-assigned{border-left:3px solid var(--info);}
+.led-item.is-resolved{border-left:3px solid var(--ok);opacity:.72;}
+.led-ico{width:32px;height:32px;flex:0 0 auto;border-radius:var(--r-sm);display:flex;
+  align-items:center;justify-content:center;background:var(--surface-3);color:var(--text-2);}
+.led-money{font-variant-numeric:tabular-nums;font-weight:800;}
+.led-money.owes-us{color:var(--crit);}
+.led-money.we-owe{color:var(--info);}
+
 /* animated route line */
 .route-anim{animation:dash 1.1s linear infinite;}
 @keyframes dash{to{stroke-dashoffset:-32;}}
@@ -511,6 +542,12 @@ const L = {
   // several ways: gas refilled into it, the bottle bought outright, a returnable
   // deposit held against it, or monthly rent when the supplier keeps ownership.
   chargeKind:{ Fill:'Plnění', Purchase:'Nákup', Deposit:'Záloha', Rent:'Nájem', Other:'Ostatní' },
+  // What a deviation touches. Typed by TARGET, not by event: "left behind" and
+  // "took extra" are one branch with opposite signs, so the arithmetic is written
+  // once and the wording is derived from the sign (see ledgerHeadline).
+  ledgerTarget:{ ProductQuantity:'Množství', SupplierGoodQuantity:'Množství zboží',
+    DeliveryAddress:'Adresa doručení', DeliveryDate:'Termín doručení', Money:'Peníze', Other:'Jiné' },
+  ledgerState:{ open:'Nedořešeno', assigned:'Zařazeno', resolved:'Vyřešeno' },
 };
 /* Charge kinds in the order a price list reads them. */
 const CHARGE_ORDER=['Fill','Purchase','Deposit','Rent','Other'];
@@ -675,7 +712,7 @@ const DB = {
           [ sgp('Purchase',210,174) ]) ],
       ''),
   ],
-  orders:[], shipments:[], deliveries:[], inventory:[], sales:[], reminders:[], clientPrices:[],
+  orders:[], shipments:[], deliveries:[], inventory:[], sales:[], reminders:[], clientPrices:[], ledger:[],
   exchangeRates:[{ currencyCode:'EUR', rate:25.30, updatedDate:SEED_TODAY }],
   drivers:[
     { id:'dr-novak', firstName:'Petr', lastName:'Novák', phoneNumber:'+420 602 100 200', color:'#F08C00',
@@ -816,6 +853,8 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
     order('o-7','cl-uzsklep','Finished',-3,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht Nealko'),2) ], -12),
     order('o-8','cl-hotel','Finished',-5,[ oi(byName('Landskron Premium'),3) ], -14),
     order('o-9','cl-pivnice','New',null,[ oi(byName('Svijanský Máz'),2), sgi('sp-linde','sg-li-co2-10',1) ]),
+    // Carries the make-good for the two kegs left behind on o-1 — the "assigned" ledger state.
+    order('o-10','cl-uzsklep','Planning',4,[ oi(byName('Albrecht 11°'),2) ], -1),
   ];
   // Shipments (outgoing / Vývozy)
   DB.shipments=[
@@ -911,6 +950,44 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
       description:'Tmavý 14° — omezená edice.', type:'Regular', occurrenceDate:daysFromNow(9), remindBefore:3, resolved:false },
     { id:'r-5', kind:'Supplier', sectionId:'sp-linde', sectionName:'Linde Gas — plnírna Liberec', name:'Revize CO₂ láhví',
       description:'Tlakové zkoušky u tří 30kg láhví propadají letos.', type:'Regular', occurrenceDate:daysFromNow(12), remindBefore:7, resolved:false },
+  ];
+  /* ---- Změny objednávek (client ledger) ------------------------------------
+     One row per deviation, owned by the CLIENT — order is optional, which is what
+     lets a plain debt exist with no delivery behind it (see led-8). */
+  let ln=0;
+  function led(clientId,orderId,target,o){
+    return { id:'led-'+(++ln), clientId, orderId:orderId||null, stopId:orderId||null, target,
+      productId:null, orderItemId:null, plannedQuantity:null, actualQuantity:null,
+      plannedText:null, actualText:null, amount:null, note:'',
+      requiresFollowUp:true, resolvedAt:null, resolvedBy:null, resolutionNote:null, resolvedByOrderId:null,
+      createdAt:daysFromNow(0), createdBy:'u-dispecer', ...o };
+  }
+  function qtyLed(clientId,orderId,prodName,planned,actual,o){
+    const p=byName(prodName); const ord=DB.orders.find(x=>x.id===orderId);
+    const oi=ord?ord.items.find(i=>i.productId===p.id):null;
+    return led(clientId,orderId,'ProductQuantity',{ productId:p.id, orderItemId:oi?oi.id:null,
+      plannedQuantity:planned, actualQuantity:actual, ...o });
+  }
+  DB.ledger=[
+    // Deliberately not on Albrecht 12°: that line carries the demo's cross-client invoice
+    // split, and cutting it would trim the very row the split exists to show.
+    qtyLed('cl-uzsklep','o-1','Svijanský Máz',3,2,{ note:'Řidič nechal jeden sud v autě, klient neměl kam.' }),
+    qtyLed('cl-uzsklep','o-1','Albrecht 11°',2,0,{ note:'Nevyloženo vůbec — dovezeme příště.',
+      resolvedByOrderId:'o-10' }),
+    // Not a debt of goods — the pieces are already at the client. What has to be
+    // settled is the money for them, which is its own row below.
+    qtyLed('cl-uzsklep','o-1','Frýdlantská 10°',0,3,{ requiresFollowUp:false,
+      note:'Klient si na místě vzal 3 sudy navíc.' }),
+    led('cl-uzsklep','o-1','DeliveryAddress',{ plannedText:'Zahrada u stromu, Chrastava',
+      actualText:'Náměstí 12, Chrastava', requiresFollowUp:false,
+      note:'Klient nestíhal dojet na zahradu, převzal na provozovně.' }),
+    led('cl-uzsklep','o-1','Money',{ amount:2970, note:'Doplatek za 3 sudy vzaté na místě.' }),
+    qtyLed('cl-uzsklep','o-7','Albrecht Nealko',2,1,{ createdAt:daysFromNow(-3),
+      note:'Jedna basa rozbitá při vykládce.', resolvedAt:daysFromNow(-2), resolvedBy:'u-admin',
+      resolvedByOrderId:null, resolutionNote:'Dobropis vystaven, klient souhlasí.' }),
+    qtyLed('cl-club','o-5','Frýdlantská 10°',2,1,{ note:'Jeden sud vrácen zpět — vadný ventil.' }),
+    led('cl-pivnice',null,'Money',{ amount:-320, createdAt:daysFromNow(-5),
+      note:'Přeplatek z minulé faktury — vracíme klientovi.' }),
   ];
 })();
 
@@ -1229,7 +1306,10 @@ const ROUTES=[
   [/^clients$/, ()=>viewClients()],
   [/^clients\/(.+)$/, m=>viewClientDetail(m[1])],
   [/^orders$/, ()=>viewOrders()],
-  [/^orders\/new$/, ()=>viewOrderEditor(null)],
+  // The query string has to be allowed through: the client detail links here as
+  // `orders/new?client=<id>` to preselect the client, and an anchored /new$/ let that
+  // fall through to the detail route, which then reported "Objednávka nenalezen".
+  [/^orders\/new(\?.*)?$/, ()=>viewOrderEditor(null)],
   [/^orders\/(.+)\/edit$/, m=>viewOrderEditor(m[1])],
   [/^orders\/(.+)$/, m=>viewOrderDetail(m[1])],
   [/^shipments$/, ()=>viewShipments()],
@@ -1800,6 +1880,7 @@ function viewClientDetail(id){
     ${clTab('info','Info a kontakty','info',tab)}
     ${clTab('orders','Objednávky','order',tab,orders.length)}
     ${clTab('cenik','Ceník','wallet',tab,prices.length)}
+    ${clTab('zmeny','Změny a dluhy','warnTri',tab,ledgerOpen(id).length)}
     ${clTab('reminders','Připomínky','bell',tab,rems.length)}
     ${clTab('notes','Poznámky','note',tab)}</div>`;
   let body='';
@@ -1846,6 +1927,7 @@ function viewClientDetail(id){
     body=`<div class="card-pad" style="padding:0">${ed?`<div class="toolbar"><a class="btn btn-primary btn-sm" href="#/orders/new?client=${id}">${icon('plus',15)}Nová objednávka</a></div>`:''}
       ${orders.length?ordersTable(orders,true):`<div class="empty"><div>${icon('order',34)}</div><div class="t">Žádné objednávky</div></div>`}</div>`;
   } else if(tab==='cenik'){ body=clCenikView(c,prices,ed); }
+  else if(tab==='zmeny'){ body=ledgerView(id); }
   else if(tab==='reminders'){ body=remindersView(rems,ed,'Client',id); }
   else { body=notesView(c,'client'); }
   return `<div class="page">
@@ -2442,6 +2524,296 @@ function delSupGood(sid,gid){ const s=supplierById(sid), g=goodById(s,gid); if(!
   confirmDialog('Smazat zboží?',`„${g.name}“ zmizí z ceníku i se všemi cenami.`,()=>{
     s.goods=s.goods.filter(x=>x.id!==gid); toast('Zboží smazáno','trash'); renderRoute(); }); }
 
+/* ============ ZMĚNY OBJEDNÁVEK (client ledger) ============
+   A deviation lives BESIDE the order, never in it: the order stays the plan, so the
+   papers printed before departure stay true. What was actually delivered is plan +
+   deltas, computed on the fly and never stored as a third number.
+
+   Owned by the client rather than the order, which is what lets a plain debt exist
+   with no delivery behind it — today that gets typed into an order note nobody can
+   filter or close. */
+function ledState(e){ return e.resolvedAt?'resolved':(e.resolvedByOrderId?'assigned':'open'); }
+function ledgerOf(clientId){ return DB.ledger.filter(e=>e.clientId===clientId)
+  .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')); }
+/* "Open" means somebody still has to settle it. Informational rows (an address that
+   moved) are deliberately excluded — they belong in the history, not in a to-do. */
+function ledgerOpen(clientId){ return ledgerOf(clientId).filter(e=>e.requiresFollowUp&&!e.resolvedAt); }
+function ledgerForOrder(orderId){ return DB.ledger.filter(e=>e.orderId===orderId); }
+/* Two different questions about the same line, and conflating them double-bills.
+   - What was delivered: a permanent fact about that handover, so resolution is
+     irrelevant. Used by the diffs and by the invoice.
+   - What is still open on that line: used by the upsert, which may only rewrite a row
+     nobody has settled yet. A settled row is history and gets a new row beside it. */
+function ledgerQtyFor(orderId,productId){
+  const all=DB.ledger.filter(e=>e.orderId===orderId&&e.target==='ProductQuantity'&&e.productId===productId);
+  return all.find(e=>!e.resolvedAt)||all[all.length-1];
+}
+function ledgerOpenQtyFor(orderId,productId){ return DB.ledger.find(e=>e.orderId===orderId
+  && e.target==='ProductQuantity' && e.productId===productId && !e.resolvedAt); }
+function ledDelta(e){ return (e.actualQuantity||0)-(e.plannedQuantity||0); }
+/* added -> nothing was planned; removed -> nothing arrived; otherwise a plain change. */
+function ledRowStatus(e){ if(!e.plannedQuantity) return 'added'; if(!e.actualQuantity) return 'removed'; return 'chg'; }
+function ledgerMoney(clientId){ let owesUs=0,weOwe=0;
+  ledgerOpen(clientId).filter(e=>e.target==='Money').forEach(e=>{ if(e.amount>=0) owesUs+=e.amount; else weOwe+=-e.amount; });
+  return {owesUs,weOwe}; }
+
+/* The tag that carries the meaning when colour cannot — a colour-blind reader and a
+   black-and-white printout both get the words. */
+function ledTag(e){
+  if(e.target==='ProductQuantity'||e.target==='SupplierGoodQuantity'){
+    const st=ledRowStatus(e), d=ledDelta(e);
+    if(st==='added') return `<span class="chg-tag t-new">${icon('plus',10)}přidáno na místě</span>`;
+    if(st==='removed') return `<span class="chg-tag t-less">nevyloženo</span>`;
+    return `<span class="chg-tag ${d<0?'t-less':'t-more'}">${d<0?'nevyloženo':'navíc'} ${Math.abs(d)} ks</span>`;
+  }
+  if(e.target==='Money') return `<span class="chg-tag t-info">${e.amount>=0?'klient dluží':'dlužíme klientovi'}</span>`;
+  return `<span class="chg-tag t-info">změna</span>`;
+}
+/* One-line human wording, derived from the sign — which is why the enum is typed by
+   target and not by event: there is no NotUnloaded/DeliveredExtra pair to keep in sync. */
+function ledgerHeadline(e){
+  if(e.target==='ProductQuantity'||e.target==='SupplierGoodQuantity'){
+    const p=prodById(e.productId); const n=p?p.name:'Položka'; const d=ledDelta(e);
+    const st=ledRowStatus(e);
+    if(st==='added') return `${esc(n)} — přidáno ${e.actualQuantity} ks na místě`;
+    if(st==='removed') return `${esc(n)} — nevyloženo ${e.plannedQuantity} ks`;
+    return `${esc(n)} — ${d<0?'nevyloženo':'navíc'} ${Math.abs(d)} ks (plán ${e.plannedQuantity}, dodáno ${e.actualQuantity})`;
+  }
+  if(e.target==='Money') return e.amount>=0?`Klient dluží ${money(e.amount)}`:`Dlužíme klientovi ${money(-e.amount)}`;
+  if(e.target==='DeliveryAddress') return `Vyloženo jinde než v objednávce`;
+  if(e.target==='DeliveryDate') return `Dovezeno jiný den, než bylo v objednávce`;
+  return esc(e.note||'Změna');
+}
+function ledIcon(t){ return t==='Money'?'wallet':t==='DeliveryAddress'?'pin':t==='DeliveryDate'?'cal':'box'; }
+/* The inline diff: the old value struck through, the new one highlighted. */
+function qtyDiff(planned,actual){
+  return `<span class="diff-old">${planned} ks</span> <span class="diff-new">${actual} ks</span>`;
+}
+function textDiff(oldV,newV){
+  return `<div><span class="diff-old">${esc(oldV||'—')}</span></div><div class="diff-new">${esc(newV||'—')}</div>`;
+}
+
+/* Merges an order's planned lines with its deltas. Does not only decorate: rows that
+   exist as a delta but not in the plan are APPENDED, which is why a new array comes
+   back rather than a map over the old one. Both the order detail and the shipment's
+   nakládka call this, so the two screens cannot drift. */
+function applyLedger(items,orderId){
+  // Resolved entries stay in the diff: settling the consequence with the client does not
+  // change the fact that seven of ten arrived.
+  const entries=ledgerForOrder(orderId).filter(e=>e.target==='ProductQuantity');
+  const rows=items.map(it=>({ it, entry: it.productId?entries.find(e=>e.productId===it.productId):null }));
+  entries.filter(e=>ledRowStatus(e)==='added'&&!items.some(it=>it.productId===e.productId))
+    .forEach(e=>rows.push({ it:{ id:'led-'+e.id, productId:e.productId, quantity:0, reminderState:null }, entry:e, appended:true }));
+  return rows;
+}
+function ledgerRowClass(entry){ if(!entry) return ''; const st=ledRowStatus(entry);
+  return st==='added'?'row-added':st==='removed'?'row-removed':'row-chg'; }
+/* What the order is actually worth once the deviations are applied. Kept beside the
+   plan rather than replacing it: the footer has to agree with the rows above it, and
+   the rows above it show what was delivered. */
+function ledgerTotals(o,rows){ let items=0,price=0;
+  rows.forEach(r=>{ const it=r.it; const qty=r.entry?r.entry.actualQuantity:it.quantity; items+=qty;
+    if(it.supplierGoodId){ const s=supplierById(it.supplierId); const g=s?goodById(s,it.supplierGoodId):null;
+      const pr=g?goodPrimaryPrice(g):null; price+=(pr?pr.priceWithVat:0)*qty; }
+    else price+=priceFor(prodById(it.productId),o.clientId).price*qty; });
+  return {items,price}; }
+
+/* ---- the shared drawer: record what actually happened --------------------------
+   Opened from the order detail and from a stop in the shipment's nakládka. The
+   "actual" column is prefilled from the STORED deviation, not from the plan —
+   otherwise reopening it after a save would record the delta a second time and
+   double the debt. Saving is an upsert, never an append. */
+function ledgerDrawer(orderId){
+  const o=DB.orders.find(x=>x.id===orderId); if(!o) return;
+  const cl=clientById(o.clientId);
+  const prodItems=o.items.filter(it=>it.productId);
+  const addable=DB.products.filter(p=>!prodItems.some(it=>it.productId===p.id));
+  // The plan to diff against is what was LOADED once the run has left — a dokládka added
+  // at the ramp is on the van, so measuring the handover against the order's original
+  // number would report pieces as missing that were never supposed to be there.
+  const ship=DB.shipments.find(x=>x.stops.some(st=>st.orderId===orderId));
+  const stop=ship?ship.stops.find(st=>st.orderId===orderId):null;
+  const loaded=ship&&ship.state!=='Created'&&stop
+    ? Object.fromEntries(stop.items.map(i=>[i.productId,slQty(i)])) : {};
+  const plannedOf=it=>loaded[it.productId]!=null?loaded[it.productId]:it.quantity;
+  const rows=prodItems.map(it=>{ const p=prodById(it.productId); const e=ledgerQtyFor(orderId,it.productId);
+    const planned=plannedOf(it); const actual=e?e.actualQuantity:planned;
+    return `<tr><td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+      <div class="t-mut" style="font-size:11.5px">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}
+      ${planned!==it.quantity?` · objednáno ${it.quantity}, naloženo ${planned}`:''}</div></td>
+      <td class="num tnum t-mut">${planned} ks</td>
+      <td style="width:104px"><input class="input" id="ld-q-${it.productId}" type="number" min="0" value="${actual}" style="text-align:right"></td></tr>`; }).join('');
+  const added=ledgerForOrder(orderId).filter(e=>e.target==='ProductQuantity'&&!e.resolvedAt&&ledRowStatus(e)==='added');
+  const addedRows=added.map(e=>{ const p=prodById(e.productId);
+    return `<tr><td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+      <div class="row gap8" style="margin-top:2px">${ledTag(e)}</div></td>
+      <td class="num tnum t-mut">—</td>
+      <td style="width:104px"><input class="input" id="ld-q-${e.productId}" type="number" min="0" value="${e.actualQuantity}" style="text-align:right"></td></tr>`; }).join('');
+  const moneyE=ledgerForOrder(orderId).find(e=>e.target==='Money'&&!e.resolvedAt);
+  const addrE=ledgerForOrder(orderId).find(e=>e.target==='DeliveryAddress');
+  openOverlay(`<div class="drawer-head">${icon('edit',20)}<h2>Zaznamenat změnu</h2><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="drawer-body">
+      <div class="row gap8" style="margin-bottom:4px">${avatar(cl.id,initials(cl.name))}
+        <div><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12px">${o.number} · ${L.orderState[o.state]}</div></div></div>
+      <p style="margin:12px 0 0;color:var(--text-2);font-size:12.5px">Objednávka zůstane plánem — přepisujete jen sloupec
+        <span class="t-strong">Skutečně</span>. Rozdíl se uloží jako změna vedle objednávky.</p>
+      <div class="divider"></div><div class="section-label">Položky</div>
+      <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th>
+        <th style="text-align:right">Plán</th><th style="text-align:right">Skutečně</th></tr></thead>
+        <tbody>${rows}${addedRows}</tbody></table></div>
+      <div class="divider"></div><div class="section-label">Přidat produkt vzatý na místě</div>
+      <div class="row gap8">
+        <div style="flex:1">${sel('ld-newprod',[['','— vyberte —'],...addable.slice(0,60).map(p=>[p.id,p.name])])}</div>
+        <div style="width:96px">${inp('ld-newqty','','ks','number')}</div>
+      </div>
+      <div class="divider"></div><div class="section-label">Peníze</div>
+      ${field('Rozdíl v Kč — plus když klient dluží nám, minus když my jemu',
+        inp('ld-money',moneyE?String(moneyE.amount):'','např. 2610','number'))}
+      ${field('Poznámka ke změně',txta('ld-note',moneyE?(moneyE.note||''):'','Co se stalo a co se musí dořešit…'))}
+      ${addrE?`<div class="divider"></div><div class="section-label">Adresa</div>
+        <div class="led-item is-resolved"><div class="led-ico">${icon('pin',15)}</div><div style="flex:1">
+        ${textDiff(addrE.plannedText,addrE.actualText)}
+        <div class="t-mut" style="font-size:11.5px;margin-top:4px">Zapsáno automaticky při změně adresy pod jedoucím vývozem.</div></div></div>`:''}
+    </div>
+    <div class="drawer-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="ld-save">${icon('check',16)}Uložit změny</button></div>`);
+  $('#ld-save').onclick=()=>ledgerSave(orderId);
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+function ledgerSave(orderId){
+  const o=DB.orders.find(x=>x.id===orderId); if(!o) return;
+  let touched=0;
+  /* Upsert, not insert: an existing unresolved row for the line is rewritten, and it is
+     DELETED when the actual returns to the plan — the ledger holds no no-op rows. */
+  function upsertQty(productId,planned,actual){
+    // Only an unresolved row may be rewritten. A settled one is history and gets a new
+    // row beside it — which is also what the real partial unique index permits.
+    const cur=ledgerOpenQtyFor(orderId,productId);
+    if(actual===planned){ if(cur){ DB.ledger=DB.ledger.filter(e=>e!==cur); touched++; } return; }
+    if(cur){ cur.actualQuantity=actual; cur.plannedQuantity=planned; touched++; return; }
+    const oi=o.items.find(i=>i.productId===productId);
+    DB.ledger.push({ id:'led-'+Math.random().toString(36).slice(2,7), clientId:o.clientId, orderId, stopId:orderId,
+      target:'ProductQuantity', productId, orderItemId:oi?oi.id:null,
+      plannedQuantity:planned, actualQuantity:actual, plannedText:null, actualText:null, amount:null,
+      note:'', requiresFollowUp: actual<planned, resolvedAt:null, resolvedBy:null, resolutionNote:null,
+      resolvedByOrderId:null, createdAt:daysFromNow(0), createdBy:ME.id });
+    touched++;
+  }
+  const ship=DB.shipments.find(x=>x.stops.some(st=>st.orderId===orderId));
+  const stop=ship?ship.stops.find(st=>st.orderId===orderId):null;
+  const loaded=ship&&ship.state!=='Created'&&stop
+    ? Object.fromEntries(stop.items.map(i=>[i.productId,slQty(i)])) : {};
+  o.items.filter(it=>it.productId).forEach(it=>{
+    const el=$('#ld-q-'+it.productId); if(!el) return;
+    const planned=loaded[it.productId]!=null?loaded[it.productId]:it.quantity;
+    upsertQty(it.productId,planned,Math.max(0,parseInt(el.value)||0));
+  });
+  ledgerForOrder(orderId).filter(e=>e.target==='ProductQuantity'&&!e.resolvedAt&&ledRowStatus(e)==='added')
+    .slice().forEach(e=>{ const el=$('#ld-q-'+e.productId); if(el) upsertQty(e.productId,0,Math.max(0,parseInt(el.value)||0)); });
+  const np=val('ld-newprod'), nq=parseInt(val('ld-newqty'))||0;
+  if(np&&nq>0) upsertQty(np,0,nq);
+  const amt=val('ld-money')===''?null:Number(val('ld-money'));
+  const note=val('ld-note');
+  const cur=ledgerForOrder(orderId).find(e=>e.target==='Money'&&!e.resolvedAt);
+  if(amt===null||amt===0){ if(cur){ DB.ledger=DB.ledger.filter(e=>e!==cur); touched++; } }
+  else if(cur){ cur.amount=amt; cur.note=note; touched++; }
+  else { DB.ledger.push({ id:'led-'+Math.random().toString(36).slice(2,7), clientId:o.clientId, orderId, stopId:orderId,
+      target:'Money', productId:null, orderItemId:null, plannedQuantity:null, actualQuantity:null,
+      plannedText:null, actualText:null, amount:amt, note, requiresFollowUp:true, resolvedAt:null,
+      resolvedBy:null, resolutionNote:null, resolvedByOrderId:null, createdAt:daysFromNow(0), createdBy:ME.id }); touched++; }
+  closeOverlay(); toast(touched?`Změny uloženy (${touched})`:'Nic se nezměnilo'); renderRoute();
+}
+function ledgerResolve(id){
+  const e=DB.ledger.find(x=>x.id===id); if(!e) return;
+  openOverlay(`<div class="modal-head">${icon('check',18)}<h3>Vyřešit</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body"><p style="margin:0 0 12px;color:var(--text-2);font-size:13px">${ledgerHeadline(e)}</p>
+      ${field('Čím se to vyřešilo',txta('lr-note','','Dovezeno 12. 9. · dobropis · klient odpustil…'))}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="lr-yes">${icon('check',15)}Vyřešeno</button></div>`,{center:true});
+  $('#lr-yes').onclick=()=>{ e.resolvedAt=daysFromNow(0); e.resolvedBy=ME.id; e.resolutionNote=val('lr-note')||null;
+    closeOverlay(); toast('Označeno jako vyřešené'); renderRoute(); };
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+/* Reopening exists because closing is a judgement call somebody can get wrong. */
+function ledgerReopen(id){ const e=DB.ledger.find(x=>x.id===id); if(!e) return;
+  e.resolvedAt=null; e.resolvedBy=null; e.resolutionNote=null; toast('Znovu otevřeno'); renderRoute(); }
+function ledgerDelete(id){ confirmDialog('Smazat záznam?','Zmizí z knihy klienta i z detailu objednávky.',
+  ()=>{ DB.ledger=DB.ledger.filter(e=>e.id!==id); toast('Záznam smazán','trash'); renderRoute(); }); }
+
+/* One row of the client's ledger. */
+function ledgerItem(e,{showClient=false}={}){
+  const st=ledState(e); const ed=canEdit('clients');
+  const ord=e.orderId?DB.orders.find(o=>o.id===e.orderId):null;
+  const by=DB.users.find(u=>u.id===e.createdBy);
+  const setOrd=e.resolvedByOrderId?DB.orders.find(o=>o.id===e.resolvedByOrderId):null;
+  return `<div class="led-item is-${st}">
+    <div class="led-ico">${icon(ledIcon(e.target),15)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="row gap8" style="flex-wrap:wrap">
+        <span class="t-strong" style="font-size:13.5px">${ledgerHeadline(e)}</span>${ledTag(e)}
+        ${st==='assigned'?`<span class="chg-tag t-new">v objednávce ${setOrd?setOrd.number:'—'}</span>`:''}
+        ${st==='resolved'?`<span class="chg-tag t-more">${icon('check',10)}vyřešeno</span>`:''}
+        ${!e.requiresFollowUp&&st!=='resolved'?`<span class="tag">jen záznam</span>`:''}</div>
+      ${e.target==='DeliveryAddress'?`<div style="margin-top:5px;font-size:12.5px">${textDiff(e.plannedText,e.actualText)}</div>`:''}
+      ${e.note?`<div class="t-mut" style="font-size:12px;margin-top:4px">${esc(e.note)}</div>`:''}
+      ${e.resolutionNote?`<div style="font-size:12px;margin-top:4px;color:var(--ok)">${icon('check',11)} ${esc(e.resolutionNote)}</div>`:''}
+      <div class="t-mut" style="font-size:11px;margin-top:5px">
+        ${fdate(e.createdAt)}${by?` · ${esc(by.firstName)} ${esc(by.lastName)}`:''}
+        ${ord?` · <a href="#/orders/${ord.id}" style="color:var(--amber-700)">${ord.number}</a>`:' · bez objednávky'}
+        ${showClient?` · <a href="#/clients/${e.clientId}" style="color:var(--amber-700)">${esc(clientById(e.clientId).name)}</a>`:''}</div>
+    </div>
+    ${ed?`<div class="row gap8" style="flex:0 0 auto;align-items:flex-start">
+      ${st==='resolved'
+        ?`<button class="btn btn-sm btn-ghost" onclick="ledgerReopen('${e.id}')">Otevřít</button>`
+        :e.requiresFollowUp?`<button class="btn btn-sm btn-soft" onclick="ledgerResolve('${e.id}')">${icon('check',14)}Vyřešit</button>`:''}
+      <button class="icon-btn" style="width:30px;height:30px;color:var(--crit)" onclick="ledgerDelete('${e.id}')">${icon('trash',13)}</button></div>`:''}
+  </div>`;
+}
+
+/* The client-profile tab: what is still open, then everything that ever deviated. */
+function ledgerView(clientId){
+  const all=ledgerOf(clientId);
+  const open=all.filter(e=>e.requiresFollowUp&&!e.resolvedAt);
+  const hist=all.filter(e=>!(e.requiresFollowUp&&!e.resolvedAt));
+  const m=ledgerMoney(clientId);
+  const ed=canEdit('clients');
+  return `<div class="stack" style="gap:16px">
+    <div class="card"><div class="card-head">${icon('warnTri',17)}<h3>Nedořešeno</h3>
+        <span class="tag">${open.length}</span>
+        ${ed?`<button class="btn btn-sm btn-soft" style="margin-left:auto" onclick="ledgerStandalone('${clientId}')">${icon('plus',14)}Přidat záznam</button>`:''}</div>
+      <div class="card-pad stack" style="gap:10px">
+        ${(m.owesUs||m.weOwe)?`<div class="row gap8" style="flex-wrap:wrap;padding-bottom:6px">
+          ${m.owesUs?`<span class="pill s-crit"><span class="d"></span>Klient dluží <span class="led-money owes-us" style="margin-left:4px">${money(m.owesUs)}</span></span>`:''}
+          ${m.weOwe?`<span class="pill s-info"><span class="d"></span>Dlužíme klientovi <span class="led-money we-owe" style="margin-left:4px">${money(m.weOwe)}</span></span>`:''}
+          </div>
+          <div class="t-mut" style="font-size:11.5px;margin-top:-6px">Součet se dopočítává z řádků — dluhy v obou směrech se záměrně neodečítají, jsou to dvě věci k vyřešení.</div>`:''}
+        ${open.length?open.map(e=>ledgerItem(e)).join(''):`<div class="t-mut" style="font-size:13px">U tohoto klienta není nic otevřeného.</div>`}
+      </div></div>
+    <div class="card"><div class="card-head">${icon('history',17)}<h3>Historie</h3><span class="tag">${hist.length}</span></div>
+      <div class="card-pad stack" style="gap:10px">
+        ${hist.length?hist.map(e=>ledgerItem(e)).join(''):`<div class="t-mut" style="font-size:13px">Žádné dřívější změny.</div>`}
+      </div></div></div>`;
+}
+/* A debt with no delivery behind it — the case an order note could never hold. */
+function ledgerStandalone(clientId){
+  openOverlay(`<div class="modal-head">${icon('wallet',18)}<h3>Nový záznam</h3><button class="icon-btn" data-scrim-close>${icon('close',16)}</button></div>
+    <div class="modal-body">
+      <p style="margin:0 0 14px;color:var(--text-2);font-size:13px">Záznam bez objednávky — třeba dluh z minula.</p>
+      ${field('Rozdíl v Kč — plus když klient dluží nám, minus když my jemu',inp('ls-amount','','např. -320','number'))}
+      ${field('Poznámka',txta('ls-note','','Za co to je a co se má stát…'))}</div>
+    <div class="modal-foot"><button class="btn btn-ghost" data-scrim-close>Zrušit</button>
+      <button class="btn btn-primary" id="ls-save">${icon('check',15)}Přidat</button></div>`,{center:true});
+  $('#ls-save').onclick=()=>{ const a=Number(val('ls-amount'));
+    if(!a) return toast('Zadejte částku','warnTri');
+    DB.ledger.push({ id:'led-'+Math.random().toString(36).slice(2,7), clientId, orderId:null, stopId:null,
+      target:'Money', productId:null, orderItemId:null, plannedQuantity:null, actualQuantity:null,
+      plannedText:null, actualText:null, amount:a, note:val('ls-note'), requiresFollowUp:true,
+      resolvedAt:null, resolvedBy:null, resolutionNote:null, resolvedByOrderId:null,
+      createdAt:daysFromNow(0), createdBy:ME.id });
+    closeOverlay(); toast('Záznam přidán'); renderRoute(); };
+  $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
+}
+
 /* ============ MODULE: OBJEDNÁVKY (ORDERS) ============ */
 function orderTotals(o){ let items=0,price=0; o.items.forEach(it=>{ items+=it.quantity;
   if(it.supplierGoodId){ const s=supplierById(it.supplierId); const g=s?goodById(s,it.supplierGoodId):null; const pr=g?goodPrimaryPrice(g):null;
@@ -2469,13 +2841,19 @@ function viewOrders(){
     <div class="toolbar"><div class="seg">${seg}</div><span class="count-note">${list.length} z ${DB.orders.length}</span></div>
     ${list.length?ordersTable(list,false):`<div class="empty"><div>${icon('order',36)}</div><div class="t">Žádné objednávky</div></div>`}</div>`;
 }
-function orderDetailProductRow(it,o,frozen){
+/* `entry` is the line's deviation, when it has one. The planned quantity is struck
+   through and the delivered one highlighted right where the reader is already
+   looking — a chip beside the row would make them assemble two facts themselves.
+   The money column follows the delivered quantity, because that is what gets billed. */
+function orderDetailProductRow(it,o,frozen,entry){
   const p=prodById(it.productId); const b=breweryById(p.breweryId); const pr=priceFor(p,o.clientId);
-  return `<tr><td><div class="row-lead"><span class="chip" style="width:auto"><span class="dotc" style="background:${b.color}"></span></span>
-    <div><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${esc(b.name)} · ${kindChipText(p.kind)}</div></div></div></td>
-    <td class="num tnum">${it.quantity} ks</td>
+  const qty=entry?entry.actualQuantity:it.quantity;
+  return `<tr class="${ledgerRowClass(entry)}"><td><div class="row-lead"><span class="chip" style="width:auto"><span class="dotc" style="background:${b.color}"></span></span>
+    <div><div class="t-strong">${esc(p.name)}</div><div class="t-mut" style="font-size:12px">${esc(b.name)} · ${kindChipText(p.kind)}</div>
+    ${entry?`<div style="margin-top:4px">${ledTag(entry)}</div>`:''}</div></div></td>
+    <td class="num tnum">${entry?(ledRowStatus(entry)==='added'?`<span class="diff-new">${qty} ks</span>`:qtyDiff(it.quantity,qty)):`${it.quantity} ks`}</td>
     <td class="num" style="text-align:right">${frozen?`<span class="t-strong tnum">${money(pr.price)}</span>`:priceCell(pr,13)}</td>
-    <td class="num tnum t-strong">${money(pr.price*it.quantity)}</td>
+    <td class="num tnum t-strong">${money(pr.price*qty)}</td>
     <td>${it.reminderState==='Added'?'<span class="pill s-info"><span class="d"></span>hlídáno</span>':''}</td></tr>`;
 }
 /* A supplier-good order line, same row shape as a product line — no client-price
@@ -2500,14 +2878,20 @@ function viewOrderDetail(id){
   // beside it would mislead. The prototype has no snapshot model, so it derives that
   // moment from the order state instead of reading the stop item.
   const frozen=o.state==='Delivering'||o.state==='Finished';
-  const items=o.items.map(it=>it.supplierGoodId?orderDetailGoodRow(it):orderDetailProductRow(it,o,frozen)).join('');
+  // Plan merged with deviations: changed lines are decorated, and lines the client took
+  // on the spot are appended — they exist as a delta with no planned row behind them.
+  const rows=applyLedger(o.items,id);
+  const tEff=ledgerTotals(o,rows);
+  const items=rows.map(r=>r.it.supplierGoodId?orderDetailGoodRow(r.it):orderDetailProductRow(r.it,o,frozen,r.entry)).join('');
+  const changes=ledgerForOrder(id);
   const shipStop=DB.shipments.find(s=>s.stops.some(st=>st.orderId===id));
   const flow=['New','Planning','Delivering','Finished'];
   return `<div class="page">
     ${detailHead('orders','Zpět na objednávky',o.number,{mono:true,lead:cl.name,status:pill('order',o.state),
       meta:[`vytvořeno <span class="t-strong">${fdate(o.createdDate)}</span>`,
         `<a href="#/clients/${cl.id}">${esc(cl.name)}</a>`],
-      actions:`${ed&&o.state!=='Finished'&&o.state!=='Cancelled'?`<a class="btn btn-ghost" href="#/orders/${id}/edit">${icon('edit',16)}Upravit</a>`:''}
+      actions:`${ed&&(o.state==='Delivering'||o.state==='Finished')?`<button class="btn btn-soft" onclick="ledgerDrawer('${id}')">${icon('edit',16)}Zaznamenat změnu</button>`:''}
+        ${ed&&o.state!=='Finished'&&o.state!=='Cancelled'?`<a class="btn btn-ghost" href="#/orders/${id}/edit">${icon('edit',16)}Upravit</a>`:''}
         ${ed?`<button class="btn btn-danger btn-icon" onclick="delOrder('${id}')">${icon('trash',16)}</button>`:''}`})}
     ${o.state!=='Cancelled'?`<div class="card" style="margin-bottom:16px"><div class="card-pad"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
       ${flow.map((s,i)=>{ const cur=flow.indexOf(o.state); const done=i<cur, active=i===cur;
@@ -2515,14 +2899,24 @@ function viewOrderDetail(id){
         <div class="row gap8" style="justify-content:center;color:${active?'var(--amber-700)':done?'var(--text)':'var(--text-3)'};font-weight:${active?800:600};font-size:12.5px">${done?icon('check',14):''}${L.orderState[s]}</div></div>`; }).join('')}
     </div></div></div>`:''}
     <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start">
-      <div class="card"><div class="card-head"><h3>Položky</h3><span class="tag" style="margin-left:auto">${o.items.length}</span></div>
+      <div class="card"><div class="card-head"><h3>Položky</h3><span class="tag" style="margin-left:auto">${rows.length}</span></div>
         <div class="tbl-wrap" style="border:0"><table class="tbl"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:right">Cena/ks</th><th style="text-align:right">Celkem</th><th></th></tr></thead>
-        <tbody>${items}</tbody><tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:14px 16px">Celkem s DPH</td>
-        <td class="num tnum" style="font-weight:800;font-size:15px;color:var(--amber-700)">${money(t.price)}</td><td></td></tr></tfoot></table></div></div>
+        <tbody>${items}</tbody><tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;padding:14px 16px">Celkem s DPH${tEff.price!==t.price?'<div class="t-mut" style="font-weight:600;font-size:11.5px">plán × skutečně dodáno</div>':''}</td>
+        <td class="num tnum" style="font-weight:800;font-size:15px;color:var(--amber-700)">${tEff.price===t.price?money(t.price)
+          :`<div class="diff-old" style="font-size:12.5px">${money(t.price)}</div><div class="diff-new">${money(tEff.price)}</div>`}</td><td></td></tr></tfoot></table></div></div>
       <div class="stack" style="gap:16px">
+        ${changes.length?`<div class="card"><div class="card-head">${icon('warnTri',17)}<h3>Změny</h3><span class="tag">${changes.length}</span>
+            ${ed?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${id}')">${icon('edit',13)}Upravit</button>`:''}</div>
+          <div class="card-pad stack" style="gap:10px">
+            <div class="t-mut" style="font-size:11.5px">Položky výše ukazují <span class="t-strong">co je jinak</span>. Tady je <span class="t-strong">kdy, kdo a proč</span> — a peníze, které na žádném řádku nejsou.</div>
+            ${changes.map(e=>ledgerItem(e)).join('')}
+            <a href="#/clients/${cl.id}?tab=zmeny" class="t-mut" style="font-size:12px;color:var(--amber-700)">Celá kniha klienta ${icon('chevR',11)}</a>
+          </div></div>`:''}
         <div class="card"><div class="card-head"><h3>Doručení</h3></div><div class="card-pad stack" style="gap:14px">
           <div class="kv"><span class="k">Požadovaný termín</span><span class="v">${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'—'}</span></div>
           <div class="kv"><span class="k">Skutečné doručení</span><span class="v">${o.actualDeliveryDate?fdate(o.actualDeliveryDate):'—'}</span></div>
+          ${(()=>{ const a=changes.find(e=>e.target==='DeliveryAddress'); return a
+            ?`<div class="kv"><span class="k">Adresa</span><span class="v" style="text-align:right">${textDiff(a.plannedText,a.actualText)}</span></div>`:''; })()}
           <div class="kv"><span class="k">Zařazeno do vývozu</span><span class="v">${shipStop?`<a href="#/shipments/${shipStop.id}" style="color:var(--amber-700)">${esc(shipStop.name)}</a>`:'<span class="t-mut">dosud ne</span>'}</span></div>
         </div></div>
         <div class="card"><div class="card-head"><h3>Klient</h3></div><div class="card-pad">
@@ -2532,17 +2926,23 @@ function viewOrderDetail(id){
 }
 function kindChipText(k){ return L.kind[k]||k; }
 function delOrder(id){ confirmDialog('Zrušit objednávku?','Objednávka bude nastavena jako Zrušená.',()=>{
-  DB.orders.find(o=>o.id===id).state='Cancelled'; toast('Objednávka zrušena','trash'); go('orders'); },{yes:'Zrušit objednávku'}); }
+  DB.orders.find(o=>o.id===id).state='Cancelled';
+  // Whatever this order was going to settle goes back to unresolved — a cancelled
+  // make-good must not make the debt disappear.
+  const back=DB.ledger.filter(e=>e.resolvedByOrderId===id&&!e.resolvedAt);
+  back.forEach(e=>e.resolvedByOrderId=null);
+  toast(back.length?`Objednávka zrušena · ${back.length} ${plural(back.length,'změna','změny','změn')} zpět v nedořešených`:'Objednávka zrušena','trash');
+  go('orders'); },{yes:'Zrušit objednávku'}); }
 
 /* ---- Order editor: history-first product picker ---- */
-let OE={ draft:null, tab:'history', search:'', brewOpen:{}, supOpen:{}, kind:'all', clientQuery:'' };
+let OE={ draft:null, tab:'history', search:'', brewOpen:{}, supOpen:{}, kind:'all', clientQuery:'', settle:[] };
 function fmtLiters(x){ return x==null?'—':x.toLocaleString('cs-CZ')+' l'; }
 function viewOrderEditor(id){
   let clientId=null; const q=location.hash.split('?')[1]||''; const qp=new URLSearchParams(q); if(qp.get('client')) clientId=qp.get('client');
   if(id){ const o=DB.orders.find(x=>x.id===id); OE.draft={ id:o.id, number:o.number, clientId:o.clientId, requiredDeliveryDate:o.requiredDeliveryDate,
     state:o.state, note:o.note||'', items:o.items.map(it=>({...it})) }; }
   else { OE.draft={ id:null, clientId:clientId, requiredDeliveryDate:daysFromNow(3), state:'New', note:'', items:[] }; }
-  OE.tab= (OE.draft.clientId && orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; OE.search=''; OE.kind='all'; OE.clientQuery='';
+  OE.tab= (OE.draft.clientId && orderHistoryProducts(OE.draft.clientId).length)?'history':'browse'; OE.search=''; OE.kind='all'; OE.clientQuery=''; OE.settle=[];
   AFTER=oeWire;
   return oeHTML();
 }
@@ -2585,6 +2985,55 @@ function oeClientInput(){
 function oePickClient(id){ OE.draft.clientId=id; OE.clientQuery=''; OE.tab=orderHistoryProducts(id).length?'history':'browse'; oeFullRerender(); }
 function oeChangeClient(){ OE.draft.clientId=null; OE.clientQuery=''; oeFullRerender(); const el=$('#oe-client-input'); if(el) el.focus(); }
 
+/* ---- open points of the selected client, shown ABOVE the cart -------------------
+   Above, not below: it has to be read before the cart is built, not at the save
+   button. This is the whole reason the ledger exists — the missing pieces and the
+   money differences have to survive into the next order. */
+function oeOpenItems(){
+  const d=OE.draft; if(!d.clientId) return '';
+  const open=ledgerOpen(d.clientId).filter(e=>e.orderId!==d.id);
+  if(!open.length) return '';
+  const rows=open.map(e=>{
+    const owed=e.target==='ProductQuantity'?Math.max(0,(e.plannedQuantity||0)-(e.actualQuantity||0)):0;
+    const inCart=owed?((d.items.find(it=>it.productId===e.productId)||{}).quantity||0):0;
+    const settling=OE.settle.includes(e.id);
+    /* Binary resolution means a short top-up would close the whole debt, so the
+       shortfall is shown here rather than discovered after the fact. */
+    const short=settling&&inCart<owed;
+    return `<div class="led-item is-${ledState(e)}" style="padding:9px 10px">
+      <div class="led-ico" style="width:26px;height:26px">${icon(ledIcon(e.target),13)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:700">${ledgerHeadline(e)}</div>
+        ${e.note?`<div class="t-mut" style="font-size:11px;margin-top:2px">${esc(e.note)}</div>`:''}
+        ${owed?`<div class="t-mut" style="font-size:11px;margin-top:3px">
+          dluh ${owed} ks${settling?` · přidáno ${inCart} ks`:''}
+          ${short?`<span class="chg-tag t-less" style="margin-left:4px">chybí ${owed-inCart} ks</span>`:''}
+          ${settling&&!short?`<span class="chg-tag t-more" style="margin-left:4px">${icon('check',10)}dorovnáno</span>`:''}</div>`:''}
+        ${ledState(e)==='assigned'?`<div class="t-mut" style="font-size:11px;margin-top:3px">už zařazeno do jiné objednávky</div>`:''}
+      </div>
+      ${owed&&!settling&&ledState(e)==='open'?`<button class="btn btn-sm btn-soft" style="flex:0 0 auto" onclick="oeSettle('${e.id}')">${icon('plus',13)}Přidat</button>`:''}
+      ${settling?`<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="oeUnsettle('${e.id}')">Zrušit</button>`:''}
+    </div>`; }).join('');
+  return `<div class="card" style="border-color:var(--warn)"><div class="card-head" style="background:var(--warn-tint)">
+      ${icon('warnTri',16)}<h3 style="color:var(--warn)">Nedořešeno u tohoto klienta</h3><span class="tag">${open.length}</span></div>
+    <div class="card-pad stack" style="gap:8px">${rows}</div></div>`;
+}
+/* Adds the owed pieces to the cart and links the entry to this draft. Linking is not
+   the same as closing: the entry stays open, badged "in order X", until that order is
+   actually delivered — otherwise cancelling it would make the debt vanish. */
+function oeSettle(id){
+  const e=DB.ledger.find(x=>x.id===id); if(!e) return;
+  const owed=Math.max(0,(e.plannedQuantity||0)-(e.actualQuantity||0));
+  if(!owed) return;
+  syncOEmeta();
+  const it=OE.draft.items.find(x=>x.productId===e.productId);
+  if(it) it.quantity+=owed;
+  else OE.draft.items.push({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:e.productId, quantity:owed, reminderState:null });
+  if(!OE.settle.includes(id)) OE.settle.push(id);
+  oeFullRerender(); toast(`${owed} ks přidáno do objednávky`);
+}
+function oeUnsettle(id){ OE.settle=OE.settle.filter(x=>x!==id); oeFullRerender(); }
+
 function oeHTML(){
   const d=OE.draft; const t=oeTotals();
   return `<div class="page">
@@ -2600,6 +3049,7 @@ function oeHTML(){
           ${field('Požadovaný termín dodání',inp('oe-date',d.requiredDeliveryDate||'','','date'))}
           ${field('Poznámka k objednávce',txta('oe-note',d.note||'','Např. dovézt dopoledne…'))}
         </div></div></div>
+        ${oeOpenItems()}
         <div class="card"><div class="card-head"><h3>Košík</h3><span class="tag" style="margin-left:auto" id="oe-count">${t.items} ks</span></div>
           <div id="oe-cart">${oeCart()}</div></div>
       </div></div></div>`;
@@ -2763,10 +3213,16 @@ function oeSave(){ syncOEmeta(); const d=OE.draft;
   if(!d.clientId) return toast('Vyberte klienta','warnTri');
   if(!d.items.length) return toast('Přidejte alespoň jeden produkt','warnTri');
   if(d.id){ const o=DB.orders.find(x=>x.id===d.id); o.clientId=d.clientId; o.requiredDeliveryDate=d.requiredDeliveryDate; o.note=d.note; o.items=d.items;
-    if(o.state==='New'&&d.requiredDeliveryDate) o.state='Planning'; toast('Objednávka uložena'); go('orders/'+d.id); }
+    if(o.state==='New'&&d.requiredDeliveryDate) o.state='Planning'; oeLinkSettled(o.id); toast('Objednávka uložena'); go('orders/'+d.id); }
   else { const num='OBJ-2026-'+(249+DB.orders.length); const o={ id:'o-'+Math.random().toString(36).slice(2,7), number:num, clientId:d.clientId,
     state:d.requiredDeliveryDate?'Planning':'New', createdDate:daysFromNow(0), requiredDeliveryDate:d.requiredDeliveryDate, actualDeliveryDate:null, note:d.note, items:d.items };
-    DB.orders.push(o); toast('Objednávka vytvořena'); go('orders/'+o.id); }
+    DB.orders.push(o); oeLinkSettled(o.id); toast('Objednávka vytvořena'); go('orders/'+o.id); }
+}
+/* Links, does not close: resolvedByOrderId only. The entry closes when that order is
+   actually delivered (see advanceShip) — promising is not delivering. */
+function oeLinkSettled(orderId){
+  OE.settle.forEach(id=>{ const e=DB.ledger.find(x=>x.id===id); if(e&&!e.resolvedAt) e.resolvedByOrderId=orderId; });
+  OE.settle=[];
 }
 
 /* ============ ROUTE MAP (stylized SVG, geographic projection) ============ */
@@ -3027,7 +3483,10 @@ function viewShipmentDetail(id){
 }
 function estWeight(p){ if(!p) return 0; if(p.kind==='Keg') return (p.packageSize||30)*1.05+8; if(p.kind==='Bottle') return (p.packageSize||0.5)*20*1.1; if(p.kind==='Can'||p.kind==='Multipack') return (p.packageSize||6)*1.05; return 5; }
 function advanceShip(id,to){ const s=DB.shipments.find(x=>x.id===id); s.state=to;
-  if(to==='Delivered'){ s.stops.forEach(st=>{ const o=DB.orders.find(x=>x.id===st.orderId); if(o){o.state='Finished';o.actualDeliveryDate=daysFromNow(0);} });
+  if(to==='Delivered'){ s.stops.forEach(st=>{ const o=DB.orders.find(x=>x.id===st.orderId); if(o){o.state='Finished';o.actualDeliveryDate=daysFromNow(0);
+      // The order carrying a make-good has arrived, so the entries it settles close now.
+      DB.ledger.filter(e=>e.resolvedByOrderId===o.id&&!e.resolvedAt).forEach(e=>{
+        e.resolvedAt=daysFromNow(0); e.resolvedBy=ME.id; e.resolutionNote=`Vyřešeno objednávkou ${o.number}.`; }); } });
     let deducted=0; s.stops.forEach(st=>st.items.forEach(it=>{ const dq=it.dokladkaQty||0; if(dq>0){ const inv=DB.inventory.find(i=>i.id===it.fromInventoryId)||DB.inventory.find(i=>i.productId===it.productId);
       if(inv){ inv.quantity=Math.max(0,inv.quantity-dq); deducted+=dq; } } }));
     toast(deducted?`Doručeno · ${deducted} ks dokládky odečteno ze skladu`:'Vývoz doručen — objednávky dokončeny','check'); }
@@ -3057,25 +3516,48 @@ function shipLoadingCard(s){
   const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
     const items=st.items;
     const rows=items.map(it=>{ const p=prodById(it.productId); const dq=it.dokladkaQty||0; const pure=it.quantity===0; const qty=slQty(it);
-      const qtyCell = dq>0
+      // What the stop was loaded with is one number; what came off it is another. The
+      // loaded snapshot is never rewritten by a deviation — it is the record of what
+      // went on the van — so both are shown, the delivered one struck against it.
+      const led=st.orderId?ledgerQtyFor(st.orderId,it.productId):null;
+      const qtyCell = led
+        ? `<div>${ledRowStatus(led)==='added'?`<span class="diff-new">${led.actualQuantity} ks</span>`:qtyDiff(qty,led.actualQuantity)}</div>
+           <div style="margin-top:3px">${ledTag(led)}</div>`
+        : dq>0
         ? `<div class="tnum t-strong">${qty} ks</div><div class="t-mut tnum" style="font-size:11px">${pure?`${dq} ze skladu`:`${it.quantity} obj. + ${dq} dokl.`}</div>`
         : `<span class="tnum t-strong">${qty} ks</span>`;
       const dokBadge = dq>0 ? `<span class="pill s-info"><span class="d"></span>dokládka +${dq}${editable?`<button title="Odebrat dokládku" onclick="slRemoveDokladka('${it.id}')" style="border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px;display:inline-flex;align-items:center">${icon('close',11)}</button>`:''}</span>` : '';
-      return `<tr>
+      return `<tr class="${ledgerRowClass(led)}">
         <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
           <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${dokBadge}</div></td>
         <td class="num">${qtyCell}</td>
         <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
         <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
         <td style="width:34px;text-align:right">${pure&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" title="Odebrat" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
+    // Products the client took at the door have no loaded row to decorate, so they are
+    // appended here — same reason applyLedger returns a new array on the order detail.
+    const stLed=st.orderId?ledgerForOrder(st.orderId):[];
+    const addedRows=stLed.filter(e=>e.target==='ProductQuantity'&&ledRowStatus(e)==='added'
+        &&!items.some(it=>it.productId===e.productId))
+      .map(e=>{ const p=prodById(e.productId); if(!p) return '';
+        return `<tr class="row-added"><td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
+          <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${ledTag(e)}</div></td>
+          <td class="num"><span class="diff-new">${e.actualQuantity} ks</span></td>
+          <td colspan="3" class="t-mut" style="font-size:11.5px">nebylo v nakládce</td></tr>`; }).join('');
+    const ledOpen=stLed.filter(e=>!e.resolvedAt).length;
+    const addrLed=stLed.find(e=>e.target==='DeliveryAddress');
     return `<div style="margin-bottom:6px">
       <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
         <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
-          <div><div class="row gap8"><span class="t-strong" style="font-size:13.5px">${esc(cl.name)}</span>
-            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}</div>
-            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div></div></div>
-        ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
-      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+          <div><div class="row gap8" style="flex-wrap:wrap"><span class="t-strong" style="font-size:13.5px">${esc(cl.name)}</span>
+            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}
+            ${ledOpen?`<span class="chg-tag t-info">${icon('warnTri',10)}${ledOpen} ${plural(ledOpen,'změna','změny','změn')}</span>`:''}</div>
+            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div>
+            ${addrLed?`<div style="font-size:11.5px;margin-top:3px">${textDiff(addrLed.plannedText,addrLed.actualText)}</div>`:''}</div></div>
+        <div class="row gap8">
+          ${canEdit('clients')&&st.orderId&&(s.state==='InTransit'||s.state==='Delivered')?`<button class="btn btn-sm btn-soft" onclick="ledgerDrawer('${st.orderId}')">${icon('edit',14)}Zaznamenat změnu</button>`:''}
+          ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div></div>
+      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}${addedRows}</tbody></table></div>`
         :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">Klient nemá v této nakládce žádné položky.</div>`}</div>`; }).join('');
   return `<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
       <span class="sub" style="margin-left:auto">Co naložit do vozu — pro řidiče a přípravu v pivovaru</span></div>
@@ -3121,8 +3603,34 @@ let FA={ shipId:null, invId:null, lineId:null, closed:{} };
 function fakNewId(){ return 'fak-'+Math.random().toString(36).slice(2,7); }
 function fakLineId(){ return 'fl-'+Math.random().toString(36).slice(2,7); }
 /** Every billable item in the shipment, paired with the stop (= ordering client) it came from. */
-function fakBillables(s){ return s.stops.slice().sort((a,b)=>a.order-b.order).flatMap(st=>st.items.map(it=>({it,st}))); }
-function fakSrc(s,itemId){ for(const st of s.stops){ const it=st.items.find(i=>i.id===itemId); if(it) return {it,st}; } return null; }
+/* Billable sources: the stop's loaded lines, plus one synthetic line per product the
+   client took at the door. Those have no loaded row to bill from — in the real schema
+   they are their own invoice-line source kind (InvoiceLineSourceKind.LedgerEntry),
+   which is what stops them going unbilled, the most expensive failure of the lot. */
+function fakBillables(s){
+  return s.stops.slice().sort((a,b)=>a.order-b.order).flatMap(st=>{
+    const rows=st.items.map(it=>({it,st}));
+    if(!st.orderId) return rows;
+    ledgerForOrder(st.orderId).filter(e=>e.target==='ProductQuantity'
+        &&ledRowStatus(e)==='added'&&!st.items.some(it=>it.productId===e.productId))
+      .forEach(e=>rows.push({ it:{ id:'ledit-'+e.id, productId:e.productId, quantity:0, dokladkaQty:0,
+        loaded:true, checked:true, source:'ledger' }, st, led:e }));
+    return rows;
+  });
+}
+/* What actually gets billed for one line. The deviation applies whether or not it has
+   been settled with the client: seven of ten delivered is an invoice for seven, and it
+   stays seven — the three that follow later are billed on THAT run's invoice. Letting a
+   closed entry restore the plan would bill those pieces twice. */
+function fakQty(it,st){
+  const led=st&&st.orderId?ledgerQtyFor(st.orderId,it.productId):null;
+  return led?led.actualQuantity:slQty(it);
+}
+/* Resolves an invoice line back to what it bills. Goes through fakBillables rather than
+   st.items directly, so a line billing a product taken at the door — which has no loaded
+   row — still resolves and renders. Counting it but failing to render it is how an
+   invoice ends up with a total its own rows do not add up to. */
+function fakSrc(s,itemId){ const hit=fakBillables(s).find(({it})=>it.id===itemId); return hit||null; }
 function fakStopIndex(s,clientId){ const so=s.stops.slice().sort((a,b)=>a.order-b.order); const i=so.findIndex(st=>st.clientId===clientId); return i<0?99:i; }
 function fakHomeFor(s,clientId){ let v=s.invoices.filter(x=>x.clientId===clientId).sort((a,b)=>a.seq-b.seq)[0];
   if(!v){ v={id:fakNewId(),clientId,seq:1,lines:[]}; s.invoices.push(v); } return v; }
@@ -3145,7 +3653,7 @@ function fakEnsure(s){
     if(known.has(l.itemId)) return true;
     log.push({t:'gone',productId:(s.fakItemProduct||{})[l.itemId],qty:l.qty}); return false; }); });
   src.forEach(({it,st})=>{
-    const total=slQty(it);
+    const total=fakQty(it,st);
     let assigned=0; s.invoices.forEach(v=>v.lines.forEach(l=>{ if(l.itemId===it.id) assigned+=l.qty; }));
     const diff=total-assigned;
     if(diff>0){ const home=fakHomeFor(s,st.clientId); const l=home.lines.find(x=>x.itemId===it.id);
@@ -3297,7 +3805,7 @@ function shipInvoiceCard(s){
   const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
   fakEnsure(s);
   const clients=fakClients(s);
-  const totalPieces=fakBillables(s).reduce((x,{it})=>x+slQty(it),0);
+  const totalPieces=fakBillables(s).reduce((x,{it,st})=>x+fakQty(it,st),0);
   const billed=s.invoices.reduce((x,v)=>x+fakPieces(v),0);
   const totalValue=s.invoices.reduce((x,v)=>x+fakValue(s,v),0);
   const crossN=s.invoices.reduce((n,v)=>n+v.lines.filter(l=>fakIsCross(s,v,l)).length,0);
