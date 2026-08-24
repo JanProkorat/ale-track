@@ -17,17 +17,19 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// <remarks>
 /// The same content as <see cref="ExportOutgoingShipmentExcelEndpoint"/>, for the times the run is
 /// printed and handed over rather than worked on in a spreadsheet. Both read the same
-/// <see cref="ShipmentExportQuery"/>, so the two files can never disagree about what is being
-/// delivered.
+/// <see cref="ShipmentExportQuery"/>, carry the rows the request names, and stamp them the same way,
+/// so the two files can never disagree about what was sent.
 /// </remarks>
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
 /// <param name="driverScope"></param>
+/// <param name="timeProvider"></param>
 [BinaryResponse(ExportOutgoingShipmentWordEndpoint.DocumentContentType)]
 public sealed class ExportOutgoingShipmentWordEndpoint(
     AleTrackDbContext dbContext,
     IOptions<CompanyOptions> companyOptions,
-    IDriverScope driverScope)
+    IDriverScope driverScope,
+    TimeProvider timeProvider)
     : Endpoint<ExportOutgoingShipmentRequest>
 {
     /// <summary>
@@ -39,13 +41,15 @@ public sealed class ExportOutgoingShipmentWordEndpoint(
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("outgoing-shipments/{Id:guid}/export/word");
+        Post("outgoing-shipments/{Id:guid}/export/word");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
+            .RequireCapability(Capability.Invoicing)
             // Registers the status code and its media type; the binary schema itself is applied by
             // BinaryResponseProcessor off this endpoint's [BinaryResponse] marker, because no
             // Produces overload yields one.
             .Produces(StatusCodes.Status200OK, contentType: DocumentContentType)
+            .Produces<FailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(ExportOutgoingShipmentWordEndpoint)));
 
@@ -55,6 +59,8 @@ public sealed class ExportOutgoingShipmentWordEndpoint(
             {
                 s.Summary = "Exports an outgoing shipment to a .docx document";
                 s.Responses[StatusCodes.Status200OK] = "Document generated";
+                s.Responses[StatusCodes.Status400BadRequest] =
+                    "Nothing was chosen, or a chosen client has no confirmed row on the shipment";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment not found";
             }
         );
@@ -65,13 +71,16 @@ public sealed class ExportOutgoingShipmentWordEndpoint(
     {
         await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
 
-        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, companyOptions.Value, ct);
-        if (model is null)
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+        var selection = await ShipmentExportSelector.LoadAsync(dbContext, req, companyOptions.Value, ct);
+
+        // Built before the stamp, so a file that failed to generate leaves no row reading as sent.
+        var bytes = ShipmentExportDocumentBuilder.Build(selection.Model);
+
+        await ShipmentExportSelector.StampAsync(dbContext, selection, timeProvider, ct);
 
         await Send.BytesAsync(
-            ShipmentExportDocumentBuilder.Build(model!),
-            ShipmentExportFileName.For(model!, "docx"),
+            bytes,
+            ShipmentExportFileName.For(selection.Model, "docx"),
             DocumentContentType,
             cancellation: ct);
     }

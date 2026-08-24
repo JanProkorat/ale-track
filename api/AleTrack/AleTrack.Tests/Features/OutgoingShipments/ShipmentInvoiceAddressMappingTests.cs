@@ -7,8 +7,9 @@ using FluentAssertions;
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
 /// <summary>
-/// Whether an invoice's DTO carries its client's official address — the payer band the frontend
-/// falls back to when the payer has no stop of its own to derive an address from.
+/// What an invoice's DTO carries off its client: the official address the frontend falls back to
+/// when the payer has no stop of its own, and the trading name that tells two clients of the same
+/// name apart.
 /// </summary>
 public sealed class ShipmentInvoiceAddressMappingTests
 {
@@ -44,6 +45,32 @@ public sealed class ShipmentInvoiceAddressMappingTests
         var dto = Map(ShipmentWith(client)).Invoices.Single();
 
         dto.ClientOfficialAddress.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Two clients can genuinely share a name — the trading name is what the office reads to tell
+    /// them apart, on the Fakturace band and in the export drawer.
+    /// </summary>
+    [Fact]
+    public void ToDto_ClientWithBusinessName_MapsItOntoTheInvoice()
+    {
+        var client = new Client
+        {
+            Id = ClientAId, PublicId = Guid.NewGuid(), Name = "Luděk Pachl", BusinessName = "Pachl s.r.o."
+        };
+
+        var dto = Map(ShipmentWith(client)).Invoices.Single();
+
+        dto.ClientName.Should().Be("Luděk Pachl");
+        dto.ClientBusinessName.Should().Be("Pachl s.r.o.");
+    }
+
+    [Fact]
+    public void ToDto_ClientWithNoBusinessName_LeavesItNull()
+    {
+        var client = new Client { Id = ClientAId, PublicId = Guid.NewGuid(), Name = "Klient A" };
+
+        Map(ShipmentWith(client)).Invoices.Single().ClientBusinessName.Should().BeNull();
     }
 
     private static ShipmentInvoicesDto Map(OutgoingShipment shipment)

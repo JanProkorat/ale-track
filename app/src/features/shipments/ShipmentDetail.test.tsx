@@ -132,6 +132,20 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useAddShipmentInvoice: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: vi.fn(), isPending: false }),
 }));
+// Stands in for the export drawer: this file is about what the detail screen does with an export,
+// not about choosing its rows — ExportSelectionDrawer.test.tsx covers that against the real thing.
+// The stub reports whether it was opened and fires each format with a fixed selection.
+vi.mock('./ExportSelectionDrawer', () => ({
+  ExportSelectionDrawer: ({ open, onExport }: {
+    open: boolean;
+    onExport: (format: 'excel' | 'word', clientIds: string[]) => void;
+  }) => (open ? (
+    <div data-testid="export-drawer">
+      <button type="button" onClick={() => onExport('excel', ['client-a'])}>Excel</button>
+      <button type="button" onClick={() => onExport('word', ['client-a'])}>Word</button>
+    </div>
+  ) : null),
+}));
 vi.mock('src/providers/CurrencyProvider', () => ({
   useCurrency: () => ({ formatMoney: (czk: number | null | undefined) => (czk == null ? '—' : `${czk} Kč`) }),
 }));
@@ -295,10 +309,10 @@ describe('ShipmentDetail — export', () => {
     exportShipmentPending.value = false;
   });
 
-  /** Opens the format menu and picks one, the way a user does. */
+  /** Opens the drawer and picks a format, the way a user does. */
   function pickFormat(label: 'Excel' | 'Word') {
     fireEvent.click(screen.getByRole('button', { name: /^Export/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(`^${label}`) }));
+    fireEvent.click(screen.getByRole('button', { name: label }));
   }
 
   // Exporting is reading, so it must not disappear on a run the office can no longer edit —
@@ -309,16 +323,17 @@ describe('ShipmentDetail — export', () => {
     expect(screen.getByRole('button', { name: /^Export/ })).toBeEnabled();
   });
 
-  // The button itself must not export: picking a format is the whole point of the menu, and a
-  // button that fired Excel on click would make the Word item unreachable in one gesture.
-  it('opens a format menu rather than exporting straight away', () => {
+  // The button must not export: which rows go into the file is the whole point of the drawer, and
+  // a button that fired one on click would send the lot every time.
+  it('opens the drawer rather than exporting straight away', () => {
     renderDetail([officialStop()]);
+
+    expect(screen.queryByTestId('export-drawer')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /^Export/ }));
 
     expect(exportShipmentMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole('menuitem', { name: /^Excel/ })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: /^Word/ })).toBeInTheDocument();
+    expect(screen.getByTestId('export-drawer')).toBeInTheDocument();
   });
 
   it.each([
@@ -330,7 +345,8 @@ describe('ShipmentDetail — export', () => {
     pickFormat(label);
 
     expect(exportShipmentMutate).toHaveBeenCalledTimes(1);
-    expect(exportShipmentMutate.mock.calls[0][0]).toEqual({ id: 'ship-1', format });
+    expect(exportShipmentMutate.mock.calls[0][0])
+      .toEqual({ id: 'ship-1', format, clientIds: ['client-a'] });
   });
 
   it('saves the file under the name the server sent', () => {
@@ -361,6 +377,29 @@ describe('ShipmentDetail — export', () => {
     act(() => onSuccess({ data: blob, fileName: undefined, status: 200 }));
 
     expect(downloadBlob).toHaveBeenCalledWith(blob, expected);
+  });
+
+  it('closes the drawer once the file is saved', () => {
+    renderDetail([officialStop()]);
+
+    pickFormat('Excel');
+
+    const { onSuccess } = exportShipmentMutate.mock.calls[0][1];
+    act(() => onSuccess({ data: new Blob(['x']), fileName: 'vyvoz.xlsx', status: 200 }));
+
+    expect(screen.queryByTestId('export-drawer')).toBeNull();
+  });
+
+  // The selection took work to make; a failed export must not throw it away.
+  it('leaves the drawer open when the export fails', () => {
+    renderDetail([officialStop()]);
+
+    pickFormat('Excel');
+
+    const { onError } = exportShipmentMutate.mock.calls[0][1];
+    act(() => onError(new Error('boom')));
+
+    expect(screen.getByTestId('export-drawer')).toBeInTheDocument();
   });
 
   it('surfaces a failed export instead of saving nothing silently', () => {

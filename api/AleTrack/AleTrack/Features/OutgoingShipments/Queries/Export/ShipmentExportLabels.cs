@@ -27,27 +27,46 @@ public static class ShipmentExportLabels
     public const string InvoicedTo = "Fakturováno na";
 
     /// <summary>
-    /// Heading for one invoice block, suffixed with its sequence only when the paying client
-    /// holds more than one invoice on the run — otherwise a single invoice is not saddled with a
-    /// meaningless "1".
+    /// Heading for one invoice block — <c>1. Luděk Pachl – Pachl s.r.o.</c>: the number the office
+    /// confirmed the row under, the client, and its trading name when it has one. Suffixed with the
+    /// invoice's sequence only when the paying client holds more than one on the run, so a single
+    /// invoice is not saddled with a meaningless "1".
     /// </summary>
     /// <remarks>
     /// Shared by both export writers so they cannot drift into disagreeing about which headings
     /// need the suffix. Keyed on <see cref="ShipmentExportInvoice.PayingClientId"/> rather than
-    /// the name, because two distinct clients can genuinely share a name.
+    /// the name, because two distinct clients can genuinely share a name — which is also why the
+    /// trading name is printed beside it — but IDs don't.
+    ///
+    /// The number leads because it is what the office writes onto the paper invoice and reads the
+    /// file by. Two blocks of one client share it, which is exactly why the sequence is still what
+    /// tells them apart.
     /// </remarks>
-    public static string InvoiceHeading(ShipmentExportInvoice invoice, IReadOnlyDictionary<Guid, int> invoiceCountByPayer) =>
-        invoiceCountByPayer[invoice.PayingClientId] > 1
-            ? $"{invoice.PayingClientName} · Faktura {invoice.Sequence}"
-            : invoice.PayingClientName;
+    public static string InvoiceHeading(ShipmentExportInvoice invoice, IReadOnlyDictionary<Guid, int> invoiceCountByPayer)
+    {
+        var client = string.IsNullOrWhiteSpace(invoice.PayingClientBusinessName)
+            ? invoice.PayingClientName
+            : $"{invoice.PayingClientName} – {invoice.PayingClientBusinessName}";
+
+        return invoiceCountByPayer[invoice.PayingClientId] > 1
+            ? $"{invoice.Number}. {client} · Faktura {invoice.Sequence}"
+            : $"{invoice.Number}. {client}";
+    }
 
     /// <summary>How many invoices each paying client holds on the run, for <see cref="InvoiceHeading"/>.</summary>
     public static Dictionary<Guid, int> InvoiceCountByPayer(IEnumerable<ShipmentExportInvoice> invoices) =>
         invoices.GroupBy(i => i.PayingClientId).ToDictionary(g => g.Key, g => g.Count());
 
-    /// <summary>Heading for one invoice party's block, marking the payer's own goods.</summary>
-    public static string PartyHeading(ShipmentExportInvoiceParty party) =>
-        party.IsPayer ? $"{party.ClientName} · vlastní zboží" : party.ClientName;
+    /// <summary>
+    /// Heading for one invoice party's block — whose goods the table below lists.
+    /// </summary>
+    /// <remarks>
+    /// The client's name and nothing else. It used to gloss the payer's own row as "vlastní zboží",
+    /// which read as jargon on the one invoice that needs no distinction at all: a block with a
+    /// single party. The writers now leave the heading out there entirely, so where it does appear
+    /// the names are the whole point.
+    /// </remarks>
+    public static string PartyHeading(ShipmentExportInvoiceParty party) => party.ClientName;
 
     /// <summary>
     /// Heading of an invoice's billing-recipients section, naming the payer the office chose these

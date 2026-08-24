@@ -5,14 +5,13 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   Backdrop,
   Box, Button, Card, Chip, CircularProgress, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link, ListItemIcon, ListItemText,
-  Menu, MenuItem, Stack, TextField, Typography,
+  DialogActions, DialogContent, DialogTitle, Divider, IconButton, Link,
+  Stack, TextField, Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import DirectionsCarOutlinedIcon from '@mui/icons-material/DirectionsCarOutlined';
@@ -28,8 +27,6 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ArrowUpIcon from '@mui/icons-material/KeyboardArrowUpOutlined';
 import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDownOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
-import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useSnackbar } from 'notistack';
 import { StatusPill } from 'src/components/common/StatusPill';
 import { DetailHeader } from 'src/components/common/DetailHeader';
@@ -83,6 +80,7 @@ import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from '.
 import { predictPickupStops, withSplitApplied } from './pickupStopPrediction';
 import { platoSizeChipText, unloadOrder } from './unloadOrder';
 import { UnloadOrderList } from './UnloadOrderList';
+import { ExportSelectionDrawer } from './ExportSelectionDrawer';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
 import { AddressChangedBanner } from './AddressChangedBanner';
 import { PreparationStepsCard } from './PreparationStepsCard';
@@ -856,7 +854,7 @@ export function ShipmentDetail({
   // rather than pretending has already happened.
   const [stateChange, setStateChange] = useState<OutgoingShipmentState | null>(null);
 
-  const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [stockPurchaseOpen, setStockPurchaseOpen] = useState(false);
   const [stockPurchaseProductId, setStockPurchaseProductId] = useState<string | null>(null);
@@ -1094,15 +1092,15 @@ export function ShipmentDetail({
   // that name off Content-Disposition, so nothing here has to reconstruct it. The fallback only
   // covers a proxy that strips the header, and carries the right extension per format so the file
   // still opens in the right program.
-  function runExport(format: ShipmentExportFormat) {
-    setExportMenuAnchor(null);
+  function runExport(format: ShipmentExportFormat, clientIds: string[]) {
     if (!shipment.id) return;
 
-    exportShipment.mutate({ id: shipment.id, format }, {
-      onSuccess: (file) => downloadBlob(
-        file.data,
-        file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'),
-      ),
+    exportShipment.mutate({ id: shipment.id, format, clientIds }, {
+      onSuccess: (file) => {
+        setExportOpen(false);
+        downloadBlob(file.data, file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'));
+      },
+      // The drawer stays open on failure, with the selection intact to retry.
       onError: (e) => enqueueSnackbar(apiErrorMessage(e, 'Export se nepodařilo vytvořit'), { variant: 'error' }),
     });
   }
@@ -1296,40 +1294,25 @@ export function ShipmentDetail({
         actions={(
           <>
             {/* Not gated on `editable`: exporting is reading, and the office needs the file for
-                runs it may no longer change. The route already gates view permission.
+                runs it may no longer change. It *is* gated on the invoicing capability — the file's
+                body is the invoice split, and the drawer chooses its rows off the invoices query,
+                which that capability guards server-side.
 
-                One button opening a format menu rather than two buttons: the header already carries
-                up to four lifecycle actions, and a fifth wraps it onto a second row. */}
-            <Button
-              variant="outlined"
-              startIcon={exportShipment.isPending
-                ? <CircularProgress size={16} color="inherit" />
-                : <FileDownloadOutlinedIcon />}
-              endIcon={exportShipment.isPending ? undefined : <ExpandMoreIcon />}
-              onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-              disabled={exportShipment.isPending}
-              aria-haspopup="menu"
-              aria-expanded={exportMenuAnchor != null}
-              sx={ghostBtnSx}
-            >
-              {exportShipment.isPending ? 'Exportuji…' : 'Export'}
-            </Button>
-            <Menu
-              anchorEl={exportMenuAnchor}
-              open={exportMenuAnchor != null}
-              onClose={() => setExportMenuAnchor(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-            >
-              <MenuItem onClick={() => runExport('excel')}>
-                <ListItemIcon><TableChartOutlinedIcon fontSize="small" /></ListItemIcon>
-                <ListItemText primary="Excel" secondary="List pro každého klienta" />
-              </MenuItem>
-              <MenuItem onClick={() => runExport('word')}>
-                <ListItemIcon><DescriptionOutlinedIcon fontSize="small" /></ListItemIcon>
-                <ListItemText primary="Word" secondary="Stránka pro každého klienta" />
-              </MenuItem>
-            </Menu>
+                The format used to be a menu on this button; it now sits in the drawer, beside the
+                selection it applies to. */}
+            {canSeeInvoicing && (
+              <Button
+                variant="outlined"
+                startIcon={exportShipment.isPending
+                  ? <CircularProgress size={16} color="inherit" />
+                  : <FileDownloadOutlinedIcon />}
+                onClick={() => setExportOpen(true)}
+                disabled={exportShipment.isPending}
+                sx={ghostBtnSx}
+              >
+                {exportShipment.isPending ? 'Exportuji…' : 'Export'}
+              </Button>
+            )}
             {/* Every lifecycle button is disabled while a transition runs: they all post to the
                 same endpoint, and a second click during the first would race the first one's
                 own state change. The clicked button carries the spinner so it is obvious which
@@ -1705,6 +1688,17 @@ export function ShipmentDetail({
         <Box sx={{ mt: 2.5 }}>
           <ShipmentInvoicing shipmentId={shipment.id!} editable={nakladkaEditable} stops={stopsSorted} />
         </Box>
+      )}
+
+      {/* Mounted alongside the card that shares its query, so opening it hits the cache. */}
+      {canSeeInvoicing && (
+        <ExportSelectionDrawer
+          open={exportOpen}
+          shipmentId={shipment.id!}
+          busy={exportShipment.isPending}
+          onClose={() => setExportOpen(false)}
+          onExport={runExport}
+        />
       )}
 
       <Dialog open={stockPurchaseOpen} onClose={() => setStockPurchaseOpen(false)} maxWidth="xs" fullWidth>

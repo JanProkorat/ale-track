@@ -17,6 +17,7 @@ import {
   LinkedClientDto,
   ProductKind,
   ShipmentInvoiceBillingRecipientDto,
+  ShipmentInvoiceConfirmationDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
@@ -28,6 +29,7 @@ const moveMutate = vi.fn();
 const addMutate = vi.fn();
 const deleteMutate = vi.fn();
 const setRecipientsMutate = vi.fn();
+const setReadinessMutate = vi.fn();
 /** Client detail per id — the billing-recipient dropdown reads its options off it. */
 let clientDetails: Record<string, ClientDto> = {};
 let invoicesResponse: ShipmentInvoicesDto | undefined;
@@ -42,6 +44,7 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
   useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
+  useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, isPending: false }),
 }));
 
 vi.mock('src/hooks/useClients', () => ({
@@ -130,6 +133,27 @@ describe('client bands', () => {
     // sub-header and in the section total above. Guarded so it does not creep
     // back in.
     expect(screen.queryByText(/1 faktura · 10 ks/)).not.toBeInTheDocument();
+  });
+
+  it("shows the client's trading name in the band header when it has one", () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientName: 'Luděk Pachl', clientBusinessName: 'Pachl s.r.o.', lines: [line({ quantity: 3 })] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/Pachl s\.r\.o\./)).toBeInTheDocument();
+  });
+
+  it('shows the client name alone when there is no trading name', () => {
+    renderSection();
+
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+    expect(screen.queryByText(/Klient A ·/)).not.toBeInTheDocument();
   });
 
   it('omits the per-invoice sub-header when the client has only one invoice', () => {
@@ -961,6 +985,116 @@ describe('delivery address', () => {
   });
 });
 
+describe("a payer's band: each sub-client's own order", () => {
+  const PAYER = 'client-payer';
+
+  /** A stop for one sub-client, carrying its own notes and vratky. */
+  const subStop = (
+    id: string,
+    order: number,
+    clientId: string,
+    notes: string[],
+    returns: { name: string; quantity: number }[],
+  ) => ({
+    id, order, clientId,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    notes: notes.map((t) => ({ id: `${id}-${t}`, text: t, dateCreated: new Date() })),
+    returns: returns.map((r) => ({ id: `${id}-${r.name}`, ...r })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  /** One invoice, issued to the payer, billing two sub-clients' goods. */
+  function payerBand() {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    return [
+      subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], []),
+      subStop('st-b', 2, CLIENT_B, [], [{ name: 'Sud 30l KEG', quantity: 4 }]),
+    ];
+  }
+
+  /// The payer takes no delivery of its own, so reading the band's own stop found nothing at all —
+  /// which is how every sub-client's note and vratka went missing from this screen.
+  it("shows each sub-client's notes and vratky under its own goods", () => {
+    renderSection(true, payerBand());
+
+    expect(within(screen.getByTestId(`party-details-${CLIENT_A}`)).getByText('Platí za pivo 822 EUR'))
+      .toBeInTheDocument();
+    expect(within(screen.getByTestId(`party-details-${CLIENT_B}`)).getByText('Sud 30l KEG'))
+      .toBeInTheDocument();
+  });
+
+  /// The client's group in the table already names it; a second block underneath named it again,
+  /// which is what made a payer's band read as two lists of the same clients.
+  it('names each sub-client exactly once', () => {
+    renderSection(true, payerBand());
+
+    expect(screen.getAllByText('Andreas Hohmann')).toHaveLength(1);
+    expect(screen.getAllByText('Chorvatka')).toHaveLength(1);
+  });
+
+  // Its detail closes its own group, so it sits between that client's goods and the next client.
+  it("keeps a sub-client's detail inside its group", () => {
+    renderSection(true, payerBand());
+
+    const hohmannDetail = screen.getByTestId(`party-details-${CLIENT_A}`);
+    const chorvatka = screen.getByText('Chorvatka');
+
+    expect(hohmannDetail.compareDocumentPosition(chorvatka) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  // A client with neither note nor vratka has nothing to show, and an empty block headed by its
+  // name would read as "no instructions".
+  it('leaves out a sub-client with neither', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], [])]);
+
+    expect(screen.getByTestId(`party-details-${CLIENT_A}`)).toBeInTheDocument();
+    // Chorvatka has neither, so its group closes with its goods — an empty block would read as "no
+    // instructions".
+    expect(screen.queryByTestId(`party-details-${CLIENT_B}`)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();
+  });
+
+  // One client, one order: naming it above its own note repeats the band header.
+  it('does not name the client on an ordinary band', () => {
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Dovézt dopoledne'], [])]);
+
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getAllByText('Klient A')).toHaveLength(1);
+  });
+});
+
 describe('order notes', () => {
   const stopWithNotes = (texts: string[]) => ({
     id: 'st1', order: 1, clientId: CLIENT_A,
@@ -1212,5 +1346,80 @@ describe('fakturační adresy sub-klientů', () => {
 
     // Read-only and empty: a chip here could never be filled in, so it is pure clutter.
     expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('marking a row finished', () => {
+  function confirmation(clientId: string, number: number, isReady = true) {
+    return new ShipmentInvoiceConfirmationDto({ clientId, number, isReady });
+  }
+
+  it('shows the row\'s own number on the badge, not the stop it is on', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ stopOrder: 4, lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 2)],
+    });
+
+    renderSection();
+
+    // The number the office writes onto the invoice — the route position it used to show has
+    // moved to the address line, which needs a stop to render at all.
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+  });
+
+  it('shows a dash while the row has never been marked', () => {
+    renderSection();
+
+    expect(screen.getByText('–')).toBeInTheDocument();
+  });
+
+  it('marks the row ready through the endpoint, keyed on the client', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hotovo – Klient A' }));
+
+    expect(setReadinessMutate).toHaveBeenCalledTimes(1);
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: true });
+  });
+
+  it('un-marks a row that is already ready', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection();
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Hotovo – Klient A' });
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(checkbox);
+
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: false });
+  });
+
+  it('offers no tick to a viewer who cannot edit, and reports a ready row as a chip', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection(false);
+
+    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Hotovo')).toBeInTheDocument();
+  });
+
+  it('says nothing about an unmarked row to a viewer who cannot edit', () => {
+    renderSection(false);
+
+    expect(screen.queryByText('Hotovo')).not.toBeInTheDocument();
   });
 });

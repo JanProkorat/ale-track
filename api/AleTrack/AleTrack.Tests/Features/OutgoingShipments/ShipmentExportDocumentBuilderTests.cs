@@ -10,7 +10,8 @@ using FluentAssertions;
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
 /// <summary>
-/// What the shipment export document contains: the run's overview, then a page per client.
+/// What the shipment export document contains: the run's overview and route, then a page per
+/// confirmed invoice.
 /// </summary>
 /// <remarks>
 /// Every test opens the produced bytes with the OpenXML SDK rather than inspecting the builder's
@@ -21,45 +22,33 @@ public sealed class ShipmentExportDocumentBuilderTests
     private static ShipmentExportStop BuildStop(
         int order,
         string clientName,
-        string? street = "Dlouhá 14",
-        string? cityLine = "602 00 Brno",
         string? city = "Brno",
-        string? deliveryPlaceName = null,
-        string? invoicedToClientName = null,
-        List<string>? notes = null,
-        List<ShipmentExportProduct>? products = null,
-        List<ShipmentExportReturn>? returns = null) =>
+        List<ShipmentExportProduct>? products = null) =>
         new()
         {
             Order = order,
             ClientName = clientName,
-            Street = street,
-            CityLine = cityLine,
             City = city,
-            DeliveryPlaceName = deliveryPlaceName,
-            InvoicedToClientName = invoicedToClientName,
-            Notes = notes ?? [],
-            Products = products ?? [BuildProduct("Pilsner Urquell", 24)],
-            Returns = returns ?? []
+            Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
     /// <summary>
-    /// A product row. <paramref name="invoicedQuantity"/> left null makes it a row nobody is billed
-    /// for — the run's own stock purchases, which is the only shape that has no invoice behind it.
+    /// A product row. <paramref name="delivered"/> left null makes it a row no stop can answer for —
+    /// the run's own stock purchases, or a supplier good.
     /// </summary>
     private static ShipmentExportProduct BuildProduct(
         string name,
         int quantity,
         ProductKind? kind = ProductKind.Bottle,
         double? packageSize = 0.5,
-        int? invoicedQuantity = null) =>
+        int? delivered = null) =>
         new()
         {
             Name = name,
             Quantity = quantity,
             Kind = kind,
             PackageSize = packageSize,
-            InvoicedQuantity = invoicedQuantity
+            DeliveredQuantity = delivered
         };
 
     private static ShipmentExportModel BuildModel(
@@ -81,14 +70,28 @@ public sealed class ShipmentExportDocumentBuilderTests
             Invoices = invoices ?? []
         };
 
+    /// <summary>
+    /// One party of an invoice. The delivery details default to none, which is the shape of a party
+    /// whose goods this run only bills.
+    /// </summary>
     private static ShipmentExportInvoiceParty BuildParty(
         string clientName,
         bool isPayer = false,
-        List<ShipmentExportProduct>? products = null) =>
+        List<ShipmentExportProduct>? products = null,
+        string? street = null,
+        string? cityLine = null,
+        string? deliveryPlaceName = null,
+        List<string>? notes = null,
+        List<ShipmentExportReturn>? returns = null) =>
         new()
         {
             ClientName = clientName,
             IsPayer = isPayer,
+            Street = street,
+            CityLine = cityLine,
+            DeliveryPlaceName = deliveryPlaceName,
+            Notes = notes ?? [],
+            Returns = returns ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
@@ -101,11 +104,19 @@ public sealed class ShipmentExportDocumentBuilderTests
         string payingClientName,
         int sequence,
         List<ShipmentExportInvoiceParty> parties,
+        int number = 1,
         Guid? payingClientId = null,
+        string? payingClientBusinessName = null,
+        string? payerStreet = null,
+        string? payerCityLine = null,
         List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
+            Number = number,
             PayingClientName = payingClientName,
+            PayingClientBusinessName = payingClientBusinessName,
+            PayerStreet = payerStreet,
+            PayerCityLine = payerCityLine,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
             Parties = parties,
@@ -142,6 +153,14 @@ public sealed class ShipmentExportDocumentBuilderTests
             .Select(row => row.Elements<TableCell>().Select(c => c.InnerText).ToList())
             .ToList();
 
+    /// <summary>Rows of a table by its first heading cell, for the ones whose index moves.</summary>
+    private static List<List<string>> TableHeaded(Body body, string firstHeader) =>
+        body.Elements<Table>()
+            .Select(table => table.Elements<TableRow>()
+                .Select(row => row.Elements<TableCell>().Select(c => c.InnerText).ToList())
+                .ToList())
+            .First(rows => rows[0][0] == firstHeader);
+
     [Fact]
     public void Build_ProducesADocumentTheOpenXmlSdkCanRead()
     {
@@ -162,34 +181,47 @@ public sealed class ShipmentExportDocumentBuilderTests
     [Fact]
     public void Build_ProducesSchemaValidWordprocessingMl()
     {
-        // Exercised over a model that reaches every branch: a custom stop, notes, returns, a custom
-        // extra with no product behind it, both product-table shapes, and the warehouse page.
+        // Exercised over a model that reaches every branch: a custom stop, the warehouse, the stock
+        // block, a party with an address, notes, returns and a custom extra with no product behind
+        // it, a party with no delivery at all, and a party with no goods.
         var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
 
         var model = BuildModel(
             stops:
             [
-                BuildStop(
-                    1,
-                    "Hospoda U Kotvy",
-                    deliveryPlaceName: "Zahrádka",
-                    notes: ["Volat 30 min předem", "Brána z boku"],
-                    products:
-                    [
-                        BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
-                        BuildProduct("Slunečník", 2, kind: null, packageSize: null, invoicedQuantity: 0)
-                    ],
-                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }]),
+                BuildStop(1, "Hospoda U Kotvy"),
                 new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" },
-                BuildStop(3, "Bez položek s.r.o.", products: []),
                 new ShipmentExportStop
                 {
-                    Order = 4, IsWarehouse = true, Label = "AleTrack s.r.o.",
-                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
-                    Products = stockGoods
+                    Order = 3, IsWarehouse = true, Label = "AleTrack s.r.o.",
+                    City = "Liberec", Products = stockGoods
                 }
             ],
-            stockPurchases: stockGoods);
+            stockPurchases: stockGoods,
+            invoices:
+            [
+                BuildInvoice(
+                    "Hospoda U Kotvy", sequence: 1,
+                    parties:
+                    [
+                        BuildParty(
+                            "Hospoda U Kotvy", isPayer: true,
+                            street: "Dlouhá 14", cityLine: "602 00 Brno", deliveryPlaceName: "Zahrádka",
+                            notes: ["Volat 30 min předem", "Brána z boku"],
+                            products:
+                            [
+                                BuildProduct("Pilsner Urquell", 24),
+                                BuildProduct("Slunečník", 2, kind: null, packageSize: null)
+                            ],
+                            returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }]),
+                        BuildParty("Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
+                    ],
+                    billingRecipients: [BuildRecipient("Bar Na Rohu")]),
+                BuildInvoice("Bez položek s.r.o.", sequence: 1, number: 2, parties:
+                [
+                    BuildParty("Bez položek s.r.o.", isPayer: true, products: [])
+                ])
+            ]);
 
         var stream = new MemoryStream(ShipmentExportDocumentBuilder.Build(model));
         using var document = WordprocessingDocument.Open(stream, isEditable: false);
@@ -208,17 +240,25 @@ public sealed class ShipmentExportDocumentBuilderTests
         BuildModel(
             stops:
             [
-                BuildStop(
-                    1,
-                    "Hospoda U Kotvy",
-                    deliveryPlaceName: "Zahrádka",
-                    notes: ["Volat 30 min předem"],
-                    products: [BuildProduct("Pilsner Urquell", 24)],
-                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6 }]),
-                new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" },
-                BuildStop(3, "Bez položek s.r.o.", products: [])
+                BuildStop(1, "Hospoda U Kotvy"),
+                new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" }
             ],
-            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
+            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)],
+            invoices:
+            [
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+                [
+                    BuildParty(
+                        "Hospoda U Kotvy", isPayer: true,
+                        street: "Dlouhá 14", cityLine: "602 00 Brno", deliveryPlaceName: "Zahrádka",
+                        notes: ["Volat 30 min předem"],
+                        returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6 }])
+                ]),
+                BuildInvoice("Bez položek s.r.o.", sequence: 1, number: 2, parties:
+                [
+                    BuildParty("Bez položek s.r.o.", isPayer: true, products: [])
+                ])
+            ]);
 
     /// <summary>
     /// Without declared page geometry a reader has no page to lay content out against, and pushes
@@ -247,7 +287,7 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     /// <summary>
-    /// Word merges two tables that sit directly against each other, which ran a client's address
+    /// Word merges two tables that sit directly against each other, which ran a party's address
     /// block into their product table; and a body ending on a table is a shape Word repairs.
     /// </summary>
     [Fact]
@@ -265,15 +305,15 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     /// <summary>
-    /// One hard break per client and nowhere else, each immediately before that client's heading.
+    /// One hard break per invoice and nowhere else, each immediately before that invoice's heading.
     /// </summary>
     /// <remarks>
     /// Asserted on an explicit <c>w:br w:type="page"</c> run rather than on <c>pageBreakBefore</c>:
-    /// the latter is a hint readers outside Word ignore, which is what ran every client onto the
-    /// previous client's page.
+    /// the latter is a hint readers outside Word ignore, which is what ran every page onto the
+    /// previous one.
     /// </remarks>
     [Fact]
-    public void Build_StartsEachClientOnAFreshPage()
+    public void Build_StartsEachInvoiceOnAFreshPage()
     {
         var model = BuildFullModel();
         var body = Open(model);
@@ -288,16 +328,16 @@ public sealed class ShipmentExportDocumentBuilderTests
             .ToList();
 
         breakIndices.Should().HaveCount(
-            model.ClientStops.Count(),
-            "one break per client — the overview keeps the first page, and a custom stop has no page");
+            model.Invoices.Count,
+            "one break per invoice — the overview keeps the first page, and a stop no longer has one");
 
-        // Each break is followed directly by the heading of the client it opens, so no content can
-        // slip onto the previous client's page.
+        // Each break is followed directly by the heading of the invoice it opens, so no content can
+        // slip onto the previous page.
         breakIndices.Select(index => children[index + 1].InnerText)
-            .Should().Equal("1. Hospoda U Kotvy", "3. Bez položek s.r.o.");
+            .Should().Equal("1. Hospoda U Kotvy", "2. Bez položek s.r.o.");
     }
 
-    // Both mechanisms together would break twice and leave a blank page between every client.
+    // Both mechanisms together would break twice and leave a blank page between every invoice.
     [Fact]
     public void Build_DoesNotAlsoUseTheParagraphLevelBreakHint()
     {
@@ -355,46 +395,46 @@ public sealed class ShipmentExportDocumentBuilderTests
         stops[3].Should().Equal("3", "Pivnice Na Růhu", "Olomouc", "6");
     }
 
+    /// <summary>
+    /// The route table is the driver's page, so it lists the whole run — including a client whose
+    /// row nobody has confirmed and which therefore has no invoice page.
+    /// </summary>
     [Fact]
-    public void Build_EachClient_StartsOnItsOwnPage()
+    public void Build_Overview_ListsAStopWhoseRowIsNotConfirmed()
     {
-        var body = Open(BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy"),
-            BuildStop(2, "Pivnice Na Růhu")
-        ]));
+        var body = Open(BuildModel(
+            stops: [BuildStop(1, "Hospoda U Kotvy"), BuildStop(2, "Pivnice Na Růhu", city: "Olomouc")],
+            invoices:
+            [
+                BuildInvoice("Pivnice Na Růhu", sequence: 1, parties: [BuildParty("Pivnice Na Růhu", isPayer: true)])
+            ]));
 
-        var children = body.ChildElements.ToList();
-
-        // This is handed over per stop, so a page holding the tail of one client and the head of the
-        // next cannot serve. Every client is opened by a break, the first one ending the overview.
-        var opened = children
-            .Select((child, index) => (child, index))
-            .Where(entry => entry.child is Paragraph paragraph
-                && paragraph.Descendants<Break>().Any(b => b.Type?.Value == BreakValues.Page))
-            .Select(entry => children[entry.index + 1].InnerText)
-            .ToList();
-
-        opened.Should().Equal("1. Hospoda U Kotvy", "2. Pivnice Na Růhu");
+        TableRows(body, 1).Should().Contain(row => row[1] == "Hospoda U Kotvy");
+        Paragraphs(body).Should().NotContain("1. Hospoda U Kotvy");
     }
 
     [Fact]
-    public void Build_ClientPage_CarriesTheAddressAndTheProductsWithATotal()
+    public void Build_InvoicePage_CarriesWhereTheGoodsWentAndTheProductsWithATotal()
     {
-        var body = Open(BuildModel(stops:
+        var body = Open(BuildModel(invoices:
         [
-            BuildStop(
-                1,
-                "Hospoda U Kotvy",
-                deliveryPlaceName: "Zahrádka",
-                notes: ["Volat 30 min předem", "Brána z boku"],
-                products:
-                [
-                    BuildProduct("Pilsner Urquell", 24),
-                    BuildProduct("Kozel 11", 6, ProductKind.Keg, 30),
-                    // A custom extra: ordered all the same, but with no product behind it.
-                    BuildProduct("Slunečník", 2, kind: null, packageSize: null)
-                ])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty(
+                    "Hospoda U Kotvy",
+                    isPayer: true,
+                    street: "Dlouhá 14",
+                    cityLine: "602 00 Brno",
+                    deliveryPlaceName: "Zahrádka",
+                    notes: ["Volat 30 min předem", "Brána z boku"],
+                    products:
+                    [
+                        BuildProduct("Pilsner Urquell", 24),
+                        BuildProduct("Kozel 11", 6, ProductKind.Keg, 30),
+                        // A custom extra: ordered all the same, but with no product behind it.
+                        BuildProduct("Slunečník", 2, kind: null, packageSize: null)
+                    ])
+            ])
         ]));
 
         var details = TableRows(body, 2);
@@ -420,34 +460,21 @@ public sealed class ShipmentExportDocumentBuilderTests
             .TableCellProperties!.GridSpan!.Val!.Value.Should().Be(2);
     }
 
+    /// <summary>
+    /// A party the run only bills — its own delivery went out on another run — has no address block
+    /// at all, rather than one full of dashes.
+    /// </summary>
     [Fact]
-    public void Build_StopPage_ReportsDeliveredAndBilledPiecesSideBySide()
+    public void Build_PartyWithNoDelivery_WritesNoAddressBlock()
     {
-        var body = Open(BuildModel(stops:
+        var body = Open(BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", products:
-            [
-                // Delivered and billed to the same client — the ordinary row.
-                BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24),
-                // Half of it billed to somebody else.
-                BuildProduct("Kozel 11", 6, ProductKind.Keg, 30, invoicedQuantity: 2),
-                // Cross-billed in: this client pays for pieces another stop receives.
-                BuildProduct("Radegast", 0, ProductKind.Keg, 50, invoicedQuantity: 4)
-            ])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
         ]));
 
-        var products = TableRows(body, 3);
-        products[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
-        products[1].Should().Equal("Pilsner Urquell", "Basa", "0,5 l", "24 ks", "24 ks");
-        products[2].Should().Equal("Kozel 11", "Sud", "30 l", "6 ks", "2 ks");
-        products[3].Should().Equal("Radegast", "Sud", "50 l", "0 ks", "4 ks");
-
-        // Four cells across five columns: the kind and the package have nothing to total, so they
-        // stay merged, and both quantity columns close with their own sum.
-        products[4].Should().Equal("Celkem", string.Empty, "30 ks", "30 ks");
-        sheetTable(body, 3).Elements<TableRow>().Last()
-            .Elements<TableCell>().ElementAt(1)
-            .TableCellProperties!.GridSpan!.Val!.Value.Should().Be(2);
+        // Tables: 0 the summary, 1 the route, 2 the party's goods — no label block in between.
+        TableRows(body, 2)[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
+        Paragraphs(body).Should().NotContain("VRACÍ");
     }
 
     /// <summary>
@@ -455,10 +482,9 @@ public sealed class ShipmentExportDocumentBuilderTests
     /// every page the table runs onto, and reads as a broken word.
     /// </summary>
     /// <remarks>
-    /// Two headers have already shipped wrapped — "FAKTURAČNĚ" in a column sized like its
-    /// neighbour's, and "ZASTÁVKA" in a column sized for the stop number under it. Both are widths
-    /// chosen for the values, forgetting that the heading above them is the longest text in the
-    /// column.
+    /// "ZASTÁVKA" has already shipped wrapped, in a column sized for the stop number under it — a
+    /// width chosen for the values, forgetting that the heading above them is the longest text in
+    /// the column.
     ///
     /// The width model is deliberately crude and deliberately pessimistic: <see cref="CapsWidth"/>
     /// measures against a wide serif rather than the declared Calibri, because a reader without
@@ -469,13 +495,20 @@ public sealed class ShipmentExportDocumentBuilderTests
     public void Build_EveryColumnHeading_IsGivenAColumnWideEnoughToHoldItOnOneLine()
     {
         var body = Open(BuildModel(
-            stops:
+            stops: [BuildStop(1, "Hospoda U Kotvy")],
+            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)],
+            invoices:
             [
-                BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)],
-                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }]),
-                BuildStop(2, "Pivnice Na Růhu", products: [BuildProduct("Kozel 11", 6, invoicedQuantity: 6)])
-            ],
-            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
+                BuildInvoice(
+                    "Hospoda U Kotvy", sequence: 1,
+                    parties:
+                    [
+                        BuildParty(
+                            "Hospoda U Kotvy", isPayer: true,
+                            returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "prasklý" }])
+                    ],
+                    billingRecipients: [BuildRecipient("Bar Na Rohu")])
+            ]));
 
         var headed = body.Elements<Table>()
             .Where(table => table.Elements<TableRow>()
@@ -509,49 +542,39 @@ public sealed class ShipmentExportDocumentBuilderTests
     private static int CapsWidth(string header) => header.Length * 144 + 216;
 
     /// <summary>
-    /// "FAKTURAČNĚ" is the longest header in the file and broke over two lines when its column was
-    /// sized like its neighbour's.
+    /// Every table is sized to the same text width, so none of them runs off the page.
     /// </summary>
     [Fact]
-    public void Build_BilledColumn_IsTheWidestOfTheNarrowOnesAndKeepsTheTableOnThePage()
+    public void Build_EveryTable_IsSizedToTheTextWidth()
     {
-        var body = Open(BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)])
-        ]));
+        var body = Open(BuildFullModel());
 
-        var columns = sheetTable(body, 3).GetFirstChild<TableGrid>()!
-            .Elements<GridColumn>()
-            .Select(c => int.Parse(c.Width!.Value!))
-            .ToList();
-
-        columns.Should().HaveCount(5);
-        columns.Sum().Should().Be(9000, "every table is sized to the same text width");
-
-        // Wider than the delivered column beside it, which carries the shorter header.
-        columns[4].Should().BeGreaterThan(columns[3]);
-        columns[4].Should().BeGreaterThan(columns[1], "and wider than the kind and package columns");
-        columns[4].Should().BeGreaterThan(columns[2]);
+        foreach (var table in body.Elements<Table>())
+        {
+            table.GetFirstChild<TableGrid>()!
+                .Elements<GridColumn>()
+                .Sum(column => int.Parse(column.Width!.Value!))
+                .Should().Be(9000);
+        }
     }
 
     /// <summary>
-    /// The run calls at our own warehouse to drop the goods bought for stock, so that stop reads
-    /// like any other: a page of its own, a town and a piece count on the overview.
+    /// The run calls at our own warehouse to drop the goods bought for stock, so the route table
+    /// reports that stop's town and piece count like any other.
     /// </summary>
     [Fact]
-    public void Build_WarehouseStop_GetsItsOwnPageAndTakesTheStockGoodsOffTheOverview()
+    public void Build_WarehouseStop_ReportsItsGoodsOnTheRouteTableInsteadOfTheStockBlock()
     {
         var stockGoods = new List<ShipmentExportProduct> { BuildProduct("Radegast", 3, ProductKind.Keg, 50) };
 
         var body = Open(BuildModel(
             stops:
             [
-                BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)]),
+                BuildStop(1, "Hospoda U Kotvy"),
                 new ShipmentExportStop
                 {
                     Order = 2, IsWarehouse = true, Label = "AleTrack s.r.o.",
-                    Street = "Skladová 7", CityLine = "460 01 Liberec", City = "Liberec",
-                    Products = stockGoods
+                    City = "Liberec", Products = stockGoods
                 }
             ],
             stockPurchases: stockGoods));
@@ -560,34 +583,22 @@ public sealed class ShipmentExportDocumentBuilderTests
         var stops = TableRows(body, 1);
         stops.Should().Contain(row => row[1] == "AleTrack s.r.o." && row[2] == "Liberec" && row[3] == "3");
 
-        // Not printed twice: the goods are the warehouse page's table now, so the overview's own
-        // block is gone and the client page follows the stop table directly.
+        // Not counted twice: the route table above already reports these pieces.
         Paragraphs(body).Should().NotContain("ZBOŽÍ NA SKLAD");
-        Paragraphs(body).Should().Contain("2. AleTrack s.r.o.");
-
-        // Tables: 0 summary, 1 stops, 2 the client's address block, 3 their goods, 4 the
-        // warehouse's address block, 5 what comes off there.
-        TableRows(body, 4).Should().Contain(row => row[0] == "Ulice" && row[1] == "Skladová 7");
-
-        var stock = TableRows(body, 5);
-        stock[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
-        stock[1].Should().Equal("Radegast", "Sud", "50 l", "3 ks");
     }
 
     /// <summary>
-    /// Nobody is billed for goods bought into our own warehouse, and a column of nothing but dashes
-    /// reads as data that failed to load. This is also the fallback for a run that carries stock
-    /// goods without a warehouse stop — one saved before the company stop existed.
+    /// The fallback for a run that carries stock goods without a warehouse stop — one saved before
+    /// the company stop existed.
     /// </summary>
     [Fact]
-    public void Build_StockPurchasesWithNoWarehouseStop_KeepTheSingleQuantityColumnOnTheOverview()
+    public void Build_StockPurchasesWithNoWarehouseStop_GetABlockOnTheOverview()
     {
         var body = Open(BuildModel(
-            stops: [BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24, invoicedQuantity: 24)])],
+            stops: [BuildStop(1, "Hospoda U Kotvy")],
             stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
 
-        // Table 2 on the overview: 0 is the summary, 1 the stop list, 2 the stock block — the stop
-        // pages come after it.
+        // Table 2 on the overview: 0 is the summary, 1 the route table, 2 the stock block.
         var stock = TableRows(body, 2);
         stock[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
         stock[1].Should().Equal("Radegast", "Sud", "50 l", "3 ks");
@@ -601,42 +612,45 @@ public sealed class ShipmentExportDocumentBuilderTests
     [Fact]
     public void Build_WritesNumbersInCzech()
     {
-        var body = Open(BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy", products:
+        var heavy = new ShipmentExportProduct
+        {
+            Name = "Pilsner Urquell", Kind = ProductKind.Bottle,
+            PackageSize = 0.5, Weight = 15.7, Quantity = 1200
+        };
+
+        var body = Open(BuildModel(
+            stops: [BuildStop(1, "Hospoda U Kotvy", products: [heavy])],
+            invoices:
             [
-                new ShipmentExportProduct
-                {
-                    Name = "Pilsner Urquell", Kind = ProductKind.Bottle,
-                    PackageSize = 0.5, Weight = 15.7, Quantity = 1200
-                }
-            ])
-        ]));
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+                [
+                    BuildParty("Hospoda U Kotvy", isPayer: true, products: [heavy])
+                ])
+            ]));
 
         // A non-breaking space is what cs-CZ groups thousands with.
         TableRows(body, 0).Should().Contain(
-            row => row[0] == "Hmotnost" && row[1].Replace(' ', ' ') == "18 840 kg",
+            row => row[0] == "Hmotnost" && row[1].Replace('\u00A0', ' ') == "18 840 kg",
             "decimal comma and a grouped thousand, not 18840");
 
-        // Table 3, not 2: 0 is the overview summary, 1 the stop list, 2 the client's address block.
-        var products = TableRows(body, 3);
+        var products = TableHeaded(body, "PRODUKT");
         products[1][2].Should().Be("0,5 l", "decimal comma, not 0.5 l");
-        products[1][3].Replace(' ', ' ').Should().Be("1 200 ks", "grouped thousand");
+        products[1][3].Replace('\u00A0', ' ').Should().Be("1 200 ks", "grouped thousand");
     }
 
-    // "Celkem kusů" and the stop table's "Kusů" already name the unit; repeating it in the value reads
-    // as "kusů: 4 ks". The product tables' "Množství" names none, so there it belongs.
+    // "Celkem kusů" and the route table's "Kusů" already name the unit; repeating it in the value
+    // reads as "kusů: 4 ks". The product tables' "Množství" names none, so there it belongs.
     [Fact]
     public void Build_NamesEachUnitExactlyOnce()
     {
-        var body = Open(BuildModel(stops:
+        var body = Open(BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", products: [BuildProduct("Pilsner Urquell", 24)])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
         ]));
 
         TableRows(body, 0).Should().Contain(row => row[0] == "Celkem kusů" && row[1] == "24");
         TableRows(body, 1)[1][3].Should().Be("24", "that column's header is already \"KUSŮ\"");
-        TableRows(body, 3)[1][3].Should().Be("24 ks", "that column's header is only \"MNOŽSTVÍ\"");
+        TableHeaded(body, "PRODUKT")[1][3].Should().Be("24 ks", "that column's header is only \"MNOŽSTVÍ\"");
     }
 
     // One driver is not a list of one.
@@ -651,8 +665,8 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     /// <summary>
-    /// A long order spills past one page, and a column of bare quantities with no heading above it is
-    /// what gets read into the wrong row.
+    /// A long invoice spills past one page, and a column of bare quantities with no heading above it
+    /// is what gets read into the wrong row.
     /// </summary>
     [Fact]
     public void Build_RepeatsTableHeadingsOnEveryPageAndKeepsRowsWhole()
@@ -677,8 +691,8 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     /// <summary>
-    /// These pages get separated on purpose, one per stop. A loose sheet carrying only a client name
-    /// says nothing about which run it came off.
+    /// These pages get separated on purpose, one per invoice. A loose sheet carrying only a client
+    /// name says nothing about which run it came off.
     /// </summary>
     [Fact]
     public void Build_FootsEveryPageWithTheRunAndAPageNumber()
@@ -702,20 +716,26 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     [Fact]
-    public void Build_ClientWithReturns_WritesThemAfterTheProducts()
+    public void Build_PartyWithReturns_WritesThemAfterTheProducts()
     {
-        var body = Open(BuildModel(stops:
+        var body = Open(BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", returns:
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
             [
-                new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" }
+                BuildParty("Hospoda U Kotvy", isPayer: true, returns:
+                [
+                    new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6, Note = "poškozený ventil" }
+                ])
             ])
         ]));
 
         var paragraphs = Paragraphs(body);
         paragraphs.Should().Contain("VRACÍ");
+        paragraphs.IndexOf("VRACÍ").Should().BeGreaterThan(
+            paragraphs.IndexOf("Celkem Hospoda U Kotvy: 24 ks"),
+            "what goes back reads after what is delivered");
 
-        var returns = TableRows(body, 4);
+        var returns = TableHeaded(body, "POLOŽKA");
         returns[0].Should().Equal("POLOŽKA", "POZNÁMKA", "MNOŽSTVÍ");
         returns[1].Should().Equal("Sud 30l KEG", "poškozený ventil", "6 ks");
     }
@@ -725,30 +745,39 @@ public sealed class ShipmentExportDocumentBuilderTests
     [Fact]
     public void Build_ReturnsWithNoNotes_DropTheNoteColumnEntirely()
     {
-        var body = Open(BuildModel(stops:
+        var body = Open(BuildModel(invoices:
         [
-            BuildStop(1, "Hospoda U Kotvy", returns:
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
             [
-                new ShipmentExportReturn { Name = "Basa", Quantity = 25 },
-                new ShipmentExportReturn { Name = "Velký sud", Quantity = 3 }
+                BuildParty("Hospoda U Kotvy", isPayer: true, returns:
+                [
+                    new ShipmentExportReturn { Name = "Basa", Quantity = 25 },
+                    new ShipmentExportReturn { Name = "Velký sud", Quantity = 3 }
+                ])
             ])
         ]));
 
-        var returns = TableRows(body, 4);
+        var returns = TableHeaded(body, "POLOŽKA");
 
         returns[0].Should().Equal("POLOŽKA", "MNOŽSTVÍ");
         returns[1].Should().Equal("Basa", "25 ks");
         returns[2].Should().Equal("Velký sud", "3 ks");
 
         // The grid has to shrink with the columns, or the two remaining ones keep their old widths.
-        sheetTable(body, 4).GetFirstChild<TableGrid>()!
+        body.Elements<Table>().Last().GetFirstChild<TableGrid>()!
             .Elements<GridColumn>().Should().HaveCount(2);
     }
 
     [Fact]
-    public void Build_ClientWithNoReturnsOrNotes_LeavesThoseSectionsOutEntirely()
+    public void Build_PartyWithNoReturnsOrNotes_LeavesThoseSectionsOutEntirely()
     {
-        var body = Open(BuildModel());
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
+        ]));
 
         // An empty "Poznámky" row reads as "no instructions", which is a claim this page cannot
         // make; an empty "Vrací" heading reads the same way about returns.
@@ -759,12 +788,19 @@ public sealed class ShipmentExportDocumentBuilderTests
     [Fact]
     public void Build_StockPurchases_GetABlockOnTheOverviewRatherThanAPageOfTheirOwn()
     {
-        var model = BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]);
+        var model = BuildModel(
+            stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)],
+            invoices:
+            [
+                BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+            ]);
+
         var body = Open(model);
 
         Paragraphs(body).Should().Contain("ZBOŽÍ NA SKLAD");
 
-        // Nobody ordered them, so they take no page of their own: the one client is the only break.
+        // Nobody is billed for them, so they open no page of their own: the one invoice is the only
+        // break.
         body.Descendants<Break>()
             .Count(b => b.Type?.Value == BreakValues.Page)
             .Should().Be(1);
@@ -780,17 +816,25 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     [Fact]
-    public void Build_ClientWithNoProducts_SaysSoRatherThanLeavingAnEmptyTable()
+    public void Build_PartyWithNoProducts_SaysSoRatherThanLeavingAnEmptyTable()
     {
-        var body = Open(BuildModel(stops: [BuildStop(1, "Hospoda U Kotvy", products: [])]));
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products: [])
+            ])
+        ]));
 
         Paragraphs(body).Should().Contain("Bez položek");
     }
 
-    // The overview counts and the document are built from one model, so the two exports of the same
-    // run cannot disagree about what is being delivered.
+    /// <summary>
+    /// The stops are the driver's page and are read off the overview's route table — none of them
+    /// takes a page of its own any more, custom or not.
+    /// </summary>
     [Fact]
-    public void Build_CustomStop_GetsNoPageOfItsOwn()
+    public void Build_Stops_GetNoPagesOfTheirOwn()
     {
         var body = Open(BuildModel(stops:
         [
@@ -798,7 +842,10 @@ public sealed class ShipmentExportDocumentBuilderTests
             new ShipmentExportStop { Order = 2, Label = "Čerpací stanice" }
         ]));
 
-        Paragraphs(body).Should().NotContain("2. Čerpací stanice");
+        var paragraphs = Paragraphs(body);
+        paragraphs.Should().NotContain("1. Hospoda U Kotvy");
+        paragraphs.Should().NotContain("2. Čerpací stanice");
+        body.Descendants<Break>().Should().BeEmpty("nothing but an invoice opens a page");
     }
 
     [Fact]
@@ -811,20 +858,26 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [payerParty, otherParty])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 2, parties: [payerParty, otherParty])
         ]);
 
         var body = Open(model);
         var paragraphs = Paragraphs(body);
 
-        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix —
-        // matching the workbook's rule exactly.
-        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy");
-        paragraphs.Should().Contain("HOSPODA U KOTVY · VLASTNÍ ZBOŽÍ");
-        paragraphs.Should().Contain("PIVNICE NA ROHU");
-        paragraphs.Should().Contain("Celkem Hospoda U Kotvy: 24 ks");
-        paragraphs.Should().Contain("Celkem Pivnice Na Rohu: 6 ks");
-        paragraphs.Should().Contain("Celkem faktura: 30 ks");
+        // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — but
+        // it does lead with the number the office confirmed the row under, matching the workbook's
+        // rule exactly.
+        paragraphs.Should().Contain("2. Hospoda U Kotvy");
+        // Two parties, so each gets a numbered section of its own under the invoice's summary.
+        paragraphs.Should().Contain("2.1 HOSPODA U KOTVY");
+        paragraphs.Should().Contain("2.2 PIVNICE NA ROHU");
+        // No totals in prose: the summary table's closing row is the invoice's total, and each
+        // section's table closes with that client's own.
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem Hospoda U Kotvy"));
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem faktura"));
+
+        // Three product tables: the invoice's summary, then one per client.
+        body.Elements<Table>().Count(t => t.InnerText.StartsWith("PRODUKT")).Should().Be(3);
     }
 
     [Fact]
@@ -832,19 +885,21 @@ public sealed class ShipmentExportDocumentBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
-            BuildInvoice("Hospoda U Kotvy", sequence: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
-            BuildInvoice("Pivnice Na Rohu", sequence: 1, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Hospoda U Kotvy", sequence: 2, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)]),
+            BuildInvoice("Pivnice Na Rohu", sequence: 1, number: 2, parties: [BuildParty("Pivnice Na Rohu", isPayer: true)])
         ]);
 
         var paragraphs = Paragraphs(Open(model));
 
-        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy · Faktura 1");
-        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy · Faktura 2");
+        // Both pages of one client share its number — it is one confirmed row — so the sequence is
+        // what tells them apart.
+        paragraphs.Should().Contain("1. Hospoda U Kotvy · Faktura 1");
+        paragraphs.Should().Contain("1. Hospoda U Kotvy · Faktura 2");
 
-        // The one-invoice payer gets a bare heading — no meaningless "Faktura 1".
-        paragraphs.Should().Contain("Fakturace: Pivnice Na Rohu");
-        paragraphs.Should().NotContain("Fakturace: Pivnice Na Rohu · Faktura 1");
+        // The one-invoice payer gets no meaningless "Faktura 1".
+        paragraphs.Should().Contain("2. Pivnice Na Rohu");
+        paragraphs.Should().NotContain("2. Pivnice Na Rohu · Faktura 1");
     }
 
     /// <summary>
@@ -857,15 +912,205 @@ public sealed class ShipmentExportDocumentBuilderTests
     {
         var model = BuildModel(invoices:
         [
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
-            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid()),
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, number: 2, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)], payingClientId: Guid.NewGuid())
         ]);
 
         var paragraphs = Paragraphs(Open(model));
 
-        paragraphs.Should().Contain("Fakturace: Hospoda U Kotvy");
-        paragraphs.Should().NotContain("Fakturace: Hospoda U Kotvy · Faktura 1");
+        // Their own numbers are what keep them apart, not a sequence suffix neither has earned.
+        paragraphs.Should().Contain("1. Hospoda U Kotvy");
+        paragraphs.Should().Contain("2. Hospoda U Kotvy");
+        paragraphs.Should().NotContain(text => text.Contains("· Faktura"));
     }
+
+    /// <summary>
+    /// The trading name is what tells two clients of the same name apart, so the page that gets
+    /// filed carries it beside the client's own.
+    /// </summary>
+    [Fact]
+    public void Build_PayerWithATradingName_NamesItInTheHeading()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice(
+                "Luděk Pachl", sequence: 1, number: 1,
+                parties: [BuildParty("Luděk Pachl", isPayer: true)],
+                payingClientBusinessName: "Pachl s.r.o.")
+        ]);
+
+        Paragraphs(Open(model)).Should().Contain("1. Luděk Pachl – Pachl s.r.o.");
+    }
+
+    /// <summary>
+    /// One client, one table: naming the party above it repeats the heading word for word. The
+    /// subtitle earns its place only on an invoice that bills more than one client's goods.
+    /// </summary>
+    [Fact]
+    public void Build_InvoiceWithOneParty_WritesNoPartySubtitle()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().Contain("1. Hospoda U Kotvy");
+        paragraphs.Should().NotContain("HOSPODA U KOTVY");
+    }
+
+    // Its own table already closes with a Celkem row; with one party that row *is* the invoice's
+    // total, so a paragraph under it said the same number a third time.
+    [Fact]
+    public void Build_InvoiceWithOneParty_WritesNoTotalsUnderTheTable()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem Hospoda U Kotvy"));
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem faktura"));
+        // The table keeps its own closing row — that is where the number belongs.
+        TableHeaded(body: Open(model), firstHeader: "PRODUKT").Last().Should().Contain("24 ks");
+    }
+
+    /// <summary>
+    /// A group's invoice — a payer billed for several sub-clients' goods — reads top down: who the
+    /// invoice is addressed to, everything it bills as one table, the sub-clients to invoice on, and
+    /// only then the per-client detail.
+    /// </summary>
+    [Fact]
+    public void Build_GroupInvoice_LeadsWithThePayersAddressAndTheWholeInvoicesGoods()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().ContainInOrder(
+            "4. O Hübner – Getränke Schulze",
+            "FAKTURAČNÍ ADRESA",
+            "FAKTURAČNÍ ADRESA PRO O HÜBNER",
+            "4.1 ANDREAS HOHMANN",
+            "4.2 CHORVATKA");
+
+        // The payer's own invoicing address, not a sub-client's delivery. Tables 0 and 1 are the
+        // overview's own summary and route table, so the invoice page's start at 2.
+        TableRows(body, 2).Should().Contain(row => row[0] == "Ulice" && row[1] == "Niedere Hauptstraße 53");
+
+        // Everything the invoice bills, merged per product: the two clients' Svijanský Máz land on
+        // one row, and the table closes with the invoice's own total.
+        var summary = TableRows(body, 3);
+        summary[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
+        // Hohmann's 5 and Chorvatka's 5 bill as one row of 10 — one of Chorvatka's never arrived,
+        // so 9 were delivered against the 10 billed.
+        summary.Should().Contain(row => row[0] == "Svijanský Máz" && row[3] == "9 ks" && row[4] == "10 ks");
+        summary.Last().Should().Equal("Celkem", string.Empty, "14 ks", "15 ks");
+    }
+
+    /// <summary>
+    /// The sub-client sections carry the detail the summary cannot: what that client ordered, the
+    /// order's notes and what it hands back. Not its address — the invoice has one, at the top.
+    /// </summary>
+    [Fact]
+    public void Build_GroupInvoiceSubSection_CarriesGoodsNotesAndVratkyButNoAddress()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        // One address block on the page — the payer's.
+        paragraphs.Count(text => text == "FAKTURAČNÍ ADRESA").Should().Be(1);
+
+        var sections = body.ChildElements.ToList();
+        var subHeading = sections.FindIndex(el => el.InnerText == "4.1 ANDREAS HOHMANN");
+        var nextHeading = sections.FindIndex(el => el.InnerText == "4.2 CHORVATKA");
+
+        var between = sections.GetRange(subHeading, nextHeading - subHeading);
+
+        between.Should().Contain(el => el.InnerText.Contains("Platí za pivo 822 EUR"), "its own note");
+        between.Should().Contain(el => el.InnerText.Contains("Svijanská Kněžna"), "its own goods");
+        between.Should().NotContain(el => el.InnerText.Contains("Ulice"), "the address is the invoice's");
+    }
+
+    [Fact]
+    public void Build_GroupInvoiceSubSection_KeepsItsVratky()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("VRACÍ");
+        paragraphs.IndexOf("VRACÍ").Should().BeGreaterThan(
+            paragraphs.IndexOf("4.2 CHORVATKA"), "they belong to the client that hands them back");
+
+        TableHeaded(body, "POLOŽKA").Should().Contain(row => row[0] == "Sud 30l KEG");
+    }
+
+    // With the summary table carrying the invoice's own Celkem row, a paragraph restating it said
+    // the same number twice.
+    [Fact]
+    public void Build_GroupInvoice_WritesNoInvoiceTotalParagraph()
+    {
+        Paragraphs(Open(BuildModel(invoices: [GroupInvoice()])))
+            .Should().NotContain(text => text.StartsWith("Celkem faktura"));
+    }
+
+    /// <summary>
+    /// One client, one table: no summary of a single thing, no numbered sub-section, and its own
+    /// address block stays where it is.
+    /// </summary>
+    [Fact]
+    public void Build_OrdinaryInvoice_KeepsItsOwnAddressAndNoSubSections()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
+        ]));
+
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("FAKTURAČNÍ ADRESA");
+        paragraphs.Should().NotContain(text => text.StartsWith("1.1"));
+        // Its own products table is the only one; a summary above it would repeat it.
+        body.Elements<Table>().Count(t => t.InnerText.StartsWith("PRODUKT")).Should().Be(1);
+    }
+
+    /// <summary>
+    /// A payer billed for two sub-clients, one of which returns goods and carries a note.
+    /// </summary>
+    private static ShipmentExportInvoice GroupInvoice() =>
+        BuildInvoice(
+            "O Hübner", sequence: 1, number: 4,
+            payingClientBusinessName: "Getränke Schulze",
+            payerStreet: "Niedere Hauptstraße 53",
+            payerCityLine: "027 08 Kottmar-Niedercunnersdorf",
+            parties:
+            [
+                BuildParty(
+                    "Andreas Hohmann",
+                    street: "Schwarzmeerstraße 80",
+                    cityLine: "10319 Berlín",
+                    notes: ["Platí za pivo 822 EUR"],
+                    products:
+                    [
+                        BuildProduct("Svijanská Kněžna", 5, ProductKind.Keg, 30, delivered: 5),
+                        BuildProduct("Svijanský Máz", 5, ProductKind.Keg, 50, delivered: 5)
+                    ]),
+                BuildParty(
+                    "Chorvatka",
+                    street: "Otto-Suhr-Allee 17",
+                    cityLine: "10585 Berlin",
+                    products: [BuildProduct("Svijanský Máz", 5, ProductKind.Keg, 50, delivered: 4)],
+                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 4 }])
+            ],
+            billingRecipients:
+            [
+                BuildRecipient("Chorvatka", "Otto-Suhr-Allee 17", "10585 Berlin")
+            ]);
 
     [Fact]
     public void Build_ModelWithoutInvoices_WritesNoFakturaceSection()
@@ -895,7 +1140,7 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         paragraphs.Should().Contain("FAKTURAČNÍ ADRESA PRO HOSPODA U KOTVY");
 
-        var recipients = TableRows(body, IndexOfRecipientsTable(body));
+        var recipients = TableHeaded(body, "KLIENT");
         recipients[0].Should().Equal("KLIENT", "ADRESA");
         recipients.Should().Contain(row => row[0] == "Bar Na Rohu" && row[1] == "Nádražní 5, 110 00 Praha");
         recipients.Should().Contain(row => row[0] == "Hospoda U Lípy" && row[1] == "Hlavní 12, 602 00 Brno");
@@ -912,6 +1157,85 @@ public sealed class ShipmentExportDocumentBuilderTests
         var body = Open(model);
 
         body.InnerText.Should().NotContain("Fakturační adresa");
+    }
+
+    /// <summary>
+    /// What the van drops beside what the invoice bills — the pair the office reads the page for.
+    /// They differ wherever the Fakturace section was edited.
+    /// </summary>
+    [Fact]
+    public void Build_PartyProducts_ReportDeliveredAndBilledSideBySide()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products:
+                [
+                    // Delivered and billed alike — the ordinary row.
+                    BuildProduct("Pilsner Urquell", 24, delivered: 24),
+                    // Four pieces kept off the invoice as soukromé: delivered more than it bills.
+                    BuildProduct("Kozel 11", 20, ProductKind.Keg, 30, delivered: 24),
+                    // Billed here, handed over somewhere else entirely.
+                    BuildProduct("Radegast", 4, ProductKind.Keg, 50, delivered: 0),
+                    // A supplier good sits on no delivery table, so nothing can answer for it.
+                    BuildProduct("CO2 Lahev 10Kg", 1, kind: null, packageSize: null)
+                ])
+            ])
+        ]));
+
+        var products = TableHeaded(body, "PRODUKT");
+
+        products[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
+        products[1].Should().Equal("Pilsner Urquell", "Basa", "0,5 l", "24 ks", "24 ks");
+        products[2].Should().Equal("Kozel 11", "Sud", "30 l", "24 ks", "20 ks");
+        products[3].Should().Equal("Radegast", "Sud", "50 l", "0 ks", "4 ks");
+        products[4].Should().Equal("CO2 Lahev 10Kg", "—", "—", "—", "1 ks");
+
+        // Four cells across five columns: the kind and the package have nothing to total, so they
+        // stay merged, and both quantity columns close with their own sum.
+        products[5].Should().Equal("Celkem", string.Empty, "48 ks", "49 ks");
+    }
+
+    // Nobody is billed for goods bought into our own warehouse, and a column of dashes reads as data
+    // that failed to load.
+    [Fact]
+    public void Build_StockPurchases_KeepTheSingleQuantityColumn()
+    {
+        var body = Open(BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
+
+        TableHeaded(body, "PRODUKT")[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
+    }
+
+    // A pair of address rows under a client's name never said what the address was for.
+    [Fact]
+    public void Build_PartyAddress_IsHeaded()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
+        ]));
+
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("FAKTURAČNÍ ADRESA");
+        paragraphs.IndexOf("FAKTURAČNÍ ADRESA")
+            .Should().BeLessThan(paragraphs.IndexOf("PRODUKT"), "it heads the address, not the goods");
+    }
+
+    // A party the run only bills has no address block, so there is nothing to head either.
+    [Fact]
+    public void Build_PartyWithNoDelivery_WritesNoAddressHeading()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]));
+
+        Paragraphs(body).Should().NotContain("FAKTURAČNÍ ADRESA");
     }
 
     /// <summary>
@@ -940,13 +1264,10 @@ public sealed class ShipmentExportDocumentBuilderTests
         children[^2].Should().NotBeOfType<Table>("a table cannot be the last content before sectPr");
     }
 
-    /// <summary>Index of the first table after the last party-products table of the document.</summary>
-    private static int IndexOfRecipientsTable(Body body) => body.Elements<Table>().Count() - 1;
-
     /// <summary>
-    /// The load-bearing rule this file documents: Word merges two tables that touch. Checked over
-    /// the whole body, not just the invoice section — the invoice pages follow the stop pages, and
-    /// an adjacency slipping in at that seam would be missed by a check scoped to one section.
+    /// The load-bearing rule this file documents: Word merges two tables that touch. Checked over a
+    /// party carrying every block it can have — an address grid, its goods and its vratky — since
+    /// those three tables follow each other directly.
     /// </summary>
     [Fact]
     public void Build_FakturaceTables_AreNeverAdjacent()
@@ -955,8 +1276,15 @@ public sealed class ShipmentExportDocumentBuilderTests
         [
             BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
             [
-                BuildParty("Hospoda U Kotvy", isPayer: true, products: [BuildProduct("Pilsner Urquell", 24)]),
-                BuildParty("Pivnice Na Rohu", products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
+                BuildParty(
+                    "Hospoda U Kotvy", isPayer: true,
+                    street: "Dlouhá 14", cityLine: "602 00 Brno",
+                    products: [BuildProduct("Pilsner Urquell", 24)],
+                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 6 }]),
+                BuildParty(
+                    "Pivnice Na Rohu",
+                    street: "Nádražní 5", cityLine: "110 00 Praha",
+                    products: [BuildProduct("Kozel 11", 6, ProductKind.Keg, 30)])
             ])
         ]);
 
@@ -969,26 +1297,5 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         adjacent.Should().Be(0);
         children[^2].Should().NotBeOfType<Table>("a table cannot be the last content before sectPr");
-    }
-
-    [Fact]
-    public void Build_SubClientStopPage_NamesThePayer()
-    {
-        var body = Open(BuildModel(stops:
-        [
-            BuildStop(1, "Hospoda U Kotvy", invoicedToClientName: "Pivnice Na Rohu")
-        ]));
-
-        var details = TableRows(body, 2);
-        details.Should().Contain(row => row[0] == "Fakturováno na" && row[1] == "Pivnice Na Rohu");
-    }
-
-    [Fact]
-    public void Build_StopWithNoPayer_OmitsTheInvoicedToRow()
-    {
-        var body = Open(BuildModel(stops: [BuildStop(1, "Hospoda U Kotvy")]));
-
-        var details = TableRows(body, 2);
-        details.Should().NotContain(row => row[0] == "Fakturováno na");
     }
 }

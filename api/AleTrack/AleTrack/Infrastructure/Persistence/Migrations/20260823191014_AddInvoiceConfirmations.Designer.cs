@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823191014_AddInvoiceConfirmations")]
+    partial class AddInvoiceConfirmations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1194,10 +1197,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsReady")
                         .HasColumnType("boolean")
                         .HasColumnName("is_ready");
-
-                    b.Property<DateTime?>("LastExportedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_exported_at");
 
                     b.Property<int>("Number")
                         .HasColumnType("integer")

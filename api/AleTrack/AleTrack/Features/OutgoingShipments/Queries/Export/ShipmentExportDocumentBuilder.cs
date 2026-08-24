@@ -7,12 +7,12 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
 /// <summary>
 /// Writes a <see cref="ShipmentExportModel"/> out as a .docx document: the run's overview, then one
-/// page per client stop, then one page per invoice.
+/// page per confirmed invoice.
 /// </summary>
 /// <remarks>
 /// The same content as <see cref="ShipmentExportWorkbookBuilder"/>, laid out for a document rather
-/// than a grid — a client gets a page with a heading rather than a worksheet, because this is the
-/// version that gets printed and handed over.
+/// than a grid — an invoice gets a page with a heading rather than a block on a worksheet, because
+/// this is the version that gets printed and handed over.
 ///
 /// Formatting is applied directly to the runs; the styles part carries nothing but document-wide
 /// defaults, because there is not enough variation here for named styles to earn the indirection.
@@ -45,7 +45,7 @@ public static class ShipmentExportDocumentBuilder
     private static readonly int[] ProductColumns = [4200, 1500, 1500, 1800];
 
     /// <summary>
-    /// Widths for a product table that also reports what is billed — see WriteProductTable. The
+    /// Widths for a product table that also reports what is delivered — see WriteProductTable. The
     /// product name gives up the room the extra column needs; it is the one that can wrap.
     /// </summary>
     /// <remarks>
@@ -54,7 +54,7 @@ public static class ShipmentExportDocumentBuilder
     /// substituted serif rather than the declared Calibri, because a reader without Calibri picks
     /// its own and every viewer must render the header on one line.
     /// </remarks>
-    private static readonly int[] ProductColumnsWithInvoiced = [2800, 1300, 1300, 1650, 1950];
+    private static readonly int[] ProductColumnsWithDelivered = [2800, 1300, 1300, 1650, 1950];
 
     /// <summary>
     /// Stop number needs far less room than the town it is in — but not less than its own header:
@@ -64,7 +64,7 @@ public static class ShipmentExportDocumentBuilder
 
     private static readonly int[] ReturnColumns = [3600, 3600, 1800];
 
-    /// <summary>Widths for a returns table whose items carry no notes — see WriteStopPage.</summary>
+    /// <summary>Widths for a returns table whose items carry no notes — see WriteReturnsTable.</summary>
     private static readonly int[] ReturnColumnsWithoutNotes = [6600, 2400];
 
     private static readonly int[] BillingRecipientColumns = [3000, 6000];
@@ -87,10 +87,6 @@ public static class ShipmentExportDocumentBuilder
             var body = new Body();
 
             WriteOverview(body, model);
-
-            foreach (var stop in model.SheetStops)
-                WriteStopPage(body, stop);
-
             WriteInvoicePages(body, model);
 
             // Last child of the body, as the schema requires. Without it the document declares no
@@ -122,9 +118,9 @@ public static class ShipmentExportDocumentBuilder
     /// Footer naming the run and numbering the pages.
     /// </summary>
     /// <remarks>
-    /// The pages of this document get separated on purpose — one per stop, handed over as the van goes
-    /// round — and a loose sheet carrying nothing but a client name says nothing about which run it
-    /// came off. The footer is what keeps a page identifiable once it leaves the stack.
+    /// The pages of this document get separated on purpose — one per invoice, filed per client — and
+    /// a loose sheet carrying nothing but a client name says nothing about which run it came off.
+    /// The footer is what keeps a page identifiable once it leaves the stack.
     ///
     /// The reference goes at the front of the section properties: sectPr's header and footer
     /// references precede the page geometry in the schema's sequence.
@@ -227,50 +223,86 @@ public static class ShipmentExportDocumentBuilder
         WriteProductTable(body, model.StockPurchases);
     }
 
-    private static void WriteStopPage(Body body, ShipmentExportStop stop)
+    /// <summary>
+    /// Where one party's goods went, what the order said, and what comes back — the parts the
+    /// per-stop pages used to carry.
+    /// </summary>
+    /// <remarks>
+    /// Nothing at all for a party with no delivery on this run, and no empty rows for the parts it
+    /// has none of: a blank "Poznámky" reads as "no instructions", which is a claim this page has no
+    /// business making.
+    /// </remarks>
+    private static void WritePartyNotes(Body body, ShipmentExportInvoiceParty party)
     {
-        // Each client starts a fresh page: this is meant to be handed over per stop, and a page
-        // holding the tail of one client and the head of the next cannot be. The break also ends the
-        // overview's page, so the first client starts clean too.
-        body.AppendChild(PageBreak());
-        // The warehouse stop has no client; its label names it.
-        body.AppendChild(Heading($"{stop.Order}. {stop.ClientName ?? stop.Label ?? Missing}"));
+        if (party.Notes.Count == 0)
+            return;
 
         var details = LabelTable();
-        details.AppendChild(LabelRow("Ulice", stop.Street ?? Missing));
-        details.AppendChild(LabelRow("PSČ a město", stop.CityLine ?? Missing));
-
-        if (stop.DeliveryPlaceName is not null)
-            details.AppendChild(LabelRow("Místo dodání", stop.DeliveryPlaceName));
-
-        if (stop.InvoicedToClientName is not null)
-            details.AppendChild(LabelRow(InvoicedTo, stop.InvoicedToClientName));
 
         // Nothing at all rather than an empty row: a blank "Poznámky" reads as "no instructions",
         // which is a claim this page has no business making.
-        for (var i = 0; i < stop.Notes.Count; i++)
-            details.AppendChild(LabelRow(i == 0 ? "Poznámky" : string.Empty, stop.Notes[i]));
+        for (var i = 0; i < party.Notes.Count; i++)
+            details.AppendChild(LabelRow(i == 0 ? "Poznámky" : string.Empty, party.Notes[i]));
 
         AppendTable(body, details);
+    }
 
-        WriteProductTable(body, stop.Products);
+    private static void WritePartyDelivery(Body body, ShipmentExportInvoiceParty party)
+    {
+        var details = LabelTable();
+        var any = false;
 
-        if (stop.Returns.Count == 0)
+        if (party.Street is not null)
+        {
+            details.AppendChild(LabelRow("Ulice", party.Street));
+            any = true;
+        }
+
+        if (party.CityLine is not null)
+        {
+            details.AppendChild(LabelRow("PSČ a město", party.CityLine));
+            any = true;
+        }
+
+        if (party.DeliveryPlaceName is not null)
+        {
+            details.AppendChild(LabelRow("Místo dodání", party.DeliveryPlaceName));
+            any = true;
+        }
+
+        for (var i = 0; i < party.Notes.Count; i++)
+        {
+            details.AppendChild(LabelRow(i == 0 ? "Poznámky" : string.Empty, party.Notes[i]));
+            any = true;
+        }
+
+        if (!any)
             return;
 
-        // Below the products, not above: what the client hands back reads after what is delivered.
+        // Headed, unlike before: a bare pair of address rows under a client's name never said what
+        // the address was for.
+        body.AppendChild(SectionHeading("Fakturační adresa"));
+        AppendTable(body, details);
+    }
+
+    /// <summary>
+    /// The vratky one party hands back, below its products — what the client hands back reads after
+    /// what is delivered.
+    /// </summary>
+    private static void WriteReturnsTable(Body body, List<ShipmentExportReturn> items)
+    {
         body.AppendChild(SectionHeading("Vrací"));
 
         // Most vratky carry no note at all, and an always-present empty column reads as information
         // that failed to load. The column appears only once something is in it.
-        var anyNotes = stop.Returns.Any(item => !string.IsNullOrWhiteSpace(item.Note));
+        var anyNotes = items.Any(item => !string.IsNullOrWhiteSpace(item.Note));
 
         var returns = BuildTable(anyNotes ? ReturnColumns : ReturnColumnsWithoutNotes);
         returns.AppendChild(anyNotes
             ? HeaderRow("Položka", "Poznámka", "Množství")
             : HeaderRow("Položka", "Množství"));
 
-        foreach (var item in stop.Returns)
+        foreach (var item in items)
         {
             returns.AppendChild(anyNotes
                 ? DataRow(item.Name, item.Note ?? string.Empty, Pieces(item.Quantity))
@@ -302,31 +334,103 @@ public static class ShipmentExportDocumentBuilder
         {
             body.AppendChild(PageBreak());
 
-            var heading = ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient);
+            // The heading names the row's number, its client and the client's business — the file is
+            // read and filed by those. "Fakturace:" led it once and said nothing: every page here is
+            // invoicing.
+            body.AppendChild(Heading(ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient)));
 
-            body.AppendChild(Heading($"{Invoicing}: {heading}"));
-
-            foreach (var party in invoice.Parties)
-            {
-                body.AppendChild(SectionHeading(ShipmentExportLabels.PartyHeading(party)));
-
-                WriteProductTable(body, party.Products);
-
-                // A paragraph rather than a row on the table above: two tables in a row are
-                // merged by Word, and the next party's table follows immediately.
-                body.AppendChild(Paragraph($"Celkem {party.ClientName}: {Pieces(party.TotalQuantity)}"));
-            }
-
-            body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
-
-            // Placed with this invoice's page, not appended after the loop, so it reads as part of
-            // this payer's invoice rather than as a stray section at the end of the document.
-            if (invoice.BillingRecipients.Count > 0)
-            {
-                body.AppendChild(SectionHeading(ShipmentExportLabels.BillingRecipientsHeading(invoice)));
-                WriteBillingRecipientsTable(body, invoice.BillingRecipients);
-            }
+            // An invoice billing several clients' goods is read top down — who it is addressed to,
+            // what it bills in total, whom to invoice on, and only then the detail behind each
+            // number. One that bills a single client needs none of that scaffolding: the client is
+            // the heading, and its table is the whole invoice.
+            if (invoice.Parties.Count > 1)
+                WriteGroupInvoice(body, invoice);
+            else
+                WriteSingleClientInvoice(body, invoice);
         }
+    }
+
+    /// <summary>
+    /// A payer's invoice: its own address, everything it bills as one table, the sub-clients to
+    /// invoice on, then a numbered section per client.
+    /// </summary>
+    private static void WriteGroupInvoice(Body body, ShipmentExportInvoice invoice)
+    {
+        WriteInvoiceAddress(body, invoice);
+
+        // The summary is what the payer owes, in one place. Its own closing row is the invoice's
+        // total, so no paragraph restates it.
+        WriteProductTable(body, invoice.AggregatedProducts);
+
+        WriteBillingRecipients(body, invoice);
+
+        var index = 1;
+
+        foreach (var party in invoice.Parties)
+        {
+            // "4.1", "4.2" — the invoice's own number, then the client's place within it, so a
+            // section can be named out loud against the number on the paper invoice.
+            body.AppendChild(SectionHeading($"{invoice.Number}.{index++} {ShipmentExportLabels.PartyHeading(party)}"));
+
+            // No address here: the invoice has one, at the top. What the client's own order said and
+            // what it hands back are its alone, though, and belong beside its goods.
+            WritePartyNotes(body, party);
+            WriteProductTable(body, party.Products);
+
+            if (party.Returns.Count > 0)
+                WriteReturnsTable(body, party.Returns);
+        }
+    }
+
+    /// <summary>
+    /// An ordinary invoice: one client, its delivery, its goods, what it hands back.
+    /// </summary>
+    private static void WriteSingleClientInvoice(Body body, ShipmentExportInvoice invoice)
+    {
+        foreach (var party in invoice.Parties)
+        {
+            WritePartyDelivery(body, party);
+            WriteProductTable(body, party.Products);
+
+            if (party.Returns.Count > 0)
+                WriteReturnsTable(body, party.Returns);
+        }
+
+        WriteBillingRecipients(body, invoice);
+    }
+
+    /// <summary>
+    /// The address the invoice is sent to. Nothing at all when the payer has none on file.
+    /// </summary>
+    private static void WriteInvoiceAddress(Body body, ShipmentExportInvoice invoice)
+    {
+        if (invoice.PayerStreet is null && invoice.PayerCityLine is null)
+            return;
+
+        body.AppendChild(SectionHeading("Fakturační adresa"));
+
+        var details = LabelTable();
+
+        if (invoice.PayerStreet is not null)
+            details.AppendChild(LabelRow("Ulice", invoice.PayerStreet));
+
+        if (invoice.PayerCityLine is not null)
+            details.AppendChild(LabelRow("PSČ a město", invoice.PayerCityLine));
+
+        AppendTable(body, details);
+    }
+
+    /// <summary>
+    /// Placed with this invoice's page rather than after the loop, so it reads as part of this
+    /// payer's invoice rather than as a stray section at the end of the document.
+    /// </summary>
+    private static void WriteBillingRecipients(Body body, ShipmentExportInvoice invoice)
+    {
+        if (invoice.BillingRecipients.Count == 0)
+            return;
+
+        body.AppendChild(SectionHeading(ShipmentExportLabels.BillingRecipientsHeading(invoice)));
+        WriteBillingRecipientsTable(body, invoice.BillingRecipients);
     }
 
     /// <summary>
@@ -348,13 +452,14 @@ public static class ShipmentExportDocumentBuilder
     }
 
     /// <summary>
-    /// A product table, with the billed column beside the delivered one wherever the rows can
-    /// answer for it.
+    /// A product table, reporting what the van drops beside what the invoice bills wherever the rows
+    /// can answer for both.
     /// </summary>
     /// <remarks>
-    /// Derived from the rows, like the workbook's: only goods delivered to a client are billed to
-    /// anyone, so the run's own stock purchases keep the single quantity column. A column of
-    /// nothing but dashes reads as data that failed to load.
+    /// Derived from the rows rather than passed in: the run's own stock purchases are billed to
+    /// nobody, and a supplier good is collected at the supplier and sits on no delivery table, so
+    /// both keep the single quantity column. A column of nothing but dashes reads as data that
+    /// failed to load.
     /// </remarks>
     private static void WriteProductTable(Body body, List<ShipmentExportProduct> products)
     {
@@ -364,10 +469,10 @@ public static class ShipmentExportDocumentBuilder
             return;
         }
 
-        var withInvoiced = products.Any(p => p.InvoicedQuantity is not null);
+        var withDelivered = products.Any(p => p.DeliveredQuantity is not null);
 
-        var table = BuildTable(withInvoiced ? ProductColumnsWithInvoiced : ProductColumns);
-        table.AppendChild(withInvoiced
+        var table = BuildTable(withDelivered ? ProductColumnsWithDelivered : ProductColumns);
+        table.AppendChild(withDelivered
             ? HeaderRow("Produkt", "Druh", "Balení", "Skutečně", "Fakturačně")
             : HeaderRow("Produkt", "Druh", "Balení", "Množství"));
 
@@ -377,19 +482,25 @@ public static class ShipmentExportDocumentBuilder
             [
                 product.Name,
                 KindLabel(product.Kind),
-                Litres(product.PackageSize),
-                Pieces(product.Quantity)
+                Litres(product.PackageSize)
             ];
 
-            table.AppendChild(withInvoiced
-                // A dash where the row cannot be billed to this client, which reads as "not
-                // applicable" rather than as "billed nothing".
-                ? DataRow([.. cells, product.InvoicedQuantity is null ? Missing : Pieces(product.InvoicedQuantity.Value)])
-                : DataRow(cells));
+            table.AppendChild(withDelivered
+                // A dash where no stop can answer for the row, which reads as "not applicable"
+                // rather than as "delivered nothing".
+                ? DataRow([
+                    .. cells,
+                    product.DeliveredQuantity is null ? Missing : Pieces(product.DeliveredQuantity.Value),
+                    Pieces(product.Quantity)
+                ])
+                : DataRow([.. cells, Pieces(product.Quantity)]));
         }
 
-        table.AppendChild(withInvoiced
-            ? TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity)), Pieces(products.Sum(p => p.InvoicedQuantity ?? 0)))
+        table.AppendChild(withDelivered
+            ? TotalRow(
+                "Celkem",
+                Pieces(products.Sum(p => p.DeliveredQuantity ?? 0)),
+                Pieces(products.Sum(p => p.Quantity)))
             : TotalRow("Celkem", Pieces(products.Sum(p => p.Quantity))));
 
         AppendTable(body, table);

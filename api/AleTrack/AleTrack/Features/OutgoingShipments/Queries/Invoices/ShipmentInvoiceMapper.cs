@@ -30,6 +30,7 @@ public static class ShipmentInvoiceMapper
                 Id = invoice.PublicId,
                 ClientId = invoice.Client?.PublicId ?? Guid.Empty,
                 ClientName = invoice.Client?.Name ?? string.Empty,
+                ClientBusinessName = invoice.Client?.BusinessName,
                 ClientOfficialAddress = invoice.Client?.OfficialAddress?.ToDto(),
                 Sequence = invoice.Sequence,
                 StopOrder = stopOrders.TryGetValue(invoice.ClientId, out var order) ? order : null,
@@ -56,6 +57,16 @@ public static class ShipmentInvoiceMapper
             // Flat, not grouped: the client who ordered the pieces is on every line already, and
             // the UI needs them under that client's band rather than under an invoice.
             PrivateLines = OrderForDisplay(split.PrivateLines.Select(line => ToLine(shipment, line))),
+            Confirmations = shipment.InvoiceConfirmations
+                .Select(c => new ShipmentInvoiceConfirmationDto
+                {
+                    ClientId = c.Client?.PublicId ?? Guid.Empty,
+                    Number = c.Number,
+                    IsReady = c.IsReady,
+                    LastExportedAt = c.LastExportedAt
+                })
+                .OrderBy(c => c.Number)
+                .ToList(),
             IsEditable = ShipmentInvoiceGraph.IsEditable(shipment),
             Adjustments = reconcileResult.Adjustments
                 .Select(a => new InvoiceAdjustmentDto

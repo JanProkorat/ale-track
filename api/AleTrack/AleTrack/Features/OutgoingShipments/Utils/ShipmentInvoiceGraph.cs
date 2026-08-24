@@ -55,7 +55,8 @@ public static class ShipmentInvoiceGraph
                 .ThenInclude(i => i.SupplierGood).ThenInclude(g => g.Prices)
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client)
-            .Include(s => s.Invoices).ThenInclude(i => i.BillingRecipients).ThenInclude(r => r.Client);
+            .Include(s => s.Invoices).ThenInclude(i => i.BillingRecipients).ThenInclude(r => r.Client)
+            .Include(s => s.InvoiceConfirmations).ThenInclude(c => c.Client);
 
         if (!tracked)
             shipments = shipments.AsNoTrackingWithIdentityResolution();
@@ -192,6 +193,53 @@ public static class ShipmentInvoiceGraph
 
         return ids;
     }
+
+    /// <summary>
+    /// Clients that have a row on the Fakturace table: those holding an invoice on the run, plus
+    /// those holding pieces kept off every invoice.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="EligibleClientIds"/> on purpose. A sub-client whose every piece is
+    /// billed to its payer holds no invoice and no private pieces, so it has no row — its goods
+    /// appear inside the payer's, which is why confirming a payer confirms the whole group.
+    /// </remarks>
+    public static HashSet<long> RowClientIds(ShipmentInvoiceSplit split)
+    {
+        var ids = split.Shipment.Invoices.Select(i => i.ClientId).ToHashSet();
+
+        foreach (var line in split.PrivateLines)
+        {
+            var clientId = OrderingClientIdOf(split.Shipment, line);
+            if (clientId is not null)
+                ids.Add(clientId.Value);
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// Internal ID of the client who ordered a line's pieces, or null when its source item is no
+    /// longer on the run.
+    /// </summary>
+    public static long? OrderingClientIdOf(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
+        line.SourceKind switch
+        {
+            InvoiceLineSourceKind.OrderItem => OrderOf(shipment, line.OrderItemId ?? 0)?.ClientId,
+            InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(shipment)
+                .FirstOrDefault(x => x.Extra.Id == line.CustomExtraItemId).Order?.ClientId,
+            InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(shipment)
+                .FirstOrDefault(x => x.Item.Id == line.SupplierGoodItemId).Order?.ClientId,
+            _ => null
+        };
+
+    /// <summary>
+    /// The number the next confirmed row on this run takes: one past the highest already handed
+    /// out, so an un-marked row's kept number is never reissued.
+    /// </summary>
+    public static int NextConfirmationNumber(OutgoingShipment shipment) =>
+        shipment.InvoiceConfirmations.Count == 0
+            ? 1
+            : shipment.InvoiceConfirmations.Max(c => c.Number) + 1;
 
     /// <summary>
     /// Whether the split may still be edited. Mirrors the nakládka rule.
