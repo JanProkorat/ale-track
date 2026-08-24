@@ -340,6 +340,16 @@ Reopening the drawer after a save must show the **stored actual**, not the origi
 the second save records a second delta and the debt doubles. That is what the upsert invariant and
 its partial unique index exist to guarantee.
 
+**A deviation may have no planned line behind it, and the drawer must be able to create one.**
+A product taken at the door, or a crate of empties handed over against an order that planned no
+returns at all — neither has a row to diff against. So every collection's section renders **even
+when the collection is empty**, each with a way to name something that was never planned: a catalog
+picker for products, a free-text name for returns and extras. Hiding the section when nothing is
+planned leaves the commonest surprise of the whole feature with nowhere to be written down.
+
+Such an entry stores `planned_quantity = 0` and is keyed by its own generated line id rather than by
+a row on the order — the order is the plan, and this was never in it.
+
 ### Inline diff
 
 | Row state | Rendering |

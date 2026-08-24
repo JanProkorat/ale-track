@@ -1009,6 +1009,11 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
       note:'Jedna basa rozbitá při vykládce.', resolvedAt:daysFromNow(-2), resolvedBy:'u-admin',
       resolvedByOrderId:null, resolutionNote:'Dobropis vystaven, klient souhlasí.' }),
     qtyLed('cl-club','o-5','Frýdlantská 10°',2,1,{ note:'Jeden sud vrácen zpět — vadný ventil.' }),
+    // The order planned no returns at all and the client handed over four crates anyway.
+    // There is no row on the order to hang this on, so the entry carries its own key.
+    led('cl-club','o-5','ReturnQuantity',{ lineKey:'ret-adhoc-basa', lineName:'Basa 0,5 l — prázdná',
+      plannedQuantity:0, actualQuantity:4,
+      note:'Objednávka žádnou vratku neměla, klient vydal 4 basy — dořešit zálohu.' }),
     led('cl-pivnice',null,'Money',{ amount:-320, createdAt:daysFromNow(-5),
       note:'Přeplatek z minulé faktury — vracíme klientovi.' }),
   ];
@@ -2733,8 +2738,10 @@ function ledgerDrawer(orderId){
       <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th>
         <th style="text-align:right">Plán</th><th style="text-align:right">Skutečně</th></tr></thead>
         <tbody>${rows}${addedRows}</tbody></table></div>
-      ${ledgerDrawerSimple('Vratky','ret',o.returns||[],orderId,'ReturnQuantity','Vráceno')}
-      ${ledgerDrawerSimple('Položky navíc','ext',o.extras||[],orderId,'CustomExtraQuantity','Předáno')}
+      ${ledgerDrawerSimple('Vratky','ret',o.returns||[],orderId,'ReturnQuantity','Vráceno',
+        'Přidat vratku, kterou objednávka neplánovala','Např. Basa 0,5 l — prázdná')}
+      ${ledgerDrawerSimple('Položky navíc','ext',o.extras||[],orderId,'CustomExtraQuantity','Předáno',
+        'Přidat položku předanou na místě','Např. Kelímky 0,5 l')}
       <div class="divider"></div><div class="section-label">Přidat produkt vzatý na místě</div>
       <div class="row gap8">
         <div style="flex:1">${sel('ld-newprod',[['','— vyberte —'],...addable.slice(0,60).map(p=>[p.id,p.name])])}</div>
@@ -2756,18 +2763,26 @@ function ledgerDrawer(orderId){
 }
 /* Returns and extras get the same plan-vs-actual table as the products. Prefilled from
    the stored deviation for the same reason: a second save must not record the delta twice. */
-function ledgerDrawerSimple(title,prefix,rows,orderId,target,actualLabel){
+function ledgerDrawerSimple(title,prefix,rows,orderId,target,actualLabel,addLabel,addPlaceholder){
   const merged=ledgerSimpleRows(rows,orderId,target);
-  if(!merged.length) return '';
+  // Rendered even with nothing planned. A client who was to return nothing and hands the
+  // driver four crates anyway is the ordinary case, not the edge one — and with the section
+  // hidden there would be nowhere to write it down.
   return `<div class="divider"></div><div class="section-label">${title}</div>
-    <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th>
+    ${merged.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th>
       <th style="text-align:right">Plán</th><th style="text-align:right">${actualLabel}</th></tr></thead>
       <tbody>${merged.map(({r,entry})=>`<tr>
         <td><div class="t-strong" style="font-size:13px">${esc(r.name||r.description)}</div>
           ${entry?`<div style="margin-top:2px">${ledTag(entry)}</div>`:''}</td>
         <td class="num tnum t-mut">${r.quantity} ks</td>
         <td style="width:104px"><input class="input" id="ld-${prefix}-${r.id}" type="number" min="0"
-          value="${entry?entry.actualQuantity:r.quantity}" style="text-align:right"></td></tr>`).join('')}</tbody></table></div>`;
+          value="${entry?entry.actualQuantity:r.quantity}" style="text-align:right"></td></tr>`).join('')}</tbody></table></div>`
+      :`<div class="t-mut" style="font-size:12.5px;padding:2px 0 8px">Objednávka žádné neplánovala.</div>`}
+    <div class="row gap8" style="margin-top:8px">
+      <div style="flex:1">${inp('ld-'+prefix+'-newname','',addPlaceholder)}</div>
+      <div style="width:96px">${inp('ld-'+prefix+'-newqty','','ks','number')}</div>
+    </div>
+    <div class="t-mut" style="font-size:11px;margin-top:4px">${addLabel}</div>`;
 }
 function ledgerSave(orderId){
   const o=DB.orders.find(x=>x.id===orderId); if(!o) return;
@@ -2815,6 +2830,10 @@ function ledgerSave(orderId){
       const el=$('#ld-'+prefix+'-'+r.id); if(!el) return;
       upsertSimple(target,r,r.quantity,Math.max(0,parseInt(el.value)||0));
     });
+    // Something handed over that the order never planned. It gets a key of its own rather
+    // than a row on the order: the order is the plan, and this was never in it.
+    const name=val('ld-'+prefix+'-newname'), qty=parseInt(val('ld-'+prefix+'-newqty'))||0;
+    if(name&&qty>0) upsertSimple(target,{ id:'ld-'+Math.random().toString(36).slice(2,7), name }, 0, qty);
   });
   const np=val('ld-newprod'), nq=parseInt(val('ld-newqty'))||0;
   if(np&&nq>0) upsertQty(np,0,nq);
