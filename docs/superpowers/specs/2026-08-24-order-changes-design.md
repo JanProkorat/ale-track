@@ -423,15 +423,20 @@ The two things the card used to carry for quantity rows are relocated rather tha
 
 - **Why, who and when** ride on the row's own tag as a `title` tooltip — wanted for the one row being
   looked at, not for all of them at once.
-- **Resolving** happens on the order's **Klient card**, which lists the client's open points in full
-  rather than linking away to them. Sending somebody to another screen for their to-do list means
-  they never look.
+- **Resolving** happens in a `Nedořešeno u klienta` card on the order detail, which lists the
+  client's open points in full rather than linking away to them. Sending somebody to another screen
+  for their to-do list means they never look.
 
-The Klient card deliberately lists the client's **whole** open list, not just this order's — what
-makes it worth reading is the part that happened elsewhere. Entries belonging to the order being
-viewed are badged `z této objednávky`, so the reader can tell at a glance what is already struck
-through above and what is news. Each row carries its resolve action; a row already carried by
-another order is badged `zařazeno` and offers none, because it is somebody else's to close.
+That card **replaces** the order detail's client block rather than sitting under it. The client's
+name is in the page title and links from the meta line, and its billing address is one click away —
+none of it is something the order screen alone can tell you. What is still open with this client is,
+so that is all the card holds. With nothing open there is no card.
+
+It deliberately lists the client's **whole** open list, not just this order's — what makes it worth
+reading is the part that happened elsewhere. Entries belonging to the order being viewed are badged
+`z této objednávky`, so the reader can tell at a glance what is already struck through above and what
+is news. Each row carries its resolve action; a row already carried by another order is badged
+`zařazeno` and offers none, because it is somebody else's to close.
 
 ### No second banner on the shipment
 

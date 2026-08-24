@@ -3116,23 +3116,18 @@ function viewOrderDetail(id){
             ?`<div class="kv" title="${esc(ledWhy(a))}"><span class="k">Adresa</span><span class="v" style="text-align:right">${textDiff(a.plannedText,a.actualText)}</span></div>`:''; })()}
           <div class="kv"><span class="k">Zařazeno do vývozu</span><span class="v">${shipStop?`<a href="#/shipments/${shipStop.id}" style="color:var(--amber-700)">${esc(shipStop.name)}</a>`:'<span class="t-mut">dosud ne</span>'}</span></div>
         </div></div>
-        <div class="card"><div class="card-head"><h3>Klient</h3></div><div class="card-pad">
-          <div class="row-lead" style="margin-bottom:12px">${avatar(cl.id,initials(cl.name))}<div><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12px">${L.region[cl.region]}</div></div></div>
-          <div class="addr">${fmtAddrFull(cl.officialAddress)}</div>
-          ${(()=>{ /* Listed here, not behind a link. This is the question the card answers —
-            what is still open with this client — and sending someone to another screen for
-            it means they never look.
+        ${(()=>{ /* The client's identity is dropped: the name is in the page title, it is a
+          link in the meta line, and its billing address is one click away on the client. What
+          the order screen cannot get anywhere else is what is still open with this client, so
+          that is all the card is.
 
-            Deliberately the client's WHOLE open list, not just this order's: what makes it
-            worth reading is the part that happened elsewhere. Entries from this order are
-            marked, so the reader can tell at a glance what is already struck through above
-            and what is news. */
-            const open=ledgerOpen(cl.id); if(!open.length) return '';
-            return `<div class="divider"></div>
-              <div class="row gap8" style="margin-bottom:10px;font-size:12.5px;font-weight:800;color:var(--warn)">
-                ${icon('warnTri',14)}Nedořešeno u klienta <span class="tag">${open.length}</span></div>
-              <div class="stack" style="gap:8px">${open.map(e=>ledgerCompactItem(e,id)).join('')}</div>`; })()}
-        </div></div>
+          Deliberately the WHOLE open list, not just this order's — what makes it worth reading
+          is the part that happened elsewhere. Entries from this order are badged, so the reader
+          can tell at a glance what is already struck through above and what is news. */
+          const open=ledgerOpen(cl.id); if(!open.length) return '';
+          return `<div class="card"><div class="card-head">${icon('warnTri',17)}<h3>Nedořešeno u klienta</h3>
+              <span class="tag">${open.length}</span></div>
+            <div class="card-pad stack" style="gap:10px">${open.map(e=>ledgerCompactItem(e,id)).join('')}</div></div>`; })()}
       </div></div></div>`;
 }
 function kindChipText(k){ return L.kind[k]||k; }
