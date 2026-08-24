@@ -3652,9 +3652,12 @@ function viewShipments(){
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Číslo</th><th>Název</th><th>Stav</th><th>Datum</th><th style="text-align:right">Zast.</th><th>Vůz</th><th>Řidiči</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
-let SL={ shipId:null, dokStop:null };
+let SL={ shipId:null, dokStop:null, view:'load' };
 function viewShipmentDetail(id){
   id=id.split('?')[0]; const s=DB.shipments.find(x=>x.id===id); if(!s) return notFound('Vývoz');
+  // Reset per shipment, so the view chosen on one run does not follow you to the next.
+  // A run already on the road opens on Vykládka — that is the only question left about it.
+  if(SL.shipId!==id) SL.view=(s.state==='InTransit'||s.state==='Delivered')?'unload':'load';
   SL.shipId=id;
   const ed=canEdit('shipments'); const veh=vehicleById(s.vehicleId);
   const pts=shipStopPoints(s.stops);
@@ -3712,7 +3715,87 @@ function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*slQty(it)
 function slRemoveDokladka(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(!it)return;
   it.dokladkaQty=0; it.fromInventoryId=null; if(it.quantity===0) s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId));
   toast('Dokládka odebrána','trash'); slRerender(); }
+/* ---- VYKLÁDKA -----------------------------------------------------------------
+ * What comes off the van, stop by stop, in the order the driver reaches them.
+ *
+ * The mirror image of the nakládka above: that one is read at the ramp, where the
+ * question is "what do we collect from this brewery", so it aggregates. On the road
+ * the question is the other one — "what comes off here" — so this is per stop and
+ * keeps each order's lines separate.
+ *
+ * This is where deviations live. The nakládka is settled with the brewery before the
+ * van leaves and a change made in transit cannot affect it; the handover is the only
+ * moment at which a plan and a reality exist side by side.
+ */
+function unloadChipText(p){
+  return [kindChipText(p.kind), p.packageSize!=null?fmtLiters(p.packageSize):'', p.platoDegree!=null?p.platoDegree+'°':'']
+    .filter(Boolean).join(' · ');
+}
+/* One stop's lines: what was loaded for it, decorated with what actually happened,
+   plus anything the client took at the door that was never on the van's list. */
+function unloadLines(s,st){
+  const led=id=>st.orderId?ledgerQtyFor(st.orderId,id):null;
+  const rows=st.items.map(it=>({ p:prodById(it.productId), planned:slQty(it), entry:led(it.productId) }))
+    .filter(r=>r.p);
+  (st.orderId?ledgerForOrder(st.orderId):[])
+    .filter(e=>e.target==='ProductQuantity'&&ledRowStatus(e)==='added'
+      &&!st.items.some(it=>it.productId===e.productId))
+    .forEach(e=>{ const p=prodById(e.productId); if(p) rows.push({ p, planned:0, entry:e, appended:true }); });
+  return rows;
+}
+function unloadStopBlock(s,st,seq){
+  const cl=clientById(st.clientId);
+  const rows=unloadLines(s,st);
+  const total=rows.reduce((x,r)=>x+(r.entry?r.entry.actualQuantity:r.planned),0);
+  const stLed=st.orderId?ledgerForOrder(st.orderId):[];
+  const openN=stLed.filter(e=>!e.resolvedAt).length;
+  const addrLed=stLed.find(e=>e.target==='DeliveryAddress');
+  const recordable=canEdit('clients')&&st.orderId&&(s.state==='InTransit'||s.state==='Delivered');
+  const lines=rows.map(r=>{
+    const qty=r.entry?r.entry.actualQuantity:r.planned;
+    return `<div class="${ledgerRowClass(r.entry)}" style="padding:7px 14px;border-top:1px solid var(--border)">
+      <div class="row gap8" style="align-items:baseline">
+        <span class="t-strong" style="font-size:13px;${ledgerRowClass(r.entry)==='row-removed'?'text-decoration:line-through':''}">${esc(r.p.name)}</span>
+        <span style="flex:1"></span>
+        <span class="tnum" style="font-size:13px;font-weight:800;flex:0 0 auto">${r.entry
+          ? (r.appended?`<span class="diff-new">× ${qty}</span>`:`<span class="diff-old">× ${r.planned}</span> <span class="diff-new">× ${qty}</span>`)
+          : '× '+qty}</span></div>
+      <div class="row gap8" style="margin-top:1px;flex-wrap:wrap">
+        <span class="t-mut" style="font-size:11.5px">${unloadChipText(r.p)}</span>
+        ${r.entry?ledTag(r.entry):''}</div></div>`; }).join('');
+  return `<div>
+    <div class="row gap8" style="padding:10px 14px;align-items:flex-start;background:var(--surface-2);border-top:1px solid var(--border)">
+      <span class="av" style="width:26px;height:26px;flex:0 0 auto;background:${colorFor(cl.id)};color:#fff;font-size:12px">${seq}</span>
+      <div style="flex:1;min-width:0">
+        <div class="row gap8" style="align-items:baseline;flex-wrap:wrap">
+          <a href="#/orders/${st.orderId}" class="t-strong" style="font-size:14px;color:var(--amber-700)">${esc(cl.name)}</a>
+          ${openN?`<span class="chg-tag t-info">${icon('warnTri',10)}${openN} ${plural(openN,'změna','změny','změn')}</span>`:''}
+          <span style="flex:1"></span>
+          ${total>0?`<span class="t-mut tnum" style="font-size:11.5px;flex:0 0 auto">${total} ks</span>`:''}</div>
+        <div class="t-mut" style="font-size:11.5px">${stopAddressText(st)}</div>
+        ${addrLed?`<div style="font-size:11.5px;margin-top:3px" title="${esc(ledWhy(addrLed))}">${textDiff(addrLed.plannedText,addrLed.actualText)}</div>`:''}</div>
+      ${recordable?`<button class="btn btn-sm btn-soft" style="flex:0 0 auto" onclick="ledgerDrawer('${st.orderId}')">${icon('edit',14)}Zaznamenat změnu</button>`:''}
+    </div>
+    ${rows.length?lines:'<div class="t-mut" style="font-size:12px;padding:8px 14px">Bez vykládky</div>'}</div>`;
+}
+function shipUnloadCard(s){
+  const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
+  return `<div class="card" style="overflow:hidden">
+    <div style="padding:10px 14px;background:var(--surface-3)">
+      <div class="t-mut" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em">Výchozí bod</div>
+      <div class="t-strong" style="font-size:13.5px">${esc(DEPOT.name)}</div></div>
+    ${stopsSorted.map((st,i)=>unloadStopBlock(s,st,i+1)).join('')}</div>`;
+}
+/* Which of the two the loading card is showing. Mirrors the app's segmented control,
+   where Vykládka sits at the end of the same row as Nakládka and the invoice columns. */
+function shipLoadView(v){ SL.view=v; slRerender(); }
+function shipLoadSwitch(s){
+  return `<div class="seg" style="margin-bottom:12px">
+    <button class="${SL.view!=='unload'?'on':''}" onclick="shipLoadView('load')">${icon('box',14)} Nakládka</button>
+    <button class="${SL.view==='unload'?'on':''}" onclick="shipLoadView('unload')">${icon('ship',14)} Vykládka</button></div>`;
+}
 function shipLoadingCard(s){
+  if(SL.view==='unload') return shipLoadSwitch(s)+shipUnloadCard(s);
   const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
   const all=stopsSorted.flatMap(st=>st.items);
@@ -3722,50 +3805,30 @@ function shipLoadingCard(s){
   const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
     const items=st.items;
     const rows=items.map(it=>{ const p=prodById(it.productId); const dq=it.dokladkaQty||0; const pure=it.quantity===0; const qty=slQty(it);
-      // What the stop was loaded with is one number; what came off it is another. The
-      // loaded snapshot is never rewritten by a deviation — it is the record of what
-      // went on the van — so both are shown, the delivered one struck against it.
-      const led=st.orderId?ledgerQtyFor(st.orderId,it.productId):null;
-      const qtyCell = led
-        ? `<div>${ledRowStatus(led)==='added'?`<span class="diff-new">${led.actualQuantity} ks</span>`:qtyDiff(qty,led.actualQuantity)}</div>
-           <div style="margin-top:3px">${ledTag(led)}</div>`
-        : dq>0
+      // Deliberately free of deviations. The nakladka is settled with the brewery before
+      // the van leaves, and what a client did or did not take at the door changes nothing
+      // about what was collected from the ramp. Deviations belong in Vykladka.
+      const qtyCell = dq>0
         ? `<div class="tnum t-strong">${qty} ks</div><div class="t-mut tnum" style="font-size:11px">${pure?`${dq} ze skladu`:`${it.quantity} obj. + ${dq} dokl.`}</div>`
         : `<span class="tnum t-strong">${qty} ks</span>`;
       const dokBadge = dq>0 ? `<span class="pill s-info"><span class="d"></span>dokládka +${dq}${editable?`<button title="Odebrat dokládku" onclick="slRemoveDokladka('${it.id}')" style="border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px;display:inline-flex;align-items:center">${icon('close',11)}</button>`:''}</span>` : '';
-      return `<tr class="${ledgerRowClass(led)}">
+      return `<tr>
         <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
           <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${dokBadge}</div></td>
         <td class="num">${qtyCell}</td>
         <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
         <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
         <td style="width:34px;text-align:right">${pure&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" title="Odebrat" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
-    // Products the client took at the door have no loaded row to decorate, so they are
-    // appended here — same reason applyLedger returns a new array on the order detail.
-    const stLed=st.orderId?ledgerForOrder(st.orderId):[];
-    const addedRows=stLed.filter(e=>e.target==='ProductQuantity'&&ledRowStatus(e)==='added'
-        &&!items.some(it=>it.productId===e.productId))
-      .map(e=>{ const p=prodById(e.productId); if(!p) return '';
-        return `<tr class="row-added"><td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
-          <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${ledTag(e)}</div></td>
-          <td class="num"><span class="diff-new">${e.actualQuantity} ks</span></td>
-          <td colspan="3" class="t-mut" style="font-size:11.5px">nebylo v nakládce</td></tr>`; }).join('');
-    const ledOpen=stLed.filter(e=>!e.resolvedAt).length;
-    const addrLed=stLed.find(e=>e.target==='DeliveryAddress');
     return `<div style="margin-bottom:6px">
       <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
         <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
           <div><div class="row gap8" style="flex-wrap:wrap"><span class="t-strong" style="font-size:13.5px">${esc(cl.name)}</span>
-            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}
-            ${ledOpen?`<span class="chg-tag t-info">${icon('warnTri',10)}${ledOpen} ${plural(ledOpen,'změna','změny','změn')}</span>`:''}</div>
-            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div>
-            ${addrLed?`<div style="font-size:11.5px;margin-top:3px">${textDiff(addrLed.plannedText,addrLed.actualText)}</div>`:''}</div></div>
-        <div class="row gap8">
-          ${canEdit('clients')&&st.orderId&&(s.state==='InTransit'||s.state==='Delivered')?`<button class="btn btn-sm btn-soft" onclick="ledgerDrawer('${st.orderId}')">${icon('edit',14)}Zaznamenat změnu</button>`:''}
-          ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div></div>
-      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}${addedRows}</tbody></table></div>`
+            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}</div>
+            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div></div></div>
+        ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
+      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
         :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">Klient nemá v této nakládce žádné položky.</div>`}</div>`; }).join('');
-  return `<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
+  return shipLoadSwitch(s)+`<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
       <span class="sub" style="margin-left:auto">Co naložit do vozu — pro řidiče a přípravu v pivovaru</span></div>
     <div class="card-pad">
       <div class="row gap8" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:6px">

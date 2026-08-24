@@ -383,8 +383,8 @@ a row on the order — the order is the plan, and this was never in it.
 | `unchanged` | untouched |
 
 Applied to all the collections on the order detail (`OrderDetail.tsx:243-352`: Položky — products
-*and* supplier goods — Vratky, Položky navíc) and to `UnloadLine` on the shipment detail. Address and
-date the same way: old struck, new beside it.
+*and* supplier goods — Vratky, Položky navíc) and to `UnloadLine` in the shipment's **Vykládka**.
+The address the same way: old struck, new beside it.
 
 Two constraints: colour is never the only signal (invisible to a colour-blind reader and in print),
 and colours come from `theme.vars.palette.*` — this project runs MUI cssVars, and `theme.palette.*`
@@ -437,6 +437,24 @@ reading is the part that happened elsewhere. Entries belonging to the order bein
 `z této objednávky`, so the reader can tell at a glance what is already struck through above and what
 is news. Each row carries its resolve action; a row already carried by another order is badged
 `zařazeno` and offers none, because it is somebody else's to close.
+
+### Vykládka, never Nakládka
+
+On the shipment detail the deviations belong to the **Vykládka** view and to nothing else.
+
+The nakládka is settled with the brewery before the van leaves: it says what was collected from the
+ramp, it is read out while the pallet is packed, and a client who refuses two kegs three hours later
+changes nothing about it. Decorating it with deviations would put a number there that nobody at the
+ramp can act on and that contradicts what was actually loaded.
+
+The handover is the one moment where a plan and a reality exist side by side, and Vykládka is the
+view of that moment — stop by stop, in the order the driver reaches them. So that is where the
+struck-through counts, the appended door-side lines, the address diff, the per-stop change badge and
+the `Zaznamenat změnu` button all live. Recording is offered only once the run has left `Created`.
+
+`Nakládka | Vykládka` is one segmented control, matching the app (`ShipmentDetail.tsx:1001-1003`,
+where the invoice columns F1/F2 sit between them). A run already on the road opens on Vykládka —
+what was loaded is settled by then, and what came off is the only question left about it.
 
 ### No second banner on the shipment
 
