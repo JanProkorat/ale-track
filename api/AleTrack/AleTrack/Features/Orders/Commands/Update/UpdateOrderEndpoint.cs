@@ -109,9 +109,9 @@ public sealed class UpdateOrderEndpoint(
                 order.Client = client!;
             }
 
-            // Only needed by the rebuild below. Kept inside the branch because it filters out
-            // retired products, which would otherwise reject a notes-only save of an order
-            // containing a since-retired one.
+            // Only needed by the merge below, for the lines it has to create. Kept inside the
+            // branch because it filters out retired products, which would otherwise reject a
+            // notes-only save of an order containing a since-retired one.
             var products = await GetExistingProductsAsync(req.Data.OrderItems, ct);
 
             // Both are optional patches: omitted means "leave as stored". They belong to the
@@ -125,26 +125,7 @@ public sealed class UpdateOrderEndpoint(
             if (addressChanged || clientChanged)
                 await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
 
-            // Destructive by design: the items are replaced, not merged, so every save hands
-            // out fresh row IDs. outgoing_shipment_invoice_lines.order_item_id is Cascade, so
-            // running this on a closed order deleted that order's invoice lines outright.
-            // Skipping the rebuild — rather than rebuilding and then comparing — is what keeps
-            // the rows, and the invoice lines hanging off them, alive.
-            order.OrderItems.Clear();
-
-            foreach (var orderItem in req.Data.OrderItems)
-            {
-                var relatedProduct = products.FirstOrDefault(p => p.PublicId == orderItem.ProductId);
-                if (relatedProduct is null)
-                    ThrowHelper.PublicEntityNotFound(nameof(Product), orderItem.ProductId);
-
-                order.OrderItems.Add(new OrderItem
-                {
-                    Product = relatedProduct!,
-                    Quantity = orderItem.Quantity,
-                    ReminderState = orderItem.ReminderState
-                });
-            }
+            MergeOrderItems(req.Data.OrderItems, order, products);
         }
 
         order.Returns = GetReturns(req.Data.Returns, order);
@@ -193,6 +174,74 @@ public sealed class UpdateOrderEndpoint(
             .ToList();
 
         return !storedItems.SequenceEqual(incomingItems);
+    }
+
+    /// <summary>
+    /// Merges the posted item lines into the persisted ones, pairing them on the product.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilding the collection handed out fresh row IDs on every save, and
+    /// <see cref="OrderItem"/> carries three fields the order does not own —
+    /// <see cref="OrderItem.IsShipmentLoadingConfirmed"/>, ticked off while packing, plus
+    /// <see cref="OrderItem.QuantityFromInventory"/> and
+    /// <see cref="OrderItem.InventoryItemId"/>, set when the sourcing is split. All three sit
+    /// on a shipment still in <c>Created</c>, which is exactly when the order is also still
+    /// editable, so any save reset them silently. The new row also took the old one's invoice
+    /// line with it, <c>outgoing_shipment_invoice_lines.order_item_id</c> being Cascade.
+    ///
+    /// Pairing on the product is safe for the same reason <see cref="ApplyItemNotes"/> relies
+    /// on: the order editor increments an existing cart line rather than adding a second one
+    /// for the same product, so a product appears at most once.
+    ///
+    /// A line the save leaves out is still removed, and its invoice line still cascades away —
+    /// merging is about the lines that stay, not about never deleting one.
+    /// </remarks>
+    private static void MergeOrderItems(List<UpdateOrderItemDto> posted, Order order, List<Product> products)
+    {
+        var dropped = order.OrderItems
+            .Where(stored => posted.All(p => p.ProductId != stored.Product.PublicId))
+            .ToList();
+
+        foreach (var stored in dropped)
+            order.OrderItems.Remove(stored);
+
+        foreach (var line in posted)
+        {
+            var existing = order.OrderItems.FirstOrDefault(i => i.Product.PublicId == line.ProductId);
+
+            if (existing is not null)
+            {
+                existing.Quantity = line.Quantity;
+                existing.ReminderState = line.ReminderState;
+
+                // Clamped, not re-seeded, exactly as GetSupplierGoodItemsAsync treats the
+                // garage split: the sourcing is a decision somebody made on the shipment, and
+                // cutting the ordered quantity is no reason to throw it away.
+                existing.QuantityFromInventory =
+                    SupplierGoodSourcing.Clamp(existing.QuantityFromInventory, line.Quantity);
+
+                // Nothing left to source means nothing left to source it from — the stock link
+                // is documented as null whenever no pieces come out of inventory.
+                if (existing.QuantityFromInventory == 0)
+                {
+                    existing.InventoryItem = null;
+                    existing.InventoryItemId = null;
+                }
+
+                continue;
+            }
+
+            var relatedProduct = products.FirstOrDefault(p => p.PublicId == line.ProductId);
+            if (relatedProduct is null)
+                ThrowHelper.PublicEntityNotFound(nameof(Product), line.ProductId);
+
+            order.OrderItems.Add(new OrderItem
+            {
+                Product = relatedProduct!,
+                Quantity = line.Quantity,
+                ReminderState = line.ReminderState
+            });
+        }
     }
 
     /// <summary>
