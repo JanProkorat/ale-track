@@ -177,6 +177,19 @@ disputed debt raises — and `IAppContext.UserId` (`Common/Utils/AppContext.cs:1
 editor preview and therefore the hottest one. Plus the partial unique index enforcing the upsert
 invariant: one unresolved entry per `(order_id, target, line id)`.
 
+**When `requires_follow_up` defaults to true.** Not simply "whenever the numbers differ":
+
+| Target | Short | Over |
+|---|---|---|
+| `ProductQuantity`, `SupplierGoodQuantity` | yes — pieces are owed | **no** — they are with the client and get billed |
+| `ReturnQuantity` | yes — the client still owes empties | **yes** — we are holding deposits that are not ours |
+| `CustomExtraQuantity` | yes | yes |
+| `Money`, `Other` | yes | yes |
+| `DeliveryAddress`, `DeliveryDate` | never — informational | never |
+
+A return has no good direction, which is also why its over-delivery never gets the
+affirmative colour that "delivered extra" earns.
+
 **Two lookups, not one.** Conflating them double-bills, which the prototype demonstrated
 before this was written down:
 

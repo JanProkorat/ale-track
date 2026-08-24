@@ -546,6 +546,7 @@ const L = {
   // "took extra" are one branch with opposite signs, so the arithmetic is written
   // once and the wording is derived from the sign (see ledgerHeadline).
   ledgerTarget:{ ProductQuantity:'Množství', SupplierGoodQuantity:'Množství zboží',
+    ReturnQuantity:'Vratka', CustomExtraQuantity:'Položka navíc',
     DeliveryAddress:'Adresa doručení', DeliveryDate:'Termín doručení', Money:'Peníze', Other:'Jiné' },
   ledgerState:{ open:'Nedořešeno', assigned:'Zařazeno', resolved:'Vyřešeno' },
 };
@@ -838,13 +839,20 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
   // A supplier-good order line — same shape, but points at a good on a supplier's
   // price list instead of a beer product.
   const sgi=(supplierId,goodId,qty)=>({ id:'oi-'+Math.random().toString(36).slice(2,7), productId:null, supplierId, supplierGoodId:goodId, quantity:qty, reminderState:null });
+  // Returnables the client hands back against the order (empty kegs, crates) and things
+  // they want that no brewery supplies. Free-form name plus a count, not catalog products —
+  // which is why they are their own collections rather than more `items`.
+  const ret=(name,qty,note)=>({ id:'ret-'+Math.random().toString(36).slice(2,7), name, quantity:qty, note:note||'' });
+  const ext=(description,qty,note)=>({ id:'ext-'+Math.random().toString(36).slice(2,7), description, quantity:qty, note:note||'' });
   let on=240;
-  function order(id,clientId,state,reqOffset,items,createdOffset){
+  function order(id,clientId,state,reqOffset,items,createdOffset,returns,extras){
     return { id, number:'OBJ-2026-'+(on++), clientId, state, createdDate:daysFromNow(createdOffset??-6),
       requiredDeliveryDate: state==='New'?null:daysFromNow(reqOffset), actualDeliveryDate: state==='Finished'?daysFromNow(reqOffset):null,
-      note:'', items }; }
+      note:'', items, returns:returns||[], extras:extras||[] }; }
   DB.orders=[
-    order('o-1','cl-uzsklep','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht 11°'),2), oi(byName('Svijanský Máz'),3,'Added') ]),
+    order('o-1','cl-uzsklep','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht 11°'),2), oi(byName('Svijanský Máz'),3,'Added') ], null,
+      [ ret('Sud 50 l — prázdný',4), ret('Basa 0,5 l — prázdná',6) ],
+      [ ext('Chlazení — zápůjčka',1,'na víkendovou akci'), ext('Kelímky 0,5 l',200) ]),
     order('o-2','cl-pivnice','Planning',2,[ oi(byName('Svijanský Rytíř'),3), oi(byName('Svijanská Kněžna'),1) ]),
     order('o-3','cl-hotel','New',null,[ oi(byName('Landskron Pilsner'),4), oi(byName('Landskron Hefeweizen'),2) ]),
     order('o-4','cl-goerlitz','Planning',3,[ oi(byName('Landskron Pilsner'),6), oi(byName('Landskron Radler'),4) ]),
@@ -966,6 +974,15 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
     const p=byName(prodName); const ord=DB.orders.find(x=>x.id===orderId);
     const oi=ord?ord.items.find(i=>i.productId===p.id):null;
     return led(clientId,orderId,'ProductQuantity',{ productId:p.id, orderItemId:oi?oi.id:null,
+      lineKey:p.id, plannedQuantity:planned, actualQuantity:actual, ...o });
+  }
+  /* Returns and extras are keyed by the row's own id — they have no catalog entry to
+     point at — and carry a name snapshot so the entry still reads after the row is gone. */
+  function lineLed(clientId,orderId,target,coll,match,planned,actual,o){
+    const ord=DB.orders.find(x=>x.id===orderId);
+    const row=(ord?ord[coll]:[]).find(r=>(r.name||r.description||'').startsWith(match));
+    return led(clientId,orderId,target,{ lineKey:row?row.id:match,
+      lineName:row?(row.name||row.description):match,
       plannedQuantity:planned, actualQuantity:actual, ...o });
   }
   DB.ledger=[
@@ -981,6 +998,12 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
     led('cl-uzsklep','o-1','DeliveryAddress',{ plannedText:'Zahrada u stromu, Chrastava',
       actualText:'Náměstí 12, Chrastava', requiresFollowUp:false,
       note:'Klient nestíhal dojet na zahradu, převzal na provozovně.' }),
+    // The scenario that started this: the client was to hand back 4 empties and pushed 6
+    // onto the driver. We now hold two that are not ours to keep.
+    lineLed('cl-uzsklep','o-1','ReturnQuantity','returns','Sud 50 l',4,6,
+      { note:'Klient vnutil řidiči 2 sudy navíc — vrátit zálohu nebo odečíst z další faktury.' }),
+    lineLed('cl-uzsklep','o-1','CustomExtraQuantity','extras','Chlazení',1,0,
+      { note:'Chlazení se do auta nevešlo, klient ho chce na příští závoz.' }),
     led('cl-uzsklep','o-1','Money',{ amount:2970, note:'Doplatek za 3 sudy vzaté na místě.' }),
     qtyLed('cl-uzsklep','o-7','Albrecht Nealko',2,1,{ createdAt:daysFromNow(-3),
       note:'Jedna basa rozbitá při vykládce.', resolvedAt:daysFromNow(-2), resolvedBy:'u-admin',
@@ -2544,12 +2567,18 @@ function ledgerForOrder(orderId){ return DB.ledger.filter(e=>e.orderId===orderId
      irrelevant. Used by the diffs and by the invoice.
    - What is still open on that line: used by the upsert, which may only rewrite a row
      nobody has settled yet. A settled row is history and gets a new row beside it. */
-function ledgerQtyFor(orderId,productId){
-  const all=DB.ledger.filter(e=>e.orderId===orderId&&e.target==='ProductQuantity'&&e.productId===productId);
-  return all.find(e=>!e.resolvedAt)||all[all.length-1];
-}
-function ledgerOpenQtyFor(orderId,productId){ return DB.ledger.find(e=>e.orderId===orderId
-  && e.target==='ProductQuantity' && e.productId===productId && !e.resolvedAt); }
+/* The four quantity targets share one code path — that is the whole reason the enum is
+   typed by target rather than by event. They differ only in what identifies the line:
+   a product for beer, the row's own id for a return or an extra. */
+const QTY_TARGETS=['ProductQuantity','SupplierGoodQuantity','ReturnQuantity','CustomExtraQuantity'];
+function isQtyTarget(t){ return QTY_TARGETS.includes(t); }
+function ledgerLines(orderId,target,key){ return DB.ledger.filter(e=>e.orderId===orderId
+  && e.target===target && e.lineKey===key); }
+function ledgerLineFor(orderId,target,key){ const all=ledgerLines(orderId,target,key);
+  return all.find(e=>!e.resolvedAt)||all[all.length-1]; }
+function ledgerOpenLineFor(orderId,target,key){ return ledgerLines(orderId,target,key).find(e=>!e.resolvedAt); }
+function ledgerQtyFor(orderId,productId){ return ledgerLineFor(orderId,'ProductQuantity',productId); }
+function ledgerOpenQtyFor(orderId,productId){ return ledgerOpenLineFor(orderId,'ProductQuantity',productId); }
 function ledDelta(e){ return (e.actualQuantity||0)-(e.plannedQuantity||0); }
 /* added -> nothing was planned; removed -> nothing arrived; otherwise a plain change. */
 function ledRowStatus(e){ if(!e.plannedQuantity) return 'added'; if(!e.actualQuantity) return 'removed'; return 'chg'; }
@@ -2560,11 +2589,18 @@ function ledgerMoney(clientId){ let owesUs=0,weOwe=0;
 /* The tag that carries the meaning when colour cannot — a colour-blind reader and a
    black-and-white printout both get the words. */
 function ledTag(e){
-  if(e.target==='ProductQuantity'||e.target==='SupplierGoodQuantity'){
+  if(isQtyTarget(e.target)){
     const st=ledRowStatus(e), d=ledDelta(e);
-    if(st==='added') return `<span class="chg-tag t-new">${icon('plus',10)}přidáno na místě</span>`;
-    if(st==='removed') return `<span class="chg-tag t-less">nevyloženo</span>`;
-    return `<span class="chg-tag ${d<0?'t-less':'t-more'}">${d<0?'nevyloženo':'navíc'} ${Math.abs(d)} ks</span>`;
+    // A return moves the other way: pieces come back to us, so "more than planned" is the
+    // client handing over extra, not us delivering extra. Same arithmetic, opposite words.
+    const ret=e.target==='ReturnQuantity';
+    if(st==='added') return `<span class="chg-tag t-new">${icon('plus',10)}${ret?'vráceno navíc':'přidáno na místě'}</span>`;
+    if(st==='removed') return `<span class="chg-tag t-less">${ret?'nevráceno':'nevyloženo'}</span>`;
+    // A return has no good direction — too few and the client still owes empties, too many
+    // and we are holding deposits that are not ours. So it never gets the green treatment
+    // that "delivered extra" earns, where the pieces are simply billed.
+    const tone=d<0?'t-less':ret?'t-new':'t-more';
+    return `<span class="chg-tag ${tone}">${d<0?(ret?'nevráceno':'nevyloženo'):(ret?'vráceno navíc':'navíc')} ${Math.abs(d)} ks</span>`;
   }
   if(e.target==='Money') return `<span class="chg-tag t-info">${e.amount>=0?'klient dluží':'dlužíme klientovi'}</span>`;
   return `<span class="chg-tag t-info">změna</span>`;
@@ -2572,19 +2608,22 @@ function ledTag(e){
 /* One-line human wording, derived from the sign — which is why the enum is typed by
    target and not by event: there is no NotUnloaded/DeliveredExtra pair to keep in sync. */
 function ledgerHeadline(e){
-  if(e.target==='ProductQuantity'||e.target==='SupplierGoodQuantity'){
-    const p=prodById(e.productId); const n=p?p.name:'Položka'; const d=ledDelta(e);
-    const st=ledRowStatus(e);
-    if(st==='added') return `${esc(n)} — přidáno ${e.actualQuantity} ks na místě`;
-    if(st==='removed') return `${esc(n)} — nevyloženo ${e.plannedQuantity} ks`;
-    return `${esc(n)} — ${d<0?'nevyloženo':'navíc'} ${Math.abs(d)} ks (plán ${e.plannedQuantity}, dodáno ${e.actualQuantity})`;
+  if(isQtyTarget(e.target)){
+    const p=e.productId?prodById(e.productId):null;
+    const n=p?p.name:(e.lineName||'Položka'); const d=ledDelta(e); const st=ledRowStatus(e);
+    const ret=e.target==='ReturnQuantity';
+    const verb=ret?'vráceno':'dodáno';
+    if(st==='added') return `${esc(n)} — ${ret?`vráceno ${e.actualQuantity} ks navíc`:`přidáno ${e.actualQuantity} ks na místě`}`;
+    if(st==='removed') return `${esc(n)} — ${ret?'nevráceno':'nevyloženo'} ${e.plannedQuantity} ks`;
+    return `${esc(n)} — ${d<0?(ret?'nevráceno':'nevyloženo'):(ret?'navíc vráceno':'navíc')} ${Math.abs(d)} ks (plán ${e.plannedQuantity}, ${verb} ${e.actualQuantity})`;
   }
   if(e.target==='Money') return e.amount>=0?`Klient dluží ${money(e.amount)}`:`Dlužíme klientovi ${money(-e.amount)}`;
   if(e.target==='DeliveryAddress') return `Vyloženo jinde než v objednávce`;
   if(e.target==='DeliveryDate') return `Dovezeno jiný den, než bylo v objednávce`;
   return esc(e.note||'Změna');
 }
-function ledIcon(t){ return t==='Money'?'wallet':t==='DeliveryAddress'?'pin':t==='DeliveryDate'?'cal':'box'; }
+function ledIcon(t){ return t==='Money'?'wallet':t==='DeliveryAddress'?'pin':t==='DeliveryDate'?'cal'
+  :t==='ReturnQuantity'?'arrowU':t==='CustomExtraQuantity'?'tag':'box'; }
 /* The inline diff: the old value struck through, the new one highlighted. */
 function qtyDiff(planned,actual){
   return `<span class="diff-old">${planned} ks</span> <span class="diff-new">${actual} ks</span>`;
@@ -2617,6 +2656,39 @@ function ledgerTotals(o,rows){ let items=0,price=0;
       const pr=g?goodPrimaryPrice(g):null; price+=(pr?pr.priceWithVat:0)*qty; }
     else price+=priceFor(prodById(it.productId),o.clientId).price*qty; });
   return {items,price}; }
+
+/* A free-form quantity list — returns, extras — merged with its deviations. Same shape
+   as applyLedger for products: decorate what is planned, append what only exists as a
+   delta, so a return the client invented at the door still shows up. */
+function ledgerSimpleRows(rows,orderId,target){
+  const entries=ledgerForOrder(orderId).filter(e=>e.target===target);
+  const out=rows.map(r=>({ r, entry: entries.find(e=>e.lineKey===r.id) }));
+  entries.filter(e=>ledRowStatus(e)==='added'&&!rows.some(r=>r.id===e.lineKey))
+    .forEach(e=>out.push({ r:{ id:e.lineKey, name:e.lineName, description:e.lineName, quantity:0, note:'' }, entry:e, appended:true }));
+  return out;
+}
+/* One card for a free-form list. Returns and extras render identically — they differ only
+   in the field the label lives in and in the words the tag uses. */
+function ledgerSimpleCard(title,ic,rows,orderId,target,editable){
+  const merged=ledgerSimpleRows(rows,orderId,target);
+  if(!merged.length) return '';
+  return `<div class="card"><div class="card-head">${icon(ic,16)}<h3>${title}</h3>
+      <span class="tag">${merged.length}</span>
+      ${editable?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${orderId}')">${icon('edit',13)}Zaznamenat změnu</button>`:''}</div>
+    <div class="card-pad stack" style="gap:0">
+      ${merged.map(({r,entry})=>{ const qty=entry?entry.actualQuantity:r.quantity;
+        const cls=ledgerRowClass(entry);
+        return `<div class="row" style="justify-content:space-between;gap:10px;padding:9px 10px;border-radius:var(--r-sm);
+            ${cls==='row-added'?'background:var(--info-tint)':cls==='row-removed'?'background:var(--crit-tint)':cls==='row-chg'?'background:var(--warn-tint)':''}">
+          <div style="min-width:0">
+            <div class="t-strong" style="font-size:13px;${cls==='row-removed'?'text-decoration:line-through':''}">${esc(r.name||r.description)}</div>
+            ${r.note?`<div class="t-mut" style="font-size:11.5px">${esc(r.note)}</div>`:''}
+            ${entry?`<div style="margin-top:3px">${ledTag(entry)}</div>`:''}</div>
+          <div class="tnum" style="flex:0 0 auto;text-align:right">
+            ${entry?(ledRowStatus(entry)==='added'?`<span class="diff-new">${qty} ks</span>`:qtyDiff(r.quantity,qty))
+              :`<span class="t-strong">${r.quantity} ks</span>`}</div></div>`; }).join('')}
+    </div></div>`;
+}
 
 /* ---- the shared drawer: record what actually happened --------------------------
    Opened from the order detail and from a stop in the shipment's nakládka. The
@@ -2661,6 +2733,8 @@ function ledgerDrawer(orderId){
       <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th>
         <th style="text-align:right">Plán</th><th style="text-align:right">Skutečně</th></tr></thead>
         <tbody>${rows}${addedRows}</tbody></table></div>
+      ${ledgerDrawerSimple('Vratky','ret',o.returns||[],orderId,'ReturnQuantity','Vráceno')}
+      ${ledgerDrawerSimple('Položky navíc','ext',o.extras||[],orderId,'CustomExtraQuantity','Předáno')}
       <div class="divider"></div><div class="section-label">Přidat produkt vzatý na místě</div>
       <div class="row gap8">
         <div style="flex:1">${sel('ld-newprod',[['','— vyberte —'],...addable.slice(0,60).map(p=>[p.id,p.name])])}</div>
@@ -2680,24 +2754,50 @@ function ledgerDrawer(orderId){
   $('#ld-save').onclick=()=>ledgerSave(orderId);
   $$('[data-scrim-close]').forEach(b=>b.onclick=closeOverlay);
 }
+/* Returns and extras get the same plan-vs-actual table as the products. Prefilled from
+   the stored deviation for the same reason: a second save must not record the delta twice. */
+function ledgerDrawerSimple(title,prefix,rows,orderId,target,actualLabel){
+  const merged=ledgerSimpleRows(rows,orderId,target);
+  if(!merged.length) return '';
+  return `<div class="divider"></div><div class="section-label">${title}</div>
+    <div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Položka</th>
+      <th style="text-align:right">Plán</th><th style="text-align:right">${actualLabel}</th></tr></thead>
+      <tbody>${merged.map(({r,entry})=>`<tr>
+        <td><div class="t-strong" style="font-size:13px">${esc(r.name||r.description)}</div>
+          ${entry?`<div style="margin-top:2px">${ledTag(entry)}</div>`:''}</td>
+        <td class="num tnum t-mut">${r.quantity} ks</td>
+        <td style="width:104px"><input class="input" id="ld-${prefix}-${r.id}" type="number" min="0"
+          value="${entry?entry.actualQuantity:r.quantity}" style="text-align:right"></td></tr>`).join('')}</tbody></table></div>`;
+}
 function ledgerSave(orderId){
   const o=DB.orders.find(x=>x.id===orderId); if(!o) return;
   let touched=0;
   /* Upsert, not insert: an existing unresolved row for the line is rewritten, and it is
      DELETED when the actual returns to the plan — the ledger holds no no-op rows. */
-  function upsertQty(productId,planned,actual){
+  function upsertLine(target,key,planned,actual,extra){
     // Only an unresolved row may be rewritten. A settled one is history and gets a new
     // row beside it — which is also what the real partial unique index permits.
-    const cur=ledgerOpenQtyFor(orderId,productId);
+    const cur=ledgerOpenLineFor(orderId,target,key);
     if(actual===planned){ if(cur){ DB.ledger=DB.ledger.filter(e=>e!==cur); touched++; } return; }
     if(cur){ cur.actualQuantity=actual; cur.plannedQuantity=planned; touched++; return; }
-    const oi=o.items.find(i=>i.productId===productId);
     DB.ledger.push({ id:'led-'+Math.random().toString(36).slice(2,7), clientId:o.clientId, orderId, stopId:orderId,
-      target:'ProductQuantity', productId, orderItemId:oi?oi.id:null,
+      target, lineKey:key, productId:null, orderItemId:null, lineName:null,
       plannedQuantity:planned, actualQuantity:actual, plannedText:null, actualText:null, amount:null,
-      note:'', requiresFollowUp: actual<planned, resolvedAt:null, resolvedBy:null, resolutionNote:null,
-      resolvedByOrderId:null, createdAt:daysFromNow(0), createdBy:ME.id });
+      note:'', requiresFollowUp:true, resolvedAt:null, resolvedBy:null, resolutionNote:null,
+      resolvedByOrderId:null, createdAt:daysFromNow(0), createdBy:ME.id, ...extra });
     touched++;
+  }
+  function upsertQty(productId,planned,actual){
+    const oi=o.items.find(i=>i.productId===productId);
+    // Pieces taken at the door are not a debt of goods — they are already with the client
+    // and get billed. Only a short delivery leaves something to settle.
+    upsertLine('ProductQuantity',productId,planned,actual,
+      { productId, orderItemId:oi?oi.id:null, requiresFollowUp: actual<planned });
+  }
+  /* Returns and extras need following up in BOTH directions: too few empties back and the
+     client still owes them, too many and we are holding deposits that are not ours. */
+  function upsertSimple(target,row,planned,actual){
+    upsertLine(target,row.id,planned,actual,{ lineName:row.name||row.description });
   }
   const ship=DB.shipments.find(x=>x.stops.some(st=>st.orderId===orderId));
   const stop=ship?ship.stops.find(st=>st.orderId===orderId):null;
@@ -2710,6 +2810,12 @@ function ledgerSave(orderId){
   });
   ledgerForOrder(orderId).filter(e=>e.target==='ProductQuantity'&&!e.resolvedAt&&ledRowStatus(e)==='added')
     .slice().forEach(e=>{ const el=$('#ld-q-'+e.productId); if(el) upsertQty(e.productId,0,Math.max(0,parseInt(el.value)||0)); });
+  [['ret','returns','ReturnQuantity'],['ext','extras','CustomExtraQuantity']].forEach(([prefix,coll,target])=>{
+    ledgerSimpleRows(o[coll]||[],orderId,target).forEach(({r})=>{
+      const el=$('#ld-'+prefix+'-'+r.id); if(!el) return;
+      upsertSimple(target,r,r.quantity,Math.max(0,parseInt(el.value)||0));
+    });
+  });
   const np=val('ld-newprod'), nq=parseInt(val('ld-newqty'))||0;
   if(np&&nq>0) upsertQty(np,0,nq);
   const amt=val('ld-money')===''?null:Number(val('ld-money'));
@@ -2872,6 +2978,8 @@ function orderDetailGoodRow(it){
 function viewOrderDetail(id){
   id=id.split('?')[0]; const o=DB.orders.find(x=>x.id===id); if(!o) return notFound('Objednávka');
   const cl=clientById(o.clientId); const t=orderTotals(o); const ed=canEdit('orders');
+  // Ledger actions are gated on Clients, not Orders: the entry is the client's record.
+  const ledEd=canEdit('clients');
   // Once a run is loaded, the price the client was actually charged is frozen on the
   // shipment's snapshot, so the mark comparing it against today's ceník drops away —
   // at that point the frozen number is the whole truth and putting a live ceník price
@@ -2890,7 +2998,7 @@ function viewOrderDetail(id){
     ${detailHead('orders','Zpět na objednávky',o.number,{mono:true,lead:cl.name,status:pill('order',o.state),
       meta:[`vytvořeno <span class="t-strong">${fdate(o.createdDate)}</span>`,
         `<a href="#/clients/${cl.id}">${esc(cl.name)}</a>`],
-      actions:`${ed&&(o.state==='Delivering'||o.state==='Finished')?`<button class="btn btn-soft" onclick="ledgerDrawer('${id}')">${icon('edit',16)}Zaznamenat změnu</button>`:''}
+      actions:`${ledEd&&(o.state==='Delivering'||o.state==='Finished')?`<button class="btn btn-soft" onclick="ledgerDrawer('${id}')">${icon('edit',16)}Zaznamenat změnu</button>`:''}
         ${ed&&o.state!=='Finished'&&o.state!=='Cancelled'?`<a class="btn btn-ghost" href="#/orders/${id}/edit">${icon('edit',16)}Upravit</a>`:''}
         ${ed?`<button class="btn btn-danger btn-icon" onclick="delOrder('${id}')">${icon('trash',16)}</button>`:''}`})}
     ${o.state!=='Cancelled'?`<div class="card" style="margin-bottom:16px"><div class="card-pad"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap">
@@ -2905,8 +3013,10 @@ function viewOrderDetail(id){
         <td class="num tnum" style="font-weight:800;font-size:15px;color:var(--amber-700)">${tEff.price===t.price?money(t.price)
           :`<div class="diff-old" style="font-size:12.5px">${money(t.price)}</div><div class="diff-new">${money(tEff.price)}</div>`}</td><td></td></tr></tfoot></table></div></div>
       <div class="stack" style="gap:16px">
+        ${ledgerSimpleCard('Vratky','arrowU',o.returns||[],id,'ReturnQuantity',ledEd)}
+        ${ledgerSimpleCard('Položky navíc','tag',o.extras||[],id,'CustomExtraQuantity',ledEd)}
         ${changes.length?`<div class="card"><div class="card-head">${icon('warnTri',17)}<h3>Změny</h3><span class="tag">${changes.length}</span>
-            ${ed?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${id}')">${icon('edit',13)}Upravit</button>`:''}</div>
+            ${ledEd?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${id}')">${icon('edit',13)}Upravit</button>`:''}</div>
           <div class="card-pad stack" style="gap:10px">
             <div class="t-mut" style="font-size:11.5px">Položky výše ukazují <span class="t-strong">co je jinak</span>. Tady je <span class="t-strong">kdy, kdo a proč</span> — a peníze, které na žádném řádku nejsou.</div>
             ${changes.map(e=>ledgerItem(e)).join('')}
