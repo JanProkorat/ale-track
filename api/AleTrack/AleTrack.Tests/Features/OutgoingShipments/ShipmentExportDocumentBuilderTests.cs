@@ -32,17 +32,23 @@ public sealed class ShipmentExportDocumentBuilderTests
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
         };
 
+    /// <summary>
+    /// A product row. <paramref name="delivered"/> left null makes it a row no stop can answer for —
+    /// the run's own stock purchases, or a supplier good.
+    /// </summary>
     private static ShipmentExportProduct BuildProduct(
         string name,
         int quantity,
         ProductKind? kind = ProductKind.Bottle,
-        double? packageSize = 0.5) =>
+        double? packageSize = 0.5,
+        int? delivered = null) =>
         new()
         {
             Name = name,
             Quantity = quantity,
             Kind = kind,
-            PackageSize = packageSize
+            PackageSize = packageSize,
+            DeliveredQuantity = delivered
         };
 
     private static ShipmentExportModel BuildModel(
@@ -1015,55 +1021,82 @@ public sealed class ShipmentExportDocumentBuilderTests
     }
 
     /// <summary>
-    /// Calibri is a Windows font. A reader without it — every Mac — substitutes something of its
-    /// own, and picked a serif, which is why the file read like a novel rather than a delivery note.
+    /// What the van drops beside what the invoice bills — the pair the office reads the page for.
+    /// They differ wherever the Fakturace section was edited.
     /// </summary>
     [Fact]
-    public void Build_DeclaresAFontEveryReaderHas()
+    public void Build_PartyProducts_ReportDeliveredAndBilledSideBySide()
     {
-        var stream = new MemoryStream(ShipmentExportDocumentBuilder.Build(BuildModel()));
-        using var document = WordprocessingDocument.Open(stream, isEditable: false);
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products:
+                [
+                    // Delivered and billed alike — the ordinary row.
+                    BuildProduct("Pilsner Urquell", 24, delivered: 24),
+                    // Four pieces kept off the invoice as soukromé: delivered more than it bills.
+                    BuildProduct("Kozel 11", 20, ProductKind.Keg, 30, delivered: 24),
+                    // Billed here, handed over somewhere else entirely.
+                    BuildProduct("Radegast", 4, ProductKind.Keg, 50, delivered: 0),
+                    // A supplier good sits on no delivery table, so nothing can answer for it.
+                    BuildProduct("CO2 Lahev 10Kg", 1, kind: null, packageSize: null)
+                ])
+            ])
+        ]));
 
-        var fonts = document.MainDocumentPart!.StyleDefinitionsPart!.Styles!
-            .DocDefaults!.RunPropertiesDefault!.RunPropertiesBaseStyle!.RunFonts!;
+        var products = TableHeaded(body, "PRODUKT");
 
-        fonts.Ascii!.Value.Should().Be("Arial");
-        fonts.HighAnsi!.Value.Should().Be("Arial");
+        products[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
+        products[1].Should().Equal("Pilsner Urquell", "Basa", "0,5 l", "24 ks", "24 ks");
+        products[2].Should().Equal("Kozel 11", "Sud", "30 l", "24 ks", "20 ks");
+        products[3].Should().Equal("Radegast", "Sud", "50 l", "0 ks", "4 ks");
+        products[4].Should().Equal("CO2 Lahev 10Kg", "—", "—", "—", "1 ks");
+
+        // Four cells across five columns: the kind and the package have nothing to total, so they
+        // stay merged, and both quantity columns close with their own sum.
+        products[5].Should().Equal("Celkem", string.Empty, "48 ks", "49 ks");
     }
 
-    /// <summary>
-    /// Hairline rules under the rows and nothing between the columns: a full grid of boxes is what
-    /// made the file look like a spreadsheet printout.
-    /// </summary>
+    // Nobody is billed for goods bought into our own warehouse, and a column of dashes reads as data
+    // that failed to load.
     [Fact]
-    public void Build_DataTables_RuleTheirRowsAndNotTheirColumns()
+    public void Build_StockPurchases_KeepTheSingleQuantityColumn()
     {
-        var body = Open(BuildFullModel());
-        var borders = sheetTable(body, 1).GetFirstChild<TableProperties>()!.TableBorders!;
+        var body = Open(BuildModel(stockPurchases: [BuildProduct("Radegast", 3, ProductKind.Keg, 50)]));
 
-        borders.InsideHorizontalBorder!.Val!.Value.Should().Be(BorderValues.Single);
-        borders.InsideVerticalBorder!.Val!.Value.Should().Be(BorderValues.None);
-        borders.LeftBorder!.Val!.Value.Should().Be(BorderValues.None);
-        borders.RightBorder!.Val!.Value.Should().Be(BorderValues.None);
+        TableHeaded(body, "PRODUKT")[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "MNOŽSTVÍ");
     }
 
-    // A quantity is read against the ones above it, which only works when they share an edge.
+    // A pair of address rows under a client's name never said what the address was for.
     [Fact]
-    public void Build_QuantityColumn_IsRightAligned()
+    public void Build_PartyAddress_IsHeaded()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
+        ]));
+
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("FAKTURAČNÍ ADRESA");
+        paragraphs.IndexOf("FAKTURAČNÍ ADRESA")
+            .Should().BeLessThan(paragraphs.IndexOf("PRODUKT"), "it heads the address, not the goods");
+    }
+
+    // A party the run only bills has no address block, so there is nothing to head either.
+    [Fact]
+    public void Build_PartyWithNoDelivery_WritesNoAddressHeading()
     {
         var body = Open(BuildModel(invoices:
         [
             BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
         ]));
 
-        var products = body.Elements<Table>()
-            .First(table => table.Elements<TableRow>().First().InnerText.StartsWith("PRODUKT"));
-
-        foreach (var row in products.Elements<TableRow>())
-        {
-            row.Elements<TableCell>().Last().Descendants<Justification>().Single().Val!.Value
-                .Should().Be(JustificationValues.Right);
-        }
+        Paragraphs(body).Should().NotContain("FAKTURAČNÍ ADRESA");
     }
 
     /// <summary>

@@ -186,9 +186,22 @@ public sealed record ShipmentExportProduct
     public double? Weight { get; init; }
 
     /// <summary>
-    /// Pieces of this item the van actually drops — "skutečně".
+    /// Pieces of this item the row is about: what an invoice party is billed for, or what the run
+    /// buys for our own warehouse.
     /// </summary>
     public required int Quantity { get; init; }
+
+    /// <summary>
+    /// Pieces the van actually drops at the client's stop — "skutečně", against
+    /// <see cref="Quantity"/>'s "fakturačně". Null where the question cannot be answered: the run's
+    /// own stock purchases, which nobody is billed for, and a supplier good, which no stop carries.
+    /// </summary>
+    /// <remarks>
+    /// The two differ exactly where the Fakturace section was edited: pieces kept off every invoice
+    /// as soukromé bill less than they deliver, and pieces moved in from another client's order bill
+    /// more — 0 delivered on a row the van hands over somewhere else entirely.
+    /// </remarks>
+    public int? DeliveredQuantity { get; init; }
 
 }
 

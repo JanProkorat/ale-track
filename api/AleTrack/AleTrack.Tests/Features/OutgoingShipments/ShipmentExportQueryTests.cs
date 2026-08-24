@@ -686,10 +686,11 @@ public sealed class ShipmentExportQueryTests
         var model = await Load(dbContext.Object, shipmentId);
 
         // The private pieces are exactly what makes the billed number fall short of the delivered
-        // one: the stop drops 24, the invoice bills 20, and the four appear nowhere in the file.
+        // one: the stop drops 24, the invoice bills 20, and the row reports both.
         model!.ClientStops.Single().TotalQuantity.Should().Be(24);
         model.Invoices.Single().Parties.Single().Products
-            .Select(p => (p.Name, p.Quantity)).Should().Equal(("Pilsner Urquell", 20));
+            .Select(p => (p.Name, p.Quantity, p.DeliveredQuantity))
+            .Should().Equal(("Pilsner Urquell", 20, 24));
     }
 
     [Fact]

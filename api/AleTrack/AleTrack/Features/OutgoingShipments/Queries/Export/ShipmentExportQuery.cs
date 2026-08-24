@@ -105,6 +105,8 @@ public static class ShipmentExportQuery
                                 .ThenBy(oi => oi.Product.Name)
                                 .Select(oi => new RawProduct
                                 {
+                                    SourceKind = InvoiceLineSourceKind.OrderItem,
+                                    SourceItemId = oi.Id,
                                     Name = oi.Product.Name,
                                     Kind = oi.Product.Kind,
                                     PackageSize = oi.Product.PackageSize,
@@ -121,6 +123,8 @@ public static class ShipmentExportQuery
                                 .OrderBy(e => e.Description)
                                 .Select(e => new RawProduct
                                 {
+                                    SourceKind = InvoiceLineSourceKind.CustomExtraItem,
+                                    SourceItemId = e.Id,
                                     Name = e.Description,
                                     Quantity = e.Quantity
                                 })
@@ -171,6 +175,16 @@ public static class ShipmentExportQuery
         // that used to carry the address, the order's notes and its vratky are gone, so the party
         // whose goods they are carries them instead. A client with two stops on one run takes the
         // first, exactly as the Fakturace screen does.
+        // What the van drops for each client, per item — the "skutečně" beside every billed row.
+        // Summed over that client's stops, because one client can take two drops on one run.
+        var deliveredByClientItem = shipment.Stops
+            .Where(s => s.ClientId is not null)
+            .SelectMany(s => s.Products
+                .Concat(s.CustomExtras)
+                .Select(product => (ClientId: s.ClientId!.Value, Product: product)))
+            .GroupBy(x => (x.ClientId, x.Product.SourceKind, x.Product.SourceItemId))
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Product.Quantity));
+
         var deliveryByClient = shipment.Stops
             .Where(s => s.ClientId is not null)
             .GroupBy(s => s.ClientId!.Value)
@@ -186,7 +200,7 @@ public static class ShipmentExportQuery
                 .Select(stop => ToStop(stop, company, shipment.StockPurchases))
                 .ToList(),
             StockPurchases = shipment.StockPurchases,
-            Invoices = BuildInvoices(invoicedSplit, deliveryByClient)
+            Invoices = BuildInvoices(invoicedSplit, deliveryByClient, deliveredByClientItem)
         };
     }
 
@@ -370,7 +384,8 @@ public static class ShipmentExportQuery
     /// </remarks>
     private static List<ShipmentExportInvoice> BuildInvoices(
         InvoicedSplit split,
-        Dictionary<long, PartyDelivery> deliveryByClient) =>
+        Dictionary<long, PartyDelivery> deliveryByClient,
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
         split.ByInvoiceAndOrderer
             .GroupBy(entry => entry.Key.InvoiceId)
             .Select(invoiceGroup => (InvoiceId: invoiceGroup.Key, Invoice: InvoiceOf(split, invoiceGroup.Key), Lines: invoiceGroup))
@@ -378,7 +393,13 @@ public static class ShipmentExportQuery
             .OrderBy(x => split.ReadyNumberByPayer[x.Invoice.PayerId])
             .ThenBy(x => x.Invoice.Sequence)
             .Select(x => BuildExportInvoice(
-                split, x.InvoiceId, split.ReadyNumberByPayer[x.Invoice.PayerId], x.Invoice, x.Lines, deliveryByClient))
+                split,
+                x.InvoiceId,
+                split.ReadyNumberByPayer[x.Invoice.PayerId],
+                x.Invoice,
+                x.Lines,
+                deliveryByClient,
+                deliveredByClientItem))
             .ToList();
 
     private static ShipmentExportInvoice BuildExportInvoice(
@@ -387,7 +408,8 @@ public static class ShipmentExportQuery
         int number,
         (long PayerId, Guid PayerPublicId, int Sequence, string Name, string? BusinessName) invoice,
         IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines,
-        Dictionary<long, PartyDelivery> deliveryByClient) =>
+        Dictionary<long, PartyDelivery> deliveryByClient,
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
         new()
         {
             Number = number,
@@ -402,7 +424,11 @@ public static class ShipmentExportQuery
                 .OrderByDescending(g => g.Key == invoice.PayerId)
                 .ThenBy(g => split.OrdererNames.GetValueOrDefault(g.Key, Missing), StringComparer.CurrentCulture)
                 .Select(ordererGroup => BuildParty(
-                    split, invoice.PayerId, ordererGroup, deliveryByClient.GetValueOrDefault(ordererGroup.Key)))
+                    split,
+                    invoice.PayerId,
+                    ordererGroup,
+                    deliveryByClient.GetValueOrDefault(ordererGroup.Key),
+                    deliveredByClientItem))
                 .ToList()
         };
 
@@ -418,7 +444,8 @@ public static class ShipmentExportQuery
         InvoicedSplit split,
         long payerId,
         IGrouping<long, KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> ordererGroup,
-        PartyDelivery? delivery) =>
+        PartyDelivery? delivery,
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem) =>
         new()
         {
             ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
@@ -434,11 +461,30 @@ public static class ShipmentExportQuery
                     Name = entry.Value.Name,
                     Kind = entry.Value.Kind,
                     PackageSize = entry.Value.PackageSize,
-                    Quantity = entry.Value.Quantity
+                    Quantity = entry.Value.Quantity,
+                    DeliveredQuantity = DeliveredFor(deliveredByClientItem, ordererGroup.Key, entry.Key)
                 })
                 .OrderBy(p => p.Name, StringComparer.CurrentCulture)
                 .ToList()
         };
+
+    /// <summary>
+    /// Pieces of one billed row the van actually drops at the client that ordered them, or null when
+    /// no stop can answer for it.
+    /// </summary>
+    /// <remarks>
+    /// A supplier good is bought at the supplier and never sits on a delivery table, so its
+    /// delivered count is unknown rather than zero — the writers print a dash for it. An order item
+    /// or a custom extra with no matching delivery genuinely is zero: this run bills for it and
+    /// hands it over somewhere else, or on another run entirely.
+    /// </remarks>
+    private static int? DeliveredFor(
+        Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> delivered,
+        long ordererId,
+        (Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId) line) =>
+        line.SourceKind == InvoiceLineSourceKind.SupplierGoodItem
+            ? null
+            : delivered.GetValueOrDefault((ordererId, line.SourceKind, line.SourceItemId));
 
     /// <summary>
     /// Where one client's goods went on this run, as its invoice parties report it.
@@ -635,10 +681,13 @@ public static class ShipmentExportQuery
     }
 
     /// <summary>
-    /// One delivered row, as the projection reads it.
+    /// One delivered row, carrying the identity an invoice line refers to it by — which is how a
+    /// billed row finds what the van actually drops for it.
     /// </summary>
     private sealed record RawProduct
     {
+        public required InvoiceLineSourceKind SourceKind { get; init; }
+        public required long SourceItemId { get; init; }
         public required string Name { get; init; }
         public ProductKind? Kind { get; init; }
         public double? PackageSize { get; init; }
