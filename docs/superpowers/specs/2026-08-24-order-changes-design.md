@@ -35,6 +35,7 @@ they start filling the cart, not after.
 | Entry point | One shared drawer, opened from a shipment stop, an order detail, or a client profile |
 | Double-count guard | At most one **unresolved** quantity entry per `(order_id, target, line)`, enforced by a partial unique index. Saving is an upsert |
 | Display | Inline diff on the real rows — old value struck through, new one highlighted, added and removed rows labelled |
+| No summary panel | Nothing repeats the diffed rows. Only `Money` and `Other` get a card, because they have no row anywhere |
 | Colour | Never the only carrier of meaning. Every changed row also carries a text label or icon |
 | Permission | `ModuleType.Clients`. Drivers cannot record — the dispatcher does |
 | Address / date | Written **automatically** from the existing `OrderDeliveryAddressWriter` path, `requires_follow_up = false` |
@@ -386,11 +387,22 @@ delivery would silently close the whole debt, so the row shows **"dluh 3 ks · p
 save asks about the shortfall. The operator either tops it up or knowingly closes it and opens a new
 entry for the remainder.
 
-### The card that stays
+### No panel repeating the rows
 
-The order detail keeps a `CollapsibleCard title="Změny"`, but its role changes: the inline diff says
-*what* is different, the card says *when, who and why*, and it is the only place `Money`, `Other` and
-resolution state appear at all.
+An earlier draft kept a `Změny` card listing every entry beside the diffed rows. It was cut: on an
+order whose deviations are all quantities, it says a second time what the struck-through numbers
+already say, and the reader has to check two places to learn one thing.
+
+What survives is only what has **no row of its own**: `Money` and `Other`, in a small
+`Peníze a poznámky` card. Address and date are not in it either — their diff is in the Doručení card.
+On an order with only quantity deviations, no card appears at all.
+
+The two things the card used to carry for quantity rows are relocated rather than dropped:
+
+- **Why, who and when** ride on the row's own tag as a `title` tooltip — wanted for the one row being
+  looked at, not for all of them at once.
+- **Resolving** happens in the client's ledger tab, reached from a `Nedořešeno u klienta` link on the
+  order's Klient card. The ledger is the client's record, so the way into it belongs on the client.
 
 ### No second banner on the shipment
 

@@ -2593,22 +2593,35 @@ function ledgerMoney(clientId){ let owesUs=0,weOwe=0;
 
 /* The tag that carries the meaning when colour cannot — a colour-blind reader and a
    black-and-white printout both get the words. */
+/* Why it happened, who said so and when — the part a struck-through number cannot carry.
+   It rides on the tag as a tooltip rather than in a panel of its own: the reader wants it
+   only for the one row they are looking at, and a second panel repeating every row is what
+   made them check two places to learn one thing. */
+function ledWhy(e){
+  const by=DB.users.find(u=>u.id===e.createdBy);
+  const who=by?`${by.firstName} ${by.lastName}`:'';
+  const tail=[fdate(e.createdAt),who].filter(Boolean).join(' · ');
+  const state=ledState(e)==='resolved'?`Vyřešeno${e.resolutionNote?': '+e.resolutionNote:''}`
+    :ledState(e)==='assigned'?'Zařazeno do další objednávky':'';
+  return [e.note,state,tail].filter(Boolean).join('\n');
+}
 function ledTag(e){
+  const wrap=(tone,inner)=>`<span class="chg-tag ${tone}" title="${esc(ledWhy(e))}">${inner}</span>`;
   if(isQtyTarget(e.target)){
     const st=ledRowStatus(e), d=ledDelta(e);
     // A return moves the other way: pieces come back to us, so "more than planned" is the
     // client handing over extra, not us delivering extra. Same arithmetic, opposite words.
     const ret=e.target==='ReturnQuantity';
-    if(st==='added') return `<span class="chg-tag t-new">${icon('plus',10)}${ret?'vráceno navíc':'přidáno na místě'}</span>`;
-    if(st==='removed') return `<span class="chg-tag t-less">${ret?'nevráceno':'nevyloženo'}</span>`;
+    if(st==='added') return wrap('t-new',`${icon('plus',10)}${ret?'vráceno navíc':'přidáno na místě'}`);
+    if(st==='removed') return wrap('t-less',ret?'nevráceno':'nevyloženo');
     // A return has no good direction — too few and the client still owes empties, too many
     // and we are holding deposits that are not ours. So it never gets the green treatment
     // that "delivered extra" earns, where the pieces are simply billed.
     const tone=d<0?'t-less':ret?'t-new':'t-more';
-    return `<span class="chg-tag ${tone}">${d<0?(ret?'nevráceno':'nevyloženo'):(ret?'vráceno navíc':'navíc')} ${Math.abs(d)} ks</span>`;
+    return wrap(tone,`${d<0?(ret?'nevráceno':'nevyloženo'):(ret?'vráceno navíc':'navíc')} ${Math.abs(d)} ks`);
   }
-  if(e.target==='Money') return `<span class="chg-tag t-info">${e.amount>=0?'klient dluží':'dlužíme klientovi'}</span>`;
-  return `<span class="chg-tag t-info">změna</span>`;
+  if(e.target==='Money') return wrap('t-info',e.amount>=0?'klient dluží':'dlužíme klientovi');
+  return wrap('t-info','změna');
 }
 /* One-line human wording, derived from the sign — which is why the enum is typed by
    target and not by event: there is no NotUnloaded/DeliveredExtra pair to keep in sync. */
@@ -3034,23 +3047,32 @@ function viewOrderDetail(id){
       <div class="stack" style="gap:16px">
         ${ledgerSimpleCard('Vratky','arrowU',o.returns||[],id,'ReturnQuantity',ledEd)}
         ${ledgerSimpleCard('Položky navíc','tag',o.extras||[],id,'CustomExtraQuantity',ledEd)}
-        ${changes.length?`<div class="card"><div class="card-head">${icon('warnTri',17)}<h3>Změny</h3><span class="tag">${changes.length}</span>
-            ${ledEd?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${id}')">${icon('edit',13)}Upravit</button>`:''}</div>
-          <div class="card-pad stack" style="gap:10px">
-            <div class="t-mut" style="font-size:11.5px">Položky výše ukazují <span class="t-strong">co je jinak</span>. Tady je <span class="t-strong">kdy, kdo a proč</span> — a peníze, které na žádném řádku nejsou.</div>
-            ${changes.map(e=>ledgerItem(e)).join('')}
-            <a href="#/clients/${cl.id}?tab=zmeny" class="t-mut" style="font-size:12px;color:var(--amber-700)">Celá kniha klienta ${icon('chevR',11)}</a>
-          </div></div>`:''}
+        ${(()=>{ // Only what has no row of its own. A quantity deviation is already struck
+          // through and re-stated on its own line, and the address diff sits in Doručení;
+          // repeating either here made the reader check two places to learn one thing.
+          // Money has no line anywhere, which is the reason this card still exists.
+          const homeless=changes.filter(e=>e.target==='Money'||e.target==='Other');
+          return homeless.length?`<div class="card"><div class="card-head">${icon('wallet',17)}<h3>Peníze a poznámky</h3>
+              <span class="tag">${homeless.length}</span>
+              ${ledEd?`<button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="ledgerDrawer('${id}')">${icon('edit',13)}Upravit</button>`:''}</div>
+            <div class="card-pad stack" style="gap:10px">${homeless.map(e=>ledgerItem(e)).join('')}</div></div>`:''; })()}
         <div class="card"><div class="card-head"><h3>Doručení</h3></div><div class="card-pad stack" style="gap:14px">
           <div class="kv"><span class="k">Požadovaný termín</span><span class="v">${o.requiredDeliveryDate?fdate(o.requiredDeliveryDate):'—'}</span></div>
           <div class="kv"><span class="k">Skutečné doručení</span><span class="v">${o.actualDeliveryDate?fdate(o.actualDeliveryDate):'—'}</span></div>
           ${(()=>{ const a=changes.find(e=>e.target==='DeliveryAddress'); return a
-            ?`<div class="kv"><span class="k">Adresa</span><span class="v" style="text-align:right">${textDiff(a.plannedText,a.actualText)}</span></div>`:''; })()}
+            ?`<div class="kv" title="${esc(ledWhy(a))}"><span class="k">Adresa</span><span class="v" style="text-align:right">${textDiff(a.plannedText,a.actualText)}</span></div>`:''; })()}
           <div class="kv"><span class="k">Zařazeno do vývozu</span><span class="v">${shipStop?`<a href="#/shipments/${shipStop.id}" style="color:var(--amber-700)">${esc(shipStop.name)}</a>`:'<span class="t-mut">dosud ne</span>'}</span></div>
         </div></div>
         <div class="card"><div class="card-head"><h3>Klient</h3></div><div class="card-pad">
           <div class="row-lead" style="margin-bottom:12px">${avatar(cl.id,initials(cl.name))}<div><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12px">${L.region[cl.region]}</div></div></div>
-          <div class="addr">${fmtAddrFull(cl.officialAddress)}</div></div></div>
+          <div class="addr">${fmtAddrFull(cl.officialAddress)}</div>
+          ${(()=>{ // The ledger belongs to the client, so the way into it lives on the client
+            // card rather than on a panel of deviations this order no longer needs.
+            const openN=ledgerOpen(cl.id).length; if(!openN) return '';
+            return `<div class="divider"></div><a href="#/clients/${cl.id}?tab=zmeny" class="row gap8" style="color:var(--amber-700);font-size:12.5px;font-weight:700">
+              ${icon('warnTri',14)}Nedořešeno u klienta <span class="tag">${openN}</span>
+              <span style="margin-left:auto">${icon('chevR',13)}</span></a>`; })()}
+        </div></div>
       </div></div></div>`;
 }
 function kindChipText(k){ return L.kind[k]||k; }
