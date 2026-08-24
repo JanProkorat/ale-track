@@ -75,6 +75,16 @@ vi.mock('src/hooks/useClientProductPrices', () => ({
   useSaveClientProductPrice: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientProductPrice: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
+// The client detail counts its open ledger points on the tab strip, so the read is mounted on
+// every tab — the mutations come with it because the panel and its drawer share the module.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedger: () => ({ data: [], isPending: false, isError: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [] }) }));
 vi.mock('src/auth/AuthProvider', () => ({
   useAuth: () => ({ canEdit: () => true, canSee: () => true, can: () => true }),
 }));

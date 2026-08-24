@@ -33,6 +33,7 @@ import {
 import { LedgerRowTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
 import { LedgerMoneyCard } from 'src/features/clients/LedgerMoneyCard';
 import { LedgerEntryDrawer } from 'src/features/clients/LedgerEntryDrawer';
+import { ClientOpenItemsCard } from 'src/features/clients/ClientOpenItemsCard';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
 
@@ -252,7 +253,8 @@ export function OrderDetail({
   // that planned none exists only as a deviation, and hiding the column would leave the
   // commonest surprise of the feature nowhere to show.
   const hasSidebar = returnRows.length > 0 || extraRows.length > 0 || notes.length > 0
-    || shipment !== undefined || orderEntries.length > 0;
+    || shipment !== undefined || orderEntries.length > 0
+    || (ledger.data ?? []).some((e) => !e.resolvedAt);
 
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
@@ -522,6 +524,16 @@ export function OrderDetail({
           )}
 
           <LedgerMoneyCard entries={orderEntries} />
+
+          {/* The client's whole open list, not just this order's: what makes it worth reading is
+              the part that happened elsewhere. Sending somebody to another screen for their
+              to-do list means they never look. */}
+          <ClientOpenItemsCard
+            entries={ledger.data ?? []}
+            clientId={order.client?.id ?? ''}
+            currentOrderId={order.id}
+            editable={canRecordDeviation}
+          />
 
           {notes.length > 0 && (
             <CollapsibleCard

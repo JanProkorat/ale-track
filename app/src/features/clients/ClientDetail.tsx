@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Card, Stack, Typography, Button, IconButton, Chip, Tabs, Tab,
 } from '@mui/material';
@@ -9,6 +10,7 @@ import ReceiptIcon from '@mui/icons-material/ReceiptLongOutlined';
 import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import NotificationsIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import StickyNote2Icon from '@mui/icons-material/StickyNote2Outlined';
+import SwapVertIcon from '@mui/icons-material/SwapVertOutlined';
 import LocationOnIcon from '@mui/icons-material/LocationOnOutlined';
 import ScheduleIcon from '@mui/icons-material/ScheduleOutlined';
 import MailIcon from '@mui/icons-material/MailOutlineOutlined';
@@ -22,12 +24,16 @@ import { type AddressDto, type ClientDto, type ClientContactDto } from 'src/gene
 import { useClientReminders } from 'src/hooks/useClientReminders';
 import { useClientOrders } from 'src/hooks/useOrders';
 import { useClientProductPrices } from 'src/hooks/useClientProductPrices';
+import { useClientLedger } from 'src/hooks/useClientLedger';
+import { PATHS } from 'src/routes/paths';
+import { type DetailBackState } from 'src/routes/backNav';
 import { type SubTab } from './clientDetailTab';
 import { ClientOrdersPanel } from './ClientOrdersPanel';
 import { RemindersPanel } from './RemindersPanel';
 import { NotesPanel } from './NotesPanel';
 import { DeliveryPlacesPanel } from './DeliveryPlacesPanel';
 import { ProductPricesPanel } from './ProductPricesPanel';
+import { LedgerPanel } from './LedgerPanel';
 
 function formatZip(zip?: string): string {
   const z = (zip ?? '').replace(/\s/g, '');
@@ -132,7 +138,10 @@ export function ClientDetail({
   onDelete: () => void;
 }) {
   const clientId = client.id!;
+  const navigate = useNavigate();
   const reminders = useClientReminders(clientId);
+  const ledger = useClientLedger(clientId, 'open');
+  const openLedgerCount = (ledger.data ?? []).length;
   const reminderRows = reminders.data ?? [];
   const orders = useClientOrders(canSeeOrders ? clientId : undefined);
   const orderRows = orders.data ?? [];
@@ -146,6 +155,15 @@ export function ClientDetail({
   // A `?tab=orders` URL from a caller without the Objednávky module has no tab
   // to open — fall back rather than leaving Tabs pointed at a missing value.
   const activeTab = tab === 'orders' && !canSeeOrders ? 'info' : tab;
+
+  // A deviation names the delivery it came off, and that link is half of what makes the row
+  // readable — so it returns here, to this tab, the way the orders tab already does.
+  const openOrderFromLedger = (orderId: string) => navigate(`${PATHS.orders}/${orderId}`, {
+    state: {
+      backTo: `${PATHS.clients}/${clientId}?tab=ledger`,
+      backLabel: 'Zpět na klienta',
+    } satisfies DetailBackState,
+  });
 
   const contacts = client.contacts ?? [];
 
@@ -181,6 +199,9 @@ export function ClientDetail({
             <Tab value="orders" iconPosition="start" icon={<ReceiptIcon fontSize="small" />} label={tabLabel('Objednávky', orderRows.length)} sx={{ minHeight: 48 }} />
           )}
           <Tab value="prices" iconPosition="start" icon={<WalletIcon fontSize="small" />} label={tabLabel('Ceník', priceRows.length)} sx={{ minHeight: 48 }} />
+          {/* The count is what is still open, not the whole history: the tab's job on a client
+              with a dispute is to say there is one. */}
+          <Tab value="ledger" iconPosition="start" icon={<SwapVertIcon fontSize="small" />} label={tabLabel('Změny a dluhy', openLedgerCount)} sx={{ minHeight: 48 }} />
           <Tab value="reminders" iconPosition="start" icon={<NotificationsIcon fontSize="small" />} label={tabLabel('Připomínky', reminderRows.length)} sx={{ minHeight: 48 }} />
           <Tab value="notes" iconPosition="start" icon={<StickyNote2Icon fontSize="small" />} label="Poznámky" sx={{ minHeight: 48 }} />
         </Tabs>
@@ -303,6 +324,15 @@ export function ClientDetail({
       {activeTab === 'orders' && canSeeOrders && <ClientOrdersPanel clientId={clientId} />}
 
       {activeTab === 'prices' && <ProductPricesPanel clientId={clientId} clientName={client.name} editable={editable} />}
+
+      {activeTab === 'ledger' && (
+        <LedgerPanel
+          clientId={clientId}
+          clientName={client.name ?? '—'}
+          editable={editable}
+          onOpenOrder={canSeeOrders ? openOrderFromLedger : undefined}
+        />
+      )}
 
       {activeTab === 'reminders' && <RemindersPanel clientId={clientId} editable={editable} />}
 

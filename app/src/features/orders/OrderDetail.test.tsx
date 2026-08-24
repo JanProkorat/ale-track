@@ -31,6 +31,7 @@ vi.mock('src/hooks/useClientLedger', () => ({
   useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [] }) }));
 
