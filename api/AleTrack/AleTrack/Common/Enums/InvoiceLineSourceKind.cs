@@ -24,5 +24,15 @@ public enum InvoiceLineSourceKind
     /// A line of a client order that buys off a supplier's price list — a CO₂ refill, a crate.
     /// The client ordered it, so it is billed like anything else they ordered.
     /// </summary>
-    SupplierGoodItem = 3
+    SupplierGoodItem = 3,
+
+    /// <summary>
+    /// A product the client took at the door, recorded as a deviation rather than ordered.
+    /// </summary>
+    /// <remarks>
+    /// It has no order line to bill through — nobody planned it — so the ledger entry is the
+    /// billable source itself. Of all the ways this feature could go wrong, not billing goods the
+    /// client walked away with is the most expensive.
+    /// </remarks>
+    LedgerEntry = 4
 }

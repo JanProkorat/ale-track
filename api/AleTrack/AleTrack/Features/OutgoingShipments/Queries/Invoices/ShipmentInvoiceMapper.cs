@@ -34,7 +34,7 @@ public static class ShipmentInvoiceMapper
                 ClientOfficialAddress = invoice.Client?.OfficialAddress?.ToDto(),
                 Sequence = invoice.Sequence,
                 StopOrder = stopOrders.TryGetValue(invoice.ClientId, out var order) ? order : null,
-                Lines = OrderForDisplay(invoice.Lines.Select(line => ToLine(shipment, line))),
+                Lines = OrderForDisplay(invoice.Lines.Select(line => ToLine(split, line))),
                 BillingRecipients = invoice.BillingRecipients
                     .Select(r => new ShipmentInvoiceBillingRecipientDto
                     {
@@ -56,7 +56,7 @@ public static class ShipmentInvoiceMapper
             Invoices = invoices,
             // Flat, not grouped: the client who ordered the pieces is on every line already, and
             // the UI needs them under that client's band rather than under an invoice.
-            PrivateLines = OrderForDisplay(split.PrivateLines.Select(line => ToLine(shipment, line))),
+            PrivateLines = OrderForDisplay(split.PrivateLines.Select(line => ToLine(split, line))),
             Confirmations = shipment.InvoiceConfirmations
                 .Select(c => new ShipmentInvoiceConfirmationDto
                 {
@@ -123,14 +123,59 @@ public static class ShipmentInvoiceMapper
     /// Maps one line, or null when its source item cannot be found in the graph — which should
     /// not happen after reconciliation, so the line is skipped rather than shown half-filled.
     /// </summary>
-    private static SortedLine? ToLine(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
+    private static SortedLine? ToLine(ShipmentInvoiceSplit split, OutgoingShipmentInvoiceLine line) =>
         line.SourceKind switch
         {
-            InvoiceLineSourceKind.OrderItem => FromOrderItem(shipment, line),
-            InvoiceLineSourceKind.CustomExtraItem => FromCustomExtra(shipment, line),
-            InvoiceLineSourceKind.SupplierGoodItem => FromSupplierGood(shipment, line),
+            InvoiceLineSourceKind.OrderItem => FromOrderItem(split.Shipment, line),
+            InvoiceLineSourceKind.CustomExtraItem => FromCustomExtra(split.Shipment, line),
+            InvoiceLineSourceKind.SupplierGoodItem => FromSupplierGood(split.Shipment, line),
+            InvoiceLineSourceKind.LedgerEntry => FromLedgerEntry(split, line),
             _ => null
         };
+
+    /// <summary>
+    /// A product the client took at the door: billed through its ledger entry, because there is
+    /// no order line behind it.
+    /// </summary>
+    /// <remarks>
+    /// It must render, not merely count. A line that is added to an invoice total but cannot be
+    /// resolved to anything displayable makes the total disagree with the rows beneath it, which
+    /// is the one failure mode nobody would think to look for.
+    /// </remarks>
+    private static SortedLine? FromLedgerEntry(ShipmentInvoiceSplit split, OutgoingShipmentInvoiceLine line)
+    {
+        var entry = split.LedgerEntries.FirstOrDefault(e => e.Id == line.LedgerEntryId);
+        if (entry is null)
+            return null;
+
+        var order = split.Shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .Select(s => s.ClientOrder!)
+            .FirstOrDefault(o => o.Id == entry.OrderId);
+
+        var dto = new ShipmentInvoiceLineDto
+        {
+            Id = line.PublicId,
+            SourceKind = line.SourceKind,
+            SourceItemId = entry.PublicId,
+            ProductId = entry.Product?.PublicId,
+            Name = line.ProductName,
+            Kind = line.Kind,
+            PackageSize = line.PackageSize,
+            PriceWithVat = line.UnitPriceWithVat,
+            Quantity = line.Quantity,
+            OrderingClientId = order?.Client?.PublicId ?? Guid.Empty,
+            OrderingClientName = order?.Client?.Name ?? string.Empty,
+            // Nobody planned these pieces, so nobody sourced them from our own shelf either.
+            IsFromStock = false
+        };
+
+        return new SortedLine(
+            dto,
+            entry.Product?.Type ?? ProductType.Other,
+            entry.Product?.PlatoDegree,
+            line.PackageSize);
+    }
 
     private static SortedLine? FromOrderItem(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line)
     {

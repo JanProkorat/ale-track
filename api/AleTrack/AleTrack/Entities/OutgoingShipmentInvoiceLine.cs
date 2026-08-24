@@ -136,6 +136,14 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     public long? SupplierGoodItemId { get; set; }
 
     /// <summary>
+    /// ID of the billed <see cref="ClientLedgerEntry"/>. Set only when
+    /// <see cref="SourceKind"/> is <see cref="InvoiceLineSourceKind.LedgerEntry"/> — a product
+    /// the client took at the door, which has no order line to bill through.
+    /// </summary>
+    [Column("ledger_entry_id")]
+    public long? LedgerEntryId { get; set; }
+
+    /// <summary>
     /// Invoice this line belongs to. Null when the pieces are private.
     /// </summary>
     public OutgoingShipmentInvoice? Invoice { get; set; }
@@ -165,4 +173,15 @@ public sealed class OutgoingShipmentInvoiceLine : PublicEntity
     /// </remarks>
     [DeleteBehavior(DeleteBehavior.Cascade)]
     public OrderSupplierGoodItem? SupplierGoodItem { get; set; }
+
+    /// <summary>
+    /// Billed ledger entry. Null unless <see cref="SourceKind"/> is
+    /// <see cref="InvoiceLineSourceKind.LedgerEntry"/>.
+    /// </summary>
+    /// <remarks>
+    /// Cascade like the other three: the entry <em>is</em> the source, so dropping it as
+    /// mis-recorded leaves nothing to bill.
+    /// </remarks>
+    [DeleteBehavior(DeleteBehavior.Cascade)]
+    public ClientLedgerEntry? LedgerEntry { get; set; }
 }

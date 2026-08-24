@@ -101,7 +101,7 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
             }
         }
 
-        var sourceItemId = ShipmentInvoiceGraph.ResolveSourceItemId(shipment, req.Data.SourceKind, req.Data.SourceItemId);
+        var sourceItemId = ShipmentInvoiceGraph.ResolveSourceItemId(split, req.Data.SourceKind, req.Data.SourceItemId);
         if (sourceItemId is null)
         {
             ThrowHelper.PublicEntityNotFound(req.Data.SourceKind.ToString(), req.Data.SourceItemId);

@@ -233,7 +233,7 @@ public static class ShipmentExportQuery
         ShipmentInvoiceReconciler.Reconcile(split);
 
         var shipment = split.Shipment;
-        var orderers = OrderersBySource(shipment);
+        var orderers = OrderersBySource(split);
         var lines = shipment.Invoices.SelectMany(invoice => invoice.Lines.Select(line =>
         {
             var sourceItemId = ShipmentInvoiceGraph.SourceItemIdOf(line);
@@ -332,10 +332,12 @@ public static class ShipmentExportQuery
     /// item's own order, exactly as the Fakturace screen derives it.
     /// </remarks>
     private static Dictionary<(InvoiceLineSourceKind SourceKind, long SourceItemId), (long ClientId, string Name)>
-        OrderersBySource(OutgoingShipment shipment)
+        OrderersBySource(ShipmentInvoiceSplit split)
     {
         var orderers =
             new Dictionary<(InvoiceLineSourceKind SourceKind, long SourceItemId), (long ClientId, string Name)>();
+
+        var shipment = split.Shipment;
 
         foreach (var order in shipment.Stops.Where(s => s.ClientOrder is not null).Select(s => s.ClientOrder!))
         {
@@ -349,6 +351,12 @@ public static class ShipmentExportQuery
 
             foreach (var good in order.SupplierGoodItems)
                 orderers[(InvoiceLineSourceKind.SupplierGoodItem, good.Id)] = orderer;
+
+            // A product taken at the door bills through its ledger entry, so the entry is what
+            // the attribution keys on. Without this the pieces would fall back to the invoice's
+            // own client and land in the wrong block whenever a payer differs from the orderer.
+            foreach (var entry in split.LedgerEntries.Where(e => e.OrderId == order.Id))
+                orderers[(InvoiceLineSourceKind.LedgerEntry, entry.Id)] = orderer;
         }
 
         return orderers;
