@@ -5,6 +5,8 @@
 // ordering client bands — can be tested without a rendering harness.
 
 import type {
+  ClientDto,
+  LinkedClientDto,
   OrderNoteDto,
   OrderReturnDto,
   OutgoingShipmentStopDto,
@@ -15,6 +17,7 @@ import type {
   ProductKind,
 } from 'src/generated/api-client';
 import { resolveDetailStopAddress } from './stopAddress';
+import { formatStreetAddress } from 'src/features/clients/deliveryPlaceFormat';
 
 /** One product on one invoice, with the exact per-source breakdown behind it. */
 export interface LineGroup {
@@ -35,7 +38,18 @@ export interface LineGroup {
 export interface ClientBand {
   clientId: string;
   clientName: string;
+  /** The client's trading name, when it has one — what tells two clients of the same name apart.
+   *  Read off the band's first invoice; a band holding only private pieces has none to read. */
+  clientBusinessName?: string;
   stopOrder?: number;
+  /** Number the row was confirmed under, or undefined while nobody has confirmed it. Assigned by
+   *  the order the office ticks rows, never by the route, and kept if a row is un-ticked. */
+  number?: number;
+  /** Whether the office has marked this row finished — which is what puts it in the export. */
+  isReady: boolean;
+  /** When an export last carried this row, or undefined while none has. What the export drawer
+   *  preselects by. */
+  lastExportedAt?: Date;
   invoices: ShipmentInvoiceDto[];
   /** Billed pieces only — private ones are counted separately. */
   quantity: number;
@@ -96,6 +110,53 @@ export function groupValue(group: LineGroup): number {
   return (group.priceWithVat ?? 0) * group.quantity;
 }
 
+/** A client whose goods are billed on one invoice, and the rows that bill them. */
+export interface InvoiceParty {
+  clientId: string;
+  clientName: string;
+  /** True for the paying client's own lines, which sort first. */
+  isPayer: boolean;
+  quantity: number;
+  value: number;
+  groups: LineGroup[];
+}
+
+const PARTY_COLLATOR = new Intl.Collator('cs');
+
+/**
+ * Split one invoice by who ordered its pieces: the payer's own goods first, then the clients
+ * billed through it, by name.
+ *
+ * Returns a single party for an ordinary invoice, so nothing changes for a client that pays
+ * for its own goods — the UI only renders party rows once there is more than one. Returns an
+ * empty array for an invoice with no lines at all, rather than a lone empty party.
+ */
+export function invoiceParties(invoice: ShipmentInvoiceDto): InvoiceParty[] {
+  const map = new Map<string, ShipmentInvoiceLineDto[]>();
+  for (const line of invoice.lines ?? []) {
+    const key = line.orderingClientId ?? '';
+    const lines = map.get(key);
+    if (lines) lines.push(line);
+    else map.set(key, [line]);
+  }
+
+  const payerId = invoice.clientId ?? '';
+
+  return [...map.entries()]
+    .map(([clientId, lines]) => ({
+      clientId,
+      clientName: lines[0].orderingClientName ?? '—',
+      isPayer: clientId === payerId,
+      quantity: lines.reduce((s, l) => s + (l.quantity ?? 0), 0),
+      value: lines.reduce((s, l) => s + (l.priceWithVat ?? 0) * (l.quantity ?? 0), 0),
+      groups: groupLineList(lines),
+    }))
+    .sort((a, b) => {
+      if (a.isPayer !== b.isPayer) return a.isPayer ? -1 : 1;
+      return PARTY_COLLATOR.compare(a.clientName, b.clientName);
+    });
+}
+
 export function invoiceQuantity(invoice: ShipmentInvoiceDto): number {
   return (invoice.lines ?? []).reduce((s, l) => s + (l.quantity ?? 0), 0);
 }
@@ -117,8 +178,16 @@ export function isCrossBilled(
 }
 
 /**
- * Group invoices into client bands, in route order. Clients without a stop — they only
- * hold cross-billed lines after their own order left the shipment — sort last.
+ * Group invoices into client bands: the rows the office has confirmed first, in the order
+ * it confirmed them, then the rest in route order.
+ *
+ * Clients without a stop sort last among the unconfirmed — either they only hold
+ * cross-billed lines after their own order left the shipment, or (since the payer
+ * redirect) they are a payer band whose invoice bills goods ordered by other clients on
+ * the route. `stopOrder` is keyed on the invoice's own client — the payer — never on the
+ * line-level ordering client, so a payer with no stop of its own has no better position
+ * to sort by; this mirrors the same call already made for the shipment export (see
+ * `ShipmentExportQuery`).
  *
  * Private pieces join the band of whoever ordered them, not of whoever would have been
  * billed: there is no invoice to belong to, and the order is what the office recognises
@@ -127,13 +196,27 @@ export function isCrossBilled(
 export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
   const map = new Map<string, ClientBand>();
 
-  const bandFor = (clientId: string, clientName: string, stopOrder?: number) => {
+  // A client the office has never ticked has no entry at all, which reads as unready with no
+  // number yet — the same absence the backend sends.
+  const confirmations = new Map((data.confirmations ?? []).map((c) => [c.clientId ?? '', c]));
+
+  const bandFor = (
+    clientId: string,
+    clientName: string,
+    stopOrder?: number,
+    clientBusinessName?: string,
+  ) => {
     let band = map.get(clientId);
     if (!band) {
+      const confirmation = confirmations.get(clientId);
       band = {
         clientId,
         clientName,
+        clientBusinessName,
         stopOrder,
+        number: confirmation?.number,
+        isReady: confirmation?.isReady ?? false,
+        lastExportedAt: confirmation?.lastExportedAt,
         invoices: [],
         quantity: 0,
         value: 0,
@@ -147,7 +230,12 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
   };
 
   for (const invoice of data.invoices ?? []) {
-    const band = bandFor(invoice.clientId ?? '', invoice.clientName ?? '—', invoice.stopOrder);
+    const band = bandFor(
+      invoice.clientId ?? '',
+      invoice.clientName ?? '—',
+      invoice.stopOrder,
+      invoice.clientBusinessName,
+    );
     band.invoices.push(invoice);
     band.quantity += invoiceQuantity(invoice);
     band.value += invoiceValue(invoice);
@@ -164,9 +252,18 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
 
   const bands = [...map.values()];
   for (const band of bands) band.invoices.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-  return bands.sort(
-    (a, b) => (a.stopOrder ?? Number.MAX_SAFE_INTEGER) - (b.stopOrder ?? Number.MAX_SAFE_INTEGER),
-  );
+
+  // Confirmed rows first, by their number, so the screen reads in the same order as the export
+  // file — which is what the office holds beside it. A row that was un-ticked keeps its number and
+  // keeps its place with it: the number never moves, and neither should the row.
+  //
+  // The rest follow in route order, the only order they have until somebody ticks them.
+  return bands.sort((a, b) => {
+    const byNumber = (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
+    if (byNumber !== 0) return byNumber;
+
+    return (a.stopOrder ?? Number.MAX_SAFE_INTEGER) - (b.stopOrder ?? Number.MAX_SAFE_INTEGER);
+  });
 }
 
 /** Where one part's pieces came from, in the wording the move dialog uses. */
@@ -296,19 +393,28 @@ function stopForBand(
  * The driver's note on a delivery place is deliberately not returned: it routes
  * a van through a gate, and means nothing to the office doing the billing. The
  * order's own notes are a different thing — see {@link bandNotes}.
+ *
+ * A payer linked to another client's order (see the linked-clients-invoicing
+ * feature) holds no stop of its own, so there is nothing here to derive a
+ * delivery address from. It falls back to the payer's own official address,
+ * plain and unlabelled like every other band's line — the invoice is what's
+ * actually addressed there, even though nothing is delivered to it.
  */
 export function bandAddress(
   band: ClientBand,
   stops: OutgoingShipmentStopDto[],
 ): { text: string; placeName?: string } | undefined {
   const stop = stopForBand(band, stops);
-  if (!stop) return undefined;
+  if (stop) {
+    const resolved = resolveDetailStopAddress(stop);
+    return {
+      text: resolved.text,
+      placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
+    };
+  }
 
-  const resolved = resolveDetailStopAddress(stop);
-  return {
-    text: resolved.text,
-    placeName: resolved.isPlace ? stop.deliveryPlace?.name : undefined,
-  };
+  const officialAddress = band.invoices[0]?.clientOfficialAddress;
+  return officialAddress ? { text: formatStreetAddress(officialAddress) } : undefined;
 }
 
 /** The notes on the order behind a band, oldest first as the backend sends them.
@@ -333,6 +439,122 @@ export function bandReturns(
   return stopForBand(band, stops)?.returns ?? [];
 }
 
+/** One client whose goods a band bills, with what its own order said and hands back. */
+export interface PartyOrderDetails {
+  clientId: string;
+  clientName: string;
+  notes: OrderNoteDto[];
+  returns: OrderReturnDto[];
+}
+
+/**
+ * The order-side detail of every client a band bills for, in the order the band renders them.
+ *
+ * A payer's band bills several clients' goods, and each of those orders carries its own notes and
+ * vratky — none of which is the payer's. Reading them off the band's own stop (as the header's
+ * address does) finds nothing at all for a payer that takes no delivery, which is why they used to
+ * be missing from a group band entirely.
+ *
+ * One entry per client, even when its goods are spread over several of the band's invoices: the
+ * notes and the vratky belong to the order, not to the invoice the office happened to split it
+ * onto. Clients with neither are dropped — an empty block reads as "no instructions", a claim this
+ * cannot make.
+ */
+export function bandPartyDetails(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): PartyOrderDetails[] {
+  const seen = new Map<string, PartyOrderDetails>();
+
+  for (const invoice of band.invoices) {
+    for (const party of invoiceParties(invoice)) {
+      if (seen.has(party.clientId)) continue;
+
+      // The band's own client keeps the stop-order match — one client can hold two stops, and
+      // `stopForBand` is what picks the right one. A party is only ever known by its client.
+      const stop = party.clientId === band.clientId
+        ? stopForBand(band, stops)
+        : stops.find((s) => s.clientId === party.clientId);
+
+      seen.set(party.clientId, {
+        clientId: party.clientId,
+        clientName: party.clientName,
+        notes: stop?.notes ?? [],
+        returns: stop?.returns ?? [],
+      });
+    }
+  }
+
+  return [...seen.values()].filter((party) => party.notes.length > 0 || party.returns.length > 0);
+}
+
+/** Where a band's per-client order detail belongs. */
+export interface BandOrderDetails {
+  /**
+   * Detail that renders inside the invoice table, under the party block that already names the
+   * client. Keyed by `${invoiceId}:${clientId}`, the key the table builds its party rows with.
+   */
+  inTable: Map<string, PartyOrderDetails>;
+  /**
+   * Detail of a client the table never names — an ordinary band's single client, whose whole table
+   * is its own. It renders under the table instead.
+   */
+  below: PartyOrderDetails[];
+}
+
+/**
+ * Splits a band's order detail into the two places it can go, so no client is named twice.
+ *
+ * The table names a client only where an invoice bills more than one — that is where its party
+ * rows appear — and that heading is the client's group. Its notes and vratky belong inside that
+ * group, not in a second block underneath repeating the name.
+ *
+ * A client billed on two of the band's invoices is named by both, and its order is still one order:
+ * the detail goes under the first block that names it, never under each.
+ */
+export function bandOrderDetails(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): BandOrderDetails {
+  const details = new Map(bandPartyDetails(band, stops).map((party) => [party.clientId, party]));
+  const inTable = new Map<string, PartyOrderDetails>();
+  const claimed = new Set<string>();
+
+  for (const invoice of band.invoices) {
+    const parties = invoiceParties(invoice);
+    if (parties.length <= 1) continue;
+
+    for (const party of parties) {
+      const detail = details.get(party.clientId);
+      if (!detail || claimed.has(party.clientId)) continue;
+
+      claimed.add(party.clientId);
+      inTable.set(`${invoice.id}:${party.clientId}`, detail);
+    }
+  }
+
+  return {
+    inTable,
+    below: [...details.values()].filter((party) => !claimed.has(party.clientId)),
+  };
+}
+
+/** How many other clients' goods this band's invoices bill for. Deliberately not called
+ * "linked" — a client billed through a payer is a standing arrangement, but a line the office
+ * moved onto this invoice by hand is not one, and this count cannot tell the two apart. It
+ * states the fact (goods for N other clients are on here), not a relationship. */
+export function otherClientCount(band: ClientBand): number {
+  const ids = new Set<string>();
+  for (const invoice of band.invoices) {
+    for (const line of invoice.lines ?? []) {
+      if (line.orderingClientId && line.orderingClientId !== invoice.clientId) {
+        ids.add(line.orderingClientId);
+      }
+    }
+  }
+  return ids.size;
+}
+
 /** Totals for the section header. */
 export function sectionTotals(data: ShipmentInvoicesDto, bands: ClientBand[]) {
   return {
@@ -343,4 +565,30 @@ export function sectionTotals(data: ShipmentInvoicesDto, bands: ClientBand[]) {
     crossBilled: bands.reduce((s, b) => s + b.crossBilled, 0),
     privateQuantity: bands.reduce((s, b) => s + b.privateQuantity, 0),
   };
+}
+
+/**
+ * The sub-clients a payer may name as billing addresses on its invoice.
+ *
+ * Every sub-client of the payer qualifies, whether or not it has goods on this shipment —
+ * the payer may owe an address for something billed elsewhere. One with no official address
+ * never does: the endpoint rejects it, so offering it would only produce a 400.
+ */
+export function billingRecipientOptions(client: ClientDto | undefined): LinkedClientDto[] {
+  return (client?.invoicedClients ?? []).filter((sub) => Boolean(sub.id && sub.officialAddress));
+}
+
+/**
+ * The invoice a band's billing-recipient selection is saved on: the payer's first, which is
+ * the one the band is opened with and the only one a client normally has. A second invoice is
+ * a manual split of the same payer's goods, and the payer needs the addresses once, not per
+ * split.
+ */
+export function billingRecipientInvoice(band: ClientBand): ShipmentInvoiceDto | undefined {
+  return band.invoices[0];
+}
+
+/** Sub-client ids already saved on an invoice, in the order the server sends them. */
+export function billingRecipientIds(invoice: ShipmentInvoiceDto | undefined): string[] {
+  return (invoice?.billingRecipients ?? []).map((r) => r.clientId).filter((id): id is string => Boolean(id));
 }

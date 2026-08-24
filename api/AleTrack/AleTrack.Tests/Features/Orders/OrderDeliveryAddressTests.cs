@@ -1,10 +1,12 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
 using AleTrack.Features.Orders.Commands.Create;
 using AleTrack.Features.Orders.Commands.Update;
 using AleTrack.Features.Orders.Queries.Detail;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Tests.Builders;
 using AleTrack.Tests.Mocks;
 using FluentAssertions;
@@ -195,12 +197,14 @@ public sealed class OrderDeliveryAddressTests
         saved.ClientDeliveryPlaceId.Should().Be(7);
     }
 
+    // A Contact kind on a client that only has an official address is legal — the read paths
+    // fall back to it. Only a client with neither address leaves nothing to print, so that is
+    // the case the endpoint rejects.
     [Fact]
-    public async Task CreateOrder_ContactKindWithoutContactAddress_Throws()
+    public async Task CreateOrder_ContactKindForClientWithNoAddressAtAll_Throws()
     {
         var clientId = Guid.NewGuid();
-        var client = ClientBuilder.BuildEntity(
-            publicId: clientId, officialAddress: AddressBuilder.BuildEntity());
+        var client = ClientBuilder.BuildEntity(publicId: clientId, noOfficialAddress: true);
         client.ContactAddress = null;
         var product = ProductBuilder.BuildEntity();
         var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], products: [product]);
@@ -281,5 +285,82 @@ public sealed class OrderDeliveryAddressTests
         addr.PlaceName.Should().Be("Letní zahrádka");
         addr.PlaceNote.Should().Be("Vjezd zezadu");
         addr.Address.Should().NotBeNull();
+    }
+
+    // A client invoiced through its payer has neither an official nor a contact address. The
+    // final fallback in the projection used to read the (then non-nullable) official address
+    // unguarded, which NullReferenceException'd this endpoint for exactly this client.
+    [Fact]
+    public async Task OrderDetail_ClientWithNeitherAddress_ResolvesNullAddress()
+    {
+        var client = ClientBuilder.BuildEntity(noOfficialAddress: true);
+        var order = OrderBuilder.BuildEntity(client: client);
+        var db = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var endpoint = EndpointWithResponseBuilder<GetOrderDetailRequest, OrderDto, GetOrderDetailEndpoint>
+            .Create(db.Object);
+        await endpoint.HandleAsync(new GetOrderDetailRequest { Id = order.PublicId }, CancellationToken.None);
+
+        var result = endpoint.Response;
+        result.DeliveryAddress.Kind.Should().Be(DeliveryAddressKind.Official);
+        result.DeliveryAddress.Address.Should().BeNull();
+    }
+
+    // Only a client with neither address is rejected: with nowhere to fall back to there is
+    // no address to print, which is the state the picker warns about.
+    [Fact]
+    public async Task ApplyAsync_OfficialKindForClientWithNoAddressAtAll_Throws400()
+    {
+        var client = ClientBuilder.BuildEntity(name: "Pub A", noOfficialAddress: true);
+        client.Id = 5;
+        var order = new Order { Id = 1, PublicId = Guid.NewGuid(), ClientId = client.Id };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var act = () => OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext.Object, order, client, DeliveryAddressKind.Official, placePublicId: null,
+            CancellationToken.None);
+
+        (await act.Should().ThrowAsync<AleTrackException>()).Which.StatusCode.Should().Be(400);
+    }
+
+    // The normal path for existing data: an order saved as Official before its client was
+    // linked to a payer and lost its official address. Every read path falls back to the
+    // contact address, so re-saving any other field on that order must not 400.
+    [Fact]
+    public async Task ApplyAsync_OfficialKindForClientWithOnlyContactAddress_Succeeds()
+    {
+        var client = ClientBuilder.BuildEntity(
+            name: "Pub A", noOfficialAddress: true, contactAddress: AddressBuilder.BuildEntity());
+        client.Id = 5;
+        var order = new Order
+        {
+            Id = 1, PublicId = Guid.NewGuid(), ClientId = client.Id,
+            DeliveryAddressKind = DeliveryAddressKind.Official
+        };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var changed = await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext.Object, order, client, DeliveryAddressKind.Official, placePublicId: null,
+            CancellationToken.None);
+
+        changed.Should().BeFalse();
+        order.DeliveryAddressKind.Should().Be(DeliveryAddressKind.Official);
+    }
+
+    // Same rule in the other direction, so neither kind is rejected while a usable address exists.
+    [Fact]
+    public async Task ApplyAsync_ContactKindForClientWithOnlyOfficialAddress_Succeeds()
+    {
+        var client = ClientBuilder.BuildEntity(name: "Pub A");
+        client.Id = 5;
+        var order = new Order { Id = 1, PublicId = Guid.NewGuid(), ClientId = client.Id };
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [client], orders: [order]);
+
+        var changed = await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext.Object, order, client, DeliveryAddressKind.Contact, placePublicId: null,
+            CancellationToken.None);
+
+        changed.Should().BeTrue();
+        order.DeliveryAddressKind.Should().Be(DeliveryAddressKind.Contact);
     }
 }

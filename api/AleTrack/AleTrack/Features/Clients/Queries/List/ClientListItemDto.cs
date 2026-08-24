@@ -28,4 +28,12 @@ public sealed class ClientListItemDto
     /// Related region of the client.
     /// </summary>
     public Region Region { get; set; }
+
+    /// <summary>
+    /// Public ID of the client that receives this one's invoices, when another client pays.
+    /// </summary>
+    public Guid? InvoicingClientId { get; set; }
+
+    /// <inheritdoc cref="InvoicingClientId"/>
+    public string? InvoicingClientName { get; set; }
 }

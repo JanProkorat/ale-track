@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
+import { DeliveryAddressKind, OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
 import { unloadOrder } from './unloadOrder';
 
 const orderStop = (order: number, clientName: string, products: unknown[] = []) =>
   new OutgoingShipmentStopDto({
     id: `stop-${order}`, order, kind: OutgoingShipmentStopKind.Order, clientName, products,
     orderId: `order-${order}`,
+  } as never);
+
+// A client billed through its payer (see the linked-clients-invoicing feature) can be saved
+// with no official address at all, and if it also has no contact address the stop has
+// nothing to resolve — this is the fixture for that case.
+const stopWithNoAddress = () =>
+  new OutgoingShipmentStopDto({
+    id: 'stop-no-address', order: 1, kind: OutgoingShipmentStopKind.Order, clientName: 'Chrastava',
+    orderId: 'order-1', products: [], officialAddress: undefined, contactAddress: undefined,
+    selectedAddressKind: DeliveryAddressKind.Official,
+  } as never);
+
+const stopWithOfficialAddress = () =>
+  new OutgoingShipmentStopDto({
+    id: 'stop-official', order: 1, kind: OutgoingShipmentStopKind.Order, clientName: 'Chrastava',
+    orderId: 'order-1', products: [],
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001', latitude: 50.7, longitude: 15.05 },
+    selectedAddressKind: DeliveryAddressKind.Official,
   } as never);
 
 describe('unloadOrder', () => {
@@ -187,5 +205,19 @@ describe('unloadOrder', () => {
     const result = unloadOrder([orderStop(3, 'A'), orderStop(9, 'B')], [], []);
 
     expect(result.map((s) => s.seq)).toEqual([1, 2]);
+  });
+
+  it('flags a stop whose client has no address at all', () => {
+    // Nothing blocks saving such a client, so the shipment is where it has to be visible.
+    const stops = unloadOrder([stopWithNoAddress()], [], []);
+
+    expect(stops[0].addressMissing).toBe(true);
+    expect(stops[0].subtitle ?? '').toBe('');
+  });
+
+  it('does not flag a stop that resolves an address', () => {
+    const stops = unloadOrder([stopWithOfficialAddress()], [], []);
+
+    expect(stops[0].addressMissing).toBe(false);
   });
 });

@@ -38,7 +38,9 @@ public sealed class GetClientListEndpoint(AleTrackDbContext dbContext) : Endpoin
                 Id = c.PublicId,
                 Name = c.Name,
                 BusinessName = c.BusinessName,
-                Region = c.Region
+                Region = c.Region,
+                InvoicingClientId = c.InvoicingClient != null ? c.InvoicingClient.PublicId : null,
+                InvoicingClientName = c.InvoicingClient != null ? c.InvoicingClient.Name : null
             })
             .ApplyFilterAndSort(req.Parameters)
             .ToListAsync(ct);

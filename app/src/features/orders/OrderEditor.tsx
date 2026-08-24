@@ -47,7 +47,9 @@ import {
   type OrderItemReminderState,
   type SupplierGoodDto,
 } from 'src/generated/api-client';
-import { useClients } from 'src/hooks/useClients';
+import { useClients, useClient } from 'src/hooks/useClients';
+import { useClientDeliveryPlaces } from 'src/hooks/useDeliveryPlaces';
+import { defaultAddressKind } from 'src/features/clients/deliveryAddress';
 import { useBreweries } from 'src/hooks/useBreweries';
 import { useProducts } from 'src/hooks/useProducts';
 import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
@@ -615,13 +617,41 @@ export function OrderEditor({
   const clientOptions: ComboOption[] = useMemo(() => clientComboOptions(clients), [clients]);
   const selectedClient = clients.find((c) => c.id === clientId);
 
+  // Fed to `defaultAddressKind` below once a client is freshly picked — `clients` (the list
+  // endpoint) carries no address fields, so the client's official/contact addresses and
+  // places are only available once this detail query resolves.
+  const selectedClientDetailQuery = useClient(clientId ?? undefined);
+  const selectedClientPlacesQuery = useClientDeliveryPlaces(clientId ?? undefined);
+  // Set by `changeClient` to the newly picked client id, and cleared once that client's
+  // address data has arrived and the picker has been defaulted — mirrors `autoTabClientRef`
+  // above. Never set on the initial order load (edit mode): that effect sets `deliveryAddress`
+  // itself, from the order's own saved choice, and must not be overridden by this one.
+  const pendingDefaultAddressClientRef = useRef<string | null>(null);
+
   // The old delivery-address choice belongs to the old client — a saved
   // place id or a contact address doesn't carry over, and the backend would
-  // reject a place that isn't the new client's.
+  // reject a place that isn't the new client's. Defaults to Official right away (most
+  // clients have one), corrected below once the new client's own data has loaded.
   const changeClient = (next: string | null) => {
     setClientId(next);
     setDeliveryAddress({ kind: DeliveryAddressKind.Official });
+    pendingDefaultAddressClientRef.current = next;
   };
+
+  // Corrects the just-picked client's delivery address to a kind it can actually satisfy —
+  // a client invoiced through a payer has no official address, and leaving the default at
+  // Official would produce an order whose stop renders a blank destination.
+  useEffect(() => {
+    if (!clientId || pendingDefaultAddressClientRef.current !== clientId) return;
+    if (!selectedClientDetailQuery.data || selectedClientPlacesQuery.isLoading) return;
+    const { addressKind, deliveryPlaceId } = defaultAddressKind(
+      selectedClientDetailQuery.data.officialAddress,
+      selectedClientDetailQuery.data.contactAddress,
+      selectedClientPlacesQuery.data ?? [],
+    );
+    setDeliveryAddress({ kind: addressKind, placeId: deliveryPlaceId });
+    pendingDefaultAddressClientRef.current = null;
+  }, [clientId, selectedClientDetailQuery.data, selectedClientPlacesQuery.isLoading, selectedClientPlacesQuery.data]);
 
   const addProduct = (productId: string) => {
     if (!productId) return;

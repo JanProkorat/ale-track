@@ -27,10 +27,13 @@ public static class OrderDeliveryAddressWriter
         Guid? placePublicId,
         CancellationToken ct)
     {
-        // The frontend merely hides the option; nothing stops a direct caller
-        // from asking for a contact address the client does not have.
-        if (kind == DeliveryAddressKind.Contact && client.ContactAddress is null)
-            ThrowHelper.BadRequest($"Client {client.PublicId} has no contact address.");
+        // Official and Contact fall back on each other everywhere they are read, so either
+        // kind is legal as long as the client has one of the two — that is what the order
+        // detail, the export and the stop already display. Only a client with neither
+        // address is rejected, which is the state the picker warns about.
+        if (kind is DeliveryAddressKind.Official or DeliveryAddressKind.Contact
+            && client is { OfficialAddress: null, ContactAddress: null })
+            ThrowHelper.BadRequest($"Client {client.PublicId} has no billing or contact address.");
 
         var placeId = await ClientDeliveryPlaceResolver.ResolveForClientAsync(
             dbContext,

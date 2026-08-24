@@ -91,7 +91,11 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                             ? o.ClientDeliveryPlace.Address.ToDto()
                             : o.DeliveryAddressKind == DeliveryAddressKind.Contact && o.Client.ContactAddress != null
                                 ? o.Client.ContactAddress.ToDto()
-                                : o.Client.OfficialAddress.ToDto()
+                                : o.Client.OfficialAddress != null
+                                    ? o.Client.OfficialAddress.ToDto()
+                                    : o.Client.ContactAddress != null
+                                        ? o.Client.ContactAddress.ToDto()
+                                        : null
                 },
                 // Product order per ProductOrdering; spelled out because EF cannot
                 // translate a helper call inside a projection.

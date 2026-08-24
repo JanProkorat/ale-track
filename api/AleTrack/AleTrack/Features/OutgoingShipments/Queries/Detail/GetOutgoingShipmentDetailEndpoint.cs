@@ -131,7 +131,9 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                         Order = s.Order,
                         ClientId = s.ClientOrder != null ? s.ClientOrder.Client.PublicId : null,
                         ClientName = s.ClientOrder != null ? s.ClientOrder.Client.Name : null,
-                        OfficialAddress = s.ClientOrder != null ? s.ClientOrder.Client.OfficialAddress.ToDto() : null,
+                        OfficialAddress = s.ClientOrder != null && s.ClientOrder.Client.OfficialAddress != null
+                            ? s.ClientOrder.Client.OfficialAddress.ToDto()
+                            : null,
                         ContactAddress = s.ClientOrder != null && s.ClientOrder.Client.ContactAddress != null
                             ? s.ClientOrder.Client.ContactAddress.ToDto()
                             : null,
@@ -162,7 +164,11 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                                         ? s.ClientOrder.ClientDeliveryPlace.Address.ToDto()
                                         : s.ClientOrder.DeliveryAddressKind == DeliveryAddressKind.Contact && s.ClientOrder.Client.ContactAddress != null
                                             ? s.ClientOrder.Client.ContactAddress.ToDto()
-                                            : s.ClientOrder.Client.OfficialAddress.ToDto()
+                                            : s.ClientOrder.Client.OfficialAddress != null
+                                                ? s.ClientOrder.Client.OfficialAddress.ToDto()
+                                                : s.ClientOrder.Client.ContactAddress != null
+                                                    ? s.ClientOrder.Client.ContactAddress.ToDto()
+                                                    : null
                             }
                             : null,
                         Label = s.Label,

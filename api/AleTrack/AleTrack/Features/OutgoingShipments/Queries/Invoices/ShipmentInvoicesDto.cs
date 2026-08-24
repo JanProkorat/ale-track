@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Models;
 using AleTrack.Features.OutgoingShipments.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Invoices;
@@ -26,9 +27,44 @@ public sealed record ShipmentInvoicesDto
     public List<InvoiceAdjustmentDto> Adjustments { get; set; } = [];
 
     /// <summary>
+    /// Rows the office has confirmed as finished, with the numbers they were confirmed under. A
+    /// client that was never marked is simply absent — read that as unready, with no number yet.
+    /// </summary>
+    public List<ShipmentInvoiceConfirmationDto> Confirmations { get; set; } = [];
+
+    /// <summary>
     /// Whether the split may still be edited (false once the shipment is delivered or cancelled).
     /// </summary>
     public bool IsEditable { get; set; }
+}
+
+/// <summary>
+/// One client's row of the split, marked finished and numbered.
+/// </summary>
+/// <remarks>
+/// Its own list rather than a field on <see cref="ShipmentInvoiceDto"/>: readiness belongs to the
+/// client's row, and repeating it on each of a client's invoices would invite the copies to
+/// disagree.
+/// </remarks>
+public sealed record ShipmentInvoiceConfirmationDto
+{
+    /// <summary>Public ID of the client whose row this is.</summary>
+    public Guid ClientId { get; set; }
+
+    /// <summary>
+    /// Number the export prints the row under, from 1 per shipment. Kept when the row is
+    /// un-marked, so re-marking gives the same number back.
+    /// </summary>
+    public int Number { get; set; }
+
+    /// <summary>Whether the row is currently marked finished.</summary>
+    public bool IsReady { get; set; }
+
+    /// <summary>
+    /// When an export last carried this row, or null while none has — what the export drawer reads
+    /// to preselect the rows that have not gone out yet.
+    /// </summary>
+    public DateTime? LastExportedAt { get; set; }
 }
 
 /// <summary>
@@ -46,6 +82,17 @@ public sealed record ShipmentInvoiceDto
     public string ClientName { get; set; } = null!;
 
     /// <summary>
+    /// The client's trading name, when it has one — what tells two clients of the same name apart.
+    /// </summary>
+    public string? ClientBusinessName { get; set; }
+
+    /// <summary>
+    /// Official (billing) address of the client this invoice is issued to, when it has one — the
+    /// client may have none, e.g. when it only ever pays for others' goods.
+    /// </summary>
+    public AddressDto? ClientOfficialAddress { get; set; }
+
+    /// <summary>
     /// Position among that client's invoices on this shipment, starting at 1. Ordering only —
     /// not an invoice number.
     /// </summary>
@@ -59,6 +106,30 @@ public sealed record ShipmentInvoiceDto
 
     /// <summary>Lines of this invoice.</summary>
     public List<ShipmentInvoiceLineDto> Lines { get; set; } = [];
+
+    /// <summary>
+    /// Sub-clients the payer should raise its own invoices against, chosen by the office. Empty
+    /// unless someone picked any.
+    /// </summary>
+    public List<ShipmentInvoiceBillingRecipientDto> BillingRecipients { get; set; } = [];
+}
+
+/// <summary>
+/// A sub-client named on a payer's invoice, with the address to invoice.
+/// </summary>
+public sealed record ShipmentInvoiceBillingRecipientDto
+{
+    /// <summary>Public ID of the sub-client.</summary>
+    public Guid ClientId { get; set; }
+
+    /// <summary>Name of the sub-client.</summary>
+    public string ClientName { get; set; } = null!;
+
+    /// <summary>
+    /// The sub-client's official address as recorded on this invoice — live while the shipment's
+    /// invoicing is still editable, frozen afterwards.
+    /// </summary>
+    public AddressDto Address { get; set; } = null!;
 }
 
 /// <summary>

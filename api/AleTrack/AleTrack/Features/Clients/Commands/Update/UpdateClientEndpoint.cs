@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -58,13 +59,24 @@ public sealed class UpdateClientEndpoint(AleTrackDbContext dbContext) : Endpoint
         if (client == null)
             ThrowHelper.PublicEntityNotFound(nameof(Client), req.Id);
 
+        // Mirrors InvoicingClientResolver's rule 5 (a payer must have an official address) on
+        // the other side: a client cannot clear the address it is being invoiced against while
+        // it still invoices for other clients — that would leave the arrangement invalid without
+        // ever going through the resolver.
+        if (req.Data.OfficialAddress is null
+            && await dbContext.Clients.AnyAsync(c => c.InvoicingClientId == client!.Id, ct))
+            ThrowHelper.BadRequest(
+                $"Client {req.Id} invoices for other clients and cannot have its official address cleared.");
+
         client!.Name = req.Data.Name;
         client.BusinessName = req.Data.BusinessName;
         client.Region = req.Data.Region;
-        client.OfficialAddress = req.Data.OfficialAddress.ToDbEntity();
-
-        if (req.Data.ContactAddress is not null)
-            client.ContactAddress = req.Data.ContactAddress.ToDbEntity();
+        // Assigned unconditionally: both addresses are now optional, so an absent one in the
+        // request means "clear it", not "leave it".
+        client.OfficialAddress = req.Data.OfficialAddress?.ToDbEntity();
+        client.ContactAddress = req.Data.ContactAddress?.ToDbEntity();
+        client.InvoicingClientId = await InvoicingClientResolver.ResolveAsync(
+            dbContext, req.Id, req.Data.InvoicingClientId, ct);
 
         client.Contacts = req.Data.Contacts
             .Select(c => new ClientContact

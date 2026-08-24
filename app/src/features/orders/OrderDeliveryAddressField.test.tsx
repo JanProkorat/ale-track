@@ -5,14 +5,15 @@ import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
 
 const place = { id: 'p1', name: 'Letní zahrádka', address: { latitude: 50.7, longitude: 15.05 } };
 
+// Mutable so the "no official address" test below can exercise a client billed through its
+// payer (see the linked-clients-invoicing feature) without a mock that is always the happy path.
+let clientData: { officialAddress?: unknown; contactAddress?: unknown } = {
+  officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+  contactAddress: undefined,
+};
+
 vi.mock('src/hooks/useClients', () => ({
-  useClient: () => ({
-    data: {
-      officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
-      contactAddress: undefined,
-    },
-    isLoading: false,
-  }),
+  useClient: () => ({ data: clientData, isLoading: false }),
 }));
 
 // Mutable so individual tests can exercise the places query's in-flight state
@@ -33,6 +34,10 @@ vi.mock('src/hooks/useDeliveryPlaces', () => ({
 beforeEach(() => {
   placesData = [place];
   placesLoading = false;
+  clientData = {
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    contactAddress: undefined,
+  };
 });
 
 describe('OrderDeliveryAddressField', () => {
@@ -52,6 +57,81 @@ describe('OrderDeliveryAddressField', () => {
     render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
     fireEvent.mouseDown(screen.getByRole('combobox'));
     expect(screen.queryByText('Kontaktní')).not.toBeInTheDocument();
+  });
+
+  it('hides Fakturační when the client has no official address', () => {
+    // A client billed through its payer has only a contact address (or none at all), so the
+    // picker stops offering the option to orders that are not already on it.
+    clientData = { officialAddress: undefined, contactAddress: undefined };
+    render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.DeliveryPlace, placeId: 'p1' }} onChange={vi.fn()} />);
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    expect(screen.queryByText('Fakturační')).not.toBeInTheDocument();
+  });
+
+  describe('a kind the order is saved with but the client can no longer satisfy', () => {
+    // An order saved as Official before its client was linked to a payer and had its official
+    // address cleared. The backend still accepts that save (the read paths fall back to the
+    // contact address), so the picker has to show what the order says rather than go blank.
+    it('keeps a stored Fakturační selected, as a disabled entry', () => {
+      clientData = {
+        officialAddress: undefined,
+        contactAddress: { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763' },
+      };
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Fakturační (chybí adresa)');
+
+      fireEvent.mouseDown(screen.getByRole('combobox'));
+      const option = within(screen.getByRole('listbox')).getByText('Fakturační (chybí adresa)');
+      expect(option.closest('[role="option"]')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('keeps a stored Kontaktní selected, as a disabled entry', () => {
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Contact }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Kontaktní (chybí adresa)');
+    });
+
+    it('leaves an offerable kind alone', () => {
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+
+      expect(screen.getByRole('combobox')).toHaveTextContent('Fakturační');
+      expect(screen.queryByText(/chybí adresa/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the all-empty-client warning', () => {
+    // A client with no official address, no contact address and no delivery place hides every
+    // standard option (only "+ Nové místo…" is left), while the caller still defaults the
+    // form to `Official` — the <Select> then shows no visible text at all, with nothing on
+    // screen to tell the dispatcher the order cannot be saved as drafted. This is the one
+    // screen that actually causes that state, so it is the one that warns about it.
+    it('warns when the client has none of the three', () => {
+      clientData = { officialAddress: undefined, contactAddress: undefined };
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+      expect(screen.getByLabelText('Klient nemá vyplněnou dodací adresu')).toBeInTheDocument();
+    });
+
+    it('does not warn when the client has an official address', () => {
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Official }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
+
+    it('does not warn when the client has a contact address', () => {
+      clientData = { officialAddress: undefined, contactAddress: { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763' } };
+      placesData = [];
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.Contact }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
+
+    it('does not warn when the client has a delivery place', () => {
+      clientData = { officialAddress: undefined, contactAddress: undefined };
+      // placesData keeps the default [place] fixture from beforeEach.
+      render(<OrderDeliveryAddressField clientId="c1" value={{ kind: DeliveryAddressKind.DeliveryPlace, placeId: 'p1' }} onChange={vi.fn()} />);
+      expect(screen.queryByLabelText('Klient nemá vyplněnou dodací adresu')).not.toBeInTheDocument();
+    });
   });
 
   it('reports the decoded choice when a place is picked', () => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Box, ListSubheader, MenuItem, Select, Typography } from '@mui/material';
+import { Box, ListSubheader, MenuItem, Select, Stack, Typography } from '@mui/material';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import { DeliveryAddressKind } from 'src/generated/api-client';
 import { useClient } from 'src/hooks/useClients';
 import { useClientDeliveryPlaces } from 'src/hooks/useDeliveryPlaces';
@@ -51,6 +52,25 @@ export function OrderDeliveryAddressField({
     && value.placeId != null
     && !places.some((p) => p.id === value.placeId);
 
+  // The kind the order is already saved with, when the client can no longer satisfy it: an
+  // Official order whose client lost its official address on being linked to a payer. Same
+  // shape as `isGone` one level up — the backend accepts it (every read path falls back to the
+  // other address), so it stays visibly selected instead of leaving the <Select> blank.
+  const goneKind = clientQuery.isLoading ? null
+    : value.kind === DeliveryAddressKind.Official && !official ? DeliveryAddressKind.Official
+      : value.kind === DeliveryAddressKind.Contact && !contact ? DeliveryAddressKind.Contact
+        : null;
+
+  // A client with none of the three hides every standard option — only "+ Nové místo…" is
+  // left — while the form still defaults `value.kind` to `Official` (see `defaultAddressKind`
+  // in deliveryAddress.ts), so the <Select> shows no visible text at all with nothing else on
+  // screen to say why. This is the one screen that actually causes that state (a freshly
+  // linked sub-client with no delivery place yet is a normal state this feature introduces),
+  // so it is the one that warns about it rather than leaving a silently blank control.
+  // Gated on neither query still loading, same reasoning as `isGone` above.
+  const hasNoAddressAtAll = !clientQuery.isLoading && !placesQuery.isLoading
+    && !official && !contact && places.length === 0;
+
   const handleChange = (raw: string) => {
     if (raw === NEW_PLACE_CHOICE) { setDialogOpen(true); return; }
     const { addressKind, deliveryPlaceId } = decodeStopChoice(raw);
@@ -67,8 +87,12 @@ export function OrderDeliveryAddressField({
         value={encodeStopChoice(value.kind, value.placeId)}
         onChange={(e) => handleChange(e.target.value)}
       >
-        <MenuItem value="Official">Fakturační</MenuItem>
+        {official && <MenuItem value="Official">Fakturační</MenuItem>}
         {contact && <MenuItem value="Contact">Kontaktní</MenuItem>}
+        {goneKind === DeliveryAddressKind.Official
+          && <MenuItem value="Official" disabled>Fakturační (chybí adresa)</MenuItem>}
+        {goneKind === DeliveryAddressKind.Contact
+          && <MenuItem value="Contact" disabled>Kontaktní (chybí adresa)</MenuItem>}
         {places.length > 0 && [
           <ListSubheader key="places-header">Vlastní místa</ListSubheader>,
           ...places.map((p) => (
@@ -86,6 +110,17 @@ export function OrderDeliveryAddressField({
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
         {clientId ? resolved.text : 'Nejprve vyberte klienta.'}
       </Typography>
+      {hasNoAddressAtAll && (
+        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+          <WarningAmberOutlinedIcon
+            aria-label="Klient nemá vyplněnou dodací adresu"
+            sx={{ fontSize: 13, color: 'warning.main' }}
+          />
+          <Typography sx={{ fontSize: 11.5, color: 'warning.main' }}>
+            Klient nemá vyplněnou dodací adresu
+          </Typography>
+        </Stack>
+      )}
       {resolved.placeNote && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
           {resolved.placeNote}

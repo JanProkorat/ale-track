@@ -15,13 +15,13 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// sheet per client listing what that client ordered.
 /// </summary>
 /// <remarks>
-/// Read-only, and gated on View rather than Edit: exporting is reading, and the office needs the
-/// file for runs it may no longer change.
+/// Gated on View rather than Edit: the office needs the file for runs it may no longer change. It
+/// does write, though — the rows it carries are stamped as exported, which is a fact about the file
+/// rather than about who asked for it, so it is recorded whoever exports. The invoice split it reads
+/// is still reconciled without being saved (see <see cref="ShipmentExportQuery"/>).
 ///
-/// Carries no prices, but every product row reports both what is delivered to the stop and what
-/// lands on that client's invoices, so it does read the split behind the Fakturace section. It
-/// reconciles that split without saving — see <see cref="ShipmentExportQuery"/>; a View-gated
-/// download must not write one.
+/// Carries no prices. What it does carry is chosen: the request names the confirmed rows to include,
+/// so a run confirmed over a morning can send only what has not gone out yet.
 ///
 /// The .docx sibling is <see cref="ExportOutgoingShipmentWordEndpoint"/>; both read the same
 /// <see cref="ShipmentExportQuery"/> and differ only in the writer they hand the model to.
@@ -29,11 +29,13 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// <param name="dbContext"></param>
 /// <param name="companyOptions"></param>
 /// <param name="driverScope"></param>
+/// <param name="timeProvider"></param>
 [BinaryResponse(ExportOutgoingShipmentExcelEndpoint.WorkbookContentType)]
 public sealed class ExportOutgoingShipmentExcelEndpoint(
     AleTrackDbContext dbContext,
     IOptions<CompanyOptions> companyOptions,
-    IDriverScope driverScope)
+    IDriverScope driverScope,
+    TimeProvider timeProvider)
     : Endpoint<ExportOutgoingShipmentRequest>
 {
     /// <summary>
@@ -45,13 +47,15 @@ public sealed class ExportOutgoingShipmentExcelEndpoint(
     /// <inheritdoc />
     public override void Configure()
     {
-        Get("outgoing-shipments/{Id:guid}/export/excel");
+        Post("outgoing-shipments/{Id:guid}/export/excel");
         Description(b => b
             .RequirePermission(ModuleType.Shipments, PermissionLevel.View)
+            .RequireCapability(Capability.Invoicing)
             // Registers the status code and its media type; the binary schema itself is applied by
             // BinaryResponseProcessor off this endpoint's [BinaryResponse] marker, because no
             // Produces overload yields one.
             .Produces(StatusCodes.Status200OK, contentType: WorkbookContentType)
+            .Produces<FailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
             .WithName(nameof(ExportOutgoingShipmentExcelEndpoint)));
 
@@ -61,6 +65,8 @@ public sealed class ExportOutgoingShipmentExcelEndpoint(
             {
                 s.Summary = "Exports an outgoing shipment to an .xlsx workbook";
                 s.Responses[StatusCodes.Status200OK] = "Workbook generated";
+                s.Responses[StatusCodes.Status400BadRequest] =
+                    "Nothing was chosen, or a chosen client has no confirmed row on the shipment";
                 s.Responses[StatusCodes.Status404NotFound] = "Outgoing shipment not found";
             }
         );
@@ -71,13 +77,16 @@ public sealed class ExportOutgoingShipmentExcelEndpoint(
     {
         await ShipmentDriverScopeGuard.EnsureAssignedAsync(driverScope, dbContext, req.Id, ct);
 
-        var model = await ShipmentExportQuery.LoadAsync(dbContext, req.Id, companyOptions.Value, ct);
-        if (model is null)
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+        var selection = await ShipmentExportSelector.LoadAsync(dbContext, req, companyOptions.Value, ct);
+
+        // Built before the stamp, so a file that failed to generate leaves no row reading as sent.
+        var bytes = ShipmentExportWorkbookBuilder.Build(selection.Model);
+
+        await ShipmentExportSelector.StampAsync(dbContext, selection, timeProvider, ct);
 
         await Send.BytesAsync(
-            ShipmentExportWorkbookBuilder.Build(model!),
-            ShipmentExportFileName.For(model!, "xlsx"),
+            bytes,
+            ShipmentExportFileName.For(selection.Model, "xlsx"),
             WorkbookContentType,
             cancellation: ct);
     }

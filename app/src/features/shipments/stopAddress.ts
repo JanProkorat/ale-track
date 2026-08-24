@@ -20,16 +20,22 @@ import { addrKindValue } from 'src/lib/labels';
  * stale choice visibly selected. The editor UI is responsible for that (an
  * extra disabled <MenuItem> — see ShipmentEditor's `isGone` handling); this
  * function only guarantees a save built from its output never silently
- * points at nothing. */
+ * points at nothing.
+ *
+ * `addressText` mirrors {@link resolveFromAddresses}'s: the tail-less address, empty when
+ * there is genuinely nothing to show — the row's own "client has no address" warning is
+ * guarded on it being empty. A place branch has no kind tail to begin with, so it is the
+ * same string as `text`. */
 export function resolveStopAddress(
   order: OutgoingShipmentOrderDto | undefined,
   addressKind: DeliveryAddressKind,
   deliveryPlaceId?: string,
-): { lat?: number; lng?: number; text: string } {
+): { lat?: number; lng?: number; text: string; addressText: string } {
   if (addressKind === DeliveryAddressKind.DeliveryPlace && deliveryPlaceId) {
     const place = order?.clientDeliveryPlaces?.find((p) => p.id === deliveryPlaceId);
     if (place) {
-      return { lat: place.address?.latitude, lng: place.address?.longitude, text: `${place.name ?? ''} · ${formatPlaceAddress(place)}` };
+      const addressText = formatPlaceAddress(place);
+      return { lat: place.address?.latitude, lng: place.address?.longitude, text: `${place.name ?? ''} · ${addressText}`, addressText };
     }
   }
   return resolveFromAddresses(addressKind, order?.clientOfficialAddress, order?.clientContactAddress);

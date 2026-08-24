@@ -9,9 +9,15 @@ import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within }
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AddressDto,
+  ClientDto,
+  Country,
   InvoiceAdjustmentKind,
   InvoiceLineSourceKind,
+  LinkedClientDto,
   ProductKind,
+  ShipmentInvoiceBillingRecipientDto,
+  ShipmentInvoiceConfirmationDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
@@ -22,6 +28,10 @@ import { theme } from 'src/theme/theme';
 const moveMutate = vi.fn();
 const addMutate = vi.fn();
 const deleteMutate = vi.fn();
+const setRecipientsMutate = vi.fn();
+const setReadinessMutate = vi.fn();
+/** Client detail per id — the billing-recipient dropdown reads its options off it. */
+let clientDetails: Record<string, ClientDto> = {};
 let invoicesResponse: ShipmentInvoicesDto | undefined;
 // The query can also be loading or failed. An earlier version of the mock always handed
 // back a response, which is why it could not catch the crash on a missing one.
@@ -33,6 +43,12 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useMoveInvoiceLine: () => ({ mutate: moveMutate, isPending: false }),
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
+  useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
+  useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, isPending: false }),
+}));
+
+vi.mock('src/hooks/useClients', () => ({
+  useClient: (id: string | undefined) => ({ data: id ? clientDetails[id] : undefined }),
 }));
 
 vi.mock('src/providers/CurrencyProvider', () => ({
@@ -87,6 +103,7 @@ function renderSection(editable = true, stops: OutgoingShipmentStopDto[] = []) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clientDetails = {};
   queryState = { isLoading: false, isError: false };
   invoicesResponse = new ShipmentInvoicesDto({
     isEditable: true,
@@ -116,6 +133,27 @@ describe('client bands', () => {
     // sub-header and in the section total above. Guarded so it does not creep
     // back in.
     expect(screen.queryByText(/1 faktura · 10 ks/)).not.toBeInTheDocument();
+  });
+
+  it("shows the client's trading name in the band header when it has one", () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ clientName: 'Luděk Pachl', clientBusinessName: 'Pachl s.r.o.', lines: [line({ quantity: 3 })] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText(/Pachl s\.r\.o\./)).toBeInTheDocument();
+  });
+
+  it('shows the client name alone when there is no trading name', () => {
+    renderSection();
+
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+    expect(screen.queryByText(/Klient A ·/)).not.toBeInTheDocument();
   });
 
   it('omits the per-invoice sub-header when the client has only one invoice', () => {
@@ -202,6 +240,216 @@ describe('client bands', () => {
   });
 });
 
+describe('invoice parties', () => {
+  it('shows a payer invoice as expanded party rows and collapses one on click', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    // Both sub-clients show as party headers, already expanded — their product rows are
+    // visible without a click.
+    expect(screen.getByText('Pub B')).toBeInTheDocument();
+    expect(screen.getByText('Pub C')).toBeInTheDocument();
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+    expect(screen.getByText('Lager 50')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Pub B'));
+
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+    expect(screen.getByText('Lager 50')).toBeInTheDocument();
+  });
+
+  it('counts the other clients on the band header, using the Czech paucal for 2', async () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    expect(await screen.findByText('2 jiní klienti')).toBeInTheDocument();
+  });
+
+  it('keeps the Czech paucal for an other-client count of 4', async () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ quantity: 1, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ quantity: 1, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+            line({ quantity: 1, orderingClientId: 'pub-d', orderingClientName: 'Pub D' }),
+            line({ quantity: 1, orderingClientId: 'pub-e', orderingClientName: 'Pub E' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    expect(await screen.findByText('4 jiní klienti')).toBeInTheDocument();
+  });
+
+  // A client can hold two invoices on a run, and a payer can hold its own possibly-empty
+  // invoice alongside one billing another client — both existing rules have to keep working
+  // once party rows are in the mix.
+  it('shows party rows alongside the per-invoice header, and the empty-invoice row', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          id: 'inv-1', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({ id: 'inv-2', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 2, lines: [] }),
+      ],
+    });
+
+    renderSection();
+
+    expect(screen.getByText('Faktura 1')).toBeInTheDocument();
+    expect(screen.getByText('Faktura 2')).toBeInTheDocument();
+    expect(screen.getByText('Pub B')).toBeInTheDocument();
+    expect(screen.getByText('Pub C')).toBeInTheDocument();
+    expect(screen.getByText(/Zatím bez položek/)).toBeInTheDocument();
+  });
+
+  it('moves a party row using its own source line, not the whole invoice', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          id: 'inv-a', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ id: 'l-pubb', sourceItemId: 'pubb-item', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ id: 'l-pubc', sourceItemId: 'pubc-item', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [] }),
+      ],
+    });
+
+    renderSection();
+    // Both party rows are already expanded by default, so both move actions are on screen
+    // without opening anything first. Parties sort alphabetically by client name (see
+    // `invoiceParties`), so Pub B's button is the first of the two.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Přesunout kusy na jinou fakturu' })[0]);
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Cílová faktura' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Faktura 1 — 0 ks' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Přesunout' }));
+
+    expect(moveMutate.mock.calls[0][0]).toMatchObject({
+      fromInvoiceId: 'inv-a',
+      sourceItemId: 'pubb-item',
+      quantity: 3,
+    });
+  });
+
+  it('re-collapses an opened party when "Sbalit vše" is pressed, not just the bands', async () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+        invoice({
+          clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2,
+          lines: [line({ name: 'Pilsner 10°', quantity: 1, orderingClientId: CLIENT_B })],
+        }),
+      ],
+    });
+
+    renderSection();
+
+    // Parties are expanded by default, so the product row is already visible.
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    // Collapse-all closes every band, hiding the still-open party along with it.
+    fireEvent.click(screen.getByRole('button', { name: /Sbalit vše/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Rozbalit vše/ })).toBeInTheDocument());
+
+    // Reopen just Klient A's band — not through "Rozbalit vše" — and check the party came
+    // back collapsed too. Before the fix, `setAll` rebuilt `collapsed` from band ids only,
+    // so the already-open party key was dropped from the set and read back as open.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rozbalit' })[0]);
+    await waitFor(() => expect(screen.getByText('Pub B')).toBeInTheDocument());
+    expect(screen.queryByText('Albrecht 12°')).not.toBeInTheDocument();
+  });
+
+  it('leaves an opened party open when the invoices query refetches', () => {
+    // Every invoicing mutation invalidates the invoice query, so an equal-but-fresh DTO
+    // arrives and the party memo recomputes. A seeding effect used to re-collapse a party
+    // the user had opened, because it re-seeded off `collapsed` rather than off "have we
+    // ever seen this key". That seeding is gone now that parties start expanded, so this
+    // passes trivially — but keep it anyway: it is the guard against anyone reintroducing
+    // auto-collapse-on-refetch later.
+    const build = () => new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        // A stable invoice id, as a real refetch returns: the party key is `<invoiceId>:<clientId>`.
+        invoice({
+          id: 'inv-stable', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1,
+          lines: [
+            line({ name: 'Albrecht 12°', quantity: 3, orderingClientId: 'pub-b', orderingClientName: 'Pub B' }),
+            line({ name: 'Lager 50', quantity: 5, orderingClientId: 'pub-c', orderingClientName: 'Pub C' }),
+          ],
+        }),
+      ],
+    });
+
+    invoicesResponse = build();
+    const { rerender } = renderSection();
+
+    // Already open by default — no click needed to get here.
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+
+    invoicesResponse = build();
+    rerender(
+      <MuiThemeProvider theme={theme}>
+        <ShipmentInvoicing shipmentId="ship-1" editable stops={[]} />
+      </MuiThemeProvider>,
+    );
+
+    expect(screen.getByText('Albrecht 12°')).toBeInTheDocument();
+  });
+});
+
 describe('provenance chips', () => {
   it('marks a fully stock-sourced row', () => {
     invoicesResponse = new ShipmentInvoicesDto({
@@ -231,6 +479,9 @@ describe('provenance chips', () => {
     expect(screen.getByText('14 ks')).toBeInTheDocument();
   });
 
+  // Two distinct orderers on one invoice split into party rows (see 'invoice parties'),
+  // so the cross-billed piece now sits behind its own party header rather than as an
+  // inline chip on a merged row — but that party header is expanded by default.
   it('marks a cross-billed portion with its ordering client and count', () => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true, adjustments: [],
@@ -245,9 +496,14 @@ describe('provenance chips', () => {
 
     renderSection();
 
-    expect(screen.getByText('2 ks z obj. Klient B')).toBeInTheDocument();
+    // Expanded by default — the chip is visible without opening the party.
+    expect(screen.getByText('z obj. Klient B')).toBeInTheDocument();
     expect(screen.getByText('1 položka fakturována jinému klientovi')).toBeInTheDocument();
     expect(screen.getByText('1× přefakturováno')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Klient B'));
+
+    expect(screen.queryByText('z obj. Klient B')).not.toBeInTheDocument();
   });
 
   it('omits the piece count on an unmerged cross-billed row', () => {
@@ -430,6 +686,10 @@ describe('read-only state', () => {
 });
 
 describe('move dialog', () => {
+  // Both lines order through the same client on purpose — a merged row spanning two
+  // *different* orderers is now split into party rows before it ever reaches this dialog
+  // (see the 'invoice parties' describe block), so a same-client, mixed-source merge (an
+  // order plus a stock top-up) is what still exercises the origin picker here.
   beforeEach(() => {
     invoicesResponse = new ShipmentInvoicesDto({
       isEditable: true,
@@ -439,7 +699,7 @@ describe('move dialog', () => {
           id: 'inv-a', clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, sequence: 1,
           lines: [
             line({ id: 'l-own', sourceItemId: 'own', quantity: 5 }),
-            line({ id: 'l-foreign', sourceItemId: 'foreign', quantity: 3, orderingClientId: CLIENT_B, orderingClientName: 'Klient B' }),
+            line({ id: 'l-stock', sourceItemId: 'stock', quantity: 3, isFromStock: true }),
           ],
         }),
         invoice({ id: 'inv-b', clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, sequence: 1, lines: [] }),
@@ -464,7 +724,7 @@ describe('move dialog', () => {
 
     const dialog = screen.getByRole('dialog');
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Původ kusů' }));
-    fireEvent.click(screen.getByRole('option', { name: 'z obj. Klient B — 3 ks' }));
+    fireEvent.click(screen.getByRole('option', { name: 'ze skladu — 3 ks' }));
 
     expect(within(dialog).getByText(/nejvýš 3 ks/)).toBeInTheDocument();
   });
@@ -725,6 +985,116 @@ describe('delivery address', () => {
   });
 });
 
+describe("a payer's band: each sub-client's own order", () => {
+  const PAYER = 'client-payer';
+
+  /** A stop for one sub-client, carrying its own notes and vratky. */
+  const subStop = (
+    id: string,
+    order: number,
+    clientId: string,
+    notes: string[],
+    returns: { name: string; quantity: number }[],
+  ) => ({
+    id, order, clientId,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    notes: notes.map((t) => ({ id: `${id}-${t}`, text: t, dateCreated: new Date() })),
+    returns: returns.map((r) => ({ id: `${id}-${r.name}`, ...r })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  /** One invoice, issued to the payer, billing two sub-clients' goods. */
+  function payerBand() {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    return [
+      subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], []),
+      subStop('st-b', 2, CLIENT_B, [], [{ name: 'Sud 30l KEG', quantity: 4 }]),
+    ];
+  }
+
+  /// The payer takes no delivery of its own, so reading the band's own stop found nothing at all —
+  /// which is how every sub-client's note and vratka went missing from this screen.
+  it("shows each sub-client's notes and vratky under its own goods", () => {
+    renderSection(true, payerBand());
+
+    expect(within(screen.getByTestId(`party-details-${CLIENT_A}`)).getByText('Platí za pivo 822 EUR'))
+      .toBeInTheDocument();
+    expect(within(screen.getByTestId(`party-details-${CLIENT_B}`)).getByText('Sud 30l KEG'))
+      .toBeInTheDocument();
+  });
+
+  /// The client's group in the table already names it; a second block underneath named it again,
+  /// which is what made a payer's band read as two lists of the same clients.
+  it('names each sub-client exactly once', () => {
+    renderSection(true, payerBand());
+
+    expect(screen.getAllByText('Andreas Hohmann')).toHaveLength(1);
+    expect(screen.getAllByText('Chorvatka')).toHaveLength(1);
+  });
+
+  // Its detail closes its own group, so it sits between that client's goods and the next client.
+  it("keeps a sub-client's detail inside its group", () => {
+    renderSection(true, payerBand());
+
+    const hohmannDetail = screen.getByTestId(`party-details-${CLIENT_A}`);
+    const chorvatka = screen.getByText('Chorvatka');
+
+    expect(hohmannDetail.compareDocumentPosition(chorvatka) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  // A client with neither note nor vratka has nothing to show, and an empty block headed by its
+  // name would read as "no instructions".
+  it('leaves out a sub-client with neither', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], [])]);
+
+    expect(screen.getByTestId(`party-details-${CLIENT_A}`)).toBeInTheDocument();
+    // Chorvatka has neither, so its group closes with its goods — an empty block would read as "no
+    // instructions".
+    expect(screen.queryByTestId(`party-details-${CLIENT_B}`)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();
+  });
+
+  // One client, one order: naming it above its own note repeats the band header.
+  it('does not name the client on an ordinary band', () => {
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Dovézt dopoledne'], [])]);
+
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getAllByText('Klient A')).toHaveLength(1);
+  });
+});
+
 describe('order notes', () => {
   const stopWithNotes = (texts: string[]) => ({
     id: 'st1', order: 1, clientId: CLIENT_A,
@@ -807,5 +1177,249 @@ describe('vratky', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Sbalit' })[0]);
     await waitForElementToBeRemoved(() => screen.queryByTestId('band-returns'));
+  });
+});
+
+describe('fakturační adresy sub-klientů', () => {
+  const SUB_A = 'sub-a';
+  const SUB_B = 'sub-b';
+  const SUB_NO_ADDRESS = 'sub-none';
+
+  const address = (streetName: string, city: string) =>
+    new AddressDto({ streetName, streetNumber: '1', zip: '11000', city, country: Country.Czechia });
+
+  const sub = (id: string, name: string, officialAddress?: AddressDto) =>
+    new LinkedClientDto({ id, name, officialAddress });
+
+  /** Klient A pays for two sub-clients with an address and one without. */
+  function payerWithSubClients() {
+    clientDetails[CLIENT_A] = new ClientDto({
+      id: CLIENT_A,
+      name: 'Klient A',
+      invoicedClients: [
+        sub(SUB_A, 'Hospoda U Lípy', address('Nádražní', 'Praha')),
+        sub(SUB_B, 'Pivnice Na Rohu', address('Dlouhá', 'Brno')),
+        sub(SUB_NO_ADDRESS, 'Bez adresy'),
+      ],
+    });
+  }
+
+  function withSavedRecipients(...recipients: { clientId: string; clientName: string; addr: AddressDto }[]) {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({
+        lines: [line({ quantity: 10 })],
+        billingRecipients: recipients.map((r) =>
+          new ShipmentInvoiceBillingRecipientDto({
+            clientId: r.clientId, clientName: r.clientName, address: r.addr,
+          })),
+      })],
+    });
+  }
+
+  const openMenu = () => fireEvent.click(screen.getByRole('button', { name: /fakturační adres/i }));
+
+  it('shows no chip when the payer has no sub-clients at all', () => {
+    renderSection();
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no chip when every sub-client lacks an official address', () => {
+    clientDetails[CLIENT_A] = new ClientDto({
+      id: CLIENT_A,
+      name: 'Klient A',
+      invoicedClients: [sub(SUB_NO_ADDRESS, 'Bez adresy')],
+    });
+
+    renderSection();
+
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
+
+  it('reads "Fakturační adresy" with nothing chosen', () => {
+    payerWithSubClients();
+    renderSection();
+
+    expect(screen.getByRole('button', { name: 'Fakturační adresy' })).toBeInTheDocument();
+  });
+
+  it('declines the count as "1 fakturační adresa" for one chosen address', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection();
+
+    expect(screen.getByRole('button', { name: '1 fakturační adresa' })).toBeInTheDocument();
+  });
+
+  it('declines the count as "2 fakturační adresy" for a 2-4 count', () => {
+    payerWithSubClients();
+    withSavedRecipients(
+      { clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') },
+      { clientId: SUB_B, clientName: 'Pivnice Na Rohu', addr: address('Dlouhá', 'Brno') },
+    );
+
+    renderSection();
+
+    expect(screen.getByRole('button', { name: '2 fakturační adresy' })).toBeInTheDocument();
+  });
+
+  it('lists every sub-client with an address and never one without, once opened', () => {
+    payerWithSubClients();
+    renderSection();
+
+    openMenu();
+    const menu = screen.getByRole('menu');
+
+    // Both offered even though neither has goods on this shipment — a payer may owe
+    // an address for something billed elsewhere.
+    expect(within(menu).getByText('Hospoda U Lípy')).toBeInTheDocument();
+    expect(within(menu).getByText('Pivnice Na Rohu')).toBeInTheDocument();
+    // The address is what the office is actually choosing between.
+    expect(within(menu).getByText('Nádražní 1, 11000 Praha')).toBeInTheDocument();
+    // Offering it would only earn a 400 from the endpoint.
+    expect(within(menu).queryByText('Bez adresy')).not.toBeInTheDocument();
+  });
+
+  it('saves the whole selection through the invoice when a row is ticked', () => {
+    payerWithSubClients();
+    const inv = invoice({ lines: [line({ quantity: 10 })] });
+    invoicesResponse = new ShipmentInvoicesDto({ isEditable: true, adjustments: [], invoices: [inv] });
+
+    renderSection();
+    openMenu();
+    fireEvent.click(within(screen.getByRole('menu')).getByText('Pivnice Na Rohu'));
+
+    expect(setRecipientsMutate).toHaveBeenCalledWith(
+      { invoiceId: inv.id, clientIds: [SUB_B] },
+      expect.anything(),
+    );
+  });
+
+  it('opens with the saved recipients already ticked', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection();
+    openMenu();
+
+    const checkbox = within(screen.getByRole('menu')).getByRole('checkbox', { name: 'Hospoda U Lípy' });
+    expect(checkbox).toBeChecked();
+  });
+
+  it('shows the "Fakturovat na" line once something is chosen, none when nothing is', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection();
+
+    expect(screen.getByText('Fakturovat na: Hospoda U Lípy')).toBeInTheDocument();
+  });
+
+  it('renders no "Fakturovat na" line when nothing is chosen', () => {
+    payerWithSubClients();
+    renderSection();
+
+    expect(screen.queryByText(/Fakturovat na/)).not.toBeInTheDocument();
+  });
+
+  it('with canEdit false the chip shows state but does not open', () => {
+    payerWithSubClients();
+    withSavedRecipients({ clientId: SUB_A, clientName: 'Hospoda U Lípy', addr: address('Nádražní', 'Praha') });
+
+    renderSection(false);
+
+    // A plain span carrying the count, not a button — nothing to click.
+    expect(screen.queryByRole('button', { name: '1 fakturační adresa' })).not.toBeInTheDocument();
+    const chip = screen.getByText('1 fakturační adresa');
+
+    fireEvent.click(chip);
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('renders no chip at all when read-only and nothing was ever chosen', () => {
+    payerWithSubClients();
+
+    renderSection(false);
+
+    // Read-only and empty: a chip here could never be filled in, so it is pure clutter.
+    expect(screen.queryByText(/fakturační adres/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('marking a row finished', () => {
+  function confirmation(clientId: string, number: number, isReady = true) {
+    return new ShipmentInvoiceConfirmationDto({ clientId, number, isReady });
+  }
+
+  it('shows the row\'s own number on the badge, not the stop it is on', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ stopOrder: 4, lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 2)],
+    });
+
+    renderSection();
+
+    // The number the office writes onto the invoice — the route position it used to show has
+    // moved to the address line, which needs a stop to render at all.
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+  });
+
+  it('shows a dash while the row has never been marked', () => {
+    renderSection();
+
+    expect(screen.getByText('–')).toBeInTheDocument();
+  });
+
+  it('marks the row ready through the endpoint, keyed on the client', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hotovo – Klient A' }));
+
+    expect(setReadinessMutate).toHaveBeenCalledTimes(1);
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: true });
+  });
+
+  it('un-marks a row that is already ready', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection();
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Hotovo – Klient A' });
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(checkbox);
+
+    expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: false });
+  });
+
+  it('offers no tick to a viewer who cannot edit, and reports a ready row as a chip', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations: [confirmation(CLIENT_A, 1)],
+    });
+
+    renderSection(false);
+
+    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Hotovo')).toBeInTheDocument();
+  });
+
+  it('says nothing about an unmarked row to a viewer who cannot edit', () => {
+    renderSection(false);
+
+    expect(screen.queryByText('Hotovo')).not.toBeInTheDocument();
   });
 });

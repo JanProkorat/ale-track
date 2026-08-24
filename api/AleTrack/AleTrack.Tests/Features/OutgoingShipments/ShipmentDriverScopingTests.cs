@@ -101,10 +101,20 @@ public sealed class ShipmentDriverScopingTests
         var dbContext = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [theirs]);
 
         var endpoint = EndpointBuilder<ExportOutgoingShipmentRequest, ExportOutgoingShipmentExcelEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Scoped(1));
+            .Create(
+                dbContext.Object,
+                Options.Create(new CompanyOptions()),
+                DriverScopeMockFactory.Scoped(1),
+                TimeProvider.System);
 
         var act = async () => await endpoint.HandleAsync(
-            new ExportOutgoingShipmentRequest { Id = theirs.PublicId }, CancellationToken.None);
+            new ExportOutgoingShipmentRequest
+            {
+                Id = theirs.PublicId,
+                // Anything at all: the scope guard runs before the selection is looked at.
+                Data = new ExportOutgoingShipmentDto { ClientIds = [Guid.NewGuid()] }
+            },
+            CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }
@@ -116,10 +126,20 @@ public sealed class ShipmentDriverScopingTests
         var dbContext = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [theirs]);
 
         var endpoint = EndpointBuilder<ExportOutgoingShipmentRequest, ExportOutgoingShipmentWordEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Scoped(1));
+            .Create(
+                dbContext.Object,
+                Options.Create(new CompanyOptions()),
+                DriverScopeMockFactory.Scoped(1),
+                TimeProvider.System);
 
         var act = async () => await endpoint.HandleAsync(
-            new ExportOutgoingShipmentRequest { Id = theirs.PublicId }, CancellationToken.None);
+            new ExportOutgoingShipmentRequest
+            {
+                Id = theirs.PublicId,
+                // Anything at all: the scope guard runs before the selection is looked at.
+                Data = new ExportOutgoingShipmentDto { ClientIds = [Guid.NewGuid()] }
+            },
+            CancellationToken.None);
 
         await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.NotfoundError);
     }

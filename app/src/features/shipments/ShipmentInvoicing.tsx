@@ -17,9 +17,9 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Card, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
-  DialogTitle, IconButton, ListSubheader, MenuItem, Stack, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow, TextField, Typography,
+  Box, Button, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions,
+  DialogContent, DialogTitle, FormControlLabel, IconButton, ListSubheader, MenuItem, Stack, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
@@ -41,21 +41,27 @@ import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import {
   InvoiceAdjustmentKind,
   InvoiceLineSourceKind,
+  type OrderNoteDto,
+  type OrderReturnDto,
   type ShipmentInvoiceDto,
   type ShipmentInvoicesDto,
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useShipmentInvoices,
+  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useSetInvoiceReadiness,
+  useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue,
+  bandAddress, bandOrderDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  invoiceValue, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
   type ClientBand,
   type LineGroup,
 } from './shipmentInvoiceModel';
+import { BandBillingRecipients } from './BandBillingRecipients';
+import { Pill } from './Pill';
 import { kindLabel, invoiceAdjustmentKindName } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
@@ -72,27 +78,6 @@ const NOTE_LINE = '19px';
 /** Indent that lines a vratka row up with the "Vrací" header's text: the 14px
  *  icon plus the 7px (0.875) gap that follows it. */
 const RETURN_INDENT = '21px';
-
-function Pill({ tint, color, icon, children }: {
-  tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
-  color: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Box
-      sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 23, px: 1.25,
-        borderRadius: 99, fontSize: 11.5, fontWeight: 700, color,
-        bgcolor: (t) => t.vars!.palette.brand[tint],
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {icon}
-      {children}
-    </Box>
-  );
-}
 
 /** Small provenance chip on a product row. */
 function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string }) {
@@ -114,6 +99,13 @@ function OriginChip({ kind, label }: { kind: 'stock' | 'cross'; label: string })
 
 /** Where this client's goods actually go, under their name in the band header.
  *  Renders nothing when the address can't be resolved — see `bandAddress`. */
+/** Where this band's goods go, led by the stop's position on the route.
+ *
+ *  The route position used to be the badge; the badge now carries the row's own
+ *  fakturační number, which is what the office writes onto the invoice. It moves
+ *  here rather than being dropped, because the route is still how the office and
+ *  the driver talk about a stop. A payer with no delivery of its own has no
+ *  position to show. */
 function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
   const address = bandAddress(band, stops);
   if (!address) return null;
@@ -122,6 +114,7 @@ function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShi
     <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.25, minWidth: 0 }}>
       <PlaceOutlinedIcon sx={{ fontSize: 13, color: 'text.disabled', flexShrink: 0 }} />
       <Typography sx={{ fontSize: 11.5, color: 'text.secondary', minWidth: 0 }} noWrap>
+        {band.stopOrder !== undefined && `Zastávka ${band.stopOrder} · `}
         {address.text}
       </Typography>
       {address.placeName && (
@@ -137,8 +130,7 @@ function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShi
  *  run long, and the header is deliberately two lines. Renders nothing at all
  *  when the order has none — an empty box would read as "no instructions",
  *  which is a claim this component has no business making. */
-function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
-  const notes = bandNotes(band, stops);
+function BandNotes({ notes }: { notes: OrderNoteDto[] }) {
   if (notes.length === 0) return null;
 
   return (
@@ -175,8 +167,7 @@ function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentS
  *  Read-only, like the shipment's own Vratky card — returns are owned by the
  *  order. Rendered in the same idiom as that card (name, note beneath,
  *  quantity right-aligned) so a vratka looks the same wherever it appears. */
-function BandReturns({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
-  const returns = bandReturns(band, stops);
+function BandReturns({ returns }: { returns: OrderReturnDto[] }) {
   if (returns.length === 0) return null;
 
   return (
@@ -400,6 +391,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const move = useMoveInvoiceLine(shipmentId);
   const addInvoice = useAddShipmentInvoice(shipmentId);
   const deleteInvoice = useDeleteShipmentInvoice(shipmentId);
+  const setReadiness = useSetInvoiceReadiness(shipmentId);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [driftDismissed, setDriftDismissed] = useState(false);
@@ -411,14 +403,40 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const canEdit = editable && (data.isEditable ?? false);
   const totals = useMemo(() => sectionTotals(data, bands), [bands, data]);
 
+  // Every party key across every multi-party invoice — an invoice with one party renders no
+  // party row at all, so it contributes nothing here. Shared by the seeding effect below and
+  // by `setAll`: collapse-all has to close these too, not just the bands.
+  const partyKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const invoice of data.invoices ?? []) {
+      const parties = invoiceParties(invoice);
+      if (parties.length > 1) {
+        for (const party of parties) keys.push(`${invoice.id}:${party.clientId}`);
+      }
+    }
+    return keys;
+  }, [data.invoices]);
+
+  // Parties open expanded by default: `collapsed` starts empty and a key's absence means
+  // "expanded", so a party key simply never gets added until the user collapses it by hand.
+  // No seeding effect is needed here, and that is what keeps a party the user opened from
+  // being slammed shut when an invoicing mutation invalidates the query and this component
+  // re-renders with an equal-but-fresh DTO.
+
   const toggleBand = (clientId: string) => setCollapsed((prev) => {
     const next = new Set(prev);
     if (next.has(clientId)) next.delete(clientId);
     else next.add(clientId);
     return next;
   });
+  // Band-scoped on purpose: the header count means bands, not parties, so opening one
+  // party out of a collapsed band must not flip "Rozbalit vše" to "Sbalit vše".
   const openCount = bands.filter((b) => !collapsed.has(b.clientId)).length;
-  const setAll = (close: boolean) => setCollapsed(close ? new Set(bands.map((b) => b.clientId)) : new Set());
+  // Extends to every party key too — rebuilding the closed set from band ids alone would
+  // drop any party key already sitting in `collapsed` (every party starts collapsed) and
+  // thereby *expand* it, the opposite of what "Sbalit vše" claims to do.
+  const setAll = (close: boolean) =>
+    setCollapsed(close ? new Set([...bands.map((b) => b.clientId), ...partyKeys]) : new Set());
 
   const handleAdd = (clientId: string) => {
     addInvoice.mutate(clientId, {
@@ -430,9 +448,18 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
     });
   };
 
+  const handleReadiness = (band: ClientBand, isReady: boolean) => {
+    setReadiness.mutate({ clientId: band.clientId, isReady }, {
+      onSuccess: () => enqueueSnackbar(
+        isReady ? 'Objednávka označena jako hotová' : 'Označení hotovo zrušeno',
+        { variant: 'success' }),
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+    });
+  };
+
   const handleDelete = (invoice: ShipmentInvoiceDto) => {
     deleteInvoice.mutate(invoice.id!, {
-      onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny objednavateli', { variant: 'success' }),
+      onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny na fakturu plátce', { variant: 'success' }),
       onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
     });
     setConfirmDelete(null);
@@ -500,59 +527,114 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
               Vývoz nemá žádné položky k fakturaci.
             </Typography>
           ) : (
-            bands.map((band, index) => (
+            bands.map((band, index) => {
+              const other = otherClientCount(band);
+              const orderDetails = bandOrderDetails(band, stops);
+              return (
               <Box
                 key={band.clientId}
                 sx={{ py: 1.5, ...(index > 0 ? { borderTop: 1, borderColor: 'divider' } : null) }}
               >
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                  <Box
-                    sx={{
-                      width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
-                      bgcolor: colorForClient(band.clientId), color: '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700,
-                    }}
-                  >
-                    {band.stopOrder ?? '?'}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{band.clientName}</Typography>
-                    {/* The client's rollup used to sit here. It is deliberately
-                        gone: the counts repeat on every invoice sub-header and
-                        in the section total, while the destination appears
-                        nowhere else on this screen. Outside the Collapse on
-                        purpose — the collapsed header is what the office scans
-                        down, and where the goods went is part of that scan. */}
-                    <BandAddressLine band={band} stops={stops} />
-                  </Box>
-                  {band.crossBilled > 0 && (
-                    <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
+                {/* The billing-recipients chip and the "Fakturovat na" line both come off
+                    one hook instance (one query, one mutation) inside BandBillingRecipients,
+                    but land in two different spots of this header — the chip in the pill
+                    cluster, the line under the address. A render-prop keeps that single
+                    instance while letting each piece sit where the layout needs it. */}
+                <BandBillingRecipients shipmentId={shipmentId} band={band} canEdit={canEdit}>
+                  {(billing) => (
+                    <>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Box
+                          sx={{
+                            width: 26, height: 26, borderRadius: '50%', flex: '0 0 auto',
+                            bgcolor: colorForClient(band.clientId), color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 12, fontWeight: 700,
+                          }}
+                        >
+                          {band.number ?? '–'}
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          {/* The trading name follows the client's own, dimmer and on the same
+                              line: two clients can genuinely share a name, and the band header is
+                              where the office recognises which one it is looking at. */}
+                          <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>
+                            {band.clientName}
+                            {band.clientBusinessName && (
+                              <Typography
+                                component="span"
+                                sx={{ fontSize: 12, fontWeight: 500, color: 'text.secondary' }}
+                              >
+                                {` · ${band.clientBusinessName}`}
+                              </Typography>
+                            )}
+                          </Typography>
+                          {/* The client's rollup used to sit here. It is deliberately
+                              gone: the counts repeat on every invoice sub-header and
+                              in the section total, while the destination appears
+                              nowhere else on this screen. Outside the Collapse on
+                              purpose — the collapsed header is what the office scans
+                              down, and where the goods went is part of that scan. */}
+                          <BandAddressLine band={band} stops={stops} />
+                          {billing.invoicedToLine}
+                        </Box>
+                        {other > 0 && (
+                          <Pill tint="greyTint" color="text.secondary">
+                            {other} {plural(other, 'jiný klient', 'jiní klienti', 'jiných klientů')}
+                          </Pill>
+                        )}
+                        {band.crossBilled > 0 && (
+                          <Pill tint="amberTint" color="warning.dark">{band.crossBilled}× přefakturováno</Pill>
+                        )}
+                        {billing.chip}
+                        {/* What puts the row in the export file, and what gives it its number. A
+                            payer's tick covers its whole group — the sub-clients have no row of
+                            their own. Deliberately not a lock: the office can still fix a mistake
+                            found after ticking, exactly as before. */}
+                        {canEdit ? (
+                          <FormControlLabel
+                            sx={{ mr: 0, ml: 0.5, '& .MuiFormControlLabel-label': { fontSize: 12.5 } }}
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={band.isReady}
+                                disabled={setReadiness.isPending}
+                                onChange={(e) => handleReadiness(band, e.target.checked)}
+                                inputProps={{ 'aria-label': `Hotovo – ${band.clientName}` }}
+                                sx={{ p: 0.5 }}
+                              />
+                            }
+                            label="Hotovo"
+                          />
+                        ) : (
+                          band.isReady && <Pill tint="okTint" color="success.main">Hotovo</Pill>
+                        )}
+                        {canEdit && (
+                          <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
+                            onClick={() => handleAdd(band.clientId)}>
+                            Faktura
+                          </Button>
+                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleBand(band.clientId)}
+                          aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
+                          sx={{
+                            width: 28, height: 28,
+                            transition: (t) => t.transitions.create('transform', {
+                              duration: t.transitions.duration.shortest,
+                            }),
+                            transform: collapsed.has(band.clientId) ? 'none' : 'rotate(180deg)',
+                          }}
+                        >
+                          <ExpandMoreIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                      </Stack>
+                    </>
                   )}
-                  {canEdit && (
-                    <Button size="small" variant="text" startIcon={<AddIcon fontSize="small" />}
-                      onClick={() => handleAdd(band.clientId)}>
-                      Faktura
-                    </Button>
-                  )}
-                  <IconButton
-                    size="small"
-                    onClick={() => toggleBand(band.clientId)}
-                    aria-label={collapsed.has(band.clientId) ? 'Rozbalit' : 'Sbalit'}
-                    sx={{
-                      width: 28, height: 28,
-                      transition: (t) => t.transitions.create('transform', {
-                        duration: t.transitions.duration.shortest,
-                      }),
-                      transform: collapsed.has(band.clientId) ? 'none' : 'rotate(180deg)',
-                    }}
-                  >
-                    <ExpandMoreIcon sx={{ fontSize: 17 }} />
-                  </IconButton>
-                </Stack>
+                </BandBillingRecipients>
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
-                  <BandNotes band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
@@ -566,7 +648,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                         </TableHead>
                         <TableBody>
                           {band.invoices.flatMap((invoice) => {
-                            const groups = groupLines(invoice);
+                            const parties = invoiceParties(invoice);
                             const rows = [];
                             // Only label individual invoices once the client has more than one.
                             if (band.invoices.length > 1) {
@@ -590,7 +672,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                 </TableRow>,
                               );
                             }
-                            if (groups.length === 0) {
+                            if (parties.length === 0) {
                               rows.push(
                                 <TableRow key={`${invoice.id}-empty`}>
                                   <TableCell colSpan={4} sx={{ fontSize: 12.5, color: 'text.secondary' }}>
@@ -599,16 +681,88 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                                 </TableRow>,
                               );
                             }
-                            for (const group of groups) {
+                            // One party is an ordinary invoice — render its rows directly, as
+                            // before. Party headers appear only where there is something to
+                            // separate, so an empty invoice (parties.length === 0) falls
+                            // through here too and renders no product row at all.
+                            if (parties.length <= 1) {
+                              for (const group of groupLines(invoice)) {
+                                rows.push(
+                                  <GroupRow
+                                    key={`${invoice.id}-${group.productKey}`}
+                                    invoice={invoice}
+                                    group={group}
+                                    editable={canEdit}
+                                    onMove={() => setMoveTarget({ invoice, group })}
+                                  />,
+                                );
+                              }
+                              return rows;
+                            }
+
+                            for (const party of parties) {
+                              const partyKey = `${invoice.id}:${party.clientId}`;
+                              const open = !collapsed.has(partyKey);
                               rows.push(
-                                <GroupRow
-                                  key={`${invoice.id}-${group.productKey}`}
-                                  invoice={invoice}
-                                  group={group}
-                                  editable={canEdit}
-                                  onMove={() => setMoveTarget({ invoice, group })}
-                                />,
+                                <TableRow
+                                  key={`${partyKey}-head`}
+                                  hover
+                                  onClick={() => toggleBand(partyKey)}
+                                  sx={{ cursor: 'pointer', bgcolor: (t) => t.vars!.palette.brand.surface2 }}
+                                >
+                                  <TableCell sx={{ fontWeight: 700, fontSize: 12 }}>
+                                    <Stack direction="row" spacing={0.75} alignItems="center">
+                                      <ExpandMoreIcon
+                                        sx={{
+                                          fontSize: 15,
+                                          transform: open ? 'rotate(180deg)' : 'none',
+                                        }}
+                                      />
+                                      <span>{party.clientName}</span>
+                                    </Stack>
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                    {num(party.quantity)} ks
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatMoney(party.value)}
+                                  </TableCell>
+                                  <TableCell />
+                                </TableRow>,
                               );
+
+                              if (!open) continue;
+
+                              for (const group of party.groups) {
+                                rows.push(
+                                  <GroupRow
+                                    key={`${partyKey}-${group.productKey}`}
+                                    invoice={invoice}
+                                    group={group}
+                                    editable={canEdit}
+                                    onMove={() => setMoveTarget({ invoice, group })}
+                                  />,
+                                );
+                              }
+
+                              // What the client's own order said and what it hands back, closing
+                              // its group. Inside the table because the party row above already
+                              // names the client: a block of its own underneath named it twice.
+                              const detail = orderDetails.inTable.get(partyKey);
+                              if (detail) {
+                                rows.push(
+                                  <TableRow key={`${partyKey}-detail`}>
+                                    <TableCell
+                                      colSpan={4}
+                                      sx={{ py: 1, borderBottom: 0 }}
+                                      data-testid={`party-details-${party.clientId}`}
+                                    >
+                                      <BandNotes notes={detail.notes} />
+                                      <BandReturns returns={detail.returns} />
+                                    </TableCell>
+                                  </TableRow>,
+                                );
+                              }
                             }
                             return rows;
                           })}
@@ -643,12 +797,22 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                       </Table>
                     </TableContainer>
                   </Card>
-                  {/* Below the products, not above: what the client hands back
-                      reads after what they are being billed for. */}
-                  <BandReturns band={band} stops={stops} />
+                  {/* Below the products, not above: what the order said and what the client hands
+                      back both read after what is being billed.
+
+                      Only for a client the table never names — an ordinary band, whose whole table
+                      is that one client's. Where the table does name clients, each one's detail sits
+                      inside its own group instead. */}
+                  {orderDetails.below.map((party) => (
+                    <Box key={party.clientId} data-testid={`party-details-${party.clientId}`}>
+                      <BandNotes notes={party.notes} />
+                      <BandReturns returns={party.returns} />
+                    </Box>
+                  ))}
                 </Collapse>
               </Box>
-            ))
+              );
+            })
           )}
         </Box>
       </Card>
@@ -678,7 +842,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         title="Smazat fakturu?"
         message={
           confirmDelete && invoiceQuantity(confirmDelete) > 0
-            ? `Faktura obsahuje ${invoiceQuantity(confirmDelete)} ks. Položky se vrátí na 1. fakturu klienta, který je objednal.`
+            ? `Faktura obsahuje ${invoiceQuantity(confirmDelete)} ks. Položky se vrátí na 1. fakturu plátce — u propojeného klienta na klienta, přes kterého se fakturuje.`
             : 'Faktura je prázdná.'
         }
         confirmLabel="Smazat"

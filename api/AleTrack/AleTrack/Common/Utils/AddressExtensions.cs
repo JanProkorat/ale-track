@@ -26,6 +26,21 @@ public static class AddressExtensions
             };
 
     /// <summary>
+    /// Detached copy, for a row that records an address rather than pointing at one.
+    /// </summary>
+    public static Address Copy(this Address address)
+        => new Address
+            {
+                StreetName = address.StreetName,
+                StreetNumber = address.StreetNumber,
+                City = address.City,
+                Country = address.Country,
+                Zip = address.Zip,
+                Latitude = address.Latitude,
+                Longitude = address.Longitude
+            };
+
+    /// <summary>
     /// Maps a database entity to dto
     /// </summary>
     /// <param name="address"></param>

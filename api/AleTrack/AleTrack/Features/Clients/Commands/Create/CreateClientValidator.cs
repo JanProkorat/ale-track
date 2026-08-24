@@ -30,7 +30,7 @@ public sealed class CreateClientDtoValidator : Validator<CreateClientDto>
         RuleFor(r => r.Name).MaximumLength(50).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         RuleFor(r => r.BusinessName).MaximumLength(50).When(x => x.BusinessName != null).WithErrorCode(ErrorCodes.ValidationMaxLengthError);
         RuleFor(r => r.Region).NotNull().WithErrorCode(ErrorCodes.ValidationNotNullError);
-        RuleFor(r => r.OfficialAddress).SetValidator(new AddressValidator());
+        RuleFor(r => r.OfficialAddress).SetValidator(new AddressValidator()).When(r => r.OfficialAddress != null);
         RuleFor(r => r.ContactAddress).SetValidator(new AddressValidator()).When(r => r.ContactAddress != null);
         RuleFor(r => r.Contacts)
             .ForEach(contact =>

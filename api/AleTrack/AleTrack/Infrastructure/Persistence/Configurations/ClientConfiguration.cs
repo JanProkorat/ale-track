@@ -20,7 +20,16 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
             ca.WithOwner();
             ca.OwnsAddressWithPrefix("contact_address");
         });
-        
+
+        // Restrict rather than cascade: a payer must not be removable while sub-clients still
+        // point at it, and soft delete would otherwise leave them pointing at a deleted row.
+        builder.HasOne(x => x.InvoicingClient)
+            .WithMany(x => x.InvoicedClients)
+            .HasForeignKey(x => x.InvoicingClientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => x.InvoicingClientId);
+
         // Configure Region with proper sentinel value
         builder.Property(e => e.Region)
             .HasDefaultValue(Region.Other)

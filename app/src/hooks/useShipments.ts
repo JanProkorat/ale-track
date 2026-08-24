@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
+  ExportOutgoingShipmentDto,
   SetOrderItemSourcingDto,
   SetSupplierGoodSourcingDto,
   ReorderShipmentStopsDto,
@@ -479,13 +480,23 @@ export type ShipmentExportFormat = 'excel' | 'word';
  * returns a `FileResponse` either way, so the blob and the server's own filename both arrive here;
  * the caller saves them with `downloadBlob`.
  */
+/** Exports the chosen confirmed rows of a run. The backend stamps them as exported, so the
+ *  invoice query — which is where the drawer reads those stamps — is invalidated on success. */
 export function useExportShipment() {
   const ds = useDataSource();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, format }: { id: string; format: ShipmentExportFormat }) =>
-      (format === 'word'
-        ? ds.exportOutgoingShipmentWordEndpoint(id)
-        : ds.exportOutgoingShipmentExcelEndpoint(id)),
+    mutationFn: ({ id, format, clientIds }: {
+      id: string;
+      format: ShipmentExportFormat;
+      clientIds: string[];
+    }) => {
+      const data = new ExportOutgoingShipmentDto({ clientIds });
+      return format === 'word'
+        ? ds.exportOutgoingShipmentWordEndpoint(id, data)
+        : ds.exportOutgoingShipmentExcelEndpoint(id, data);
+    },
+    onSuccess: (_file, { id }) => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(id) }),
   });
 }
 

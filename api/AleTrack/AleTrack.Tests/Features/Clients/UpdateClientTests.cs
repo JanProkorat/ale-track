@@ -84,6 +84,33 @@ public sealed class UpdateClientTests
     }
     
     [Fact]
+    public async Task ProcessAsync_UpdateClient_ClearingOfficialAddressWithSubClients_Throws400()
+    {
+        // Mirrors InvoicingClientResolver's rule 5 from the other side: a payer cannot clear the
+        // address it is invoiced against while it still invoices for other clients.
+        var payer = ClientBuilder.BuildEntity(name: "Head Office");
+        payer.Id = 1;
+        var sub = ClientBuilder.BuildEntity(name: "Sub", invoicingClientId: payer.Id);
+        sub.Id = 2;
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(clients: [payer, sub]);
+
+        var command = new UpdateClientRequest
+        {
+            Id = payer.PublicId,
+            Data = ClientBuilder.BuildUpdateDto(noOfficialAddress: true)
+        };
+
+        var endpoint = EndpointBuilder<UpdateClientRequest, UpdateClientEndpoint>.Create(dbContext.Object);
+
+        var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<AleTrackException>()).Which.StatusCode.Should().Be(400);
+        payer.OfficialAddress.Should().NotBeNull();
+        dbContext.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdateClient_NotFound()
     {
         var dbContext = AleTrackDbContextMockFactory.CreateMock();

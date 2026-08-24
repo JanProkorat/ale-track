@@ -421,13 +421,13 @@ export interface IClient {
      * Exports an outgoing shipment to an .xlsx workbook
      * @return Workbook generated
      */
-    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+    exportOutgoingShipmentExcelEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse>;
 
     /**
      * Exports an outgoing shipment to a .docx document
      * @return Document generated
      */
-    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse>;
+    exportOutgoingShipmentWordEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse>;
 
     /**
      * Retrieves details of an existing outgoing shipment
@@ -490,6 +490,18 @@ export interface IClient {
     setLoadingStateEndpoint(id: string, data: SetLoadingStateDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Marks one client's invoice split on a shipment as finished
+     * @return Readiness stored
+     */
+    setInvoiceReadinessEndpoint(id: string, clientId: string, data: SetInvoiceReadinessDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Sets which sub-clients an invoice names as addresses to invoice
+     * @return Selection saved
+     */
+    setInvoiceBillingRecipientsEndpoint(id: string, invoiceId: string, data: SetInvoiceBillingRecipientsDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Reorders a shipment's stops
      * @return New order stored
      */
@@ -509,7 +521,7 @@ export interface IClient {
 
     /**
      * Deletes an additional invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the ordering client
+     * @return Invoice deleted, its pieces returned to the paying client
      */
     deleteShipmentInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string>;
 
@@ -5116,17 +5128,21 @@ export class Client implements IClient {
      * Exports an outgoing shipment to an .xlsx workbook
      * @return Workbook generated
      */
-    exportOutgoingShipmentExcelEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+    exportOutgoingShipmentExcelEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/excel";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
+        const content_ = JSON.stringify(data);
+
         let options_: RequestInit = {
-            method: "GET",
+            body: content_,
+            method: "POST",
             signal,
             headers: {
+                "Content-Type": "application/json",
                 "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             }
         };
@@ -5150,6 +5166,10 @@ export class Client implements IClient {
                 fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
             }
             return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Nothing was chosen, or a chosen client has no confirmed row on the shipment", status, _responseText, _headers);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
             let result401: any = null;
@@ -5183,17 +5203,21 @@ export class Client implements IClient {
      * Exports an outgoing shipment to a .docx document
      * @return Document generated
      */
-    exportOutgoingShipmentWordEndpoint(id: string, signal?: AbortSignal): Promise<FileResponse> {
+    exportOutgoingShipmentWordEndpoint(id: string, data: ExportOutgoingShipmentDto, signal?: AbortSignal): Promise<FileResponse> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/export/word";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{Id}", encodeURIComponent("" + id));
         url_ = url_.replace(/[?&]$/, "");
 
+        const content_ = JSON.stringify(data);
+
         let options_: RequestInit = {
-            method: "GET",
+            body: content_,
+            method: "POST",
             signal,
             headers: {
+                "Content-Type": "application/json",
                 "Accept": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             }
         };
@@ -5217,6 +5241,10 @@ export class Client implements IClient {
                 fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
             }
             return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Nothing was chosen, or a chosen client has no confirmed row on the shipment", status, _responseText, _headers);
+            });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
             let result401: any = null;
@@ -5952,6 +5980,156 @@ export class Client implements IClient {
     }
 
     /**
+     * Marks one client's invoice split on a shipment as finished
+     * @return Readiness stored
+     */
+    setInvoiceReadinessEndpoint(id: string, clientId: string, data: SetInvoiceReadinessDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoices/clients/{ClientId}/readiness";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (clientId === undefined || clientId === null)
+            throw new globalThis.Error("The parameter 'clientId' must be defined.");
+        url_ = url_.replace("{ClientId}", encodeURIComponent("" + clientId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetInvoiceReadinessEndpoint(_response);
+        });
+    }
+
+    protected processSetInvoiceReadinessEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment invoicing can no longer be changed", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found, or the client has no row on its invoice split", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Sets which sub-clients an invoice names as addresses to invoice
+     * @return Selection saved
+     */
+    setInvoiceBillingRecipientsEndpoint(id: string, invoiceId: string, data: SetInvoiceBillingRecipientsDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoices/{InvoiceId}/billing-recipients";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (invoiceId === undefined || invoiceId === null)
+            throw new globalThis.Error("The parameter 'invoiceId' must be defined.");
+        url_ = url_.replace("{InvoiceId}", encodeURIComponent("" + invoiceId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetInvoiceBillingRecipientsEndpoint(_response);
+        });
+    }
+
+    protected processSetInvoiceBillingRecipientsEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Shipment no longer editable, a client is not billed through this payer, or it has no official address", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment, invoice or client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Reorders a shipment's stops
      * @return New order stored
      */
@@ -6168,7 +6346,7 @@ export class Client implements IClient {
 
     /**
      * Deletes an additional invoice of an outgoing shipment
-     * @return Invoice deleted, its pieces returned to the ordering client
+     * @return Invoice deleted, its pieces returned to the paying client
      */
     deleteShipmentInvoiceEndpoint(id: string, invoiceId: string, signal?: AbortSignal): Promise<string> {
         let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoices/{InvoiceId}";
@@ -16387,6 +16565,7 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
     privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
+    confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
 
     constructor(data?: IShipmentInvoicesDto) {
@@ -16414,6 +16593,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                 this.adjustments = [] as any;
                 for (let item of _data["adjustments"])
                     this.adjustments!.push(InvoiceAdjustmentDto.fromJS(item));
+            }
+            if (Array.isArray(_data["confirmations"])) {
+                this.confirmations = [] as any;
+                for (let item of _data["confirmations"])
+                    this.confirmations!.push(ShipmentInvoiceConfirmationDto.fromJS(item));
             }
             this.isEditable = _data["isEditable"];
         }
@@ -16443,6 +16627,11 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
             for (let item of this.adjustments)
                 data["adjustments"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.confirmations)) {
+            data["confirmations"] = [];
+            for (let item of this.confirmations)
+                data["confirmations"].push(item ? item.toJSON() : undefined as any);
+        }
         data["isEditable"] = this.isEditable;
         return data;
     }
@@ -16452,6 +16641,7 @@ export interface IShipmentInvoicesDto {
     invoices?: ShipmentInvoiceDto[];
     privateLines?: ShipmentInvoiceLineDto[];
     adjustments?: InvoiceAdjustmentDto[];
+    confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
 }
 
@@ -16459,9 +16649,12 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
     id?: string;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
+    clientOfficialAddress?: AddressDto | undefined;
     sequence?: number;
     stopOrder?: number | undefined;
     lines?: ShipmentInvoiceLineDto[];
+    billingRecipients?: ShipmentInvoiceBillingRecipientDto[];
 
     constructor(data?: IShipmentInvoiceDto) {
         if (data) {
@@ -16477,12 +16670,19 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
             this.id = _data["id"];
             this.clientId = _data["clientId"];
             this.clientName = _data["clientName"];
+            this.clientBusinessName = _data["clientBusinessName"];
+            this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
             this.sequence = _data["sequence"];
             this.stopOrder = _data["stopOrder"];
             if (Array.isArray(_data["lines"])) {
                 this.lines = [] as any;
                 for (let item of _data["lines"])
                     this.lines!.push(ShipmentInvoiceLineDto.fromJS(item));
+            }
+            if (Array.isArray(_data["billingRecipients"])) {
+                this.billingRecipients = [] as any;
+                for (let item of _data["billingRecipients"])
+                    this.billingRecipients!.push(ShipmentInvoiceBillingRecipientDto.fromJS(item));
             }
         }
     }
@@ -16499,12 +16699,19 @@ export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
         data["id"] = this.id;
         data["clientId"] = this.clientId;
         data["clientName"] = this.clientName;
+        data["clientBusinessName"] = this.clientBusinessName;
+        data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
         data["sequence"] = this.sequence;
         data["stopOrder"] = this.stopOrder;
         if (Array.isArray(this.lines)) {
             data["lines"] = [];
             for (let item of this.lines)
                 data["lines"].push(item ? item.toJSON() : undefined as any);
+        }
+        if (Array.isArray(this.billingRecipients)) {
+            data["billingRecipients"] = [];
+            for (let item of this.billingRecipients)
+                data["billingRecipients"].push(item ? item.toJSON() : undefined as any);
         }
         return data;
     }
@@ -16514,9 +16721,12 @@ export interface IShipmentInvoiceDto {
     id?: string;
     clientId?: string;
     clientName?: string;
+    clientBusinessName?: string | undefined;
+    clientOfficialAddress?: AddressDto | undefined;
     sequence?: number;
     stopOrder?: number | undefined;
     lines?: ShipmentInvoiceLineDto[];
+    billingRecipients?: ShipmentInvoiceBillingRecipientDto[];
 }
 
 export class ShipmentInvoiceLineDto implements IShipmentInvoiceLineDto {
@@ -16605,6 +16815,50 @@ export enum InvoiceLineSourceKind {
     SupplierGoodItem = 3,
 }
 
+export class ShipmentInvoiceBillingRecipientDto implements IShipmentInvoiceBillingRecipientDto {
+    clientId?: string;
+    clientName?: string;
+    address?: AddressDto;
+
+    constructor(data?: IShipmentInvoiceBillingRecipientDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientId = _data["clientId"];
+            this.clientName = _data["clientName"];
+            this.address = _data["address"] ? AddressDto.fromJS(_data["address"]) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): ShipmentInvoiceBillingRecipientDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentInvoiceBillingRecipientDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientId"] = this.clientId;
+        data["clientName"] = this.clientName;
+        data["address"] = this.address ? this.address.toJSON() : undefined as any;
+        return data;
+    }
+}
+
+export interface IShipmentInvoiceBillingRecipientDto {
+    clientId?: string;
+    clientName?: string;
+    address?: AddressDto;
+}
+
 export class InvoiceAdjustmentDto implements IInvoiceAdjustmentDto {
     kind?: InvoiceAdjustmentKind;
     sourceKind?: InvoiceLineSourceKind;
@@ -16659,6 +16913,54 @@ export enum InvoiceAdjustmentKind {
     SourceRemoved = 2,
 }
 
+export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmationDto {
+    clientId?: string;
+    number?: number;
+    isReady?: boolean;
+    lastExportedAt?: Date | undefined;
+
+    constructor(data?: IShipmentInvoiceConfirmationDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.clientId = _data["clientId"];
+            this.number = _data["number"];
+            this.isReady = _data["isReady"];
+            this.lastExportedAt = _data["lastExportedAt"] ? new Date(_data["lastExportedAt"].toString()) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): ShipmentInvoiceConfirmationDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ShipmentInvoiceConfirmationDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["clientId"] = this.clientId;
+        data["number"] = this.number;
+        data["isReady"] = this.isReady;
+        data["lastExportedAt"] = this.lastExportedAt ? this.lastExportedAt.toISOString() : undefined as any;
+        return data;
+    }
+}
+
+export interface IShipmentInvoiceConfirmationDto {
+    clientId?: string;
+    number?: number;
+    isReady?: boolean;
+    lastExportedAt?: Date | undefined;
+}
+
 export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
 
     constructor(data?: IGetShipmentInvoicesRequest) {
@@ -16687,36 +16989,6 @@ export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {
 }
 
 export interface IGetShipmentInvoicesRequest {
-}
-
-export class ExportOutgoingShipmentRequest implements IExportOutgoingShipmentRequest {
-
-    constructor(data?: IExportOutgoingShipmentRequest) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-    }
-
-    static fromJS(data: any): ExportOutgoingShipmentRequest {
-        data = typeof data === 'object' ? data : {};
-        let result = new ExportOutgoingShipmentRequest();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        return data;
-    }
-}
-
-export interface IExportOutgoingShipmentRequest {
 }
 
 export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
@@ -16909,6 +17181,53 @@ export interface IOutgoingShipmentDetailDto {
     purchaseInvoices?: OutgoingShipmentPurchaseInvoiceDto[];
     loadingStates?: OutgoingShipmentLoadingStateDto[];
     preparationSteps?: OutgoingShipmentPreparationStepDto[];
+}
+
+export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
+    clientIds!: string[];
+
+    constructor(data?: IExportOutgoingShipmentDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.clientIds = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["clientIds"])) {
+                this.clientIds = [] as any;
+                for (let item of _data["clientIds"])
+                    this.clientIds!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): ExportOutgoingShipmentDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ExportOutgoingShipmentDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.clientIds)) {
+            data["clientIds"] = [];
+            for (let item of this.clientIds)
+                data["clientIds"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface IExportOutgoingShipmentDto {
+    clientIds: string[];
 }
 
 export class ShipmentVehicleDto implements IShipmentVehicleDto {
@@ -18808,6 +19127,89 @@ export interface ISetLoadingStateDto {
     state?: ShipmentLoadingState;
 }
 
+export class SetInvoiceReadinessDto implements ISetInvoiceReadinessDto {
+    isReady?: boolean;
+
+    constructor(data?: ISetInvoiceReadinessDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.isReady = _data["isReady"];
+        }
+    }
+
+    static fromJS(data: any): SetInvoiceReadinessDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetInvoiceReadinessDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["isReady"] = this.isReady;
+        return data;
+    }
+}
+
+export interface ISetInvoiceReadinessDto {
+    isReady?: boolean;
+}
+
+export class SetInvoiceBillingRecipientsDto implements ISetInvoiceBillingRecipientsDto {
+    clientIds!: string[];
+
+    constructor(data?: ISetInvoiceBillingRecipientsDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+        if (!data) {
+            this.clientIds = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            if (Array.isArray(_data["clientIds"])) {
+                this.clientIds = [] as any;
+                for (let item of _data["clientIds"])
+                    this.clientIds!.push(item);
+            }
+        }
+    }
+
+    static fromJS(data: any): SetInvoiceBillingRecipientsDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetInvoiceBillingRecipientsDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        if (Array.isArray(this.clientIds)) {
+            data["clientIds"] = [];
+            for (let item of this.clientIds)
+                data["clientIds"].push(item);
+        }
+        return data;
+    }
+}
+
+export interface ISetInvoiceBillingRecipientsDto {
+    clientIds: string[];
+}
+
 export class ReorderShipmentStopsDto implements IReorderShipmentStopsDto {
     stopIds?: string[];
 
@@ -18976,7 +19378,8 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
-    clientOfficialAddress?: AddressDto;
+    clientBusinessName?: string | undefined;
+    clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     deliveryAddressKind?: DeliveryAddressKind;
@@ -18998,6 +19401,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
             this.id = _data["id"];
             this.requiredDeliveryDate = _data["requiredDeliveryDate"] ? new Date(_data["requiredDeliveryDate"].toString()) : undefined as any;
             this.clientName = _data["clientName"];
+            this.clientBusinessName = _data["clientBusinessName"];
             this.clientOfficialAddress = _data["clientOfficialAddress"] ? AddressDto.fromJS(_data["clientOfficialAddress"]) : undefined as any;
             this.clientContactAddress = _data["clientContactAddress"] ? AddressDto.fromJS(_data["clientContactAddress"]) : undefined as any;
             if (Array.isArray(_data["clientDeliveryPlaces"])) {
@@ -19032,6 +19436,7 @@ export class OutgoingShipmentOrderDto implements IOutgoingShipmentOrderDto {
         data["id"] = this.id;
         data["requiredDeliveryDate"] = this.requiredDeliveryDate ? formatDate(this.requiredDeliveryDate) : undefined as any;
         data["clientName"] = this.clientName;
+        data["clientBusinessName"] = this.clientBusinessName;
         data["clientOfficialAddress"] = this.clientOfficialAddress ? this.clientOfficialAddress.toJSON() : undefined as any;
         data["clientContactAddress"] = this.clientContactAddress ? this.clientContactAddress.toJSON() : undefined as any;
         if (Array.isArray(this.clientDeliveryPlaces)) {
@@ -19059,7 +19464,8 @@ export interface IOutgoingShipmentOrderDto {
     id?: string;
     requiredDeliveryDate?: Date | undefined;
     clientName?: string;
-    clientOfficialAddress?: AddressDto;
+    clientBusinessName?: string | undefined;
+    clientOfficialAddress?: AddressDto | undefined;
     clientContactAddress?: AddressDto | undefined;
     clientDeliveryPlaces?: ClientDeliveryPlaceDto[];
     deliveryAddressKind?: DeliveryAddressKind;
@@ -21254,6 +21660,8 @@ export class ClientListItemDto implements IClientListItemDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
 
     constructor(data?: IClientListItemDto) {
         if (data) {
@@ -21270,6 +21678,8 @@ export class ClientListItemDto implements IClientListItemDto {
             this.name = _data["name"];
             this.businessName = _data["businessName"];
             this.region = _data["region"];
+            this.invoicingClientId = _data["invoicingClientId"];
+            this.invoicingClientName = _data["invoicingClientName"];
         }
     }
 
@@ -21286,6 +21696,8 @@ export class ClientListItemDto implements IClientListItemDto {
         data["name"] = this.name;
         data["businessName"] = this.businessName;
         data["region"] = this.region;
+        data["invoicingClientId"] = this.invoicingClientId;
+        data["invoicingClientName"] = this.invoicingClientName;
         return data;
     }
 }
@@ -21295,6 +21707,8 @@ export interface IClientListItemDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
 }
 
 export class CreateDriverDto implements ICreateDriverDto {
@@ -21402,8 +21816,11 @@ export class ClientDto implements IClientDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
+    invoicedClients?: LinkedClientDto[];
     contacts?: ClientContactDto[];
 
     constructor(data?: IClientDto) {
@@ -21423,6 +21840,13 @@ export class ClientDto implements IClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
+            this.invoicingClientName = _data["invoicingClientName"];
+            if (Array.isArray(_data["invoicedClients"])) {
+                this.invoicedClients = [] as any;
+                for (let item of _data["invoicedClients"])
+                    this.invoicedClients!.push(LinkedClientDto.fromJS(item));
+            }
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21446,6 +21870,13 @@ export class ClientDto implements IClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
+        data["invoicingClientName"] = this.invoicingClientName;
+        if (Array.isArray(this.invoicedClients)) {
+            data["invoicedClients"] = [];
+            for (let item of this.invoicedClients)
+                data["invoicedClients"].push(item ? item.toJSON() : undefined as any);
+        }
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21460,9 +21891,56 @@ export interface IClientDto {
     name?: string;
     businessName?: string | undefined;
     region?: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
+    invoicingClientName?: string | undefined;
+    invoicedClients?: LinkedClientDto[];
     contacts?: ClientContactDto[];
+}
+
+export class LinkedClientDto implements ILinkedClientDto {
+    id?: string;
+    name?: string;
+    officialAddress?: AddressDto | undefined;
+
+    constructor(data?: ILinkedClientDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.name = _data["name"];
+            this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
+        }
+    }
+
+    static fromJS(data: any): LinkedClientDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new LinkedClientDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["name"] = this.name;
+        data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
+        return data;
+    }
+}
+
+export interface ILinkedClientDto {
+    id?: string;
+    name?: string;
+    officialAddress?: AddressDto | undefined;
 }
 
 export class ClientContactDto implements IClientContactDto {
@@ -21573,8 +22051,9 @@ export class UpdateClientDto implements IUpdateClientDto {
     name!: string;
     businessName?: string | undefined;
     region!: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: UpdateClientContactDto[];
 
     constructor(data?: IUpdateClientDto) {
@@ -21593,6 +22072,7 @@ export class UpdateClientDto implements IUpdateClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21615,6 +22095,7 @@ export class UpdateClientDto implements IUpdateClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21628,8 +22109,9 @@ export interface IUpdateClientDto {
     name: string;
     businessName?: string | undefined;
     region: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: UpdateClientContactDto[];
 }
 
@@ -21749,8 +22231,9 @@ export class CreateClientDto implements ICreateClientDto {
     name!: string;
     businessName?: string | undefined;
     region!: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: CreateClientContactDto[];
 
     constructor(data?: ICreateClientDto) {
@@ -21769,6 +22252,7 @@ export class CreateClientDto implements ICreateClientDto {
             this.region = _data["region"];
             this.officialAddress = _data["officialAddress"] ? AddressDto.fromJS(_data["officialAddress"]) : undefined as any;
             this.contactAddress = _data["contactAddress"] ? AddressDto.fromJS(_data["contactAddress"]) : undefined as any;
+            this.invoicingClientId = _data["invoicingClientId"];
             if (Array.isArray(_data["contacts"])) {
                 this.contacts = [] as any;
                 for (let item of _data["contacts"])
@@ -21791,6 +22275,7 @@ export class CreateClientDto implements ICreateClientDto {
         data["region"] = this.region;
         data["officialAddress"] = this.officialAddress ? this.officialAddress.toJSON() : undefined as any;
         data["contactAddress"] = this.contactAddress ? this.contactAddress.toJSON() : undefined as any;
+        data["invoicingClientId"] = this.invoicingClientId;
         if (Array.isArray(this.contacts)) {
             data["contacts"] = [];
             for (let item of this.contacts)
@@ -21804,8 +22289,9 @@ export interface ICreateClientDto {
     name: string;
     businessName?: string | undefined;
     region: Region;
-    officialAddress?: AddressDto;
+    officialAddress?: AddressDto | undefined;
     contactAddress?: AddressDto | undefined;
+    invoicingClientId?: string | undefined;
     contacts?: CreateClientContactDto[];
 }
 

@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AddressDto,
+  Country,
   InvoiceLineSourceKind,
   ProductKind,
+  ShipmentInvoiceConfirmationDto,
   ShipmentInvoiceDto,
   ShipmentInvoiceLineDto,
   ShipmentInvoicesDto,
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceQuantity, invoiceValue, isCrossBilled,
+  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  invoiceValue, isCrossBilled, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   type ClientBand,
 } from './shipmentInvoiceModel';
@@ -190,6 +194,75 @@ describe('toBands', () => {
     expect(bands.map((b) => b.clientName)).toEqual(['Klient A', 'Klient B']);
     expect(bands[0].invoices.map((i) => i.sequence)).toEqual([1, 2]);
     expect(bands[0].quantity).toBe(10);
+  });
+
+  it('attaches the confirmation number and readiness to the band it belongs to', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, lines: [line({ quantity: 1 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ quantity: 1, orderingClientId: CLIENT_B })] }),
+      ],
+      confirmations: [
+        new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_B, number: 1, isReady: true }),
+        new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_A, number: 2, isReady: false }),
+      ],
+    });
+
+    const bands = toBands(data);
+
+    // Ordered by the number, not the route: the number is what the office reads the table and the
+    // export file by, and the two have to agree. A kept number still sorts by it — un-ticking a row
+    // must not move it.
+    expect(bands.map((b) => [b.clientId, b.number, b.isReady])).toEqual([
+      [CLIENT_B, 1, true],
+      [CLIENT_A, 2, false],
+    ]);
+  });
+
+  it('sorts the rows nobody has confirmed after the numbered ones, in route order', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({ clientId: 'client-c', clientName: 'Klient C', stopOrder: 1, lines: [line({ quantity: 1, orderingClientId: 'client-c' })] }),
+        invoice({ clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 2, lines: [line({ quantity: 1 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 3, lines: [line({ quantity: 1, orderingClientId: CLIENT_B })] }),
+      ],
+      confirmations: [new ShipmentInvoiceConfirmationDto({ clientId: CLIENT_B, number: 1, isReady: true })],
+    });
+
+    // The confirmed row leads whatever its stop; the rest keep the route order they had, which is
+    // the only order they have.
+    expect(toBands(data).map((b) => b.clientId)).toEqual([CLIENT_B, 'client-c', CLIENT_A]);
+  });
+
+  it("carries the client's trading name onto the band", () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [
+        invoice({
+          clientId: CLIENT_A, clientName: 'Luděk Pachl', clientBusinessName: 'Pachl s.r.o.',
+          stopOrder: 1, lines: [line({ quantity: 1 })],
+        }),
+        invoice({
+          clientId: CLIENT_B, clientName: 'Rebner', stopOrder: 2,
+          lines: [line({ quantity: 1, orderingClientId: CLIENT_B })],
+        }),
+      ],
+    });
+
+    const bands = toBands(data);
+
+    expect(bands[0].clientBusinessName).toBe('Pachl s.r.o.');
+    expect(bands[1].clientBusinessName).toBeUndefined();
+  });
+
+  it('reads a band nobody has confirmed as unready with no number', () => {
+    const data = new ShipmentInvoicesDto({
+      invoices: [invoice({ clientId: CLIENT_A, stopOrder: 1, lines: [line({ quantity: 1 })] })],
+    });
+
+    const band = toBands(data)[0];
+
+    expect(band.number).toBeUndefined();
+    expect(band.isReady).toBe(false);
   });
 
   it('sorts a client with no stop last — they only hold cross-billed lines', () => {
@@ -408,9 +481,90 @@ describe('private pieces', () => {
   });
 });
 
+describe('invoiceParties', () => {
+  it('returns a single party for an ordinary invoice', () => {
+    const inv = invoice({ clientId: 'head', lines: [line({ orderingClientId: 'head', quantity: 4 })] });
+
+    const parties = invoiceParties(inv);
+
+    expect(parties).toHaveLength(1);
+    expect(parties[0].isPayer).toBe(true);
+    expect(parties[0].quantity).toBe(4);
+  });
+
+  it('splits an invoice by ordering client, payer first', () => {
+    const inv = invoice({
+      clientId: 'head',
+      lines: [
+        line({ orderingClientId: 'pubB', orderingClientName: 'Pub B', quantity: 2 }),
+        line({ orderingClientId: 'head', orderingClientName: 'Head', quantity: 5 }),
+        line({ orderingClientId: 'pubA', orderingClientName: 'Pub A', quantity: 3 }),
+      ],
+    });
+
+    const parties = invoiceParties(inv);
+
+    expect(parties.map((p) => p.clientName)).toEqual(['Head', 'Pub A', 'Pub B']);
+    expect(parties[0].isPayer).toBe(true);
+    expect(parties.slice(1).every((p) => !p.isPayer)).toBe(true);
+  });
+
+  it('merges a party rows by product and sums its value', () => {
+    const inv = invoice({
+      clientId: 'head',
+      lines: [
+        line({ orderingClientId: 'pubA', productId: 'p1', quantity: 2, priceWithVat: 10 }),
+        line({ orderingClientId: 'pubA', productId: 'p1', quantity: 3, priceWithVat: 10 }),
+      ],
+    });
+
+    const [party] = invoiceParties(inv);
+
+    expect(party.groups).toHaveLength(1);
+    expect(party.groups[0].quantity).toBe(5);
+    expect(party.quantity).toBe(5);
+    expect(party.value).toBe(50);
+  });
+
+  // A payer can hold its own, possibly empty, invoice on a run — the UI must not render a
+  // stray party header for it. Returning [] (rather than one empty party) is what lets the
+  // component fall into its ordinary "single party" / empty-invoice path unchanged.
+  it('returns no parties for an invoice with no lines', () => {
+    const inv = invoice({ clientId: 'head', lines: [] });
+
+    expect(invoiceParties(inv)).toEqual([]);
+  });
+});
+
+describe('otherClientCount', () => {
+  const band = (over: Partial<ClientBand> = {}): ClientBand => ({
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+  });
+
+  it('is zero for a band billing only its own client', () => {
+    const inv = invoice({ clientId: CLIENT_A, lines: [line({ orderingClientId: CLIENT_A, quantity: 3 })] });
+
+    expect(otherClientCount(band({ invoices: [inv] }))).toBe(0);
+  });
+
+  it('counts each distinct ordering client billed through this band, not lines', () => {
+    const inv = invoice({
+      clientId: CLIENT_A,
+      lines: [
+        line({ orderingClientId: CLIENT_B, orderingClientName: 'Klient B', quantity: 2 }),
+        line({ orderingClientId: CLIENT_B, orderingClientName: 'Klient B', quantity: 1 }),
+        line({ orderingClientId: 'client-c', orderingClientName: 'Klient C', quantity: 4 }),
+      ],
+    });
+
+    expect(otherClientCount(band({ invoices: [inv] }))).toBe(2);
+  });
+});
+
 describe('bandAddress', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 
@@ -462,11 +616,47 @@ describe('bandAddress', () => {
   it('returns nothing when no stop matches', () => {
     expect(bandAddress(band({ stopOrder: 7 }), [stop()])).toBeUndefined();
   });
+
+  // A payer linked to another client's order (linked-clients-invoicing) holds
+  // no stop of its own, so the band falls back to its own official address —
+  // plain text, no place chip, no kind tail.
+  it('falls back to the payer\'s official address when it has no stop', () => {
+    const inv = invoice({
+      clientOfficialAddress: new AddressDto({
+        streetName: 'Nádražní', streetNumber: '5', city: 'Ústí', zip: '40001', country: Country.Czechia,
+      }),
+    });
+
+    const result = bandAddress(band({ stopOrder: undefined, invoices: [inv] }), []);
+
+    expect(result?.text).toBe('Nádražní 5, 40001 Ústí');
+    expect(result?.placeName).toBeUndefined();
+  });
+
+  it('renders nothing for a payer with no stop and no official address either', () => {
+    const inv = invoice({ clientOfficialAddress: undefined });
+
+    const result = bandAddress(band({ stopOrder: undefined, invoices: [inv] }), []);
+
+    expect(result).toBeUndefined();
+  });
+
+  it('prefers the matched stop\'s address over the invoice\'s official address', () => {
+    const inv = invoice({
+      clientOfficialAddress: new AddressDto({
+        streetName: 'Nádražní', streetNumber: '5', city: 'Ústí', zip: '40001', country: Country.Czechia,
+      }),
+    });
+
+    const result = bandAddress(band({ invoices: [inv] }), [stop()]);
+
+    expect(result?.text).toContain('Hlavní 1');
+  });
 });
 
 describe('bandNotes', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 
@@ -509,7 +699,7 @@ describe('bandNotes', () => {
 
 describe('bandReturns', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
-    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, invoices: [],
+    clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
     quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
   });
 

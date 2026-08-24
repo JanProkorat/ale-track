@@ -482,6 +482,46 @@ public sealed class ShipmentStopDeliveryPlaceTests
         returnedStop.DeliveryPlace!.Name.Should().Be("Zrušená hospoda");
     }
 
+    // A client invoiced through its payer has neither an official nor a contact address, and no
+    // delivery place either — the exact case that used to NullReferenceException this endpoint.
+    [Fact]
+    public async Task ProcessAsync_ShipmentDetail_ClientWithNeitherAddress_ResolvesNullAddress()
+    {
+        var shipmentId = Guid.NewGuid();
+        var client = ClientBuilder.BuildEntity(noOfficialAddress: true);
+        var order = OrderBuilder.BuildEntity(client: client, deliveryAddressKind: DeliveryAddressKind.Official);
+
+        var stop = new OutgoingShipmentStop
+        {
+            Kind = OutgoingShipmentStopKind.Order,
+            ClientOrder = order,
+            Order = 1,
+            SelectedAddressKind = DeliveryAddressKind.Official
+        };
+
+        var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            state: OutgoingShipmentState.Created,
+            stops: [stop]
+        );
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [client],
+            orders: [order],
+            outgoingShipments: [outgoingShipment]
+        );
+
+        var request = new GetOutgoingShipmentDetailRequest { Id = shipmentId };
+        var endpoint = EndpointWithResponseBuilder<GetOutgoingShipmentDetailRequest, OutgoingShipmentDetailDto, GetOutgoingShipmentDetailEndpoint>
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        var returnedStop = endpoint.Response.Stops.Single();
+        returnedStop.OrderDeliveryAddress.Should().NotBeNull();
+        returnedStop.OrderDeliveryAddress!.Address.Should().BeNull();
+    }
+
     // IsAddressOverridden is derived, never accepted from the request: a stop
     // whose requested kind and place match the order's own choice is not an
     // override.
@@ -690,6 +730,32 @@ public sealed class ShipmentStopDeliveryPlaceTests
         var returnedOrder = endpoint.Response.Single();
         returnedOrder.ClientDeliveryPlaces.Should().ContainSingle()
             .Which.Name.Should().Be("Aktivní místo");
+    }
+
+    // The orders-list projection also carries the client's business name, so the shipment
+    // editor's picker can distinguish two clients that share a plain Name.
+    [Fact]
+    public async Task ProcessAsync_OrdersForShipments_CarriesClientBusinessName()
+    {
+        var withBusinessName = ClientBuilder.BuildEntity(name: "Luděk Pachl", businessName: "Pivovar s.r.o.", officialAddress: AddressBuilder.BuildEntity());
+        var withoutBusinessName = ClientBuilder.BuildEntity(name: "Chorvatka", officialAddress: AddressBuilder.BuildEntity());
+
+        var orderWithBusinessName = OrderBuilder.BuildEntity(client: withBusinessName);
+        var orderWithoutBusinessName = OrderBuilder.BuildEntity(client: withoutBusinessName);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [withBusinessName, withoutBusinessName],
+            orders: [orderWithBusinessName, orderWithoutBusinessName]
+        );
+
+        var request = new GetOrdersListForOutgoingShipmentsRequest();
+        var endpoint = EndpointWithResponseBuilder<GetOrdersListForOutgoingShipmentsRequest, List<OutgoingShipmentOrderDto>, GetOrdersListForOutgoingShipmentsEndpoint>
+            .Create(dbContext.Object);
+
+        await endpoint.HandleAsync(request, CancellationToken.None);
+
+        endpoint.Response.Single(o => o.ClientName == "Luděk Pachl").ClientBusinessName.Should().Be("Pivovar s.r.o.");
+        endpoint.Response.Single(o => o.ClientName == "Chorvatka").ClientBusinessName.Should().BeNull();
     }
 
     [Fact]
