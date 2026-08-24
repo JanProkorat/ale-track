@@ -71,6 +71,51 @@ const QUANTITY_TARGETS = new Set([
   'ReturnQuantity',
 ]);
 
+/** The member names of the four quantity targets, for scoping entries to one collection. */
+export type QuantityTargetName =
+  | 'ProductQuantity'
+  | 'SupplierGoodQuantity'
+  | 'CustomExtraQuantity'
+  | 'ReturnQuantity';
+
+/**
+ * The entries belonging to one collection.
+ *
+ * {@link applyLedger} appends everything it cannot match to a planned row, so feeding it the
+ * whole ledger would drop a returned crate into the items list. Each collection is diffed
+ * against its own target.
+ */
+export function entriesForTarget(
+  entries: ClientLedgerEntryDto[],
+  target: QuantityTargetName,
+): ClientLedgerEntryDto[] {
+  return entries.filter((e) => ledgerTargetName(e.target) === target);
+}
+
+/** Entries recorded against one order. A standalone debt has no order and is never among them. */
+export function entriesForOrder(
+  entries: ClientLedgerEntryDto[],
+  orderId: string | undefined,
+): ClientLedgerEntryDto[] {
+  if (!orderId) return [];
+  return entries.filter((e) => e.orderId === orderId);
+}
+
+/**
+ * A planned line in the shape {@link applyLedger} diffs against.
+ *
+ * The key is the line's own public id, which is exactly what {@link entryLineKey} reads off an
+ * entry — going through this helper is what keeps the two from drifting.
+ */
+export function planRow(
+  key: string | undefined,
+  name: string | undefined,
+  quantity: number | undefined,
+  chip?: string,
+): PlanRow {
+  return { key: key ?? '', name: name ?? '—', quantity: quantity ?? 0, chip };
+}
+
 /** Whether an entry is about a quantity of something, whichever way the target arrives. */
 export function isQuantityEntry(entry: ClientLedgerEntryDto): boolean {
   const name = ledgerTargetName(entry.target);
@@ -193,28 +238,62 @@ function rowStatus(planned: number, actual: number): LedgerRowStatus {
   return 'changed';
 }
 
+/** Which of the four tag colours a deviation carries. Mirrors the prototype's chg-tag tones. */
+export type LedgerTone = 'less' | 'more' | 'new' | 'info';
+
 /**
  * The wording for a decorated row's tag, derived from the sign rather than stored.
  *
  * An event-shaped vocabulary would need a value per scenario; the arithmetic already says
- * everything, and colour must never be the only signal — a colour-blind reader and a printed
- * copy both get only this text.
+ * everything. Colour must never be the only signal — a colour-blind reader and a printed copy
+ * both get nothing but this text — so every changed row carries it.
+ *
+ * A return moves the other way: pieces come back to us, so "more than planned" is the client
+ * handing over extra rather than us delivering extra. Same arithmetic, opposite words.
  */
 export function deviationText(row: DecoratedRow): string | undefined {
   const diff = row.actualQuantity - row.plannedQuantity;
+  const isReturn = ledgerTargetName(row.entry?.target) === 'ReturnQuantity';
 
   switch (row.status) {
     case 'unchanged':
       return undefined;
     case 'removed':
-      return 'Nevyloženo';
+      return isReturn ? 'Nevráceno' : 'Nevyloženo';
     case 'added':
-      return 'Přidáno na místě';
+      return isReturn ? 'Vráceno navíc' : 'Přidáno na místě';
     default:
-      return diff > 0
-        ? `O ${pieces(diff)} víc`
-        : `Chybí ${pieces(-diff)}`;
+      if (diff < 0) return `${isReturn ? 'Nevráceno' : 'Nevyloženo'} ${pieces(-diff)}`;
+      return `${isReturn ? 'Vráceno navíc' : 'Navíc'} ${pieces(diff)}`;
   }
+}
+
+/**
+ * The tag's tone.
+ *
+ * A return never gets the affirmative colour that "delivered extra" earns: it has no good
+ * direction — too few and the client still owes empties, too many and we are holding deposits
+ * that are not ours — whereas beer over the plan is simply with the client and billed.
+ */
+export function deviationTone(row: DecoratedRow): LedgerTone | undefined {
+  const isReturn = ledgerTargetName(row.entry?.target) === 'ReturnQuantity';
+
+  switch (row.status) {
+    case 'unchanged':
+      return undefined;
+    case 'removed':
+      return 'less';
+    case 'added':
+      return 'new';
+    default:
+      if (row.actualQuantity < row.plannedQuantity) return 'less';
+      return isReturn ? 'new' : 'more';
+  }
+}
+
+/** Money read as a direction: who owes whom. */
+export function moneyText(entry: ClientLedgerEntryDto): string {
+  return (entry.amount ?? 0) >= 0 ? 'Klient dluží' : 'Dlužíme klientovi';
 }
 
 /**

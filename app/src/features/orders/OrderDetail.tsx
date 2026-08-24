@@ -25,6 +25,13 @@ import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } 
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
+import { useClientLedger } from 'src/hooks/useClientLedger';
+import {
+  addressEntry, applyLedger, entriesForOrder, entriesForTarget, planRow,
+  type DecoratedRow,
+} from 'src/features/clients/ledgerModel';
+import { LedgerRowTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
+import { LedgerMoneyCard } from 'src/features/clients/LedgerMoneyCard';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
 
@@ -135,6 +142,53 @@ export function OrderDetail({
   const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
 
+  // 'all', not 'open': what came off the van is a permanent fact about that handover, so
+  // settling the debt afterwards must not put the plan back on this screen.
+  const ledger = useClientLedger(order.client?.id, 'all');
+  const orderEntries = entriesForOrder(ledger.data ?? [], order.id);
+
+  // Each collection is diffed against its own target — applyLedger appends what it cannot
+  // match, so feeding it the whole ledger would drop a returned crate into the items list.
+  const itemRows = applyLedger(
+    items.map((it) => planRow(it.id, it.productName, it.quantity)),
+    entriesForTarget(orderEntries, 'ProductQuantity'),
+  );
+  const goodRows = applyLedger(
+    goodItems.map((g) => planRow(g.id, g.goodName, g.quantity)),
+    entriesForTarget(orderEntries, 'SupplierGoodQuantity'),
+  );
+  const returnRows = applyLedger(
+    returns.map((r) => planRow(r.id, r.name, r.quantity)),
+    entriesForTarget(orderEntries, 'ReturnQuantity'),
+  );
+  const extraRows = applyLedger(
+    extras.map((e) => planRow(e.id, e.description, e.quantity)),
+    entriesForTarget(orderEntries, 'CustomExtraQuantity'),
+  );
+  const movedTo = addressEntry(orderEntries);
+
+  // Row lookups by line id, so the existing item and good tables keep their own markup and
+  // only borrow the diff. A row appended by the ledger has no planned line to attach to and is
+  // rendered separately below the table.
+  const rowFor = (rows: DecoratedRow[], id: string | undefined) => rows.find((r) => r.key === id);
+  const appended = (rows: DecoratedRow[], planned: Array<string | undefined>) =>
+    rows.filter((r) => !planned.includes(r.key));
+
+  // What the order is worth as delivered. Only the priced lines count: a product taken at the
+  // door carries no price on the order at all — it is priced on the invoice — so including it
+  // would make the sum disagree with the money column beside it.
+  const deliveredTotal = itemRows.reduce((sum, row) => {
+    const item = items.find((i) => i.id === row.key);
+    return sum + (item?.unitPriceWithVat ?? 0) * row.actualQuantity;
+  }, 0) + goodRows.reduce((sum, row) => {
+    const good = goodItems.find((g) => g.id === row.key);
+    return sum + (good?.unitPriceWithVat ?? 0) * row.actualQuantity;
+  }, 0);
+
+  const plannedTotal =
+    items.reduce((sum, it) => sum + (it.unitPriceWithVat ?? 0) * (it.quantity ?? 0), 0)
+    + goodItems.reduce((sum, g) => sum + (g.unitPriceWithVat ?? 0) * (g.quantity ?? 0), 0);
+
   // Optimistic per-item reminder-state overrides, cleared when fresh order data
   // arrives (the refetch after a successful update carries the persisted value).
   const [override, setOverride] = useState<Map<string, OrderItemReminderState | undefined>>(new Map());
@@ -166,7 +220,11 @@ export function OrderDetail({
   const openShipment = () => shipment?.id && onOpenShipment?.(shipment.id);
 
   // Every sidebar card hides when empty, so the whole column can be absent.
-  const hasSidebar = returns.length > 0 || extras.length > 0 || notes.length > 0 || shipment !== undefined;
+  // Counts the diffed rows rather than the stored ones: a return handed over against an order
+  // that planned none exists only as a deviation, and hiding the column would leave the
+  // commonest surprise of the feature nowhere to show.
+  const hasSidebar = returnRows.length > 0 || extraRows.length > 0 || notes.length > 0
+    || shipment !== undefined || orderEntries.length > 0;
 
   // Once it has arrived the deadline is history — show when it actually landed.
   // Before that the deadline is the number people work to; the creation date is
@@ -195,7 +253,12 @@ export function OrderDetail({
           <>
             <PlaceOutlinedIcon sx={{ fontSize: 16, flexShrink: 0 }} />
             <Box component="span" sx={{ minWidth: 0 }}>
-              {formatAddressOrCoords(order.deliveryAddress?.address)}
+              {/* Where it was meant to go, struck through, beside where it went. The diff
+                  belongs here rather than in a second banner: AddressChangedBanner already
+                  holds the top of the shipment, and two strips compete for one glance. */}
+              {movedTo
+                ? <TextDiff before={movedTo.plannedText} after={movedTo.actualText} />
+                : formatAddressOrCoords(order.deliveryAddress?.address)}
             </Box>
           </>,
           order.deliveryAddress?.placeName && (
@@ -248,20 +311,28 @@ export function OrderDetail({
               <Box sx={{ '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
                 {items.map((it) => {
                   const rs = reminderStateName(effState(it.id ?? '', it.reminderState));
+                  const row = rowFor(itemRows, it.id);
                   return (
                     <Box key={it.id}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700 }}>{it.productName}</Typography>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography sx={{ fontWeight: 700, ...(row?.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }}>
+                            {it.productName}
+                          </Typography>
+                          {row && <LedgerRowTag row={row} />}
+                        </Stack>
                         {rs === 'Added' && <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 700 }}>hlídáno</Typography>}
                         {rs === 'Resolved' && <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>vyřešeno</Typography>}
                         {it.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{it.note}</Typography>}
                       </Box>
-                      <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>
+                      {row
+                        ? <QuantityDiff row={row} />
+                        : <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{it.quantity} ks</Typography>}
                       <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
                         <PriceWithList price={it.unitPriceWithVat} listPrice={it.listPriceWithVat} size={13} />
                       </Box>
                       <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                        {formatMoney((it.unitPriceWithVat ?? 0) * (it.quantity ?? 0))}
+                        {formatMoney((it.unitPriceWithVat ?? 0) * (row?.actualQuantity ?? it.quantity ?? 0))}
                       </Typography>
                       {editable && canEditOrder && (
                         <Tooltip title="Hlídání položky">
@@ -280,24 +351,73 @@ export function OrderDetail({
                 })}
                 {/* Supplier goods — same table, below the beer. No reminder control:
                     hlídání watches a brewery's stock, which these do not come from. */}
-                {goodItems.map((g) => (
+                {goodItems.map((g) => {
+                  const row = rowFor(goodRows, g.id);
+                  return (
                   <Box key={g.id}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700 }}>{g.goodName}</Typography>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={{ fontWeight: 700, ...(row?.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }}>
+                          {g.goodName}
+                        </Typography>
+                        {row && <LedgerRowTag row={row} />}
+                      </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {[g.supplierName, g.goodSize, chargeKindLabel(g.chargeKind)].filter(Boolean).join(' · ')}
                       </Typography>
                       {g.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{g.note}</Typography>}
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity} ks</Typography>
+                    {row
+                      ? <QuantityDiff row={row} />
+                      : <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{g.quantity} ks</Typography>}
                     <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
                       <PriceWithList price={g.unitPriceWithVat} />
                     </Box>
                     <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                      {formatMoney((g.unitPriceWithVat ?? 0) * (g.quantity ?? 0))}
+                      {formatMoney((g.unitPriceWithVat ?? 0) * (row?.actualQuantity ?? g.quantity ?? 0))}
                     </Typography>
                   </Box>
+                  );
+                })}
+
+                {/* Products the client took at the door. They have no order line, so they
+                    cannot be decorated onto one — and no price on the order either: they are
+                    priced on the invoice, which is why the money column reads a dash. */}
+                {appended(itemRows, items.map((i) => i.id)).map((row) => (
+                  <Box key={row.key}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={{ fontWeight: 700 }}>{row.name}</Typography>
+                        <LedgerRowTag row={row} />
+                      </Stack>
+                    </Box>
+                    <QuantityDiff row={row} />
+                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }} />
+                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', color: 'text.disabled' }}>—</Typography>
+                  </Box>
                 ))}
+
+                {/* What the order came to as delivered. The plan is struck through beside it
+                    only when the two differ, so an untouched order shows one number. */}
+                <Box sx={{ pt: 1.5 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 800 }}>Celkem</Typography>
+                  </Box>
+                  {deliveredTotal !== plannedTotal ? (
+                    <Stack alignItems="flex-end" spacing={0.25}>
+                      <Typography variant="caption" sx={{ textDecoration: 'line-through', color: 'text.disabled', fontWeight: 700 }}>
+                        {formatMoney(plannedTotal)}
+                      </Typography>
+                      <Typography sx={{ fontWeight: 800, color: 'warning.dark', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatMoney(deliveredTotal)}
+                      </Typography>
+                    </Stack>
+                  ) : (
+                    <Typography sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatMoney(deliveredTotal)}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             )}
           </Box>
@@ -307,45 +427,63 @@ export function OrderDetail({
         <Stack spacing={2}>
           {shipment && <ShipmentCard shipment={shipment} onOpen={openShipment} />}
 
-          {returns.length > 0 && (
+          {returnRows.length > 0 && (
             <CollapsibleCard
               title="Vratky"
-              count={returns.length}
+              count={returnRows.length}
               icon={<UndoIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
             >
               <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
-                {returns.map((r) => (
-                  <Box key={r.id}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700 }}>{r.name}</Typography>
-                      {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
+                {returnRows.map((row) => {
+                  const stored = returns.find((r) => r.id === row.key);
+                  return (
+                    <Box key={row.key}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography sx={{ fontWeight: 700, ...(row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }}>
+                            {row.name}
+                          </Typography>
+                          <LedgerRowTag row={row} />
+                        </Stack>
+                        {stored?.note && <Typography variant="caption" color="text.secondary">{stored.note}</Typography>}
+                      </Box>
+                      <QuantityDiff row={row} unit="×" />
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
-                  </Box>
-                ))}
+                  );
+                })}
               </Box>
             </CollapsibleCard>
           )}
 
-          {extras.length > 0 && (
+          {extraRows.length > 0 && (
             <CollapsibleCard
               title="Položky navíc"
-              count={extras.length}
+              count={extraRows.length}
               icon={<Inventory2OutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
             >
               <Box sx={{ px: 2.5, py: 1, '& > div': { display: 'flex', alignItems: 'flex-start', py: 1.25, borderBottom: 1, borderColor: 'divider' }, '& > div:last-of-type': { borderBottom: 0 } }}>
-                {extras.map((e) => (
-                  <Box key={e.id}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 700 }}>{e.description}</Typography>
-                      {e.note && <Typography variant="caption" color="text.secondary">{e.note}</Typography>}
+                {extraRows.map((row) => {
+                  const stored = extras.find((e) => e.id === row.key);
+                  return (
+                    <Box key={row.key}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography sx={{ fontWeight: 700, ...(row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }}>
+                            {row.name}
+                          </Typography>
+                          <LedgerRowTag row={row} />
+                        </Stack>
+                        {stored?.note && <Typography variant="caption" color="text.secondary">{stored.note}</Typography>}
+                      </Box>
+                      <QuantityDiff row={row} />
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{e.quantity} ks</Typography>
-                  </Box>
-                ))}
+                  );
+                })}
               </Box>
             </CollapsibleCard>
           )}
+
+          <LedgerMoneyCard entries={orderEntries} />
 
           {notes.length > 0 && (
             <CollapsibleCard

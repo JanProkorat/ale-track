@@ -47,7 +47,7 @@ describe('applyLedger', () => {
     );
 
     expect(rows[0]).toMatchObject({ status: 'changed', plannedQuantity: 10, actualQuantity: 7 });
-    expect(deviationText(rows[0])).toBe('Chybí 3 ks');
+    expect(deviationText(rows[0])).toBe('Nevyloženo 3 ks');
   });
 
   it('marks an over-delivery as changed', () => {
@@ -57,7 +57,7 @@ describe('applyLedger', () => {
     );
 
     expect(rows[0]).toMatchObject({ status: 'changed', actualQuantity: 12 });
-    expect(deviationText(rows[0])).toBe('O 2 ks víc');
+    expect(deviationText(rows[0])).toBe('Navíc 2 ks');
   });
 
   it('marks a line nothing arrived on as removed', () => {

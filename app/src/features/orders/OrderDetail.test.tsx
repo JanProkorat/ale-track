@@ -3,8 +3,8 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
-import { describe, expect, it, vi } from 'vitest';
-import { ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OrderSupplierGoodItemDto, OutgoingShipmentState, SupplierChargeKind } from 'src/generated/api-client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ClientLedgerEntryDto, ClientLedgerEntryTarget, ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OrderSupplierGoodItemDto, OutgoingShipmentState, SupplierChargeKind } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -14,6 +14,27 @@ vi.mock('src/hooks/useReminders', () => ({
 vi.mock('src/providers/CurrencyProvider', () => ({
   useCurrency: () => ({ formatMoney: (v?: number | null) => (v == null ? '—' : `${v} Kč`) }),
 }));
+
+// The ledger is a resource hook, so it is mocked rather than backed by a QueryClient — and the
+// mock can express loading, error and no-data, because a mock that always answers happily
+// cannot catch a crash on missing data.
+const ledgerState: {
+  data?: ClientLedgerEntryDto[];
+  isLoading: boolean;
+  isError: boolean;
+} = { data: [], isLoading: false, isError: false };
+
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedger: () => ledgerState,
+}));
+
+function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledgerState> = {}) {
+  ledgerState.data = entries;
+  ledgerState.isLoading = over.isLoading ?? false;
+  ledgerState.isError = over.isError ?? false;
+}
+
+beforeEach(() => setLedger([]));
 
 const { OrderDetail } = await import('./OrderDetail');
 
@@ -358,8 +379,9 @@ describe('OrderDetail — supplier goods', () => {
     expect(card.getByText('CO₂ láhev')).toBeInTheDocument();
     expect(card.getByText('Svijanela Herbal Cola')).toBeInTheDocument();
     expect(card.getByText('Linde Gas · 10 kg · Plnění')).toBeInTheDocument();
-    // 2 x 450
-    expect(card.getByText('900 Kč')).toBeInTheDocument();
+    // 2 x 450, on the line and again on Celkem — the beer line here carries no price, so the
+    // order's total is this one good.
+    expect(card.getAllByText('900 Kč')).toHaveLength(2);
   });
 
   it('counts good lines in the card count alongside the products', () => {
@@ -386,5 +408,174 @@ describe('OrderDetail — supplier goods', () => {
     renderDetail(order({ supplierGoodItems: [goodLine({ note: 'Výměnou za prázdné' })] }));
 
     expect(within(itemsCard()).getByText('Výměnou za prázdné')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// The inline diff. The order stays the plan; what the ledger records is laid over it.
+// ---------------------------------------------------------------------------------
+
+describe('OrderDetail — deviations', () => {
+  const ORDER_ID = '4cf0eb00-0000-0000-0000-000000000000';
+
+  function ledgerEntry(over: Partial<ClientLedgerEntryDto> = {}): ClientLedgerEntryDto {
+    return ClientLedgerEntryDto.fromJS({
+      id: `entry-${Math.random()}`,
+      orderId: ORDER_ID,
+      target: ClientLedgerEntryTarget.ProductQuantity,
+      requiresFollowUp: false,
+      createdAt: '2026-08-24T10:00:00Z',
+      ...over,
+    });
+  }
+
+  function itemsCard(): HTMLElement {
+    return screen.getByText('Položky').closest('.MuiCard-root') as HTMLElement;
+  }
+
+  it('strikes the planned quantity through and highlights what arrived', () => {
+    setLedger([ledgerEntry({ orderItemId: 'item-1', plannedQuantity: 1, actualQuantity: 0 })]);
+    renderDetail(order());
+
+    const card = within(itemsCard());
+    expect(card.getByText('Nevyloženo')).toBeInTheDocument();
+    expect(card.getByText('1 ks')).toBeInTheDocument();
+    expect(card.getByText('0 ks')).toBeInTheDocument();
+  });
+
+  // Colour cannot be the only signal: a colour-blind reader and a printed copy get the words.
+  it('words every changed row, not just colours it', () => {
+    setLedger([ledgerEntry({ orderItemId: 'item-1', plannedQuantity: 10, actualQuantity: 7 })]);
+    renderDetail(order({
+      orderItems: [new OrderItemDto({ id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Ležák', quantity: 10 })],
+    }));
+
+    expect(within(itemsCard()).getByText('Nevyloženo 3 ks')).toBeInTheDocument();
+  });
+
+  it('appends a product the client took at the door', () => {
+    setLedger([ledgerEntry({
+      productId: 'p9',
+      productName: 'Světlé 10',
+      plannedQuantity: 0,
+      actualQuantity: 4,
+    })]);
+    renderDetail(order());
+
+    const card = within(itemsCard());
+    expect(card.getByText('Světlé 10')).toBeInTheDocument();
+    expect(card.getByText('Přidáno na místě')).toBeInTheDocument();
+  });
+
+  it('shows a return handed over against an order that planned none', () => {
+    setLedger([ledgerEntry({
+      target: ClientLedgerEntryTarget.ReturnQuantity,
+      lineName: 'Basy prázdných',
+      plannedQuantity: 0,
+      actualQuantity: 4,
+    })]);
+    renderDetail(order());
+
+    const card = within(screen.getByText('Vratky').closest('.MuiCard-root') as HTMLElement);
+    expect(card.getByText('Basy prázdných')).toBeInTheDocument();
+    expect(card.getByText('Vráceno navíc')).toBeInTheDocument();
+  });
+
+  it('totals what was delivered, with the plan struck through beside it', () => {
+    setLedger([ledgerEntry({ orderItemId: 'item-1', plannedQuantity: 10, actualQuantity: 7 })]);
+    renderDetail(order({
+      orderItems: [new OrderItemDto({
+        id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Ležák', quantity: 10, unitPriceWithVat: 100,
+      })],
+    }));
+
+    const card = within(itemsCard());
+    expect(card.getByText('Celkem')).toBeInTheDocument();
+    expect(card.getByText('1000 Kč')).toBeInTheDocument();
+    expect(card.getAllByText('700 Kč').length).toBeGreaterThan(0);
+  });
+
+  it('shows one total when nothing deviated', () => {
+    renderDetail(order({
+      orderItems: [new OrderItemDto({
+        id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Ležák', quantity: 10, unitPriceWithVat: 100,
+      })],
+    }));
+
+    expect(within(itemsCard()).queryByText('Nevyloženo')).not.toBeInTheDocument();
+    expect(within(itemsCard()).getAllByText('1000 Kč')).toHaveLength(2);
+  });
+
+  it('diffs the delivery address where it went, not in a second banner', () => {
+    setLedger([ledgerEntry({
+      target: ClientLedgerEntryTarget.DeliveryAddress,
+      plannedText: 'Dlouhá 1, 46001 Liberec',
+      actualText: 'Krátká 2, 46002 Liberec',
+    })]);
+    renderDetail(order());
+
+    expect(screen.getByText('Dlouhá 1, 46001 Liberec')).toBeInTheDocument();
+    expect(screen.getByText('Krátká 2, 46002 Liberec')).toBeInTheDocument();
+  });
+
+  // Money and a bare note are the only deviations with no row of their own, so they are the
+  // only thing the card holds — and an order without them must not grow an empty card.
+  it('shows money and notes in their own card', () => {
+    setLedger([
+      ledgerEntry({ target: ClientLedgerEntryTarget.Money, amount: 2400, requiresFollowUp: true }),
+    ]);
+    renderDetail(order());
+
+    const card = within(screen.getByText('Peníze a poznámky').closest('.MuiCard-root') as HTMLElement);
+    expect(card.getByText('Klient dluží')).toBeInTheDocument();
+    expect(card.getByText('2400 Kč')).toBeInTheDocument();
+  });
+
+  it('has no money card on an order whose deviations are all quantities', () => {
+    setLedger([ledgerEntry({ orderItemId: 'item-1', plannedQuantity: 1, actualQuantity: 0 })]);
+    renderDetail(order());
+
+    expect(screen.queryByText('Peníze a poznámky')).not.toBeInTheDocument();
+  });
+
+  it('leaves the rows alone while the ledger is still loading', () => {
+    setLedger(undefined, { isLoading: true });
+    renderDetail(order());
+
+    expect(within(itemsCard()).getByText('1 ks')).toBeInTheDocument();
+    expect(within(itemsCard()).queryByText('Nevyloženo')).not.toBeInTheDocument();
+  });
+
+  it('renders the plan when the ledger cannot be read', () => {
+    setLedger(undefined, { isError: true });
+    renderDetail(order());
+
+    expect(within(itemsCard()).getByText('Svijanela Herbal Cola')).toBeInTheDocument();
+  });
+
+  // Settling the debt is a different question from what came off the van. Filtering the display
+  // by resolution would put the plan back on screen the moment somebody closed the entry.
+  it('keeps showing a settled deviation', () => {
+    setLedger([ledgerEntry({
+      orderItemId: 'item-1',
+      plannedQuantity: 1,
+      actualQuantity: 0,
+      resolvedAt: new Date('2026-08-26T09:00:00Z'),
+    })]);
+    renderDetail(order());
+
+    expect(within(itemsCard()).getByText('Nevyloženo')).toBeInTheDocument();
+  });
+
+  it('ignores deviations recorded against another order', () => {
+    setLedger([ledgerEntry({
+      orderId: 'some-other-order',
+      orderItemId: 'item-1',
+      plannedQuantity: 1,
+      actualQuantity: 0,
+    })]);
+    renderDetail(order());
+
+    expect(within(itemsCard()).queryByText('Nevyloženo')).not.toBeInTheDocument();
   });
 });
