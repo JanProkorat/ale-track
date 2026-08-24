@@ -404,6 +404,12 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:poin
   color:var(--text-2);background:var(--surface-3);border-bottom:1px solid var(--border);}
 .nak-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:14px;row-gap:8px;
   padding:12px 16px;background:var(--surface-2);border-top:1px solid var(--border);}
+/* Další zboží: the two columns the stepper moves pieces between, named once at the top
+   rather than on every row. */
+.sg-head,.sg-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 74px;align-items:center;
+  column-gap:10px;padding:10px 16px;border-top:1px solid var(--border);}
+.sg-head{padding:7px 16px;background:var(--surface-2);font-size:10.5px;font-weight:800;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--text-2);}
 @media (max-width:900px){
   .nak-head{display:none;}
   .nak-row{grid-template-columns:minmax(0,1fr) 54px;row-gap:6px;}
@@ -867,19 +873,25 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
   // which is why they are their own collections rather than more `items`.
   const ret=(name,qty,note)=>({ id:'ret-'+Math.random().toString(36).slice(2,7), name, quantity:qty, note:note||'' });
   const ext=(description,qty,note)=>({ id:'ext-'+Math.random().toString(36).slice(2,7), description, quantity:qty, note:note||'' });
+  /* The driver's pre-departure checklist. Seeded per run rather than shared, because
+     ticking one run's box must not tick another's. */
+  const PREP=['Rudlík','Tankovací karta','Soupis','Vozejk','Klíče','Co2','Biogon','Prázdné','Paleta','Nářadí','Doklady'];
+  const prepSteps=()=>PREP.map((name,i)=>({ id:'pz-'+i+'-'+Math.random().toString(36).slice(2,5), name, done:false }));
   let on=240;
   function order(id,clientId,state,reqOffset,items,createdOffset,returns,extras){
     return { id, number:'OBJ-2026-'+(on++), clientId, state, createdDate:daysFromNow(createdOffset??-6),
       requiredDeliveryDate: state==='New'?null:daysFromNow(reqOffset), actualDeliveryDate: state==='Finished'?daysFromNow(reqOffset):null,
       note:'', items, returns:returns||[], extras:extras||[] }; }
   DB.orders=[
-    order('o-1','cl-uzsklep','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht 11°'),2), oi(byName('Svijanský Máz'),3,'Added') ], null,
+    order('o-1','cl-uzsklep','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht 11°'),2), oi(byName('Svijanský Máz'),3,'Added'),
+      sgi('sp-linde','sg-li-co2-10',2) ], null,
       [ ret('Sud 50 l — prázdný',4), ret('Basa 0,5 l — prázdná',6) ],
       [ ext('Chlazení — zápůjčka',1,'na víkendovou akci'), ext('Kelímky 0,5 l',200) ]),
     order('o-2','cl-pivnice','Planning',2,[ oi(byName('Svijanský Rytíř'),3), oi(byName('Svijanská Kněžna'),1) ]),
     order('o-3','cl-hotel','New',null,[ oi(byName('Landskron Pilsner'),4), oi(byName('Landskron Hefeweizen'),2) ]),
     order('o-4','cl-goerlitz','Planning',3,[ oi(byName('Landskron Pilsner'),6), oi(byName('Landskron Radler'),4) ]),
-    order('o-5','cl-club','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),2), oi(byName('Frýdlantská 10°'),2) ]),
+    order('o-5','cl-club','Delivering',1,[ oi(byName('Albrecht 12° Světlý'),2), oi(byName('Frýdlantská 10°'),2),
+      sgi('sp-obaly','sg-ob-prepravka',3) ]),
     order('o-6','cl-farma','New',null,[ oi(byName('Svijany 450'),5), oi(byName('Svijanský Fanda'),3) ]),
     order('o-7','cl-uzsklep','Finished',-3,[ oi(byName('Albrecht 12° Světlý'),4), oi(byName('Albrecht Nealko'),2) ], -12),
     order('o-8','cl-hotel','Finished',-5,[ oi(byName('Landskron Premium'),3) ], -14),
@@ -897,13 +909,17 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
       // filter by. Seeded empty; piEnsure fills each line from what the run actually loads.
       purchaseInvoices:[ { id:'pi-1', seq:1, breweryId:'b-frydlant', lines:[] },
                          { id:'pi-2', seq:2, breweryId:'b-svijany', lines:[] } ],
+      preparationSteps:prepSteps(),
+      // How the supplier goods on this run are collected: off our own shelf, or picked up
+      // at the supplier on the way. The client gets the whole quantity either way.
+      supplierGoodSourcing:{ 'sg-li-co2-10':2 },
       extraCustom:[{ id:'ex-1', description:'Vratné obaly — 6× basa', quantity:6 }] },
     { id:'s-2', number:'VYV-2026-052', name:'Rozvoz Liberec / Görlitz', state:'Created', deliveryDate:daysFromNow(3)+'T08:00',
       vehicleId:null, driverIds:[], stops:[ stop('o-2','Official',1), stop('o-4','Official',2) ],
-      purchaseInvoices:[], extraCustom:[] },
+      purchaseInvoices:[], preparationSteps:prepSteps(), supplierGoodSourcing:{}, extraCustom:[] },
     { id:'s-3', number:'VYV-2026-050', name:'Rozvoz čtvrtek', state:'Delivered', deliveryDate:daysFromNow(-2)+'T07:30',
       vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ],
-      purchaseInvoices:[], extraCustom:[] },
+      purchaseInvoices:[], preparationSteps:prepSteps(), supplierGoodSourcing:{}, extraCustom:[] },
   ];
   // Supplier-good order lines never enter a nakládka stop — they aren't beer
   // going out on the truck the same way, so they're filtered out here too.
@@ -3703,19 +3719,34 @@ function viewShipmentDetail(id){
     ${routeMap(pts,{h:360,animate:s.state==='InTransit'})}
     <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start;margin-top:16px">
       <div class="stack" style="gap:14px"><div id="ship-load">${shipLoadingCard(s)}</div>
-        ${shipReturnsCard(s)}
         ${shipExtrasCard(s)}</div>
       <div class="stack" style="gap:14px">
-        <div class="card"><div class="card-head"><h3>Vůz</h3></div><div class="card-pad">
-          ${veh?`<div class="row gap12"><div class="ti-ico" style="background:var(--surface-3)">${icon('vehicle',18)}</div>
-            <div><div class="t-strong">${esc(veh.name)}</div><div class="t-mut" style="font-size:12px">Nosnost ${num(veh.maxWeight)} kg</div></div></div>
-            <div class="divider"></div><div class="row" style="justify-content:space-between"><span class="t-mut">Odhad. hmotnost nákladu</span>
-            <span class="tnum t-strong" style="color:${totalWeight>veh.maxWeight?'var(--crit)':'var(--ok)'}">${num(Math.round(totalWeight))} kg</span></div>
-            ${totalWeight>veh.maxWeight?`<div class="pill s-crit" style="margin-top:8px"><span class="d"></span>Překročena nosnost!</div>`:''}`
-            :'<span class="t-mut">Vůz nepřiřazen</span>'}</div></div>
-        <div class="card"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad stack" style="gap:10px">
-          ${s.driverIds.length?s.driverIds.map(did=>{const d=driverById(did);return `<div class="row gap12"><span class="dotc" style="width:12px;height:12px;border-radius:99px;background:${d.color}"></span>
-            <div><div class="t-strong">${esc(d.firstName)} ${esc(d.lastName)}</div><div class="t-mut" style="font-size:12px">${esc(d.phoneNumber||'')}</div></div></div>`;}).join(''):'<span class="t-mut">Bez řidiče</span>'}</div></div>
+        <!-- Both are short, sparse cards: side by side they read as one "kdo a čím" block
+             instead of two mostly-empty rows. auto-fit rather than a fixed pair, so they
+             stack once this column gets narrow. -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;align-items:start">
+          <div class="card" style="height:100%"><div class="card-head"><h3>Vůz</h3></div><div class="card-pad">
+            ${veh?`<div class="row gap12"><div class="ti-ico" style="background:var(--surface-3)">${icon('vehicle',18)}</div>
+              <div><div class="t-strong">${esc(veh.name)}</div><div class="t-mut" style="font-size:12px">Nosnost ${num(veh.maxWeight)} kg</div></div></div>
+              <div class="divider"></div><div class="row" style="justify-content:space-between;gap:8px"><span class="t-mut">Odhad. hmotnost</span>
+              <span class="tnum t-strong" style="white-space:nowrap;color:${totalWeight>veh.maxWeight?'var(--crit)':'var(--ok)'}">${num(Math.round(totalWeight))} kg</span></div>
+              ${totalWeight>veh.maxWeight?`<div class="pill s-crit" style="margin-top:8px"><span class="d"></span>Překročena nosnost!</div>`:''}`
+              :'<span class="t-mut">Vůz nepřiřazen</span>'}</div></div>
+          <div class="card" style="height:100%"><div class="card-head"><h3>Řidiči</h3></div><div class="card-pad stack" style="gap:10px">
+            ${s.driverIds.length?s.driverIds.map(did=>{const d=driverById(did);
+              // A full-height bar, not a dot: a dot has to pick a line to sit on and picks
+              // wrong the moment the phone line is empty.
+              return `<div style="padding-left:10px;border-left:3px solid ${d.color};min-width:0">
+                <div class="t-strong" style="font-size:14px">${esc(d.firstName)} ${esc(d.lastName)}</div>
+                <div class="t-mut" style="font-size:12px">${esc(d.phoneNumber||'\u00A0')}</div></div>`;}).join('')
+              :'<span class="t-mut">Bez řidiče</span>'}</div></div>
+        </div>
+        ${shipSupplierGoodsCard(s)}
+        ${shipGarageCard('Vyložit','stock',nakladkaRows(s),r=>0,'Nic se do garáže nevykládá.')}
+        ${shipGarageCard('Doložit','box',nakladkaRows(s),r=>r.fromInventory,'Nic se z garáže nenakládá.',
+          shipSupplierGoodRows(s).map(r=>({ name:r.name, chip:r.size, qty:r.fromGarage })))}
+        ${shipReturnsCard(s)}
+        ${shipChecklistCard(s)}
       </div></div>
     <div id="ship-inv" style="margin-top:16px">${shipInvoiceCard(s)}</div></div>`;
 }
@@ -3755,6 +3786,9 @@ function slRemoveDokladka(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId
  * moment at which a plan and a reality exist side by side.
  */
 function unloadChipText(p){
+  // A supplier good has no kind and its size is free text ('10 kg'), so it is named as
+  // what it is — that is what tells a CO₂ bottle apart from the beer around it.
+  if(p.supplierSize!==undefined) return ['Zboží dodavatele',p.supplierSize].filter(Boolean).join(' · ');
   return [kindChipText(p.kind), p.packageSize!=null?fmtLiters(p.packageSize):'', p.platoDegree!=null?p.platoDegree+'°':'']
     .filter(Boolean).join(' · ');
 }
@@ -3768,6 +3802,15 @@ function unloadLines(s,st){
     .filter(e=>e.target==='ProductQuantity'&&ledRowStatus(e)==='added'
       &&!st.items.some(it=>it.productId===e.productId))
     .forEach(e=>{ const p=prodById(e.productId); if(p) rows.push({ p, planned:0, entry:e, appended:true }); });
+  // The supplier goods the client ordered come off here too, whichever way they were
+  // collected — the garage/supplier split decides where the van picks them up, never how
+  // many the client gets. They are not on the stop's item list, so they are matched back
+  // by order.
+  const o=st.orderId?DB.orders.find(x=>x.id===st.orderId):null;
+  (o?o.items:[]).filter(i=>i.supplierGoodId).forEach(i=>{
+    const sup=supplierById(i.supplierId); const gd=sup?goodById(sup,i.supplierGoodId):null; if(!gd) return;
+    rows.push({ p:{ name:gd.name, supplierSize:gd.size }, planned:i.quantity, entry:null });
+  });
   return rows;
 }
 /* ---- Vratky a Extra položky na vývozu -------------------------------------------
@@ -3800,6 +3843,96 @@ function shipSideCard(s,title,ic,coll,target){
             ? (ledRowStatus(entry)==='added'?`<span class="diff-new">${qty}×</span>`:`<span class="diff-old">${r.quantity}×</span> <span class="diff-new">${qty}×</span>`)
             : qty+'×'}</span></div>`; }).join('')}</div></div>`).join('')}</div>`;
 }
+/* ---- Další zboží ----------------------------------------------------------------
+ * What the run carries that no brewery supplies — gas, crates, chemicals — ordered by
+ * the client off a supplier's price list. Read before the garage exchange below,
+ * because these are collected before or on the way round.
+ *
+ * The split says where the pieces are picked up, never how many the client gets: the
+ * whole quantity is delivered either way.
+ */
+function shipSupplierGoodRows(s){
+  const map=new Map();
+  s.stops.forEach(st=>{ const o=st.orderId?DB.orders.find(x=>x.id===st.orderId):null; if(!o) return;
+    (o.items||[]).filter(i=>i.supplierGoodId).forEach(i=>{
+      const sup=supplierById(i.supplierId); const gd=sup?goodById(sup,i.supplierGoodId):null; if(!gd) return;
+      let r=map.get(i.supplierGoodId);
+      if(!r){ r={ key:i.supplierGoodId, name:gd.name, size:gd.size, quantity:0, fromGarage:0 }; map.set(i.supplierGoodId,r); }
+      r.quantity+=i.quantity;
+    }); });
+  const src=s.supplierGoodSourcing||{};
+  map.forEach(r=>{ r.fromGarage=Math.min(src[r.key]||0,r.quantity); });
+  return [...map.values()];
+}
+function sgAdjust(key,delta){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const r=shipSupplierGoodRows(s).find(x=>x.key===key); if(!r) return;
+  s.supplierGoodSourcing=s.supplierGoodSourcing||{};
+  s.supplierGoodSourcing[key]=Math.max(0,Math.min(r.quantity,(s.supplierGoodSourcing[key]||0)+delta));
+  renderRoute();
+}
+function shipSupplierGoodsCard(s){
+  const rows=shipSupplierGoodRows(s); if(!rows.length) return '';
+  const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
+  const total=rows.reduce((x,r)=>x+r.quantity,0), garage=rows.reduce((x,r)=>x+r.fromGarage,0);
+  const step=(key,d,dis)=>`<button class="icon-btn" style="width:24px;height:24px;font-size:14px" ${dis?'disabled':`onclick="sgAdjust('${key}',${d})"`}>${d>0?'+':'−'}</button>`;
+  return `<div class="card" style="overflow:hidden"><div class="card-head">${icon('cylinder',17)}<h3>Další zboží</h3>
+      <span class="t-mut tnum" style="margin-left:auto;font-size:12.5px;font-weight:700">${total} ks</span></div>
+    <div class="sg-head"><span>Zboží</span><span style="text-align:center">Z garáže</span><span style="text-align:right">Od dodav.</span></div>
+    ${rows.map(r=>`<div class="sg-row">
+      <div style="min-width:0"><div class="row gap8" style="min-width:0"><span class="t-strong" style="font-size:13.5px">${esc(r.name)}</span>
+        ${r.size?`<span class="tag">${esc(r.size)}</span>`:''}</div>
+        <div class="t-mut" style="font-size:11.5px">${r.quantity} ks celkem</div></div>
+      <div class="row gap8" style="justify-content:center">${step(r.key,-1,!editable||r.fromGarage<=0)}
+        <span class="tnum t-strong" style="min-width:18px;text-align:center;color:${r.fromGarage?'var(--info)':'var(--text-3)'}">${r.fromGarage}</span>
+        ${step(r.key,1,!editable||r.fromGarage>=r.quantity)}</div>
+      <div class="tnum t-strong" style="text-align:right">${r.quantity-r.fromGarage} ks</div></div>`).join('')}
+    <div class="sg-row" style="background:var(--surface-2)">
+      <span class="t-mut" style="font-size:12.5px;font-weight:700">Celkem</span>
+      <span class="tnum t-strong" style="text-align:center;color:${garage?'var(--info)':'var(--text-3)'}">${garage}</span>
+      <span class="tnum t-strong" style="text-align:right">${total-garage} ks</span></div></div>`;
+}
+
+/* ---- Vyložit / Doložit ----------------------------------------------------------
+ * The two directions of the garage exchange, deliberately over the WHOLE loading list
+ * and not the invoice-filtered view: what the garage gives and takes has nothing to do
+ * with which brewery invoice the goods are billed on.
+ */
+function shipGarageCard(title,ic,rows,qtyOf,emptyText,extraRows){
+  const list=[...rows.map(r=>({ name:r.name, chip:[r.platoDegree!=null?r.platoDegree+'°':'',r.packageSize!=null?fmtLiters(r.packageSize):''].filter(Boolean).join(' · '), qty:qtyOf(r) })),
+    ...(extraRows||[])].filter(r=>r.qty>0);
+  const total=list.reduce((x,r)=>x+r.qty,0);
+  return `<div class="card" style="overflow:hidden"><div class="card-head">${icon(ic,17)}<h3>${title}</h3>
+      ${total?`<span class="t-mut tnum" style="margin-left:auto;font-size:12.5px;font-weight:700">${total} ks</span>`:''}</div>
+    <div class="card-pad stack" style="gap:9px">
+      ${list.length?list.map(r=>`<div class="row gap8" style="align-items:flex-start">
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">${esc(r.name)}</div>
+          ${r.chip?`<div class="t-mut" style="font-size:11.5px">${esc(r.chip)}</div>`:''}</div>
+        <span class="tnum t-strong" style="flex:0 0 auto">${r.qty} ks</span></div>`).join('')
+      :`<div class="t-mut" style="font-size:13px">${emptyText}</div>`}</div></div>`;
+}
+
+/* ---- Checklist -----------------------------------------------------------------
+   What has to be in the van before it leaves. Per run, so ticking one does not tick
+   another's. */
+function prepToggle(stepId){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const st=(s.preparationSteps||[]).find(x=>x.id===stepId); if(!st) return;
+  st.done=!st.done; renderRoute();
+}
+function shipChecklistCard(s){
+  const steps=s.preparationSteps||[]; if(!steps.length) return '';
+  const done=steps.filter(x=>x.done).length;
+  const editable=canEdit('shipments')&&s.state!=='Cancelled';
+  return `<div class="card" style="overflow:hidden"><div class="card-head">${icon('check',17)}<h3>Checklist</h3>
+      <span class="tag" style="margin-left:auto">${done}/${steps.length}</span></div>
+    <div class="card-pad stack" style="gap:2px">
+      ${steps.map(x=>`<label class="row gap8" style="padding:5px 2px;cursor:${editable?'pointer':'default'}">
+        <input type="checkbox" ${x.done?'checked':''} ${editable?'':'disabled'} onchange="prepToggle('${x.id}')" style="width:17px;height:17px">
+        <span style="font-size:13.5px;${x.done?'color:var(--text-3);text-decoration:line-through':''}">${esc(x.name)}</span></label>`).join('')}
+    </div></div>`;
+}
+
 function shipReturnsCard(s){ return shipSideCard(s,'Vratky','arrowU','returns','ReturnQuantity'); }
 /* Owned by the order, added there, only displayed here — which is why the app reads
    these off the stops rather than off the shipment's own list. */
@@ -3962,7 +4095,8 @@ function shipLoadSwitch(s){
 }
 
 function shipLoadingCard(s){
-  if(SL.view==='unload') return shipLoadSwitch(s)+shipUnloadCard(s);
+  if(SL.view==='unload') return `<div class="card" style="overflow:clip"><div class="card-head">${icon('stock',18)}<h3>Rozpis zboží</h3></div>
+    <div style="padding:14px 16px 16px">${shipLoadSwitch(s)}${shipUnloadCard(s)}</div></div>`;
   const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
   piEnsure(s);
   const invs=(s.purchaseInvoices||[]).slice().sort((a,b)=>a.seq-b.seq);
@@ -3997,8 +4131,8 @@ function shipLoadingCard(s){
     ${b.kinds.map(k=>`<div class="nak-kind">${k.label}<span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.8"> · ${k.rows.length} ${plural(k.rows.length,'položka','položky','položek')}</span></div>
       ${k.rows.map(rowHtml).join('')}`).join('')}`).join('');
 
-  return shipLoadSwitch(s)+`<div class="card" style="overflow:hidden"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
-      <span class="sub" style="margin-left:auto">Co naložit do vozu — pro řidiče a přípravu v pivovaru</span></div>
+  return `<div class="card" style="overflow:clip"><div class="card-head">${icon('stock',18)}<h3>Rozpis zboží</h3></div>
+    <div style="padding:14px 16px 0">${shipLoadSwitch(s)}</div>
     ${rows.length?`<div class="nak-head"><span>Produkt</span><span class="num">Ks</span><span>Zdroj</span><span>Faktury</span></div>${body}
       <div class="nak-foot">
         <div class="row gap8" style="flex-wrap:wrap">${piProgress(s,rows)||'<span class="t-mut" style="font-size:12px">Zatím žádná faktura pivovaru</span>'}</div>
