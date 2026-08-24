@@ -387,6 +387,29 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--amber);cursor:poin
 .login-divider::before,.login-divider::after{content:"";flex:1;height:1px;background:var(--border);}
 @media (max-width:900px){ .login-brand{display:none;} .login-logo-sm{display:flex;} }
 
+/* ---- Nakládka: a grid, not a table --------------------------------------
+   Four sized tracks rather than content-derived ones: each section is its own box so
+   the brewery can collapse, and max-content would measure every box separately —
+   no two rows would agree. Zdroj and Faktury share a floor with Produkt so they end
+   up as wide as each other instead of huddling at the right edge. */
+.nak-head,.nak-row{display:grid;grid-template-columns:minmax(120px,1fr) 54px minmax(150px,1fr) minmax(150px,1fr);
+  align-items:center;column-gap:14px;padding:9px 16px;}
+.nak-head{background:var(--surface-2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--text-2);}
+.nak-row{border-bottom:1px solid var(--border);}
+.nak-row:hover{background:var(--surface-2);}
+.nak-brewery{display:flex;align-items:center;gap:8px;padding:10px 16px;font-weight:800;font-size:13.5px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);}
+.nak-kind{padding:6px 16px 6px 30px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-2);background:var(--surface-3);border-bottom:1px solid var(--border);}
+.nak-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:14px;row-gap:8px;
+  padding:12px 16px;background:var(--surface-2);border-top:1px solid var(--border);}
+@media (max-width:900px){
+  .nak-head{display:none;}
+  .nak-row{grid-template-columns:minmax(0,1fr) 54px;row-gap:6px;}
+  .nak-row>div:nth-child(3),.nak-row>div:nth-child(4){grid-column:1/-1;}
+}
+
 /* ---- Změny objednávek (ledger diffs) ------------------------------------
    The struck-through old value and the highlighted new one are the primary
    signal, but never the ONLY one: every changed row also carries a .chg-tag,
@@ -870,11 +893,17 @@ function specialPriceTag(){ return `<span class="tag" style="color:var(--amber-7
       vehicleId:'v-iveco', driverIds:['dr-novak','dr-svoboda'],
       // demo: first stop delivers to one of the client's saved places, not its billing address
       stops:[ stop('o-1','Place',1,'dp-strom-zahrada'), stop('o-5','Official',2) ],
+      // One purchase invoice per brewery we collect from — what the nakladka's F columns
+      // filter by. Seeded empty; piEnsure fills each line from what the run actually loads.
+      purchaseInvoices:[ { id:'pi-1', seq:1, breweryId:'b-frydlant', lines:[] },
+                         { id:'pi-2', seq:2, breweryId:'b-svijany', lines:[] } ],
       extraCustom:[{ id:'ex-1', description:'Vratné obaly — 6× basa', quantity:6 }] },
     { id:'s-2', number:'VYV-2026-052', name:'Rozvoz Liberec / Görlitz', state:'Created', deliveryDate:daysFromNow(3)+'T08:00',
-      vehicleId:null, driverIds:[], stops:[ stop('o-2','Official',1), stop('o-4','Official',2) ], extraCustom:[] },
+      vehicleId:null, driverIds:[], stops:[ stop('o-2','Official',1), stop('o-4','Official',2) ],
+      purchaseInvoices:[], extraCustom:[] },
     { id:'s-3', number:'VYV-2026-050', name:'Rozvoz čtvrtek', state:'Delivered', deliveryDate:daysFromNow(-2)+'T07:30',
-      vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ], extraCustom:[] },
+      vehicleId:'v-sprinter', driverIds:['dr-marek'], stops:[ stop('o-7','Official',1) ],
+      purchaseInvoices:[], extraCustom:[] },
   ];
   // Supplier-good order lines never enter a nakládka stop — they aren't beer
   // going out on the truck the same way, so they're filtered out here too.
@@ -3707,8 +3736,6 @@ function slFind(s,itemId){ for(const st of s.stops){ const it=st.items.find(i=>i
 function slRerender(){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
   const el=$('#ship-load'); if(el) el.innerHTML=shipLoadingCard(s);
   const iv=$('#ship-inv'); if(iv) iv.innerHTML=shipInvoiceCard(s); }   // loading edits change what there is to invoice
-function slToggle(itemId,field){ const s=DB.shipments.find(x=>x.id===SL.shipId); const it=slFind(s,itemId); if(!it)return;
-  it[field]=!it[field]; if(field==='loaded'&&!it.loaded) it.checked=false; slRerender(); }
 function slRemoveItem(itemId){ const s=DB.shipments.find(x=>x.id===SL.shipId); s.stops.forEach(st=>st.items=st.items.filter(i=>i.id!==itemId)); toast('Dokládka odebrána','trash'); slRerender(); }
 function slQty(it){ return (it.quantity||0)+(it.dokladkaQty||0); }
 function slPrice(it){ return (prodById(it.productId)?.priceWithVat||0)*slQty(it); }
@@ -3743,8 +3770,28 @@ function unloadLines(s,st){
     .forEach(e=>{ const p=prodById(e.productId); if(p) rows.push({ p, planned:0, entry:e, appended:true }); });
   return rows;
 }
+/* The empties the client hands back and the odds and ends going the other way.
+   Both belong at the handover as much as the beer does — the driver has to take the
+   crates and the client has to sign for the loan — and neither was visible on the run
+   at all before. Rendered as a sub-list rather than more unload lines, because they
+   are not what came off the pallet. */
+function unloadSideList(st,coll,target,title,rows){
+  const merged=st.orderId?ledgerSimpleRows(rows||[],st.orderId,target):[];
+  if(!merged.length) return '';
+  return `<div style="padding:6px 14px 8px;border-top:1px solid var(--border)">
+    <div class="t-mut" style="font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">${title}</div>
+    ${merged.map(({r,entry})=>{ const qty=entry?entry.actualQuantity:r.quantity; const cls=ledgerRowClass(entry);
+      return `<div class="row gap8" style="align-items:baseline;padding:3px 0;${cls==='row-added'?'':''}">
+        <span style="font-size:12.5px;${cls==='row-removed'?'text-decoration:line-through;color:var(--text-3)':''}">${esc(r.name||r.description)}</span>
+        ${entry?ledTag(entry):''}
+        <span style="flex:1"></span>
+        <span class="tnum" style="font-size:12.5px;font-weight:700;flex:0 0 auto">${entry
+          ? (ledRowStatus(entry)==='added'?`<span class="diff-new">× ${qty}</span>`:`<span class="diff-old">× ${r.quantity}</span> <span class="diff-new">× ${qty}</span>`)
+          : '× '+qty}</span></div>`; }).join('')}</div>`;
+}
 function unloadStopBlock(s,st,seq){
   const cl=clientById(st.clientId);
+  const o=st.orderId?DB.orders.find(x=>x.id===st.orderId):null;
   const rows=unloadLines(s,st);
   const total=rows.reduce((x,r)=>x+(r.entry?r.entry.actualQuantity:r.planned),0);
   const stLed=st.orderId?ledgerForOrder(st.orderId):[];
@@ -3776,7 +3823,9 @@ function unloadStopBlock(s,st,seq){
         ${addrLed?`<div style="font-size:11.5px;margin-top:3px" title="${esc(ledWhy(addrLed))}">${textDiff(addrLed.plannedText,addrLed.actualText)}</div>`:''}</div>
       ${recordable?`<button class="btn btn-sm btn-soft" style="flex:0 0 auto" onclick="ledgerDrawer('${st.orderId}')">${icon('edit',14)}Zaznamenat změnu</button>`:''}
     </div>
-    ${rows.length?lines:'<div class="t-mut" style="font-size:12px;padding:8px 14px">Bez vykládky</div>'}</div>`;
+    ${rows.length?lines:'<div class="t-mut" style="font-size:12px;padding:8px 14px">Bez vykládky</div>'}
+    ${unloadSideList(st,'returns','ReturnQuantity','Vratky',o&&o.returns)}
+    ${unloadSideList(st,'extras','CustomExtraQuantity','Položky navíc',o&&o.extras)}</div>`;
 }
 function shipUnloadCard(s){
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
@@ -3786,59 +3835,163 @@ function shipUnloadCard(s){
       <div class="t-strong" style="font-size:13.5px">${esc(DEPOT.name)}</div></div>
     ${stopsSorted.map((st,i)=>unloadStopBlock(s,st,i+1)).join('')}</div>`;
 }
-/* Which of the two the loading card is showing. Mirrors the app's segmented control,
-   where Vykládka sits at the end of the same row as Nakládka and the invoice columns. */
+/* ---- NAKLÁDKA -----------------------------------------------------------------
+ * What is collected from the ramp, aggregated per product and read out brewery by
+ * brewery. Deliberately NOT per stop: the pallet is packed brewery by brewery, and
+ * two clients ordering the same beer is one line to fetch, not two.
+ *
+ * Nothing here carries a deviation. This list is settled with the brewery before the
+ * van leaves and a client refusing kegs three hours later cannot change what was
+ * collected. Deviations live in Vykládka.
+ */
+/* Kegs LAST — the van is packed crates and cans first, kegs on top. Deliberately not
+   the catalogue's KIND_ORDER, which puts kegs first for a different reason. */
+const NAKLADKA_KINDS=['Bottle','Can','Multipack','Other','Keg'];
+
+/* One line per distinct product across the whole run. The brewery joins the key so a
+   line can never straddle two sections — same-named beers of two breweries are two
+   lines, which is also what the pallet looks like. */
+function nakladkaRows(s){
+  const map=new Map();
+  s.stops.forEach(st=>st.items.forEach(it=>{
+    const pr=prodById(it.productId); if(!pr) return;
+    const b=breweryById(pr.breweryId);
+    const key=`${pr.breweryId}|${pr.name}|${pr.kind}|${pr.packageSize}`;
+    let r=map.get(key);
+    if(!r){ r={ key, productId:pr.id, name:pr.name, kind:pr.kind, packageSize:pr.packageSize,
+      platoDegree:pr.platoDegree, breweryId:pr.breweryId, breweryName:b?b.name:'Bez pivovaru',
+      breweryOrder:b?b.displayOrder:999, breweryColor:b?b.color:'var(--text-3)',
+      quantity:0, fromBrewery:0, fromInventory:0, value:0 }; map.set(key,r); }
+    r.quantity+=slQty(it); r.fromBrewery+=(it.quantity||0); r.fromInventory+=(it.dokladkaQty||0);
+    r.value+=slPrice(it);
+  }));
+  return [...map.values()];
+}
+/* Brewery in the catalogue's own display order, then kind, then the app-wide product
+   order inside the kind. */
+function nakladkaSections(rows){
+  const byBrewery=new Map();
+  rows.forEach(r=>{ if(!byBrewery.has(r.breweryId)) byBrewery.set(r.breweryId,[]); byBrewery.get(r.breweryId).push(r); });
+  return [...byBrewery.entries()]
+    .map(([id,rs])=>({ breweryId:id, label:rs[0].breweryName, color:rs[0].breweryColor, order:rs[0].breweryOrder,
+      rows:rs, kinds:NAKLADKA_KINDS
+        .map(k=>({ kind:k, label:L.kind[k]||k, rows:rs.filter(r=>r.kind===k)
+          .sort((a,b)=>(b.platoDegree||0)-(a.platoDegree||0)||(a.packageSize||0)-(b.packageSize||0)||a.name.localeCompare(b.name)) }))
+        .filter(x=>x.rows.length) }))
+    .sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label));
+}
+
+/* ---- Faktury pivovarů (purchase invoices) ------------------------------------
+   Distinct from the client invoicing further down the page: these are what WE are
+   billed for what we collect, one per brewery, and they are what the F columns filter
+   by. The loading state hangs on the (invoice, product) pair rather than on an order
+   line, because the ramp is worked through invoice by invoice. */
+function piLine(inv,productId){ return inv.lines.find(l=>l.productId===productId); }
+/* Materialises a line per product on its brewery's invoice, so the columns are never
+   emptier than the run. Quantities stay editable afterwards; only new ones are seeded. */
+function piEnsure(s){
+  (s.purchaseInvoices||[]).forEach(inv=>{
+    nakladkaRows(s).filter(r=>r.breweryId===inv.breweryId).forEach(r=>{
+      if(!piLine(inv,r.productId)) inv.lines.push({ productId:r.productId, qty:r.quantity, state:'none' });
+    });
+    inv.lines=inv.lines.filter(l=>nakladkaRows(s).some(r=>r.productId===l.productId));
+  });
+}
+function piAddInvoice(){ const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  s.purchaseInvoices=s.purchaseInvoices||[];
+  const seq=s.purchaseInvoices.reduce((m,i)=>Math.max(m,i.seq),0)+1;
+  s.purchaseInvoices.push({ id:'pi-'+Math.random().toString(36).slice(2,7), seq, breweryId:null, lines:[] });
+  toast(`Faktura F${seq} přidána`); slRerender(); }
+/* none -> naloženo -> zkontrolováno -> none. One control for the two rounds, because
+   the second never happens before the first. */
+function piCycle(invId,productId){
+  const s=DB.shipments.find(x=>x.id===SL.shipId); if(!s) return;
+  const inv=(s.purchaseInvoices||[]).find(i=>i.id===invId); const l=inv&&piLine(inv,productId); if(!l) return;
+  l.state=l.state==='none'?'loaded':l.state==='loaded'?'checked':'none';
+  slRerender();
+}
+const PI_STATE={ none:['s-grey',''], loaded:['s-info','naloženo'], checked:['s-ok','zkontrolováno'] };
+function piChip(inv,r,editable){
+  const l=piLine(inv,r.productId); if(!l) return '';
+  const [cls,label]=PI_STATE[l.state]||PI_STATE.none;
+  return `<button class="pill ${cls}" title="F${inv.seq}${label?' · '+label:''}${editable?' — klikem posunout stav':''}"
+    ${editable?`onclick="piCycle('${inv.id}','${r.productId}')"`:'disabled'}
+    style="border:0;cursor:${editable?'pointer':'default'};font-size:11px"><span class="d"></span>F${inv.seq} · ${l.qty} ks</button>`;
+}
+function piProgress(s,rows){
+  const out=[];
+  (s.purchaseInvoices||[]).forEach(inv=>{
+    const ls=inv.lines.filter(l=>rows.some(r=>r.productId===l.productId));
+    if(!ls.length) return;
+    const done=ls.filter(l=>l.state==='checked').length, loaded=ls.filter(l=>l.state!=='none').length;
+    out.push(`<span class="pill ${done===ls.length?'s-ok':loaded?'s-info':'s-grey'}"><span class="d"></span>F${inv.seq} ${done}/${ls.length}</span>`);
+  });
+  return out.join('');
+}
+
+/* Which view the loading card is showing: the nakládka, one brewery invoice of it, or
+   the vykládka. One segmented control, as in the app, where the F columns sit between
+   Nakládka and Vykládka. */
 function shipLoadView(v){ SL.view=v; slRerender(); }
 function shipLoadSwitch(s){
-  return `<div class="seg" style="margin-bottom:12px">
-    <button class="${SL.view!=='unload'?'on':''}" onclick="shipLoadView('load')">${icon('box',14)} Nakládka</button>
-    <button class="${SL.view==='unload'?'on':''}" onclick="shipLoadView('unload')">${icon('ship',14)} Vykládka</button></div>`;
+  const invs=(s.purchaseInvoices||[]).slice().sort((a,b)=>a.seq-b.seq);
+  return `<div class="row gap8" style="margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <div class="seg">
+      <button class="${SL.view==='load'?'on':''}" onclick="shipLoadView('load')">${icon('box',14)} Nakládka</button>
+      ${invs.map(i=>`<button class="${SL.view==='pi:'+i.id?'on':''}" onclick="shipLoadView('pi:${i.id}')">F${i.seq}</button>`).join('')}
+      <button class="${SL.view==='unload'?'on':''}" onclick="shipLoadView('unload')">${icon('ship',14)} Vykládka</button>
+    </div>
+    <span style="flex:1"></span>
+    ${canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled'&&SL.view!=='unload'
+      ? `<button class="btn btn-sm btn-ghost" onclick="piAddInvoice()">${icon('plus',14)}Faktura pivovaru</button>`:''}
+  </div>`;
 }
+
 function shipLoadingCard(s){
   if(SL.view==='unload') return shipLoadSwitch(s)+shipUnloadCard(s);
   const editable=canEdit('shipments')&&s.state!=='Delivered'&&s.state!=='Cancelled';
-  const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
-  const all=stopsSorted.flatMap(st=>st.items);
-  const totalN=all.length, loadedN=all.filter(i=>i.loaded).length, checkedN=all.filter(i=>i.checked).length;
-  const loadValue=all.reduce((x,i)=>x+slPrice(i),0);
-  const totalPieces=all.reduce((x,i)=>x+slQty(i),0);
-  const stopBlocks=stopsSorted.map((st,i)=>{ const cl=clientById(st.clientId); const a=stopAddress(st);
-    const items=st.items;
-    const rows=items.map(it=>{ const p=prodById(it.productId); const dq=it.dokladkaQty||0; const pure=it.quantity===0; const qty=slQty(it);
-      // Deliberately free of deviations. The nakladka is settled with the brewery before
-      // the van leaves, and what a client did or did not take at the door changes nothing
-      // about what was collected from the ramp. Deviations belong in Vykladka.
-      const qtyCell = dq>0
-        ? `<div class="tnum t-strong">${qty} ks</div><div class="t-mut tnum" style="font-size:11px">${pure?`${dq} ze skladu`:`${it.quantity} obj. + ${dq} dokl.`}</div>`
-        : `<span class="tnum t-strong">${qty} ks</span>`;
-      const dokBadge = dq>0 ? `<span class="pill s-info"><span class="d"></span>dokládka +${dq}${editable?`<button title="Odebrat dokládku" onclick="slRemoveDokladka('${it.id}')" style="border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px;display:inline-flex;align-items:center">${icon('close',11)}</button>`:''}</span>` : '';
-      return `<tr>
-        <td><div class="t-strong" style="font-size:13px">${esc(p.name)}</div>
-          <div class="row gap8" style="margin-top:2px;flex-wrap:wrap"><span class="tag">${kindChipText(p.kind)}${p.packageSize!=null?' · '+fmtLiters(p.packageSize):''}</span>${dokBadge}</div></td>
-        <td class="num">${qtyCell}</td>
-        <td style="text-align:center"><input type="checkbox" ${it.loaded?'checked':''} ${editable?'':'disabled'} onchange="slToggle('${it.id}','loaded')" style="width:18px;height:18px"></td>
-        <td style="text-align:center"><input type="checkbox" ${it.checked?'checked':''} ${editable&&it.loaded?'':'disabled'} onchange="slToggle('${it.id}','checked')" style="width:18px;height:18px" title="${it.loaded?'':'Nejdřív naložit'}"></td>
-        <td style="width:34px;text-align:right">${pure&&editable?`<button class="icon-btn" style="width:28px;height:28px;color:var(--crit)" title="Odebrat" onclick="slRemoveItem('${it.id}')">${icon('trash',12)}</button>`:''}</td></tr>`; }).join('');
-    return `<div style="margin-bottom:6px">
-      <div class="row gap8" style="margin:14px 0 8px;justify-content:space-between;flex-wrap:wrap">
-        <div class="row gap8"><span class="av" style="width:26px;height:26px;background:${colorFor(cl.id)};color:#fff;font-size:12px">${i+1}</span>
-          <div><div class="row gap8" style="flex-wrap:wrap"><span class="t-strong" style="font-size:13.5px">${esc(cl.name)}</span>
-            ${st.addressKind==='Place'?`<span class="tag" style="border-color:var(--info);color:var(--info)">${icon('pin',11)}${esc((placeById(st.clientId,st.placeId)||{name:'místo'}).name)}</span>`:''}</div>
-            <div class="t-mut" style="font-size:11.5px">${st.addressKind==='Place'?placeAddrText(placeById(st.clientId,st.placeId)):`${fmtAddr(a)} · ${L.addrKind[st.addressKind]}`}</div></div></div>
-        ${editable?`<button class="btn btn-sm btn-soft" onclick="slAddDokladka('${st.orderId}')">${icon('plus',14)}Dokládka ze skladu</button>`:''}</div>
-      ${items.length?`<div class="tbl-wrap"><table class="tbl" style="min-width:0"><thead><tr><th>Produkt</th><th style="text-align:right">Množství</th><th style="text-align:center" title="1. diktovaná nakládka">Naloženo</th><th style="text-align:center" title="2. kontrolní kolo">Kontrola</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-        :`<div class="t-mut" style="font-size:12.5px;padding:8px 2px">Klient nemá v této nakládce žádné položky.</div>`}</div>`; }).join('');
-  return shipLoadSwitch(s)+`<div class="card"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
+  piEnsure(s);
+  const invs=(s.purchaseInvoices||[]).slice().sort((a,b)=>a.seq-b.seq);
+  const filterInv=SL.view.startsWith('pi:')?invs.find(i=>'pi:'+i.id===SL.view):null;
+  let rows=nakladkaRows(s);
+  if(filterInv) rows=rows.filter(r=>!!piLine(filterInv,r.productId));
+  const sections=nakladkaSections(rows);
+  const totalPieces=rows.reduce((x,r)=>x+r.quantity,0);
+  const totalValue=rows.reduce((x,r)=>x+r.value,0);
+
+  const rowHtml=r=>{
+    const chip=[r.platoDegree!=null?r.platoDegree+'°':'', r.packageSize!=null?fmtLiters(r.packageSize):'']
+      .filter(Boolean).join(' · ');
+    // Where the pieces come from. The garage line only appears when there is one —
+    // an all-brewery row would otherwise carry a permanent "Sklad 0".
+    const zdroj=[`<span class="t-mut" style="font-size:11.5px">Pivovar <span class="tnum t-strong" style="color:var(--text)">${r.fromBrewery}</span></span>`,
+      r.fromInventory?`<span class="t-mut" style="font-size:11.5px">Sklad <span class="tnum t-strong" style="color:var(--info)">${r.fromInventory}</span></span>`:'']
+      .filter(Boolean).join('<span class="t-mut" style="opacity:.5">·</span>');
+    const faktury=(filterInv?[filterInv]:invs).map(i=>piChip(i,r,editable)).filter(Boolean).join(' ')
+      || '<span class="t-mut" style="font-size:11.5px">bez faktury</span>';
+    return `<div class="nak-row">
+      <div style="min-width:0"><div class="t-strong" style="font-size:13px">${esc(r.name)}</div>
+        ${chip?`<div class="t-mut" style="font-size:11.5px">${chip}</div>`:''}</div>
+      <div class="num tnum t-strong" style="font-size:13px">${r.quantity}</div>
+      <div class="row gap8" style="flex-wrap:wrap">${zdroj}</div>
+      <div class="row gap8" style="flex-wrap:wrap">${faktury}</div></div>`;
+  };
+
+  const body=sections.map(b=>`
+    <div class="nak-brewery"><span class="dotc" style="width:10px;height:10px;border-radius:3px;background:${b.color}"></span>
+      ${esc(b.label)}<span class="t-mut" style="font-weight:600;margin-left:6px">${b.rows.length} ${plural(b.rows.length,'položka','položky','položek')}</span></div>
+    ${b.kinds.map(k=>`<div class="nak-kind">${k.label}<span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.8"> · ${k.rows.length} ${plural(k.rows.length,'položka','položky','položek')}</span></div>
+      ${k.rows.map(rowHtml).join('')}`).join('')}`).join('');
+
+  return shipLoadSwitch(s)+`<div class="card" style="overflow:hidden"><div class="card-head">${icon('box',18)}<h3>Nakládka</h3>
       <span class="sub" style="margin-left:auto">Co naložit do vozu — pro řidiče a přípravu v pivovaru</span></div>
-    <div class="card-pad">
-      <div class="row gap8" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:6px">
-        <div class="row gap8">
-          <span class="pill ${loadedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Naloženo ${loadedN}/${totalN}</span>
-          <span class="pill ${checkedN===totalN&&totalN?'s-ok':'s-grey'}"><span class="d"></span>Zkontrolováno ${checkedN}/${totalN}</span></div>
-        <div class="t-mut" style="font-size:13px">${num(totalPieces)} ks · <span class="t-strong" style="color:var(--amber-700)">${money(loadValue)}</span></div>
-      </div>
-      ${stopBlocks}
-    </div></div>`;
+    ${rows.length?`<div class="nak-head"><span>Produkt</span><span class="num">Ks</span><span>Zdroj</span><span>Faktury</span></div>${body}
+      <div class="nak-foot">
+        <div class="row gap8" style="flex-wrap:wrap">${piProgress(s,rows)||'<span class="t-mut" style="font-size:12px">Zatím žádná faktura pivovaru</span>'}</div>
+        <div class="t-mut" style="font-size:13px;text-align:right">${num(totalPieces)} ks · <span class="t-strong" style="color:var(--amber-700)">${money(totalValue)}</span></div>
+      </div>`
+    :`<div class="t-mut" style="font-size:13px;padding:16px">${filterInv?'Na této faktuře zatím nic není.':'Vývoz nemá žádné položky.'}</div>`}
+    </div>`;
 }
 function slAddDokladka(orderId){ SL.dokStop=orderId;
   const stock=DB.inventory.filter(i=>i.productId&&i.quantity>0);

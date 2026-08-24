@@ -452,9 +452,24 @@ view of that moment — stop by stop, in the order the driver reaches them. So t
 struck-through counts, the appended door-side lines, the address diff, the per-stop change badge and
 the `Zaznamenat změnu` button all live. Recording is offered only once the run has left `Created`.
 
-`Nakládka | Vykládka` is one segmented control, matching the app (`ShipmentDetail.tsx:1001-1003`,
-where the invoice columns F1/F2 sit between them). A run already on the road opens on Vykládka —
-what was loaded is settled by then, and what came off is the only question left about it.
+`Nakládka | F1 | F2 | … | Vykládka` is one segmented control (`ShipmentDetail.tsx:1001-1003`). The
+F columns are **brewery purchase invoices** — what *we* are billed for what we collect — and are a
+different thing from the client invoicing further down the page. A run already on the road opens on
+Vykládka: what was loaded is settled by then, and what came off is the only question left about it.
+
+The nakládka the deviations stay out of is the aggregated one: one line per product across the whole
+run, sectioned by brewery and then by kind (kegs last, as the van is packed), with the columns
+`Produkt | Ks | Zdroj | Faktury`. Loading state hangs on the (invoice, product) pair, because the
+ramp is worked through invoice by invoice — not on an order line, which is what makes it structurally
+unable to carry a per-client deviation in the first place.
+
+**Returns and extra items belong on the run too.** They were invisible on the shipment: `unloadOrder.ts`
+maps only `stop.products` and the supplier goods, so a client handing back four crates against an
+order that planned none showed up nowhere on the run at all. Each stop therefore carries two
+sub-lists under its unload lines — `Vratky` and `Položky navíc` — diffed the same way. They are
+sub-lists rather than more unload lines because they did not come off the pallet: the driver takes
+the empties and the client signs for the loan, which is a different transaction at the same doorstep.
+This is a change to the app's unload view, not only to the prototype.
 
 ### No second banner on the shipment
 
