@@ -2708,6 +2708,39 @@ function ledgerSimpleCard(title,ic,rows,orderId,target,editable){
     </div></div>`;
 }
 
+/* Where a delivery address change gets written down.
+ *
+ * Two paths lead here in the real schema and only one of them was wired: an edit on the
+ * ORDER propagates to the stop and stamps AddressChangedAt, but a planner redirecting the
+ * STOP itself stamps nothing — and that is the commoner path for "the client rang, they
+ * cannot make it". Both are the same event to the client, so both are recorded.
+ *
+ * Only once the van has left. Before that, moving a stop is planning: nothing has been
+ * promised to anyone yet, and logging every drag of the route would bury the real changes.
+ */
+function ledgerRecordAddressMoves(shipment,draftStops){
+  if(shipment.state==='Created'||shipment.state==='Cancelled') return 0;
+  let n=0;
+  draftStops.forEach(next=>{
+    const prev=shipment.stops.find(s=>s.orderId===next.orderId);
+    if(!prev||!next.orderId) return;
+    if(prev.addressKind===next.addressKind&&(prev.placeId||null)===(next.placeId||null)) return;
+    const o=DB.orders.find(x=>x.id===next.orderId); if(!o) return;
+    const before=stopAddressText(prev), after=stopAddressText({...next,clientId:prev.clientId});
+    // Upsert, like every other deviation: redirecting a stop twice is one change of
+    // address, not two — but the ORIGINAL address is the one worth keeping.
+    const cur=DB.ledger.find(e=>e.orderId===next.orderId&&e.target==='DeliveryAddress'&&!e.resolvedAt);
+    if(cur){ cur.actualText=after; if(cur.plannedText===after){ DB.ledger=DB.ledger.filter(e=>e!==cur); } n++; return; }
+    DB.ledger.push({ id:'led-'+Math.random().toString(36).slice(2,7), clientId:o.clientId, orderId:next.orderId,
+      stopId:next.orderId, target:'DeliveryAddress', lineKey:null, productId:null, orderItemId:null, lineName:null,
+      plannedQuantity:null, actualQuantity:null, plannedText:before, actualText:after, amount:null,
+      note:'Zastávka přesměrována za jízdy.', requiresFollowUp:false, resolvedAt:null, resolvedBy:null,
+      resolutionNote:null, resolvedByOrderId:null, createdAt:daysFromNow(0), createdBy:ME.id });
+    n++;
+  });
+  return n;
+}
+
 /* ---- the shared drawer: record what actually happened --------------------------
    Opened from the order detail and from a stop in the shipment's nakládka. The
    "actual" column is prefilled from the STORED deviation, not from the plan —
@@ -4202,7 +4235,13 @@ function seSave(){ seSyncMeta(); const d=SH.draft; if(!d.name)return toast('Zade
     // the outgoing-shipment handling for them is being sorted out separately.
     return { ...st, items:[...o.items.filter(it=>it.productId).map(it=>{ const prev=existing&&existing.items.find(x=>x.orderItemId===it.id);
       return { id:it.id, orderItemId:it.id, productId:it.productId, quantity:it.quantity, dokladkaQty:prev?(prev.dokladkaQty||0):0, fromInventoryId:prev?prev.fromInventoryId:null, loaded:prev?prev.loaded:false, checked:prev?prev.checked:false, source:'order' }; }), ...keep] }; };
-  if(d.id){ const s=DB.shipments.find(x=>x.id===d.id); Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom }); toast('Vývoz uložen'); go('shipments/'+d.id); }
+  if(d.id){ const s=DB.shipments.find(x=>x.id===d.id);
+    // Redirecting a stop on a run that has already left is a change to the delivery, not
+    // a planning tweak, so it is recorded before the new address overwrites the old one.
+    const moved=ledgerRecordAddressMoves(s,d.stops);
+    Object.assign(s,{ name:d.name,deliveryDate:d.deliveryDate,vehicleId:d.vehicleId,driverIds:d.driverIds,stops:d.stops.map(build),extraCustom:d.extraCustom });
+    toast(moved?`Vývoz uložen · ${moved} ${plural(moved,'změna adresy zaznamenána','změny adresy zaznamenány','změn adresy zaznamenáno')}`:'Vývoz uložen');
+    go('shipments/'+d.id); }
   else { const s={ id:'s-'+Math.random().toString(36).slice(2,7), number:'VYV-2026-'+(53+DB.shipments.length), name:d.name, state:'Created',
     deliveryDate:d.deliveryDate, vehicleId:d.vehicleId, driverIds:d.driverIds, stops:d.stops.map(build), extraCustom:d.extraCustom };
     d.stops.forEach(st=>{const o=DB.orders.find(x=>x.id===st.orderId); if(o&&o.state==='New')o.state='Planning';});

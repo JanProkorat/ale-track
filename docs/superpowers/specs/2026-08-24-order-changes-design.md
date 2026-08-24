@@ -38,7 +38,7 @@ they start filling the cart, not after.
 | No summary panel | Nothing repeats the diffed rows. Only `Money` and `Other` get a card, because they have no row anywhere |
 | Colour | Never the only carrier of meaning. Every changed row also carries a text label or icon |
 | Permission | `ModuleType.Clients`. Drivers cannot record — the dispatcher does |
-| Address / date | Written **automatically** from the existing `OrderDeliveryAddressWriter` path, `requires_follow_up = false` |
+| Address / date | Written **automatically**, from **both** write paths — the order's address propagating to the stop, and the planner redirecting the stop itself. `requires_follow_up = false` |
 | Invoice | Deltas feed `ShipmentInvoiceReconciler.BuildSources` **regardless of `resolved_at`** |
 | Added products | New `InvoiceLineSourceKind.LedgerEntry = 4` |
 | Money on the invoice | Never |
@@ -242,11 +242,29 @@ untouched and the frozen-order guarantee is unchanged.
 
 ### Automatic entries for address and date
 
-`OrderDeliveryAddressWriter.PropagateToStopAsync` (`OrderDeliveryAddressWriter.cs:65`) already
-detects "the address changed under a live run" and stamps `AddressChangedAt` for stops whose shipment
-is neither `Delivered` nor `Cancelled`. An entry with `target = DeliveryAddress`,
-`requires_follow_up = false` and the old and new address text is written in that same branch. Same
-for `RequiredDeliveryDate`.
+**There are two write paths, and only one of them is instrumented today.** An earlier draft of this
+spec hooked the first and missed the second, which is the commoner one:
+
+1. **The order's address is edited** and propagates to the stop.
+   `OrderDeliveryAddressWriter.PropagateToStopAsync` (`OrderDeliveryAddressWriter.cs:65`) already
+   detects this and stamps `AddressChangedAt` for stops whose shipment is neither `Delivered` nor
+   `Cancelled`.
+2. **The planner redirects the stop itself** on the shipment. This stamps nothing:
+   `AddressChangedAt` is *set* in exactly one place in the whole codebase, the propagation above;
+   `UpdateOutgoingShipmentEndpoint.cs:369` only ever clears it, because saving the run is how a
+   dispatcher acknowledges a change that came from the order side.
+
+Path 2 is what actually happens when a client rings mid-run to say they cannot make it: the
+dispatcher opens the run and moves the stop. Both paths are the same event to the client, so **both
+write the entry** — `target = DeliveryAddress`, `requires_follow_up = false`, old and new address
+text. Same for `RequiredDeliveryDate`.
+
+Path 2 writes only once the run has left `Created`. Before that, moving a stop is planning: nothing
+has been promised to anyone, and logging every drag of the route would bury the real changes.
+
+Redirecting the same stop twice is **one** change of address, upserted like every other deviation —
+but the `planned_text` kept is the **original**, not the intermediate one, and returning the stop to
+where it began deletes the entry.
 
 The dispatcher therefore never types it twice, and `AddressChangedBanner` keeps working unchanged.
 The ledger adds what the banner lacks: what the value was before.
@@ -430,7 +448,11 @@ Backend, ledger:
 7. The upsert invariant: a second save for the same line rewrites, never appends.
 8. An actual returning to the planned value deletes the entry.
 9. An address change under a live run writes a `DeliveryAddress` entry with `requires_follow_up`
-   false, and leaves `AddressChangedAt` behaving as before.
+   false, and leaves `AddressChangedAt` behaving as before — **from either write path**: the order's
+   address propagating to the stop, and the planner redirecting the stop on the shipment.
+9a. Redirecting a stop on a run still in `Created` writes nothing.
+9b. Redirecting the same stop twice leaves one entry, whose `planned_text` is the original address.
+9c. Redirecting a stop back to where it started deletes the entry.
 10. Assigning to an order sets `resolved_by_order_id` and leaves `resolved_at` null.
 11. That order reaching `Finished` resolves the entry.
 12. Cancelling that order reopens it; cancelling the *shipment* does not.
