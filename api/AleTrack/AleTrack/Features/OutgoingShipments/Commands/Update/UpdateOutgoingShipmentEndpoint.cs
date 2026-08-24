@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
@@ -34,7 +35,10 @@ public sealed record UpdateOutgoingShipmentRequest
 /// <param name="companyOptions"></param>
 /// <param name="driverScope"></param>
 public sealed class UpdateOutgoingShipmentEndpoint(
-    AleTrackDbContext dbContext, IOptions<CompanyOptions> companyOptions, IDriverScope driverScope)
+    AleTrackDbContext dbContext,
+    IOptions<CompanyOptions> companyOptions,
+    IDriverScope driverScope,
+    IAppContext appContext)
     : Endpoint<UpdateOutgoingShipmentRequest>
 {
     /// <inheritdoc />
@@ -346,6 +350,15 @@ public sealed class UpdateOutgoingShipmentEndpoint(
             .Select(cos => cos.ClientOrderId)
             .Contains(s.ClientOrder!.PublicId))];
 
+        // The second of the two paths that can move a delivery, and the commoner one: a client
+        // rings mid-run to say they cannot make it, and the planner moves the stop here. Captured
+        // before the loop below rewrites the addresses.
+        var addressesBefore = stops
+            .Where(s => existingOrderIds.Contains(s.ClientOrder!.PublicId))
+            .ToDictionary(
+                s => s.PublicId,
+                s => DeliveryAddressText.Render(s.ClientOrder!.Client, s.SelectedAddressKind, s.ClientDeliveryPlace));
+
         // Update already-linked stops. Before this feature only Order was
         // written here, so changing a stop's address kind never persisted.
         foreach (var stop in stops.Where(s => existingOrderIds.Contains(s.ClientOrder!.PublicId)))
@@ -362,6 +375,23 @@ public sealed class UpdateOutgoingShipmentEndpoint(
             stop.DeriveAddressOverride(stop.ClientOrder!);
         }
 
+        // Judged on the stored state, not the requested one: a save that both moves a stop and
+        // loads the run is still planning — the address it settles on is what gets loaded.
+        if (ClientLedgerAddressWriter.IsRecordable(outgoingShipment.State))
+        {
+            var userId = await ResolveCurrentUserIdAsync(ct);
+            var now = DateTime.UtcNow;
+
+            foreach (var stop in stops.Where(s => addressesBefore.ContainsKey(s.PublicId)))
+            {
+                var after = await DeliveryAddressText.RenderAsync(
+                    dbContext, stop.ClientOrder!.Client, stop.SelectedAddressKind, stop.ClientDeliveryPlaceId, ct);
+
+                await ClientLedgerAddressWriter.RecordAsync(
+                    dbContext, stop.ClientOrder!, stop, addressesBefore[stop.PublicId], after, userId, now, ct);
+            }
+        }
+
         // The planner has just been looking at this shipment; whatever the
         // banner was announcing has been seen. Cleared for every stop, not
         // only the re-assigned ones.
@@ -369,6 +399,18 @@ public sealed class UpdateOutgoingShipmentEndpoint(
             stop.AddressChangedAt = null;
 
         return stops;
+    }
+
+    private async Task<long?> ResolveCurrentUserIdAsync(CancellationToken ct)
+    {
+        if (appContext.UserId is null)
+            return null;
+
+        var user = await dbContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.PublicId == appContext.UserId, ct);
+
+        return user?.Id;
     }
 
     private async Task<List<OutgoingShipmentStop>> BuildCustomStopsAsync(

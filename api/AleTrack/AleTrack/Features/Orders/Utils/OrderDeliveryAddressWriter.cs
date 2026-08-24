@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Features.ClientDeliveryPlaces;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,12 +62,18 @@ public static class OrderDeliveryAddressWriter
     /// the same: the shipment then shows "the order disagrees with this stop",
     /// which is the more valuable of the two warnings. Stops on delivered or
     /// cancelled shipments are left alone entirely — their address is history.
+    ///
+    /// This is also the first of the two paths that can move a delivery, so it
+    /// records the move in the client's ledger — but only once the run has left
+    /// <see cref="OutgoingShipmentState.Created"/>. Before that the order is
+    /// still the plan, and editing the plan is not a deviation from it.
     /// </remarks>
     public static async Task PropagateToStopAsync(
         AleTrackDbContext dbContext,
         Order order,
         DateTime now,
-        CancellationToken ct)
+        CancellationToken ct,
+        long? userId = null)
     {
         // AleTrackDbContext has no direct DbSet<OutgoingShipmentStop>; reach the
         // stop through the shipments it belongs to instead. The Include must
@@ -85,6 +92,16 @@ public static class OrderDeliveryAddressWriter
         if (stop.OutgoingShipment.State is OutgoingShipmentState.Delivered or OutgoingShipmentState.Cancelled)
             return;
 
+        // Captured before the mutation below, and rendered rather than compared as a
+        // (kind, place) pair: what the ledger needs is where the van was going to go.
+        var recordable = order.Client is not null
+                         && ClientLedgerAddressWriter.IsRecordable(stop.OutgoingShipment.State);
+
+        var before = recordable
+            ? await DeliveryAddressText.RenderAsync(
+                dbContext, order.Client, stop.SelectedAddressKind, stop.ClientDeliveryPlaceId, ct)
+            : null;
+
         if (!stop.IsAddressOverridden)
         {
             stop.SelectedAddressKind = order.DeliveryAddressKind;
@@ -100,5 +117,13 @@ public static class OrderDeliveryAddressWriter
         stop.DeriveAddressOverride(order);
 
         stop.AddressChangedAt = now;
+
+        if (!recordable)
+            return;
+
+        var after = await DeliveryAddressText.RenderAsync(
+            dbContext, order.Client, stop.SelectedAddressKind, stop.ClientDeliveryPlaceId, ct);
+
+        await ClientLedgerAddressWriter.RecordAsync(dbContext, order, stop, before, after, userId, now, ct);
     }
 }

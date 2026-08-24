@@ -70,7 +70,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         // Verify that the order entity was updated with correct values
@@ -123,7 +123,7 @@ public sealed class UpdateOrderTests
         var data = ContentOnlyDto(client.PublicId,
             [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 4 }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.State.Should().Be(OrderState.Planning, "the editor edits content, not the lifecycle");
@@ -157,7 +157,7 @@ public sealed class UpdateOrderTests
             ],
             notes: [new OrderNoteDto { Text = "Reklamace vyřízena." }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -185,7 +185,7 @@ public sealed class UpdateOrderTests
             state: OrderState.Cancelled,
             orderItems: [new UpdateOrderItemDto { ProductId = product.PublicId, Quantity = 1 }]);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.State.Should().Be(OrderState.Cancelled);
@@ -202,7 +202,7 @@ public sealed class UpdateOrderTests
             Data = OrderBuilder.BuildUpdateDto()
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -262,7 +262,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Client.Should().Be(newClient);
@@ -298,7 +298,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -345,7 +345,7 @@ public sealed class UpdateOrderTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         // Act
         var act = async () => await endpoint.HandleAsync(command, CancellationToken.None);
@@ -436,7 +436,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems[0].Quantity = 99;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -456,7 +456,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems.Clear();
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -476,7 +476,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.State = OrderState.Planning;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -502,7 +502,7 @@ public sealed class UpdateOrderTests
         data.Notes = [new OrderNoteDto { Text = "Klient si stěžoval na teplotu." }];
         data.RequiredDeliveryDate = new DateOnly(2026, 8, 1);
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -528,7 +528,7 @@ public sealed class UpdateOrderTests
         data.State = OrderState.New;
         data.OrderItems[0].Quantity = 7;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -546,7 +546,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems[0].Quantity = 3;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -634,7 +634,7 @@ public sealed class UpdateOrderTests
         UpdateOrderDto data)
     {
         var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
-            db.Object, Options.Create(new CompanyOptions()));
+            db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         return endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
     }
@@ -809,7 +809,7 @@ public sealed class UpdateOrderTests
         var data = EchoDto(f);
         data.OrderItems[0].Note = "Nechat u zadního vchodu.";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()));
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
@@ -818,5 +818,81 @@ public sealed class UpdateOrderTests
         f.Item.Note.Should().Be("Nechat u zadního vchodu.");
         db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
-}
 
+    // ---------------------------------------------------------------------------------
+    // The destination is not frozen content.
+    //
+    // What freezes when the truck is packed is what is on it. Where a client takes delivery is
+    // something that client can still change afterwards — ringing mid-run to say they cannot
+    // make it is the commonest deviation there is — so the move is allowed and recorded in the
+    // client's ledger instead of being refused.
+    // ---------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ProcessAsync_MoveTheAddressOfAnOrderOnALoadedShipment_Succeeds()
+    {
+        var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Loaded);
+        f.Client.ContactAddress = AddressBuilder.BuildEntity(streetName: "Krátká", streetNumber: "2");
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.DeliveryAddressKind = DeliveryAddressKind.Contact;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
+            db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.DeliveryAddressKind.Should().Be(DeliveryAddressKind.Contact);
+        f.Order.OrderItems.Should().ContainSingle().Which.Should().BeSameAs(f.Item,
+            "the items are still frozen — only the destination moved");
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Changing the <em>client</em> is still frozen content: that is not somebody moving their
+    /// own delivery, it is a different client's goods on a packed truck.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_ChangeTheClientOfAnOrderOnALoadedShipment_Fails()
+    {
+        var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Loaded);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.ClientId = Guid.NewGuid();
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
+            db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+
+        var act = async () => await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+    }
+
+    /// <summary>
+    /// A delivery that already happened is history: moving it would be rewriting the record
+    /// rather than recording it.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_MoveTheAddressOfAFinishedOrder_LeavesItAlone()
+    {
+        var f = BuildFreezeFixture(OrderState.Finished, OutgoingShipmentState.Delivered);
+        f.Client.ContactAddress = AddressBuilder.BuildEntity(streetName: "Krátká", streetNumber: "2");
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.DeliveryAddressKind = DeliveryAddressKind.Contact;
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
+            db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.DeliveryAddressKind.Should().Be(DeliveryAddressKind.Official);
+    }
+}

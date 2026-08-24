@@ -94,12 +94,36 @@ public sealed class ShipmentContentGuardTests
             .Should().Contain(nameof(UpdateOutgoingShipmentDto.ClientOrderShipments));
     }
 
+    /// <summary>
+    /// A stop's destination is deliberately not frozen content, though it used to be.
+    /// </summary>
+    /// <remarks>
+    /// What freezes when the truck is packed is what is on it and where it goes in what order.
+    /// Where a given client takes delivery is something that client can still change afterwards,
+    /// by ringing mid-run to say they cannot make it to the agreed address — the commonest
+    /// deviation there is. Refusing the move left the dispatcher nowhere to record what actually
+    /// happened; it is now allowed and written to the client's ledger instead.
+    /// </remarks>
     [Fact]
-    public void ChangedFrozenFields_StopAddressKindChanged_ReportsClientOrderShipments()
+    public void ChangedFrozenFields_StopAddressKindChanged_ReturnsEmpty()
     {
         var (shipment, dto) = RoundTripped();
 
         dto.ClientOrderShipments[0].SelectedAddressKind = DeliveryAddressKind.Contact;
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Which orders ride on the run stays frozen even though their destinations do not.
+    /// </summary>
+    [Fact]
+    public void ChangedFrozenFields_StopResequencedWhileMovingItsAddress_StillReportsClientOrderShipments()
+    {
+        var (shipment, dto) = RoundTripped();
+
+        dto.ClientOrderShipments[0].SelectedAddressKind = DeliveryAddressKind.Contact;
+        dto.ClientOrderShipments[0].Order += 10;
 
         ShipmentContentGuard.ChangedFrozenFields(shipment, dto)
             .Should().Contain(nameof(UpdateOutgoingShipmentDto.ClientOrderShipments));

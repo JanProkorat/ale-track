@@ -38,7 +38,8 @@ public sealed record UpdateOrderRequest
 /// </remarks>
 public sealed class UpdateOrderEndpoint(
     AleTrackDbContext dbContext,
-    IOptions<CompanyOptions> companyOptions) : Endpoint<UpdateOrderRequest>
+    IOptions<CompanyOptions> companyOptions,
+    IAppContext appContext) : Endpoint<UpdateOrderRequest>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -119,14 +120,10 @@ public sealed class UpdateOrderEndpoint(
             order.ActualDeliveryDate = req.Data.ActualDeliveryDate ?? order.ActualDeliveryDate;
             order.State = req.Data.State ?? order.State;
 
-            var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
-                dbContext, order, order.Client, req.Data.DeliveryAddressKind, req.Data.ClientDeliveryPlaceId, ct);
-
-            if (addressChanged || clientChanged)
-                await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct);
-
             MergeOrderItems(req.Data.OrderItems, order, products);
         }
+
+        await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
 
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
@@ -144,6 +141,41 @@ public sealed class UpdateOrderEndpoint(
     }
 
     /// <summary>
+    /// Applies the requested delivery address and pushes it onto the order's stop.
+    /// </summary>
+    /// <remarks>
+    /// Its own pass outside the <c>contentEditable</c> branch, like <see cref="ApplyItemNotes"/>,
+    /// and deliberately absent from <see cref="RequestChangesFrozenContent"/>. What freezes when
+    /// the truck is packed is what is on it; where a client takes delivery is something that
+    /// client can still change afterwards — ringing mid-run to say they cannot make it to the
+    /// agreed address is the commonest deviation there is. Refusing it left the dispatcher with
+    /// nowhere to record what happened, so the move is allowed and
+    /// <see cref="OrderDeliveryAddressWriter.PropagateToStopAsync"/> writes it into the client's
+    /// ledger.
+    ///
+    /// A closed order is still excluded: moving a delivery that has already happened would be
+    /// rewriting history rather than recording it. The stop's own guard refuses a delivered or
+    /// cancelled run for the same reason.
+    /// </remarks>
+    private async Task ApplyDeliveryAddressAsync(
+        UpdateOrderDto data, Order order, bool clientChanged, CancellationToken ct)
+    {
+        if (order.State is OrderState.Finished or OrderState.Cancelled)
+            return;
+
+        var addressChanged = await OrderDeliveryAddressWriter.ApplyAsync(
+            dbContext, order, order.Client, data.DeliveryAddressKind, data.ClientDeliveryPlaceId, ct);
+
+        if (!addressChanged && !clientChanged)
+            return;
+
+        // The author is passed through because propagation may record a change of destination in
+        // the client's ledger, and who moved a delivery is worth knowing.
+        var userId = await ResolveCurrentUserIdAsync(ct);
+        await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct, userId);
+    }
+
+    /// <summary>
     /// Whether the request would actually change content that is frozen.
     /// </summary>
     /// <remarks>
@@ -154,11 +186,14 @@ public sealed class UpdateOrderEndpoint(
     {
         // State and ActualDeliveryDate are compared only when the request carries them:
         // omitted means "leave as stored", which is by definition not a change.
+        //
+        // The delivery address is deliberately not compared — see ApplyDeliveryAddressAsync,
+        // which writes it in its own pass. Changing the *client*, on the other hand, still is
+        // frozen content: that is not a client moving their own delivery, it is a different
+        // client's goods on a packed truck.
         if (data.ClientId != order.Client.PublicId
             || (data.State is not null && data.State != order.State)
-            || (data.ActualDeliveryDate is not null && data.ActualDeliveryDate != order.ActualDeliveryDate)
-            || data.DeliveryAddressKind != order.DeliveryAddressKind
-            || data.ClientDeliveryPlaceId != order.ClientDeliveryPlace?.PublicId)
+            || (data.ActualDeliveryDate is not null && data.ActualDeliveryDate != order.ActualDeliveryDate))
             return true;
 
         var storedItems = order.OrderItems
@@ -398,6 +433,18 @@ public sealed class UpdateOrderEndpoint(
                 item.Note = posted.Note;
             }
         }
+    }
+
+    private async Task<long?> ResolveCurrentUserIdAsync(CancellationToken ct)
+    {
+        if (appContext.UserId is null)
+            return null;
+
+        var user = await dbContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.PublicId == appContext.UserId, ct);
+
+        return user?.Id;
     }
 
     private async Task<List<Product>> GetExistingProductsAsync(List<UpdateOrderItemDto> orderItems, CancellationToken ct)

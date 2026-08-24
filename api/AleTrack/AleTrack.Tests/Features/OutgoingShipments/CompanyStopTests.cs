@@ -63,7 +63,7 @@ public sealed class CompanyStopTests
         ];
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, Options.Create(Company), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(request, CancellationToken.None);
 

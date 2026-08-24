@@ -82,32 +82,31 @@ public static class ShipmentContentGuard
     }
 
     /// <summary>
-    /// Composition only: which orders are on the run, in what sequence, delivering to which
-    /// address.
+    /// Composition only: which orders are on the run, and in what sequence.
     /// </summary>
     /// <remarks>
     /// Loading confirmation and inventory sourcing ride along inside the same DTO field but
     /// are progress rather than content — the nakládka writes them while the shipment is
     /// Loaded and InTransit — so they are deliberately not compared here.
+    ///
+    /// Neither is a stop's <em>destination</em>, though it used to be. What freezes when the
+    /// truck is packed is what is on it and where it goes in what order; where a given client
+    /// takes delivery is a thing that client can still change afterwards, by ringing to say
+    /// they cannot make it to the agreed address. Refusing that left the dispatcher no way to
+    /// record what actually happened — the deviation this ledger exists for — so the move is
+    /// allowed and written to the client's ledger instead. The papers stay true because they
+    /// were printed before departure, and the invoice never looked at the address.
     /// </remarks>
     private static bool OrderStopsMatch(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
     {
         var storedStops = stored.Stops
             .Where(s => s.Kind == OutgoingShipmentStopKind.Order && s.ClientOrder is not null)
-            .Select(s => (
-                OrderId: s.ClientOrder!.PublicId,
-                s.Order,
-                s.SelectedAddressKind,
-                PlaceId: s.ClientDeliveryPlace?.PublicId))
+            .Select(s => (OrderId: s.ClientOrder!.PublicId, s.Order))
             .OrderBy(s => s.OrderId)
             .ToList();
 
         var incomingStops = incoming.ClientOrderShipments
-            .Select(s => (
-                OrderId: s.ClientOrderId,
-                s.Order,
-                s.SelectedAddressKind,
-                PlaceId: s.ClientDeliveryPlaceId))
+            .Select(s => (OrderId: s.ClientOrderId, s.Order))
             .OrderBy(s => s.OrderId)
             .ToList();
 

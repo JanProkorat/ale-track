@@ -222,7 +222,7 @@ public sealed class PreparationStepTests
 
     private static async Task Save(Fixture f, List<PreparationStepDto> steps)
     {
-        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+        var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(f.DbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(new UpdateOutgoingShipmentRequest
         {
             Id = f.Shipment.PublicId,
