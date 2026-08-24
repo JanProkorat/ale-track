@@ -19,9 +19,10 @@ import { fmtLiters } from 'src/lib/format';
 import { kindLabel } from 'src/lib/labels';
 import {
   ClientLedgerEntryTarget,
+  ClientLedgerRowDto,
   SaveClientLedgerEntriesDto,
   UpdateClientLedgerEntryDto,
-  type ClientLedgerRowDto,
+  type IClientLedgerRowDto,
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
 import { useProducts } from 'src/hooks/useProducts';
@@ -167,7 +168,9 @@ export function LedgerEntryDrawer({
   const buildRows = (): ClientLedgerRowDto[] => {
     const rows: ClientLedgerRowDto[] = [];
 
-    const push = (row: Partial<ClientLedgerRowDto>) => rows.push(row as ClientLedgerRowDto);
+    // Constructed, never cast: the generated SaveClientLedgerEntriesDto.toJSON() calls toJSON()
+    // on every row, so a plain object literal type-checks and then throws on save.
+    const push = (row: IClientLedgerRowDto) => rows.push(new ClientLedgerRowDto(row));
 
     for (const row of items) {
       push({

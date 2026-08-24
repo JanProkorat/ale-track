@@ -259,6 +259,21 @@ describe('LedgerEntryDrawer', () => {
     expect(screen.getByText(/Zapsáno automaticky/)).toBeInTheDocument();
   });
 
+  // The payload has to survive being serialized, which is the one thing recording the mutation
+  // argument does not prove. SaveClientLedgerEntriesDto.toJSON() calls toJSON() on every row, so
+  // a row built as a plain object literal throws "item.toJSON is not a function" — and every
+  // assertion above passed while it did, because they only ever read the object's fields.
+  it('sends rows the generated client can serialize', () => {
+    renderDrawer(context());
+
+    fireEvent.change(actualInput('Ležák 12'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    const payload = saveMock.mock.calls[0][0].data;
+    expect(() => payload.toJSON()).not.toThrow();
+    expect(payload.toJSON().rows[0]).toMatchObject({ plannedQuantity: 10, actualQuantity: 7 });
+  });
+
   it('records nothing at all when the operator changes nothing', () => {
     renderDrawer(context({ items: [], returns: [], extras: [], goods: [] }));
 
