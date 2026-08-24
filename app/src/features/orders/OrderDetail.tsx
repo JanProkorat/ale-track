@@ -32,6 +32,7 @@ import {
 } from 'src/features/clients/ledgerModel';
 import { LedgerRowTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
 import { LedgerMoneyCard } from 'src/features/clients/LedgerMoneyCard';
+import { LedgerEntryDrawer } from 'src/features/clients/LedgerEntryDrawer';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
 
@@ -115,6 +116,7 @@ export function OrderDetail({
   onEdit,
   onDelete,
   onOpenShipment,
+  canRecordDeviation = false,
 }: {
   order: OrderDto;
   editable: boolean;
@@ -129,6 +131,8 @@ export function OrderDetail({
    *  resolved by the page, like `editable`, so the detail stays renderable
    *  without an auth provider. */
   onOpenShipment?: (shipmentId: string) => void;
+  /** Whether the user may record a deviation — the ledger rides on Clients : Edit, not Orders. */
+  canRecordDeviation?: boolean;
 }) {
   const { enqueueSnackbar } = useSnackbar();
   const { formatMoney } = useCurrency();
@@ -166,6 +170,30 @@ export function OrderDetail({
     entriesForTarget(orderEntries, 'CustomExtraQuantity'),
   );
   const movedTo = addressEntry(orderEntries);
+
+  const [recording, setRecording] = useState(false);
+
+  // Offered once the run has left: before that the plan is still being made, and there is no
+  // handover to compare anything against.
+  const canRecordNow = canRecordDeviation && (stateName === 'Delivering' || stateName === 'Finished');
+
+  // The plan the drawer diffs against is the order's own quantity, which is also what was
+  // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype
+  // shows an "objednáno 4, naloženo 6" case; the real model has no way to load more than the
+  // order says, so that line has nothing to render.)
+  const drawerContext = {
+    clientId: order.client?.id ?? '',
+    clientName: order.client?.name ?? '—',
+    orderId: order.id,
+    orderLabel: [orderNumber(order.id), status.label].filter(Boolean).join(' · '),
+    // No kind or package size on the order's item DTO — the order screen never showed them, so
+    // the drawer's rows carry the name alone rather than the chip the prototype draws.
+    items: items.map((it) => planRow(it.id, it.productName, it.quantity)),
+    goods: goodItems.map((g) => planRow(g.id, g.goodName, g.quantity, g.goodSize)),
+    returns: returns.map((r) => planRow(r.id, r.name, r.quantity)),
+    extras: extras.map((e) => planRow(e.id, e.description, e.quantity)),
+    entries: orderEntries,
+  };
 
   // Row lookups by line id, so the existing item and good tables keep their own markup and
   // only borrow the diff. A row appended by the ledger has no planned line to attach to and is
@@ -286,6 +314,16 @@ export function OrderDetail({
                 sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
               >
                 Upravit
+              </Button>
+            )}
+            {canRecordNow && (
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() => setRecording(true)}
+                sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+              >
+                Zaznamenat změnu
               </Button>
             )}
             {editable && (
@@ -507,6 +545,12 @@ export function OrderDetail({
         </Stack>
         )}
       </Box>
+
+      <LedgerEntryDrawer
+        open={recording}
+        context={drawerContext}
+        onClose={() => setRecording(false)}
+      />
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
         <MenuItem onClick={() => menu && setReminder(menu.itemId, OrderItemReminderState.Added)}>

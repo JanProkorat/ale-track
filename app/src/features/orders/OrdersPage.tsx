@@ -248,6 +248,10 @@ export function OrdersPage({ view }: { view?: 'create' | 'edit' }) {
             <OrderDetail
               order={order}
               editable={editable}
+              // The ledger is a client record, so recording a deviation needs Clients : Edit —
+              // resolved here like `editable`, so the detail stays renderable without an auth
+              // provider.
+              canRecordDeviation={canEdit('clients')}
               onBack={() => navigate(backTarget?.backTo ?? PATHS.orders)}
               backLabel={backTarget?.backLabel}
               onEdit={() => navigate(`${PATHS.orders}/${id}/edit`)}

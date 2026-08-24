@@ -24,9 +24,15 @@ const ledgerState: {
   isError: boolean;
 } = { data: [], isLoading: false, isError: false };
 
+// The recording drawer is mounted by the detail, so its mutation hooks are part of the same
+// module and have to be mocked alongside the read.
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ledgerState,
+  useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [] }) }));
 
 function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledgerState> = {}) {
   ledgerState.data = entries;
