@@ -463,13 +463,16 @@ run, sectioned by brewery and then by kind (kegs last, as the van is packed), wi
 ramp is worked through invoice by invoice — not on an order line, which is what makes it structurally
 unable to carry a per-client deviation in the first place.
 
-**Returns and extra items belong on the run too.** They were invisible on the shipment: `unloadOrder.ts`
-maps only `stop.products` and the supplier goods, so a client handing back four crates against an
-order that planned none showed up nowhere on the run at all. Each stop therefore carries two
-sub-lists under its unload lines — `Vratky` and `Položky navíc` — diffed the same way. They are
-sub-lists rather than more unload lines because they did not come off the pallet: the driver takes
-the empties and the client signs for the loan, which is a different transaction at the same doorstep.
-This is a change to the app's unload view, not only to the prototype.
+**Returns and extra items belong on the run too**, but not in the unload list. They already have
+cards of their own on the shipment detail — `ReturnsCard` (`ShipmentDetail.tsx:768`), grouped by stop
+and headed by the client, and the `Extra položky (vratné obaly ap.)` card that reads the stops'
+`customExtraItems`. Both are read-only there: the rows are owned by the order and only displayed on
+the run.
+
+The diff goes into those cards, not under the unload lines. The vykládka is what comes **off** the
+pallet; these two go the other way — the driver takes the empties, the client signs for the loan —
+so they are a different transaction at the same doorstep and belong in their own place. Recording
+still happens through the stop's `Zaznamenat změnu`, which covers every collection at once.
 
 ### No second banner on the shipment
 

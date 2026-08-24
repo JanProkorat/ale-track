@@ -3703,8 +3703,8 @@ function viewShipmentDetail(id){
     ${routeMap(pts,{h:360,animate:s.state==='InTransit'})}
     <div class="grid" style="grid-template-columns:1.5fr 1fr;align-items:start;margin-top:16px">
       <div class="stack" style="gap:14px"><div id="ship-load">${shipLoadingCard(s)}</div>
-        ${s.extraCustom&&s.extraCustom.length?`<div class="section-label" style="margin-top:8px">Extra položky (vratné obaly ap.)</div>
-          <div class="card"><div class="card-pad stack" style="gap:8px">${s.extraCustom.map(e=>`<div class="row" style="justify-content:space-between"><span>${esc(e.description)}</span><span class="tnum t-strong">${e.quantity} ks</span></div>`).join('')}</div></div>`:''}</div>
+        ${shipReturnsCard(s)}
+        ${shipExtrasCard(s)}</div>
       <div class="stack" style="gap:14px">
         <div class="card"><div class="card-head"><h3>Vůz</h3></div><div class="card-pad">
           ${veh?`<div class="row gap12"><div class="ti-ico" style="background:var(--surface-3)">${icon('vehicle',18)}</div>
@@ -3770,25 +3770,41 @@ function unloadLines(s,st){
     .forEach(e=>{ const p=prodById(e.productId); if(p) rows.push({ p, planned:0, entry:e, appended:true }); });
   return rows;
 }
-/* The empties the client hands back and the odds and ends going the other way.
-   Both belong at the handover as much as the beer does — the driver has to take the
-   crates and the client has to sign for the loan — and neither was visible on the run
-   at all before. Rendered as a sub-list rather than more unload lines, because they
-   are not what came off the pallet. */
-function unloadSideList(st,coll,target,title,rows){
-  const merged=st.orderId?ledgerSimpleRows(rows||[],st.orderId,target):[];
-  if(!merged.length) return '';
-  return `<div style="padding:6px 14px 8px;border-top:1px solid var(--border)">
-    <div class="t-mut" style="font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">${title}</div>
-    ${merged.map(({r,entry})=>{ const qty=entry?entry.actualQuantity:r.quantity; const cls=ledgerRowClass(entry);
-      return `<div class="row gap8" style="align-items:baseline;padding:3px 0;${cls==='row-added'?'':''}">
-        <span style="font-size:12.5px;${cls==='row-removed'?'text-decoration:line-through;color:var(--text-3)':''}">${esc(r.name||r.description)}</span>
-        ${entry?ledTag(entry):''}
-        <span style="flex:1"></span>
-        <span class="tnum" style="font-size:12.5px;font-weight:700;flex:0 0 auto">${entry
-          ? (ledRowStatus(entry)==='added'?`<span class="diff-new">× ${qty}</span>`:`<span class="diff-old">× ${r.quantity}</span> <span class="diff-new">× ${qty}</span>`)
-          : '× '+qty}</span></div>`; }).join('')}</div>`;
+/* ---- Vratky a Extra položky na vývozu -------------------------------------------
+ * Their own cards, grouped by stop, as in the app. Not lines of the vykládka: the
+ * vykládka is what comes OFF the pallet, and these two go the other way — the driver
+ * takes the empties, the client signs for the loan. Two transactions at one doorstep.
+ *
+ * Both are owned by the order and only displayed here, so both are read-only; the
+ * deviations are recorded through the stop's own "Zaznamenat změnu".
+ */
+function shipSideCard(s,title,ic,coll,target){
+  const groups=s.stops.slice().sort((a,b)=>a.order-b.order)
+    .map(st=>{ const o=st.orderId?DB.orders.find(x=>x.id===st.orderId):null;
+      return { st, cl:clientById(st.clientId), rows:o?ledgerSimpleRows(o[coll]||[],st.orderId,target):[] }; })
+    .filter(g=>g.rows.length);
+  if(!groups.length) return '';
+  return `<div class="card" style="overflow:hidden"><div class="card-head">${icon(ic,17)}<h3>${title}</h3></div>
+    ${groups.map(g=>`<div style="padding:12px 16px;border-top:1px solid var(--border)">
+      <div class="row gap8" style="margin-bottom:8px">
+        <span class="dotc" style="width:8px;height:8px;border-radius:2px;flex:0 0 auto;background:${colorFor(g.cl.id)}"></span>
+        <span class="t-strong" style="font-size:13px">${esc(g.cl.name)}</span></div>
+      <div class="stack" style="gap:7px">${g.rows.map(({r,entry})=>{ const qty=entry?entry.actualQuantity:r.quantity;
+        const cls=ledgerRowClass(entry);
+        return `<div class="row gap8" style="align-items:flex-start">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:13.5px;${cls==='row-removed'?'text-decoration:line-through;color:var(--text-3)':''}">${esc(r.name||r.description)}</div>
+            ${r.note?`<div class="t-mut" style="font-size:11.5px">${esc(r.note)}</div>`:''}
+            ${entry?`<div style="margin-top:3px">${ledTag(entry)}</div>`:''}</div>
+          <span class="tnum t-strong" style="flex:0 0 auto">${entry
+            ? (ledRowStatus(entry)==='added'?`<span class="diff-new">${qty}×</span>`:`<span class="diff-old">${r.quantity}×</span> <span class="diff-new">${qty}×</span>`)
+            : qty+'×'}</span></div>`; }).join('')}</div></div>`).join('')}</div>`;
 }
+function shipReturnsCard(s){ return shipSideCard(s,'Vratky','arrowU','returns','ReturnQuantity'); }
+/* Owned by the order, added there, only displayed here — which is why the app reads
+   these off the stops rather than off the shipment's own list. */
+function shipExtrasCard(s){ return shipSideCard(s,'Extra položky (vratné obaly ap.)','tag','extras','CustomExtraQuantity'); }
+
 function unloadStopBlock(s,st,seq){
   const cl=clientById(st.clientId);
   const o=st.orderId?DB.orders.find(x=>x.id===st.orderId):null;
@@ -3823,9 +3839,7 @@ function unloadStopBlock(s,st,seq){
         ${addrLed?`<div style="font-size:11.5px;margin-top:3px" title="${esc(ledWhy(addrLed))}">${textDiff(addrLed.plannedText,addrLed.actualText)}</div>`:''}</div>
       ${recordable?`<button class="btn btn-sm btn-soft" style="flex:0 0 auto" onclick="ledgerDrawer('${st.orderId}')">${icon('edit',14)}Zaznamenat změnu</button>`:''}
     </div>
-    ${rows.length?lines:'<div class="t-mut" style="font-size:12px;padding:8px 14px">Bez vykládky</div>'}
-    ${unloadSideList(st,'returns','ReturnQuantity','Vratky',o&&o.returns)}
-    ${unloadSideList(st,'extras','CustomExtraQuantity','Položky navíc',o&&o.extras)}</div>`;
+    ${rows.length?lines:'<div class="t-mut" style="font-size:12px;padding:8px 14px">Bez vykládky</div>'}</div>`;
 }
 function shipUnloadCard(s){
   const stopsSorted=s.stops.slice().sort((a,b)=>a.order-b.order);
