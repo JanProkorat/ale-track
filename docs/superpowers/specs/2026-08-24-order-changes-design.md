@@ -26,7 +26,7 @@ they start filling the cart, not after.
 | Owner | **Client**, not order. `order_id` is nullable — a debt can exist with no order behind it |
 | Table | One: `client_ledger_entries` |
 | Two kinds of row | `requires_follow_up` separates a debt from a mere record (address change) |
-| Taxonomy | By **target** (what changed), not by event. Eight values, four of which share one code path |
+| Taxonomy | By **target** (what changed), not by event. Seven values, four of which share one code path |
 | Money | Plain signed `decimal`, CZK only (the project has no multi-currency) |
 | Resolution | Binary: open / assigned / resolved. No partial settlement |
 | "Assigned" | `resolved_by_order_id` set while `resolved_at` is still null |
@@ -38,7 +38,8 @@ they start filling the cart, not after.
 | No summary panel | Nothing repeats the diffed rows. Only `Money` and `Other` get a card, because they have no row anywhere |
 | Colour | Never the only carrier of meaning. Every changed row also carries a text label or icon |
 | Permission | `ModuleType.Clients`. Drivers cannot record — the dispatcher does |
-| Address / date | Written **automatically**, from **both** write paths — the order's address propagating to the stop, and the planner redirecting the stop itself. `requires_follow_up = false` |
+| Address | Written **automatically**, from **both** write paths — the order's address propagating to the stop, and the planner redirecting the stop itself. `requires_follow_up = false` |
+| No `DeliveryDate` target | The delivery date is not changed once the run is on the road, so the target would never be written. Appended later if that changes |
 | Invoice | Deltas feed `ShipmentInvoiceReconciler.BuildSources` **regardless of `resolved_at`** |
 | Added products | New `InvoiceLineSourceKind.LedgerEntry = 4` |
 | Money on the invoice | Never |
@@ -140,7 +141,7 @@ order_return_id        NULL,     SetNull      ReturnQuantity
 line_name              NULL                   snapshot for the non-product lines
 planned_quantity       NULL
 actual_quantity        NULL
-planned_text           NULL                   DeliveryAddress / DeliveryDate: the old value
+planned_text           NULL                   DeliveryAddress: the old value
 actual_text            NULL                   ... and the new one
 amount                 NULL   decimal(18,2)   Money; signed, + client owes us, - we owe client
 note                   NULL
@@ -161,9 +162,8 @@ public enum ClientLedgerEntryTarget
     CustomExtraQuantity = 2,   // custom_extra_item_id
     ReturnQuantity = 3,        // order_return_id
     DeliveryAddress = 4,
-    DeliveryDate = 5,
-    Money = 6,
-    Other = 7
+    Money = 5,
+    Other = 6
 }
 ```
 
@@ -186,7 +186,7 @@ invariant: one unresolved entry per `(order_id, target, line id)`.
 | `ReturnQuantity` | yes — the client still owes empties | **yes** — we are holding deposits that are not ours |
 | `CustomExtraQuantity` | yes | yes |
 | `Money`, `Other` | yes | yes |
-| `DeliveryAddress`, `DeliveryDate` | never — informational | never |
+| `DeliveryAddress` | never — informational | never |
 
 A return has no good direction, which is also why its over-delivery never gets the
 affirmative colour that "delivered extra" earns.
@@ -240,7 +240,7 @@ where actual equals planned are never stored — the ledger holds no no-op rows.
 The ledger never routes through `UpdateOrderEndpoint`, so `OrderMutability.IsContentEditable` is
 untouched and the frozen-order guarantee is unchanged.
 
-### Automatic entries for address and date
+### Automatic entries for the delivery address
 
 **There are two write paths, and only one of them is instrumented today.** An earlier draft of this
 spec hooked the first and missed the second, which is the commoner one:
@@ -257,7 +257,11 @@ spec hooked the first and missed the second, which is the commoner one:
 Path 2 is what actually happens when a client rings mid-run to say they cannot make it: the
 dispatcher opens the run and moves the stop. Both paths are the same event to the client, so **both
 write the entry** — `target = DeliveryAddress`, `requires_follow_up = false`, old and new address
-text. Same for `RequiredDeliveryDate`.
+text.
+
+`RequiredDeliveryDate` has **no** target of its own: the date is not changed once the run has left,
+so an entry for it would never be written. Enum values are appended in this codebase rather than
+reordered, so adding one later is safe.
 
 Path 2 writes only once the run has left `Created`. Before that, moving a stop is planning: nothing
 has been promised to anyone, and logging every drag of the route would bury the real changes.
@@ -419,8 +423,15 @@ The two things the card used to carry for quantity rows are relocated rather tha
 
 - **Why, who and when** ride on the row's own tag as a `title` tooltip — wanted for the one row being
   looked at, not for all of them at once.
-- **Resolving** happens in the client's ledger tab, reached from a `Nedořešeno u klienta` link on the
-  order's Klient card. The ledger is the client's record, so the way into it belongs on the client.
+- **Resolving** happens on the order's **Klient card**, which lists the client's open points in full
+  rather than linking away to them. Sending somebody to another screen for their to-do list means
+  they never look.
+
+The Klient card deliberately lists the client's **whole** open list, not just this order's — what
+makes it worth reading is the part that happened elsewhere. Entries belonging to the order being
+viewed are badged `z této objednávky`, so the reader can tell at a glance what is already struck
+through above and what is news. Each row carries its resolve action; a row already carried by
+another order is badged `zařazeno` and offers none, because it is somebody else's to close.
 
 ### No second banner on the shipment
 

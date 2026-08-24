@@ -547,7 +547,7 @@ const L = {
   // once and the wording is derived from the sign (see ledgerHeadline).
   ledgerTarget:{ ProductQuantity:'Množství', SupplierGoodQuantity:'Množství zboží',
     ReturnQuantity:'Vratka', CustomExtraQuantity:'Položka navíc',
-    DeliveryAddress:'Adresa doručení', DeliveryDate:'Termín doručení', Money:'Peníze', Other:'Jiné' },
+    DeliveryAddress:'Adresa doručení', Money:'Peníze', Other:'Jiné' },
   ledgerState:{ open:'Nedořešeno', assigned:'Zařazeno', resolved:'Vyřešeno' },
 };
 /* Charge kinds in the order a price list reads them. */
@@ -2637,10 +2637,9 @@ function ledgerHeadline(e){
   }
   if(e.target==='Money') return e.amount>=0?`Klient dluží ${money(e.amount)}`:`Dlužíme klientovi ${money(-e.amount)}`;
   if(e.target==='DeliveryAddress') return `Vyloženo jinde než v objednávce`;
-  if(e.target==='DeliveryDate') return `Dovezeno jiný den, než bylo v objednávce`;
   return esc(e.note||'Změna');
 }
-function ledIcon(t){ return t==='Money'?'wallet':t==='DeliveryAddress'?'pin':t==='DeliveryDate'?'cal'
+function ledIcon(t){ return t==='Money'?'wallet':t==='DeliveryAddress'?'pin'
   :t==='ReturnQuantity'?'arrowU':t==='CustomExtraQuantity'?'tag':'box'; }
 /* The inline diff: the old value struck through, the new one highlighted. */
 function qtyDiff(planned,actual){
@@ -2941,6 +2940,27 @@ function ledgerItem(e,{showClient=false}={}){
   </div>`;
 }
 
+/* The short form, for the client card on an order detail. Drops the date, the author and
+   the order link that the full row carries — this is a to-do list, not a record — but keeps
+   the action, because a to-do you cannot tick is just a reminder that you are behind. */
+function ledgerCompactItem(e,currentOrderId){
+  const here=e.orderId&&e.orderId===currentOrderId;
+  const ord=e.orderId?DB.orders.find(o=>o.id===e.orderId):null;
+  return `<div class="row gap8" style="align-items:flex-start" title="${esc(ledWhy(e))}">
+    <span class="led-ico" style="width:24px;height:24px;flex:0 0 auto">${icon(ledIcon(e.target),12)}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12.5px;font-weight:700;line-height:1.35">${ledgerHeadline(e)}</div>
+      <div class="row gap8" style="margin-top:3px;flex-wrap:wrap">
+        ${here?'<span class="tag">z této objednávky</span>'
+          :ord?`<a href="#/orders/${ord.id}" class="tag" style="color:var(--amber-700)">${ord.number}</a>`
+          :'<span class="tag">bez objednávky</span>'}
+        ${ledState(e)==='assigned'?'<span class="chg-tag t-new">zařazeno</span>':''}</div>
+    </div>
+    ${canEdit('clients')&&ledState(e)==='open'
+      ?`<button class="btn btn-sm btn-ghost" style="flex:0 0 auto" onclick="ledgerResolve('${e.id}')">${icon('check',13)}</button>`:''}
+  </div>`;
+}
+
 /* The client-profile tab: what is still open, then everything that ever deviated. */
 function ledgerView(clientId){
   const all=ledgerOf(clientId);
@@ -3099,12 +3119,19 @@ function viewOrderDetail(id){
         <div class="card"><div class="card-head"><h3>Klient</h3></div><div class="card-pad">
           <div class="row-lead" style="margin-bottom:12px">${avatar(cl.id,initials(cl.name))}<div><div class="t-strong">${esc(cl.name)}</div><div class="t-mut" style="font-size:12px">${L.region[cl.region]}</div></div></div>
           <div class="addr">${fmtAddrFull(cl.officialAddress)}</div>
-          ${(()=>{ // The ledger belongs to the client, so the way into it lives on the client
-            // card rather than on a panel of deviations this order no longer needs.
-            const openN=ledgerOpen(cl.id).length; if(!openN) return '';
-            return `<div class="divider"></div><a href="#/clients/${cl.id}?tab=zmeny" class="row gap8" style="color:var(--amber-700);font-size:12.5px;font-weight:700">
-              ${icon('warnTri',14)}Nedořešeno u klienta <span class="tag">${openN}</span>
-              <span style="margin-left:auto">${icon('chevR',13)}</span></a>`; })()}
+          ${(()=>{ /* Listed here, not behind a link. This is the question the card answers —
+            what is still open with this client — and sending someone to another screen for
+            it means they never look.
+
+            Deliberately the client's WHOLE open list, not just this order's: what makes it
+            worth reading is the part that happened elsewhere. Entries from this order are
+            marked, so the reader can tell at a glance what is already struck through above
+            and what is news. */
+            const open=ledgerOpen(cl.id); if(!open.length) return '';
+            return `<div class="divider"></div>
+              <div class="row gap8" style="margin-bottom:10px;font-size:12.5px;font-weight:800;color:var(--warn)">
+                ${icon('warnTri',14)}Nedořešeno u klienta <span class="tag">${open.length}</span></div>
+              <div class="stack" style="gap:8px">${open.map(e=>ledgerCompactItem(e,id)).join('')}</div>`; })()}
         </div></div>
       </div></div></div>`;
 }
