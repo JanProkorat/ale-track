@@ -985,6 +985,101 @@ describe('delivery address', () => {
   });
 });
 
+describe("a payer's band: each sub-client's own order", () => {
+  const PAYER = 'client-payer';
+
+  /** A stop for one sub-client, carrying its own notes and vratky. */
+  const subStop = (
+    id: string,
+    order: number,
+    clientId: string,
+    notes: string[],
+    returns: { name: string; quantity: number }[],
+  ) => ({
+    id, order, clientId,
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    notes: notes.map((t) => ({ id: `${id}-${t}`, text: t, dateCreated: new Date() })),
+    returns: returns.map((r) => ({ id: `${id}-${r.name}`, ...r })),
+  } as unknown as OutgoingShipmentStopDto);
+
+  /** One invoice, issued to the payer, billing two sub-clients' goods. */
+  function payerBand() {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    return [
+      subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], []),
+      subStop('st-b', 2, CLIENT_B, [], [{ name: 'Sud 30l KEG', quantity: 4 }]),
+    ];
+  }
+
+  /// The payer takes no delivery of its own, so reading the band's own stop found nothing at all —
+  /// which is how every sub-client's note and vratka went missing from this screen.
+  it("shows each sub-client's notes and vratky, named", () => {
+    renderSection(true, payerBand());
+
+    // Named, because two clients' orders are on this one band and a bare note or vratka could
+    // belong to either.
+    const hohmann = screen.getByTestId(`party-details-${CLIENT_A}`);
+    expect(within(hohmann).getByText('Andreas Hohmann')).toBeInTheDocument();
+    expect(within(hohmann).getByText('Platí za pivo 822 EUR')).toBeInTheDocument();
+
+    const chorvatka = screen.getByTestId(`party-details-${CLIENT_B}`);
+    expect(within(chorvatka).getByText('Chorvatka')).toBeInTheDocument();
+    expect(within(chorvatka).getByText('Sud 30l KEG')).toBeInTheDocument();
+  });
+
+  // A client with neither note nor vratka has nothing to show, and an empty block headed by its
+  // name would read as "no instructions".
+  it('leaves out a sub-client with neither', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({
+          clientId: PAYER,
+          clientName: 'O Hübner',
+          stopOrder: undefined,
+          lines: [
+            line({ quantity: 5, orderingClientId: CLIENT_A, orderingClientName: 'Andreas Hohmann' }),
+            line({ quantity: 4, orderingClientId: CLIENT_B, orderingClientName: 'Chorvatka' }),
+          ],
+        }),
+      ],
+    });
+
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Platí za pivo 822 EUR'], [])]);
+
+    expect(screen.getByTestId(`party-details-${CLIENT_A}`)).toBeInTheDocument();
+    // Chorvatka has neither, so it gets no block — an empty one under its name would read as "no
+    // instructions".
+    expect(screen.queryByTestId(`party-details-${CLIENT_B}`)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('band-returns')).not.toBeInTheDocument();
+  });
+
+  // One client, one order: naming it above its own note repeats the band header.
+  it('does not name the client on an ordinary band', () => {
+    renderSection(true, [subStop('st-a', 1, CLIENT_A, ['Dovézt dopoledne'], [])]);
+
+    expect(screen.getByText('Dovézt dopoledne')).toBeInTheDocument();
+    expect(screen.getAllByText('Klient A')).toHaveLength(1);
+  });
+});
+
 describe('order notes', () => {
   const stopWithNotes = (texts: string[]) => ({
     id: 'st1', order: 1, clientId: CLIENT_A,

@@ -232,6 +232,21 @@ public static class ShipmentExportDocumentBuilder
     /// has none of: a blank "Poznámky" reads as "no instructions", which is a claim this page has no
     /// business making.
     /// </remarks>
+    private static void WritePartyNotes(Body body, ShipmentExportInvoiceParty party)
+    {
+        if (party.Notes.Count == 0)
+            return;
+
+        var details = LabelTable();
+
+        // Nothing at all rather than an empty row: a blank "Poznámky" reads as "no instructions",
+        // which is a claim this page has no business making.
+        for (var i = 0; i < party.Notes.Count; i++)
+            details.AppendChild(LabelRow(i == 0 ? "Poznámky" : string.Empty, party.Notes[i]));
+
+        AppendTable(body, details);
+    }
+
     private static void WritePartyDelivery(Body body, ShipmentExportInvoiceParty party)
     {
         var details = LabelTable();
@@ -324,37 +339,98 @@ public static class ShipmentExportDocumentBuilder
             // invoicing.
             body.AppendChild(Heading(ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient)));
 
-            // One party's name above one table repeats the heading word for word. The subtitle is
-            // for the invoice that bills several clients' goods, where each table needs saying
-            // whose it is.
-            var namesParties = invoice.Parties.Count > 1;
-
-            foreach (var party in invoice.Parties)
-            {
-                if (namesParties)
-                    body.AppendChild(SectionHeading(ShipmentExportLabels.PartyHeading(party)));
-
-                WritePartyDelivery(body, party);
-                WriteProductTable(body, party.Products);
-
-                if (party.Returns.Count > 0)
-                    WriteReturnsTable(body, party.Returns);
-            }
-
-            // Only where it is the one number no table carries: with a single party its table's own
-            // closing row is already the invoice's total, and printing it twice invited the reader
-            // to look for the difference.
-            if (namesParties)
-                body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
-
-            // Placed with this invoice's page, not appended after the loop, so it reads as part of
-            // this payer's invoice rather than as a stray section at the end of the document.
-            if (invoice.BillingRecipients.Count > 0)
-            {
-                body.AppendChild(SectionHeading(ShipmentExportLabels.BillingRecipientsHeading(invoice)));
-                WriteBillingRecipientsTable(body, invoice.BillingRecipients);
-            }
+            // An invoice billing several clients' goods is read top down — who it is addressed to,
+            // what it bills in total, whom to invoice on, and only then the detail behind each
+            // number. One that bills a single client needs none of that scaffolding: the client is
+            // the heading, and its table is the whole invoice.
+            if (invoice.Parties.Count > 1)
+                WriteGroupInvoice(body, invoice);
+            else
+                WriteSingleClientInvoice(body, invoice);
         }
+    }
+
+    /// <summary>
+    /// A payer's invoice: its own address, everything it bills as one table, the sub-clients to
+    /// invoice on, then a numbered section per client.
+    /// </summary>
+    private static void WriteGroupInvoice(Body body, ShipmentExportInvoice invoice)
+    {
+        WriteInvoiceAddress(body, invoice);
+
+        // The summary is what the payer owes, in one place. Its own closing row is the invoice's
+        // total, so no paragraph restates it.
+        WriteProductTable(body, invoice.AggregatedProducts);
+
+        WriteBillingRecipients(body, invoice);
+
+        var index = 1;
+
+        foreach (var party in invoice.Parties)
+        {
+            // "4.1", "4.2" — the invoice's own number, then the client's place within it, so a
+            // section can be named out loud against the number on the paper invoice.
+            body.AppendChild(SectionHeading($"{invoice.Number}.{index++} {ShipmentExportLabels.PartyHeading(party)}"));
+
+            // No address here: the invoice has one, at the top. What the client's own order said and
+            // what it hands back are its alone, though, and belong beside its goods.
+            WritePartyNotes(body, party);
+            WriteProductTable(body, party.Products);
+
+            if (party.Returns.Count > 0)
+                WriteReturnsTable(body, party.Returns);
+        }
+    }
+
+    /// <summary>
+    /// An ordinary invoice: one client, its delivery, its goods, what it hands back.
+    /// </summary>
+    private static void WriteSingleClientInvoice(Body body, ShipmentExportInvoice invoice)
+    {
+        foreach (var party in invoice.Parties)
+        {
+            WritePartyDelivery(body, party);
+            WriteProductTable(body, party.Products);
+
+            if (party.Returns.Count > 0)
+                WriteReturnsTable(body, party.Returns);
+        }
+
+        WriteBillingRecipients(body, invoice);
+    }
+
+    /// <summary>
+    /// The address the invoice is sent to. Nothing at all when the payer has none on file.
+    /// </summary>
+    private static void WriteInvoiceAddress(Body body, ShipmentExportInvoice invoice)
+    {
+        if (invoice.PayerStreet is null && invoice.PayerCityLine is null)
+            return;
+
+        body.AppendChild(SectionHeading("Fakturační adresa"));
+
+        var details = LabelTable();
+
+        if (invoice.PayerStreet is not null)
+            details.AppendChild(LabelRow("Ulice", invoice.PayerStreet));
+
+        if (invoice.PayerCityLine is not null)
+            details.AppendChild(LabelRow("PSČ a město", invoice.PayerCityLine));
+
+        AppendTable(body, details);
+    }
+
+    /// <summary>
+    /// Placed with this invoice's page rather than after the loop, so it reads as part of this
+    /// payer's invoice rather than as a stray section at the end of the document.
+    /// </summary>
+    private static void WriteBillingRecipients(Body body, ShipmentExportInvoice invoice)
+    {
+        if (invoice.BillingRecipients.Count == 0)
+            return;
+
+        body.AppendChild(SectionHeading(ShipmentExportLabels.BillingRecipientsHeading(invoice)));
+        WriteBillingRecipientsTable(body, invoice.BillingRecipients);
     }
 
     /// <summary>

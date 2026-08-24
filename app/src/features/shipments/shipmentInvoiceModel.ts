@@ -439,6 +439,55 @@ export function bandReturns(
   return stopForBand(band, stops)?.returns ?? [];
 }
 
+/** One client whose goods a band bills, with what its own order said and hands back. */
+export interface PartyOrderDetails {
+  clientId: string;
+  clientName: string;
+  notes: OrderNoteDto[];
+  returns: OrderReturnDto[];
+}
+
+/**
+ * The order-side detail of every client a band bills for, in the order the band renders them.
+ *
+ * A payer's band bills several clients' goods, and each of those orders carries its own notes and
+ * vratky — none of which is the payer's. Reading them off the band's own stop (as the header's
+ * address does) finds nothing at all for a payer that takes no delivery, which is why they used to
+ * be missing from a group band entirely.
+ *
+ * One entry per client, even when its goods are spread over several of the band's invoices: the
+ * notes and the vratky belong to the order, not to the invoice the office happened to split it
+ * onto. Clients with neither are dropped — an empty block reads as "no instructions", a claim this
+ * cannot make.
+ */
+export function bandPartyDetails(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): PartyOrderDetails[] {
+  const seen = new Map<string, PartyOrderDetails>();
+
+  for (const invoice of band.invoices) {
+    for (const party of invoiceParties(invoice)) {
+      if (seen.has(party.clientId)) continue;
+
+      // The band's own client keeps the stop-order match — one client can hold two stops, and
+      // `stopForBand` is what picks the right one. A party is only ever known by its client.
+      const stop = party.clientId === band.clientId
+        ? stopForBand(band, stops)
+        : stops.find((s) => s.clientId === party.clientId);
+
+      seen.set(party.clientId, {
+        clientId: party.clientId,
+        clientName: party.clientName,
+        notes: stop?.notes ?? [],
+        returns: stop?.returns ?? [],
+      });
+    }
+  }
+
+  return [...seen.values()].filter((party) => party.notes.length > 0 || party.returns.length > 0);
+}
+
 /** How many other clients' goods this band's invoices bill for. Deliberately not called
  * "linked" — a client billed through a payer is a standing arrangement, but a line the office
  * moved onto this invoice by hand is not one, and this count cannot tell the two apart. It

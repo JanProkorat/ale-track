@@ -721,6 +721,21 @@ public static class ShipmentExportQuery
         OutgoingShipmentInvoiceLine Line);
 
     /// <summary>
+    /// What one invoice is, apart from its lines: who pays, which of that payer's invoices it is,
+    /// and where it is addressed.
+    /// </summary>
+    private sealed record InvoiceFacts
+    {
+        public required long PayerId { get; init; }
+        public required Guid PayerPublicId { get; init; }
+        public required int Sequence { get; init; }
+        public required string Name { get; init; }
+        public string? BusinessName { get; init; }
+        public string? Street { get; init; }
+        public string? CityLine { get; init; }
+    }
+
+    /// <summary>
     /// Where one client's goods went on this run — the delivery its invoice parties report.
     /// </summary>
     private sealed record PartyDelivery

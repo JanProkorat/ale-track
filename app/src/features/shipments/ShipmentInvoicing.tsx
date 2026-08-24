@@ -41,6 +41,8 @@ import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import {
   InvoiceAdjustmentKind,
   InvoiceLineSourceKind,
+  type OrderNoteDto,
+  type OrderReturnDto,
   type ShipmentInvoiceDto,
   type ShipmentInvoicesDto,
   type OutgoingShipmentStopDto,
@@ -51,7 +53,7 @@ import {
 } from 'src/hooks/useShipmentInvoices';
 import { fmtLiters, num, plural } from 'src/lib/format';
 import {
-  bandAddress, bandNotes, bandReturns, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
+  bandAddress, bandPartyDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
   invoiceValue, otherClientCount,
   moveTargetOptions, originChips, partOrigin, partsByLikelihood, sectionTotals, toBands,
   PRIVATE_TARGET,
@@ -128,8 +130,7 @@ function BandAddressLine({ band, stops }: { band: ClientBand; stops: OutgoingShi
  *  run long, and the header is deliberately two lines. Renders nothing at all
  *  when the order has none — an empty box would read as "no instructions",
  *  which is a claim this component has no business making. */
-function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
-  const notes = bandNotes(band, stops);
+function BandNotes({ notes }: { notes: OrderNoteDto[] }) {
   if (notes.length === 0) return null;
 
   return (
@@ -166,8 +167,7 @@ function BandNotes({ band, stops }: { band: ClientBand; stops: OutgoingShipmentS
  *  Read-only, like the shipment's own Vratky card — returns are owned by the
  *  order. Rendered in the same idiom as that card (name, note beneath,
  *  quantity right-aligned) so a vratka looks the same wherever it appears. */
-function BandReturns({ band, stops }: { band: ClientBand; stops: OutgoingShipmentStopDto[] }) {
-  const returns = bandReturns(band, stops);
+function BandReturns({ returns }: { returns: OrderReturnDto[] }) {
   if (returns.length === 0) return null;
 
   return (
@@ -529,6 +529,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
           ) : (
             bands.map((band, index) => {
               const other = otherClientCount(band);
+              const partyDetails = bandPartyDetails(band, stops);
               return (
               <Box
                 key={band.clientId}
@@ -634,7 +635,6 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                 </BandBillingRecipients>
 
                 <Collapse in={!collapsed.has(band.clientId)} unmountOnExit>
-                  <BandNotes band={band} stops={stops} />
                   <Card variant="outlined" sx={{ mt: 1.25 }}>
                     <TableContainer sx={{ overflowX: 'auto' }}>
                       <Table size="small">
@@ -778,9 +778,22 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
                       </Table>
                     </TableContainer>
                   </Card>
-                  {/* Below the products, not above: what the client hands back
-                      reads after what they are being billed for. */}
-                  <BandReturns band={band} stops={stops} />
+                  {/* Below the products, not above: what the order said and what the client
+                      hands back both read after what is being billed.
+
+                      One block per client whose goods this band bills, not one for the band: a
+                      payer's band carries several clients' orders, and every note and vratka on it
+                      belongs to one of them. The client is named only when there is more than one
+                      to tell apart — an ordinary band reads exactly as it always did. */}
+                  {partyDetails.map((party) => (
+                    <Box key={party.clientId} data-testid={`party-details-${party.clientId}`}>
+                      {partyDetails.length > 1 && (
+                        <Typography sx={{ ...HEAD_SX, mt: 1.5 }}>{party.clientName}</Typography>
+                      )}
+                      <BandNotes notes={party.notes} />
+                      <BandReturns returns={party.returns} />
+                    </Box>
+                  ))}
                 </Collapse>
               </Box>
               );

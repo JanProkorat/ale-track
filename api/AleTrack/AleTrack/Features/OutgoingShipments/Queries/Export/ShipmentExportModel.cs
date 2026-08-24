@@ -233,9 +233,49 @@ public sealed record ShipmentExportInvoice
     /// <summary>Position among that client's invoices on this run, starting at 1.</summary>
     public int Sequence { get; init; }
 
+    /// <summary>
+    /// Street line of the address the invoice itself is sent to — the paying client's own official
+    /// one, not a delivery. Null when it has none on file.
+    /// </summary>
+    public string? PayerStreet { get; init; }
+
+    /// <summary>Zip and city of the same.</summary>
+    public string? PayerCityLine { get; init; }
+
     public List<ShipmentExportInvoiceParty> Parties { get; init; } = [];
 
     public int TotalQuantity => Parties.Sum(p => p.TotalQuantity);
+
+    /// <summary>
+    /// Everything the invoice bills, merged into one row per product — the summary a payer's invoice
+    /// leads with, before the per-client detail behind it.
+    /// </summary>
+    /// <remarks>
+    /// Two sub-clients ordering the same keg land on one row: what the payer owes for it is one
+    /// number, and reading it off two tables is the arithmetic this table exists to save.
+    ///
+    /// Merged on the product as the reader sees it — name, kind, package — because that is what the
+    /// rows claim to be the same. Delivered counts add up where they are known and stay null where
+    /// none of the contributing rows could answer, so a merged row never reads as "delivered
+    /// nothing" for goods nobody tracked a delivery for.
+    /// </remarks>
+    public List<ShipmentExportProduct> AggregatedProducts =>
+        Parties
+            .SelectMany(party => party.Products)
+            .GroupBy(product => (product.Name, product.Kind, product.PackageSize))
+            .Select(group => new ShipmentExportProduct
+            {
+                Name = group.Key.Name,
+                Kind = group.Key.Kind,
+                PackageSize = group.Key.PackageSize,
+                Weight = group.Select(p => p.Weight).FirstOrDefault(weight => weight is not null),
+                Quantity = group.Sum(p => p.Quantity),
+                DeliveredQuantity = group.Any(p => p.DeliveredQuantity is not null)
+                    ? group.Sum(p => p.DeliveredQuantity ?? 0)
+                    : null
+            })
+            .OrderBy(product => product.Name, StringComparer.CurrentCulture)
+            .ToList();
 
     /// <summary>
     /// Sub-clients whose official address the office chose to name on this invoice, for the

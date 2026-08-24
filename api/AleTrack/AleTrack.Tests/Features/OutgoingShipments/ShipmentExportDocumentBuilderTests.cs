@@ -107,12 +107,16 @@ public sealed class ShipmentExportDocumentBuilderTests
         int number = 1,
         Guid? payingClientId = null,
         string? payingClientBusinessName = null,
+        string? payerStreet = null,
+        string? payerCityLine = null,
         List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
             Number = number,
             PayingClientName = payingClientName,
             PayingClientBusinessName = payingClientBusinessName,
+            PayerStreet = payerStreet,
+            PayerCityLine = payerCityLine,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
             Parties = parties,
@@ -864,15 +868,16 @@ public sealed class ShipmentExportDocumentBuilderTests
         // it does lead with the number the office confirmed the row under, matching the workbook's
         // rule exactly.
         paragraphs.Should().Contain("2. Hospoda U Kotvy");
-        // Two parties, so each table says whose goods it lists — by name, with no "vlastní zboží"
-        // gloss on the payer's own.
-        paragraphs.Should().Contain("HOSPODA U KOTVY");
-        paragraphs.Should().Contain("PIVNICE NA ROHU");
-        // The per-party totals are gone: each party's own table closes with its Celkem row, so a
-        // paragraph restating it said the same number twice.
-        paragraphs.Should().NotContain("Celkem Hospoda U Kotvy: 24 ks");
-        // The invoice total survives here, and only here — it is the one number no table carries.
-        paragraphs.Should().Contain("Celkem faktura: 30 ks");
+        // Two parties, so each gets a numbered section of its own under the invoice's summary.
+        paragraphs.Should().Contain("2.1 HOSPODA U KOTVY");
+        paragraphs.Should().Contain("2.2 PIVNICE NA ROHU");
+        // No totals in prose: the summary table's closing row is the invoice's total, and each
+        // section's table closes with that client's own.
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem Hospoda U Kotvy"));
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem faktura"));
+
+        // Three product tables: the invoice's summary, then one per client.
+        body.Elements<Table>().Count(t => t.InnerText.StartsWith("PRODUKT")).Should().Be(3);
     }
 
     [Fact]
@@ -972,6 +977,140 @@ public sealed class ShipmentExportDocumentBuilderTests
         // The table keeps its own closing row — that is where the number belongs.
         TableHeaded(body: Open(model), firstHeader: "PRODUKT").Last().Should().Contain("24 ks");
     }
+
+    /// <summary>
+    /// A group's invoice — a payer billed for several sub-clients' goods — reads top down: who the
+    /// invoice is addressed to, everything it bills as one table, the sub-clients to invoice on, and
+    /// only then the per-client detail.
+    /// </summary>
+    [Fact]
+    public void Build_GroupInvoice_LeadsWithThePayersAddressAndTheWholeInvoicesGoods()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().ContainInOrder(
+            "4. O Hübner – Getränke Schulze",
+            "FAKTURAČNÍ ADRESA",
+            "FAKTURAČNÍ ADRESA PRO O HÜBNER",
+            "4.1 ANDREAS HOHMANN",
+            "4.2 CHORVATKA");
+
+        // The payer's own invoicing address, not a sub-client's delivery. Tables 0 and 1 are the
+        // overview's own summary and route table, so the invoice page's start at 2.
+        TableRows(body, 2).Should().Contain(row => row[0] == "Ulice" && row[1] == "Niedere Hauptstraße 53");
+
+        // Everything the invoice bills, merged per product: the two clients' Svijanský Máz land on
+        // one row, and the table closes with the invoice's own total.
+        var summary = TableRows(body, 3);
+        summary[0].Should().Equal("PRODUKT", "DRUH", "BALENÍ", "SKUTEČNĚ", "FAKTURAČNĚ");
+        // Hohmann's 5 and Chorvatka's 5 bill as one row of 10 — one of Chorvatka's never arrived,
+        // so 9 were delivered against the 10 billed.
+        summary.Should().Contain(row => row[0] == "Svijanský Máz" && row[3] == "9 ks" && row[4] == "10 ks");
+        summary.Last().Should().Equal("Celkem", string.Empty, "14 ks", "15 ks");
+    }
+
+    /// <summary>
+    /// The sub-client sections carry the detail the summary cannot: what that client ordered, the
+    /// order's notes and what it hands back. Not its address — the invoice has one, at the top.
+    /// </summary>
+    [Fact]
+    public void Build_GroupInvoiceSubSection_CarriesGoodsNotesAndVratkyButNoAddress()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        // One address block on the page — the payer's.
+        paragraphs.Count(text => text == "FAKTURAČNÍ ADRESA").Should().Be(1);
+
+        var sections = body.ChildElements.ToList();
+        var subHeading = sections.FindIndex(el => el.InnerText == "4.1 ANDREAS HOHMANN");
+        var nextHeading = sections.FindIndex(el => el.InnerText == "4.2 CHORVATKA");
+
+        var between = sections.GetRange(subHeading, nextHeading - subHeading);
+
+        between.Should().Contain(el => el.InnerText.Contains("Platí za pivo 822 EUR"), "its own note");
+        between.Should().Contain(el => el.InnerText.Contains("Svijanská Kněžna"), "its own goods");
+        between.Should().NotContain(el => el.InnerText.Contains("Ulice"), "the address is the invoice's");
+    }
+
+    [Fact]
+    public void Build_GroupInvoiceSubSection_KeepsItsVratky()
+    {
+        var body = Open(BuildModel(invoices: [GroupInvoice()]));
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("VRACÍ");
+        paragraphs.IndexOf("VRACÍ").Should().BeGreaterThan(
+            paragraphs.IndexOf("4.2 CHORVATKA"), "they belong to the client that hands them back");
+
+        TableHeaded(body, "POLOŽKA").Should().Contain(row => row[0] == "Sud 30l KEG");
+    }
+
+    // With the summary table carrying the invoice's own Celkem row, a paragraph restating it said
+    // the same number twice.
+    [Fact]
+    public void Build_GroupInvoice_WritesNoInvoiceTotalParagraph()
+    {
+        Paragraphs(Open(BuildModel(invoices: [GroupInvoice()])))
+            .Should().NotContain(text => text.StartsWith("Celkem faktura"));
+    }
+
+    /// <summary>
+    /// One client, one table: no summary of a single thing, no numbered sub-section, and its own
+    /// address block stays where it is.
+    /// </summary>
+    [Fact]
+    public void Build_OrdinaryInvoice_KeepsItsOwnAddressAndNoSubSections()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, street: "Dlouhá 14", cityLine: "602 00 Brno")
+            ])
+        ]));
+
+        var paragraphs = Paragraphs(body);
+
+        paragraphs.Should().Contain("FAKTURAČNÍ ADRESA");
+        paragraphs.Should().NotContain(text => text.StartsWith("1.1"));
+        // Its own products table is the only one; a summary above it would repeat it.
+        body.Elements<Table>().Count(t => t.InnerText.StartsWith("PRODUKT")).Should().Be(1);
+    }
+
+    /// <summary>
+    /// A payer billed for two sub-clients, one of which returns goods and carries a note.
+    /// </summary>
+    private static ShipmentExportInvoice GroupInvoice() =>
+        BuildInvoice(
+            "O Hübner", sequence: 1, number: 4,
+            payingClientBusinessName: "Getränke Schulze",
+            payerStreet: "Niedere Hauptstraße 53",
+            payerCityLine: "027 08 Kottmar-Niedercunnersdorf",
+            parties:
+            [
+                BuildParty(
+                    "Andreas Hohmann",
+                    street: "Schwarzmeerstraße 80",
+                    cityLine: "10319 Berlín",
+                    notes: ["Platí za pivo 822 EUR"],
+                    products:
+                    [
+                        BuildProduct("Svijanská Kněžna", 5, ProductKind.Keg, 30, delivered: 5),
+                        BuildProduct("Svijanský Máz", 5, ProductKind.Keg, 50, delivered: 5)
+                    ]),
+                BuildParty(
+                    "Chorvatka",
+                    street: "Otto-Suhr-Allee 17",
+                    cityLine: "10585 Berlin",
+                    products: [BuildProduct("Svijanský Máz", 5, ProductKind.Keg, 50, delivered: 4)],
+                    returns: [new ShipmentExportReturn { Name = "Sud 30l KEG", Quantity = 4 }])
+            ],
+            billingRecipients:
+            [
+                BuildRecipient("Chorvatka", "Otto-Suhr-Allee 17", "10585 Berlin")
+            ]);
 
     [Fact]
     public void Build_ModelWithoutInvoices_WritesNoFakturaceSection()
