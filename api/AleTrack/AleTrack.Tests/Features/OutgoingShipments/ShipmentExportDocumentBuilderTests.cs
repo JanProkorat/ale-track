@@ -100,11 +100,13 @@ public sealed class ShipmentExportDocumentBuilderTests
         List<ShipmentExportInvoiceParty> parties,
         int number = 1,
         Guid? payingClientId = null,
+        string? payingClientBusinessName = null,
         List<ShipmentExportBillingRecipient>? billingRecipients = null) =>
         new()
         {
             Number = number,
             PayingClientName = payingClientName,
+            PayingClientBusinessName = payingClientBusinessName,
             PayingClientId = payingClientId ?? new Guid(MD5.HashData(Encoding.UTF8.GetBytes(payingClientName))),
             Sequence = sequence,
             Parties = parties,
@@ -322,7 +324,7 @@ public sealed class ShipmentExportDocumentBuilderTests
         // Each break is followed directly by the heading of the invoice it opens, so no content can
         // slip onto the previous page.
         breakIndices.Select(index => children[index + 1].InnerText)
-            .Should().Equal("Fakturace: 1 · Hospoda U Kotvy", "Fakturace: 2 · Bez položek s.r.o.");
+            .Should().Equal("1. Hospoda U Kotvy", "2. Bez položek s.r.o.");
     }
 
     // Both mechanisms together would break twice and leave a blank page between every invoice.
@@ -398,7 +400,7 @@ public sealed class ShipmentExportDocumentBuilderTests
             ]));
 
         TableRows(body, 1).Should().Contain(row => row[1] == "Hospoda U Kotvy");
-        Paragraphs(body).Should().NotContain("Fakturace: 1 · Hospoda U Kotvy");
+        Paragraphs(body).Should().NotContain("1. Hospoda U Kotvy");
     }
 
     [Fact]
@@ -855,11 +857,15 @@ public sealed class ShipmentExportDocumentBuilderTests
         // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — but
         // it does lead with the number the office confirmed the row under, matching the workbook's
         // rule exactly.
-        paragraphs.Should().Contain("Fakturace: 2 · Hospoda U Kotvy");
-        paragraphs.Should().Contain("HOSPODA U KOTVY · VLASTNÍ ZBOŽÍ");
+        paragraphs.Should().Contain("2. Hospoda U Kotvy");
+        // Two parties, so each table says whose goods it lists — by name, with no "vlastní zboží"
+        // gloss on the payer's own.
+        paragraphs.Should().Contain("HOSPODA U KOTVY");
         paragraphs.Should().Contain("PIVNICE NA ROHU");
-        paragraphs.Should().Contain("Celkem Hospoda U Kotvy: 24 ks");
-        paragraphs.Should().Contain("Celkem Pivnice Na Rohu: 6 ks");
+        // The per-party totals are gone: each party's own table closes with its Celkem row, so a
+        // paragraph restating it said the same number twice.
+        paragraphs.Should().NotContain("Celkem Hospoda U Kotvy: 24 ks");
+        // The invoice total survives here, and only here — it is the one number no table carries.
         paragraphs.Should().Contain("Celkem faktura: 30 ks");
     }
 
@@ -877,12 +883,12 @@ public sealed class ShipmentExportDocumentBuilderTests
 
         // Both pages of one client share its number — it is one confirmed row — so the sequence is
         // what tells them apart.
-        paragraphs.Should().Contain("Fakturace: 1 · Hospoda U Kotvy · Faktura 1");
-        paragraphs.Should().Contain("Fakturace: 1 · Hospoda U Kotvy · Faktura 2");
+        paragraphs.Should().Contain("1. Hospoda U Kotvy · Faktura 1");
+        paragraphs.Should().Contain("1. Hospoda U Kotvy · Faktura 2");
 
         // The one-invoice payer gets no meaningless "Faktura 1".
-        paragraphs.Should().Contain("Fakturace: 2 · Pivnice Na Rohu");
-        paragraphs.Should().NotContain("Fakturace: 2 · Pivnice Na Rohu · Faktura 1");
+        paragraphs.Should().Contain("2. Pivnice Na Rohu");
+        paragraphs.Should().NotContain("2. Pivnice Na Rohu · Faktura 1");
     }
 
     /// <summary>
@@ -902,9 +908,63 @@ public sealed class ShipmentExportDocumentBuilderTests
         var paragraphs = Paragraphs(Open(model));
 
         // Their own numbers are what keep them apart, not a sequence suffix neither has earned.
-        paragraphs.Should().Contain("Fakturace: 1 · Hospoda U Kotvy");
-        paragraphs.Should().Contain("Fakturace: 2 · Hospoda U Kotvy");
+        paragraphs.Should().Contain("1. Hospoda U Kotvy");
+        paragraphs.Should().Contain("2. Hospoda U Kotvy");
         paragraphs.Should().NotContain(text => text.Contains("· Faktura"));
+    }
+
+    /// <summary>
+    /// The trading name is what tells two clients of the same name apart, so the page that gets
+    /// filed carries it beside the client's own.
+    /// </summary>
+    [Fact]
+    public void Build_PayerWithATradingName_NamesItInTheHeading()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice(
+                "Luděk Pachl", sequence: 1, number: 1,
+                parties: [BuildParty("Luděk Pachl", isPayer: true)],
+                payingClientBusinessName: "Pachl s.r.o.")
+        ]);
+
+        Paragraphs(Open(model)).Should().Contain("1. Luděk Pachl – Pachl s.r.o.");
+    }
+
+    /// <summary>
+    /// One client, one table: naming the party above it repeats the heading word for word. The
+    /// subtitle earns its place only on an invoice that bills more than one client's goods.
+    /// </summary>
+    [Fact]
+    public void Build_InvoiceWithOneParty_WritesNoPartySubtitle()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().Contain("1. Hospoda U Kotvy");
+        paragraphs.Should().NotContain("HOSPODA U KOTVY");
+    }
+
+    // Its own table already closes with a Celkem row; with one party that row *is* the invoice's
+    // total, so a paragraph under it said the same number a third time.
+    [Fact]
+    public void Build_InvoiceWithOneParty_WritesNoTotalsUnderTheTable()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        var paragraphs = Paragraphs(Open(model));
+
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem Hospoda U Kotvy"));
+        paragraphs.Should().NotContain(text => text.StartsWith("Celkem faktura"));
+        // The table keeps its own closing row — that is where the number belongs.
+        TableHeaded(body: Open(model), firstHeader: "PRODUKT").Last().Should().Contain("24 ks");
     }
 
     [Fact]
@@ -952,6 +1012,58 @@ public sealed class ShipmentExportDocumentBuilderTests
         var body = Open(model);
 
         body.InnerText.Should().NotContain("Fakturační adresa");
+    }
+
+    /// <summary>
+    /// Calibri is a Windows font. A reader without it — every Mac — substitutes something of its
+    /// own, and picked a serif, which is why the file read like a novel rather than a delivery note.
+    /// </summary>
+    [Fact]
+    public void Build_DeclaresAFontEveryReaderHas()
+    {
+        var stream = new MemoryStream(ShipmentExportDocumentBuilder.Build(BuildModel()));
+        using var document = WordprocessingDocument.Open(stream, isEditable: false);
+
+        var fonts = document.MainDocumentPart!.StyleDefinitionsPart!.Styles!
+            .DocDefaults!.RunPropertiesDefault!.RunPropertiesBaseStyle!.RunFonts!;
+
+        fonts.Ascii!.Value.Should().Be("Arial");
+        fonts.HighAnsi!.Value.Should().Be("Arial");
+    }
+
+    /// <summary>
+    /// Hairline rules under the rows and nothing between the columns: a full grid of boxes is what
+    /// made the file look like a spreadsheet printout.
+    /// </summary>
+    [Fact]
+    public void Build_DataTables_RuleTheirRowsAndNotTheirColumns()
+    {
+        var body = Open(BuildFullModel());
+        var borders = sheetTable(body, 1).GetFirstChild<TableProperties>()!.TableBorders!;
+
+        borders.InsideHorizontalBorder!.Val!.Value.Should().Be(BorderValues.Single);
+        borders.InsideVerticalBorder!.Val!.Value.Should().Be(BorderValues.None);
+        borders.LeftBorder!.Val!.Value.Should().Be(BorderValues.None);
+        borders.RightBorder!.Val!.Value.Should().Be(BorderValues.None);
+    }
+
+    // A quantity is read against the ones above it, which only works when they share an edge.
+    [Fact]
+    public void Build_QuantityColumn_IsRightAligned()
+    {
+        var body = Open(BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]));
+
+        var products = body.Elements<Table>()
+            .First(table => table.Elements<TableRow>().First().InnerText.StartsWith("PRODUKT"));
+
+        foreach (var row in products.Elements<TableRow>())
+        {
+            row.Elements<TableCell>().Last().Descendants<Justification>().Single().Val!.Value
+                .Should().Be(JustificationValues.Right);
+        }
     }
 
     /// <summary>

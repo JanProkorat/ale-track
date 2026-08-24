@@ -628,10 +628,11 @@ public sealed class ShipmentExportWorkbookBuilderTests
         var sheet = workbook.Worksheet("Fakturace");
 
         // The payer holds only this one invoice, so the heading carries no "Faktura 1" suffix — but
-        // it does lead with the number the office confirmed the row under. Its party row carries the
-        // "vlastní zboží" marker instead, matching the Word export.
-        var headingRow = RowOf(sheet, "2 · Hospoda U Kotvy");
-        var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
+        // it does lead with the number the office confirmed the row under.
+        var headingRow = RowOf(sheet, "2. Hospoda U Kotvy");
+        // The party row under it is named by the client alone — the sheet keeps one per party
+        // because that row carries the party's subtotal and its collapse group.
+        var payerPartyRow = RowOf(sheet, "Hospoda U Kotvy");
         payerPartyRow.Should().BeGreaterThan(headingRow);
 
         sheet.Cell(payerPartyRow, 4).GetValue<int>().Should().Be(24);
@@ -661,7 +662,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
-        RowOf(sheet, "1 · Pivnice Na Rohu").Should().BeLessThan(RowOf(sheet, "2 · Hospoda U Kotvy"));
+        RowOf(sheet, "1. Pivnice Na Rohu").Should().BeLessThan(RowOf(sheet, "2. Hospoda U Kotvy"));
     }
 
     [Fact]
@@ -731,7 +732,7 @@ public sealed class ShipmentExportWorkbookBuilderTests
         using var workbook = Open(model);
         var sheet = workbook.Worksheet("Fakturace");
 
-        var partyRow = RowOf(sheet, "Hospoda U Kotvy · vlastní zboží");
+        var partyRow = RowOf(sheet, "Hospoda U Kotvy");
         var addressRow = RowOf(sheet, "Adresa");
         var productHeaderRow = RowOf(sheet, "PRODUKT");
 
@@ -758,14 +759,14 @@ public sealed class ShipmentExportWorkbookBuilderTests
 
         // Both blocks of one client share its number — it is one confirmed row — so the sequence is
         // what tells them apart.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
-        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1. Hospoda U Kotvy · Faktura 1").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1. Hospoda U Kotvy · Faktura 2").Should().HaveCount(1);
 
-        // The one-invoice payer gets no meaningless "Faktura 1". Its own party row carries the
-        // "vlastní zboží" marker, matching the Word export.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
-        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Pivnice Na Rohu").Should().HaveCount(1);
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu · vlastní zboží").Should().HaveCount(1);
+        // The one-invoice payer gets no meaningless "Faktura 1"; its party row is named by the
+        // client alone, as every party row now is.
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2. Pivnice Na Rohu · Faktura 1").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2. Pivnice Na Rohu").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Pivnice Na Rohu").Should().HaveCount(1);
     }
 
     /// <summary>
@@ -787,8 +788,9 @@ public sealed class ShipmentExportWorkbookBuilderTests
 
         sheet.Column(1).CellsUsed(c => c.GetString().Contains("Faktura")).Should().BeEmpty();
         // Their own numbers are what keep them apart, not a sequence suffix neither has earned.
-        sheet.Column(1).CellsUsed(c => c.GetString() == "1 · Hospoda U Kotvy").Should().HaveCount(1);
-        sheet.Column(1).CellsUsed(c => c.GetString() == "2 · Hospoda U Kotvy").Should().HaveCount(1);
-        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy · vlastní zboží").Should().HaveCount(2);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "1. Hospoda U Kotvy").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "2. Hospoda U Kotvy").Should().HaveCount(1);
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy")
+            .Should().HaveCount(2, "one party row each, named by the client alone");
     }
 }

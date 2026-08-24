@@ -25,12 +25,27 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 /// </remarks>
 public static class ShipmentExportDocumentBuilder
 {
+    /// <summary>
+    /// The one font the file declares. On every reader that matters — Word on Windows, Preview and
+    /// Pages on macOS — Arial is installed, so nothing substitutes a face of its own choosing.
+    /// </summary>
+    private const string BodyFont = "Arial";
+
     /// <summary>Half-points, as Word measures font size. 20 = 10pt.</summary>
     private const string BodyFontSize = "20";
 
-    private const string HeadingFontSize = "28";
+    /// <summary>The run's own name, at the head of the first page. 32 = 16pt.</summary>
+    private const string TitleFontSize = "32";
+
+    private const string HeadingFontSize = "26";
 
     private const string FooterFontSize = "16";
+
+    /// <summary>Grey for the labels of a label block, so the values are what the eye lands on.</summary>
+    private const string LabelColor = "666666";
+
+    /// <summary>Hairline grey for the rules between rows.</summary>
+    private const string RuleColor = "D9D9D9";
 
     /// <summary>
     /// Column widths in twentieths of a point, summing to the text width of a portrait A4 page at
@@ -57,8 +72,11 @@ public static class ShipmentExportDocumentBuilder
 
     private static readonly int[] BillingRecipientColumns = [3000, 6000];
 
-    /// <summary>Header-row fill, matching the workbook's.</summary>
-    private const string HeaderFill = "F2F2F2";
+    /// <summary>Rule under a header row — darker than the row hairlines, to close the band off.</summary>
+    private const string HeaderRuleColor = "808080";
+
+    /// <summary>Accent under the run's own title, the app's primary.</summary>
+    private const string AccentColor = "E8A33D";
 
     /// <summary>
     /// Builds the document and returns its bytes.
@@ -151,7 +169,10 @@ public static class ShipmentExportDocumentBuilder
             new DocDefaults(
                 new RunPropertiesDefault(
                     new RunPropertiesBaseStyle(
-                        new RunFonts { Ascii = "Calibri", HighAnsi = "Calibri" },
+                        // Arial rather than Calibri: Calibri ships with Office, so a reader without
+                        // it — every Mac — substitutes its own, and picks a serif. The file then
+                        // reads like a novel instead of a delivery note.
+                        new RunFonts { Ascii = BodyFont, HighAnsi = BodyFont, ComplexScript = BodyFont },
                         new FontSize { Val = BodyFontSize },
                         new FontSizeComplexScript { Val = BodyFontSize })),
                 new ParagraphPropertiesDefault(
@@ -166,7 +187,7 @@ public static class ShipmentExportDocumentBuilder
 
     private static void WriteOverview(Body body, ShipmentExportModel model)
     {
-        body.AppendChild(Heading(model.ShipmentName));
+        body.AppendChild(Title(model.ShipmentName));
 
         var summary = LabelTable();
         summary.AppendChild(LabelRow("Datum dodání", Date(model.DeliveryDate)));
@@ -186,11 +207,12 @@ public static class ShipmentExportDocumentBuilder
         body.AppendChild(SectionHeading("Zastávky"));
 
         var stops = BuildTable(StopColumns);
-        stops.AppendChild(HeaderRow("Zastávka", "Klient", "Město", "Kusů"));
+        stops.AppendChild(HeaderRow(alignLastRight: true, "Zastávka", "Klient", "Město", "Kusů"));
 
         foreach (var stop in model.Stops)
         {
             stops.AppendChild(DataRow(
+                alignLastRight: true,
                 Number(stop.Order),
                 stop.ClientName ?? stop.Label ?? Missing,
                 stop.City ?? Missing,
@@ -267,14 +289,14 @@ public static class ShipmentExportDocumentBuilder
 
         var returns = BuildTable(anyNotes ? ReturnColumns : ReturnColumnsWithoutNotes);
         returns.AppendChild(anyNotes
-            ? HeaderRow("Položka", "Poznámka", "Množství")
-            : HeaderRow("Položka", "Množství"));
+            ? HeaderRow(alignLastRight: true, "Položka", "Poznámka", "Množství")
+            : HeaderRow(alignLastRight: true, "Položka", "Množství"));
 
         foreach (var item in items)
         {
             returns.AppendChild(anyNotes
-                ? DataRow(item.Name, item.Note ?? string.Empty, Pieces(item.Quantity))
-                : DataRow(item.Name, Pieces(item.Quantity)));
+                ? DataRow(alignLastRight: true, item.Name, item.Note ?? string.Empty, Pieces(item.Quantity))
+                : DataRow(alignLastRight: true, item.Name, Pieces(item.Quantity)));
         }
 
         AppendTable(body, returns);
@@ -302,26 +324,33 @@ public static class ShipmentExportDocumentBuilder
         {
             body.AppendChild(PageBreak());
 
-            var heading = ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient);
+            // The heading names the row's number, its client and the client's business — the file is
+            // read and filed by those. "Fakturace:" led it once and said nothing: every page here is
+            // invoicing.
+            body.AppendChild(Heading(ShipmentExportLabels.InvoiceHeading(invoice, invoiceCountByClient)));
 
-            body.AppendChild(Heading($"{Invoicing}: {heading}"));
+            // One party's name above one table repeats the heading word for word. The subtitle is
+            // for the invoice that bills several clients' goods, where each table needs saying
+            // whose it is.
+            var namesParties = invoice.Parties.Count > 1;
 
             foreach (var party in invoice.Parties)
             {
-                body.AppendChild(SectionHeading(ShipmentExportLabels.PartyHeading(party)));
+                if (namesParties)
+                    body.AppendChild(SectionHeading(ShipmentExportLabels.PartyHeading(party)));
 
                 WritePartyDelivery(body, party);
                 WriteProductTable(body, party.Products);
-
-                // A paragraph rather than a row on the table above: two tables in a row are
-                // merged by Word, and the next party's table follows immediately.
-                body.AppendChild(Paragraph($"Celkem {party.ClientName}: {Pieces(party.TotalQuantity)}"));
 
                 if (party.Returns.Count > 0)
                     WriteReturnsTable(body, party.Returns);
             }
 
-            body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
+            // Only where it is the one number no table carries: with a single party its table's own
+            // closing row is already the invoice's total, and printing it twice invited the reader
+            // to look for the difference.
+            if (namesParties)
+                body.AppendChild(Paragraph($"Celkem faktura: {Pieces(invoice.TotalQuantity)}"));
 
             // Placed with this invoice's page, not appended after the loop, so it reads as part of
             // this payer's invoice rather than as a stray section at the end of the document.
@@ -363,11 +392,12 @@ public static class ShipmentExportDocumentBuilder
         }
 
         var table = BuildTable(ProductColumns);
-        table.AppendChild(HeaderRow("Produkt", "Druh", "Balení", "Množství"));
+        table.AppendChild(HeaderRow(alignLastRight: true, "Produkt", "Druh", "Balení", "Množství"));
 
         foreach (var product in products)
         {
             table.AppendChild(DataRow(
+                alignLastRight: true,
                 product.Name,
                 KindLabel(product.Kind),
                 Litres(product.PackageSize),
@@ -395,9 +425,30 @@ public static class ShipmentExportDocumentBuilder
             new SpacingBetweenLines { After = "0", Line = "120", LineRule = LineSpacingRuleValues.Auto })));
     }
 
+    /// <summary>
+    /// The run's own name, at the head of the first page, over an accent rule.
+    /// </summary>
+    private static Paragraph Title(string text) =>
+        new(
+            new ParagraphProperties(
+                new ParagraphBorders(new BottomBorder
+                {
+                    Val = BorderValues.Single, Size = 12, Color = AccentColor, Space = 4
+                }),
+                new SpacingBetweenLines { After = "240" }),
+            Run(text, bold: true, fontSize: TitleFontSize));
+
+    /// <summary>
+    /// A page's heading, over a hairline rule — the invoice number and who it is for.
+    /// </summary>
     private static Paragraph Heading(string text) =>
         new(
-            new ParagraphProperties(new SpacingBetweenLines { After = "160" }),
+            new ParagraphProperties(
+                new ParagraphBorders(new BottomBorder
+                {
+                    Val = BorderValues.Single, Size = 6, Color = RuleColor, Space = 4
+                }),
+                new SpacingBetweenLines { After = "200" }),
             Run(text, bold: true, fontSize: HeadingFontSize));
 
     /// <summary>
@@ -416,16 +467,22 @@ public static class ShipmentExportDocumentBuilder
 
     private static Paragraph SectionHeading(string text) =>
         new(
-            new ParagraphProperties(new SpacingBetweenLines { Before = "240", After = "80" }),
-            Run(text.ToUpperInvariant(), bold: true));
+            new ParagraphProperties(new SpacingBetweenLines { Before = "280", After = "100" }),
+            Run(text.ToUpperInvariant(), bold: true, color: LabelColor));
 
     private static Paragraph Paragraph(string text, bool italic = false) =>
         new(Run(text, italic: italic));
 
-    private static Run Run(string text, bool bold = false, bool italic = false, string? fontSize = null)
+    private static Run Run(
+        string text,
+        bool bold = false,
+        bool italic = false,
+        string? fontSize = null,
+        string? color = null)
     {
-        // Bold and italic before the size: rPr's children are a fixed sequence (b, i, … sz), and
-        // Word refuses a document that orders them any other way.
+        // Bold and italic before the colour, and the colour before the size: rPr's children are a
+        // fixed sequence (b, i, color, … sz), and Word refuses a document that orders them any
+        // other way.
         var properties = new RunProperties();
 
         if (bold)
@@ -433,6 +490,9 @@ public static class ShipmentExportDocumentBuilder
 
         if (italic)
             properties.AppendChild(new Italic());
+
+        if (color is not null)
+            properties.AppendChild(new Color { Val = color });
 
         properties.AppendChild(new FontSize { Val = fontSize ?? BodyFontSize });
 
@@ -456,13 +516,17 @@ public static class ShipmentExportDocumentBuilder
         {
             // Ordered top, left, bottom, right, inside-h, inside-v — again the schema's sequence,
             // not the CSS one.
+            //
+            // Rules between the rows and nothing else: a full grid of boxes is what made these files
+            // read as a spreadsheet printout. The columns are held apart by their widths and their
+            // alignment, which is enough on paper and quieter to read.
             properties.AppendChild(new TableBorders(
-                new TopBorder { Val = BorderValues.Single, Size = 4 },
-                new LeftBorder { Val = BorderValues.Single, Size = 4 },
-                new BottomBorder { Val = BorderValues.Single, Size = 4 },
-                new RightBorder { Val = BorderValues.Single, Size = 4 },
-                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
-                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 }));
+                new TopBorder { Val = BorderValues.None },
+                new LeftBorder { Val = BorderValues.None },
+                new BottomBorder { Val = BorderValues.Single, Size = 4, Color = RuleColor },
+                new RightBorder { Val = BorderValues.None },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4, Color = RuleColor },
+                new InsideVerticalBorder { Val = BorderValues.None }));
         }
 
         properties.AppendChild(new TableLayout { Type = TableLayoutValues.Fixed });
@@ -470,9 +534,9 @@ public static class ShipmentExportDocumentBuilder
         // Cell padding, after the layout per the schema's sequence. Without it text sits hard against
         // the cell border, which is legible on screen and cramped on paper.
         properties.AppendChild(new TableCellMarginDefault(
-            new TopMargin { Width = "40", Type = TableWidthUnitValues.Dxa },
+            new TopMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
             new TableCellLeftMargin { Width = 108, Type = TableWidthValues.Dxa },
-            new BottomMargin { Width = "40", Type = TableWidthUnitValues.Dxa },
+            new BottomMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
             new TableCellRightMargin { Width = 108, Type = TableWidthValues.Dxa }));
 
         var grid = new TableGrid(columnWidths.Select(width =>
@@ -481,8 +545,12 @@ public static class ShipmentExportDocumentBuilder
         return new Table(properties, grid);
     }
 
+    /// <remarks>
+    /// The label is grey and unbolded, so the value is what the eye lands on — the block answers
+    /// questions, and the answers are the point.
+    /// </remarks>
     private static TableRow LabelRow(string label, string value) =>
-        Row(Cell(label, bold: true), Cell(value));
+        Row(Cell(label, color: LabelColor), Cell(value, bold: true));
 
     /// <summary>
     /// Column headings — shaded, and repeated at the top of every page the table runs onto.
@@ -491,18 +559,35 @@ public static class ShipmentExportDocumentBuilder
     /// A long order spills past one page, and a column of bare quantities with no heading above it is
     /// exactly the kind of thing that gets read into the wrong row.
     /// </remarks>
-    private static TableRow HeaderRow(params string[] headers)
+    private static TableRow HeaderRow(params string[] headers) => HeaderRow(false, headers);
+
+    /// <inheritdoc cref="HeaderRow(string[])"/>
+    /// <param name="alignLastRight">
+    /// True for a table whose last column is a number — its heading sits over the digits it names.
+    /// </param>
+    /// <param name="headers">Column headings.</param>
+    private static TableRow HeaderRow(bool alignLastRight, params string[] headers)
     {
         var row = Row(headers
-            .Select(header => Cell(header.ToUpperInvariant(), bold: true, shaded: true))
+            .Select((header, i) => Cell(
+                header.ToUpperInvariant(),
+                bold: true,
+                color: LabelColor,
+                ruled: true,
+                alignRight: alignLastRight && i == headers.Length - 1))
             .ToArray());
 
         row.TableRowProperties!.AppendChild(new TableHeader());
         return row;
     }
 
-    private static TableRow DataRow(params string[] values) =>
-        Row(values.Select(value => Cell(value)).ToArray());
+    private static TableRow DataRow(params string[] values) => DataRow(false, values);
+
+    /// <inheritdoc cref="DataRow(string[])"/>
+    private static TableRow DataRow(bool alignLastRight, params string[] values) =>
+        Row(values
+            .Select((value, i) => Cell(value, alignRight: alignLastRight && i == values.Length - 1))
+            .ToArray());
 
     /// <summary>
     /// Closing total, with the columns that carry no total merged rather than left blank — an empty
@@ -517,7 +602,7 @@ public static class ShipmentExportDocumentBuilder
         Row([
             Cell(label, bold: true),
             Cell(string.Empty, gridSpan: 2),
-            .. totals.Select(total => Cell(total, bold: true))
+            .. totals.Select(total => Cell(total, bold: true, alignRight: true))
         ]);
 
     /// <summary>
@@ -537,21 +622,36 @@ public static class ShipmentExportDocumentBuilder
     }
 
     /// <remarks>
-    /// tcPr's children are a fixed sequence: the span before the shading.
+    /// tcPr's children are a fixed sequence: the span before the borders.
     /// </remarks>
-    private static TableCell Cell(string text, bool bold = false, bool shaded = false, int gridSpan = 1)
+    private static TableCell Cell(
+        string text,
+        bool bold = false,
+        int gridSpan = 1,
+        string? color = null,
+        bool ruled = false,
+        bool alignRight = false)
     {
         var properties = new TableCellProperties();
 
         if (gridSpan > 1)
             properties.AppendChild(new GridSpan { Val = gridSpan });
 
-        if (shaded)
-            properties.AppendChild(new Shading
+        // Only a header row asks for this: the band needs closing off with something stronger than
+        // the hairlines between the rows under it, and the table's own borders cannot single one
+        // row out.
+        if (ruled)
+            properties.AppendChild(new TableCellBorders(new BottomBorder
             {
-                Val = ShadingPatternValues.Clear, Color = "auto", Fill = HeaderFill
-            });
+                Val = BorderValues.Single, Size = 8, Color = HeaderRuleColor
+            }));
 
-        return new TableCell(properties, new Paragraph(Run(text, bold: bold)));
+        var paragraph = alignRight
+            ? new Paragraph(
+                new ParagraphProperties(new Justification { Val = JustificationValues.Right }),
+                Run(text, bold: bold, color: color))
+            : new Paragraph(Run(text, bold: bold, color: color));
+
+        return new TableCell(properties, paragraph);
     }
 }

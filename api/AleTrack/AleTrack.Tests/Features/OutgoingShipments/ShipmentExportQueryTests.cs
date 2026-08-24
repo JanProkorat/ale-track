@@ -876,6 +876,47 @@ public sealed class ShipmentExportQueryTests
         block.TotalQuantity.Should().Be(30);
     }
 
+    /// <summary>
+    /// Two clients can genuinely share a name, so the block names the business as well — the same
+    /// pair the Fakturace band shows on screen.
+    /// </summary>
+    [Fact]
+    public async Task Build_Invoice_CarriesThePayersBusinessName()
+    {
+        var shipmentId = Guid.NewGuid();
+
+        var withBusiness = ClientBuilder.BuildEntity(
+            name: "Luděk Pachl", businessName: "Pachl s.r.o.", officialAddress: AddressBuilder.BuildEntity());
+        var without = ClientBuilder.BuildEntity(name: "Rebner", officialAddress: AddressBuilder.BuildEntity());
+
+        var first = OrderBuilder.BuildEntity(
+            client: withBusiness, orderItems: [BuildOrderItem(BuildProduct("Pilsner Urquell"), 24)]);
+        var second = OrderBuilder.BuildEntity(
+            client: without, orderItems: [BuildOrderItem(BuildProduct("Kozel 11", platoDegree: 11f), 6)]);
+
+        var shipment = OutgoingShipmentBuilder.BuildEntity(
+            publicId: shipmentId,
+            stops:
+            [
+                new OutgoingShipmentStop { Order = 1, Kind = OutgoingShipmentStopKind.Order, ClientOrder = first },
+                new OutgoingShipmentStop { Order = 2, Kind = OutgoingShipmentStopKind.Order, ClientOrder = second }
+            ]);
+
+        AssignInternalIds(shipment);
+        Confirm(shipment, withBusiness, number: 1);
+        Confirm(shipment, without, number: 2);
+
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(
+            clients: [withBusiness, without], orders: [first, second], outgoingShipments: [shipment]);
+
+        var model = await Load(dbContext.Object, shipmentId);
+
+        model!.Invoices.Single(i => i.PayingClientName == "Luděk Pachl")
+            .PayingClientBusinessName.Should().Be("Pachl s.r.o.");
+        model.Invoices.Single(i => i.PayingClientName == "Rebner")
+            .PayingClientBusinessName.Should().BeNull();
+    }
+
     [Fact]
     public async Task Build_PayerWithNoStopOfItsOwn_StillAppearsInTheInvoicePart()
     {

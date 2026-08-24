@@ -206,6 +206,12 @@ public sealed record ShipmentExportInvoice
     public required string PayingClientName { get; init; }
 
     /// <summary>
+    /// The paying client's trading name, when it has one. Named beside its own, because two clients
+    /// can genuinely share a name and this is the page that gets filed.
+    /// </summary>
+    public string? PayingClientBusinessName { get; init; }
+
+    /// <summary>
     /// Public ID of the paying client — the identity the "more than one invoice" heading rule
     /// keys on, since names collide (that is what <c>BusinessName</c> exists for) but IDs don't.
     /// </summary>

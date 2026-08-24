@@ -252,6 +252,13 @@ public static class ShipmentExportQuery
                 g => g.Key,
                 g => g.Select(i => i.Client?.PublicId).FirstOrDefault(id => id is not null) ?? Guid.Empty);
 
+        // Optional, so no Missing fallback: a client without one simply has none to print.
+        var payerBusinessNames = shipment.Invoices
+            .GroupBy(i => i.ClientId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(i => i.Client?.BusinessName).FirstOrDefault(name => name is not null));
+
         // The row's own stored address, never the client's current one — a delivered run must
         // export what it was sent with, exactly as the Fakturace screen shows it.
         var recipientsByInvoice = shipment.Invoices.ToDictionary(
@@ -288,7 +295,12 @@ public static class ShipmentExportQuery
             // empty still resolves an identity — it just contributes no block.
             Invoices = shipment.Invoices.ToDictionary(
                 i => i.PublicId,
-                i => (PayerId: i.ClientId, PayerPublicId: payerPublicIds[i.ClientId], Sequence: i.Sequence, Name: payerNames[i.ClientId])),
+                i => (
+                    PayerId: i.ClientId,
+                    PayerPublicId: payerPublicIds[i.ClientId],
+                    Sequence: i.Sequence,
+                    Name: payerNames[i.ClientId],
+                    BusinessName: payerBusinessNames[i.ClientId])),
             OrdererNames = lines
                 .GroupBy(x => x.OrdererId)
                 .ToDictionary(g => g.Key, g => g.Select(x => x.OrdererName).First()),
@@ -373,13 +385,14 @@ public static class ShipmentExportQuery
         InvoicedSplit split,
         Guid invoiceId,
         int number,
-        (long PayerId, Guid PayerPublicId, int Sequence, string Name) invoice,
+        (long PayerId, Guid PayerPublicId, int Sequence, string Name, string? BusinessName) invoice,
         IEnumerable<KeyValuePair<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem>> lines,
         Dictionary<long, PartyDelivery> deliveryByClient) =>
         new()
         {
             Number = number,
             PayingClientName = invoice.Name,
+            PayingClientBusinessName = invoice.BusinessName,
             PayingClientId = invoice.PayerPublicId,
             Sequence = invoice.Sequence,
             BillingRecipients = split.RecipientsByInvoice.GetValueOrDefault(invoiceId, []),
@@ -453,8 +466,11 @@ public static class ShipmentExportQuery
     /// Who one invoice bills, its sequence and its name, falling back to a placeholder for an
     /// invoice the graph did not hand back — a block must still name somebody.
     /// </summary>
-    private static (long PayerId, Guid PayerPublicId, int Sequence, string Name) InvoiceOf(InvoicedSplit split, Guid invoiceId) =>
-        split.Invoices.TryGetValue(invoiceId, out var found) ? found : (PayerId: 0, PayerPublicId: Guid.Empty, Sequence: 1, Name: Missing);
+    private static (long PayerId, Guid PayerPublicId, int Sequence, string Name, string? BusinessName)
+        InvoiceOf(InvoicedSplit split, Guid invoiceId) =>
+        split.Invoices.TryGetValue(invoiceId, out var found)
+            ? found
+            : (PayerId: 0, PayerPublicId: Guid.Empty, Sequence: 1, Name: Missing, BusinessName: null);
 
     private static ShipmentExportStop ToStop(
         RawStop stop,
@@ -681,8 +697,8 @@ public static class ShipmentExportQuery
         /// <summary>Billed pieces keyed by (invoice, orderer, item) — what a party row reports.</summary>
         public required Dictionary<(Guid InvoiceId, long OrdererId, InvoiceLineSourceKind SourceKind, long SourceItemId), InvoicedItem> ByInvoiceAndOrderer { get; init; }
 
-        /// <summary>Who each invoice bills, its sequence and its name, by public ID.</summary>
-        public required Dictionary<Guid, (long PayerId, Guid PayerPublicId, int Sequence, string Name)> Invoices { get; init; }
+        /// <summary>Who each invoice bills, its sequence and its names, by public ID.</summary>
+        public required Dictionary<Guid, (long PayerId, Guid PayerPublicId, int Sequence, string Name, string? BusinessName)> Invoices { get; init; }
 
         /// <summary>Name of each client that ordered billed pieces.</summary>
         public required Dictionary<long, string> OrdererNames { get; init; }
