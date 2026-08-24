@@ -729,6 +729,18 @@ export interface IClient {
     createClientEndpoint(data: CreateClientDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Gets a client's ledger of deviations
+     * @return The client's ledger entries, newest first
+     */
+    getClientLedgerEntriesEndpoint(id: string, state: ClientLedgerQueryState, signal?: AbortSignal): Promise<ClientLedgerEntryDto[]>;
+
+    /**
+     * Records deviations from the plan for a client
+     * @return Deviations recorded
+     */
+    saveClientLedgerEntriesEndpoint(id: string, data: SaveClientLedgerEntriesDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Gets client detail
      * @return Detail of client
      */
@@ -745,6 +757,24 @@ export interface IClient {
      * @return Accepted
      */
     deleteClientEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Corrects a recorded deviation
+     * @return Entry updated
+     */
+    updateClientLedgerEntryEndpoint(id: string, data: UpdateClientLedgerEntryDto, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Deletes a recorded deviation
+     * @return Entry deleted
+     */
+    deleteClientLedgerEntryEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
+     * Settles or reopens a recorded deviation
+     * @return Resolution set
+     */
+    setClientLedgerEntryResolutionEndpoint(id: string, data: SetClientLedgerEntryResolutionDto, signal?: AbortSignal): Promise<string>;
 
     /**
      * Gets a client's own product prices
@@ -8550,6 +8580,145 @@ export class Client implements IClient {
     }
 
     /**
+     * Gets a client's ledger of deviations
+     * @return The client's ledger entries, newest first
+     */
+    getClientLedgerEntriesEndpoint(id: string, state: ClientLedgerQueryState, signal?: AbortSignal): Promise<ClientLedgerEntryDto[]> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/ledger-entries?";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (state === undefined || state === null)
+            throw new globalThis.Error("The parameter 'state' must be defined and cannot be null.");
+        else
+            url_ += "State=" + encodeURIComponent("" + state) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetClientLedgerEntriesEndpoint(_response);
+        });
+    }
+
+    protected processGetClientLedgerEntriesEndpoint(response: Response): Promise<ClientLedgerEntryDto[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(ClientLedgerEntryDto.fromJS(item));
+            }
+            else {
+                result200 = null as any;
+            }
+            return result200;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<ClientLedgerEntryDto[]>(null as any);
+    }
+
+    /**
+     * Records deviations from the plan for a client
+     * @return Deviations recorded
+     */
+    saveClientLedgerEntriesEndpoint(id: string, data: SaveClientLedgerEntriesDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/{id}/ledger-entries";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSaveClientLedgerEntriesEndpoint(_response);
+        });
+    }
+
+    protected processSaveClientLedgerEntriesEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The order belongs to another client", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Client, order or line not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Gets client detail
      * @return Detail of client
      */
@@ -8729,6 +8898,214 @@ export class Client implements IClient {
             let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result403 = FailureResponse.fromJS(resultData403);
             return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Corrects a recorded deviation
+     * @return Entry updated
+     */
+    updateClientLedgerEntryEndpoint(id: string, data: UpdateClientLedgerEntryDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processUpdateClientLedgerEntryEndpoint(_response);
+        });
+    }
+
+    protected processUpdateClientLedgerEntryEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Deletes a recorded deviation
+     * @return Entry deleted
+     */
+    deleteClientLedgerEntryEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processDeleteClientLedgerEntryEndpoint(_response);
+        });
+    }
+
+    protected processDeleteClientLedgerEntryEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Settles or reopens a recorded deviation
+     * @return Resolution set
+     */
+    setClientLedgerEntryResolutionEndpoint(id: string, data: SetClientLedgerEntryResolutionDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/clients/ledger-entries/{Id}/resolution";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetClientLedgerEntryResolutionEndpoint(_response);
+        });
+    }
+
+    protected processSetClientLedgerEntryResolutionEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("Bad Request", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Entry not found", status, _responseText, _headers, result404);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -16813,6 +17190,7 @@ export enum InvoiceLineSourceKind {
     OrderItem = 0,
     CustomExtraItem = 2,
     SupplierGoodItem = 3,
+    LedgerEntry = 4,
 }
 
 export class ShipmentInvoiceBillingRecipientDto implements IShipmentInvoiceBillingRecipientDto {
@@ -20337,6 +20715,7 @@ export class UpdateOrderDto implements IUpdateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 
     constructor(data?: IUpdateOrderDto) {
         if (data) {
@@ -20379,6 +20758,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
                 this.supplierGoodItems = [] as any;
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["settledLedgerEntryIds"])) {
+                this.settledLedgerEntryIds = [] as any;
+                for (let item of _data["settledLedgerEntryIds"])
+                    this.settledLedgerEntryIds!.push(item);
             }
         }
     }
@@ -20423,6 +20807,11 @@ export class UpdateOrderDto implements IUpdateOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.settledLedgerEntryIds)) {
+            data["settledLedgerEntryIds"] = [];
+            for (let item of this.settledLedgerEntryIds)
+                data["settledLedgerEntryIds"].push(item);
+        }
         return data;
     }
 }
@@ -20439,6 +20828,7 @@ export interface IUpdateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 }
 
 export class UpdateOrderItemDto implements IUpdateOrderItemDto {
@@ -20575,6 +20965,7 @@ export class CreateOrderDto implements ICreateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 
     constructor(data?: ICreateOrderDto) {
         if (data) {
@@ -20615,6 +21006,11 @@ export class CreateOrderDto implements ICreateOrderDto {
                 this.supplierGoodItems = [] as any;
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
+            }
+            if (Array.isArray(_data["settledLedgerEntryIds"])) {
+                this.settledLedgerEntryIds = [] as any;
+                for (let item of _data["settledLedgerEntryIds"])
+                    this.settledLedgerEntryIds!.push(item);
             }
         }
     }
@@ -20657,6 +21053,11 @@ export class CreateOrderDto implements ICreateOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        if (Array.isArray(this.settledLedgerEntryIds)) {
+            data["settledLedgerEntryIds"] = [];
+            for (let item of this.settledLedgerEntryIds)
+                data["settledLedgerEntryIds"].push(item);
+        }
         return data;
     }
 }
@@ -20671,6 +21072,7 @@ export interface ICreateOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    settledLedgerEntryIds?: string[];
 }
 
 export class CreateOrderItemDto implements ICreateOrderItemDto {
@@ -21811,6 +22213,183 @@ export interface ICreateDriverAvailabilityDto {
     until?: Date;
 }
 
+export class ClientLedgerEntryDto implements IClientLedgerEntryDto {
+    id?: string;
+    target?: ClientLedgerEntryTarget;
+    orderId?: string | undefined;
+    orderRequiredDeliveryDate?: Date | undefined;
+    stopId?: string | undefined;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    productName?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+    requiresFollowUp?: boolean;
+    resolvedAt?: Date | undefined;
+    resolutionNote?: string | undefined;
+    resolvedByOrderId?: string | undefined;
+    createdAt?: Date;
+    createdByUserName?: string | undefined;
+    resolvedByUserName?: string | undefined;
+
+    constructor(data?: IClientLedgerEntryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+            this.target = _data["target"];
+            this.orderId = _data["orderId"];
+            this.orderRequiredDeliveryDate = _data["orderRequiredDeliveryDate"] ? new Date(_data["orderRequiredDeliveryDate"].toString()) : undefined as any;
+            this.stopId = _data["stopId"];
+            this.orderItemId = _data["orderItemId"];
+            this.productId = _data["productId"];
+            this.productName = _data["productName"];
+            this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.customExtraItemId = _data["customExtraItemId"];
+            this.orderReturnId = _data["orderReturnId"];
+            this.lineName = _data["lineName"];
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.plannedText = _data["plannedText"];
+            this.actualText = _data["actualText"];
+            this.amount = _data["amount"];
+            this.note = _data["note"];
+            this.requiresFollowUp = _data["requiresFollowUp"];
+            this.resolvedAt = _data["resolvedAt"] ? new Date(_data["resolvedAt"].toString()) : undefined as any;
+            this.resolutionNote = _data["resolutionNote"];
+            this.resolvedByOrderId = _data["resolvedByOrderId"];
+            this.createdAt = _data["createdAt"] ? new Date(_data["createdAt"].toString()) : undefined as any;
+            this.createdByUserName = _data["createdByUserName"];
+            this.resolvedByUserName = _data["resolvedByUserName"];
+        }
+    }
+
+    static fromJS(data: any): ClientLedgerEntryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientLedgerEntryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        data["target"] = this.target;
+        data["orderId"] = this.orderId;
+        data["orderRequiredDeliveryDate"] = this.orderRequiredDeliveryDate ? formatDate(this.orderRequiredDeliveryDate) : undefined as any;
+        data["stopId"] = this.stopId;
+        data["orderItemId"] = this.orderItemId;
+        data["productId"] = this.productId;
+        data["productName"] = this.productName;
+        data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["customExtraItemId"] = this.customExtraItemId;
+        data["orderReturnId"] = this.orderReturnId;
+        data["lineName"] = this.lineName;
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["plannedText"] = this.plannedText;
+        data["actualText"] = this.actualText;
+        data["amount"] = this.amount;
+        data["note"] = this.note;
+        data["requiresFollowUp"] = this.requiresFollowUp;
+        data["resolvedAt"] = this.resolvedAt ? this.resolvedAt.toISOString() : undefined as any;
+        data["resolutionNote"] = this.resolutionNote;
+        data["resolvedByOrderId"] = this.resolvedByOrderId;
+        data["createdAt"] = this.createdAt ? this.createdAt.toISOString() : undefined as any;
+        data["createdByUserName"] = this.createdByUserName;
+        data["resolvedByUserName"] = this.resolvedByUserName;
+        return data;
+    }
+}
+
+export interface IClientLedgerEntryDto {
+    id?: string;
+    target?: ClientLedgerEntryTarget;
+    orderId?: string | undefined;
+    orderRequiredDeliveryDate?: Date | undefined;
+    stopId?: string | undefined;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    productName?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+    requiresFollowUp?: boolean;
+    resolvedAt?: Date | undefined;
+    resolutionNote?: string | undefined;
+    resolvedByOrderId?: string | undefined;
+    createdAt?: Date;
+    createdByUserName?: string | undefined;
+    resolvedByUserName?: string | undefined;
+}
+
+export enum ClientLedgerEntryTarget {
+    ProductQuantity = 0,
+    SupplierGoodQuantity = 1,
+    CustomExtraQuantity = 2,
+    ReturnQuantity = 3,
+    DeliveryAddress = 4,
+    Money = 5,
+    Other = 6,
+}
+
+export class GetClientLedgerEntriesRequest implements IGetClientLedgerEntriesRequest {
+
+    constructor(data?: IGetClientLedgerEntriesRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): GetClientLedgerEntriesRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new GetClientLedgerEntriesRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IGetClientLedgerEntriesRequest {
+}
+
+export enum ClientLedgerQueryState {
+    Open = 0,
+    All = 1,
+}
+
 export class ClientDto implements IClientDto {
     id?: string;
     name?: string;
@@ -22017,9 +22596,9 @@ export class GetClientDetailRequest implements IGetClientDetailRequest {
 export interface IGetClientDetailRequest {
 }
 
-export class DeleteClientRequest implements IDeleteClientRequest {
+export class DeleteClientLedgerEntryRequest implements IDeleteClientLedgerEntryRequest {
 
-    constructor(data?: IDeleteClientRequest) {
+    constructor(data?: IDeleteClientLedgerEntryRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -22031,9 +22610,9 @@ export class DeleteClientRequest implements IDeleteClientRequest {
     init(_data?: any) {
     }
 
-    static fromJS(data: any): DeleteClientRequest {
+    static fromJS(data: any): DeleteClientLedgerEntryRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new DeleteClientRequest();
+        let result = new DeleteClientLedgerEntryRequest();
         result.init(data);
         return result;
     }
@@ -22044,7 +22623,7 @@ export class DeleteClientRequest implements IDeleteClientRequest {
     }
 }
 
-export interface IDeleteClientRequest {
+export interface IDeleteClientLedgerEntryRequest {
 }
 
 export class UpdateClientDto implements IUpdateClientDto {
@@ -22157,6 +22736,260 @@ export interface IUpdateClientContactDto {
     type?: ContactType;
     description?: string | undefined;
     value?: string;
+}
+
+export class UpdateClientLedgerEntryDto implements IUpdateClientLedgerEntryDto {
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    amount?: number | undefined;
+    lineName?: string | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IUpdateClientLedgerEntryDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.amount = _data["amount"];
+            this.lineName = _data["lineName"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): UpdateClientLedgerEntryDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateClientLedgerEntryDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["amount"] = this.amount;
+        data["lineName"] = this.lineName;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IUpdateClientLedgerEntryDto {
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    amount?: number | undefined;
+    lineName?: string | undefined;
+    note?: string | undefined;
+}
+
+export class SaveClientLedgerEntriesDto implements ISaveClientLedgerEntriesDto {
+    orderId?: string | undefined;
+    rows?: ClientLedgerRowDto[];
+
+    constructor(data?: ISaveClientLedgerEntriesDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.orderId = _data["orderId"];
+            if (Array.isArray(_data["rows"])) {
+                this.rows = [] as any;
+                for (let item of _data["rows"])
+                    this.rows!.push(ClientLedgerRowDto.fromJS(item));
+            }
+        }
+    }
+
+    static fromJS(data: any): SaveClientLedgerEntriesDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaveClientLedgerEntriesDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["orderId"] = this.orderId;
+        if (Array.isArray(this.rows)) {
+            data["rows"] = [];
+            for (let item of this.rows)
+                data["rows"].push(item ? item.toJSON() : undefined as any);
+        }
+        return data;
+    }
+}
+
+export interface ISaveClientLedgerEntriesDto {
+    orderId?: string | undefined;
+    rows?: ClientLedgerRowDto[];
+}
+
+export class ClientLedgerRowDto implements IClientLedgerRowDto {
+    target?: ClientLedgerEntryTarget;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+
+    constructor(data?: IClientLedgerRowDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.target = _data["target"];
+            this.orderItemId = _data["orderItemId"];
+            this.productId = _data["productId"];
+            this.supplierGoodItemId = _data["supplierGoodItemId"];
+            this.customExtraItemId = _data["customExtraItemId"];
+            this.orderReturnId = _data["orderReturnId"];
+            this.lineName = _data["lineName"];
+            this.plannedQuantity = _data["plannedQuantity"];
+            this.actualQuantity = _data["actualQuantity"];
+            this.plannedText = _data["plannedText"];
+            this.actualText = _data["actualText"];
+            this.amount = _data["amount"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): ClientLedgerRowDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new ClientLedgerRowDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["target"] = this.target;
+        data["orderItemId"] = this.orderItemId;
+        data["productId"] = this.productId;
+        data["supplierGoodItemId"] = this.supplierGoodItemId;
+        data["customExtraItemId"] = this.customExtraItemId;
+        data["orderReturnId"] = this.orderReturnId;
+        data["lineName"] = this.lineName;
+        data["plannedQuantity"] = this.plannedQuantity;
+        data["actualQuantity"] = this.actualQuantity;
+        data["plannedText"] = this.plannedText;
+        data["actualText"] = this.actualText;
+        data["amount"] = this.amount;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface IClientLedgerRowDto {
+    target?: ClientLedgerEntryTarget;
+    orderItemId?: string | undefined;
+    productId?: string | undefined;
+    supplierGoodItemId?: string | undefined;
+    customExtraItemId?: string | undefined;
+    orderReturnId?: string | undefined;
+    lineName?: string | undefined;
+    plannedQuantity?: number | undefined;
+    actualQuantity?: number | undefined;
+    plannedText?: string | undefined;
+    actualText?: string | undefined;
+    amount?: number | undefined;
+    note?: string | undefined;
+}
+
+export class SetClientLedgerEntryResolutionDto implements ISetClientLedgerEntryResolutionDto {
+    resolved?: boolean;
+    note?: string | undefined;
+
+    constructor(data?: ISetClientLedgerEntryResolutionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.resolved = _data["resolved"];
+            this.note = _data["note"];
+        }
+    }
+
+    static fromJS(data: any): SetClientLedgerEntryResolutionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetClientLedgerEntryResolutionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["resolved"] = this.resolved;
+        data["note"] = this.note;
+        return data;
+    }
+}
+
+export interface ISetClientLedgerEntryResolutionDto {
+    resolved?: boolean;
+    note?: string | undefined;
+}
+
+export class DeleteClientRequest implements IDeleteClientRequest {
+
+    constructor(data?: IDeleteClientRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeleteClientRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeleteClientRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeleteClientRequest {
 }
 
 export class ClientProductPriceDto implements IClientProductPriceDto {

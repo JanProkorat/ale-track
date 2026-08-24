@@ -7,6 +7,7 @@ import {
   ShipmentStartPointKind, OutgoingShipmentStopKind, ProductContainer, ProductSaleUnit,
   PriceListChangeKind, InvoiceAdjustmentKind, SaleState, SalePaymentMethod, SaleBuyerKind,
   SupplierChargeKind, SupplierGoodPickupSource, DayOfWeek, DeliveryStopKind,
+  ClientLedgerEntryTarget,
 } from 'src/generated/api-client';
 import { fmtLiters } from './format';
 
@@ -144,6 +145,17 @@ export const L = {
   } as Record<string, string>,
   country: { Czechia: 'Česko', Germany: 'Německo' } as Record<string, string>,
   addrKind: { Official: 'Fakturační', Contact: 'Kontaktní', DeliveryPlace: 'Vlastní místo' } as Record<string, string>,
+  // What a recorded deviation is about. Named by the target — what changed — rather than by
+  // the event, because "not unloaded" and "took extra" are one arithmetic with two signs.
+  ledgerTarget: {
+    ProductQuantity: 'Množství',
+    SupplierGoodQuantity: 'Zboží dodavatele',
+    CustomExtraQuantity: 'Položka navíc',
+    ReturnQuantity: 'Vratka',
+    DeliveryAddress: 'Adresa doručení',
+    Money: 'Peníze',
+    Other: 'Jiné',
+  } as Record<string, string>,
 } as const;
 
 // The generated enums are numeric, but the backend serializes enum values as
@@ -456,6 +468,22 @@ export function invoiceAdjustmentKindName(
   k?: InvoiceAdjustmentKind | string | number,
 ): string | undefined {
   return enumName(InvoiceAdjustmentKind as unknown as Record<string, string | number>, k);
+}
+
+/** The ClientLedgerEntryTarget member name, from either wire representation. Nothing compares
+ * a target raw — this project has paid for that mistake once already. */
+export function ledgerTargetName(
+  t?: ClientLedgerEntryTarget | string | number,
+): string | undefined {
+  return enumName(ClientLedgerEntryTarget as unknown as Record<string, string | number>, t);
+}
+
+/** Czech label for what a recorded deviation is about. */
+export function ledgerTargetLabel(
+  t?: ClientLedgerEntryTarget | string | number,
+): string | undefined {
+  const name = ledgerTargetName(t);
+  return name ? (L.ledgerTarget[name] ?? name) : undefined;
 }
 
 export const KIND_ORDER: Record<string, number> = {
