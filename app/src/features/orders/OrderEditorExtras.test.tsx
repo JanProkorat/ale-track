@@ -28,6 +28,12 @@ vi.mock('src/hooks/useOrders', () => ({
   useUpdateOrder: () => ({ mutateAsync: updateMutate, isPending: false }),
 }));
 
+// The editor reads the client's open ledger points above the cart, so the hook is mocked like
+// every other resource — and the mock can say "nothing open", which is the ordinary case.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+}));
+
 vi.mock('src/hooks/useClients', () => ({
   // Carries a trading name because that is what separates two clients of the same name;
   // the editor shows it both in the picker and on the chosen-client card.

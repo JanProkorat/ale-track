@@ -311,6 +311,20 @@ export function entryTooltip(entry?: ClientLedgerEntryDto): string | undefined {
     .join(' · ');
 }
 
+/** How many pieces an entry still says are owed. Zero when the client had more than planned. */
+export function owedPieces(entry: ClientLedgerEntryDto): number {
+  return Math.max(0, (entry.plannedQuantity ?? 0) - (entry.actualQuantity ?? 0));
+}
+
+/**
+ * Whether an entry can be topped up from an order's cart: a quantity of a known product that is
+ * genuinely owed, and that no other order has already promised to bring.
+ */
+export function isSettleable(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry) && !isAssigned(entry) && isQuantityEntry(entry)
+    && entry.productId != null && owedPieces(entry) > 0;
+}
+
 /** Money owed in both directions, summed separately. */
 export interface MoneySummary {
   /** What the client owes us. Always positive. */

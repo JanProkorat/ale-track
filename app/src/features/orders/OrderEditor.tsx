@@ -54,7 +54,12 @@ import { useBreweries } from 'src/hooks/useBreweries';
 import { useProducts } from 'src/hooks/useProducts';
 import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
 import { groupSupplierGoods, primaryPrice, resolvedGoodMap } from './supplierGoodCatalogModel';
+import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { useOrder, useClientProductHistory, useCreateOrder, useUpdateOrder } from 'src/hooks/useOrders';
+import { useClientLedger } from 'src/hooks/useClientLedger';
+import { type ClientLedgerEntryDto } from 'src/generated/api-client';
+import { ClientOpenItemsPreview } from 'src/features/clients/ClientOpenItemsPreview';
+import { isSettleable, owedPieces } from 'src/features/clients/ledgerModel';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
@@ -540,6 +545,19 @@ export function OrderEditor({
 
   const historyQuery = useClientProductHistory(clientId ?? undefined);
 
+  // 'open', not 'all': this is a to-do list, and it is read before the cart is built rather
+  // than at the save button — beside the existing product-history read.
+  const ledgerQuery = useClientLedger(clientId ?? undefined, 'open');
+  // Memoised: the fallback array is a fresh value every render, which would make the in-cart
+  // lookup below recompute each time.
+  const openLedger = useMemo(() => ledgerQuery.data ?? [], [ledgerQuery.data]);
+
+  // Which open points this draft promises to settle. Held in the draft and sent on save: the
+  // server links them to the order and closes them only when it actually arrives, because
+  // promising is not delivering.
+  const [settledEntryIds, setSettledEntryIds] = useState<string[]>([]);
+  const [confirmShortfall, setConfirmShortfall] = useState(false);
+
   // Auto-pick the catalog tab once, right after a client is (re)selected —
   // history if they have any, else browse — mirrors the prototype's
   // oePickClient. Guarded so it fires once per selection, not on every refetch.
@@ -668,6 +686,39 @@ export function OrderEditor({
   };
   const removeProduct = (productId: string) => setCart((prev) => prev.filter((c) => c.productId !== productId));
 
+  /**
+   * Tops the cart up to what the entry says is owed and remembers the promise.
+   *
+   * Tops up rather than adds: the product may already be in the cart for its own sake, and
+   * adding the debt on top would order it twice.
+   */
+  const addOwedToOrder = (entry: ClientLedgerEntryDto) => {
+    const productId = entry.productId;
+    if (!productId) return;
+
+    const owed = owedPieces(entry);
+    setCart((prev) => {
+      const existing = prev.find((c) => c.productId === productId);
+      if (!existing) return [...prev, { productId, quantity: owed }];
+      return prev.map((c) => (c.productId === productId
+        ? { ...c, quantity: Math.max(c.quantity, owed) }
+        : c));
+    });
+
+    setSettledEntryIds((prev) => (entry.id && !prev.includes(entry.id) ? [...prev, entry.id] : prev));
+  };
+
+  // How much of each promised entry's product the cart holds, so the row can say
+  // "dluh 3 ks · přidáno 2 ks" and the save can ask about the shortfall.
+  const inCartByEntryId = useMemo(() => {
+    const byProduct = new Map(cart.map((c) => [c.productId, c.quantity]));
+    return new Map(
+      openLedger
+        .filter((e) => e.id && e.productId)
+        .map((e) => [e.id!, byProduct.get(e.productId!) ?? 0]),
+    );
+  }, [cart, openLedger]);
+
   // Supplier-good lines mirror the product handlers, keyed by good id. A line's `id`
   // survives quantity edits so the backend patches the row rather than replacing it.
   const addGood = (goodId: string) => {
@@ -735,9 +786,28 @@ export function OrderEditor({
   const dirty = baselineRef.current !== null && snapshot !== baselineRef.current;
   const { blocker, allowNext } = useUnsavedChangesGuard(dirty);
 
-  // Persist only (no navigation); returns the saved id or null on failure.
-  const persist = async (): Promise<string | null> => {
+  /**
+   * Promised entries the cart does not fully cover.
+   *
+   * Resolution is binary: an entry assigned to an order closes whole when that order arrives,
+   * so a debt of three settled with two loses the third. That cost cannot be prevented in a
+   * binary model — it can only be made visible before it is paid.
+   */
+  const shortfalls = openLedger
+    .filter((e) => e.id && settledEntryIds.includes(e.id) && isSettleable(e))
+    .map((e) => ({ entry: e, owed: owedPieces(e), inCart: inCartByEntryId.get(e.id!) ?? 0 }))
+    .filter((x) => x.inCart < x.owed);
+
+  /**
+   * Persist only (no navigation); returns the saved id or null on failure.
+   *
+   * `ignoreShortfall` is an argument rather than state on purpose: the confirmation dialog's
+   * handler closes over the render that opened it, so a flag set beside it would still read
+   * false when the save re-ran.
+   */
+  const persist = async ({ ignoreShortfall = false } = {}): Promise<string | null> => {
     if (!clientId) { enqueueSnackbar('Vyberte klienta', { variant: 'warning' }); return null; }
+    if (shortfalls.length > 0 && !ignoreShortfall) { setConfirmShortfall(true); return null; }
     // Either kind of line counts: a client asking only for a CO₂ refill has ordered.
     if (cart.length === 0 && goodLines.length === 0) { enqueueSnackbar('Přidejte alespoň jednu položku', { variant: 'warning' }); return null; }
     // Blank-name rows are scratch rows the user never filled in — drop them
@@ -788,6 +858,7 @@ export function OrderEditor({
             supplierGoodItems: supplierGoodsPayload,
             deliveryAddressKind: deliveryAddress.kind,
             clientDeliveryPlaceId: deliveryAddress.placeId,
+            settledLedgerEntryIds: settledEntryIds,
           }),
         });
         savedId = orderId;
@@ -808,6 +879,7 @@ export function OrderEditor({
           supplierGoodItems: supplierGoodsPayload,
           deliveryAddressKind: deliveryAddress.kind,
           clientDeliveryPlaceId: deliveryAddress.placeId,
+          settledLedgerEntryIds: settledEntryIds,
         }));
         enqueueSnackbar('Objednávka vytvořena.', { variant: 'success' });
       }
@@ -819,8 +891,8 @@ export function OrderEditor({
     }
   };
 
-  const handleSave = async () => {
-    const id = await persist();
+  const handleSave = async (opts?: { ignoreShortfall?: boolean }) => {
+    const id = await persist(opts);
     if (id != null) { allowNext(); onDone(id); }
   };
 
@@ -838,7 +910,7 @@ export function OrderEditor({
         actions={(
           <>
             <Button onClick={onCancel} color="inherit" disabled={busy}>Zrušit</Button>
-            <Button variant="contained" startIcon={<CheckIcon />} onClick={handleSave} disabled={busy}>
+            <Button variant="contained" startIcon={<CheckIcon />} onClick={() => handleSave()} disabled={busy}>
               {busy ? 'Ukládám…' : mode === 'edit' ? 'Uložit změny' : 'Vytvořit objednávku'}
             </Button>
           </>
@@ -1105,6 +1177,14 @@ export function OrderEditor({
             overflow would keep the stickiness, but nested scroll containers are
             their own trap here — see app/CLAUDE.md. */}
         <Stack spacing={2} sx={{ gridColumn: { lg: 2 }, gridRow: { lg: 2 } }}>
+          {/* Above the cart, not beside the save button: whoever builds the next order needs to
+              see what is outstanding before they start filling it. */}
+          <ClientOpenItemsPreview
+            entries={openLedger}
+            inCartByEntryId={inCartByEntryId}
+            onAddToOrder={addOwedToOrder}
+          />
+
           <Card sx={{ overflow: 'hidden' }}>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
               <ShoppingCartOutlinedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
@@ -1373,6 +1453,34 @@ export function OrderEditor({
           </Card>
         </Stack>
       </Box>
+
+      {/* Binary resolution has a cost, and this is where it is made visible: a debt of three
+          settled with two closes whole and loses the third. The operator either tops it up or
+          knowingly closes it and opens a new entry for the remainder. */}
+      <ConfirmDialog
+        open={confirmShortfall}
+        title="Dluh není dorovnaný"
+        destructive={false}
+        confirmLabel="Uložit i tak"
+        message={(
+          <Stack spacing={1}>
+            <Typography variant="body2">
+              Zařazené body se po doručení objednávky uzavřou celé. Zbytek se ztratí — pokud ho
+              chcete dořešit, dorovnejte množství, nebo po uložení založte na zbytek nový záznam.
+            </Typography>
+            {shortfalls.map(({ entry, owed, inCart }) => (
+              <Typography key={entry.id} variant="body2" sx={{ fontWeight: 700 }}>
+                {entry.productName ?? entry.lineName ?? 'Položka'} — dluh {owed} ks, přidáno {inCart} ks
+              </Typography>
+            ))}
+          </Stack>
+        )}
+        onConfirm={() => {
+          setConfirmShortfall(false);
+          void handleSave({ ignoreShortfall: true });
+        }}
+        onClose={() => setConfirmShortfall(false)}
+      />
 
       <UnsavedChangesDialog blocker={blocker} onSave={() => persist().then((id) => id != null)} busy={busy} />
     </Box>
