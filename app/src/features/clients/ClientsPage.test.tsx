@@ -3,7 +3,7 @@
 // state, the arrow must honour it instead of dropping the user on /clients.
 // fireEvent rather than user-event — not a dependency of this project.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const navigateMock = vi.fn();
@@ -77,8 +77,9 @@ vi.mock('src/hooks/useClientProductPrices', () => ({
 }));
 // The client detail counts its open ledger points on the tab strip, so the read is mounted on
 // every tab — the mutations come with it because the panel and its drawer share the module.
+const ledgerEntries: { data: unknown[] } = { data: [] };
 vi.mock('src/hooks/useClientLedger', () => ({
-  useClientLedger: () => ({ data: [], isPending: false, isError: false }),
+  useClientLedger: () => ({ ...ledgerEntries, isPending: false, isError: false }),
   useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -229,5 +230,33 @@ describe('ClientDetail — payer visibility', () => {
     renderDetail();
 
     expect(screen.getByText('Head Office')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// The Změny a dluhy tab. Its count is what makes the tab worth noticing on a client with a
+// dispute, so it counts what is still OPEN rather than the whole history.
+// ---------------------------------------------------------------------------------
+
+describe('ClientDetail — the ledger tab', () => {
+  afterEach(() => { ledgerEntries.data = []; });
+
+  it('counts the client\'s open points beside the tab name', () => {
+    ledgerEntries.data = [
+      { id: 'e-1', target: 0, requiresFollowUp: true, createdAt: new Date('2026-08-24T10:00:00Z') },
+      { id: 'e-2', target: 5, amount: 500, requiresFollowUp: true, createdAt: new Date('2026-08-24T10:00:00Z') },
+    ];
+
+    renderDetail();
+
+    const tab = screen.getByRole('tab', { name: /Změny a dluhy/ });
+    expect(within(tab).getByText('2')).toBeInTheDocument();
+  });
+
+  it('shows the tab with no count on a client nobody has a dispute with', () => {
+    renderDetail();
+
+    const tab = screen.getByRole('tab', { name: /Změny a dluhy/ });
+    expect(within(tab).queryByText('0')).not.toBeInTheDocument();
   });
 });
