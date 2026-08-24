@@ -42,6 +42,7 @@ public static class AleTrackDbContextMockFactory
     /// <param name="sales">The collection of Sale entities to include in the mocked DbContext.</param>
     /// <param name="saleItems">The collection of SaleItem entities to include in the mocked DbContext.</param>
     /// <param name="clientProductPrices">The collection of ClientProductPrice entities to include in the mocked DbContext.</param>
+    /// <param name="clientLedgerEntries">The collection of ClientLedgerEntry entities to include in the mocked DbContext.</param>
     /// <returns>A mock of the AleTrackDbContext configured with the provided entity data.</returns>
     public static Mock<AleTrackDbContext> CreateMock(
         ICollection<Client>? clients = null,
@@ -72,6 +73,7 @@ public static class AleTrackDbContextMockFactory
         ICollection<Sale>? sales = null,
         ICollection<SaleItem>? saleItems = null,
         ICollection<ClientProductPrice>? clientProductPrices = null,
+        ICollection<ClientLedgerEntry>? clientLedgerEntries = null,
         ICollection<Supplier>? suppliers = null,
         ICollection<SupplierGood>? supplierGoods = null,
         ICollection<SupplierNote>? supplierNotes = null)
@@ -107,6 +109,7 @@ public static class AleTrackDbContextMockFactory
             sales ?? [],
             saleItems ?? [],
             clientProductPrices ?? [],
+            clientLedgerEntries ?? [],
             suppliers ?? [],
             supplierGoods ?? [],
             supplierNotes ?? []);
@@ -159,6 +162,7 @@ public static class AleTrackDbContextMockFactory
         ICollection<Sale> sales,
         ICollection<SaleItem> saleItems,
         ICollection<ClientProductPrice> clientProductPrices,
+        ICollection<ClientLedgerEntry> clientLedgerEntries,
         ICollection<Supplier> suppliers,
         ICollection<SupplierGood> supplierGoods,
         ICollection<SupplierNote> supplierNotes)
@@ -191,6 +195,7 @@ public static class AleTrackDbContextMockFactory
         dbContextMock.Setup<DbSet<Sale>>(x => x.Sales).ReturnsDbSet(sales);
         dbContextMock.Setup<DbSet<SaleItem>>(x => x.SaleItems).ReturnsDbSet(saleItems);
         dbContextMock.Setup<DbSet<ClientProductPrice>>(x => x.ClientProductPrices).ReturnsDbSet(clientProductPrices);
+        dbContextMock.Setup<DbSet<ClientLedgerEntry>>(x => x.ClientLedgerEntries).ReturnsDbSet(clientLedgerEntries);
         dbContextMock.Setup<DbSet<Supplier>>(x => x.Suppliers).ReturnsDbSet(suppliers);
         dbContextMock.Setup<DbSet<SupplierGood>>(x => x.SupplierGoods).ReturnsDbSet(supplierGoods);
         dbContextMock.Setup<DbSet<SupplierNote>>(x => x.SupplierNotes).ReturnsDbSet(supplierNotes);
