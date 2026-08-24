@@ -3,6 +3,7 @@ using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Common.Options;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
@@ -124,6 +125,17 @@ public sealed class UpdateOrderEndpoint(
         }
 
         await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
+
+        // Which of the client's open points this order promises to settle. Outside the freeze
+        // gate: it records an intention about the ledger, not the order's content, and the
+        // entries close only when the order is delivered.
+        await ClientLedgerAssignment.AssignAsync(dbContext, order, req.Data.SettledLedgerEntryIds, ct);
+
+        // Cancelling the order withdraws every promise it was carrying, so those points go back
+        // to being open. Cancelling the *shipment* deliberately does not — that only frees the
+        // order for re-planning, and it still carries the debt.
+        if (order.State is OrderState.Cancelled)
+            await ClientLedgerAssignment.ReleaseForCancelledOrderAsync(dbContext, order.Id, ct);
 
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
