@@ -82,6 +82,9 @@ public sealed class UpdateOrderEndpoint(
             // state — order items are the shipment's content.
             .Include(o => o.OutgoingShipmentStop)
                 .ThenInclude(s => s!.OutgoingShipment)
+                    // The rows the office has marked finished: a change to what is billed here
+                    // has to un-mark the one covering this order — see UnmarkInvoicingAsync.
+                    .ThenInclude(sh => sh.InvoiceConfirmations)
             .FirstOrDefaultAsync(ct);
 
         if (order is null)
@@ -97,6 +100,13 @@ public sealed class UpdateOrderEndpoint(
         // old client), so it must feed into the propagation decision even
         // when the (kind, placeId) pair itself is left untouched.
         var clientChanged = req.Data.ClientId != order!.Client.PublicId;
+
+        // Read before anything is applied, and remembered across the save: a marked invoice row
+        // says somebody checked this order against the paperwork, so changing what is billed has
+        // to send it back for checking. The payer is captured too, because changing the client
+        // moves the order to a different row.
+        var billedContentChanged = RequestChangesBilledContent(order, req.Data);
+        var payerBefore = InvoiceReadiness.RowClientIdOf(order);
 
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
 
@@ -125,6 +135,9 @@ public sealed class UpdateOrderEndpoint(
         }
 
         await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
+
+        if (billedContentChanged)
+            UnmarkInvoicing(order, payerBefore);
 
         // Which of the client's open points this order promises to settle. Outside the freeze
         // gate: it records an intention about the ledger, not the order's content, and the
@@ -185,6 +198,91 @@ public sealed class UpdateOrderEndpoint(
         // the client's ledger, and who moved a delivery is worth knowing.
         var userId = await ResolveCurrentUserIdAsync(ct);
         await OrderDeliveryAddressWriter.PropagateToStopAsync(dbContext, order, DateTime.UtcNow, ct, userId);
+    }
+
+    /// <summary>
+    /// Whether the request changes anything the invoice bills for.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than <see cref="RequestChangesFrozenContent"/> on purpose. A reminder flag or a
+    /// note is not on an invoice, and neither is the delivered date; sending a marked row back
+    /// for checking over one of those would teach the office to ignore the mark. Returns are out
+    /// for the same reason — empties are deposits, not billed pieces.
+    ///
+    /// Supplier goods and custom extras are in, unlike in the freeze predicate: they are lines of
+    /// the invoice, so a changed quantity there is exactly what somebody has to re-check.
+    /// </remarks>
+    private static bool RequestChangesBilledContent(Order order, UpdateOrderDto data)
+    {
+        if (data.ClientId != order.Client.PublicId)
+            return true;
+
+        var storedItems = order.OrderItems
+            .Select(i => (i.Product.PublicId, i.Quantity))
+            .OrderBy(i => i.PublicId).ThenBy(i => i.Quantity)
+            .ToList();
+
+        var incomingItems = data.OrderItems
+            .Select(i => (PublicId: i.ProductId, i.Quantity))
+            .OrderBy(i => i.PublicId).ThenBy(i => i.Quantity)
+            .ToList();
+
+        if (!storedItems.SequenceEqual(incomingItems))
+            return true;
+
+        var storedGoods = order.SupplierGoodItems
+            .Where(g => g.SupplierGood is not null)
+            .Select(g => (g.SupplierGood!.PublicId, g.Quantity))
+            .OrderBy(g => g.PublicId).ThenBy(g => g.Quantity)
+            .ToList();
+
+        var incomingGoods = (data.SupplierGoodItems ?? [])
+            .Select(g => (PublicId: g.SupplierGoodId, g.Quantity))
+            .OrderBy(g => g.PublicId).ThenBy(g => g.Quantity)
+            .ToList();
+
+        if (!storedGoods.SequenceEqual(incomingGoods))
+            return true;
+
+        var storedExtras = order.CustomExtraItems
+            .Select(e => (e.Description, e.Quantity))
+            .OrderBy(e => e.Description).ThenBy(e => e.Quantity)
+            .ToList();
+
+        var incomingExtras = (data.CustomExtraItems ?? [])
+            .Select(e => (e.Description, e.Quantity))
+            .OrderBy(e => e.Description).ThenBy(e => e.Quantity)
+            .ToList();
+
+        return !storedExtras.SequenceEqual(incomingExtras);
+    }
+
+    /// <summary>
+    /// Sends the invoice row covering this order back for checking.
+    /// </summary>
+    /// <remarks>
+    /// The number is kept, exactly as un-marking by hand keeps it — re-marking then gives the
+    /// same one back and no number is ever printed against two clients.
+    ///
+    /// Both payers when the client moved: the row the order used to sit on has to lose its mark
+    /// too, because what it was checked against has left it. A filed run is left alone — nothing
+    /// there can be edited anyway, and the marks are the record of what was filed.
+    /// </remarks>
+    private static void UnmarkInvoicing(Order order, long payerBefore)
+    {
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is null || shipment.IsInvoicingFiled)
+            return;
+
+        // The payer read off the navigation, not off the FK: the client may have been reassigned a
+        // moment ago and the key still points at the old one until EF fixes it up, which would
+        // leave the new row marked as checked against goods that have only just arrived on it.
+        var payerAfter = order.Client.InvoicingClientId ?? order.Client.Id;
+        var payers = new[] { payerBefore, payerAfter };
+
+        foreach (var confirmation in shipment.InvoiceConfirmations.Where(c => payers.Contains(c.ClientId)))
+            confirmation.IsReady = false;
     }
 
     /// <summary>
@@ -258,6 +356,12 @@ public sealed class UpdateOrderEndpoint(
 
             if (existing is not null)
             {
+                // A ticked-off line whose count changes has not been checked at that count. The
+                // tick says somebody counted these pieces into the van; leaving it standing would
+                // have the ramp trust a number nobody read.
+                if (existing.Quantity != line.Quantity)
+                    existing.IsShipmentLoadingConfirmed = false;
+
                 existing.Quantity = line.Quantity;
                 existing.ReminderState = line.ReminderState;
 
@@ -339,9 +443,13 @@ public sealed class UpdateOrderEndpoint(
 
     /// <summary>
     /// Diffs posted custom extras against the persisted ones, like returns and notes.
-    /// <see cref="OrderCustomExtraItem.IsShipmentLoadingConfirmed"/> is left alone —
-    /// it belongs to the shipment, and an order edit must not un-confirm a loaded item.
     /// </summary>
+    /// <remarks>
+    /// <see cref="OrderCustomExtraItem.IsShipmentLoadingConfirmed"/> survives an edit that leaves
+    /// the count alone — renaming a line or adding a note does not un-check what was counted into
+    /// the van. A changed count does clear it: the tick says somebody counted these pieces, and at
+    /// a different number nobody has.
+    /// </remarks>
     private static List<OrderCustomExtraItem> GetCustomExtras(List<OrderCustomExtraItemDto> extras, Order order)
     {
         var result = extras
@@ -352,6 +460,10 @@ public sealed class UpdateOrderEndpoint(
         foreach (var e in extras.Where(e => e.Id is not null && order.CustomExtraItems.Any(x => x.PublicId == e.Id!.Value)))
         {
             var existing = order.CustomExtraItems.First(x => x.PublicId == e.Id!.Value);
+
+            if (existing.Quantity != e.Quantity)
+                existing.IsShipmentLoadingConfirmed = false;
+
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;
             existing.Note = e.Note;
