@@ -28,7 +28,10 @@ vi.mock('src/hooks/useClientLedger', () => ({
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
-vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [] }) }));
+// The recording drawer this panel opens reads the client's catalog for its product picker.
+vi.mock('src/hooks/useOrders', () => ({
+  useClientProductHistory: () => ({ data: undefined, isLoading: false }),
+}));
 
 const { LedgerPanel } = await import('./LedgerPanel');
 const { ClientOpenItemsCard } = await import('./ClientOpenItemsCard');

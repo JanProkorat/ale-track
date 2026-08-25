@@ -1888,6 +1888,9 @@ function ledgerDrawerContext(
       p.quantity,
       unloadChipText(p),
     )),
+    itemProductIds: (source?.products ?? [])
+      .map((p) => p.id)
+      .filter((id): id is string => Boolean(id)),
     returns: (source?.returns ?? []).map((r) => planRow(r.id, r.name, r.quantity)),
     extras: (source?.customExtraItems ?? []).map((e) => planRow(e.id, e.description, e.quantity)),
     entries,

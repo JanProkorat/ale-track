@@ -252,6 +252,9 @@ export function OrderDetail({
     // No kind or package size on the order's item DTO — the order screen never showed them, so
     // the drawer's rows carry the name alone rather than the chip the prototype draws.
     items: items.map((it) => planRow(it.id, it.productName, it.quantity)),
+    // Product ids as well as line ids: the drawer's catalog must not offer a product the order
+    // already plans, whose extra pieces belong on that line instead.
+    itemProductIds: items.map((it) => it.productId).filter((id): id is string => Boolean(id)),
     goods: goodItems.map((g) => planRow(g.id, g.goodName, g.quantity, g.goodSize)),
     returns: returns.map((r) => planRow(r.id, r.name, r.quantity)),
     extras: extras.map((e) => planRow(e.id, e.description, e.quantity)),

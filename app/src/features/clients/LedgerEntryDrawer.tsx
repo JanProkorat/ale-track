@@ -10,11 +10,12 @@
 // deleted.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Divider, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import {
+  Box, CircularProgress, Divider, IconButton, Stack, TextField, Tooltip, Typography,
+} from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
-import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
 import {
   ClientLedgerEntryTarget,
@@ -24,7 +25,9 @@ import {
   type IClientLedgerRowDto,
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
-import { useProducts } from 'src/hooks/useProducts';
+import { useClientProductHistory } from 'src/hooks/useOrders';
+import { ProductCatalogBrowser } from 'src/features/orders/ProductCatalog';
+import { catalogByProductId } from 'src/features/orders/clientPrices';
 import {
   useDeleteClientLedgerEntry,
   useSaveClientLedgerEntries,
@@ -37,7 +40,6 @@ import {
   isFreeEntry,
   type PlanRow,
 } from './ledgerModel';
-import { productPickerOptions } from './productPickerOptions';
 import { TextDiff } from './LedgerDiff';
 
 /** What the screen opening the drawer already knows about the handover. */
@@ -52,6 +54,14 @@ export interface LedgerDrawerContext {
   goods?: PlanRow[];
   returns?: PlanRow[];
   extras?: PlanRow[];
+  /**
+   * Products the order's own lines are for.
+   *
+   * Kept apart from `items`, whose keys are order-item ids: taking more of a product the order
+   * plans is an over-delivery on that line, recorded in the Skutečně column above, so the catalog
+   * must not offer it a second time as something taken at the door.
+   */
+  itemProductIds?: string[];
   /** The order's recorded deviations, so the actual column can be prefilled from them. */
   entries?: ClientLedgerEntryDto[];
 }
@@ -69,14 +79,14 @@ interface NewLine {
 }
 
 /**
- * A product added at the door in an earlier pass: an entry with no line on the order.
+ * A product taken at the door: no line on the order, so it is keyed by the product.
  *
- * It has to be listed, not just creatable. The form's tables are built from the order's own
- * lines, so until this existed a mistyped addition could be neither corrected nor taken back
- * from the one screen that wrote it.
+ * Rows arrive two ways — from an entry an earlier pass wrote, or from the catalog below. Only the
+ * first has an `entryId`, which is what separates "set this to zero so the server deletes it"
+ * from "never mind, it was never saved".
  */
 interface AddedRow {
-  entryId: string;
+  entryId?: string;
   productId: string;
   name: string;
   actual: string;
@@ -113,7 +123,12 @@ export function LedgerEntryDrawer({
   const save = useSaveClientLedgerEntries();
   const updateEntry = useUpdateClientLedgerEntry();
   const deleteEntry = useDeleteClientLedgerEntry();
-  const products = useProducts();
+
+  // The client's own catalog, not the plain product list: it arrives already grouped by brewery
+  // and kind, and its prices are this client's rather than the list ones — the same source the
+  // order editor prices a new line from, so the two screens cannot quote different money.
+  const catalog = useClientProductHistory(context.clientId || undefined);
+  const productsById = useMemo(() => catalogByProductId(catalog.data), [catalog.data]);
 
   // Memoised: the fallback array is a fresh value on every render, which would make the two
   // lookups below recompute each time.
@@ -125,8 +140,6 @@ export function LedgerEntryDrawer({
   const [returns, setReturns] = useState<EditableRow[]>([]);
   const [extras, setExtras] = useState<EditableRow[]>([]);
   const [added, setAdded] = useState<AddedRow[]>([]);
-  const [newProduct, setNewProduct] = useState<string | null>(null);
-  const [newProductQty, setNewProductQty] = useState('');
   const [newReturn, setNewReturn] = useState<NewLine>(EMPTY_NEW_LINE);
   const [newExtra, setNewExtra] = useState<NewLine>(EMPTY_NEW_LINE);
   const [money, setMoney] = useState('');
@@ -154,13 +167,11 @@ export function LedgerEntryDrawer({
     setReturns(toEditable(context.returns ?? [], entriesForTarget(entries, 'ReturnQuantity')));
     setExtras(toEditable(context.extras ?? [], entriesForTarget(entries, 'CustomExtraQuantity')));
     setAdded(doorSideAdditions(entries).map((e) => ({
-      entryId: e.id ?? '',
+      entryId: e.id,
       productId: e.productId ?? '',
       name: e.productName ?? '—',
       actual: String(e.actualQuantity ?? 0),
     })));
-    setNewProduct(null);
-    setNewProductQty('');
     setNewReturn(EMPTY_NEW_LINE);
     setNewExtra(EMPTY_NEW_LINE);
     setMoney(moneyEntry?.amount != null ? String(moneyEntry.amount) : '');
@@ -168,16 +179,44 @@ export function LedgerEntryDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, context.orderId, context.clientId]);
 
-  // Excludes what is already added at the door as well as what the order plans: both have a row
-  // above with its own field, and picking one here would overwrite that row's quantity instead of
-  // adding to it.
-  const productOptions = useMemo(() => {
-    const exclude = new Set<string | undefined>([
-      ...(context.items ?? []).map((r) => r.key),
-      ...doorSideAdditions(entries).map((e) => e.productId),
-    ]);
-    return productPickerOptions(products.data, exclude);
-  }, [products.data, context.items, entries]);
+  // What the catalog shows as already taken. Keyed by product, which is how a door-side addition
+  // is keyed everywhere else.
+  const addedQuantities = useMemo(
+    () => new Map(added.map((row) => [row.productId, parsed(row.actual, 0)])),
+    [added],
+  );
+
+  // Products the order itself plans. Taking more of one of those is an over-delivery on its own
+  // line, recorded in the Skutečně column above — offering it here as well would write a second
+  // entry for one product, and the two would disagree.
+  const onOrder = useMemo(
+    () => new Set<string | undefined>(context.itemProductIds ?? []),
+    [context.itemProductIds],
+  );
+
+  /** Puts a product on the form at one piece, or brings a row that was zeroed back to one. */
+  const addProduct = (productId: string) => {
+    const name = productsById.get(productId)?.name ?? '—';
+    setAdded((prev) => (prev.some((r) => r.productId === productId)
+      ? prev.map((r) => (r.productId === productId ? { ...r, actual: '1' } : r))
+      : [...prev, { productId, name, actual: '1' }]));
+  };
+
+  /**
+   * Steps a row by the catalog's +/−.
+   *
+   * A row the server already knows about stays at zero rather than disappearing: zero is what
+   * tells the server to delete the entry, so dropping the row would leave it stored. One that was
+   * never saved is simply forgotten.
+   */
+  const changeProductQty = (productId: string, delta: number) => {
+    setAdded((prev) => prev.flatMap((row) => {
+      if (row.productId !== productId) return [row];
+      const next = Math.max(0, parsed(row.actual, 0) + delta);
+      if (next === 0 && !row.entryId) return [];
+      return [{ ...row, actual: String(next) }];
+    }));
+  };
 
   const busy = save.isPending || updateEntry.isPending || deleteEntry.isPending;
 
@@ -226,25 +265,19 @@ export function LedgerEntryDrawer({
       });
     }
 
-    // Already added at the door, now corrected. Keyed by product, which is how the server pairs
-    // it with the entry it wrote — and zero means the two agree again, which deletes it.
+    // Products taken at the door — whether picked from the catalog just now or corrected from an
+    // earlier pass. Keyed by product, which is how the server pairs a row with the entry it wrote;
+    // zero says the two agree again, which deletes it. A row at zero that was never saved has
+    // nothing to delete and is left out.
     for (const row of added) {
+      const quantity = parsed(row.actual, 0);
+      if (quantity === 0 && !row.entryId) continue;
+
       push({
         target: ClientLedgerEntryTarget.ProductQuantity,
         productId: row.productId,
         plannedQuantity: 0,
-        actualQuantity: parsed(row.actual, 0),
-      });
-    }
-
-    // Nothing planned it, so it is keyed by what it is rather than by a line of the order.
-    const productQty = parsed(newProductQty, 0);
-    if (newProduct && productQty > 0) {
-      push({
-        target: ClientLedgerEntryTarget.ProductQuantity,
-        productId: newProduct,
-        plannedQuantity: 0,
-        actualQuantity: productQty,
+        actualQuantity: quantity,
       });
     }
 
@@ -406,7 +439,7 @@ export function LedgerEntryDrawer({
       onSubmit={submit}
       submitLabel="Uložit změny"
       busy={busy}
-      width={520}
+      width={680}
     >
       <Stack spacing={2}>
         <Typography variant="body2" color="text.secondary">
@@ -427,7 +460,7 @@ export function LedgerEntryDrawer({
                 <SectionLabel>Přidáno na místě</SectionLabel>
                 <Stack spacing={1}>
                   {added.map((row, index) => (
-                    <Stack key={row.entryId} direction="row" spacing={1} alignItems="center">
+                    <Stack key={row.productId} direction="row" spacing={1} alignItems="center">
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
                       </Box>
@@ -443,15 +476,16 @@ export function LedgerEntryDrawer({
                         inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${row.name} — vzato na místě` }}
                         sx={{ width: 96 }}
                       />
+                      {/* A stored row is zeroed rather than dropped: zero is what tells the server
+                          to delete the entry, so removing the row would leave it saved. One picked
+                          from the catalog a moment ago has nothing stored and simply goes. */}
                       <Tooltip title="Odebrat">
                         <IconButton
                           size="small"
                           aria-label={`Odebrat ${row.name}`}
-                          onClick={() => {
-                            const next = [...added];
-                            next[index] = { ...row, actual: '0' };
-                            setAdded(next);
-                          }}
+                          onClick={() => setAdded((prev) => (row.entryId
+                            ? prev.map((r) => (r.productId === row.productId ? { ...r, actual: '0' } : r))
+                            : prev.filter((r) => r.productId !== row.productId)))}
                           sx={{ color: 'text.disabled' }}
                         >
                           <DeleteIcon fontSize="small" />
@@ -468,28 +502,22 @@ export function LedgerEntryDrawer({
 
             <Box>
               <SectionLabel>Přidat produkt navíc</SectionLabel>
-              <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Box sx={{ flex: 1 }}>
-                  {/* Collapsible headings, as the catalog has: the whole catalog is on offer
-                      here, and a flat list of it is not a thing anybody can read. */}
-                  <Combobox
-                    value={newProduct}
-                    onChange={setNewProduct}
-                    options={productOptions}
-                    placeholder="— vyberte —"
-                    collapsibleGroups
-                  />
-                </Box>
-                <TextField
-                  size="small"
-                  type="number"
-                  placeholder="ks"
-                  value={newProductQty}
-                  onChange={(e) => setNewProductQty(e.target.value)}
-                  inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': 'Počet navíc' }}
-                  sx={{ width: 96 }}
+              {/* The order editor's own catalog, not an imitation of it: the same brewery panels,
+                  the same prices, the same +/− control. Panels start closed — expanded, the
+                  catalog would bury Vratky and everything under it. */}
+              {catalog.isLoading ? (
+                <Stack alignItems="center" sx={{ py: 2 }}><CircularProgress size={22} /></Stack>
+              ) : (
+                <ProductCatalogBrowser
+                  breweries={catalog.data?.breweries ?? []}
+                  quantities={addedQuantities}
+                  onAdd={addProduct}
+                  onChange={changeProductQty}
+                  exclude={onOrder}
+                  panelsOpenByDefault={false}
+                  emptyTitle="Žádné produkty"
                 />
-              </Stack>
+              )}
             </Box>
 
             {(context.goods ?? []).length > 0 && (

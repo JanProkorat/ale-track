@@ -5,11 +5,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ClientLedgerEntryDto, ClientLedgerEntryTarget, ProductKind } from 'src/generated/api-client';
+import {
+  ClientLedgerEntryDto, ClientLedgerEntryTarget, GroupedProductHistoryDto, ProductKind,
+} from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 import type { LedgerDrawerContext } from './LedgerEntryDrawer';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
+// The catalog prices its rows, and money goes through the display currency.
+vi.mock('src/providers/CurrencyProvider', () => ({
+  useCurrency: () => ({ formatMoney: (v?: number | null) => (v == null ? '—' : `${v} Kč`) }),
+}));
 
 const saveMock = vi.fn();
 const updateMock = vi.fn();
@@ -21,12 +27,28 @@ vi.mock('src/hooks/useClientLedger', () => ({
   useDeleteClientLedgerEntry: () => ({ mutateAsync: deleteMock, isPending: false }),
 }));
 
-// The product picker is a resource hook like any other, and the mock can express no-data. The
-// brewery and kind are what the picker groups by, so a product here carries them.
-const productState: {
-  data?: Array<{ id: string; name: string; breweryName?: string; kind?: ProductKind; packageSize?: number }>;
-} = { data: [] };
-vi.mock('src/hooks/useProducts', () => ({ useProducts: () => productState }));
+// The catalog behind "Přidat produkt navíc". A resource hook like any other, and the mock can
+// express no-data: the drawer renders before it arrives.
+const catalogState: { data?: GroupedProductHistoryDto; isLoading: boolean } = {
+  data: undefined,
+  isLoading: false,
+};
+vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => catalogState }));
+
+/** One brewery, one product, one size — the smallest thing the catalog can show. */
+function catalogOf(...items: Array<{ id: string; name: string; priceWithVat?: number; packageSize?: number }>) {
+  return GroupedProductHistoryDto.fromJS({
+    recent: [],
+    breweries: [{
+      breweryId: 'b-1',
+      breweryName: 'Svijany',
+      kinds: [{
+        kind: ProductKind.Keg,
+        packageSizes: [{ size: 50, items: items.map((i) => ({ kind: ProductKind.Keg, packageSize: 50, ...i })) }],
+      }],
+    }],
+  });
+}
 
 const { LedgerEntryDrawer } = await import('./LedgerEntryDrawer');
 
@@ -81,7 +103,8 @@ beforeEach(() => {
   saveMock.mockReset().mockResolvedValue('ok');
   updateMock.mockReset().mockResolvedValue('ok');
   deleteMock.mockReset().mockResolvedValue('ok');
-  productState.data = [];
+  catalogState.data = undefined;
+  catalogState.isLoading = false;
 });
 
 describe('LedgerEntryDrawer', () => {
@@ -175,34 +198,43 @@ describe('LedgerEntryDrawer', () => {
     ]));
   });
 
-  it('calls the picker "Přidat produkt navíc"', () => {
+  // ---------------------------------------------------------------------------------
+  // Adding a product from the catalog. It is the order editor's own catalog, brewery panels and
+  // all — the dropdown it replaced listed the entire catalog flat, which nobody could read.
+  // ---------------------------------------------------------------------------------
+
+  it('calls the section "Přidat produkt navíc"', () => {
     renderDrawer(context());
 
     expect(screen.getByText('Přidat produkt navíc')).toBeInTheDocument();
   });
 
-  // The catalog is the whole catalog here, so the options carry the headings it groups by.
-  it('heads the picker options by brewery and kind', () => {
-    productState.data = [
-      { id: 'p-9', name: 'Svijanská Desítka', breweryName: 'Svijany', kind: ProductKind.Keg, packageSize: 50 },
-    ];
+  // Closed, or the catalog buries Vratky and the money under it.
+  it('starts the brewery panels closed', () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Svijanská Desítka', priceWithVat: 1860 });
     renderDrawer(context());
 
-    fireEvent.change(screen.getByPlaceholderText('— vyberte —'), { target: { value: 'Desítka' } });
+    expect(screen.getByText('Svijany')).toBeInTheDocument();
+    expect(screen.queryByText('Svijanská Desítka')).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByText('Svijany · Sud')).toBeInTheDocument();
+  it('shows the product, its size and the client price once its brewery is opened', () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Svijanská Desítka', priceWithVat: 1860 });
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByText('Svijany'));
+
+    expect(screen.getByText('Svijanská Desítka')).toBeInTheDocument();
     expect(screen.getByText('50 l')).toBeInTheDocument();
+    expect(screen.getByText('1860 Kč')).toBeInTheDocument();
   });
 
   it('records a product taken at the door against the product, not a line', () => {
-    productState.data = [{ id: 'p-9', name: 'Světlé 10' }];
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Světlé 10' });
     renderDrawer(context());
 
-    fireEvent.change(screen.getByLabelText('Počet navíc'), { target: { value: '4' } });
-    // The Combobox is an Autocomplete: type, then pick the option.
-    const picker = screen.getByPlaceholderText('— vyberte —');
-    fireEvent.change(picker, { target: { value: 'Světlé' } });
-    fireEvent.click(screen.getByText('Světlé 10'));
+    fireEvent.click(screen.getByText('Svijany'));
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat' }));
     fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
 
     expect(savedRows()).toEqual(expect.arrayContaining([
@@ -210,8 +242,62 @@ describe('LedgerEntryDrawer', () => {
         target: ClientLedgerEntryTarget.ProductQuantity,
         productId: 'p-9',
         plannedQuantity: 0,
-        actualQuantity: 4,
+        actualQuantity: 1,
       }),
+    ]));
+  });
+
+  it('counts up with the catalog\'s own control', () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Světlé 10' });
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByText('Svijany'));
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat' }));
+    // Now a +/− pair, one of which reads "Přidat" too — the row's is the one inside the panel.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Přidat' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ productId: 'p-9', actualQuantity: 2 }),
+    ]));
+  });
+
+  // Taking more of a product the order plans is an over-delivery on that line, recorded in the
+  // Skutečně column. Offering it here too would write a second entry for one product.
+  it('leaves out a product the order already plans', () => {
+    catalogState.data = catalogOf(
+      { id: 'p-1', name: 'Ležák 12' },
+      { id: 'p-9', name: 'Světlé 10' },
+    );
+    renderDrawer(context({ itemProductIds: ['p-1'] }));
+
+    fireEvent.click(screen.getByText('Svijany'));
+
+    expect(screen.getByText('Světlé 10')).toBeInTheDocument();
+    // Only the row of the planned line above, not a catalog row of its own.
+    expect(screen.getAllByText('Ležák 12')).toHaveLength(1);
+  });
+
+  it('says nothing about a catalog that has not arrived', () => {
+    renderDrawer(context());
+
+    expect(screen.getByText('Žádné produkty')).toBeInTheDocument();
+  });
+
+  // Nothing is stored yet, so there is nothing for a zero to delete — the row just goes.
+  it('drops a just-picked product outright when it is taken off again', () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Světlé 10' });
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByText('Svijany'));
+    fireEvent.click(screen.getByRole('button', { name: 'Přidat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Odebrat Světlé 10' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(screen.queryByLabelText('Světlé 10 — vzato na místě')).not.toBeInTheDocument();
+    // The planned line still goes, as every save does; the product does not.
+    expect(savedRows()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ productId: 'p-9' }),
     ]));
   });
 
@@ -268,17 +354,18 @@ describe('LedgerEntryDrawer', () => {
     ]));
   });
 
-  // Picking it again would overwrite the row above rather than add to it, so it is not offered.
-  it('drops an already-added product from the picker', () => {
-    productState.data = [{ id: 'p-9', name: 'Světlé 10' }, { id: 'p-1', name: 'Tmavé 11' }];
+  // The catalog is not a separate world from the list above it: a product already taken shows
+  // its count on its own row, which is the one thing a hidden option could never do.
+  it('shows what is already taken on the catalog row itself', () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Světlé 10' });
     renderDrawer(context({ entries: [doorSide()] }));
 
-    const picker = screen.getByPlaceholderText('— vyberte —');
-    fireEvent.change(picker, { target: { value: 'é 1' } });
+    fireEvent.click(screen.getByText('Svijany'));
 
-    expect(screen.getByText('Tmavé 11')).toBeInTheDocument();
-    // The name still appears once — as the editable row above, not as an option.
-    expect(screen.getAllByText('Světlé 10')).toHaveLength(1);
+    // 4 from the entry, shown on the row's own +/− control — which is there instead of the
+    // bare "Přidat" button an untaken product gets.
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ubrat' })).toBeInTheDocument();
   });
 
   // A settled entry is history to the server: a save carrying the same product would open a
