@@ -639,6 +639,28 @@ describe('OrderDetail — when a change can be recorded', () => {
     expect(record()).not.toBeInTheDocument();
   });
 
+  // The button appearing with no explanation is what made the rule invisible: the office had no
+  // way to tell what had changed about the order.
+  it('says on the page that the paperwork is what opened it', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: true }));
+
+    expect(within(screen.getByTestId('detail-header')).getByText('Fakturace hotová')).toBeInTheDocument();
+  });
+
+  it('says nothing about the paperwork while it is unfinished', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: false }));
+
+    expect(screen.queryByText('Fakturace hotová')).not.toBeInTheDocument();
+  });
+
+  // The state of the paperwork is worth knowing whether or not this user may record anything.
+  it('shows it to a user who cannot record either', () => {
+    renderDetail(order({ isInvoiceReady: true }));
+
+    expect(screen.getByText('Fakturace hotová')).toBeInTheDocument();
+    expect(record()).not.toBeInTheDocument();
+  });
+
   it('never offers it to a user who may not write a client\'s ledger', () => {
     render(
       <MuiThemeProvider theme={theme}>

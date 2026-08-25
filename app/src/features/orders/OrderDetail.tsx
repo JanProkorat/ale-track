@@ -308,6 +308,26 @@ export function OrderDetail({
               sx={{ fontWeight: 700, height: 20 }}
             />
           ),
+          // Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
+          // Without it the button simply appeared one day and the office had no way to tell what
+          // had changed. Shown whether or not the user may record, because the state of the
+          // paperwork is worth knowing either way.
+          order.isInvoiceReady && (
+            <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
+              <Chip
+                size="small"
+                icon={<CheckCircleIcon sx={{ fontSize: 15 }} />}
+                label="Fakturace hotová"
+                sx={{
+                  fontWeight: 700,
+                  height: 20,
+                  color: 'success.main',
+                  bgcolor: (t) => t.vars!.palette.brand.okTint,
+                  '& .MuiChip-icon': { color: 'success.main' },
+                }}
+              />
+            </Tooltip>
+          ),
         ]}
         actions={(
           <>
