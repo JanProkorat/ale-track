@@ -339,6 +339,16 @@ describe('OrderDetail', () => {
     expect(onOpenShipment).toHaveBeenNthCalledWith(2, 'ship-0000-0000-0000-00002a');
   });
 
+  // Short on the face so the two pills fit on one line above it; the accessible name keeps the
+  // whole phrase, since "Otevřít" on its own says nothing about what opens.
+  it('reads just "Otevřít" while still announcing the vývoz', () => {
+    renderDetail(order({ outgoingShipment: shipment() }), undefined, vi.fn());
+
+    const button = screen.getByRole('button', { name: 'Otevřít vývoz' });
+    expect(button).toHaveTextContent('Otevřít');
+    expect(button).not.toHaveTextContent('Otevřít vývoz');
+  });
+
   it('says nothing about vývozy when the order is not planned onto one', () => {
     const { container } = renderDetail(order({ outgoingShipment: undefined }), undefined, vi.fn());
 

@@ -144,13 +144,18 @@ function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
           </Typography>
         </Box>
 
+        {/* Small, and reading "Otevřít" alone: at full size it took more than half the card and
+            the two pills could not sit on one line. The word it drops is the card's own title,
+            three lines above it — the accessible name keeps the whole phrase. */}
         <Button
           variant="outlined"
+          size="small"
           endIcon={<ArrowForwardIcon />}
           onClick={onOpen}
+          aria-label="Otevřít vývoz"
           sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
         >
-          Otevřít vývoz
+          Otevřít
         </Button>
       </Stack>
     </CollapsibleCard>
