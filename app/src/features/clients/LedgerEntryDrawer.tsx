@@ -26,6 +26,7 @@ import {
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
 import { useClientProductHistory } from 'src/hooks/useOrders';
+import { useBreweryColors } from 'src/hooks/useBreweries';
 import { ProductCatalogBrowser } from 'src/features/orders/ProductCatalog';
 import { catalogByProductId } from 'src/features/orders/clientPrices';
 import {
@@ -128,6 +129,9 @@ export function LedgerEntryDrawer({
   // and kind, and its prices are this client's rather than the list ones — the same source the
   // order editor prices a new line from, so the two screens cannot quote different money.
   const catalog = useClientProductHistory(context.clientId || undefined);
+  // The square that marks a brewery across every catalog surface. Without it the panels render
+  // a grey placeholder, which reads as "no colour" rather than as this brewery's.
+  const colorForBrewery = useBreweryColors();
   const productsById = useMemo(() => catalogByProductId(catalog.data), [catalog.data]);
 
   // Memoised: the fallback array is a fresh value on every render, which would make the two
@@ -358,43 +362,27 @@ export function LedgerEntryDrawer({
           Objednávka žádné neplánovala.
         </Typography>
       ) : (
-        <Stack spacing={1}>
-          <Stack direction="row" spacing={1}>
-            <Box sx={{ flex: 1 }} />
-            <Typography variant="caption" color="text.secondary" sx={{ width: 56, textAlign: 'right' }}>
-              Plán
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ width: 96, textAlign: 'right' }}>
-              {actualLabel}
-            </Typography>
-          </Stack>
-          {rows.map((row, index) => (
-            <Stack key={row.key} direction="row" spacing={1} alignItems="center">
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
-                {row.chip && (
-                  <Typography variant="caption" color="text.secondary">{row.chip}</Typography>
-                )}
-              </Box>
-              <Typography
-                sx={{ width: 56, textAlign: 'right', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
-              >
-                {row.quantity} {unit}
-              </Typography>
-              <TextField
-                size="small"
-                type="number"
+        <Stack spacing={0.75}>
+          <ColumnHeads actualLabel={actualLabel} />
+          {rows.map((row, index) => {
+            const changed = parsed(row.actual, row.quantity) !== row.quantity;
+            return (
+              <QuantityRow
+                key={row.key}
+                name={row.name}
+                chip={row.chip}
+                changed={changed}
+                planned={`${row.quantity} ${unit}`}
                 value={row.actual}
-                onChange={(e) => {
+                inputLabel={`${row.name} — ${actualLabel}`}
+                onValue={(value) => {
                   const next = [...rows];
-                  next[index] = { ...row, actual: e.target.value };
+                  next[index] = { ...row, actual: value };
                   setRows(next);
                 }}
-                inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${row.name} — ${actualLabel}` }}
-                sx={{ width: 96 }}
               />
-            </Stack>
-          ))}
+            );
+          })}
         </Stack>
       )}
     </Box>
@@ -406,7 +394,12 @@ export function LedgerEntryDrawer({
     value: NewLine,
     setValue: (v: NewLine) => void,
   ) => (
-    <Box sx={{ mt: 1 }}>
+    // Label above the fields rather than under them: a caption below reads as a note about what
+    // was just typed instead of as the name of the thing being typed into.
+    <Box sx={{ mt: 1, px: ROW_PX, py: 1, borderRadius: 2, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+        {label}
+      </Typography>
       <Stack direction="row" spacing={1}>
         <TextField
           size="small"
@@ -423,10 +416,9 @@ export function LedgerEntryDrawer({
           value={value.quantity}
           onChange={(e) => setValue({ ...value, quantity: e.target.value })}
           inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${label} — počet` }}
-          sx={{ width: 96 }}
+          sx={{ width: ACTUAL_W }}
         />
       </Stack>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
     </Box>
   );
 
@@ -442,11 +434,19 @@ export function LedgerEntryDrawer({
       width={680}
     >
       <Stack spacing={2}>
-        <Typography variant="body2" color="text.secondary">
-          Objednávka zůstane plánem — přepisujete jen sloupec{' '}
-          <Box component="span" sx={{ fontWeight: 800 }}>Skutečně</Box>. Rozdíl se uloží jako
-          změna vedle objednávky.
-        </Typography>
+        {/* Guidance, so it reads as a note rather than as the first paragraph of the form. */}
+        <Box
+          sx={{
+            px: 1.75, py: 1.25, borderRadius: 2, border: 1, borderColor: 'divider',
+            bgcolor: (t) => t.vars!.palette.brand.infoTint,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            Objednávka zůstane plánem — přepisujete jen sloupec{' '}
+            <Box component="span" sx={{ fontWeight: 800, color: 'text.primary' }}>Skutečně</Box>.
+            {' '}Rozdíl se uloží jako změna vedle objednávky.
+          </Typography>
+        </Box>
 
         {hasOrder && (
           <>
@@ -458,43 +458,32 @@ export function LedgerEntryDrawer({
             {added.length > 0 && (
               <Box>
                 <SectionLabel>Přidáno na místě</SectionLabel>
-                <Stack spacing={1}>
+                <Stack spacing={0.75}>
+                  <ColumnHeads actualLabel="Vzato" />
                   {added.map((row, index) => (
-                    <Stack key={row.productId} direction="row" spacing={1} alignItems="center">
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
-                      </Box>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={row.actual}
-                        onChange={(e) => {
-                          const next = [...added];
-                          next[index] = { ...row, actual: e.target.value };
-                          setAdded(next);
-                        }}
-                        inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${row.name} — vzato na místě` }}
-                        sx={{ width: 96 }}
-                      />
-                      {/* A stored row is zeroed rather than dropped: zero is what tells the server
-                          to delete the entry, so removing the row would leave it saved. One picked
-                          from the catalog a moment ago has nothing stored and simply goes. */}
-                      <Tooltip title="Odebrat">
-                        <IconButton
-                          size="small"
-                          aria-label={`Odebrat ${row.name}`}
-                          onClick={() => setAdded((prev) => (row.entryId
-                            ? prev.map((r) => (r.productId === row.productId ? { ...r, actual: '0' } : r))
-                            : prev.filter((r) => r.productId !== row.productId)))}
-                          sx={{ color: 'text.disabled' }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                    // No plan behind these, so the Plán column reads as a dash — and the row is
+                    // always the changed colour, because its existence is the change.
+                    <QuantityRow
+                      key={row.productId}
+                      name={row.name}
+                      changed
+                      value={row.actual}
+                      inputLabel={`${row.name} — vzato na místě`}
+                      onValue={(value) => {
+                        const next = [...added];
+                        next[index] = { ...row, actual: value };
+                        setAdded(next);
+                      }}
+                      // A stored row is zeroed rather than dropped: zero is what tells the server
+                      // to delete the entry, so removing the row would leave it saved. One picked
+                      // from the catalog a moment ago has nothing stored and simply goes.
+                      onRemove={() => setAdded((prev) => (row.entryId
+                        ? prev.map((r) => (r.productId === row.productId ? { ...r, actual: '0' } : r))
+                        : prev.filter((r) => r.productId !== row.productId)))}
+                    />
                   ))}
                 </Stack>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
                   Nula položku odebere.
                 </Typography>
               </Box>
@@ -514,6 +503,7 @@ export function LedgerEntryDrawer({
                   onAdd={addProduct}
                   onChange={changeProductQty}
                   exclude={onOrder}
+                  colorForBrewery={colorForBrewery}
                   panelsOpenByDefault={false}
                   emptyTitle="Žádné produkty"
                 />
@@ -557,7 +547,8 @@ export function LedgerEntryDrawer({
             size="small"
             fullWidth
             type="number"
-            label="Rozdíl v Kč — plus když klient dluží nám, minus když my jemu"
+            label="Rozdíl v Kč"
+            helperText="Plus když klient dluží nám, minus když my jemu."
             value={money}
             onChange={(e) => setMoney(e.target.value)}
             placeholder="např. 2610"
@@ -600,5 +591,93 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     >
       {children}
     </Typography>
+  );
+}
+
+/** Column widths, shared by the heads and the rows so the two line up. */
+const PLAN_W = 64;
+const ACTUAL_W = 92;
+
+/** Row padding, which the heads have to repeat or the labels sit off their columns. */
+const ROW_PX = 1.25;
+
+function ColumnHeads({ actualLabel }: { actualLabel: string }) {
+  return (
+    <Stack direction="row" spacing={1} sx={{ px: ROW_PX }}>
+      <Box sx={{ flex: 1 }} />
+      <Typography variant="caption" color="text.secondary" sx={{ width: PLAN_W, textAlign: 'right' }}>
+        Plán
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ width: ACTUAL_W, textAlign: 'right' }}>
+        {actualLabel}
+      </Typography>
+    </Stack>
+  );
+}
+
+/**
+ * One line of the form: what was planned, and the number being typed over it.
+ *
+ * Bordered like the catalog's own rows, because a bare row of a name and two numbers at opposite
+ * edges of a 680px drawer reads as three unrelated things. A row that no longer matches its plan
+ * carries the amber the rest of the app gives a deviation, so what has been typed is visible
+ * without reading every number back.
+ */
+function QuantityRow({
+  name, chip, planned, value, inputLabel, changed, onValue, onRemove,
+}: {
+  name: string;
+  chip?: string;
+  /** Rendered as text, unit included; omitted for a row the order never planned. */
+  planned?: string;
+  value: string;
+  inputLabel: string;
+  changed: boolean;
+  onValue: (value: string) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      data-changed={changed ? 'true' : 'false'}
+      sx={{
+        px: ROW_PX,
+        py: 0.75,
+        border: 1,
+        borderRadius: 2,
+        borderColor: changed ? 'warning.main' : 'divider',
+        bgcolor: (t) => (changed ? t.vars!.palette.brand.amberTint : 'transparent'),
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
+        {chip && <Typography variant="caption" color="text.secondary" noWrap>{chip}</Typography>}
+      </Box>
+      <Typography
+        sx={{
+          width: PLAN_W, textAlign: 'right', fontSize: 13,
+          color: 'text.secondary', fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {planned ?? '—'}
+      </Typography>
+      <TextField
+        size="small"
+        type="number"
+        value={value}
+        onChange={(e) => onValue(e.target.value)}
+        inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': inputLabel }}
+        sx={{ width: ACTUAL_W }}
+      />
+      {onRemove && (
+        <Tooltip title="Odebrat">
+          <IconButton size="small" aria-label={`Odebrat ${name}`} onClick={onRemove} sx={{ color: 'text.disabled' }}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Stack>
   );
 }

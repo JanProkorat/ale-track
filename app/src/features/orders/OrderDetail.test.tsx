@@ -47,6 +47,10 @@ const historyState: { data?: GroupedProductHistoryDto; isLoading: boolean } = {
   isLoading: false,
 };
 vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => historyState }));
+// The catalog marks each brewery with its colour; the hook rides on the brewery list.
+vi.mock('src/hooks/useBreweries', () => ({
+  useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
+}));
 
 function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledgerState> = {}) {
   ledgerState.data = entries;

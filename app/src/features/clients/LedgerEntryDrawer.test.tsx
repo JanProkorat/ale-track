@@ -34,6 +34,10 @@ const catalogState: { data?: GroupedProductHistoryDto; isLoading: boolean } = {
   isLoading: false,
 };
 vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => catalogState }));
+// The catalog marks each brewery with its colour; the hook rides on the brewery list.
+vi.mock('src/hooks/useBreweries', () => ({
+  useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
+}));
 
 /** One brewery, one product, one size — the smallest thing the catalog can show. */
 function catalogOf(...items: Array<{ id: string; name: string; priceWithVat?: number; packageSize?: number }>) {
@@ -166,6 +170,39 @@ describe('LedgerEntryDrawer', () => {
       plannedQuantity: 10,
       actualQuantity: 7,
     });
+  });
+
+  // ---------------------------------------------------------------------------------
+  // Which rows are marked. The amber says "this no longer matches the plan", so the operator can
+  // see what they have typed without reading every number back.
+  // ---------------------------------------------------------------------------------
+
+  /** The row carrying a field, which is the element the mark sits on. */
+  const rowOf = (name: string) => actualInput(name).closest('[data-changed]');
+
+  it('leaves a row alone while it still matches the plan', () => {
+    renderDrawer(context());
+
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-changed', 'false');
+  });
+
+  it('marks a row that no longer matches its plan', () => {
+    renderDrawer(context());
+
+    fireEvent.change(actualInput('Ležák 12'), { target: { value: '7' } });
+
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-changed', 'true');
+  });
+
+  it('unmarks it again when the number goes back', () => {
+    renderDrawer(context({
+      entries: [entry({ orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7 })],
+    }));
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-changed', 'true');
+
+    fireEvent.change(actualInput('Ležák 12'), { target: { value: '10' } });
+
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-changed', 'false');
   });
 
   // Hiding the section when nothing was planned would leave the commonest surprise of the whole

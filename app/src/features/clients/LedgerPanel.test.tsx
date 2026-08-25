@@ -32,6 +32,10 @@ vi.mock('src/hooks/useClientLedger', () => ({
 vi.mock('src/hooks/useOrders', () => ({
   useClientProductHistory: () => ({ data: undefined, isLoading: false }),
 }));
+// The catalog marks each brewery with its colour; the hook rides on the brewery list.
+vi.mock('src/hooks/useBreweries', () => ({
+  useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
+}));
 
 const { LedgerPanel } = await import('./LedgerPanel');
 const { ClientOpenItemsCard } = await import('./ClientOpenItemsCard');
