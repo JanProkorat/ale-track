@@ -16,8 +16,6 @@ import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtLiters } from 'src/lib/format';
-import { kindLabel } from 'src/lib/labels';
 import {
   ClientLedgerEntryTarget,
   ClientLedgerRowDto,
@@ -39,6 +37,7 @@ import {
   isFreeEntry,
   type PlanRow,
 } from './ledgerModel';
+import { productPickerOptions } from './productPickerOptions';
 import { TextDiff } from './LedgerDiff';
 
 /** What the screen opening the drawer already knows about the handover. */
@@ -173,16 +172,11 @@ export function LedgerEntryDrawer({
   // above with its own field, and picking one here would overwrite that row's quantity instead of
   // adding to it.
   const productOptions = useMemo(() => {
-    const onOrder = new Set((context.items ?? []).map((r) => r.key));
-    const alreadyAdded = new Set(doorSideAdditions(entries).map((e) => e.productId));
-    return (products.data ?? [])
-      .filter((p) => p.id && !onOrder.has(p.id) && !alreadyAdded.has(p.id))
-      .map((p) => ({
-        value: p.id!,
-        label: p.name ?? '—',
-        secondary: [kindLabel(p.kind), p.packageSize != null ? fmtLiters(p.packageSize) : '']
-          .filter(Boolean).join(' · '),
-      }));
+    const exclude = new Set<string | undefined>([
+      ...(context.items ?? []).map((r) => r.key),
+      ...doorSideAdditions(entries).map((e) => e.productId),
+    ]);
+    return productPickerOptions(products.data, exclude);
   }, [products.data, context.items, entries]);
 
   const busy = save.isPending || updateEntry.isPending || deleteEntry.isPending;
@@ -473,14 +467,17 @@ export function LedgerEntryDrawer({
             )}
 
             <Box>
-              <SectionLabel>Přidat produkt vzatý na místě</SectionLabel>
+              <SectionLabel>Přidat produkt navíc</SectionLabel>
               <Stack direction="row" spacing={1} alignItems="flex-start">
                 <Box sx={{ flex: 1 }}>
+                  {/* Collapsible headings, as the catalog has: the whole catalog is on offer
+                      here, and a flat list of it is not a thing anybody can read. */}
                   <Combobox
                     value={newProduct}
                     onChange={setNewProduct}
                     options={productOptions}
                     placeholder="— vyberte —"
+                    collapsibleGroups
                   />
                 </Box>
                 <TextField
@@ -489,7 +486,7 @@ export function LedgerEntryDrawer({
                   placeholder="ks"
                   value={newProductQty}
                   onChange={(e) => setNewProductQty(e.target.value)}
-                  inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': 'Počet vzatých na místě' }}
+                  inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': 'Počet navíc' }}
                   sx={{ width: 96 }}
                 />
               </Stack>

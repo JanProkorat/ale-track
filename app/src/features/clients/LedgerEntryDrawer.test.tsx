@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ClientLedgerEntryDto, ClientLedgerEntryTarget } from 'src/generated/api-client';
+import { ClientLedgerEntryDto, ClientLedgerEntryTarget, ProductKind } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 import type { LedgerDrawerContext } from './LedgerEntryDrawer';
 
@@ -21,8 +21,11 @@ vi.mock('src/hooks/useClientLedger', () => ({
   useDeleteClientLedgerEntry: () => ({ mutateAsync: deleteMock, isPending: false }),
 }));
 
-// The product picker is a resource hook like any other, and the mock can express no-data.
-const productState: { data?: Array<{ id: string; name: string }> } = { data: [] };
+// The product picker is a resource hook like any other, and the mock can express no-data. The
+// brewery and kind are what the picker groups by, so a product here carries them.
+const productState: {
+  data?: Array<{ id: string; name: string; breweryName?: string; kind?: ProductKind; packageSize?: number }>;
+} = { data: [] };
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => productState }));
 
 const { LedgerEntryDrawer } = await import('./LedgerEntryDrawer');
@@ -172,11 +175,30 @@ describe('LedgerEntryDrawer', () => {
     ]));
   });
 
+  it('calls the picker "Přidat produkt navíc"', () => {
+    renderDrawer(context());
+
+    expect(screen.getByText('Přidat produkt navíc')).toBeInTheDocument();
+  });
+
+  // The catalog is the whole catalog here, so the options carry the headings it groups by.
+  it('heads the picker options by brewery and kind', () => {
+    productState.data = [
+      { id: 'p-9', name: 'Svijanská Desítka', breweryName: 'Svijany', kind: ProductKind.Keg, packageSize: 50 },
+    ];
+    renderDrawer(context());
+
+    fireEvent.change(screen.getByPlaceholderText('— vyberte —'), { target: { value: 'Desítka' } });
+
+    expect(screen.getByText('Svijany · Sud')).toBeInTheDocument();
+    expect(screen.getByText('50 l')).toBeInTheDocument();
+  });
+
   it('records a product taken at the door against the product, not a line', () => {
     productState.data = [{ id: 'p-9', name: 'Světlé 10' }];
     renderDrawer(context());
 
-    fireEvent.change(screen.getByLabelText('Počet vzatých na místě'), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText('Počet navíc'), { target: { value: '4' } });
     // The Combobox is an Autocomplete: type, then pick the option.
     const picker = screen.getByPlaceholderText('— vyberte —');
     fireEvent.change(picker, { target: { value: 'Světlé' } });
