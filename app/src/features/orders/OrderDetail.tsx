@@ -91,56 +91,63 @@ function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
       title="Vývoz"
       icon={<LocalShippingOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
     >
-      <Box sx={{ px: 2.5, py: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
-          <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14 }}>
-            {shipmentNumber(shipment.id)}
+      {/* The run on the left, the way to it on the right. Wraps rather than squeezes: this card
+          sits in the detail's narrow column on a phone, where a button beside three lines of text
+          would leave neither enough room. */}
+      <Stack
+        direction="row"
+        spacing={2}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ px: 2.5, py: 2 }}
+      >
+        <Box sx={{ flex: 1, minWidth: 180 }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
+            <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14 }}>
+              {shipmentNumber(shipment.id)}
+            </Typography>
+            <StatusPill tone={status.tone} label={status.label} />
+            {/* Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
+                Without it the button simply appeared and the office had no way to tell what had
+                changed about the order. It sits beside the run's own state because that is the
+                other half of the same sentence: where the goods are, and whether the paper is
+                closed. Shown whether or not this user may record, because the state of the
+                paperwork is worth knowing either way.
+
+                The same pill as the state beside it, not a chip of its own: two badges on one
+                line describing two halves of one sentence should not look like two kinds of
+                thing. The span is for the tooltip, which needs a ref the pill does not forward. */}
+            {isInvoiceReady && (
+              <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
+                <Box component="span" sx={{ display: 'inline-flex' }}>
+                  <StatusPill tone="ok" label="Faktura hotová" />
+                </Box>
+              </Tooltip>
+            )}
+          </Stack>
+
+          <Typography sx={{ fontWeight: 700 }}>{shipment.name}</Typography>
+
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            {shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen'}
+            {crew && ` · ${crew}`}
           </Typography>
-          <StatusPill tone={status.tone} label={status.label} />
-          {/* Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
-              Without it the button simply appeared and the office had no way to tell what had
-              changed about the order. It sits beside the run's own state because that is the
-              other half of the same sentence: where the goods are, and whether the paper is
-              closed. Shown whether or not this user may record, because the state of the
-              paperwork is worth knowing either way. */}
-          {isInvoiceReady && (
-            <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
-              <Chip
-                size="small"
-                icon={<CheckCircleIcon sx={{ fontSize: 15 }} />}
-                label="Faktura hotová"
-                sx={{
-                  fontWeight: 700,
-                  height: 20,
-                  color: 'success.main',
-                  bgcolor: (t) => t.vars!.palette.brand.okTint,
-                  '& .MuiChip-icon': { color: 'success.main' },
-                }}
-              />
-            </Tooltip>
-          )}
-        </Stack>
 
-        <Typography sx={{ fontWeight: 700 }}>{shipment.name}</Typography>
-
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-          {shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen'}
-          {crew && ` · ${crew}`}
-        </Typography>
-
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-          Zastávka {shipment.stopOrder} z {shipment.stopCount}
-        </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+            Zastávka {shipment.stopOrder} z {shipment.stopCount}
+          </Typography>
+        </Box>
 
         <Button
           variant="outlined"
           endIcon={<ArrowForwardIcon />}
           onClick={onOpen}
-          sx={{ mt: 1.5, color: 'text.primary', borderColor: 'divider', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
+          sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
         >
           Otevřít vývoz
         </Button>
-      </Box>
+      </Stack>
     </CollapsibleCard>
   );
 }
