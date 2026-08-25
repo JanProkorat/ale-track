@@ -9,9 +9,7 @@ import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { plural } from 'src/lib/format';
 import { LedgerRowTag, LedgerTag, QuantityDiff } from 'src/features/clients/LedgerDiff';
-import {
-  RECORD_CHANGE_LABEL, RECORD_CHANGE_SHORT, recordButtonSx,
-} from 'src/features/clients/ledgerStyles';
+import { RECORD_CHANGE_LABEL, RECORD_CHANGE_SHORT } from 'src/features/clients/ledgerStyles';
 import { StopAvatar } from './StopAvatar';
 import type { UnloadStop } from './unloadOrder';
 
@@ -147,13 +145,20 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
         {/* Offered only once the run has left Created — see UnloadOrderList's own note. */}
         {record && (
           <Tooltip title={RECORD_CHANGE_LABEL}>
+            {/* Plain here, unlike the order detail's outlined amber: a stop row already carries a
+                state chip and a change badge, and a bordered button among them reads as clutter.
+
+                Pulled up by the small button's own top padding (4px): the row aligns to
+                flex-start, so without it the padded box drops the label below the client's name
+                and the "n ks" it reads against. Negative margin rather than py: 0 — the padding
+                is the hit area, and the row is taller than the button either way, so nothing
+                below moves. */}
             <Button
-              variant="outlined"
               size="small"
               startIcon={<EditOutlinedIcon />}
               onClick={record}
               aria-label={RECORD_CHANGE_LABEL}
-              sx={{ ...recordButtonSx, flexShrink: 0 }}
+              sx={{ flexShrink: 0, fontWeight: 700, mt: -0.5 }}
             >
               {RECORD_CHANGE_SHORT}
             </Button>

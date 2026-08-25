@@ -1,11 +1,13 @@
-// Shared look of the "record a change" affordance, which appears on two screens — the order
-// detail's header and each stop of the run's Vykládka. One copy, so the two cannot drift into
-// looking like different actions.
+// Wording and look of the "record a change" affordance, which appears on two screens — the order
+// detail's header and each stop of the run's Vykládka. The wording is shared; the look is not.
+// The two rows are nothing alike: the order header is a row of bordered buttons, a stop row is
+// already busy with a chip and a badge, so the style below is the header's alone and the stop
+// keeps a plain button.
 
 /**
- * An outlined button in the prototype's amber: amber border, amber label, no fill.
+ * The order detail's button: outlined in the prototype's amber, amber label, no fill.
  *
- * Paired with `variant="outlined"` at each call site. The amber is the prototype's `.btn-soft`
+ * Paired with `variant="outlined"` at the call site. The amber is the prototype's `.btn-soft`
  * palette, which this theme already carries — `amberStrong` for the label, `amberTint` for the
  * hover ground. Deliberately `amberStrong` and not `primary.dark` (that one is `amberHover`, a
  * lighter shade a few older soft buttons happen to use): against the card the darker amber is the
@@ -32,5 +34,5 @@ export const recordButtonSx = {
 /** Full phrase, kept as the accessible name and the tooltip while the button reads just "Změna". */
 export const RECORD_CHANGE_LABEL = 'Zaznamenat změnu';
 
-/** What the button itself shows. */
+/** What the button itself shows, on both screens. */
 export const RECORD_CHANGE_SHORT = 'Změna';
