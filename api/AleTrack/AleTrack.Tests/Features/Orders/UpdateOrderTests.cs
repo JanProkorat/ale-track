@@ -447,10 +447,44 @@ public sealed class UpdateOrderTests
         db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task ProcessAsync_UpdateItemsOfOrderOnLoadedShipment_Fails()
+    /// <summary>
+    /// Packing the van does not close the order. A client rings up, a pallet will not fit, the
+    /// office spots a wrong line — that is the plan being corrected, and it happens while the run
+    /// is loaded and on the road. What closes it is filing the run's invoicing.
+    /// </summary>
+    [Theory]
+    [InlineData(OutgoingShipmentState.Loaded)]
+    [InlineData(OutgoingShipmentState.InTransit)]
+    public async Task ProcessAsync_UpdateItemsOfOrderOnARunningShipment_Succeeds(OutgoingShipmentState shipmentState)
     {
-        var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Loaded);
+        var f = BuildFreezeFixture(OrderState.Planning, shipmentState);
+        var db = MockForFreeze(f);
+
+        var data = EchoDto(f);
+        data.OrderItems.Clear();
+
+        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+
+        await endpoint.HandleAsync(
+            new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+
+        f.Order.OrderItems.Should().BeEmpty();
+        db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Filing the run's invoicing is the one-way door: past it the plan is what was filed, and
+    /// what happens at the door is recorded beside it instead.
+    /// </summary>
+    [Theory]
+    [InlineData(OutgoingShipmentState.Created)]
+    [InlineData(OutgoingShipmentState.Loaded)]
+    [InlineData(OutgoingShipmentState.InTransit)]
+    public async Task ProcessAsync_UpdateItemsOfOrderOnAFiledShipment_Fails(OutgoingShipmentState shipmentState)
+    {
+        var f = BuildFreezeFixture(OrderState.Planning, shipmentState);
+        f.Order.OutgoingShipmentStop!.OutgoingShipment!.InvoicingFiledAt =
+            new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Utc);
         var db = MockForFreeze(f);
 
         var data = EchoDto(f);
@@ -846,18 +880,21 @@ public sealed class UpdateOrderTests
 
         f.Order.DeliveryAddressKind.Should().Be(DeliveryAddressKind.Contact);
         f.Order.OrderItems.Should().ContainSingle().Which.Should().BeSameAs(f.Item,
-            "the items are still frozen — only the destination moved");
+            "the echoed line is matched, not rebuilt");
         db.Verify(e => e.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
-    /// Changing the <em>client</em> is still frozen content: that is not somebody moving their
-    /// own delivery, it is a different client's goods on a packed truck.
+    /// The client of an order on a loaded run can be corrected too — a mis-keyed client is a
+    /// mistake in the plan like any other, and until the paperwork is filed the plan is what is
+    /// being corrected. Refused only once it is filed.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_ChangeTheClientOfAnOrderOnALoadedShipment_Fails()
+    public async Task ProcessAsync_ChangeTheClientOfAnOrderOnAFiledShipment_Fails()
     {
         var f = BuildFreezeFixture(OrderState.Planning, OutgoingShipmentState.Loaded);
+        f.Order.OutgoingShipmentStop!.OutgoingShipment!.InvoicingFiledAt =
+            new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Utc);
         var db = MockForFreeze(f);
 
         var data = EchoDto(f);

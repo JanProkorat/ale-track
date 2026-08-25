@@ -112,6 +112,37 @@ public sealed class OutgoingShipment : PublicEnumSoftlyDeletableEntity<OutgoingS
     public ICollection<OutgoingShipmentInvoiceConfirmation> InvoiceConfirmations { get; set; } = [];
 
     /// <summary>
+    /// When the run's invoicing was filed — after which its orders are closed to editing and
+    /// deviations are recorded against them instead. Null until somebody files it.
+    /// </summary>
+    /// <remarks>
+    /// The one-way door of the whole run. Up to it, the office moves freely: a row is marked
+    /// finished and unmarked again, an order is corrected the ordinary way, the export is taken
+    /// afresh. Past it, the plan is what was filed and everything that happens at the door is a
+    /// deviation beside it — which is what makes the two editing modes impossible to hold at
+    /// once, and why nothing here undoes it.
+    ///
+    /// Not the shipment's state: an order legitimately changes while a run is loaded or on the
+    /// road, and only filing the paperwork ends that.
+    /// </remarks>
+    [Column("invoicing_filed_at")]
+    public DateTime? InvoicingFiledAt { get; set; }
+
+    /// <summary>
+    /// Who filed it. Kept because the act cannot be undone: when somebody asks why an order is
+    /// locked, this is the only answer there is.
+    /// </summary>
+    [Column("invoicing_filed_by_user_id")]
+    public long? InvoicingFiledByUserId { get; set; }
+
+    /// <inheritdoc cref="InvoicingFiledByUserId" />
+    [DeleteBehavior(DeleteBehavior.SetNull)]
+    public User? InvoicingFiledByUser { get; set; }
+
+    /// <summary>Whether the run's invoicing has been filed.</summary>
+    public bool IsInvoicingFiled => InvoicingFiledAt is not null;
+
+    /// <summary>
     /// Invoices the brewery issues to us for the goods picked up on this run.
     /// </summary>
     [DeleteBehavior(DeleteBehavior.Cascade)]
