@@ -246,16 +246,16 @@ describe('LedgerEntryDrawer', () => {
     renderDrawer(context({ returns: [] }));
 
     expect(screen.getByText('Vratky')).toBeInTheDocument();
-    expect(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala')).toBeInTheDocument();
+    expect(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala 1')).toBeInTheDocument();
   });
 
   it('records empties handed over against an order that planned none', () => {
     renderDrawer(context());
 
-    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala'), {
+    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala 1'), {
       target: { value: 'Basy prázdných' },
     });
-    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala — počet'), {
+    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala 1 — počet'), {
       target: { value: '4' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
@@ -266,6 +266,78 @@ describe('LedgerEntryDrawer', () => {
         lineName: 'Basy prázdných',
         plannedQuantity: 0,
         actualQuantity: 4,
+      }),
+    ]));
+  });
+
+  // A client hands back crates of two kinds, which is ordinary rather than exotic — one draft row
+  // meant the second had nowhere to go until the form had been saved and reopened.
+  it('takes as many unplanned returns as the client handed over', () => {
+    renderDrawer(context());
+
+    const fill = (n: number, name: string, quantity: string) => {
+      fireEvent.change(screen.getByLabelText(`Přidat vratku, kterou objednávka neplánovala ${n}`), {
+        target: { value: name },
+      });
+      fireEvent.change(screen.getByLabelText(`Přidat vratku, kterou objednávka neplánovala ${n} — počet`), {
+        target: { value: quantity },
+      });
+    };
+
+    fill(1, 'Basy prázdných', '4');
+    fireEvent.click(screen.getByRole('button', { name: 'Další vratka' }));
+    fill(2, 'Sudy 30 l', '2');
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ lineName: 'Basy prázdných', actualQuantity: 4 }),
+      expect.objectContaining({ lineName: 'Sudy 30 l', actualQuantity: 2 }),
+    ]));
+  });
+
+  it('drops a draft row that was added and then taken back', () => {
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Další vratka' }));
+    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala 2'), {
+      target: { value: 'Omyl' },
+    });
+    fireEvent.change(screen.getByLabelText('Přidat vratku, kterou objednávka neplánovala 2 — počet'), {
+      target: { value: '3' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Odebrat vratku 2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ lineName: 'Omyl' }),
+    ]));
+  });
+
+  // The section would otherwise be able to lose its only field, and an empty section says nothing
+  // about where to write the thing it is for.
+  it('never lets the last draft row go', () => {
+    renderDrawer(context());
+
+    expect(screen.getByRole('button', { name: 'Odebrat vratku 1' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Odebrat položku 1' })).toBeDisabled();
+  });
+
+  it('takes several unplanned extras too', () => {
+    renderDrawer(context());
+
+    fireEvent.change(screen.getByLabelText('Přidat položku předanou na místě 1'), { target: { value: 'Kelímky' } });
+    fireEvent.change(screen.getByLabelText('Přidat položku předanou na místě 1 — počet'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Další položka' }));
+    fireEvent.change(screen.getByLabelText('Přidat položku předanou na místě 2'), { target: { value: 'Tácky' } });
+    fireEvent.change(screen.getByLabelText('Přidat položku předanou na místě 2 — počet'), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        target: ClientLedgerEntryTarget.CustomExtraQuantity, lineName: 'Kelímky', actualQuantity: 50,
+      }),
+      expect.objectContaining({
+        target: ClientLedgerEntryTarget.CustomExtraQuantity, lineName: 'Tácky', actualQuantity: 100,
       }),
     ]));
   });

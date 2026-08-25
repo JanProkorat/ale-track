@@ -11,8 +11,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Box, CircularProgress, Divider, IconButton, Stack, TextField, Tooltip, Typography,
+  Box, Button, CircularProgress, Divider, IconButton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/AddOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
@@ -159,8 +160,8 @@ export function LedgerEntryDrawer({
   const [returns, setReturns] = useState<EditableRow[]>([]);
   const [extras, setExtras] = useState<EditableRow[]>([]);
   const [added, setAdded] = useState<AddedRow[]>([]);
-  const [newReturn, setNewReturn] = useState<NewLine>(EMPTY_NEW_LINE);
-  const [newExtra, setNewExtra] = useState<NewLine>(EMPTY_NEW_LINE);
+  const [newReturns, setNewReturns] = useState<NewLine[]>([EMPTY_NEW_LINE]);
+  const [newExtras, setNewExtras] = useState<NewLine[]>([EMPTY_NEW_LINE]);
   const [money, setMoney] = useState('');
   const [note, setNote] = useState('');
 
@@ -191,8 +192,8 @@ export function LedgerEntryDrawer({
       name: e.productName ?? '—',
       actual: String(e.actualQuantity ?? 0),
     })));
-    setNewReturn(EMPTY_NEW_LINE);
-    setNewExtra(EMPTY_NEW_LINE);
+    setNewReturns([EMPTY_NEW_LINE]);
+    setNewExtras([EMPTY_NEW_LINE]);
     setMoney(moneyEntry?.amount != null ? String(moneyEntry.amount) : '');
     setNote(moneyEntry?.note ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,23 +301,29 @@ export function LedgerEntryDrawer({
       });
     }
 
-    const returnQty = parsed(newReturn.quantity, 0);
-    if (newReturn.name.trim() && returnQty > 0) {
+    // Every draft that says something. A blank one is not an error to report: the form offers a
+    // row whether or not it is wanted, so an untouched one is simply not a line.
+    for (const row of newReturns) {
+      const quantity = parsed(row.quantity, 0);
+      if (!row.name.trim() || quantity <= 0) continue;
+
       push({
         target: ClientLedgerEntryTarget.ReturnQuantity,
-        lineName: newReturn.name.trim(),
+        lineName: row.name.trim(),
         plannedQuantity: 0,
-        actualQuantity: returnQty,
+        actualQuantity: quantity,
       });
     }
 
-    const extraQty = parsed(newExtra.quantity, 0);
-    if (newExtra.name.trim() && extraQty > 0) {
+    for (const row of newExtras) {
+      const quantity = parsed(row.quantity, 0);
+      if (!row.name.trim() || quantity <= 0) continue;
+
       push({
         target: ClientLedgerEntryTarget.CustomExtraQuantity,
-        lineName: newExtra.name.trim(),
+        lineName: row.name.trim(),
         plannedQuantity: 0,
-        actualQuantity: extraQty,
+        actualQuantity: quantity,
       });
     }
 
@@ -436,11 +443,21 @@ export function LedgerEntryDrawer({
     />
   ));
 
+  /**
+   * Lines the order never planned, as many as the client handed over.
+   *
+   * A single draft row was one crate short of the ordinary case: a client returns empties of two
+   * kinds and the second had nowhere to go until the form was saved and reopened. The rows are
+   * numbered in their accessible names, which is the only way two identical-looking fields can be
+   * told apart by anything but sight.
+   */
   const newLineFields = (
     label: string,
     placeholder: string,
-    value: NewLine,
-    setValue: (v: NewLine) => void,
+    addLabel: string,
+    removeLabel: string,
+    rows: NewLine[],
+    setRows: (rows: NewLine[]) => void,
   ) => (
     // Label above the fields rather than under them: a caption below reads as a note about what
     // was just typed instead of as the name of the thing being typed into.
@@ -448,24 +465,49 @@ export function LedgerEntryDrawer({
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
         {label}
       </Typography>
-      <Stack direction="row" spacing={1}>
-        <TextField
+      <Stack spacing={1}>
+        {rows.map((row, index) => (
+          <Stack key={index} direction="row" spacing={1} alignItems="center">
+            <TextField
+              size="small"
+              fullWidth
+              placeholder={placeholder}
+              value={row.name}
+              onChange={(e) => setRows(rows.map((r, i) => (i === index ? { ...r, name: e.target.value } : r)))}
+              inputProps={{ 'aria-label': `${label} ${index + 1}` }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              placeholder="ks"
+              value={row.quantity}
+              onChange={(e) => setRows(rows.map((r, i) => (i === index ? { ...r, quantity: e.target.value } : r)))}
+              inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${label} ${index + 1} — počet` }}
+              sx={{ width: ACTUAL_W }}
+            />
+            {/* Offered from the second row on: taking the only row away would leave the section
+                with no field at all, and its own emptiness is how a blank row already reads. */}
+            <Tooltip title={removeLabel}>
+              <IconButton
+                size="small"
+                aria-label={`${removeLabel} ${index + 1}`}
+                onClick={() => setRows(rows.filter((_, i) => i !== index))}
+                disabled={rows.length === 1}
+                sx={{ color: 'text.disabled' }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ))}
+        <Button
           size="small"
-          fullWidth
-          placeholder={placeholder}
-          value={value.name}
-          onChange={(e) => setValue({ ...value, name: e.target.value })}
-          inputProps={{ 'aria-label': label }}
-        />
-        <TextField
-          size="small"
-          type="number"
-          placeholder="ks"
-          value={value.quantity}
-          onChange={(e) => setValue({ ...value, quantity: e.target.value })}
-          inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${label} — počet` }}
-          sx={{ width: ACTUAL_W }}
-        />
+          startIcon={<AddIcon fontSize="small" />}
+          onClick={() => setRows([...rows, EMPTY_NEW_LINE])}
+          sx={{ alignSelf: 'flex-start', fontWeight: 700 }}
+        >
+          {addLabel}
+        </Button>
       </Stack>
     </Box>
   );
@@ -544,8 +586,10 @@ export function LedgerEntryDrawer({
             {newLineFields(
               'Přidat vratku, kterou objednávka neplánovala',
               'Např. Basa 0,5 l — prázdná',
-              newReturn,
-              setNewReturn,
+              'Další vratka',
+              'Odebrat vratku',
+              newReturns,
+              setNewReturns,
             )}
 
             <Divider />
@@ -553,8 +597,10 @@ export function LedgerEntryDrawer({
             {newLineFields(
               'Přidat položku předanou na místě',
               'Např. Kelímky 0,5 l',
-              newExtra,
-              setNewExtra,
+              'Další položka',
+              'Odebrat položku',
+              newExtras,
+              setNewExtras,
             )}
           </>
         )}
