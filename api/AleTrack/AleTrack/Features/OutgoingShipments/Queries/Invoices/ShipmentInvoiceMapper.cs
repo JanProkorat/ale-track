@@ -68,6 +68,11 @@ public static class ShipmentInvoiceMapper
                 .OrderBy(c => c.Number)
                 .ToList(),
             IsEditable = ShipmentInvoiceGraph.IsEditable(shipment),
+            IsInvoicingFiled = shipment.IsInvoicingFiled,
+            InvoicingFiledAt = shipment.InvoicingFiledAt,
+            InvoicingFiledByUserName = shipment.InvoicingFiledByUser == null
+                ? null
+                : $"{shipment.InvoicingFiledByUser.FirstName} {shipment.InvoicingFiledByUser.LastName}".Trim(),
             Adjustments = reconcileResult.Adjustments
                 .Select(a => new InvoiceAdjustmentDto
                 {

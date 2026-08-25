@@ -514,6 +514,12 @@ export interface IClient {
     moveInvoiceLineEndpoint(id: string, data: MoveInvoiceLineDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Files the run's invoicing, closing its orders for good
+     * @return Invoicing filed
+     */
+    fileShipmentInvoicingEndpoint(id: string, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Deletes a brewery invoice of an outgoing shipment
      * @return Invoice deleted, its pieces returned to the remainder
      */
@@ -6300,6 +6306,77 @@ export class Client implements IClient {
             let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result404 = FailureResponse.fromJS(resultData404);
             return throwException("Outgoing shipment, invoice, item or client not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
+     * Files the run's invoicing, closing its orders for good
+     * @return Invoicing filed
+     */
+    fileShipmentInvoicingEndpoint(id: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/invoicing/filed";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PUT",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processFileShipmentInvoicingEndpoint(_response);
+        });
+    }
+
+    protected processFileShipmentInvoicingEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment not found", status, _responseText, _headers, result404);
+            });
+        } else if (status === 409) {
+            return response.text().then((_responseText) => {
+            let result409: any = null;
+            let resultData409 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result409 = FailureResponse.fromJS(resultData409);
+            return throwException("The run is cancelled, or some of its invoice rows are not finished", status, _responseText, _headers, result409);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -17029,6 +17106,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
     adjustments?: InvoiceAdjustmentDto[];
     confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
+    isInvoicingFiled?: boolean;
+    invoicingFiledAt?: Date | undefined;
+    invoicingFiledByUserName?: string | undefined;
 
     constructor(data?: IShipmentInvoicesDto) {
         if (data) {
@@ -17062,6 +17142,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                     this.confirmations!.push(ShipmentInvoiceConfirmationDto.fromJS(item));
             }
             this.isEditable = _data["isEditable"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
+            this.invoicingFiledAt = _data["invoicingFiledAt"] ? new Date(_data["invoicingFiledAt"].toString()) : undefined as any;
+            this.invoicingFiledByUserName = _data["invoicingFiledByUserName"];
         }
     }
 
@@ -17095,6 +17178,9 @@ export class ShipmentInvoicesDto implements IShipmentInvoicesDto {
                 data["confirmations"].push(item ? item.toJSON() : undefined as any);
         }
         data["isEditable"] = this.isEditable;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
+        data["invoicingFiledAt"] = this.invoicingFiledAt ? this.invoicingFiledAt.toISOString() : undefined as any;
+        data["invoicingFiledByUserName"] = this.invoicingFiledByUserName;
         return data;
     }
 }
@@ -17105,6 +17191,9 @@ export interface IShipmentInvoicesDto {
     adjustments?: InvoiceAdjustmentDto[];
     confirmations?: ShipmentInvoiceConfirmationDto[];
     isEditable?: boolean;
+    isInvoicingFiled?: boolean;
+    invoicingFiledAt?: Date | undefined;
+    invoicingFiledByUserName?: string | undefined;
 }
 
 export class ShipmentInvoiceDto implements IShipmentInvoiceDto {
@@ -17457,6 +17546,7 @@ export interface IGetShipmentInvoicesRequest {
 export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
     id?: string;
     state?: OutgoingShipmentState;
+    isInvoicingFiled?: boolean;
     name?: string;
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
@@ -17491,6 +17581,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
         if (_data) {
             this.id = _data["id"];
             this.state = _data["state"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
             this.name = _data["name"];
             this.deliveryDate = _data["deliveryDate"] ? new Date(_data["deliveryDate"].toString()) : undefined as any;
             this.startPointKind = _data["startPointKind"];
@@ -17561,6 +17652,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
         data = typeof data === 'object' ? data : {};
         data["id"] = this.id;
         data["state"] = this.state;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
         data["name"] = this.name;
         data["deliveryDate"] = this.deliveryDate ? this.deliveryDate.toISOString() : undefined as any;
         data["startPointKind"] = this.startPointKind;
@@ -17624,6 +17716,7 @@ export class OutgoingShipmentDetailDto implements IOutgoingShipmentDetailDto {
 export interface IOutgoingShipmentDetailDto {
     id?: string;
     state?: OutgoingShipmentState;
+    isInvoicingFiled?: boolean;
     name?: string;
     deliveryDate?: Date | undefined;
     startPointKind?: ShipmentStartPointKind;
@@ -18718,9 +18811,9 @@ export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDet
 export interface IGetOutgoingShipmentDetailRequest {
 }
 
-export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceRequest {
+export class FileShipmentInvoicingRequest implements IFileShipmentInvoicingRequest {
 
-    constructor(data?: IDeletePurchaseInvoiceRequest) {
+    constructor(data?: IFileShipmentInvoicingRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -18732,9 +18825,9 @@ export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceReque
     init(_data?: any) {
     }
 
-    static fromJS(data: any): DeletePurchaseInvoiceRequest {
+    static fromJS(data: any): FileShipmentInvoicingRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new DeletePurchaseInvoiceRequest();
+        let result = new FileShipmentInvoicingRequest();
         result.init(data);
         return result;
     }
@@ -18745,7 +18838,7 @@ export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceReque
     }
 }
 
-export interface IDeletePurchaseInvoiceRequest {
+export interface IFileShipmentInvoicingRequest {
 }
 
 export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
@@ -19781,6 +19874,36 @@ export interface IMoveInvoiceLineDto {
     toPrivate?: boolean;
 }
 
+export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceRequest {
+
+    constructor(data?: IDeletePurchaseInvoiceRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+    }
+
+    static fromJS(data: any): DeletePurchaseInvoiceRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new DeletePurchaseInvoiceRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        return data;
+    }
+}
+
+export interface IDeletePurchaseInvoiceRequest {
+}
+
 export class DeleteShipmentInvoiceRequest implements IDeleteShipmentInvoiceRequest {
 
     constructor(data?: IDeleteShipmentInvoiceRequest) {
@@ -20357,6 +20480,8 @@ export class OrderDto implements IOrderDto {
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
     isInvoiceReady?: boolean;
+    isInvoicingFiled?: boolean;
+    isContentEditable?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
@@ -20403,6 +20528,8 @@ export class OrderDto implements IOrderDto {
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
             this.isInvoiceReady = _data["isInvoiceReady"];
+            this.isInvoicingFiled = _data["isInvoicingFiled"];
+            this.isContentEditable = _data["isContentEditable"];
             this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
     }
@@ -20449,6 +20576,8 @@ export class OrderDto implements IOrderDto {
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
         data["isInvoiceReady"] = this.isInvoiceReady;
+        data["isInvoicingFiled"] = this.isInvoicingFiled;
+        data["isContentEditable"] = this.isContentEditable;
         data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
@@ -20468,6 +20597,8 @@ export interface IOrderDto {
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
     isInvoiceReady?: boolean;
+    isInvoicingFiled?: boolean;
+    isContentEditable?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 

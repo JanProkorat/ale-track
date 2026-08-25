@@ -83,6 +83,22 @@ public sealed record OrderDto
     public bool IsInvoiceReady { get; set; }
 
     /// <summary>
+    /// Whether the run carrying this order has had its invoicing filed — the one-way door after
+    /// which the order is closed to editing and deviations are recorded against it instead.
+    /// </summary>
+    public bool IsInvoicingFiled { get; set; }
+
+    /// <summary>
+    /// Whether the order's content may still be changed the ordinary way.
+    /// </summary>
+    /// <remarks>
+    /// Computed by <c>OrderMutability</c> rather than re-derived from the states on the wire: the
+    /// screen would otherwise carry a second copy of a rule the server enforces, and the two
+    /// would drift the first time either changed.
+    /// </remarks>
+    public bool IsContentEditable { get; set; }
+
+    /// <summary>
     /// The outgoing shipment carrying this order. Null when the order is not
     /// planned onto a run, or when the run it was on has been cancelled.
     /// </summary>

@@ -601,23 +601,23 @@ describe('OrderDetail — deviations', () => {
 
   const removeButton = () => screen.queryByRole('button', { name: 'Odebrat Prim. limo Hrozno' });
 
-  it('offers to remove a door-side product once the invoice row is finished', () => {
+  it('offers to remove a door-side product once the invoicing is filed', () => {
     setLedger([doorSide()]);
-    renderWithRights(order({ isInvoiceReady: true }));
+    renderWithRights(order({ isInvoicingFiled: true }));
 
     expect(removeButton()).toBeInTheDocument();
   });
 
-  it('withholds it while the paperwork is unfinished', () => {
+  it('withholds it while the invoicing is unfiled', () => {
     setLedger([doorSide()]);
-    renderWithRights(order({ isInvoiceReady: false }));
+    renderWithRights(order({ isInvoicingFiled: false }));
 
     expect(removeButton()).not.toBeInTheDocument();
   });
 
   it('offers nothing to a user who may not write the client\'s ledger', () => {
     setLedger([doorSide()]);
-    renderDetail(order({ isInvoiceReady: true }));
+    renderDetail(order({ isInvoicingFiled: true }));
 
     expect(removeButton()).not.toBeInTheDocument();
   });
@@ -625,7 +625,7 @@ describe('OrderDetail — deviations', () => {
   it('deletes the entry the row came from, once confirmed', async () => {
     const entry = doorSide();
     setLedger([entry]);
-    renderWithRights(order({ isInvoiceReady: true }));
+    renderWithRights(order({ isInvoicingFiled: true }));
 
     fireEvent.click(removeButton()!);
     fireEvent.click(screen.getByRole('button', { name: 'Odebrat' }));
@@ -636,7 +636,7 @@ describe('OrderDetail — deviations', () => {
 
   it('deletes nothing when the confirm is dismissed', () => {
     setLedger([doorSide()]);
-    renderWithRights(order({ isInvoiceReady: true }));
+    renderWithRights(order({ isInvoicingFiled: true }));
 
     fireEvent.click(removeButton()!);
     fireEvent.click(screen.getByRole('button', { name: 'Zrušit' }));
@@ -783,8 +783,8 @@ describe('OrderDetail — when a change can be recorded', () => {
 
   const record = () => screen.queryByRole('button', { name: 'Zaznamenat změnu' });
 
-  it('offers it once the invoice row is finished', () => {
-    renderWithLedgerRights(order({ isInvoiceReady: true }));
+  it('offers it once the run\'s invoicing is filed', () => {
+    renderWithLedgerRights(order({ isInvoicingFiled: true }));
 
     expect(record()).toBeInTheDocument();
   });
@@ -792,7 +792,7 @@ describe('OrderDetail — when a change can be recorded', () => {
   // Short on the face, full phrase as the accessible name: "Změna" beside "Upravit" is terse
   // enough that a screen reader should still hear the verb.
   it('reads just "Změna" while still announcing the whole action', () => {
-    renderWithLedgerRights(order({ isInvoiceReady: true }));
+    renderWithLedgerRights(order({ isInvoicingFiled: true }));
 
     const button = record()!;
     expect(button).toHaveTextContent('Změna');
@@ -800,22 +800,23 @@ describe('OrderDetail — when a change can be recorded', () => {
     expect(button).toHaveAccessibleName('Zaznamenat změnu');
   });
 
-  it('does not offer it while the paperwork is unfinished', () => {
-    renderWithLedgerRights(order({ isInvoiceReady: false }));
+  // A finished row is not the gate any more: the office still ticks and unticks while it
+  // reconciles, and a deviation recorded against a plan that can still move would not stay true.
+  it('does not offer it on a finished row while the invoicing is unfiled', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: true, isInvoicingFiled: false }));
 
     expect(record()).not.toBeInTheDocument();
   });
 
-  // The window that made the old rule wrong: papers done, order still only planned.
-  it('offers it on a planned order whose row is already finished', () => {
-    renderWithLedgerRights(order({ state: OrderState.Planning, isInvoiceReady: true }));
+  it('offers it on a planned order whose run is already filed', () => {
+    renderWithLedgerRights(order({ state: OrderState.Planning, isInvoicingFiled: true }));
 
     expect(record()).toBeInTheDocument();
   });
 
-  // And its mirror: delivered, but nobody has closed the row yet.
-  it('withholds it on a delivered order whose row is unfinished', () => {
-    renderWithLedgerRights(order({ state: OrderState.Finished, isInvoiceReady: false }));
+  // And its mirror: delivered, but nobody has filed the paperwork yet.
+  it('withholds it on a delivered order whose run is unfiled', () => {
+    renderWithLedgerRights(order({ state: OrderState.Finished, isInvoicingFiled: false }));
 
     expect(record()).not.toBeInTheDocument();
   });
@@ -824,7 +825,7 @@ describe('OrderDetail — when a change can be recorded', () => {
     render(
       <MuiThemeProvider theme={theme}>
         <OrderDetail
-          order={order({ isInvoiceReady: true })}
+          order={order({ isInvoicingFiled: true })}
           editable
           onBack={vi.fn()}
           onEdit={vi.fn()}
@@ -838,20 +839,24 @@ describe('OrderDetail — when a change can be recorded', () => {
 });
 
 // ---------------------------------------------------------------------------------
-// The chip that explains the record button. It sits in the Vývoz card beside the run's own
-// state: where the goods are, and whether the paper is closed.
+// The pills that say where the paperwork stands. They sit in the Vývoz card beside the run's own
+// state: where the goods are, and how far the paper has got.
+//
+// Two stages, two words. A finished row says the office has closed that client's paperwork and
+// may still reopen it; a filed run says nothing about this order moves any more, which is what
+// puts the record button on the screen.
 // ---------------------------------------------------------------------------------
 
-describe('OrderDetail — the finished-invoice chip', () => {
-  const onRun = (isInvoiceReady: boolean) =>
-    order({ outgoingShipment: shipment(), isInvoiceReady });
+describe('OrderDetail — the paperwork pills', () => {
+  const onRun = (over: Partial<OrderDto>) =>
+    order({ outgoingShipment: shipment(), ...over });
 
-  /** The Vývoz card, which is where the chip belongs. */
+  /** The Vývoz card, which is where the pills belong. */
   const shipmentCard = () =>
     within(screen.getByText('Vývoz').closest('.MuiCard-root') as HTMLElement);
 
-  it('sits in the Vývoz card, beside the run\'s state', () => {
-    renderDetail(onRun(true), undefined, vi.fn());
+  it('says the row is finished while the run is unfiled', () => {
+    renderDetail(onRun({ isInvoiceReady: true }), undefined, vi.fn());
 
     const card = shipmentCard();
     expect(card.getByText('Faktura hotová')).toBeInTheDocument();
@@ -859,17 +864,28 @@ describe('OrderDetail — the finished-invoice chip', () => {
     expect(card.getByText('Na cestě')).toBeInTheDocument();
   });
 
-  it('says nothing while the paperwork is unfinished', () => {
-    renderDetail(onRun(false), undefined, vi.fn());
+  // Filed outranks finished: past filing, "hotová" says the smaller thing and the reader needs
+  // the one that explains why the order can no longer be edited.
+  it('says the run is filed once it is, and only that', () => {
+    renderDetail(onRun({ isInvoiceReady: true, isInvoicingFiled: true }), undefined, vi.fn());
 
-    expect(screen.queryByText('Faktura hotová')).not.toBeInTheDocument();
+    const card = shipmentCard();
+    expect(card.getByText('Zaevidováno')).toBeInTheDocument();
+    expect(card.queryByText('Faktura hotová')).not.toBeInTheDocument();
   });
 
-  // The state of the paperwork is worth knowing whether or not this user may record anything.
-  it('shows it to a user who cannot record', () => {
-    renderDetail(onRun(true), undefined, vi.fn());
+  it('says neither while the paperwork is untouched', () => {
+    renderDetail(onRun({}), undefined, vi.fn());
 
-    expect(screen.getByText('Faktura hotová')).toBeInTheDocument();
+    expect(screen.queryByText('Faktura hotová')).not.toBeInTheDocument();
+    expect(screen.queryByText('Zaevidováno')).not.toBeInTheDocument();
+  });
+
+  // Where the paperwork stands is worth knowing whether or not this user may record anything.
+  it('shows the filed pill to a user who cannot record', () => {
+    renderDetail(onRun({ isInvoicingFiled: true }), undefined, vi.fn());
+
+    expect(screen.getByText('Zaevidováno')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Zaznamenat změnu' })).not.toBeInTheDocument();
   });
 
@@ -877,7 +893,7 @@ describe('OrderDetail — the finished-invoice chip', () => {
     render(
       <MuiThemeProvider theme={theme}>
         <OrderDetail
-          order={onRun(true)}
+          order={onRun({ isInvoicingFiled: true })}
           editable
           canRecordDeviation
           onBack={vi.fn()}
@@ -888,7 +904,34 @@ describe('OrderDetail — the finished-invoice chip', () => {
       </MuiThemeProvider>,
     );
 
-    expect(screen.getByText('Faktura hotová')).toBeInTheDocument();
+    expect(screen.getByText('Zaevidováno')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Zaznamenat změnu' })).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// Upravit follows the server's own rule, read off the wire rather than re-derived here.
+// ---------------------------------------------------------------------------------
+
+describe('OrderDetail — editing the order', () => {
+  const edit = () => screen.queryByRole('button', { name: 'Upravit' });
+
+  it('offers editing while the server says the content is open', () => {
+    renderDetail(order({ isContentEditable: true }));
+
+    expect(edit()).toBeInTheDocument();
+  });
+
+  it('withholds it when the server says the content is closed', () => {
+    renderDetail(order({ isContentEditable: false, isInvoicingFiled: true }));
+
+    expect(edit()).not.toBeInTheDocument();
+  });
+
+  // An order fetched before the flag existed still has to render something sane.
+  it('falls back to the order state when the flag is absent', () => {
+    renderDetail(order({ state: OrderState.Finished }));
+
+    expect(edit()).not.toBeInTheDocument();
   });
 });

@@ -72,6 +72,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                 Name = os.Name,
                 Id = os.PublicId,
                 State = os.State,
+                IsInvoicingFiled = os.InvoicingFiledAt != null,
                 DeliveryDate = os.DeliveryDate,
                 VehicleId = os.Vehicle != null ? os.Vehicle.PublicId : null,
                 StartPointKind = os.StartPointKind,

@@ -32,20 +32,32 @@ public static class OrderMutability
     /// </remarks>
     public static bool IsContentEditable(Order order)
     {
-        if (order.State is OrderState.Finished or OrderState.Cancelled)
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+        return IsContentEditable(order.State, shipment?.State, shipment?.IsInvoicingFiled ?? false);
+    }
+
+    /// <summary>
+    /// The same rule from the three facts it turns on, for callers that hold a projection rather
+    /// than an entity — the order detail's own DTO, so the screen never carries a second copy of
+    /// this.
+    /// </summary>
+    public static bool IsContentEditable(
+        OrderState orderState,
+        OutgoingShipmentState? shipmentState,
+        bool invoicingFiled)
+    {
+        if (orderState is OrderState.Finished or OrderState.Cancelled)
             return false;
 
-        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
-
-        if (shipment is null)
+        if (shipmentState is null)
             return true;
 
         // Cancellation outranks filing, for the reason above: the orders of a cancelled run are
         // freed for reuse, and paperwork filed on a run that then did not happen must not hold
         // them.
-        if (shipment.State is OutgoingShipmentState.Cancelled)
+        if (shipmentState is OutgoingShipmentState.Cancelled)
             return true;
 
-        return shipment.State != OutgoingShipmentState.Delivered && !shipment.IsInvoicingFiled;
+        return shipmentState != OutgoingShipmentState.Delivered && !invoicingFiled;
     }
 }

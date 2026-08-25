@@ -57,7 +57,9 @@ public static class ShipmentInvoiceGraph
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client)
             .Include(s => s.Invoices).ThenInclude(i => i.BillingRecipients).ThenInclude(r => r.Client)
-            .Include(s => s.InvoiceConfirmations).ThenInclude(c => c.Client);
+            .Include(s => s.InvoiceConfirmations).ThenInclude(c => c.Client)
+            // Who filed the invoicing, for the Fakturace head to name them.
+            .Include(s => s.InvoicingFiledByUser);
 
         if (!tracked)
             shipments = shipments.AsNoTrackingWithIdentityResolution();

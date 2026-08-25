@@ -1,7 +1,8 @@
 // The Vykládka's own affordances: which stop offers to record a change, and which does not.
 //
-// Recording is opened by that stop's Fakturace row being finished — never by the run's state.
-// The office closes rows one client at a time, so two stops of one run legitimately disagree.
+// Recording opens for the whole run at once, when its invoicing is filed — the caller withholds
+// the handler until then. What this list decides is narrower: a stop needs an order to record
+// against.
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
@@ -42,68 +43,50 @@ function renderList(stops: UnloadStop[], onRecordChange?: (s: UnloadStop) => voi
 const recordButtons = () => screen.queryAllByRole('button', { name: 'Zaznamenat změnu' });
 
 describe('UnloadOrderList — recording a change', () => {
-  it('offers it on a stop whose invoice row is finished', () => {
-    renderList([stop({ isInvoiceReady: true })], vi.fn());
+  it('offers it on every stop with an order once the caller opens recording', () => {
+    renderList([stop(), stop({ seq: 2, title: 'Bílý Kostel', orderId: 'order-2' })], vi.fn());
 
-    expect(recordButtons()).toHaveLength(1);
+    expect(recordButtons()).toHaveLength(2);
   });
 
   it('reads just "Změna" while still announcing the whole action', () => {
-    renderList([stop({ isInvoiceReady: true })], vi.fn());
+    renderList([stop()], vi.fn());
 
     const button = screen.getByRole('button', { name: 'Zaznamenat změnu' });
     expect(button).toHaveTextContent('Změna');
     expect(button).not.toHaveTextContent('Zaznamenat');
   });
 
-  it('withholds it while the stop\'s paperwork is unfinished', () => {
-    renderList([stop({ isInvoiceReady: false })], vi.fn());
+  // Whether recording is open is the run's business, not the stop's: it opens when the run's
+  // invoicing is filed, and the caller says so by withholding the handler.
+  it('offers nothing while the caller holds recording shut', () => {
+    renderList([stop()]);
 
     expect(recordButtons()).toHaveLength(0);
-  });
-
-  // The office closes the Fakturace rows one client at a time, so the button appearing per stop
-  // rather than per run is the whole point of the change.
-  it('decides per stop, not per run', () => {
-    renderList(
-      [
-        stop({ seq: 1, title: 'Chrastava', isInvoiceReady: true }),
-        stop({ seq: 2, title: 'Bílý Kostel', orderId: 'order-2', isInvoiceReady: false }),
-      ],
-      vi.fn(),
-    );
-
-    expect(recordButtons()).toHaveLength(1);
   });
 
   it('hands the stop back to the caller', () => {
     const onRecord = vi.fn();
-    const ready = stop({ isInvoiceReady: true });
-    renderList([ready], onRecord);
+    const target = stop();
+    renderList([target], onRecord);
 
     fireEvent.click(screen.getByRole('button', { name: 'Zaznamenat změnu' }));
 
-    expect(onRecord).toHaveBeenCalledWith(ready);
+    expect(onRecord).toHaveBeenCalledWith(target);
   });
 
-  // A warehouse or fuel stop has no order, so it has no row to finish and nothing to record.
+  // A warehouse or fuel stop has no order, so there is nothing to record against.
   it('never offers it on a stop with no order', () => {
-    renderList([stop({ kind: 'custom', orderId: undefined, isInvoiceReady: true, lines: [] })], vi.fn());
-
-    expect(recordButtons()).toHaveLength(0);
-  });
-
-  it('offers nothing to a user who may not write a client\'s ledger', () => {
-    renderList([stop({ isInvoiceReady: true })]);
+    renderList([stop({ kind: 'custom', orderId: undefined, lines: [] })], vi.fn());
 
     expect(recordButtons()).toHaveLength(0);
   });
 
   it('badges a stop with its open changes independently of the button', () => {
-    renderList([stop({ openChanges: 2, isInvoiceReady: false })], vi.fn());
+    renderList([stop({ openChanges: 2 })]);
 
-    // The badge says what happened; the button says whether more can be written down. A stop can
-    // carry recorded changes from an earlier pass while its row is re-opened.
+    // The badge says what happened; the button says whether more can be written down. A stop
+    // carries what was recorded whether or not recording is open now.
     expect(screen.getByText('2 změny')).toBeInTheDocument();
     expect(recordButtons()).toHaveLength(0);
   });

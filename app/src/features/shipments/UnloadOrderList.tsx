@@ -73,10 +73,10 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
   onRecordChange?: (stop: UnloadStop) => void;
 }) {
   const openOrder = onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined;
-  // Offered once this stop's Fakturace row is finished: the deviation is recorded against
-  // paperwork the office has closed, and a row nobody has ticked yet has nothing to record
-  // against. A stop with no order has no row at all.
-  const record = onRecordChange && stop.orderId && stop.isInvoiceReady
+  // A stop with no order has nothing to record against. Whether recording is open at all is the
+  // run's business rather than the stop's — the caller withholds the handler until the run's
+  // invoicing is filed, which is the point where the plan stops moving.
+  const record = onRecordChange && stop.orderId
     ? () => onRecordChange(stop)
     : undefined;
   return (
@@ -149,8 +149,7 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
                 {`${stop.totalQuantity} ks`}
               </Typography>
             )}
-            {/* Offered only once this stop's Fakturace row is finished — see the note above.
-                Plain, unlike the order detail's outlined amber: this cluster already carries a
+            {/* Plain, unlike the order detail's outlined amber: this cluster already carries a
                 badge and a count, and a bordered button among them reads as clutter. */}
             {record && (
               <Tooltip title={RECORD_CHANGE_LABEL}>

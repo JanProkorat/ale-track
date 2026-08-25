@@ -1564,7 +1564,12 @@ export function ShipmentDetail({
                     stops={unloadStops}
                     startPoint={startPointLabel}
                     onOpenOrder={onOpenOrder}
-                    onRecordChange={canRecordDeviation ? setRecordingStop : undefined}
+                    // Recording opens when the run's invoicing is filed — before that the
+                    // office is still correcting the orders themselves, and a deviation
+                    // recorded against a plan that can still move would not stay true.
+                    onRecordChange={canRecordDeviation && (shipment.isInvoicingFiled ?? false)
+                      ? setRecordingStop
+                      : undefined}
                   />
                 </Box>
               ) : (

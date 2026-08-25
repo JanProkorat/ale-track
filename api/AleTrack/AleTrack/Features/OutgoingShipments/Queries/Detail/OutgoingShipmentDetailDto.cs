@@ -23,6 +23,16 @@ public sealed record OutgoingShipmentDetailDto
     public OutgoingShipmentState State { get; set; }
 
     /// <summary>
+    /// Whether the run's invoicing has been filed — the one-way door after which its orders are
+    /// closed to editing and the Vykládka begins offering to record deviations instead.
+    /// </summary>
+    /// <remarks>
+    /// On the run rather than on each stop: filing is one act for the whole run, and a copy per
+    /// stop would invite the copies to disagree.
+    /// </remarks>
+    public bool IsInvoicingFiled { get; set; }
+
+    /// <summary>
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;

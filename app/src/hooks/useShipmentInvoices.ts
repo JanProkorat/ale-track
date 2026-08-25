@@ -98,6 +98,26 @@ export function useSetInvoiceReadiness(shipmentId: string | undefined) {
   });
 }
 
+/**
+ * Files the run's invoicing — the one-way door.
+ *
+ * Invalidates what the readiness tick does, and for the same reason: filing closes the run's
+ * orders to editing and opens recording against them, and both flags travel on the shipment's
+ * stops and on the orders themselves.
+ */
+export function useFileShipmentInvoicing(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => ds.fileShipmentInvoicingEndpoint(shipmentId!),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.orders.all }),
+    ]),
+  });
+}
+
 export interface SetInvoiceBillingRecipientsArgs {
   invoiceId: string;
   /** The whole selection — the endpoint replaces the invoice's list with it. */

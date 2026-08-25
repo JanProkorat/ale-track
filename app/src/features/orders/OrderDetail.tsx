@@ -72,14 +72,16 @@ function StatusFlow({ stateName }: { stateName: string }) {
 /** The vývoz carrying this order: which run, when it goes, who drives it, and
  *  where in the route this stop sits. Mirrors the shipment detail's order list,
  *  which links the other way. */
-function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
+function ShipmentCard({ shipment, onOpen, isInvoiceReady = false, isInvoicingFiled = false }: {
   shipment: OrderOutgoingShipmentDto;
   onOpen: () => void;
-  /**
-   * Whether this order's Fakturace row is finished, which is what opens recording a deviation
-   * against it — see the chip below.
-   */
+  /** Whether this order's Fakturace row is marked finished — see the pills below. */
   isInvoiceReady?: boolean;
+  /**
+   * Whether the run's invoicing has been filed, which is what closes this order to editing and
+   * opens recording a deviation against it.
+   */
+  isInvoicingFiled?: boolean;
 }) {
   const status = SHIP_STATUS[shipStateName(shipment.state) ?? 'Created'] ?? SHIP_STATUS.Created;
   const drivers = shipment.driverNames ?? [];
@@ -125,8 +127,14 @@ function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
                 The same pill as the state beside it, not a chip of its own: two badges on one
                 line describing two halves of one sentence should not look like two kinds of
                 thing. The span is for the tooltip, which needs a ref the pill does not forward. */}
-            {isInvoiceReady && (
-              <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
+            {isInvoicingFiled ? (
+              <Tooltip title="Fakturace vývozu je zaevidovaná: objednávku už nelze upravovat, změny se k ní zaznamenávají.">
+                <Box component="span" sx={{ display: 'inline-flex' }}>
+                  <StatusPill tone="ok" label="Zaevidováno" />
+                </Box>
+              </Tooltip>
+            ) : isInvoiceReady && (
+              <Tooltip title="Fakturační řádek je označený jako hotový. Zaznamenávat změny půjde po zaevidování fakturace.">
                 <Box component="span" sx={{ display: 'inline-flex' }}>
                   <StatusPill tone="ok" label="Faktura hotová" />
                 </Box>
@@ -197,7 +205,12 @@ export function OrderDetail({
   const extras = order.customExtraItems ?? [];
   const goodItems = order.supplierGoodItems ?? [];
   const stateName = orderStateName(order.state) ?? 'New';
-  const canEditOrder = stateName !== 'Finished' && stateName !== 'Cancelled';
+  // Read off the wire, not re-derived here: the server computes it with the same OrderMutability
+  // the update endpoint enforces, so this screen cannot offer an edit that would be refused — nor
+  // refuse one that would be allowed. Falls back to the old state test only for an order fetched
+  // before the field existed.
+  const canEditOrder = order.isContentEditable
+    ?? (stateName !== 'Finished' && stateName !== 'Cancelled');
   const status = ORDER_STATUS[stateName] ?? ORDER_STATUS.New;
 
   // 'all', not 'open': what came off the van is a permanent fact about that handover, so
@@ -255,7 +268,10 @@ export function OrderDetail({
   // State said "the van has left", which is a different question: the papers need not be done at
   // Naloženo, and this screen would then be offering Upravit — editing the plan — under finished
   // paperwork while the run's own Vykládka already offered recording. One flag, both screens.
-  const canRecordNow = canRecordDeviation && (order.isInvoiceReady ?? false);
+  // Filing the run's invoicing is what opens recording — not a row being marked finished, which
+  // the office still ticks and unticks while it reconciles. Past filing the plan cannot move, so a
+  // deviation recorded against it stays true.
+  const canRecordNow = canRecordDeviation && (order.isInvoicingFiled ?? false);
 
   // The plan the drawer diffs against is the order's own quantity, which is also what was
   // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype
@@ -596,6 +612,7 @@ export function OrderDetail({
               shipment={shipment}
               onOpen={openShipment}
               isInvoiceReady={order.isInvoiceReady ?? false}
+              isInvoicingFiled={order.isInvoicingFiled ?? false}
             />
           )}
 

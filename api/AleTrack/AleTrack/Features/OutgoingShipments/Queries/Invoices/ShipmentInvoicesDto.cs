@@ -36,6 +36,18 @@ public sealed record ShipmentInvoicesDto
     /// Whether the split may still be edited (false once the shipment is delivered or cancelled).
     /// </summary>
     public bool IsEditable { get; set; }
+
+    /// <summary>
+    /// Whether the run's invoicing has been filed — the one-way door after which the rows lock,
+    /// the orders close to editing, and deviations begin to be recorded against them.
+    /// </summary>
+    public bool IsInvoicingFiled { get; set; }
+
+    /// <summary>When it was filed, and by whom. Null until it is.</summary>
+    public DateTime? InvoicingFiledAt { get; set; }
+
+    /// <inheritdoc cref="InvoicingFiledAt" />
+    public string? InvoicingFiledByUserName { get; set; }
 }
 
 /// <summary>
