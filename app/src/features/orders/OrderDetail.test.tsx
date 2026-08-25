@@ -639,28 +639,6 @@ describe('OrderDetail — when a change can be recorded', () => {
     expect(record()).not.toBeInTheDocument();
   });
 
-  // The button appearing with no explanation is what made the rule invisible: the office had no
-  // way to tell what had changed about the order.
-  it('says on the page that the paperwork is what opened it', () => {
-    renderWithLedgerRights(order({ isInvoiceReady: true }));
-
-    expect(within(screen.getByTestId('detail-header')).getByText('Fakturace hotová')).toBeInTheDocument();
-  });
-
-  it('says nothing about the paperwork while it is unfinished', () => {
-    renderWithLedgerRights(order({ isInvoiceReady: false }));
-
-    expect(screen.queryByText('Fakturace hotová')).not.toBeInTheDocument();
-  });
-
-  // The state of the paperwork is worth knowing whether or not this user may record anything.
-  it('shows it to a user who cannot record either', () => {
-    renderDetail(order({ isInvoiceReady: true }));
-
-    expect(screen.getByText('Fakturace hotová')).toBeInTheDocument();
-    expect(record()).not.toBeInTheDocument();
-  });
-
   it('never offers it to a user who may not write a client\'s ledger', () => {
     render(
       <MuiThemeProvider theme={theme}>
@@ -675,5 +653,61 @@ describe('OrderDetail — when a change can be recorded', () => {
     );
 
     expect(record()).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// The chip that explains the record button. It sits in the Vývoz card beside the run's own
+// state: where the goods are, and whether the paper is closed.
+// ---------------------------------------------------------------------------------
+
+describe('OrderDetail — the finished-invoice chip', () => {
+  const onRun = (isInvoiceReady: boolean) =>
+    order({ outgoingShipment: shipment(), isInvoiceReady });
+
+  /** The Vývoz card, which is where the chip belongs. */
+  const shipmentCard = () =>
+    within(screen.getByText('Vývoz').closest('.MuiCard-root') as HTMLElement);
+
+  it('sits in the Vývoz card, beside the run\'s state', () => {
+    renderDetail(onRun(true), undefined, vi.fn());
+
+    const card = shipmentCard();
+    expect(card.getByText('Faktura hotová')).toBeInTheDocument();
+    // The run's own state pill is its neighbour.
+    expect(card.getByText('Na cestě')).toBeInTheDocument();
+  });
+
+  it('says nothing while the paperwork is unfinished', () => {
+    renderDetail(onRun(false), undefined, vi.fn());
+
+    expect(screen.queryByText('Faktura hotová')).not.toBeInTheDocument();
+  });
+
+  // The state of the paperwork is worth knowing whether or not this user may record anything.
+  it('shows it to a user who cannot record', () => {
+    renderDetail(onRun(true), undefined, vi.fn());
+
+    expect(screen.getByText('Faktura hotová')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Zaznamenat změnu' })).not.toBeInTheDocument();
+  });
+
+  it('shows it beside the button for a user who can', () => {
+    render(
+      <MuiThemeProvider theme={theme}>
+        <OrderDetail
+          order={onRun(true)}
+          editable
+          canRecordDeviation
+          onBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          onOpenShipment={vi.fn()}
+        />
+      </MuiThemeProvider>,
+    );
+
+    expect(screen.getByText('Faktura hotová')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zaznamenat změnu' })).toBeInTheDocument();
   });
 });

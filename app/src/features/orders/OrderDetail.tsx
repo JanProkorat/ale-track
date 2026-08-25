@@ -66,7 +66,15 @@ function StatusFlow({ stateName }: { stateName: string }) {
 /** The vývoz carrying this order: which run, when it goes, who drives it, and
  *  where in the route this stop sits. Mirrors the shipment detail's order list,
  *  which links the other way. */
-function ShipmentCard({ shipment, onOpen }: { shipment: OrderOutgoingShipmentDto; onOpen: () => void }) {
+function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
+  shipment: OrderOutgoingShipmentDto;
+  onOpen: () => void;
+  /**
+   * Whether this order's Fakturace row is finished, which is what opens recording a deviation
+   * against it — see the chip below.
+   */
+  isInvoiceReady?: boolean;
+}) {
   const status = SHIP_STATUS[shipStateName(shipment.state) ?? 'Created'] ?? SHIP_STATUS.Created;
   const drivers = shipment.driverNames ?? [];
   // Crew and vehicle are both assigned late, so either can still be missing.
@@ -78,11 +86,33 @@ function ShipmentCard({ shipment, onOpen }: { shipment: OrderOutgoingShipmentDto
       icon={<LocalShippingOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />}
     >
       <Box sx={{ px: 2.5, py: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
           <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14 }}>
             {shipmentNumber(shipment.id)}
           </Typography>
           <StatusPill tone={status.tone} label={status.label} />
+          {/* Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
+              Without it the button simply appeared and the office had no way to tell what had
+              changed about the order. It sits beside the run's own state because that is the
+              other half of the same sentence: where the goods are, and whether the paper is
+              closed. Shown whether or not this user may record, because the state of the
+              paperwork is worth knowing either way. */}
+          {isInvoiceReady && (
+            <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
+              <Chip
+                size="small"
+                icon={<CheckCircleIcon sx={{ fontSize: 15 }} />}
+                label="Faktura hotová"
+                sx={{
+                  fontWeight: 700,
+                  height: 20,
+                  color: 'success.main',
+                  bgcolor: (t) => t.vars!.palette.brand.okTint,
+                  '& .MuiChip-icon': { color: 'success.main' },
+                }}
+              />
+            </Tooltip>
+          )}
         </Stack>
 
         <Typography sx={{ fontWeight: 700 }}>{shipment.name}</Typography>
@@ -308,26 +338,6 @@ export function OrderDetail({
               sx={{ fontWeight: 700, height: 20 }}
             />
           ),
-          // Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
-          // Without it the button simply appeared one day and the office had no way to tell what
-          // had changed. Shown whether or not the user may record, because the state of the
-          // paperwork is worth knowing either way.
-          order.isInvoiceReady && (
-            <Tooltip title="Fakturační řádek je označený jako hotový, takže k objednávce lze zaznamenat změnu.">
-              <Chip
-                size="small"
-                icon={<CheckCircleIcon sx={{ fontSize: 15 }} />}
-                label="Fakturace hotová"
-                sx={{
-                  fontWeight: 700,
-                  height: 20,
-                  color: 'success.main',
-                  bgcolor: (t) => t.vars!.palette.brand.okTint,
-                  '& .MuiChip-icon': { color: 'success.main' },
-                }}
-              />
-            </Tooltip>
-          ),
         ]}
         actions={(
           <>
@@ -488,7 +498,13 @@ export function OrderDetail({
 
         {hasSidebar && (
         <Stack spacing={2}>
-          {shipment && <ShipmentCard shipment={shipment} onOpen={openShipment} />}
+          {shipment && (
+            <ShipmentCard
+              shipment={shipment}
+              onOpen={openShipment}
+              isInvoiceReady={order.isInvoiceReady ?? false}
+            />
+          )}
 
           {returnRows.length > 0 && (
             <CollapsibleCard
