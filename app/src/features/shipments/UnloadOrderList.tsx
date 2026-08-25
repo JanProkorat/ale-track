@@ -92,64 +92,23 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
       >
         <StopAvatar kind={stop.kind} seq={stop.seq} clientId={stop.clientId} testId="unload-stop-seq" />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" alignItems="baseline" spacing={1}>
-            {openOrder ? (
-              <Link
-                component="button"
-                type="button"
-                underline="hover"
-                onClick={openOrder}
-                sx={{ fontWeight: 700, fontSize: 14, color: 'primary.dark', textAlign: 'left', minWidth: 0 }}
-              >
-                {stop.title}
-              </Link>
-            ) : (
-              <Typography sx={{ fontWeight: 700, fontSize: 14, minWidth: 0 }} noWrap>{stop.title}</Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            {/* What the driver counts the handover against, so it belongs beside the client's
-                name rather than under the last line. */}
-            {/* No second banner: AddressChangedBanner already holds the top of the page, and two
-                strips competing for one glance cost the reader both. The highlight belongs to the
-                stop it concerns. */}
-            {stop.openChanges > 0 && (
-              <LedgerTag
-                tone="info"
-                label={`${stop.openChanges} ${plural(stop.openChanges, 'změna', 'změny', 'změn')}`}
-              />
-            )}
-            {/* The count and the button as one centred cluster, so the browser aligns them to
-                each other — a hand-computed offset between an 11.5px line and a padded small
-                button was off by a few pixels twice. `alignSelf: center` on the cluster lands it
-                on the client's name, where the count sat when it was baseline-aligned. */}
-            {(stop.totalQuantity > 0 || record) && (
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, alignSelf: 'center' }}>
-                {stop.totalQuantity > 0 && (
-                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-                    {`${stop.totalQuantity} ks`}
-                  </Typography>
-                )}
-                {/* Offered only once this stop's Fakturace row is finished — see the note above.
-                    Plain, unlike the order detail's outlined amber: this row already carries a
-                    change badge and a count, and a bordered button among them reads as clutter.
-                    Symmetric negative margins keep the padded button from growing the name line
-                    without moving it off centre. */}
-                {record && (
-                  <Tooltip title={RECORD_CHANGE_LABEL}>
-                    <Button
-                      size="small"
-                      startIcon={<EditOutlinedIcon />}
-                      onClick={record}
-                      aria-label={RECORD_CHANGE_LABEL}
-                      sx={{ flexShrink: 0, fontWeight: 700, my: -0.75 }}
-                    >
-                      {RECORD_CHANGE_SHORT}
-                    </Button>
-                  </Tooltip>
-                )}
-              </Stack>
-            )}
-          </Stack>
+          {openOrder ? (
+            <Link
+              component="button"
+              type="button"
+              underline="hover"
+              onClick={openOrder}
+              sx={{
+                fontWeight: 700, fontSize: 14, color: 'primary.dark', textAlign: 'left',
+                display: 'block', maxWidth: '100%', overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {stop.title}
+            </Link>
+          ) : (
+            <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{stop.title}</Typography>
+          )}
           {stop.subtitle && (
             <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }} noWrap>{stop.subtitle}</Typography>
           )}
@@ -168,6 +127,46 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
             <Typography variant="caption" color="text.secondary">{stop.note}</Typography>
           )}
         </Box>
+        {/* The whole right-hand side as one cluster centred on the row: the open changes, what
+            the driver counts the handover against, and the button to record a deviation.
+            Centred, and outside the name's own line — a padded button sharing that line pushed
+            the address away from the name, and centring lets the browser align the three to each
+            other instead of an offset computed against MUI's line metrics.
+
+            No second banner among them: AddressChangedBanner already holds the top of the page,
+            and two strips competing for one glance cost the reader both. The highlight belongs
+            to the stop it concerns. */}
+        {(stop.openChanges > 0 || stop.totalQuantity > 0 || record) && (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, alignSelf: 'center' }}>
+            {stop.openChanges > 0 && (
+              <LedgerTag
+                tone="info"
+                label={`${stop.openChanges} ${plural(stop.openChanges, 'změna', 'změny', 'změn')}`}
+              />
+            )}
+            {stop.totalQuantity > 0 && (
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+                {`${stop.totalQuantity} ks`}
+              </Typography>
+            )}
+            {/* Offered only once this stop's Fakturace row is finished — see the note above.
+                Plain, unlike the order detail's outlined amber: this cluster already carries a
+                badge and a count, and a bordered button among them reads as clutter. */}
+            {record && (
+              <Tooltip title={RECORD_CHANGE_LABEL}>
+                <Button
+                  size="small"
+                  startIcon={<EditOutlinedIcon />}
+                  onClick={record}
+                  aria-label={RECORD_CHANGE_LABEL}
+                  sx={{ flexShrink: 0, fontWeight: 700 }}
+                >
+                  {RECORD_CHANGE_SHORT}
+                </Button>
+              </Tooltip>
+            )}
+          </Stack>
+        )}
       </Stack>
       {/* A muted placeholder when nothing comes off here: a Custom stop unloads nothing, and an
           order the office has not put products on yet reads the same way. */}
