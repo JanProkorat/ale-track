@@ -202,6 +202,25 @@ describe('OrderEditor — settling open points', () => {
     expect(snackbar.mock.calls.at(-1)![0]).toContain('u 2 položek padla kontrola nakládky');
   });
 
+  // The run-wide reset says the stronger thing: the product goes back to unloaded, which is why
+  // the ticks that came with it are not spelled out beside it.
+  it('names the run-wide reset instead of the ticks it came with', async () => {
+    updateMutate.mockResolvedValue(UpdateOrderResultDto.fromJS({
+      loadingChecksCleared: 2,
+      loadingProductsReset: 1,
+    }));
+    renderEditor();
+
+    await waitFor(() => expect(screen.getByText('Košík')).toBeInTheDocument());
+    save();
+
+    await waitFor(() => expect(snackbar).toHaveBeenCalledWith(
+      expect.stringContaining('nakládka se u 1 produktu vrátila na nenaloženo'),
+      { variant: 'warning' },
+    ));
+    expect(snackbar.mock.calls.at(-1)![0]).not.toContain('padla kontrola nakládky');
+  });
+
   it('says nothing extra when the save undid nothing', async () => {
     renderEditor();
 

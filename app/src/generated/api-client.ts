@@ -20899,6 +20899,7 @@ export interface IGetOrderDetailRequest {
 export class UpdateOrderResultDto implements IUpdateOrderResultDto {
     invoicingUnmarked?: boolean;
     loadingChecksCleared?: number;
+    loadingProductsReset?: number;
     changedShipmentWork?: boolean;
 
     constructor(data?: IUpdateOrderResultDto) {
@@ -20914,6 +20915,7 @@ export class UpdateOrderResultDto implements IUpdateOrderResultDto {
         if (_data) {
             this.invoicingUnmarked = _data["invoicingUnmarked"];
             this.loadingChecksCleared = _data["loadingChecksCleared"];
+            this.loadingProductsReset = _data["loadingProductsReset"];
             this.changedShipmentWork = _data["changedShipmentWork"];
         }
     }
@@ -20929,6 +20931,7 @@ export class UpdateOrderResultDto implements IUpdateOrderResultDto {
         data = typeof data === 'object' ? data : {};
         data["invoicingUnmarked"] = this.invoicingUnmarked;
         data["loadingChecksCleared"] = this.loadingChecksCleared;
+        data["loadingProductsReset"] = this.loadingProductsReset;
         data["changedShipmentWork"] = this.changedShipmentWork;
         return data;
     }
@@ -20937,6 +20940,7 @@ export class UpdateOrderResultDto implements IUpdateOrderResultDto {
 export interface IUpdateOrderResultDto {
     invoicingUnmarked?: boolean;
     loadingChecksCleared?: number;
+    loadingProductsReset?: number;
     changedShipmentWork?: boolean;
 }
 

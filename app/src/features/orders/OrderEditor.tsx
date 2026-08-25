@@ -127,8 +127,15 @@ function shipmentWorkUndone(result: UpdateOrderResultDto): string | undefined {
 
   if (result.invoicingUnmarked) parts.push('fakturace už není označená jako hotová');
 
+  // The run-wide reset says the stronger thing, so it stands in for the per-line ticks it comes
+  // with: telling somebody a product must be loaded again and, separately, that two of its lines
+  // lost a tick is one fact told twice.
+  const reset = result.loadingProductsReset ?? 0;
   const cleared = result.loadingChecksCleared ?? 0;
-  if (cleared > 0) {
+
+  if (reset > 0) {
+    parts.push(`nakládka se u ${reset} ${plural(reset, 'produktu', 'produktů', 'produktů')} vrátila na nenaloženo`);
+  } else if (cleared > 0) {
     parts.push(`u ${cleared} ${plural(cleared, 'položky', 'položek', 'položek')} padla kontrola nakládky`);
   }
 

@@ -94,6 +94,16 @@ public sealed class OrderEditInvalidationTests
 
         shipment.InvoicingFiledAt = filedAt;
 
+        // The nakládka's own row for that product: read out and counted back, for the whole run.
+        shipment.LoadingStates.Add(new OutgoingShipmentLoadingState
+        {
+            PublicId = Guid.NewGuid(),
+            OutgoingShipment = shipment,
+            ProductId = product.Id,
+            Sequence = 1,
+            State = ShipmentLoadingState.Checked
+        });
+
         // Every row of the split marked finished: the order's own payer, and an unrelated client's
         // row that must be left alone.
         foreach (var clientId in new[] { payerId ?? ClientRowId, OtherClientRowId })
@@ -123,7 +133,8 @@ public sealed class OrderEditInvalidationTests
             clients: [f.Client, f.Other],
             products: [f.Product],
             orders: [f.Order],
-            outgoingShipments: [f.Shipment]);
+            outgoingShipments: [f.Shipment],
+            outgoingShipmentLoadingStates: f.Shipment.LoadingStates.ToList());
 
         db.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
         return db;
@@ -411,5 +422,76 @@ public sealed class OrderEditInvalidationTests
 
         f.Order.OrderItems.Single().IsShipmentLoadingConfirmed.Should().BeTrue();
         f.Order.CustomExtraItems.Single().IsShipmentLoadingConfirmed.Should().BeTrue();
+    }
+
+    // ---------------------------------------------------------------------------------
+    // The nakládka's own row, which is per product for the whole run rather than per order. It
+    // aggregates every order carrying that product, so one order asking for a different number
+    // makes "read out and counted back" untrue for all of them — and there is no correcting it,
+    // only doing it again.
+    // ---------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChangedQuantity_SendsThatProductsLoadingBackToTheStart()
+    {
+        var f = Build();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.OrderItems[0].Quantity = 12;
+
+        var result = await SaveAsync(db, f, data);
+
+        // NotLoaded is the absence of a row, exactly as the loading screen writes it.
+        f.Shipment.LoadingStates.Should().BeEmpty();
+        result.LoadingProductsReset.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task DroppedLine_SendsItsProductsLoadingBackToo()
+    {
+        var f = Build();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.OrderItems.Clear();
+
+        await SaveAsync(db, f, data);
+
+        f.Shipment.LoadingStates.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A product the run had not started loading has no row to remove, and nothing to report.
+    /// </summary>
+    [Fact]
+    public async Task ChangedQuantityWithNothingLoadedYet_ReportsNoReset()
+    {
+        var f = Build();
+        f.Shipment.LoadingStates.Clear();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.OrderItems[0].Quantity = 12;
+
+        var result = await SaveAsync(db, f, data);
+
+        result.LoadingProductsReset.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task SameQuantities_LeaveTheLoadingRowAlone()
+    {
+        var f = Build();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.Notes = [new OrderNoteDto { Text = "Volal." }];
+
+        var result = await SaveAsync(db, f, data);
+
+        f.Shipment.LoadingStates.Should().ContainSingle()
+            .Which.State.Should().Be(ShipmentLoadingState.Checked);
+        result.LoadingProductsReset.Should().Be(0);
     }
 }

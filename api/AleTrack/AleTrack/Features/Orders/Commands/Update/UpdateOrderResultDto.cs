@@ -23,6 +23,13 @@ public sealed record UpdateOrderResultDto
     /// </summary>
     public int LoadingChecksCleared { get; set; }
 
+    /// <summary>
+    /// How many products had their loading sent back to the start, because the run now carries a
+    /// different number of them than was read out and counted back.
+    /// </summary>
+    public int LoadingProductsReset { get; set; }
+
     /// <summary>Whether anything on the run was invalidated at all.</summary>
-    public bool ChangedShipmentWork => InvoicingUnmarked || LoadingChecksCleared > 0;
+    public bool ChangedShipmentWork =>
+        InvoicingUnmarked || LoadingChecksCleared > 0 || LoadingProductsReset > 0;
 }

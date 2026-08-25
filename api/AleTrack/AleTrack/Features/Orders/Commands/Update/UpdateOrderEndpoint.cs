@@ -82,8 +82,13 @@ public sealed class UpdateOrderEndpoint(
             .Include(o => o.OutgoingShipmentStop)
                 .ThenInclude(s => s!.OutgoingShipment)
                     // The rows the office has marked finished: a change to what is billed here
-                    // has to un-mark the one covering this order — see UnmarkInvoicingAsync.
+                    // has to un-mark the one covering this order — see UnmarkInvoicing.
                     .ThenInclude(sh => sh.InvoiceConfirmations)
+            .Include(o => o.OutgoingShipmentStop)
+                .ThenInclude(s => s!.OutgoingShipment)
+                    // And how far each of its products got through loading, for the same reason
+                    // — see ResetLoadingStates.
+                    .ThenInclude(sh => sh.LoadingStates)
             .FirstOrDefaultAsync(ct);
 
         if (order is null)
@@ -107,6 +112,7 @@ public sealed class UpdateOrderEndpoint(
         var billedContentChanged = RequestChangesBilledContent(order, req.Data);
         var payerBefore = InvoiceReadiness.RowClientIdOf(order);
         var loadingChecksCleared = 0;
+        var loadingProductsReset = 0;
 
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
 
@@ -131,7 +137,9 @@ public sealed class UpdateOrderEndpoint(
             order.ActualDeliveryDate = req.Data.ActualDeliveryDate ?? order.ActualDeliveryDate;
             order.State = req.Data.State ?? order.State;
 
-            loadingChecksCleared += MergeOrderItems(req.Data.OrderItems, order, products);
+            var merge = MergeOrderItems(req.Data.OrderItems, order, products);
+            loadingChecksCleared += merge.LoadingChecksCleared;
+            loadingProductsReset += ResetLoadingStates(order, merge.MovedProductIds);
         }
 
         await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
@@ -165,7 +173,8 @@ public sealed class UpdateOrderEndpoint(
         await Send.OkAsync(new UpdateOrderResultDto
         {
             InvoicingUnmarked = invoicingUnmarked,
-            LoadingChecksCleared = loadingChecksCleared
+            LoadingChecksCleared = loadingChecksCleared,
+            LoadingProductsReset = loadingProductsReset
         }, ct);
     }
 
@@ -351,16 +360,24 @@ public sealed class UpdateOrderEndpoint(
     /// A line the save leaves out is still removed, and its invoice line still cascades away —
     /// merging is about the lines that stay, not about never deleting one.
     /// </remarks>
-    private static int MergeOrderItems(List<UpdateOrderItemDto> posted, Order order, List<Product> products)
+    private static ItemMergeResult MergeOrderItems(
+        List<UpdateOrderItemDto> posted,
+        Order order,
+        List<Product> products)
     {
         var loadingChecksCleared = 0;
+        var movedProductIds = new HashSet<long>();
 
         var dropped = order.OrderItems
             .Where(stored => posted.All(p => p.ProductId != stored.Product.PublicId))
             .ToList();
 
         foreach (var stored in dropped)
+        {
+            // The run carries fewer of this product than it was loaded with.
+            movedProductIds.Add(stored.ProductId);
             order.OrderItems.Remove(stored);
+        }
 
         foreach (var line in posted)
         {
@@ -371,10 +388,15 @@ public sealed class UpdateOrderEndpoint(
                 // A ticked-off line whose count changes has not been checked at that count. The
                 // tick says somebody counted these pieces into the van; leaving it standing would
                 // have the ramp trust a number nobody read.
-                if (existing.Quantity != line.Quantity && existing.IsShipmentLoadingConfirmed)
+                if (existing.Quantity != line.Quantity)
                 {
-                    existing.IsShipmentLoadingConfirmed = false;
-                    loadingChecksCleared++;
+                    movedProductIds.Add(existing.ProductId);
+
+                    if (existing.IsShipmentLoadingConfirmed)
+                    {
+                        existing.IsShipmentLoadingConfirmed = false;
+                        loadingChecksCleared++;
+                    }
                 }
 
                 existing.Quantity = line.Quantity;
@@ -401,6 +423,8 @@ public sealed class UpdateOrderEndpoint(
             if (relatedProduct is null)
                 ThrowHelper.PublicEntityNotFound(nameof(Product), line.ProductId);
 
+            movedProductIds.Add(relatedProduct!.Id);
+
             order.OrderItems.Add(new OrderItem
             {
                 Product = relatedProduct!,
@@ -409,7 +433,46 @@ public sealed class UpdateOrderEndpoint(
             });
         }
 
-        return loadingChecksCleared;
+        return new ItemMergeResult(loadingChecksCleared, movedProductIds);
+    }
+
+    /// <summary>
+    /// What merging the posted lines disturbed: the ticks it had to clear, and the products whose
+    /// count on this run moved.
+    /// </summary>
+    private sealed record ItemMergeResult(int LoadingChecksCleared, HashSet<long> MovedProductIds);
+
+    /// <summary>
+    /// Sends the loading of every product whose count moved back to the beginning.
+    /// </summary>
+    /// <remarks>
+    /// The nakládka's own row is per product per brewery-invoice column, and it aggregates every
+    /// order on the run that carries that product. So "read out and counted back, 10 pieces" stops
+    /// being true the moment one of those orders asks for twelve — and the row cannot be corrected,
+    /// only re-done, because nobody knows which of the twelve were counted.
+    ///
+    /// Deliberately the whole product across the run, and deliberately the strong reset: the ramp
+    /// reads out and counts back again. Both passes were done against a number that no longer
+    /// exists, so keeping the first would only make the row lie more quietly.
+    ///
+    /// NotLoaded is the absence of a row, exactly as <c>SetLoadingStateEndpoint</c> writes it —
+    /// hence removing rather than rewriting. A filed run is left alone: its content cannot move.
+    /// </remarks>
+    private static int ResetLoadingStates(Order order, HashSet<long> movedProductIds)
+    {
+        var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is null || shipment.IsInvoicingFiled || movedProductIds.Count == 0)
+            return 0;
+
+        var stale = shipment.LoadingStates
+            .Where(state => movedProductIds.Contains(state.ProductId))
+            .ToList();
+
+        foreach (var state in stale)
+            shipment.LoadingStates.Remove(state);
+
+        return stale.Select(state => state.ProductId).Distinct().Count();
     }
 
     /// <summary>
