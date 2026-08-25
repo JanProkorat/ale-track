@@ -4,11 +4,14 @@
 // for the road. See unloadOrder.ts for why the shapes differ and what each
 // line carries; this component only lays that shape out.
 
-import { Box, Button, Card, Divider, Link, Stack, Typography } from '@mui/material';
+import { Box, Button, Card, Divider, Link, Stack, Tooltip, Typography } from '@mui/material';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { plural } from 'src/lib/format';
 import { LedgerRowTag, LedgerTag, QuantityDiff } from 'src/features/clients/LedgerDiff';
+import {
+  RECORD_CHANGE_LABEL, RECORD_CHANGE_SHORT, recordButtonSx,
+} from 'src/features/clients/ledgerStyles';
 import { StopAvatar } from './StopAvatar';
 import type { UnloadStop } from './unloadOrder';
 
@@ -143,14 +146,18 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
         </Box>
         {/* Offered only once the run has left Created — see UnloadOrderList's own note. */}
         {record && (
-          <Button
-            size="small"
-            startIcon={<EditOutlinedIcon />}
-            onClick={record}
-            sx={{ flexShrink: 0, fontWeight: 700 }}
-          >
-            Zaznamenat změnu
-          </Button>
+          <Tooltip title={RECORD_CHANGE_LABEL}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<EditOutlinedIcon />}
+              onClick={record}
+              aria-label={RECORD_CHANGE_LABEL}
+              sx={{ ...recordButtonSx, flexShrink: 0 }}
+            >
+              {RECORD_CHANGE_SHORT}
+            </Button>
+          </Tooltip>
         )}
       </Stack>
       {/* A muted placeholder when nothing comes off here: a Custom stop unloads nothing, and an

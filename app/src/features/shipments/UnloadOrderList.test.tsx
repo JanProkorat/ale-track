@@ -48,6 +48,14 @@ describe('UnloadOrderList — recording a change', () => {
     expect(recordButtons()).toHaveLength(1);
   });
 
+  it('reads just "Změna" while still announcing the whole action', () => {
+    renderList([stop({ isInvoiceReady: true })], vi.fn());
+
+    const button = screen.getByRole('button', { name: 'Zaznamenat změnu' });
+    expect(button).toHaveTextContent('Změna');
+    expect(button).not.toHaveTextContent('Zaznamenat');
+  });
+
   it('withholds it while the stop\'s paperwork is unfinished', () => {
     renderList([stop({ isInvoiceReady: false })], vi.fn());
 

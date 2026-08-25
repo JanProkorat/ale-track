@@ -619,6 +619,17 @@ describe('OrderDetail — when a change can be recorded', () => {
     expect(record()).toBeInTheDocument();
   });
 
+  // Short on the face, full phrase as the accessible name: "Změna" beside "Upravit" is terse
+  // enough that a screen reader should still hear the verb.
+  it('reads just "Změna" while still announcing the whole action', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: true }));
+
+    const button = record()!;
+    expect(button).toHaveTextContent('Změna');
+    expect(button).not.toHaveTextContent('Zaznamenat');
+    expect(button).toHaveAccessibleName('Zaznamenat změnu');
+  });
+
   it('does not offer it while the paperwork is unfinished', () => {
     renderWithLedgerRights(order({ isInvoiceReady: false }));
 

@@ -123,6 +123,7 @@ describe.each(['light', 'dark'] as const)('the inline diff in %s mode', (scheme)
 describe('the ledger UI reads colours scheme-aware', () => {
   const FILES = [
     'LedgerDiff.tsx',
+    'ledgerStyles.ts',
     'LedgerMoneyCard.tsx',
     'LedgerPanel.tsx',
     'ClientOpenItemsCard.tsx',

@@ -33,6 +33,9 @@ import {
 import { LedgerRowTag, QuantityDiff, TextDiff } from 'src/features/clients/LedgerDiff';
 import { LedgerMoneyCard } from 'src/features/clients/LedgerMoneyCard';
 import { LedgerEntryDrawer } from 'src/features/clients/LedgerEntryDrawer';
+import {
+  RECORD_CHANGE_LABEL, RECORD_CHANGE_SHORT, recordButtonSx,
+} from 'src/features/clients/ledgerStyles';
 import { ClientOpenItemsCard } from 'src/features/clients/ClientOpenItemsCard';
 
 const FLOW = ['New', 'Planning', 'Delivering', 'Finished'];
@@ -352,14 +355,19 @@ export function OrderDetail({
               </Button>
             )}
             {canRecordNow && (
-              <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={() => setRecording(true)}
-                sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper', fontWeight: 700, '&:hover': { bgcolor: 'action.hover', borderColor: 'divider' } }}
-              >
-                Zaznamenat změnu
-              </Button>
+              <Tooltip title={RECORD_CHANGE_LABEL}>
+                {/* Short on the face, full phrase as the accessible name — "Změna" beside
+                    "Upravit" is terse enough that a screen reader should still hear the verb. */}
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => setRecording(true)}
+                  aria-label={RECORD_CHANGE_LABEL}
+                  sx={recordButtonSx}
+                >
+                  {RECORD_CHANGE_SHORT}
+                </Button>
+              </Tooltip>
             )}
             {editable && (
               <IconButton color="error" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }} aria-label="Zrušit objednávku">
