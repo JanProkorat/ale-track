@@ -118,10 +118,36 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
                 label={`${stop.openChanges} ${plural(stop.openChanges, 'změna', 'změny', 'změn')}`}
               />
             )}
-            {stop.totalQuantity > 0 && (
-              <Typography sx={{ fontSize: 11.5, color: 'text.secondary', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                {`${stop.totalQuantity} ks`}
-              </Typography>
+            {/* The count and the button as one centred cluster, so the browser aligns them to
+                each other — a hand-computed offset between an 11.5px line and a padded small
+                button was off by a few pixels twice. `alignSelf: center` on the cluster lands it
+                on the client's name, where the count sat when it was baseline-aligned. */}
+            {(stop.totalQuantity > 0 || record) && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0, alignSelf: 'center' }}>
+                {stop.totalQuantity > 0 && (
+                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+                    {`${stop.totalQuantity} ks`}
+                  </Typography>
+                )}
+                {/* Offered only once this stop's Fakturace row is finished — see the note above.
+                    Plain, unlike the order detail's outlined amber: this row already carries a
+                    change badge and a count, and a bordered button among them reads as clutter.
+                    Symmetric negative margins keep the padded button from growing the name line
+                    without moving it off centre. */}
+                {record && (
+                  <Tooltip title={RECORD_CHANGE_LABEL}>
+                    <Button
+                      size="small"
+                      startIcon={<EditOutlinedIcon />}
+                      onClick={record}
+                      aria-label={RECORD_CHANGE_LABEL}
+                      sx={{ flexShrink: 0, fontWeight: 700, my: -0.75 }}
+                    >
+                      {RECORD_CHANGE_SHORT}
+                    </Button>
+                  </Tooltip>
+                )}
+              </Stack>
             )}
           </Stack>
           {stop.subtitle && (
@@ -142,28 +168,6 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
             <Typography variant="caption" color="text.secondary">{stop.note}</Typography>
           )}
         </Box>
-        {/* Offered only once the run has left Created — see UnloadOrderList's own note. */}
-        {record && (
-          <Tooltip title={RECORD_CHANGE_LABEL}>
-            {/* Plain here, unlike the order detail's outlined amber: a stop row already carries a
-                state chip and a change badge, and a bordered button among them reads as clutter.
-
-                Pulled up by the small button's own top padding (4px): the row aligns to
-                flex-start, so without it the padded box drops the label below the client's name
-                and the "n ks" it reads against. Negative margin rather than py: 0 — the padding
-                is the hit area, and the row is taller than the button either way, so nothing
-                below moves. */}
-            <Button
-              size="small"
-              startIcon={<EditOutlinedIcon />}
-              onClick={record}
-              aria-label={RECORD_CHANGE_LABEL}
-              sx={{ flexShrink: 0, fontWeight: 700, mt: -0.5 }}
-            >
-              {RECORD_CHANGE_SHORT}
-            </Button>
-          </Tooltip>
-        )}
       </Stack>
       {/* A muted placeholder when nothing comes off here: a Custom stop unloads nothing, and an
           order the office has not put products on yet reads the same way. */}
