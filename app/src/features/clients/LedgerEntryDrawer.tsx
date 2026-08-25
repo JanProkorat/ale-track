@@ -444,7 +444,7 @@ export function LedgerEntryDrawer({
   ) => (
     // Label above the fields rather than under them: a caption below reads as a note about what
     // was just typed instead of as the name of the thing being typed into.
-    <Box sx={{ mt: 1, px: ROW_PX, py: 1, borderRadius: 2, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
+    <Box sx={{ mt: 1, px: ROW_PX, py: 1, borderRadius: ROW_RADIUS, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
         {label}
       </Typography>
@@ -617,8 +617,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 const PLAN_W = 64;
 const ACTUAL_W = 92;
 
-/** Row padding, which the heads have to repeat or the labels sit off their columns. */
-const ROW_PX = 1.25;
+/**
+ * Row padding, which the heads have to repeat or the labels sit off their columns.
+ *
+ * Wider than the catalog's own rows because these start with the name: there is no colour swatch
+ * to hold the text off the corner, and at 10px the two were crowding each other.
+ */
+const ROW_PX = 1.75;
+
+/** Gentler than a card's, so a 44px row's corner curves away from the text rather than into it. */
+const ROW_RADIUS = 1.25;
 
 function ColumnHeads({ actualLabel }: { actualLabel: string }) {
   return (
@@ -671,7 +679,7 @@ function QuantityRow({
         px: ROW_PX,
         py: 0.75,
         border: 1,
-        borderRadius: 2,
+        borderRadius: ROW_RADIUS,
         borderColor: color ? color.fg : 'divider',
         bgcolor: (t) => (color ? t.vars!.palette.brand[color.bg] : 'transparent'),
       }}
