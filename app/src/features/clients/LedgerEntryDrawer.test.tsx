@@ -2,7 +2,9 @@
 // from the plan rather than from what is already stored, which would record the difference a
 // second time and double the client's debt.
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent, render, screen, waitFor, waitForElementToBeRemoved,
+} from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -286,6 +288,19 @@ describe('LedgerEntryDrawer', () => {
 
     expect(screen.getByText('Svijany')).toBeInTheDocument();
     expect(screen.queryByText('Svijanská Desítka')).not.toBeInTheDocument();
+  });
+
+  // The panel animates shut, so its rows outlive the click that closed it — a bare queryBy here
+  // would pass or fail depending on how fast the machine ran the transition.
+  it('folds a brewery away again', async () => {
+    catalogState.data = catalogOf({ id: 'p-9', name: 'Svijanská Desítka', priceWithVat: 1860 });
+    renderDrawer(context());
+
+    fireEvent.click(screen.getByText('Svijany'));
+    const row = screen.getByText('Svijanská Desítka');
+    fireEvent.click(screen.getByText('Svijany'));
+
+    await waitForElementToBeRemoved(row);
   });
 
   it('shows the product, its size and the client price once its brewery is opened', () => {

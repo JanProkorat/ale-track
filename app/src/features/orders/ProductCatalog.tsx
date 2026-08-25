@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, Stack, ToggleButton, ToggleButtonGroup, Typography,
+  Box, Button, Chip, Collapse, IconButton, Stack, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import RemoveIcon from '@mui/icons-material/RemoveOutlined';
@@ -186,6 +186,13 @@ export function CatalogGroupList({
   );
 }
 
+/**
+ * How long a brewery takes to open, shared by the panel and its chevron so the two move as one
+ * gesture. Short on purpose: browsing a catalog means opening and closing several in a row, and
+ * MUI's default 300ms reads as sluggish when you are hunting for a product.
+ */
+const PANEL_MS = 180;
+
 export function BreweryGroupPanel({
   brewery, products, color, open, onToggle, quantities, onAdd, onChange,
 }: {
@@ -212,13 +219,22 @@ export function BreweryGroupPanel({
           px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
         }}
       >
-        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
+        <ChevronRightIcon
+          fontSize="small"
+          sx={{
+            color: 'text.disabled', flexShrink: 0,
+            transform: open ? 'rotate(90deg)' : 'none',
+            transition: `transform ${PANEL_MS}ms`,
+          }}
+        />
         <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
         <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{brewery.breweryName}</Typography>
         <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{products.length}</Typography>
         <Box sx={{ flex: 1 }} />
       </Box>
-      {open && (
+      {/* Unmounted while closed, not merely hidden: a drawer full of collapsed breweries would
+          otherwise mount the whole catalog, and a closed panel's rows would answer a search. */}
+      <Collapse in={open} timeout={PANEL_MS} unmountOnExit>
         <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
           <CatalogGroupList
             products={products}
@@ -229,7 +245,7 @@ export function BreweryGroupPanel({
             onChange={onChange}
           />
         </Box>
-      )}
+      </Collapse>
     </Box>
   );
 }
