@@ -355,15 +355,16 @@ public static class ShipmentInvoiceReconciler
     /// Extra items without a <c>ClientId</c> are skipped rather than guessed at; they predate
     /// invoicing and there is nobody to bill them to.
     ///
-    /// Every planned quantity here is the <em>effective</em> one: the plan plus whatever the
-    /// client's ledger records about that line. An invoice bills what came off the van, so seven
-    /// of ten delivered is an invoice for seven — and stays seven even after somebody squares the
-    /// three, because those are billed on the order that brings them.
+    /// Quantities are the <em>planned</em> ones. The client ledger records what actually came off
+    /// the van, but for now it stays out of the invoice and the export — the office decides what
+    /// to bill from the deviations it can see on the run, rather than the invoice moving under it.
+    /// Re-enabling it means billing the effective quantity here and taking door-side products as
+    /// billable sources of their own; the line's <c>LedgerEntry</c> source kind and its column stay
+    /// in place for that, and to prune the lines an earlier build already wrote.
     /// </remarks>
     private static List<BillableSource> CollectSources(ShipmentInvoiceSplit split)
     {
         var shipment = split.Shipment;
-        var ledger = split.LedgerEntries;
         var sources = new List<BillableSource>();
 
         foreach (var stop in shipment.Stops.Where(s => s.ClientOrder is not null).OrderBy(s => s.Order))
@@ -379,38 +380,10 @@ public static class ShipmentInvoiceReconciler
                     OrderingClient = stop.ClientOrder.Client,
                     PayingClientId = payer.Id,
                     PayingClient = payer.Entity,
-                    Quantity = ClientLedgerDelivery.Effective(
-                        item.Quantity, ClientLedgerDelivery.ForOrderItem(ledger, item.Id)),
+                    Quantity = item.Quantity,
                     Snapshot = SnapshotFor(shipment, stop, item)
                 });
             }
-        }
-
-        // Products the client took at the door. They have no order line, so the ledger entry is
-        // the billable source itself — of every way this could go wrong, letting goods the client
-        // walked away with go unbilled is the most expensive.
-        foreach (var entry in ClientLedgerDelivery.DoorSideProducts(ledger))
-        {
-            var order = shipment.Stops
-                .Where(s => s.ClientOrder is not null)
-                .Select(s => s.ClientOrder!)
-                .FirstOrDefault(o => o.Id == entry.OrderId);
-
-            if (order is null || entry.Product is null)
-                continue;
-
-            var payer = PayerOf(order.ClientId, order.Client);
-            sources.Add(new BillableSource
-            {
-                Kind = InvoiceLineSourceKind.LedgerEntry,
-                ItemId = RequirePersisted(entry.Id, nameof(ClientLedgerEntry)),
-                OrderingClientId = order.ClientId,
-                OrderingClient = order.Client,
-                PayingClientId = payer.Id,
-                PayingClient = payer.Entity,
-                Quantity = (entry.ActualQuantity ?? 0) - (entry.PlannedQuantity ?? 0),
-                Snapshot = DoorSideSnapshot(split, order.ClientId, entry)
-            });
         }
 
         // The client ordered these off a supplier's price list, so they are billed like the beer
@@ -428,8 +401,7 @@ public static class ShipmentInvoiceReconciler
                 OrderingClient = order.Client,
                 PayingClientId = payer.Id,
                 PayingClient = payer.Entity,
-                Quantity = ClientLedgerDelivery.Effective(
-                    item.Quantity, ClientLedgerDelivery.ForSupplierGoodItem(ledger, item.Id)),
+                Quantity = item.Quantity,
                 Snapshot = SupplierGoodSnapshot(item)
             });
         }
@@ -447,8 +419,7 @@ public static class ShipmentInvoiceReconciler
                 OrderingClient = order.Client,
                 PayingClientId = payer.Id,
                 PayingClient = payer.Entity,
-                Quantity = ClientLedgerDelivery.Effective(
-                    item.Quantity, ClientLedgerDelivery.ForCustomExtraItem(ledger, item.Id)),
+                Quantity = item.Quantity,
                 // A custom extra has no product, so it carries a description and no prices —
                 // which is what the invoice already showed for these lines.
                 Snapshot = new LineSnapshot(Truncate(item.Description), null, null, null, null)
@@ -491,28 +462,6 @@ public static class ShipmentInvoiceReconciler
         var price = SupplierGoodPricing.Primary(good?.Prices);
 
         return new LineSnapshot(Truncate(name), null, null, price?.PriceWithVat, price?.PriceWithoutVat);
-    }
-
-    /// <summary>
-    /// What a line billing a door-side product records.
-    /// </summary>
-    /// <remarks>
-    /// There is no stop item to read and no order line either, so the product is the only source
-    /// of facts — priced through the client's own price list, because billing the catalog price to
-    /// a client who has an override has already been a defect in this codebase once. The name is
-    /// taken from the entry's snapshot so a since-retired product still reads correctly.
-    /// </remarks>
-    private static LineSnapshot DoorSideSnapshot(ShipmentInvoiceSplit split, long clientId, ClientLedgerEntry entry)
-    {
-        var product = entry.Product!;
-        var prices = split.PriceListsByClientId.GetValueOrDefault(clientId, ClientPriceList.Empty).Resolve(product);
-
-        return new LineSnapshot(
-            Truncate(entry.ProductName ?? product.Name),
-            product.Kind,
-            product.PackageSize,
-            prices.PriceWithVat,
-            prices.PriceWithoutVat);
     }
 
     /// <summary>

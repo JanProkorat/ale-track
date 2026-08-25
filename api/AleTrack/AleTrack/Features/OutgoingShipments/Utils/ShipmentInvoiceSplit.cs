@@ -28,12 +28,13 @@ public sealed record ShipmentInvoiceSplit
     public required List<OutgoingShipmentInvoiceLine> PrivateLines { get; init; }
 
     /// <summary>
-    /// Recorded deviations of the orders on this run — what actually came off the van.
+    /// Recorded deviations of the orders on this run — empty for now: the ledger stays out of
+    /// invoicing, so nothing loads them.
     /// </summary>
     /// <remarks>
-    /// Travels with the split for the same reason the private lines do: they cannot be reached
-    /// from the shipment through a navigation, and the invoice is wrong without them. An invoice
-    /// bills what was handed over, not what was planned.
+    /// Kept so the mapper can still resolve a <c>LedgerEntry</c> line an earlier build wrote, and
+    /// so switching the ledger back on is a matter of loading them again in
+    /// <see cref="ShipmentInvoiceGraph"/>.
     /// </remarks>
     public List<ClientLedgerEntry> LedgerEntries { get; init; } = [];
 

@@ -352,9 +352,10 @@ public static class ShipmentExportQuery
             foreach (var good in order.SupplierGoodItems)
                 orderers[(InvoiceLineSourceKind.SupplierGoodItem, good.Id)] = orderer;
 
-            // A product taken at the door bills through its ledger entry, so the entry is what
-            // the attribution keys on. Without this the pieces would fall back to the invoice's
-            // own client and land in the wrong block whenever a payer differs from the orderer.
+            // Nothing to attribute for now — the ledger stays out of invoicing, so the split
+            // carries no entries. Kept because a ledger-sourced line has no order item to key on:
+            // its pieces would fall back to the invoice's own client and land in the wrong block
+            // whenever a payer differs from the orderer.
             foreach (var entry in split.LedgerEntries.Where(e => e.OrderId == order.Id))
                 orderers[(InvoiceLineSourceKind.LedgerEntry, entry.Id)] = orderer;
         }

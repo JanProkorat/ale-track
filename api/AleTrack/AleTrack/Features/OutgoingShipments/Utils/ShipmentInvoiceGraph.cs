@@ -75,22 +75,6 @@ public static class ShipmentInvoiceGraph
         if (!tracked)
             privateLines = privateLines.AsNoTracking();
 
-        var orderIds = shipment.Stops
-            .Where(s => s.ClientOrder is not null)
-            .Select(s => s.ClientOrder!.Id)
-            .Distinct()
-            .ToList();
-
-        // The deviations of the run's own orders, regardless of whether anybody has settled them:
-        // what came off the van is what gets billed, forever. Loaded by their own query for the
-        // same reason the private lines are — there is no navigation from the shipment.
-        IQueryable<ClientLedgerEntry> ledgerEntries = dbContext.ClientLedgerEntries
-            .Include(e => e.Product)
-            .Where(e => e.OrderId != null && orderIds.Contains(e.OrderId!.Value));
-
-        if (!tracked)
-            ledgerEntries = ledgerEntries.AsNoTracking();
-
         var clientIds = shipment.Stops
             .Where(s => s.ClientOrder is not null)
             .Select(s => s.ClientOrder!.ClientId)
@@ -101,7 +85,6 @@ public static class ShipmentInvoiceGraph
         {
             Shipment = shipment,
             PrivateLines = await privateLines.ToListAsync(ct),
-            LedgerEntries = await ledgerEntries.ToListAsync(ct),
             PriceListsByClientId = await ClientPriceResolver.LoadForClientsAsync(dbContext, clientIds, ct)
         };
     }
