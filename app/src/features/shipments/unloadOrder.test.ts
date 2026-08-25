@@ -357,3 +357,25 @@ describe('unloadOrder — deviations', () => {
     expect(result[0].lines[0].diff).toBeUndefined();
   });
 });
+
+describe('unloadOrder — finished paperwork', () => {
+  it('carries the stop\'s invoice-ready flag through', () => {
+    const stop = orderStop(1, 'Chrastava');
+    stop.isInvoiceReady = true;
+
+    expect(unloadOrder([stop], [], [])[0].isInvoiceReady).toBe(true);
+  });
+
+  it('reads an absent flag as not ready', () => {
+    expect(unloadOrder([orderStop(1, 'Chrastava')], [], [])[0].isInvoiceReady).toBe(false);
+  });
+
+  // A warehouse or fuel stop has no order, so there is no Fakturace row to finish.
+  it('is never ready on a stop with no order', () => {
+    const fuel = new OutgoingShipmentStopDto({
+      id: 'fuel', order: 1, kind: 'Custom' as unknown as OutgoingShipmentStopKind, label: 'Čerpací stanice',
+    } as never);
+
+    expect(unloadOrder([fuel], [], [])[0].isInvoiceReady).toBe(false);
+  });
+});

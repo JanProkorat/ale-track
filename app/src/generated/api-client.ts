@@ -17718,6 +17718,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
+    isInvoiceReady?: boolean;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -17753,6 +17754,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.selectedAddressKind = _data["selectedAddressKind"];
             this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.isAddressOverridden = _data["isAddressOverridden"];
+            this.isInvoiceReady = _data["isInvoiceReady"];
             this.addressChangedAt = _data["addressChangedAt"] ? new Date(_data["addressChangedAt"].toString()) : undefined as any;
             this.orderDeliveryAddress = _data["orderDeliveryAddress"] ? OrderDeliveryAddressDto.fromJS(_data["orderDeliveryAddress"]) : undefined as any;
             this.label = _data["label"];
@@ -17804,6 +17806,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["selectedAddressKind"] = this.selectedAddressKind;
         data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["isAddressOverridden"] = this.isAddressOverridden;
+        data["isInvoiceReady"] = this.isInvoiceReady;
         data["addressChangedAt"] = this.addressChangedAt ? this.addressChangedAt.toISOString() : undefined as any;
         data["orderDeliveryAddress"] = this.orderDeliveryAddress ? this.orderDeliveryAddress.toJSON() : undefined as any;
         data["label"] = this.label;
@@ -17848,6 +17851,7 @@ export interface IOutgoingShipmentStopDto {
     selectedAddressKind?: DeliveryAddressKind;
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
+    isInvoiceReady?: boolean;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -20267,6 +20271,7 @@ export class OrderDto implements IOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    isInvoiceReady?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 
     constructor(data?: IOrderDto) {
@@ -20312,6 +20317,7 @@ export class OrderDto implements IOrderDto {
                 for (let item of _data["supplierGoodItems"])
                     this.supplierGoodItems!.push(OrderSupplierGoodItemDto.fromJS(item));
             }
+            this.isInvoiceReady = _data["isInvoiceReady"];
             this.outgoingShipment = _data["outgoingShipment"] ? OrderOutgoingShipmentDto.fromJS(_data["outgoingShipment"]) : undefined as any;
         }
     }
@@ -20357,6 +20363,7 @@ export class OrderDto implements IOrderDto {
             for (let item of this.supplierGoodItems)
                 data["supplierGoodItems"].push(item ? item.toJSON() : undefined as any);
         }
+        data["isInvoiceReady"] = this.isInvoiceReady;
         data["outgoingShipment"] = this.outgoingShipment ? this.outgoingShipment.toJSON() : undefined as any;
         return data;
     }
@@ -20375,6 +20382,7 @@ export interface IOrderDto {
     returns?: OrderReturnDto[];
     customExtraItems?: OrderCustomExtraItemDto[];
     supplierGoodItems?: OrderSupplierGoodItemDto[];
+    isInvoiceReady?: boolean;
     outgoingShipment?: OrderOutgoingShipmentDto | undefined;
 }
 

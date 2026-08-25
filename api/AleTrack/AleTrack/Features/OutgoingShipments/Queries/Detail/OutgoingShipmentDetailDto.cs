@@ -340,6 +340,17 @@ public sealed record OutgoingShipmentStopDto
     public bool IsAddressOverridden { get; set; }
 
     /// <summary>
+    /// Whether the Fakturace row covering this stop's order is marked finished — which is what
+    /// opens recording a deviation against it. See <see cref="Utils.InvoiceReadiness"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the stop rather than read from the invoicing endpoint so the unload list needs
+    /// no second query, and so a caller denied the Fakturace capability still gets the flag: what
+    /// it gates is a client record, not an invoice.
+    /// </remarks>
+    public bool IsInvoiceReady { get; set; }
+
+    /// <summary>
     /// Set when an order edit changed the delivery address under this shipment
     /// and nobody has acknowledged it yet. Drives the banner.
     /// </summary>

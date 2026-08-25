@@ -72,7 +72,12 @@ function UnloadStopBlock({ stop, onOpenOrder, onRecordChange }: {
   onRecordChange?: (stop: UnloadStop) => void;
 }) {
   const openOrder = onOpenOrder && stop.orderId ? () => onOpenOrder(stop.orderId!) : undefined;
-  const record = onRecordChange && stop.orderId ? () => onRecordChange(stop) : undefined;
+  // Offered once this stop's Fakturace row is finished: the deviation is recorded against
+  // paperwork the office has closed, and a row nobody has ticked yet has nothing to record
+  // against. A stop with no order has no row at all.
+  const record = onRecordChange && stop.orderId && stop.isInvoiceReady
+    ? () => onRecordChange(stop)
+    : undefined;
   return (
     <Box>
       <Stack
@@ -173,9 +178,8 @@ export function UnloadOrderList({
    *  Omitted for users who cannot see the Objednávky module, who then get the plain name back. */
   onOpenOrder?: (orderId: string) => void;
   /**
-   * Opens the recording drawer for a stop. Omitted while the run is still Created — nothing has
-   * been promised to anyone yet, so there is no handover to record against — and for users who
-   * may not write a client's ledger.
+   * Opens the recording drawer for a stop. Omitted for users who may not write a client's ledger;
+   * each stop then decides for itself whether its paperwork is finished.
    */
   onRecordChange?: (stop: UnloadStop) => void;
 }) {

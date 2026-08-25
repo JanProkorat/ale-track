@@ -109,6 +109,11 @@ export interface UnloadStop {
    * Zero on a stop nothing was recorded against, and on every stop when no ledger was passed.
    */
   openChanges: number;
+  /**
+   * Whether this stop's Fakturace row is marked finished, which is what opens recording against
+   * it. False on a stop with no order — there is no row to finish.
+   */
+  isInvoiceReady: boolean;
   /** The client whose ledger a deviation here belongs to, for the recording drawer. */
   clientIdForLedger?: string;
 }
@@ -170,6 +175,7 @@ function shapeStop(
       addressMissing: false,
       lines: stockPurchases.map(lineFrom),
       openChanges: 0,
+      isInvoiceReady: false,
     };
   }
 
@@ -181,6 +187,7 @@ function shapeStop(
       note: stop.note,
       lines: [],
       openChanges: 0,
+      isInvoiceReady: false,
     };
   }
 
@@ -194,6 +201,7 @@ function shapeStop(
     clientId: stop.clientId,
     // Filled in by decorate() once a ledger is in hand.
     openChanges: 0,
+    isInvoiceReady: false,
     // The order's beer, then the supplier goods bought alongside it. Those are carried on the
     // run rather than on the stop, so they are matched back to it by order — a stop with no
     // order (a run may not have reconciled one yet) matches nothing rather than everything.
@@ -252,6 +260,7 @@ export function unloadOrder(
         totalQuantity: decorated.lines.reduce((sum, l) => sum + (l.diff?.actualQuantity ?? l.quantity), 0),
         openChanges: decorated.openChanges,
         clientIdForLedger: stop.clientId,
+        isInvoiceReady: stop.isInvoiceReady ?? false,
       };
     })
     .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);

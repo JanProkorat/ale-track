@@ -586,3 +586,72 @@ describe('OrderDetail — deviations', () => {
     expect(within(itemsCard()).queryByText('Nevyloženo')).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------------
+// Recording is opened by finished paperwork, not by the order's state.
+//
+// State said "the van has left", which is a different question: at Naloženo the papers need not
+// be done, and this screen would then offer Upravit — editing the plan — under finished paperwork
+// while the run's Vykládka already offered recording.
+// ---------------------------------------------------------------------------------
+
+describe('OrderDetail — when a change can be recorded', () => {
+  function renderWithLedgerRights(o: OrderDto) {
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <OrderDetail
+          order={o}
+          editable
+          canRecordDeviation
+          onBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MuiThemeProvider>,
+    );
+  }
+
+  const record = () => screen.queryByRole('button', { name: 'Zaznamenat změnu' });
+
+  it('offers it once the invoice row is finished', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: true }));
+
+    expect(record()).toBeInTheDocument();
+  });
+
+  it('does not offer it while the paperwork is unfinished', () => {
+    renderWithLedgerRights(order({ isInvoiceReady: false }));
+
+    expect(record()).not.toBeInTheDocument();
+  });
+
+  // The window that made the old rule wrong: papers done, order still only planned.
+  it('offers it on a planned order whose row is already finished', () => {
+    renderWithLedgerRights(order({ state: OrderState.Planning, isInvoiceReady: true }));
+
+    expect(record()).toBeInTheDocument();
+  });
+
+  // And its mirror: delivered, but nobody has closed the row yet.
+  it('withholds it on a delivered order whose row is unfinished', () => {
+    renderWithLedgerRights(order({ state: OrderState.Finished, isInvoiceReady: false }));
+
+    expect(record()).not.toBeInTheDocument();
+  });
+
+  it('never offers it to a user who may not write a client\'s ledger', () => {
+    render(
+      <MuiThemeProvider theme={theme}>
+        <OrderDetail
+          order={order({ isInvoiceReady: true })}
+          editable
+          onBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MuiThemeProvider>,
+    );
+
+    expect(record()).not.toBeInTheDocument();
+  });
+});

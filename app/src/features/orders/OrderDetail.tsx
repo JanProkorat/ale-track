@@ -174,9 +174,12 @@ export function OrderDetail({
 
   const [recording, setRecording] = useState(false);
 
-  // Offered once the run has left: before that the plan is still being made, and there is no
-  // handover to compare anything against.
-  const canRecordNow = canRecordDeviation && (stateName === 'Delivering' || stateName === 'Finished');
+  // Offered once this order's Fakturace row is marked finished — not on the order's state.
+  //
+  // State said "the van has left", which is a different question: the papers need not be done at
+  // Naloženo, and this screen would then be offering Upravit — editing the plan — under finished
+  // paperwork while the run's own Vykládka already offered recording. One flag, both screens.
+  const canRecordNow = canRecordDeviation && (order.isInvoiceReady ?? false);
 
   // The plan the drawer diffs against is the order's own quantity, which is also what was
   // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype

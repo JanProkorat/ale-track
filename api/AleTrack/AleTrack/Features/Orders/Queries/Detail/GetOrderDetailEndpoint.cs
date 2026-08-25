@@ -165,6 +165,15 @@ public sealed class GetOrderDetailEndpoint(AleTrackDbContext dbContext) : Endpoi
                             .FirstOrDefault()
                     })
                     .ToList(),
+                // The Fakturace row covering this order, matched on the PAYING client — see the
+                // note at the shipment detail's own copy of this, and InvoiceReadiness for why.
+                // A cancelled run is excluded for the same reason the shipment below is: that
+                // order is back to being unplanned, so it has no row to finish.
+                IsInvoiceReady =
+                    o.OutgoingShipmentStop != null
+                    && o.OutgoingShipmentStop.OutgoingShipment.State != OutgoingShipmentState.Cancelled
+                    && o.OutgoingShipmentStop.OutgoingShipment.InvoiceConfirmations.Any(c => c.IsReady
+                        && c.ClientId == (o.Client.InvoicingClientId ?? o.ClientId)),
                 // Shipments carry no global soft-delete filter, so a cancelled run
                 // has to be excluded here — an order whose run was cancelled is
                 // back to being unplanned and shows no shipment at all.

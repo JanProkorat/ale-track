@@ -72,6 +72,17 @@ public sealed record OrderDto
     public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
 
     /// <summary>
+    /// Whether the Fakturace row covering this order is marked finished — which is what opens
+    /// recording a deviation against it. See <c>InvoiceReadiness</c>.
+    /// </summary>
+    /// <remarks>
+    /// False on an order that is not on a run, and on one whose run was cancelled: there is no row
+    /// to finish. A debt owed by that client can still be opened from their profile, which is where
+    /// a deviation with no delivery behind it belongs anyway.
+    /// </remarks>
+    public bool IsInvoiceReady { get; set; }
+
+    /// <summary>
     /// The outgoing shipment carrying this order. Null when the order is not
     /// planned onto a run, or when the run it was on has been cancelled.
     /// </summary>

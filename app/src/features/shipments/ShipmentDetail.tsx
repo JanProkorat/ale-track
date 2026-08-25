@@ -1094,11 +1094,11 @@ export function ShipmentDetail({
     [stopsSorted, shipment.stockPurchases, shipment.supplierGoods, ledgerClientIds.join(',')],
   );
 
-  // Recording is offered only once the run has left Created: before that, moving pieces around is
-  // planning, and there is no handover to compare anything against.
-  const canRecordDeviation = canRecordLedger
-    && shipStateName(shipment.state) !== 'Created'
-    && shipStateName(shipment.state) !== 'Cancelled';
+  // Recording is offered per stop, once that stop's Fakturace row is marked finished — see
+  // UnloadOrderList. Nothing about the run's own state decides it: at Naloženo the papers need
+  // not be done, and gating on state let the office record here while the order screen was still
+  // offering to edit the plan underneath.
+  const canRecordDeviation = canRecordLedger;
 
   const [recordingStop, setRecordingStop] = useState<UnloadStop | null>(null);
 
