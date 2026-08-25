@@ -93,7 +93,7 @@ describe.each(['light', 'dark'] as const)('the inline diff in %s mode', (scheme)
 
     expect(screen.getByText('Nevyloženo 3 ks')).toBeInTheDocument();
     expect(screen.getByText('Nevyloženo')).toBeInTheDocument();
-    expect(screen.getByText('Přidáno na místě')).toBeInTheDocument();
+    expect(screen.getByText('Přidáno extra')).toBeInTheDocument();
   });
 
   it('says nothing at all about an unchanged row', () => {

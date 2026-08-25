@@ -498,7 +498,7 @@ describe('OrderDetail — deviations', () => {
 
     const card = within(itemsCard());
     expect(card.getByText('Světlé 10')).toBeInTheDocument();
-    expect(card.getByText('Přidáno na místě')).toBeInTheDocument();
+    expect(card.getByText('Přidáno extra')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------------

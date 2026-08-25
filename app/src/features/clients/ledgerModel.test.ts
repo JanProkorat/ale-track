@@ -86,7 +86,7 @@ describe('applyLedger', () => {
       plannedQuantity: 0,
       actualQuantity: 4,
     });
-    expect(deviationText(rows[1])).toBe('Přidáno na místě');
+    expect(deviationText(rows[1])).toBe('Přidáno extra');
   });
 
   it('appends a row for empties handed back against an order that planned none', () => {

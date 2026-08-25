@@ -38,6 +38,7 @@ import {
   useUpdateClientLedgerEntry,
 } from 'src/hooks/useClientLedger';
 import {
+  ADDED_EXTRA,
   deliveredEntryFor,
   doorSideAdditions,
   entriesForTarget,
@@ -426,7 +427,7 @@ export function LedgerEntryDrawer({
       name={row.name}
       chip={chipFor(row.productId)}
       tone="new"
-      tag="Přidáno na místě"
+      tag={ADDED_EXTRA}
       value={row.actual}
       inputLabel={`${row.name} — vzato na místě`}
       onValue={(value) => {

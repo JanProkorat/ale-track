@@ -290,6 +290,14 @@ export function deviationText(row: DecoratedRow): string | undefined {
   return quantityWords(row.plannedQuantity, row.actualQuantity, isReturn);
 }
 
+/**
+ * What a line the order never planned is called, in the one place that decides it.
+ *
+ * The recording form names its own rows too — it has numbers rather than a decorated row to hand
+ * to {@link quantityWords} — so the words live here rather than in either caller.
+ */
+export const ADDED_EXTRA = 'Přidáno extra';
+
 /** The same wording from two bare numbers — see {@link quantityTone} for why it is shared. */
 export function quantityWords(planned: number, actual: number, isReturn = false): string | undefined {
   const diff = actual - planned;
@@ -300,7 +308,7 @@ export function quantityWords(planned: number, actual: number, isReturn = false)
     case 'removed':
       return isReturn ? 'Nevráceno' : 'Nevyloženo';
     case 'added':
-      return isReturn ? 'Vráceno navíc' : 'Přidáno na místě';
+      return isReturn ? 'Vráceno navíc' : ADDED_EXTRA;
     default:
       if (diff < 0) return `${isReturn ? 'Nevráceno' : 'Nevyloženo'} ${pieces(-diff)}`;
       return `${isReturn ? 'Vráceno navíc' : 'Navíc'} ${pieces(diff)}`;
