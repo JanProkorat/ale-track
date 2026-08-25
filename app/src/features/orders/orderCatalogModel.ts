@@ -4,6 +4,7 @@
 // without a rendering harness.
 
 import { compareProductsForDisplay } from 'src/lib/productSort';
+import { kindName } from 'src/lib/labels';
 import {
   BreweryGroupDto, KindGroupDto, PackageGroupDto, type ProductListItemDto,
 } from 'src/generated/api-client';
@@ -113,4 +114,61 @@ export function groupByBrewery(products: ProductListItemDto[]): BreweryGroupDto[
       products.find((p) => (p.breweryId ?? '') === (g.breweryId ?? ''))?.breweryDisplayOrder ?? 0;
     return order(a) - order(b) || (a.breweryName ?? '').localeCompare(b.breweryName ?? '', 'cs');
   });
+}
+
+/**
+ * The kind filter's buttons, as member names rather than numeric members: the real API serializes
+ * enums as strings while demo data sends numbers, so everything here buckets through kindName.
+ */
+export const KIND_TABS = ['Keg', 'Bottle', 'Can', 'Multipack', 'Other'] as const;
+
+export type KindTab = (typeof KIND_TABS)[number];
+
+/** The products of one kind group, whatever package sizes they come in. */
+export function flattenKind(k: KindGroupDto): ProductListItemDto[] {
+  return (k.packageSizes ?? []).flatMap((pkg) => pkg.items ?? []);
+}
+
+/** Case-insensitive match on the product name, which is what the catalog searches by. */
+export function matchesQuery(product: ProductListItemDto, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return !q || (product.name ?? '').toLowerCase().includes(q);
+}
+
+/**
+ * One panel per brewery, holding the products that pass the kind filter and the query, in display
+ * order. A brewery with nothing left to show is dropped rather than rendered empty.
+ */
+export function breweryPanels(
+  breweries: BreweryGroupDto[],
+  kindFilter: KindTab | 'all',
+  matches: (product: ProductListItemDto) => boolean,
+): Array<{ brewery: BreweryGroupDto; items: ProductListItemDto[] }> {
+  return breweries
+    .map((brewery) => ({
+      brewery,
+      items: inDisplayOrder((brewery.kinds ?? [])
+        .filter((k) => kindFilter === 'all' || kindName(k.kind) === kindFilter)
+        .flatMap(flattenKind)
+        .filter(matches)),
+    }))
+    .filter((panel) => panel.items.length > 0);
+}
+
+/** How many products of each kind pass the query, keyed by kind member name. */
+export function countsByKind(
+  breweries: BreweryGroupDto[],
+  matches: (product: ProductListItemDto) => boolean,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const brewery of breweries) {
+    for (const k of brewery.kinds ?? []) {
+      // Keyed by member name: keying by the raw wire value left every KIND_TABS lookup missing
+      // against real (string) data, which dropped all five buttons.
+      const kind = kindName(k.kind) ?? 'Other';
+      const n = flattenKind(k).filter(matches).length;
+      if (n) counts.set(kind, (counts.get(kind) ?? 0) + n);
+    }
+  }
+  return counts;
 }

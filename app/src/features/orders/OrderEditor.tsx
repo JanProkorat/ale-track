@@ -16,21 +16,23 @@ import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
-import WalletIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { DetailHeader } from 'src/components/common/DetailHeader';
 import { Combobox, type ComboOption } from 'src/components/common/Combobox';
-import { PriceWithList } from 'src/components/common/PriceWithList';
 import { clientComboOptions } from 'src/features/clients/clientOptions';
-import { groupByBrewery, groupByName, inDisplayOrder, type NameGroup } from './orderCatalogModel';
+import {
+  KIND_TABS, breweryPanels, countsByKind, groupByBrewery, inDisplayOrder, matchesQuery,
+  type KindTab,
+} from './orderCatalogModel';
+import { BreweryGroupPanel, CatalogGroupList, QtyControl } from './ProductCatalog';
 import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
-import { initials, plural, fmtLiters, orderNumber } from 'src/lib/format';
-import { kindLabel, kindName, addrKindValue, chargeKindLabel } from 'src/lib/labels';
+import { initials, fmtLiters, orderNumber } from 'src/lib/format';
+import { kindLabel, addrKindValue, chargeKindLabel } from 'src/lib/labels';
 import {
   DeliveryAddressKind,
   CreateOrderDto,
@@ -42,8 +44,6 @@ import {
   OrderCustomExtraItemDto,
   OrderSupplierGoodItemDto,
   type ProductListItemDto,
-  type BreweryGroupDto,
-  type KindGroupDto,
   type OrderItemReminderState,
   type SupplierGoodDto,
 } from 'src/generated/api-client';
@@ -63,12 +63,6 @@ import { isSettleable, owedPieces } from 'src/features/clients/ledgerModel';
 import { useUnsavedChangesGuard, UnsavedChangesDialog } from 'src/components/common/UnsavedChangesGuard';
 import { TOPBAR_H } from 'src/layout/Topbar';
 import { OrderDeliveryAddressField } from './OrderDeliveryAddressField';
-
-// Member names, not the numeric members: the real API serializes enums as strings
-// (JsonStringEnumConverter) while demo data sends numbers, so everything here buckets
-// and compares through kindName — the same convention as VolumeTab and productSort.
-const KIND_TABS = ['Keg', 'Bottle', 'Can', 'Multipack', 'Other'] as const;
-type KindTab = (typeof KIND_TABS)[number];
 
 interface CartLine {
   productId: string;
@@ -120,223 +114,11 @@ function serializeForm(
     goodLines: goodLines.map((g) => ({ supplierGoodId: g.supplierGoodId, quantity: g.quantity, note: g.note?.trim() ?? '' })),
   });
 }
-function flattenKind(k: KindGroupDto): ProductListItemDto[] {
-  return (k.packageSizes ?? []).flatMap((pkg) => pkg.items ?? []);
-}
-
 function clientInitials(name?: string): string {
   const [a, b] = (name ?? '').trim().split(/\s+/);
   return initials(a, b);
 }
 
-/** Says out loud what the struck-through ceník price beside it only implies —
- *  ports the prototype's `specialPriceTag`. */
-function ClientPriceChip() {
-  return (
-    <Chip
-      size="small"
-      icon={<WalletIcon sx={{ fontSize: '13px !important' }} />}
-      label="vlastní cena"
-      sx={{
-        height: 20,
-        fontSize: 11,
-        fontWeight: 700,
-        color: (t) => t.vars!.palette.brand.amberStrong,
-        '& .MuiChip-icon': { color: 'inherit' },
-      }}
-    />
-  );
-}
-
-function QtyControl({ qty, onAdd, onChange }: { qty: number; onAdd: () => void; onChange: (delta: number) => void }) {
-  if (qty <= 0) {
-    return (
-      <Button
-        size="small"
-        variant="outlined"
-        startIcon={<AddIcon fontSize="small" />}
-        onClick={onAdd}
-        sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700, bgcolor: 'background.paper' }}
-      >
-        Přidat
-      </Button>
-    );
-  }
-  return (
-    <Stack direction="row" spacing={0.5} alignItems="center" flexShrink={0}>
-      <IconButton size="small" onClick={() => onChange(-1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Ubrat">
-        <RemoveIcon fontSize="small" />
-      </IconButton>
-      <Typography sx={{ minWidth: 22, textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{qty}</Typography>
-      <IconButton size="small" onClick={() => onChange(1)} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30 }} aria-label="Přidat">
-        <AddIcon fontSize="small" />
-      </IconButton>
-    </Stack>
-  );
-}
-
-function ProductRow({
-  product, qty, historyBadge, color, onAdd, onChange,
-}: {
-  product: ProductListItemDto;
-  qty: number;
-  historyBadge: boolean;
-  color?: string;
-  onAdd: () => void;
-  onChange: (delta: number) => void;
-}) {
-  return (
-    <Box sx={{
-      display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, border: 1, borderRadius: 2,
-      borderColor: qty > 0 ? 'warning.main' : 'divider',
-      bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent'),
-    }}
-    >
-      <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }} noWrap>{product.name}</Typography>
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-          <Chip size="small" label={kindLabel(product.kind)} sx={{ height: 20, fontSize: 11 }} />
-          {product.packageSize != null && <Chip size="small" label={fmtLiters(product.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />}
-          <PriceWithList price={product.priceWithVat} listPrice={product.listPriceWithVat} />
-          {product.listPriceWithVat != null && <ClientPriceChip />}
-          {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
-        </Stack>
-      </Box>
-      <QtyControl qty={qty} onAdd={onAdd} onChange={onChange} />
-    </Box>
-  );
-}
-
-function VariantCard({
-  group, historyBadge, color, cartMap, onAdd, onChange,
-}: {
-  group: NameGroup;
-  historyBadge: boolean;
-  color?: string;
-  cartMap: Map<string, CartLine>;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 1.5, py: 1.1, bgcolor: 'action.hover' }}>
-        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{group.name}</Typography>
-        {historyBadge && <Typography sx={{ fontSize: 11, color: 'info.main', fontWeight: 700 }}>dříve objednáno</Typography>}
-        <Box sx={{ flex: 1 }} />
-        <Chip size="small" label={`${group.items.length} ${plural(group.items.length, 'velikost', 'velikosti', 'velikostí')}`} sx={{ height: 20, fontSize: 11 }} />
-      </Stack>
-      <Stack>
-        {group.items.map((v) => {
-          const qty = cartMap.get(v.id ?? '')?.quantity ?? 0;
-          return (
-            <Stack
-              key={v.id}
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider', bgcolor: (t) => (qty > 0 ? t.vars!.palette.brand.amberTint : 'transparent') }}
-            >
-              <Chip size="small" label={kindLabel(v.kind)} sx={{ height: 20, fontSize: 11 }} />
-              <Chip size="small" label={fmtLiters(v.packageSize)} sx={{ height: 20, fontSize: 11, fontWeight: 800 }} />
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>{v.description ?? ''}</Typography>
-              {v.listPriceWithVat != null && <ClientPriceChip />}
-              <PriceWithList price={v.priceWithVat} listPrice={v.listPriceWithVat} />
-              <QtyControl qty={qty} onAdd={() => onAdd(v.id ?? '')} onChange={(d) => onChange(v.id ?? '', d)} />
-            </Stack>
-          );
-        })}
-      </Stack>
-    </Box>
-  );
-}
-
-function CatalogGroupList({
-  products, historyBadge, cartMap, colorForBrewery, onAdd, onChange,
-}: {
-  products: ProductListItemDto[];
-  historyBadge: boolean;
-  cartMap: Map<string, CartLine>;
-  colorForBrewery: (breweryId?: string) => string | undefined;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  const groups = groupByName(products);
-  return (
-    <Stack spacing={1.1}>
-      {groups.map((g) => (g.items.length > 1 ? (
-        <VariantCard
-          key={g.name}
-          group={g}
-          historyBadge={historyBadge}
-          color={colorForBrewery(g.items[0].breweryId)}
-          cartMap={cartMap}
-          onAdd={onAdd}
-          onChange={onChange}
-        />
-      ) : (
-        <ProductRow
-          key={g.items[0].id}
-          product={g.items[0]}
-          qty={cartMap.get(g.items[0].id ?? '')?.quantity ?? 0}
-          historyBadge={historyBadge}
-          color={colorForBrewery(g.items[0].breweryId)}
-          onAdd={() => onAdd(g.items[0].id ?? '')}
-          onChange={(d) => onChange(g.items[0].id ?? '', d)}
-        />
-      )))}
-    </Stack>
-  );
-}
-
-function BreweryGroupPanel({
-  brewery, products, color, open, onToggle, cartMap, onAdd, onChange,
-}: {
-  brewery: BreweryGroupDto;
-  products: ProductListItemDto[];
-  color?: string;
-  open: boolean;
-  onToggle: () => void;
-  cartMap: Map<string, CartLine>;
-  onAdd: (productId: string) => void;
-  onChange: (productId: string, delta: number) => void;
-}) {
-  return (
-    // The whole brewery — header + its products — is one bordered card, so the
-    // products clearly live *inside* the brewery rather than beside it.
-    <Box sx={{ mb: 1.25, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}>
-      <Box
-        component="button"
-        type="button"
-        onClick={onToggle}
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left',
-          bgcolor: 'action.hover', border: 0, borderBottom: open ? 1 : 0, borderColor: 'divider',
-          px: 1.5, py: 1.25, font: 'inherit', cursor: 'pointer', color: 'text.primary',
-        }}
-      >
-        <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }} />
-        <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: color ?? 'text.disabled', flexShrink: 0 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{brewery.breweryName}</Typography>
-        <Typography color="text.secondary" sx={{ fontWeight: 600, fontSize: 12.5 }}>{products.length}</Typography>
-        <Box sx={{ flex: 1 }} />
-      </Box>
-      {open && (
-        <Box sx={{ p: 1.5, bgcolor: 'background.default' }}>
-          <CatalogGroupList
-            products={products}
-            historyBadge={false}
-            cartMap={cartMap}
-            colorForBrewery={() => color}
-            onAdd={onAdd}
-            onChange={onChange}
-          />
-        </Box>
-      )}
-    </Box>
-  );
-}
 
 /** One row of the "Další zboží" tab — a good off a supplier's price list. Priced by
  *  {@link primaryPrice}, with no client-price override: a supplier charges every
@@ -626,7 +408,11 @@ export function OrderEditor({
   const goodUnitPrice = (goodId: string): number | undefined =>
     primaryPrice(goodMap.get(goodId)?.good)?.price ?? goodFallback[goodId]?.unitPriceWithVat;
 
-  const cartMap = useMemo(() => new Map(cart.map((c) => [c.productId, c])), [cart]);
+  // What the catalog needs of the cart: how many of each product are in it.
+  const cartQuantities = useMemo(
+    () => new Map(cart.map((c) => [c.productId, c.quantity])),
+    [cart],
+  );
   const goodQtyOf = (goodId: string) => goodLines.find((g) => g.supplierGoodId === goodId)?.quantity ?? 0;
   const cartTotalQty = cart.reduce((n, c) => n + c.quantity, 0) + goodLines.reduce((n, g) => n + g.quantity, 0);
   const cartTotalPrice = cart.reduce((sum, c) => sum + (productMap.get(c.productId)?.priceWithVat ?? 0) * c.quantity, 0)
@@ -743,10 +529,7 @@ export function OrderEditor({
   const isNoteOpen = (line: CartLine) => noteOpen[line.productId] ?? Boolean(line.note);
   const toggleNote = (line: CartLine) => setNoteOpen((prev) => ({ ...prev, [line.productId]: !isNoteOpen(line) }));
 
-  const matchesSearch = (p: ProductListItemDto) => {
-    const q = search.trim().toLowerCase();
-    return !q || (p.name ?? '').toLowerCase().includes(q);
-  };
+  const matchesSearch = (p: ProductListItemDto) => matchesQuery(p, search);
 
   // Sorted before the search filter, so the list and the tab's own count agree on
   // one order — the same one "Procházet dle pivovaru" uses.
@@ -764,21 +547,11 @@ export function OrderEditor({
   // and the browse tab flashed an empty catalog while the product list was still in flight.
   const catalogLoading = clientId ? historyQuery.isLoading : allProductsQuery.isLoading;
 
-  const kindCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const b of breweries) {
-      for (const k of b.kinds ?? []) {
-        // Keyed by member name. Keying by the raw wire value left every KIND_TABS lookup
-        // missing against real (string) data, which dropped all five buttons and left the
-        // "Vše" reset standing on its own.
-        const kind = kindName(k.kind) ?? 'Other';
-        const n = flattenKind(k).filter(matchesSearch).length;
-        if (n) counts.set(kind, (counts.get(kind) ?? 0) + n);
-      }
-    }
-    return counts;
+  const kindCounts = useMemo(
+    () => countsByKind(breweries, matchesSearch),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [breweries, search]);
+    [breweries, search],
+  );
 
   const busy = createOrder.isPending || updateOrder.isPending;
 
@@ -1104,7 +877,7 @@ export function OrderEditor({
                 <CatalogGroupList
                   products={recent}
                   historyBadge
-                  cartMap={cartMap}
+                  quantities={cartQuantities}
                   colorForBrewery={(id) => (id ? colorByBreweryId.get(id) : undefined)}
                   onAdd={addProduct}
                   onChange={changeQty}
@@ -1137,15 +910,7 @@ export function OrderEditor({
                 </ToggleButtonGroup>
 
                 {(() => {
-                  const panels = breweries
-                    .map((b) => ({
-                      brewery: b,
-                      items: inDisplayOrder((b.kinds ?? [])
-                        .filter((k) => kindFilter === 'all' || kindName(k.kind) === kindFilter)
-                        .flatMap(flattenKind)
-                        .filter(matchesSearch)),
-                    }))
-                    .filter((p) => p.items.length > 0);
+                  const panels = breweryPanels(breweries, kindFilter, matchesSearch);
                   if (panels.length === 0) return <EmptyState title="Žádné produkty v této kategorii" dense />;
                   return panels.map(({ brewery, items }) => (
                     <BreweryGroupPanel
@@ -1155,7 +920,7 @@ export function OrderEditor({
                       color={brewery.breweryId ? colorByBreweryId.get(brewery.breweryId) : undefined}
                       open={brewOpen[brewery.breweryId ?? ''] !== false}
                       onToggle={() => setBrewOpen((prev) => ({ ...prev, [brewery.breweryId ?? '']: prev[brewery.breweryId ?? ''] === false }))}
-                      cartMap={cartMap}
+                      quantities={cartQuantities}
                       onAdd={addProduct}
                       onChange={changeQty}
                     />
