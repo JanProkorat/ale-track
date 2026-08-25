@@ -40,7 +40,7 @@ public sealed record UpdateOrderRequest
 public sealed class UpdateOrderEndpoint(
     AleTrackDbContext dbContext,
     IOptions<CompanyOptions> companyOptions,
-    IAppContext appContext) : Endpoint<UpdateOrderRequest>
+    IAppContext appContext) : Endpoint<UpdateOrderRequest, UpdateOrderResultDto>
 {
     /// <inheritdoc />
     public override void Configure()
@@ -48,17 +48,16 @@ public sealed class UpdateOrderEndpoint(
         Put("orders/{id}");
         Description(b => b
             .RequirePermission(ModuleType.Orders, PermissionLevel.Edit)
-            .Produces<string>(StatusCodes.Status204NoContent)
+            .Produces<UpdateOrderResultDto>()
             .Produces<FailureResponse>(StatusCodes.Status404NotFound)
-            .WithName(nameof(UpdateOrderEndpoint))
-            .ClearDefaultProduces(StatusCodes.Status200OK));
+            .WithName(nameof(UpdateOrderEndpoint)));
 
         DontCatchExceptions();
 
         Summary(s =>
             {
                 s.Summary = "Updates order for delivery";
-                s.Responses[StatusCodes.Status204NoContent] = "Order updated";
+                s.Responses[StatusCodes.Status200OK] = "Order updated, with what the save invalidated on its run";
                 s.Responses[StatusCodes.Status400BadRequest] = "Order is closed or already loaded; its content is frozen";
             }
         );
@@ -107,6 +106,7 @@ public sealed class UpdateOrderEndpoint(
         // moves the order to a different row.
         var billedContentChanged = RequestChangesBilledContent(order, req.Data);
         var payerBefore = InvoiceReadiness.RowClientIdOf(order);
+        var loadingChecksCleared = 0;
 
         order.RequiredDeliveryDate = req.Data.RequiredDeliveryDate;
 
@@ -131,13 +131,12 @@ public sealed class UpdateOrderEndpoint(
             order.ActualDeliveryDate = req.Data.ActualDeliveryDate ?? order.ActualDeliveryDate;
             order.State = req.Data.State ?? order.State;
 
-            MergeOrderItems(req.Data.OrderItems, order, products);
+            loadingChecksCleared += MergeOrderItems(req.Data.OrderItems, order, products);
         }
 
         await ApplyDeliveryAddressAsync(req.Data, order, clientChanged, ct);
 
-        if (billedContentChanged)
-            UnmarkInvoicing(order, payerBefore);
+        var invoicingUnmarked = billedContentChanged && UnmarkInvoicing(order, payerBefore);
 
         // Which of the client's open points this order promises to settle. Outside the freeze
         // gate: it records an intention about the ledger, not the order's content, and the
@@ -152,7 +151,7 @@ public sealed class UpdateOrderEndpoint(
 
         order.Returns = GetReturns(req.Data.Returns, order);
         order.Notes = GetNotes(req.Data.Notes, order);
-        order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order);
+        order.CustomExtraItems = GetCustomExtras(req.Data.CustomExtraItems, order, ref loadingChecksCleared);
         order.SupplierGoodItems = await GetSupplierGoodItemsAsync(req.Data.SupplierGoodItems, order, ct);
         ApplyItemNotes(req.Data.OrderItems, order);
 
@@ -162,7 +161,12 @@ public sealed class UpdateOrderEndpoint(
         await PickupStopSync.ForOrderAsync(dbContext, order.PublicId, companyOptions.Value, ct);
 
         await dbContext.SaveChangesAsync(ct);
-        await Send.NoContentAsync(ct);
+
+        await Send.OkAsync(new UpdateOrderResultDto
+        {
+            InvoicingUnmarked = invoicingUnmarked,
+            LoadingChecksCleared = loadingChecksCleared
+        }, ct);
     }
 
     /// <summary>
@@ -268,21 +272,27 @@ public sealed class UpdateOrderEndpoint(
     /// too, because what it was checked against has left it. A filed run is left alone — nothing
     /// there can be edited anyway, and the marks are the record of what was filed.
     /// </remarks>
-    private static void UnmarkInvoicing(Order order, long payerBefore)
+    private static bool UnmarkInvoicing(Order order, long payerBefore)
     {
         var shipment = order.OutgoingShipmentStop?.OutgoingShipment;
 
         if (shipment is null || shipment.IsInvoicingFiled)
-            return;
+            return false;
 
         // The payer read off the navigation, not off the FK: the client may have been reassigned a
         // moment ago and the key still points at the old one until EF fixes it up, which would
         // leave the new row marked as checked against goods that have only just arrived on it.
         var payerAfter = order.Client.InvoicingClientId ?? order.Client.Id;
         var payers = new[] { payerBefore, payerAfter };
+        var unmarked = false;
 
-        foreach (var confirmation in shipment.InvoiceConfirmations.Where(c => payers.Contains(c.ClientId)))
+        foreach (var confirmation in shipment.InvoiceConfirmations.Where(c => payers.Contains(c.ClientId) && c.IsReady))
+        {
             confirmation.IsReady = false;
+            unmarked = true;
+        }
+
+        return unmarked;
     }
 
     /// <summary>
@@ -341,8 +351,10 @@ public sealed class UpdateOrderEndpoint(
     /// A line the save leaves out is still removed, and its invoice line still cascades away —
     /// merging is about the lines that stay, not about never deleting one.
     /// </remarks>
-    private static void MergeOrderItems(List<UpdateOrderItemDto> posted, Order order, List<Product> products)
+    private static int MergeOrderItems(List<UpdateOrderItemDto> posted, Order order, List<Product> products)
     {
+        var loadingChecksCleared = 0;
+
         var dropped = order.OrderItems
             .Where(stored => posted.All(p => p.ProductId != stored.Product.PublicId))
             .ToList();
@@ -359,8 +371,11 @@ public sealed class UpdateOrderEndpoint(
                 // A ticked-off line whose count changes has not been checked at that count. The
                 // tick says somebody counted these pieces into the van; leaving it standing would
                 // have the ramp trust a number nobody read.
-                if (existing.Quantity != line.Quantity)
+                if (existing.Quantity != line.Quantity && existing.IsShipmentLoadingConfirmed)
+                {
                     existing.IsShipmentLoadingConfirmed = false;
+                    loadingChecksCleared++;
+                }
 
                 existing.Quantity = line.Quantity;
                 existing.ReminderState = line.ReminderState;
@@ -393,6 +408,8 @@ public sealed class UpdateOrderEndpoint(
                 ReminderState = line.ReminderState
             });
         }
+
+        return loadingChecksCleared;
     }
 
     /// <summary>
@@ -450,7 +467,10 @@ public sealed class UpdateOrderEndpoint(
     /// the van. A changed count does clear it: the tick says somebody counted these pieces, and at
     /// a different number nobody has.
     /// </remarks>
-    private static List<OrderCustomExtraItem> GetCustomExtras(List<OrderCustomExtraItemDto> extras, Order order)
+    private static List<OrderCustomExtraItem> GetCustomExtras(
+        List<OrderCustomExtraItemDto> extras,
+        Order order,
+        ref int loadingChecksCleared)
     {
         var result = extras
             .Where(e => e.Id is null)
@@ -461,8 +481,11 @@ public sealed class UpdateOrderEndpoint(
         {
             var existing = order.CustomExtraItems.First(x => x.PublicId == e.Id!.Value);
 
-            if (existing.Quantity != e.Quantity)
+            if (existing.Quantity != e.Quantity && existing.IsShipmentLoadingConfirmed)
+            {
                 existing.IsShipmentLoadingConfirmed = false;
+                loadingChecksCleared++;
+            }
 
             existing.Description = e.Description;
             existing.Quantity = e.Quantity;

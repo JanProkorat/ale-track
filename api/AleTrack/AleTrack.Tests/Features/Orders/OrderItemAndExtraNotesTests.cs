@@ -67,7 +67,7 @@ public sealed class OrderItemAndExtraNotesTests
         data.OrderItems[0].Quantity = 20;
         data.OrderItems[0].Note = "Vyložit jako první";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -91,7 +91,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = "Klient si stěžoval na teplotu";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -113,7 +113,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = "Vyložit u rampy";
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -135,7 +135,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = null;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -156,7 +156,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].Note = null;
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 
@@ -176,7 +176,7 @@ public sealed class OrderItemAndExtraNotesTests
         var data = EchoDto(fixture);
         data.OrderItems[0].ProductId = Guid.NewGuid();
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
@@ -211,7 +211,7 @@ public sealed class OrderItemAndExtraNotesTests
             new OrderCustomExtraItemDto { Description = "Otvírák", Quantity = 2, Note = "Nový" }
         ];
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(
             new UpdateOrderRequest { Id = fixture.Order.PublicId, Data = data }, CancellationToken.None);
 

@@ -124,7 +124,7 @@ public sealed class OrderSupplierGoodItemTests
             // droppedId left out entirely
         ];
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.SupplierGoodItems.Should().HaveCount(2);
@@ -164,7 +164,7 @@ public sealed class OrderSupplierGoodItemTests
         var data = EchoDto(f, order);
         data.SupplierGoodItems = [new OrderSupplierGoodItemDto { SupplierGoodId = f.Good.PublicId, Quantity = 1 }];
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(new UpdateOrderRequest { Id = order.PublicId, Data = data }, CancellationToken.None);
 
         order.SupplierGoodItems.Should().ContainSingle().Which.Quantity.Should().Be(1);

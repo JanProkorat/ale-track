@@ -85,7 +85,7 @@ public sealed class ClientLedgerResolutionTests
 
     private static Task UpdateOrderAsync(Mock<AleTrackDbContext> db, Fixture f, UpdateOrderDto data)
     {
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(
             db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
         return endpoint.HandleAsync(new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);

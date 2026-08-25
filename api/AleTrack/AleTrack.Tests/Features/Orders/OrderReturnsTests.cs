@@ -89,7 +89,7 @@ public sealed class OrderReturnsTests
             )
         };
 
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(dbContext.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
         await endpoint.HandleAsync(command, CancellationToken.None);
 
         order.Returns.Should().HaveCount(2);

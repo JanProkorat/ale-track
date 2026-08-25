@@ -12,7 +12,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClientInfoDto, ClientLedgerEntryDto, ClientLedgerEntryTarget, OrderDto, OrderItemDto,
-  ProductKind, ProductListItemDto, ProductType,
+  ProductKind, ProductListItemDto, ProductType, UpdateOrderResultDto,
 } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
@@ -76,7 +76,9 @@ vi.mock('src/providers/CurrencyProvider', () => ({
   useCurrency: () => ({ formatMoney: (czk?: number | null) => (czk == null ? '—' : `${czk} Kč`) }),
 }));
 
-vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
+// Shared, not a fresh spy per call: the save has to be able to say what it undid on the run.
+const snackbar = vi.fn();
+vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: snackbar }) }));
 
 const { OrderEditor } = await import('./OrderEditor');
 
@@ -140,7 +142,8 @@ function decrementOwedLine() {
 }
 
 beforeEach(() => {
-  updateMutate.mockReset().mockResolvedValue('order-1');
+  updateMutate.mockReset().mockResolvedValue(UpdateOrderResultDto.fromJS({}));
+  snackbar.mockReset();
   createMutate.mockReset().mockResolvedValue('order-1');
   ledgerResponse = { data: [], isLoading: false, isError: false };
 });
@@ -175,6 +178,38 @@ describe('OrderEditor — settling open points', () => {
 
     await waitFor(() => expect(updateMutate).toHaveBeenCalled());
     expect(updateMutate.mock.calls[0][0].data.settledLedgerEntryIds).toEqual(['entry-owed']);
+  });
+
+  // ---------------------------------------------------------------------------------
+  // What the save undid on the run. It is somebody else's work — a Fakturace row checked off, a
+  // line counted into the van — so the editor says so instead of leaving them to find out.
+  // ---------------------------------------------------------------------------------
+
+  it('says what the save undid on the run', async () => {
+    updateMutate.mockResolvedValue(UpdateOrderResultDto.fromJS({
+      invoicingUnmarked: true,
+      loadingChecksCleared: 2,
+    }));
+    renderEditor();
+
+    await waitFor(() => expect(screen.getByText('Košík')).toBeInTheDocument());
+    save();
+
+    await waitFor(() => expect(snackbar).toHaveBeenCalledWith(
+      expect.stringContaining('fakturace už není označená jako hotová'),
+      { variant: 'warning' },
+    ));
+    expect(snackbar.mock.calls.at(-1)![0]).toContain('u 2 položek padla kontrola nakládky');
+  });
+
+  it('says nothing extra when the save undid nothing', async () => {
+    renderEditor();
+
+    await waitFor(() => expect(screen.getByText('Košík')).toBeInTheDocument());
+    save();
+
+    await waitFor(() => expect(snackbar).toHaveBeenCalledWith('Objednávka uložena.', { variant: 'success' }));
+    expect(snackbar).not.toHaveBeenCalledWith(expect.anything(), { variant: 'warning' });
   });
 
   it('adds the owed quantity to the cart', async () => {

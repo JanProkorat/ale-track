@@ -570,9 +570,9 @@ export interface IClient {
 
     /**
      * Updates order for delivery
-     * @return Order updated
+     * @return Order updated, with what the save invalidated on its run
      */
-    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<string>;
+    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<UpdateOrderResultDto>;
 
     /**
      * Deletes order for delivery
@@ -6918,9 +6918,9 @@ export class Client implements IClient {
 
     /**
      * Updates order for delivery
-     * @return Order updated
+     * @return Order updated, with what the save invalidated on its run
      */
-    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<string> {
+    updateOrderEndpoint(id: string, data: UpdateOrderDto, signal?: AbortSignal): Promise<UpdateOrderResultDto> {
         let url_ = this.baseUrl + "/ale-track/orders/{id}";
         if (id === undefined || id === null)
             throw new globalThis.Error("The parameter 'id' must be defined.");
@@ -6944,16 +6944,15 @@ export class Client implements IClient {
         });
     }
 
-    protected processUpdateOrderEndpoint(response: Response): Promise<string> {
+    protected processUpdateOrderEndpoint(response: Response): Promise<UpdateOrderResultDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 204) {
+        if (status === 200) {
             return response.text().then((_responseText) => {
-            let result204: any = null;
-            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
-                result204 = resultData204 !== undefined ? resultData204 : null as any;
-    
-            return result204;
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = UpdateOrderResultDto.fromJS(resultData200);
+            return result200;
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
@@ -6985,7 +6984,7 @@ export class Client implements IClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<string>(null as any);
+        return Promise.resolve<UpdateOrderResultDto>(null as any);
     }
 
     /**
@@ -20895,6 +20894,50 @@ export class GetOrderDetailRequest implements IGetOrderDetailRequest {
 }
 
 export interface IGetOrderDetailRequest {
+}
+
+export class UpdateOrderResultDto implements IUpdateOrderResultDto {
+    invoicingUnmarked?: boolean;
+    loadingChecksCleared?: number;
+    changedShipmentWork?: boolean;
+
+    constructor(data?: IUpdateOrderResultDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.invoicingUnmarked = _data["invoicingUnmarked"];
+            this.loadingChecksCleared = _data["loadingChecksCleared"];
+            this.changedShipmentWork = _data["changedShipmentWork"];
+        }
+    }
+
+    static fromJS(data: any): UpdateOrderResultDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UpdateOrderResultDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["invoicingUnmarked"] = this.invoicingUnmarked;
+        data["loadingChecksCleared"] = this.loadingChecksCleared;
+        data["changedShipmentWork"] = this.changedShipmentWork;
+        return data;
+    }
+}
+
+export interface IUpdateOrderResultDto {
+    invoicingUnmarked?: boolean;
+    loadingChecksCleared?: number;
+    changedShipmentWork?: boolean;
 }
 
 export class DeleteOrderRequest implements IDeleteOrderRequest {

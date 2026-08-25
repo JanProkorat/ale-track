@@ -149,12 +149,16 @@ public sealed class OrderEditInvalidationTests
         return data;
     }
 
-    private static Task SaveAsync(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db, Fixture f, UpdateOrderDto data)
+    private static async Task<UpdateOrderResultDto> SaveAsync(
+        Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db,
+        Fixture f,
+        UpdateOrderDto data)
     {
-        var endpoint = EndpointBuilder<UpdateOrderRequest, UpdateOrderEndpoint>.Create(
+        var endpoint = EndpointWithResponseBuilder<UpdateOrderRequest, UpdateOrderResultDto, UpdateOrderEndpoint>.Create(
             db.Object, Options.Create(new CompanyOptions()), AppContextMockFactory.Anonymous());
 
-        return endpoint.HandleAsync(new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+        await endpoint.HandleAsync(new UpdateOrderRequest { Id = f.Order.PublicId, Data = data }, CancellationToken.None);
+        return endpoint.Response;
     }
 
     private static bool MarkOf(Fixture f, long clientId) =>
@@ -299,6 +303,62 @@ public sealed class OrderEditInvalidationTests
         await SaveAsync(db, f, data);
 
         MarkOf(f, ClientRowId).Should().BeTrue();
+    }
+
+    // ---------------------------------------------------------------------------------
+    // What the save reports back. The screen cannot know any of this without being told: the rule
+    // lives here, and a copy of it in the browser would drift.
+    // ---------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChangedQuantity_ReportsBothTheRowAndTheTick()
+    {
+        var f = Build();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.OrderItems[0].Quantity = 12;
+
+        var result = await SaveAsync(db, f, data);
+
+        result.InvoicingUnmarked.Should().BeTrue();
+        result.LoadingChecksCleared.Should().Be(1);
+        result.ChangedShipmentWork.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task NotesOnly_ReportsNothingInvalidated()
+    {
+        var f = Build();
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.Notes = [new OrderNoteDto { Text = "Volal." }];
+
+        var result = await SaveAsync(db, f, data);
+
+        result.ChangedShipmentWork.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A row nobody had marked cannot be sent back for checking, so a save that changes what is
+    /// billed reports nothing about the invoicing — only what it actually undid.
+    /// </summary>
+    [Fact]
+    public async Task ChangedQuantityOnAnUnmarkedRow_ReportsOnlyTheTick()
+    {
+        var f = Build();
+        foreach (var row in f.Shipment.InvoiceConfirmations)
+            row.IsReady = false;
+        var db = BuildDb(f);
+
+        var data = Echo(f);
+        data.OrderItems[0].Quantity = 12;
+
+        var result = await SaveAsync(db, f, data);
+
+        result.InvoicingUnmarked.Should().BeFalse();
+        result.LoadingChecksCleared.Should().Be(1);
     }
 
     // ---------------------------------------------------------------------------------

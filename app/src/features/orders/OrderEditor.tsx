@@ -31,7 +31,7 @@ import { SearchField } from 'src/components/common/SearchField';
 import { EmptyState } from 'src/components/common/EmptyState';
 import { apiErrorMessage } from 'src/api/errors';
 import { useCurrency } from 'src/providers/CurrencyProvider';
-import { initials, fmtLiters, orderNumber } from 'src/lib/format';
+import { initials, fmtLiters, orderNumber, plural } from 'src/lib/format';
 import { kindLabel, addrKindValue, chargeKindLabel } from 'src/lib/labels';
 import {
   DeliveryAddressKind,
@@ -39,6 +39,7 @@ import {
   CreateOrderItemDto,
   UpdateOrderDto,
   UpdateOrderItemDto,
+  type UpdateOrderResultDto,
   OrderReturnDto,
   OrderNoteDto,
   OrderCustomExtraItemDto,
@@ -114,6 +115,28 @@ function serializeForm(
     goodLines: goodLines.map((g) => ({ supplierGoodId: g.supplierGoodId, quantity: g.quantity, note: g.note?.trim() ?? '' })),
   });
 }
+/**
+ * What to tell the operator their save undid on the run, or nothing.
+ *
+ * Both marks mean somebody checked something: a Fakturace row closed, a line counted into the van.
+ * Saying so is the whole point — the office would otherwise find a row it had finished quietly
+ * open again, with no idea why.
+ */
+function shipmentWorkUndone(result: UpdateOrderResultDto): string | undefined {
+  const parts: string[] = [];
+
+  if (result.invoicingUnmarked) parts.push('fakturace už není označená jako hotová');
+
+  const cleared = result.loadingChecksCleared ?? 0;
+  if (cleared > 0) {
+    parts.push(`u ${cleared} ${plural(cleared, 'položky', 'položek', 'položek')} padla kontrola nakládky`);
+  }
+
+  if (parts.length === 0) return undefined;
+
+  return `Ve vývozu se kvůli změně počtů ${parts.join(' a ')} — zkontrolujte to.`;
+}
+
 function clientInitials(name?: string): string {
   const [a, b] = (name ?? '').trim().split(/\s+/);
   return initials(a, b);
@@ -614,7 +637,7 @@ export function OrderEditor({
     try {
       let savedId: string;
       if (mode === 'edit' && orderId) {
-        await updateOrder.mutateAsync({
+        const result = await updateOrder.mutateAsync({
           id: orderId,
           data: new UpdateOrderDto({
             clientId,
@@ -636,6 +659,12 @@ export function OrderEditor({
         });
         savedId = orderId;
         enqueueSnackbar('Objednávka uložena.', { variant: 'success' });
+
+        // What this save undid on the run. Said out loud because it is somebody else's work: a
+        // Fakturace row that had been checked off, a line counted into the van. The server
+        // decides it — the alternative was a copy of that rule here, drifting.
+        const undone = shipmentWorkUndone(result);
+        if (undone) enqueueSnackbar(undone, { variant: 'warning' });
       } else {
         savedId = await createOrder.mutateAsync(new CreateOrderDto({
           clientId,
