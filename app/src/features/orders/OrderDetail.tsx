@@ -103,10 +103,17 @@ function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
         sx={{ px: 2.5, py: 2 }}
       >
         <Box sx={{ flex: 1, minWidth: 180 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 0.75 }}>
-            <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14 }}>
+          {/* Number and name on one line, badges on the next. Sharing a line with the pills, the
+              number left the run's name below two states, and at this column's width the pills
+              wrapped mid-row and the button ended up beside the second half of them. */}
+          <Stack direction="row" spacing={1} alignItems="baseline" sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14, flexShrink: 0 }}>
               {shipmentNumber(shipment.id)}
             </Typography>
+            <Typography sx={{ fontWeight: 700, minWidth: 0 }} noWrap>{shipment.name}</Typography>
+          </Stack>
+
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
             <StatusPill tone={status.tone} label={status.label} />
             {/* Why the Zaznamenat změnu button is there — or, read the other way, why it is not.
                 Without it the button simply appeared and the office had no way to tell what had
@@ -127,9 +134,7 @@ function ShipmentCard({ shipment, onOpen, isInvoiceReady = false }: {
             )}
           </Stack>
 
-          <Typography sx={{ fontWeight: 700 }}>{shipment.name}</Typography>
-
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
             {shipment.deliveryDate ? fmtDate(shipment.deliveryDate) : 'termín neurčen'}
             {crew && ` · ${crew}`}
           </Typography>
