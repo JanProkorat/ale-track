@@ -175,6 +175,25 @@ export function openEntries(entries: ClientLedgerEntryDto[]): ClientLedgerEntryD
 }
 
 /**
+ * Products the client took at the door and that can still be corrected: a product entry with no
+ * order line behind it.
+ *
+ * Only unsettled ones. A settled entry is history to the server — a save carrying the same
+ * product would open a second row beside it rather than rewriting it — so the recording form
+ * must not offer to edit one. Removing it outright still works from the order's own table, which
+ * deletes by id rather than re-saving the line.
+ */
+export function doorSideAdditions(entries: ClientLedgerEntryDto[]): ClientLedgerEntryDto[] {
+  return entries.filter((e) =>
+    isQuantityEntry(e)
+    && ledgerTargetName(e.target) === 'ProductQuantity'
+    && !e.orderItemId
+    && !!e.productId
+    && isOpen(e)
+    && (e.actualQuantity ?? 0) !== (e.plannedQuantity ?? 0));
+}
+
+/**
  * Lays the ledger over a plan: every planned row decorated, plus a row for everything the
  * ledger records that the plan never had.
  *

@@ -4,6 +4,7 @@ import {
   applyLedger,
   deliveredEntryFor,
   deviationText,
+  doorSideAdditions,
   entryLineKey,
   entryTooltip,
   isAssigned,
@@ -255,6 +256,47 @@ describe('open points', () => {
 
   it('leaves settled entries out', () => {
     expect(openEntries([entry({ resolvedAt: new Date('2026-08-26T09:00:00Z') })])).toHaveLength(0);
+  });
+});
+
+// What the recording form may offer to correct: an addition it made itself, keyed by product
+// because there is no order line to key on.
+describe('doorSideAdditions', () => {
+  const added = () => entry({ productId: PRODUCT, productName: 'Světlé 10', plannedQuantity: 0, actualQuantity: 4 });
+
+  it('finds a product taken at the door', () => {
+    expect(doorSideAdditions([added()])).toHaveLength(1);
+  });
+
+  it('leaves a deviation on a planned line to its own row', () => {
+    expect(doorSideAdditions([
+      entry({ orderItemId: ITEM_A, productId: PRODUCT, plannedQuantity: 10, actualQuantity: 7 }),
+    ])).toHaveLength(0);
+  });
+
+  // Re-saving one of these would open a second row beside it rather than rewrite it.
+  it('leaves a settled one out', () => {
+    expect(doorSideAdditions([
+      entry({ productId: PRODUCT, plannedQuantity: 0, actualQuantity: 4, resolvedAt: new Date('2026-08-26T09:00:00Z') }),
+    ])).toHaveLength(0);
+  });
+
+  it('ignores an added return, which is keyed by name and belongs to its own table', () => {
+    expect(doorSideAdditions([
+      entry({ target: ClientLedgerEntryTarget.ReturnQuantity, lineName: 'Basy', plannedQuantity: 0, actualQuantity: 4 }),
+    ])).toHaveLength(0);
+  });
+
+  it('ignores money, which has no quantity at all', () => {
+    expect(doorSideAdditions([
+      entry({ target: ClientLedgerEntryTarget.Money, amount: 2400 }),
+    ])).toHaveLength(0);
+  });
+
+  it('ignores an entry that records no change', () => {
+    expect(doorSideAdditions([
+      entry({ productId: PRODUCT, plannedQuantity: 0, actualQuantity: 0 }),
+    ])).toHaveLength(0);
   });
 });
 

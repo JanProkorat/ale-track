@@ -193,6 +193,82 @@ describe('LedgerEntryDrawer', () => {
     ]));
   });
 
+  // ---------------------------------------------------------------------------------
+  // Correcting one that was already added. The form that wrote a mistyped quantity is the one
+  // place it has to be fixable — until this existed, the drawer built its tables from the
+  // order's lines alone, so an addition it had made itself was invisible on reopening.
+  // ---------------------------------------------------------------------------------
+
+  function doorSide(over: Partial<ClientLedgerEntryDto> = {}): ClientLedgerEntryDto {
+    return entry({
+      productId: 'p-9',
+      productName: 'Světlé 10',
+      plannedQuantity: 0,
+      actualQuantity: 4,
+      ...over,
+    });
+  }
+
+  it('lists a product added at the door, with what was recorded', () => {
+    renderDrawer(context({ entries: [doorSide()] }));
+
+    expect(actualInput('Světlé 10', 'vzato na místě').value).toBe('4');
+  });
+
+  it('corrects it against the product, so the server rewrites the entry it wrote', () => {
+    renderDrawer(context({ entries: [doorSide()] }));
+
+    fireEvent.change(actualInput('Světlé 10', 'vzato na místě'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        target: ClientLedgerEntryTarget.ProductQuantity,
+        productId: 'p-9',
+        plannedQuantity: 0,
+        actualQuantity: 2,
+      }),
+    ]));
+  });
+
+  // Zero is how the server is told a line is back at its plan, which deletes the stored entry —
+  // the same mechanism that undoes a shortfall on a planned line.
+  it('takes it off by zeroing it', () => {
+    renderDrawer(context({ entries: [doorSide()] }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Odebrat Světlé 10' }));
+    expect(actualInput('Světlé 10', 'vzato na místě').value).toBe('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uložit změny' }));
+
+    expect(savedRows()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ productId: 'p-9', plannedQuantity: 0, actualQuantity: 0 }),
+    ]));
+  });
+
+  // Picking it again would overwrite the row above rather than add to it, so it is not offered.
+  it('drops an already-added product from the picker', () => {
+    productState.data = [{ id: 'p-9', name: 'Světlé 10' }, { id: 'p-1', name: 'Tmavé 11' }];
+    renderDrawer(context({ entries: [doorSide()] }));
+
+    const picker = screen.getByPlaceholderText('— vyberte —');
+    fireEvent.change(picker, { target: { value: 'é 1' } });
+
+    expect(screen.getByText('Tmavé 11')).toBeInTheDocument();
+    // The name still appears once — as the editable row above, not as an option.
+    expect(screen.getAllByText('Světlé 10')).toHaveLength(1);
+  });
+
+  // A settled entry is history to the server: a save carrying the same product would open a
+  // second row beside it instead of rewriting it.
+  it('leaves a settled addition alone', () => {
+    renderDrawer(context({
+      entries: [doorSide({ resolvedAt: new Date('2026-08-26T09:00:00Z') })],
+    }));
+
+    expect(screen.queryByLabelText('Světlé 10 — vzato na místě')).not.toBeInTheDocument();
+  });
+
   it('records money with the sign the operator typed', () => {
     renderDrawer(context());
 

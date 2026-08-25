@@ -10,7 +10,8 @@
 // deleted.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Divider, Stack, TextField, Typography } from '@mui/material';
+import { Box, Divider, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { Combobox } from 'src/components/common/Combobox';
@@ -33,6 +34,7 @@ import {
 } from 'src/hooks/useClientLedger';
 import {
   deliveredEntryFor,
+  doorSideAdditions,
   entriesForTarget,
   isFreeEntry,
   type PlanRow,
@@ -65,6 +67,20 @@ interface EditableRow extends PlanRow {
 interface NewLine {
   name: string;
   quantity: string;
+}
+
+/**
+ * A product added at the door in an earlier pass: an entry with no line on the order.
+ *
+ * It has to be listed, not just creatable. The form's tables are built from the order's own
+ * lines, so until this existed a mistyped addition could be neither corrected nor taken back
+ * from the one screen that wrote it.
+ */
+interface AddedRow {
+  entryId: string;
+  productId: string;
+  name: string;
+  actual: string;
 }
 
 const EMPTY_NEW_LINE: NewLine = { name: '', quantity: '' };
@@ -109,6 +125,7 @@ export function LedgerEntryDrawer({
   const [goods, setGoods] = useState<EditableRow[]>([]);
   const [returns, setReturns] = useState<EditableRow[]>([]);
   const [extras, setExtras] = useState<EditableRow[]>([]);
+  const [added, setAdded] = useState<AddedRow[]>([]);
   const [newProduct, setNewProduct] = useState<string | null>(null);
   const [newProductQty, setNewProductQty] = useState('');
   const [newReturn, setNewReturn] = useState<NewLine>(EMPTY_NEW_LINE);
@@ -137,6 +154,12 @@ export function LedgerEntryDrawer({
     setGoods(toEditable(context.goods ?? [], entriesForTarget(entries, 'SupplierGoodQuantity')));
     setReturns(toEditable(context.returns ?? [], entriesForTarget(entries, 'ReturnQuantity')));
     setExtras(toEditable(context.extras ?? [], entriesForTarget(entries, 'CustomExtraQuantity')));
+    setAdded(doorSideAdditions(entries).map((e) => ({
+      entryId: e.id ?? '',
+      productId: e.productId ?? '',
+      name: e.productName ?? '—',
+      actual: String(e.actualQuantity ?? 0),
+    })));
     setNewProduct(null);
     setNewProductQty('');
     setNewReturn(EMPTY_NEW_LINE);
@@ -146,17 +169,21 @@ export function LedgerEntryDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, context.orderId, context.clientId]);
 
+  // Excludes what is already added at the door as well as what the order plans: both have a row
+  // above with its own field, and picking one here would overwrite that row's quantity instead of
+  // adding to it.
   const productOptions = useMemo(() => {
     const onOrder = new Set((context.items ?? []).map((r) => r.key));
+    const alreadyAdded = new Set(doorSideAdditions(entries).map((e) => e.productId));
     return (products.data ?? [])
-      .filter((p) => p.id && !onOrder.has(p.id))
+      .filter((p) => p.id && !onOrder.has(p.id) && !alreadyAdded.has(p.id))
       .map((p) => ({
         value: p.id!,
         label: p.name ?? '—',
         secondary: [kindLabel(p.kind), p.packageSize != null ? fmtLiters(p.packageSize) : '']
           .filter(Boolean).join(' · '),
       }));
-  }, [products.data, context.items]);
+  }, [products.data, context.items, entries]);
 
   const busy = save.isPending || updateEntry.isPending || deleteEntry.isPending;
 
@@ -202,6 +229,17 @@ export function LedgerEntryDrawer({
         customExtraItemId: row.key,
         plannedQuantity: row.quantity,
         actualQuantity: parsed(row.actual, row.quantity),
+      });
+    }
+
+    // Already added at the door, now corrected. Keyed by product, which is how the server pairs
+    // it with the entry it wrote — and zero means the two agree again, which deletes it.
+    for (const row of added) {
+      push({
+        target: ClientLedgerEntryTarget.ProductQuantity,
+        productId: row.productId,
+        plannedQuantity: 0,
+        actualQuantity: parsed(row.actual, 0),
       });
     }
 
@@ -387,6 +425,52 @@ export function LedgerEntryDrawer({
           <>
             <Divider />
             {quantityTable('Položky', 'Skutečně', items, setItems, 'ks')}
+
+            {/* What an earlier pass already added. Editable, because the form that wrote a
+                mistyped quantity is the one place it should be correctable. */}
+            {added.length > 0 && (
+              <Box>
+                <SectionLabel>Přidáno na místě</SectionLabel>
+                <Stack spacing={1}>
+                  {added.map((row, index) => (
+                    <Stack key={row.entryId} direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{row.name}</Typography>
+                      </Box>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={row.actual}
+                        onChange={(e) => {
+                          const next = [...added];
+                          next[index] = { ...row, actual: e.target.value };
+                          setAdded(next);
+                        }}
+                        inputProps={{ min: 0, style: { textAlign: 'right' }, 'aria-label': `${row.name} — vzato na místě` }}
+                        sx={{ width: 96 }}
+                      />
+                      <Tooltip title="Odebrat">
+                        <IconButton
+                          size="small"
+                          aria-label={`Odebrat ${row.name}`}
+                          onClick={() => {
+                            const next = [...added];
+                            next[index] = { ...row, actual: '0' };
+                            setAdded(next);
+                          }}
+                          sx={{ color: 'text.disabled' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  ))}
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  Nula položku odebere.
+                </Typography>
+              </Box>
+            )}
 
             <Box>
               <SectionLabel>Přidat produkt vzatý na místě</SectionLabel>
