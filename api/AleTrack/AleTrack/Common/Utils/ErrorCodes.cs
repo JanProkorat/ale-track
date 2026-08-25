@@ -167,6 +167,21 @@ public static class ErrorCodes
     public const string SaleNotAwaitingPayment = "SALE_NOT_AWAITING_PAYMENT";
 
     /// <summary>
+    /// Error code for case when a run's invoicing is already filed and would be changed.
+    /// </summary>
+    public const string ShipmentInvoicingFiled = "SHIPMENT_INVOICING_FILED";
+
+    /// <summary>
+    /// Error code for case when a run would be filed with invoice rows still unfinished.
+    /// </summary>
+    public const string ShipmentInvoicingIncomplete = "SHIPMENT_INVOICING_INCOMPLETE";
+
+    /// <summary>
+    /// Error code for case when a run cannot be filed at all — a cancelled one.
+    /// </summary>
+    public const string ShipmentInvoicingNotFileable = "SHIPMENT_INVOICING_NOT_FILEABLE";
+
+    /// <summary>
     /// Error code for case when a settled ledger entry would be handed to an order to settle.
     /// </summary>
     public const string LedgerEntryAlreadyResolved = "LEDGER_ENTRY_ALREADY_RESOLVED";

@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Commands.FileInvoicing;
 using AleTrack.Features.OutgoingShipments.Commands.SetInvoiceReadiness;
 using AleTrack.Features.OutgoingShipments.Queries.Invoices;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -232,7 +233,129 @@ public sealed class ShipmentInvoiceReadinessTests
 
     #endregion
 
+    #region filing
+
+    /// <summary>
+    /// Filing is the one-way door: the run's orders close, these marks lock, and only then can a
+    /// deviation be recorded against what was delivered.
+    /// </summary>
+    [Fact]
+    public async Task File_EveryRowFinished_StampsItWithWhoAndWhen()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().NotBeNull();
+        scenario.Shipment.InvoicingFiledByUserId.Should().Be(Scenario.OfficeUserId);
+    }
+
+    /// <summary>
+    /// Filing over an unfinished row would lock that order out of both worlds: no longer
+    /// editable, and never markable either.
+    /// </summary>
+    [Fact]
+    public async Task File_WithAnUnfinishedRow_ConflictsAndFilesNothing()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await Set(scenario, db, scenario.Lva.PublicId, isReady: true);
+
+        var act = () => File(scenario, db);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingIncomplete);
+        scenario.Shipment.InvoicingFiledAt.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A run marked delivered before the office closed its paperwork must still be fileable, or it
+    /// could neither be filed nor ever have a deviation recorded against it.
+    /// </summary>
+    [Fact]
+    public async Task File_ADeliveredRun_IsAllowed()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        scenario.Shipment.State = OutgoingShipmentState.Delivered;
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// A cancelled run frees its orders for reuse; filing would lock them against a run that did
+    /// not happen.
+    /// </summary>
+    [Fact]
+    public async Task File_ACancelledRun_Conflicts()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        scenario.Shipment.State = OutgoingShipmentState.Cancelled;
+
+        var act = () => File(scenario, db);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingNotFileable);
+        scenario.Shipment.InvoicingFiledAt.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Pressing it twice is not an error — it is a state, not an event — and the second press must
+    /// not restamp who filed it.
+    /// </summary>
+    [Fact]
+    public async Task File_Twice_KeepsTheFirstStamp()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        await File(scenario, db);
+        var first = scenario.Shipment.InvoicingFiledAt;
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().Be(first);
+    }
+
+    [Fact]
+    public async Task Set_AfterFiling_Conflicts()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        await File(scenario, db);
+
+        var act = () => Set(scenario, db, scenario.Lva.PublicId, isReady: false);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.ConfirmationOf(Scenario.LvaId).IsReady.Should().BeTrue();
+    }
+
+    #endregion
+
     #region helpers
+
+    private static async Task MarkEveryRow(Scenario scenario, Mock<AleTrackDbContext> db)
+    {
+        foreach (var client in new[] { scenario.Kout, scenario.Lva, scenario.Beseda, scenario.Payer })
+            await Set(scenario, db, client.PublicId, isReady: true);
+    }
+
+    private static Task File(Scenario scenario, Mock<AleTrackDbContext> db)
+    {
+        var endpoint = EndpointBuilder<FileShipmentInvoicingRequest, FileShipmentInvoicingEndpoint>
+            .Create(db.Object, AppContextMockFactory.For(Scenario.OfficeUserPublicId));
+
+        return endpoint.HandleAsync(new FileShipmentInvoicingRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+    }
 
     private static async Task Set(
         Scenario scenario,
@@ -272,6 +395,9 @@ public sealed class ShipmentInvoiceReadinessTests
         internal const long PayerId = 4;
         internal const long SubId = 5;
         internal const long OutsiderId = 6;
+        internal const long OfficeUserId = 7;
+
+        internal static readonly Guid OfficeUserPublicId = Guid.NewGuid();
 
         internal required OutgoingShipment Shipment { get; init; }
         internal required Client Kout { get; init; }
@@ -288,6 +414,15 @@ public sealed class ShipmentInvoiceReadinessTests
 
         internal Mock<AleTrackDbContext> Mock() =>
             AleTrackDbContextMockFactory.CreateMock(
+                users: [new User
+                {
+                    Id = OfficeUserId,
+                    PublicId = OfficeUserPublicId,
+                    UserName = "fakturantka",
+                    Password = "x",
+                    FirstName = "Jana",
+                    LastName = "Nováková"
+                }],
                 clients: [Kout, Lva, Beseda, Payer, Sub, Outsider],
                 outgoingShipments: [Shipment],
                 outgoingShipmentInvoices: Shipment.Invoices.ToList(),

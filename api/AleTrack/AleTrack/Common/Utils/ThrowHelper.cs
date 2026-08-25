@@ -301,6 +301,65 @@ public static class ThrowHelper
             });
 
     /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run whose invoicing is filed would have
+    /// that invoicing changed.
+    /// </summary>
+    /// <param name="shipmentId">Public id of the run.</param>
+    /// <remarks>
+    /// Filing is the one-way door: past it the paperwork is what was filed, and what happens at
+    /// the door is recorded beside it.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingFiled(Guid shipmentId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingFiled,
+            new Dictionary<string, object>
+            {
+                { nameof(shipmentId), shipmentId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run would be filed with invoice rows still
+    /// unfinished.
+    /// </summary>
+    /// <param name="unfinished">How many rows are not marked finished.</param>
+    /// <remarks>
+    /// Filing with a row unfinished would lock an order whose paperwork is not done: neither
+    /// editable afterwards, nor ever markable. Carries the count so the UI can say how many.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingIncomplete(int unfinished)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingIncomplete,
+            new Dictionary<string, object>
+            {
+                { nameof(unfinished), unfinished }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run cannot be filed at all.
+    /// </summary>
+    /// <param name="shipmentId">Public id of the run.</param>
+    /// <remarks>
+    /// A cancelled run: its orders are freed for reuse, and filing would lock them against a run
+    /// that did not happen.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingNotFileable(Guid shipmentId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingNotFileable,
+            new Dictionary<string, object>
+            {
+                { nameof(shipmentId), shipmentId }
+            });
+
+    /// <summary>
     /// Throws an <see cref="AleTrackException"/> when a settled deviation would be handed to an
     /// order to settle.
     /// </summary>
