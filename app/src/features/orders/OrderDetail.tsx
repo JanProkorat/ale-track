@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Card, Chip, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -23,9 +23,12 @@ import { fmtDate, orderNumber, shipmentNumber } from 'src/lib/format';
 import { ORDER_STATUS, SHIP_STATUS, chargeKindLabel, orderStateName, reminderStateName, reminderStateValue, shipStateName } from 'src/lib/labels';
 import { OrderItemReminderState, type OrderDto, type OrderOutgoingShipmentDto } from 'src/generated/api-client';
 import { useSetOrderItemReminderState } from 'src/hooks/useReminders';
+import { useClientProductHistory } from 'src/hooks/useOrders';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { formatAddressOrCoords } from 'src/features/clients/deliveryPlaceFormat';
-import { useClientLedger } from 'src/hooks/useClientLedger';
+import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
+import { useClientLedger, useDeleteClientLedgerEntry } from 'src/hooks/useClientLedger';
+import { catalogByProductId } from './clientPrices';
 import {
   addressEntry, applyLedger, entriesForOrder, entriesForTarget, planRow,
   type DecoratedRow,
@@ -185,6 +188,10 @@ export function OrderDetail({
   const ledger = useClientLedger(order.client?.id, 'all');
   const orderEntries = entriesForOrder(ledger.data ?? [], order.id);
 
+  // Prices for products the order never planned. They have none of their own — see clientPrices.
+  const history = useClientProductHistory(order.client?.id);
+  const catalog = useMemo(() => catalogByProductId(history.data), [history.data]);
+
   // Each collection is diffed against its own target — applyLedger appends what it cannot
   // match, so feeding it the whole ledger would drop a returned crate into the items list.
   const itemRows = applyLedger(
@@ -206,6 +213,25 @@ export function OrderDetail({
   const movedTo = addressEntry(orderEntries);
 
   const [recording, setRecording] = useState(false);
+
+  // Undoing a door-side addition. It is a correction, not an edit of the order, so it is offered
+  // under the same rule as recording one — and confirmed, because the row is the only record that
+  // the client took those pieces.
+  const removeEntry = useDeleteClientLedgerEntry();
+  const [removing, setRemoving] = useState<DecoratedRow | null>(null);
+
+  const confirmRemove = async () => {
+    const entryId = removing?.entry?.id;
+    if (!entryId) return;
+
+    try {
+      await removeEntry.mutateAsync({ id: entryId, clientId: order.client?.id ?? '' });
+      setRemoving(null);
+      enqueueSnackbar('Položka odebrána.', { variant: 'success' });
+    } catch (e) {
+      enqueueSnackbar(apiErrorMessage(e), { variant: 'error' });
+    }
+  };
 
   // Offered once this order's Fakturace row is marked finished — not on the order's state.
   //
@@ -239,13 +265,21 @@ export function OrderDetail({
   const appended = (rows: DecoratedRow[], planned: Array<string | undefined>) =>
     rows.filter((r) => !planned.includes(r.key));
 
-  // What the order is worth as delivered. Only the priced lines count: a product taken at the
-  // door carries no price on the order at all — it is priced on the invoice — so including it
-  // would make the sum disagree with the money column beside it.
-  const deliveredTotal = itemRows.reduce((sum, row) => {
+  /** The unit price of a row: the order's own line, or the client's price for a door-side product. */
+  const unitPriceOf = (row: DecoratedRow): number | undefined => {
     const item = items.find((i) => i.id === row.key);
-    return sum + (item?.unitPriceWithVat ?? 0) * row.actualQuantity;
-  }, 0) + goodRows.reduce((sum, row) => {
+    if (item) return item.unitPriceWithVat ?? undefined;
+
+    const product = row.entry?.productId ? catalog.get(row.entry.productId) : undefined;
+    return product?.priceWithVat ?? undefined;
+  };
+
+  // What the order is worth as delivered, a product taken at the door included: it was handed
+  // over, so it belongs in the delivered figure. The planned total below stays without it, which
+  // is what makes the two differ and shows the plan struck through beside this.
+  const deliveredTotal = itemRows.reduce(
+    (sum, row) => sum + (unitPriceOf(row) ?? 0) * row.actualQuantity, 0,
+  ) + goodRows.reduce((sum, row) => {
     const good = goodItems.find((g) => g.id === row.key);
     return sum + (good?.unitPriceWithVat ?? 0) * row.actualQuantity;
   }, 0);
@@ -461,11 +495,14 @@ export function OrderDetail({
                   );
                 })}
 
-                {/* Products the client took at the door. They have no order line, so they
-                    cannot be decorated onto one — and no price on the order either: they are
-                    priced on the invoice, which is why the money column reads a dash. */}
-                {appended(itemRows, items.map((i) => i.id)).map((row) => (
-                  <Box key={row.key}>
+                {/* Products the client took at the door. They have no order line to decorate, and
+                    no price on the order either — the money below is the client's own price for
+                    the product, resolved the way the editor would price it if it had been
+                    ordered. */}
+                {appended(itemRows, items.map((i) => i.id)).map((row) => {
+                  const unitPrice = unitPriceOf(row);
+                  return (
+                  <Box key={row.key} data-testid="order-item-added">
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
                         <Typography sx={{ fontWeight: 700 }}>{row.name}</Typography>
@@ -473,10 +510,29 @@ export function OrderDetail({
                       </Stack>
                     </Box>
                     <QuantityDiff row={row} />
-                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }} />
-                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', color: 'text.disabled' }}>—</Typography>
+                    <Box sx={{ ml: 1.5, minWidth: 84, textAlign: 'right' }}>
+                      <PriceWithList price={unitPrice} />
+                    </Box>
+                    {/* A dash only while the catalog is still loading, or for a product it does
+                        not hold: a zero would read as free. */}
+                    <Typography sx={{ ml: 1.5, minWidth: 84, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', ...(unitPrice == null ? { color: 'text.disabled', fontWeight: 400 } : {}) }}>
+                      {unitPrice == null ? '—' : formatMoney(unitPrice * row.actualQuantity)}
+                    </Typography>
+                    {canRecordNow && row.entry?.id && (
+                      <Tooltip title="Odebrat položku">
+                        <IconButton
+                          size="small"
+                          onClick={() => setRemoving(row)}
+                          sx={{ ml: 1.5, color: 'text.disabled' }}
+                          aria-label={`Odebrat ${row.name}`}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
-                ))}
+                  );
+                })}
 
                 {/* What the order came to as delivered. The plan is struck through beside it
                     only when the two differ, so an untouched order shows one number. */}
@@ -609,6 +665,16 @@ export function OrderDetail({
         open={recording}
         context={drawerContext}
         onClose={() => setRecording(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removing)}
+        title="Odebrat položku"
+        message={`Zaznamenaná změna u položky ${removing?.name ?? ''} bude smazána. Objednávka zůstane bez ní.`}
+        confirmLabel="Odebrat"
+        busy={removeEntry.isPending}
+        onConfirm={confirmRemove}
+        onClose={() => setRemoving(null)}
       />
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>

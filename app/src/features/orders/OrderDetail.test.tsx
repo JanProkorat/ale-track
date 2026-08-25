@@ -4,7 +4,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ClientLedgerEntryDto, ClientLedgerEntryTarget, ClientInfoDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OrderSupplierGoodItemDto, OutgoingShipmentState, SupplierChargeKind } from 'src/generated/api-client';
+import { ClientLedgerEntryDto, ClientLedgerEntryTarget, ClientInfoDto, GroupedProductHistoryDto, OrderCustomExtraItemDto, OrderDeliveryAddressDto, OrderDto, OrderItemDto, OrderNoteDto, OrderOutgoingShipmentDto, OrderReturnDto, OrderState, OrderSupplierGoodItemDto, OutgoingShipmentState, SupplierChargeKind } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
@@ -24,16 +24,29 @@ const ledgerState: {
   isError: boolean;
 } = { data: [], isLoading: false, isError: false };
 
+// Shared, not a fresh vi.fn() per call: the removal tests assert what the screen asked the
+// server to delete.
+const deleteLedgerMock = vi.fn();
+
 // The recording drawer is mounted by the detail, so its mutation hooks are part of the same
 // module and have to be mocked alongside the read.
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ledgerState,
   useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: deleteLedgerMock, isPending: false }),
   useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => ({ data: [] }) }));
+
+// Where a door-side product's price comes from. Same reasoning as the ledger mock: it must be
+// able to answer "not loaded", because that is what the screen sees on its first render and a
+// product the catalog does not hold has to read as a dash rather than as free.
+const historyState: { data?: GroupedProductHistoryDto; isLoading: boolean } = {
+  data: undefined,
+  isLoading: false,
+};
+vi.mock('src/hooks/useOrders', () => ({ useClientProductHistory: () => historyState }));
 
 function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledgerState> = {}) {
   ledgerState.data = entries;
@@ -41,7 +54,17 @@ function setLedger(entries?: ClientLedgerEntryDto[], over: Partial<typeof ledger
   ledgerState.isError = over.isError ?? false;
 }
 
-beforeEach(() => setLedger([]));
+function setHistory(data?: GroupedProductHistoryDto, isLoading = false) {
+  historyState.data = data;
+  historyState.isLoading = isLoading;
+}
+
+beforeEach(() => {
+  setLedger([]);
+  setHistory(undefined);
+  deleteLedgerMock.mockReset();
+  deleteLedgerMock.mockResolvedValue(undefined);
+});
 
 const { OrderDetail } = await import('./OrderDetail');
 
@@ -472,6 +495,138 @@ describe('OrderDetail — deviations', () => {
     const card = within(itemsCard());
     expect(card.getByText('Světlé 10')).toBeInTheDocument();
     expect(card.getByText('Přidáno na místě')).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------------
+  // What a door-side product costs. It has no line on the order, so the price comes from the
+  // client's own list — the figure the editor would have put on the line had it been ordered.
+  // ---------------------------------------------------------------------------------
+
+  function doorSide(quantity = 2) {
+    return ledgerEntry({
+      productId: 'p9',
+      productName: 'Prim. limo Hrozno',
+      plannedQuantity: 0,
+      actualQuantity: quantity,
+    });
+  }
+
+  function catalogWith(priceWithVat: number, listPriceWithVat?: number) {
+    return GroupedProductHistoryDto.fromJS({
+      recent: [{ id: 'p9', name: 'Prim. limo Hrozno', priceWithVat, listPriceWithVat }],
+      breweries: [],
+    });
+  }
+
+  /** The door-side row itself: prices repeat in the total below, so assertions are scoped. */
+  const addedRow = () => within(screen.getByTestId('order-item-added'));
+
+  it('prices a door-side product per unit and per line', () => {
+    setLedger([doorSide(2)]);
+    setHistory(catalogWith(351));
+    renderDetail(order());
+
+    expect(addedRow().getByText('351 Kč')).toBeInTheDocument();
+    expect(addedRow().getByText('702 Kč')).toBeInTheDocument();
+  });
+
+  it('counts it into the delivered total, leaving the plan behind it', () => {
+    setLedger([doorSide(2)]);
+    setHistory(catalogWith(351));
+    renderDetail(order({
+      orderItems: [new OrderItemDto({
+        id: 'item-1', orderId: 'o1', productId: 'p1', productName: 'Ležák', quantity: 10, unitPriceWithVat: 100,
+      })],
+    }));
+
+    const card = within(itemsCard());
+    // 10 × 100 + 2 × 351 — the door-side pieces are in the delivered figure.
+    expect(card.getByText('1702 Kč')).toBeInTheDocument();
+    // The plan behind it, on the ordered line and struck through in the total.
+    expect(card.getAllByText('1000 Kč')).toHaveLength(2);
+  });
+
+  // A zero would read as free, which is a worse answer than "no price known".
+  it('reads a dash while the price list has not arrived', () => {
+    setLedger([doorSide(2)]);
+    renderDetail(order());
+
+    expect(screen.getByTestId('order-item-added')).toHaveTextContent('—');
+    expect(screen.getByTestId('order-item-added')).not.toHaveTextContent('Kč');
+  });
+
+  it('reads a dash for a product the price list does not hold', () => {
+    setLedger([doorSide(2)]);
+    setHistory(GroupedProductHistoryDto.fromJS({ recent: [{ id: 'other', priceWithVat: 999 }], breweries: [] }));
+    renderDetail(order());
+
+    expect(screen.getByTestId('order-item-added')).toHaveTextContent('—');
+    expect(addedRow().queryByText('999 Kč')).not.toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------------
+  // Undoing one. The row is the only record that the client took the pieces, so it is
+  // confirmed — and offered under the same rule as recording it in the first place.
+  // ---------------------------------------------------------------------------------
+
+  function renderWithRights(o: OrderDto) {
+    return render(
+      <MuiThemeProvider theme={theme}>
+        <OrderDetail
+          order={o}
+          editable
+          canRecordDeviation
+          onBack={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MuiThemeProvider>,
+    );
+  }
+
+  const removeButton = () => screen.queryByRole('button', { name: 'Odebrat Prim. limo Hrozno' });
+
+  it('offers to remove a door-side product once the invoice row is finished', () => {
+    setLedger([doorSide()]);
+    renderWithRights(order({ isInvoiceReady: true }));
+
+    expect(removeButton()).toBeInTheDocument();
+  });
+
+  it('withholds it while the paperwork is unfinished', () => {
+    setLedger([doorSide()]);
+    renderWithRights(order({ isInvoiceReady: false }));
+
+    expect(removeButton()).not.toBeInTheDocument();
+  });
+
+  it('offers nothing to a user who may not write the client\'s ledger', () => {
+    setLedger([doorSide()]);
+    renderDetail(order({ isInvoiceReady: true }));
+
+    expect(removeButton()).not.toBeInTheDocument();
+  });
+
+  it('deletes the entry the row came from, once confirmed', async () => {
+    const entry = doorSide();
+    setLedger([entry]);
+    renderWithRights(order({ isInvoiceReady: true }));
+
+    fireEvent.click(removeButton()!);
+    fireEvent.click(screen.getByRole('button', { name: 'Odebrat' }));
+
+    await screen.findByText('Prim. limo Hrozno');
+    expect(deleteLedgerMock).toHaveBeenCalledWith({ id: entry.id, clientId: 'client-a' });
+  });
+
+  it('deletes nothing when the confirm is dismissed', () => {
+    setLedger([doorSide()]);
+    renderWithRights(order({ isInvoiceReady: true }));
+
+    fireEvent.click(removeButton()!);
+    fireEvent.click(screen.getByRole('button', { name: 'Zrušit' }));
+
+    expect(deleteLedgerMock).not.toHaveBeenCalled();
   });
 
   it('shows a return handed over against an order that planned none', () => {
