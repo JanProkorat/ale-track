@@ -489,9 +489,14 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
           <ReceiptLongOutlinedIcon sx={{ fontSize: 19, color: 'text.secondary' }} />
           <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Fakturace</Typography>
-          <Typography sx={{ ml: 'auto', fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'none', lg: 'block' } }}>
+          <Typography sx={{ fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'none', lg: 'block' } }}>
             Rozdělení položek vývozu na faktury — pro fakturaci klientům
           </Typography>
+
+          {/* A spacer rather than `ml: 'auto'` on what follows: this Stack spaces its children
+              with margins, and that rule outranks a child's own sx — the margin quietly won and
+              the button sat next to the subtitle instead of at the edge. */}
+          <Box sx={{ flex: 1 }} />
 
           {/* The one-way door. Up to here the office moves freely — mark a row, unmark it, correct
               an order the ordinary way, take the export again. Past it the rows lock, the orders
@@ -499,7 +504,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
               asks first, and why what it says afterwards is who filed it. */}
           {filed ? (
             <Tooltip title={filedTooltip(data)}>
-              <Box component="span" sx={{ display: 'inline-flex', ml: { xs: 'auto', lg: 0 } }}>
+              <Box component="span" sx={{ display: 'inline-flex' }}>
                 <Pill tint="okTint" color="success.main" icon={<LockOutlinedIcon sx={{ fontSize: 12 }} />}>
                   Zaevidováno
                 </Pill>
@@ -510,7 +515,7 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
               ? `Nejdřív označte všechny řádky jako hotové (zbývá ${unfinished}).`
               : 'Zamkne fakturaci i objednávky. Nevratné.'}
             >
-              <Box component="span" sx={{ display: 'inline-flex', ml: { xs: 'auto', lg: 0 } }}>
+              <Box component="span" sx={{ display: 'inline-flex' }}>
                 <Button
                   size="small"
                   variant="outlined"
