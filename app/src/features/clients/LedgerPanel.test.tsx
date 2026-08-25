@@ -1,6 +1,6 @@
 // The client profile's Změny a dluhy tab, and the order screen's card of the same list.
 
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClientLedgerEntryDto, ClientLedgerEntryTarget } from 'src/generated/api-client';
@@ -20,10 +20,13 @@ const ledgerState: { data?: ClientLedgerEntryDto[]; isLoading: boolean; isError:
 };
 
 const resolveMock = vi.fn();
+// The order screen's card promises rather than closes, so it drives a different mutation.
+const assignMock = vi.fn();
 
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ledgerState,
   useSetClientLedgerEntryResolution: () => ({ mutateAsync: resolveMock, isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: assignMock, isPending: false }),
   useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -87,6 +90,7 @@ beforeEach(() => {
   ledgerState.isLoading = false;
   ledgerState.isError = false;
   resolveMock.mockReset().mockResolvedValue('ok');
+  assignMock.mockReset().mockResolvedValue('ok');
 });
 
 describe('LedgerPanel', () => {
@@ -170,17 +174,31 @@ describe('ClientOpenItemsCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // What makes it worth reading is the part that happened elsewhere — this order's own
-  // deviations are already struck through above it.
-  it('lists the whole open list and badges the rows from this order', () => {
+  // What the card is for: what this delivery has to put right. This order's own deviations are
+  // the struck-through rows above it and its money is in the Peníze card, so repeating them here
+  // buried the part that is actually news.
+  it('lists what is open from elsewhere and leaves this order out', () => {
     renderCard([
       entry({ productName: 'Ležák 12', orderId: ORDER }),
       entry({ productName: 'Světlé 10', orderId: OTHER_ORDER }),
     ], ORDER);
 
-    expect(screen.getByText(/Ležák 12/)).toBeInTheDocument();
     expect(screen.getByText(/Světlé 10/)).toBeInTheDocument();
-    expect(screen.getAllByText('z této objednávky')).toHaveLength(1);
+    expect(screen.queryByText(/Ležák 12/)).not.toBeInTheDocument();
+  });
+
+  // A debt attached to no order is exactly what the next delivery is meant to clear.
+  it('keeps a standalone debt, which belongs to no order at all', () => {
+    renderCard([entry({ productName: 'Světlé 10', orderId: undefined })], ORDER);
+
+    expect(screen.getByText(/Světlé 10/)).toBeInTheDocument();
+    expect(screen.getByText(/bez objednávky/)).toBeInTheDocument();
+  });
+
+  it('renders nothing when everything open belongs to this order', () => {
+    const { container } = renderCard([entry({ orderId: ORDER })], ORDER);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('words a shortfall as pieces missing', () => {
@@ -189,10 +207,54 @@ describe('ClientOpenItemsCard', () => {
     expect(screen.getByText('Ležák 12 — chybí 3 ks')).toBeInTheDocument();
   });
 
-  it('offers no manual close on an assigned row', () => {
-    renderCard([entry({ resolvedByOrderId: OTHER_ORDER })]);
+  // ---------------------------------------------------------------------------------
+  // The tick is a promise, not a close. Settling on the click would leave the debt settled even
+  // if this order were cancelled — the failure the whole feature exists to prevent — so the row
+  // is only linked to the order, and the server closes it when the run arrives.
+  // ---------------------------------------------------------------------------------
+
+  it('hands the entry to this order rather than settling it', async () => {
+    const owed = entry({ orderId: OTHER_ORDER });
+    renderCard([owed], ORDER);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Vyřeší tato objednávka' }));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith({
+      id: owed.id,
+      clientId: 'client-a',
+      data: expect.objectContaining({ orderId: ORDER }),
+    }));
+    expect(resolveMock).not.toHaveBeenCalled();
+  });
+
+  it('takes its own promise back', async () => {
+    const owed = entry({ orderId: OTHER_ORDER, resolvedByOrderId: ORDER });
+    renderCard([owed], ORDER);
+
+    expect(screen.getByText('vyřeší tato objednávka')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Vyřadit z objednávky' }));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith({
+      id: owed.id,
+      clientId: 'client-a',
+      data: expect.objectContaining({ orderId: undefined }),
+    }));
+  });
+
+  // Another order's promise closes itself when that order arrives; undoing it from here would
+  // quietly take a debt off an order that is still going to deliver against it.
+  it('leaves an entry another order is carrying alone', () => {
+    renderCard([entry({ orderId: OTHER_ORDER, resolvedByOrderId: '55555555-5555-5555-5555-555555555555' })], ORDER);
 
     expect(screen.getByText('zařazeno')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Vyřešit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vyřeší tato objednávka' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vyřadit z objednávky' })).not.toBeInTheDocument();
+  });
+
+  // Nothing to promise with no order in view.
+  it('offers no promise when it is not rendered against an order', () => {
+    renderCard([entry({ orderId: OTHER_ORDER })]);
+
+    expect(screen.queryByRole('button', { name: 'Vyřeší tato objednávka' })).not.toBeInTheDocument();
   });
 });

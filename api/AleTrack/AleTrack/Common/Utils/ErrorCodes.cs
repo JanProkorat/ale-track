@@ -167,6 +167,21 @@ public static class ErrorCodes
     public const string SaleNotAwaitingPayment = "SALE_NOT_AWAITING_PAYMENT";
 
     /// <summary>
+    /// Error code for case when a settled ledger entry would be handed to an order to settle.
+    /// </summary>
+    public const string LedgerEntryAlreadyResolved = "LEDGER_ENTRY_ALREADY_RESOLVED";
+
+    /// <summary>
+    /// Error code for case when an order of one client would take on another client's entry.
+    /// </summary>
+    public const string LedgerEntryClientMismatch = "LEDGER_ENTRY_CLIENT_MISMATCH";
+
+    /// <summary>
+    /// Error code for case when a second order would promise to settle the same entry.
+    /// </summary>
+    public const string LedgerEntryAlreadyAssigned = "LEDGER_ENTRY_ALREADY_ASSIGNED";
+
+    /// <summary>
     /// Error code for case when a client's own product price is zero or negative.
     /// Distinct from the generic min-value code so clients can show a precise message.
     /// </summary>

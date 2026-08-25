@@ -13,6 +13,7 @@ import {
   ClientLedgerQueryState,
   type ClientLedgerEntryDto,
   type SaveClientLedgerEntriesDto,
+  type SetClientLedgerEntryAssignmentDto,
   type SetClientLedgerEntryResolutionDto,
   type UpdateClientLedgerEntryDto,
 } from 'src/generated/api-client';
@@ -101,6 +102,25 @@ export function useDeleteClientLedgerEntry() {
   return useMutation({
     mutationFn: ({ id }: { id: string; clientId: string }) =>
       ds.deleteClientLedgerEntryEndpoint(id),
+    onSuccess: (_res, { clientId }) => invalidateLedger(qc, clientId),
+  });
+}
+
+/**
+ * Hands one open entry to an order, or takes it back.
+ *
+ * The promise, not the settling: the entry closes when that order's run actually arrives. Pass a
+ * null orderId to release it.
+ */
+export function useSetClientLedgerEntryAssignment() {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: { id: string; clientId: string; data: SetClientLedgerEntryAssignmentDto }) =>
+      ds.setClientLedgerEntryAssignmentEndpoint(id, data),
     onSuccess: (_res, { clientId }) => invalidateLedger(qc, clientId),
   });
 }

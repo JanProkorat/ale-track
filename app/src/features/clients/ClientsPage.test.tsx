@@ -81,6 +81,7 @@ const ledgerEntries: { data: unknown[] } = { data: [] };
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ({ ...ledgerEntries, isPending: false, isError: false }),
   useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),

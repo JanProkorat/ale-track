@@ -301,6 +301,64 @@ public static class ThrowHelper
             });
 
     /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a settled deviation would be handed to an
+    /// order to settle.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <remarks>
+    /// Settling is history. Taking it back is the resolution endpoint's business, and letting an
+    /// assignment do it as a side effect would undo a close nobody asked to undo.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryAlreadyResolved(Guid entryId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryAlreadyResolved,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an order would take on a deviation recorded
+    /// against a different client.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <param name="orderId">Public id of the order.</param>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryClientMismatch(Guid entryId, Guid orderId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryClientMismatch,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId },
+                { nameof(orderId), orderId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a second order would promise to settle a
+    /// deviation another order is already carrying.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <remarks>
+    /// Two orders promising the same three kegs is the failure this prevents: the first to arrive
+    /// closes the entry and the second is left carrying nothing.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryAlreadyAssigned(Guid entryId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryAlreadyAssigned,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId }
+            });
+
+    /// <summary>
     /// Throws an <see cref="AleTrackException"/> when an already completed sale would be changed.
     /// </summary>
     /// <param name="saleId">Public id of the sale.</param>

@@ -572,6 +572,15 @@ export function OrderDetail({
 
         {hasSidebar && (
         <Stack spacing={2}>
+          {/* First in the column: it is the one card that says what this delivery still has to
+              put right, and a to-do list under three other cards is a to-do list nobody reads. */}
+          <ClientOpenItemsCard
+            entries={ledger.data ?? []}
+            clientId={order.client?.id ?? ''}
+            currentOrderId={order.id}
+            editable={canRecordDeviation}
+          />
+
           {shipment && (
             <ShipmentCard
               shipment={shipment}
@@ -637,16 +646,6 @@ export function OrderDetail({
           )}
 
           <LedgerMoneyCard entries={orderEntries} />
-
-          {/* The client's whole open list, not just this order's: what makes it worth reading is
-              the part that happened elsewhere. Sending somebody to another screen for their
-              to-do list means they never look. */}
-          <ClientOpenItemsCard
-            entries={ledger.data ?? []}
-            clientId={order.client?.id ?? ''}
-            currentOrderId={order.id}
-            editable={canRecordDeviation}
-          />
 
           {notes.length > 0 && (
             <CollapsibleCard

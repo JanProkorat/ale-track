@@ -1,5 +1,6 @@
 using AleTrack.Common.Authorization;
 using AleTrack.Common.Enums;
+using AleTrack.Features.Clients.Commands.Ledger.Assignment;
 using AleTrack.Features.Clients.Commands.Ledger.Delete;
 using AleTrack.Features.Clients.Commands.Ledger.Resolution;
 using AleTrack.Features.Clients.Commands.Ledger.Save;
@@ -31,6 +32,7 @@ public sealed class ClientLedgerPermissionTests
     [InlineData(typeof(UpdateClientLedgerEntryEndpoint), PermissionLevel.Edit)]
     [InlineData(typeof(DeleteClientLedgerEntryEndpoint), PermissionLevel.Edit)]
     [InlineData(typeof(SetClientLedgerEntryResolutionEndpoint), PermissionLevel.Edit)]
+    [InlineData(typeof(SetClientLedgerEntryAssignmentEndpoint), PermissionLevel.Edit)]
     public void Endpoint_RequiresTheClientsModuleAtTheRightLevel(Type endpointType, PermissionLevel level)
     {
         DeclaredPolicies(endpointType)
@@ -45,6 +47,7 @@ public sealed class ClientLedgerPermissionTests
     [InlineData(typeof(UpdateClientLedgerEntryEndpoint))]
     [InlineData(typeof(DeleteClientLedgerEntryEndpoint))]
     [InlineData(typeof(SetClientLedgerEntryResolutionEndpoint))]
+    [InlineData(typeof(SetClientLedgerEntryAssignmentEndpoint))]
     public void WriteEndpoint_IsNotSatisfiedByViewOnly(Type endpointType)
     {
         DeclaredPolicies(endpointType)

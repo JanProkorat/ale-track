@@ -41,6 +41,7 @@ vi.mock('src/hooks/useClientLedger', () => ({
   useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
 
