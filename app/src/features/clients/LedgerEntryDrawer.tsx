@@ -17,6 +17,8 @@ import DeleteIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { useSnackbar } from 'notistack';
 import { FormDrawer } from 'src/components/common/FormDrawer';
 import { apiErrorMessage } from 'src/api/errors';
+import { fmtLiters } from 'src/lib/format';
+import { kindLabel } from 'src/lib/labels';
 import {
   ClientLedgerEntryTarget,
   ClientLedgerRowDto,
@@ -39,9 +41,13 @@ import {
   doorSideAdditions,
   entriesForTarget,
   isFreeEntry,
+  quantityTone,
+  quantityWords as deviationWords,
+  TONE_COLOR,
+  type LedgerTone,
   type PlanRow,
 } from './ledgerModel';
-import { TextDiff } from './LedgerDiff';
+import { LedgerTag, TextDiff } from './LedgerDiff';
 
 /** What the screen opening the drawer already knows about the handover. */
 export interface LedgerDrawerContext {
@@ -133,6 +139,15 @@ export function LedgerEntryDrawer({
   // a grey placeholder, which reads as "no colour" rather than as this brewery's.
   const colorForBrewery = useBreweryColors();
   const productsById = useMemo(() => catalogByProductId(catalog.data), [catalog.data]);
+
+  /** Packaging under a door-side product's name, the way the catalog labels it. */
+  const chipFor = (productId: string) => {
+    const product = productsById.get(productId);
+    if (!product) return undefined;
+    return [kindLabel(product.kind), product.packageSize != null ? fmtLiters(product.packageSize) : '']
+      .filter(Boolean)
+      .join(' · ') || undefined;
+  };
 
   // Memoised: the fallback array is a fresh value on every render, which would make the two
   // lookups below recompute each time.
@@ -354,10 +369,11 @@ export function LedgerEntryDrawer({
     rows: EditableRow[],
     setRows: (rows: EditableRow[]) => void,
     unit: string,
+    options: { isReturn?: boolean; appended?: React.ReactNode } = {},
   ) => (
     <Box>
       <SectionLabel>{title}</SectionLabel>
-      {rows.length === 0 ? (
+      {rows.length === 0 && !options.appended ? (
         <Typography variant="body2" color="text.secondary" sx={{ pb: 1 }}>
           Objednávka žádné neplánovala.
         </Typography>
@@ -365,13 +381,15 @@ export function LedgerEntryDrawer({
         <Stack spacing={0.75}>
           <ColumnHeads actualLabel={actualLabel} />
           {rows.map((row, index) => {
-            const changed = parsed(row.actual, row.quantity) !== row.quantity;
+            const actual = parsed(row.actual, row.quantity);
+            const tone = quantityTone(row.quantity, actual, options.isReturn);
             return (
               <QuantityRow
                 key={row.key}
                 name={row.name}
                 chip={row.chip}
-                changed={changed}
+                tone={tone}
+                tag={tone && deviationWords(row.quantity, actual, options.isReturn)}
                 planned={`${row.quantity} ${unit}`}
                 value={row.actual}
                 inputLabel={`${row.name} — ${actualLabel}`}
@@ -383,10 +401,40 @@ export function LedgerEntryDrawer({
               />
             );
           })}
+          {options.appended}
         </Stack>
       )}
     </Box>
   );
+
+  /**
+   * The products taken at the door, as rows of the table above rather than a section of their own.
+   *
+   * They belong there: the operator is reading one list of what the client ended up with, and a
+   * second heading between it and the catalog made them look like a different kind of thing.
+   */
+  const doorSideRows = added.map((row, index) => (
+    <QuantityRow
+      key={row.productId}
+      name={row.name}
+      chip={chipFor(row.productId)}
+      tone="new"
+      tag="Přidáno na místě"
+      value={row.actual}
+      inputLabel={`${row.name} — vzato na místě`}
+      onValue={(value) => {
+        const next = [...added];
+        next[index] = { ...row, actual: value };
+        setAdded(next);
+      }}
+      // A stored row is zeroed rather than dropped: zero is what tells the server to delete the
+      // entry, so removing the row would leave it saved. One picked from the catalog a moment ago
+      // has nothing stored and simply goes.
+      onRemove={() => setAdded((prev) => (row.entryId
+        ? prev.map((r) => (r.productId === row.productId ? { ...r, actual: '0' } : r))
+        : prev.filter((r) => r.productId !== row.productId)))}
+    />
+  ));
 
   const newLineFields = (
     label: string,
@@ -451,42 +499,13 @@ export function LedgerEntryDrawer({
         {hasOrder && (
           <>
             <Divider />
-            {quantityTable('Položky', 'Skutečně', items, setItems, 'ks')}
-
-            {/* What an earlier pass already added. Editable, because the form that wrote a
-                mistyped quantity is the one place it should be correctable. */}
+            {/* One table: the order's own lines, then whatever was taken at the door beneath
+                them. The operator is reading a single list of what the client ended up with. */}
+            {quantityTable('Položky', 'Skutečně', items, setItems, 'ks', { appended: doorSideRows })}
             {added.length > 0 && (
-              <Box>
-                <SectionLabel>Přidáno na místě</SectionLabel>
-                <Stack spacing={0.75}>
-                  <ColumnHeads actualLabel="Vzato" />
-                  {added.map((row, index) => (
-                    // No plan behind these, so the Plán column reads as a dash — and the row is
-                    // always the changed colour, because its existence is the change.
-                    <QuantityRow
-                      key={row.productId}
-                      name={row.name}
-                      changed
-                      value={row.actual}
-                      inputLabel={`${row.name} — vzato na místě`}
-                      onValue={(value) => {
-                        const next = [...added];
-                        next[index] = { ...row, actual: value };
-                        setAdded(next);
-                      }}
-                      // A stored row is zeroed rather than dropped: zero is what tells the server
-                      // to delete the entry, so removing the row would leave it saved. One picked
-                      // from the catalog a moment ago has nothing stored and simply goes.
-                      onRemove={() => setAdded((prev) => (row.entryId
-                        ? prev.map((r) => (r.productId === row.productId ? { ...r, actual: '0' } : r))
-                        : prev.filter((r) => r.productId !== row.productId)))}
-                    />
-                  ))}
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                  Nula položku odebere.
-                </Typography>
-              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -1 }}>
+                Nula položku navíc odebere.
+              </Typography>
             )}
 
             <Box>
@@ -521,7 +540,7 @@ export function LedgerEntryDrawer({
             {/* Rendered even with nothing planned: a client who was to return nothing and hands
                 the driver four crates anyway is the ordinary case, not the edge one — and with
                 the section hidden there would be nowhere to write it down. */}
-            {quantityTable('Vratky', 'Vráceno', returns, setReturns, '×')}
+            {quantityTable('Vratky', 'Vráceno', returns, setReturns, '×', { isReturn: true })}
             {newLineFields(
               'Přidat vratku, kterou objednávka neplánovala',
               'Např. Basa 0,5 l — prázdná',
@@ -624,7 +643,7 @@ function ColumnHeads({ actualLabel }: { actualLabel: string }) {
  * without reading every number back.
  */
 function QuantityRow({
-  name, chip, planned, value, inputLabel, changed, onValue, onRemove,
+  name, chip, planned, value, inputLabel, tone, tag, onValue, onRemove,
 }: {
   name: string;
   chip?: string;
@@ -632,27 +651,36 @@ function QuantityRow({
   planned?: string;
   value: string;
   inputLabel: string;
-  changed: boolean;
+  /** Absent while the row still matches its plan. */
+  tone?: LedgerTone;
+  /** Words for the tone, because colour must never be the only signal. */
+  tag?: string;
   onValue: (value: string) => void;
   onRemove?: () => void;
 }) {
+  const color = tone ? TONE_COLOR[tone] : undefined;
+
   return (
     <Stack
       direction="row"
       spacing={1}
       alignItems="center"
-      data-changed={changed ? 'true' : 'false'}
+      data-changed={tone ? 'true' : 'false'}
+      data-tone={tone ?? 'none'}
       sx={{
         px: ROW_PX,
         py: 0.75,
         border: 1,
         borderRadius: 2,
-        borderColor: changed ? 'warning.main' : 'divider',
-        bgcolor: (t) => (changed ? t.vars!.palette.brand.amberTint : 'transparent'),
+        borderColor: color ? color.fg : 'divider',
+        bgcolor: (t) => (color ? t.vars!.palette.brand[color.bg] : 'transparent'),
       }}
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{name}</Typography>
+          {tone && tag && <LedgerTag tone={tone} label={tag} />}
+        </Stack>
         {chip && <Typography variant="caption" color="text.secondary" noWrap>{chip}</Typography>}
       </Box>
       <Typography

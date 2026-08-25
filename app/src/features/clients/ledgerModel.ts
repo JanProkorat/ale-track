@@ -261,6 +261,21 @@ function rowStatus(planned: number, actual: number): LedgerRowStatus {
 export type LedgerTone = 'less' | 'more' | 'new' | 'info';
 
 /**
+ * What each tone is made of: a foreground from the theme's status colours, and one of the brand
+ * tints behind it.
+ *
+ * Here rather than beside the tag that first used it, because the recording form paints its rows
+ * in these tones too — short of the plan reads the same red while it is being typed as it does on
+ * the screen afterwards, and one table of pairs is what keeps the two from drifting.
+ */
+export const TONE_COLOR: Record<LedgerTone, { fg: string; bg: 'critTint' | 'okTint' | 'infoTint' | 'amberTint' }> = {
+  less: { fg: 'error.main', bg: 'critTint' },
+  more: { fg: 'success.main', bg: 'okTint' },
+  new: { fg: 'info.main', bg: 'infoTint' },
+  info: { fg: 'warning.dark', bg: 'amberTint' },
+};
+
+/**
  * The wording for a decorated row's tag, derived from the sign rather than stored.
  *
  * An event-shaped vocabulary would need a value per scenario; the arithmetic already says
@@ -271,10 +286,15 @@ export type LedgerTone = 'less' | 'more' | 'new' | 'info';
  * handing over extra rather than us delivering extra. Same arithmetic, opposite words.
  */
 export function deviationText(row: DecoratedRow): string | undefined {
-  const diff = row.actualQuantity - row.plannedQuantity;
   const isReturn = ledgerTargetName(row.entry?.target) === 'ReturnQuantity';
+  return quantityWords(row.plannedQuantity, row.actualQuantity, isReturn);
+}
 
-  switch (row.status) {
+/** The same wording from two bare numbers — see {@link quantityTone} for why it is shared. */
+export function quantityWords(planned: number, actual: number, isReturn = false): string | undefined {
+  const diff = actual - planned;
+
+  switch (rowStatus(planned, actual)) {
     case 'unchanged':
       return undefined;
     case 'removed':
@@ -296,8 +316,18 @@ export function deviationText(row: DecoratedRow): string | undefined {
  */
 export function deviationTone(row: DecoratedRow): LedgerTone | undefined {
   const isReturn = ledgerTargetName(row.entry?.target) === 'ReturnQuantity';
+  return quantityTone(row.plannedQuantity, row.actualQuantity, isReturn);
+}
 
-  switch (row.status) {
+/**
+ * The same tone from two bare numbers, for the recording form — where the actual is being typed
+ * and there is no stored entry to decorate yet.
+ *
+ * Shared with {@link deviationTone} rather than reimplemented: a form that coloured a shortfall
+ * one way and the screen behind it another would teach the reader two vocabularies for one fact.
+ */
+export function quantityTone(planned: number, actual: number, isReturn = false): LedgerTone | undefined {
+  switch (rowStatus(planned, actual)) {
     case 'unchanged':
       return undefined;
     case 'removed':
@@ -305,7 +335,7 @@ export function deviationTone(row: DecoratedRow): LedgerTone | undefined {
     case 'added':
       return 'new';
     default:
-      if (row.actualQuantity < row.plannedQuantity) return 'less';
+      if (actual < planned) return 'less';
       return isReturn ? 'new' : 'more';
   }
 }

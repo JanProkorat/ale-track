@@ -10,14 +10,9 @@
 
 import { Box, Stack, Tooltip, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
-import { deviationText, deviationTone, entryTooltip, type DecoratedRow, type LedgerTone } from './ledgerModel';
-
-const TONE_COLOR: Record<LedgerTone, { fg: string; bg: 'critTint' | 'okTint' | 'infoTint' | 'amberTint' }> = {
-  less: { fg: 'error.main', bg: 'critTint' },
-  more: { fg: 'success.main', bg: 'okTint' },
-  new: { fg: 'info.main', bg: 'infoTint' },
-  info: { fg: 'warning.dark', bg: 'amberTint' },
-};
+import {
+  TONE_COLOR, deviationText, deviationTone, entryTooltip, type DecoratedRow, type LedgerTone,
+} from './ledgerModel';
 
 /** The worded tag: what changed, with why/who/when on its tooltip. */
 export function LedgerTag({

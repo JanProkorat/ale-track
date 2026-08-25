@@ -178,7 +178,7 @@ describe('LedgerEntryDrawer', () => {
   // ---------------------------------------------------------------------------------
 
   /** The row carrying a field, which is the element the mark sits on. */
-  const rowOf = (name: string) => actualInput(name).closest('[data-changed]');
+  const rowOf = (name: string, label = 'Skutečně') => actualInput(name, label).closest('[data-tone]');
 
   it('leaves a row alone while it still matches the plan', () => {
     renderDrawer(context());
@@ -192,6 +192,39 @@ describe('LedgerEntryDrawer', () => {
     fireEvent.change(actualInput('Ležák 12'), { target: { value: '7' } });
 
     expect(rowOf('Ležák 12')).toHaveAttribute('data-changed', 'true');
+  });
+
+  // The tones are the ones the screens behind this form use, so short of the plan is the same red
+  // in both places. And the words go with the colour, which a colour-blind reader cannot see.
+  it('colours a shortfall as a shortfall, and says so', () => {
+    renderDrawer(context());
+
+    fireEvent.change(actualInput('Ležák 12'), { target: { value: '7' } });
+
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-tone', 'less');
+    expect(screen.getByText('Nevyloženo 3 ks')).toBeInTheDocument();
+  });
+
+  it('colours over-delivery the other way', () => {
+    renderDrawer(context());
+
+    fireEvent.change(actualInput('Ležák 12'), { target: { value: '12' } });
+
+    expect(rowOf('Ležák 12')).toHaveAttribute('data-tone', 'more');
+    expect(screen.getByText('Navíc 2 ks')).toBeInTheDocument();
+  });
+
+  // A return has no good direction — too few and the client owes empties, too many and we hold
+  // deposits that are not ours — so it never gets the affirmative colour.
+  it('never calls an over-return an improvement', () => {
+    renderDrawer(context({ returns: [{ key: 'r-1', name: 'Sud', quantity: 5 }] }));
+
+    fireEvent.change(actualInput('Sud', 'Vráceno'), { target: { value: '7' } });
+
+    expect(rowOf('Sud', 'Vráceno')).toHaveAttribute('data-tone', 'new');
+    // The words count pieces, as they do on the screens behind the form; the plan column is
+    // where the returns' own unit shows.
+    expect(screen.getByText('Vráceno navíc 2 ks')).toBeInTheDocument();
   });
 
   it('unmarks it again when the number goes back', () => {
@@ -358,6 +391,18 @@ describe('LedgerEntryDrawer', () => {
     renderDrawer(context({ entries: [doorSide()] }));
 
     expect(actualInput('Světlé 10', 'vzato na místě').value).toBe('4');
+  });
+
+  // Not a section of its own below the table: the operator reads one list of what the client
+  // ended up with, so the row sits among the order's own lines.
+  it('puts it in the same table as the order\'s lines', () => {
+    renderDrawer(context({ entries: [doorSide()] }));
+
+    const planned = rowOf('Ležák 12');
+    const doorSideRow = rowOf('Světlé 10', 'vzato na místě');
+
+    expect(doorSideRow).toHaveAttribute('data-tone', 'new');
+    expect(doorSideRow?.parentElement).toBe(planned?.parentElement);
   });
 
   it('corrects it against the product, so the server rewrites the entry it wrote', () => {
