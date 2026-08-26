@@ -60,11 +60,7 @@ public sealed class ShipmentExportScopeFilterTests
                                 {
                                     Name = "Pilsner Urquell", Quantity = 24, Deviation = Short(24, 18)
                                 },
-                                new ShipmentExportProduct { Name = "Radegast 10", Quantity = 6 },
-                                new ShipmentExportProduct
-                                {
-                                    Name = "Kozel 11", Quantity = 0, IsFromDeviation = true, Deviation = Short(0, 12)
-                                }
+                                new ShipmentExportProduct { Name = "Radegast 10", Quantity = 6 }
                             ],
                             Returns =
                             [
@@ -73,6 +69,9 @@ public sealed class ShipmentExportScopeFilterTests
                             ],
                             Deviations =
                             [
+                                Short(24, 18) with { LineName = "Pilsner Urquell" },
+                                Short(4, 1) with { Target = ClientLedgerEntryTarget.ReturnQuantity, LineName = "Sud 50 l" },
+                                Short(0, 12) with { LineName = "Kozel 11" },
                                 new ShipmentExportDeviation
                                 {
                                     Target = ClientLedgerEntryTarget.Money, Amount = 2400m, RequiresFollowUp = true
@@ -105,8 +104,7 @@ public sealed class ShipmentExportScopeFilterTests
         model.Invoices.SelectMany(i => i.Parties).Single(p => p.ClientName == clientName);
 
     /// <summary>
-    /// The plan is the paper printed before the run: no deviation anywhere, and no row that exists
-    /// only because of one.
+    /// The plan is the paper printed before the run: no deviation on it anywhere.
     /// </summary>
     [Fact]
     public void Apply_Plan_LeavesTheModelTheWritersWereWrittenAgainst()
@@ -137,9 +135,12 @@ public sealed class ShipmentExportScopeFilterTests
 
         var kotvy = PartyOf(model, "Hospoda U Kotvy");
 
-        kotvy.Products.Select(p => p.Name).Should().Equal("Pilsner Urquell", "Kozel 11");
+        // Only the rows a deviation touched survive — and every deviation is stated, the keg taken
+        // at the door included, which never had a row to be kept.
+        kotvy.Products.Select(p => p.Name).Should().Equal("Pilsner Urquell");
         kotvy.Returns.Select(r => r.Name).Should().Equal("Sud 50 l");
-        kotvy.Deviations.Should().ContainSingle().Which.Amount.Should().Be(2400m);
+        kotvy.Deviations.Select(d => ShipmentExportLabels.DeviationSubject(d)).Should()
+            .Equal("Pilsner Urquell", "Sud 50 l", "Kozel 11", "Peníze");
 
         // Unchanged content is exactly what this scope exists to leave out — but the address stays,
         // because a correction has to say whose delivery it corrects.
@@ -168,9 +169,9 @@ public sealed class ShipmentExportScopeFilterTests
 
         var kotvy = PartyOf(model, "Hospoda U Kotvy");
 
-        kotvy.Products.Should().HaveCount(3);
+        kotvy.Products.Should().HaveCount(2);
         kotvy.Returns.Should().HaveCount(2);
-        kotvy.Deviations.Should().HaveCount(1);
+        kotvy.Deviations.Should().HaveCount(4);
         kotvy.Notes.Should().Equal("Zvonit vzadu");
         model.Invoices.Should().HaveCount(2);
     }
@@ -202,7 +203,9 @@ public sealed class ShipmentExportScopeFilterTests
         ShipmentExportScopeFilter.Apply(original, ShipmentExportScope.Plan);
         ShipmentExportScopeFilter.Apply(original, ShipmentExportScope.Changed);
 
-        PartyOf(original, "Hospoda U Kotvy").Products.Should().HaveCount(3);
+        var kotvy = PartyOf(original, "Hospoda U Kotvy");
+        kotvy.Products.Should().HaveCount(2);
+        kotvy.Deviations.Should().HaveCount(4);
         original.Invoices.Should().HaveCount(2);
     }
 }

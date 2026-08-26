@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using AleTrack.Common.Enums;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 
@@ -22,18 +23,39 @@ public static class ShipmentExportFileName
     /// </remarks>
     /// <param name="model">The run being exported.</param>
     /// <param name="extension">File extension without the dot — <c>xlsx</c> or <c>docx</c>.</param>
-    public static string For(ShipmentExportModel model, string extension)
+    /// <param name="scope">
+    /// How much of the run the file carries. Anything but the plan is suffixed, so the three files
+    /// of one run can sit in one folder — a correction saved over the paper that went out before the
+    /// van is a lost original.
+    /// </param>
+    public static string For(
+        ShipmentExportModel model,
+        string extension,
+        ShipmentExportScope scope = ShipmentExportScope.Plan)
     {
         var parts = new[]
             {
                 "vyvoz",
                 model.DeliveryDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Slug(model.ShipmentName)
+                Slug(model.ShipmentName),
+                ScopeSuffix(scope)
             }
             .Where(part => !string.IsNullOrEmpty(part));
 
         return $"{string.Join('-', parts)}.{extension}";
     }
+
+    /// <summary>
+    /// What the file's scope adds to its name. Nothing for the plan, which is what the name has
+    /// always meant and what every file in the office's folders already is.
+    /// </summary>
+    private static string? ScopeSuffix(ShipmentExportScope scope) =>
+        scope switch
+        {
+            ShipmentExportScope.Changed => "zmeny",
+            ShipmentExportScope.All => "vse",
+            _ => null
+        };
 
     /// <summary>
     /// Reduces a name to lowercase ASCII words joined by hyphens, so it survives every filesystem

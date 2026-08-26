@@ -9,14 +9,14 @@ using FluentAssertions;
 namespace AleTrack.Tests.Features.OutgoingShipments;
 
 /// <summary>
-/// How recorded deviations reach the export model: onto the billed row they are about, onto the
-/// vratka, as a row the order never planned, or — when the file has no row for them — onto the
-/// client itself.
+/// How recorded deviations reach the export model: all of them onto the client that diverged, and a
+/// mark on the rows they touched.
 /// </summary>
 /// <remarks>
-/// The sorting is what these tests are for. A deviation is written against an order line, but the
-/// file is written from the invoice split, and the two do not always hold the same rows. Every path
-/// through that mismatch has to end with the deviation somewhere in the file.
+/// Both halves matter, and they are not the same half. The list is what the file states, and every
+/// deviation has to be in it — a deviation written against a line the file does not bill still
+/// happened. The marks are only how the Changed scope knows which rows to keep, so a deviation with
+/// no row of its own leaves none.
 /// </remarks>
 public sealed class ShipmentExportDeviationTests
 {
@@ -174,15 +174,18 @@ public sealed class ShipmentExportDeviationTests
         row.Deviation.QuantityDifference.Should().Be(-6);
         row.Deviation.Note.Should().Be("Sklep byl plný");
         row.Deviation.RequiresFollowUp.Should().BeTrue();
-        row.IsFromDeviation.Should().BeFalse();
+
+        // And it is stated once, on the client — the mark above only says which row it was about.
+        PartyOf(model!).Deviations.Should().ContainSingle()
+            .Which.LineName.Should().Be("Pilsner Urquell");
     }
 
     /// <summary>
-    /// Goods taken at the door have no order line to annotate, so they become a row — and its billed
-    /// count stays 0, because nothing bills them while the ledger is out of invoicing.
+    /// Goods taken at the door have no order line to annotate and nothing bills them while the ledger
+    /// is out of invoicing, so they appear as a deviation and touch no billed row at all.
     /// </summary>
     [Fact]
-    public async Task LoadAsync_ProductTakenAtTheDoor_BecomesItsOwnRowBillingNothing()
+    public async Task LoadAsync_ProductTakenAtTheDoor_IsStatedWithoutTouchingTheBilledRows()
     {
         var shipmentId = Guid.NewGuid();
         var (shipment, client, order, _, _) = OneClientRun(shipmentId);
@@ -214,17 +217,15 @@ public sealed class ShipmentExportDeviationTests
         var model = await Load(dbContext.Object, shipmentId);
 
         var party = PartyOf(model!);
-        var added = party.Products.Single(p => p.IsFromDeviation);
+        var added = party.Deviations.Should().ContainSingle().Subject;
 
-        added.Name.Should().Be("Kozel 11");
-        added.Kind.Should().Be(ProductKind.Bottle);
-        added.Quantity.Should().Be(0);
-        added.Deviation!.ActualQuantity.Should().Be(12);
+        added.LineName.Should().Be("Kozel 11");
+        added.PlannedQuantity.Should().Be(0);
+        added.ActualQuantity.Should().Be(12);
 
-        // It follows the ordered rows rather than sorting in among them.
-        party.Products.Last().Should().BeSameAs(added);
-
-        // And it does not quietly join the billed total.
+        // The order's own row is untouched, and the pieces do not quietly join the billed total.
+        party.Products.Select(p => p.Name).Should().Equal("Pilsner Urquell");
+        party.Products.Should().OnlyContain(p => p.Deviation == null);
         party.TotalQuantity.Should().Be(24);
     }
 
@@ -251,7 +252,7 @@ public sealed class ShipmentExportDeviationTests
 
         var party = PartyOf(model!);
         party.Returns.Single().Deviation!.QuantityDifference.Should().Be(-3);
-        party.Deviations.Should().BeEmpty();
+        party.Deviations.Should().ContainSingle().Which.LineName.Should().Be("Sud 50 l");
         party.HasDeviations.Should().BeTrue();
     }
 
@@ -286,8 +287,8 @@ public sealed class ShipmentExportDeviationTests
     }
 
     /// <summary>
-    /// A deviation whose line is billed on no invoice has no row to sit on and is still true. It
-    /// falls through to the client rather than being dropped — losing one is what costs money.
+    /// A deviation whose line is billed on no invoice marks no row — and is stated all the same.
+    /// Rendering off the marks would drop exactly this one, and losing a deviation costs money.
     /// </summary>
     [Fact]
     public async Task LoadAsync_DeviationOnALineTheFileDoesNotBill_FallsThroughToTheClient()
@@ -311,7 +312,7 @@ public sealed class ShipmentExportDeviationTests
         var party = PartyOf(model!);
         party.Deviations.Should().ContainSingle()
             .Which.LineName.Should().Be("Pilsner Urquell");
-        party.Products.Should().OnlyContain(p => !p.IsFromDeviation && p.Deviation == null);
+        party.Products.Should().OnlyContain(p => p.Deviation == null);
     }
 
     /// <summary>

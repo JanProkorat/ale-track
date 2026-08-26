@@ -207,23 +207,17 @@ public sealed record ShipmentExportProduct
     /// The deviation recorded against this line, or null while the line went to plan.
     /// </summary>
     /// <remarks>
-    /// A third pair of numbers on the row, and deliberately not either of the first two.
+    /// A mark, not a rendering. What the deviation says is printed once, in the party's own list of
+    /// them; this only says that this row is one the reader was told about, which is how the Changed
+    /// scope knows which rows to keep.
+    ///
+    /// Deliberately not either of the two counts already here.
     /// <see cref="Quantity"/> against <see cref="DeliveredQuantity"/> is what the invoice split did
-    /// with the pieces; this is what happened to them at the door. Conflating the two would let an
-    /// editing decision read as a delivery going wrong.
+    /// with the pieces; a deviation is what happened to them at the door. Conflating the two would
+    /// let an editing decision read as a delivery going wrong.
     /// </remarks>
     public ShipmentExportDeviation? Deviation { get; init; }
 
-    /// <summary>
-    /// Whether the row exists only because of a deviation — goods the client took at the door that
-    /// no order planned.
-    /// </summary>
-    /// <remarks>
-    /// Its <see cref="Quantity"/> is 0 and stays 0: nothing bills those pieces yet, and inventing a
-    /// billed number for them would put money on an invoice nobody raised. What changed hands is on
-    /// the <see cref="Deviation"/>.
-    /// </remarks>
-    public bool IsFromDeviation { get; init; }
 }
 
 /// <summary>
@@ -297,7 +291,6 @@ public sealed record ShipmentExportInvoice
                 DeliveredQuantity = group.Any(p => p.DeliveredQuantity is not null)
                     ? group.Sum(p => p.DeliveredQuantity ?? 0)
                     : null,
-                IsFromDeviation = group.All(p => p.IsFromDeviation),
                 Deviation = MergeDeviations(group)
             })
             .OrderBy(product => product.Name, StringComparer.CurrentCulture)
@@ -409,22 +402,21 @@ public sealed record ShipmentExportInvoiceParty
     public List<ShipmentExportProduct> Products { get; init; } = [];
 
     /// <summary>
-    /// Deviations of this party that no row carries: where the goods went instead, money owed either
-    /// way, and anything else the dispatcher recorded.
+    /// Everything that diverged from this party's plan, oldest first — the one place the file states
+    /// it.
     /// </summary>
     /// <remarks>
-    /// Also the catch-all for a deviation whose line has since been removed from the order. It has
-    /// nowhere to sit and is still true, so it lands here rather than being dropped.
+    /// Every deviation, including the ones a row above is marked with: a correction is read as a
+    /// list, and splitting it between an annotated table and a leftovers section would mean reading
+    /// two places to learn what happened. It is also the only place goods taken at the door can
+    /// appear, having no order line to be a row of.
     /// </remarks>
     public List<ShipmentExportDeviation> Deviations { get; init; } = [];
 
     /// <summary>
     /// Whether anything about this party diverged from the plan — what the Changed scope keeps.
     /// </summary>
-    public bool HasDeviations =>
-        Deviations.Count > 0
-        || Products.Any(p => p.Deviation is not null)
-        || Returns.Any(r => r.Deviation is not null);
+    public bool HasDeviations => Deviations.Count > 0;
 
     public int TotalQuantity => Products.Sum(p => p.Quantity);
 }

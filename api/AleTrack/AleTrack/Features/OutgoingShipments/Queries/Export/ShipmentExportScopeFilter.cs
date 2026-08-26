@@ -32,8 +32,7 @@ internal static class ShipmentExportScopeFilter
         };
 
     /// <summary>
-    /// The plan as it was ordered: every deviation taken off, and the rows that exist only because
-    /// of one taken out altogether.
+    /// The plan as it was ordered, with every deviation taken off it.
     /// </summary>
     private static ShipmentExportModel WithoutDeviations(ShipmentExportModel model) =>
         model with
@@ -45,7 +44,6 @@ internal static class ShipmentExportScopeFilter
                         .Select(party => party with
                         {
                             Products = party.Products
-                                .Where(product => !product.IsFromDeviation)
                                 .Select(product => product with { Deviation = null })
                                 .ToList(),
                             Returns = party.Returns

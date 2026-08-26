@@ -417,10 +417,9 @@ public static class ShipmentExportQuery
             .ThenBy(x => x.Invoice.Sequence)
             .ToList();
 
-        // A deviation that hangs off no row — money owed, a redirected delivery, goods taken at the
-        // door — belongs to the client, not to an invoice. A client holding two invoices on the run
-        // appears as a party in both, so it is written into the first of them only: printing a debt
-        // twice is how a file starts overstating what somebody owes.
+        // Deviations belong to the client, not to an invoice. A client holding two invoices on the
+        // run appears as a party in both, so they are written into the first of them only: printing a
+        // debt twice is how a file starts overstating what somebody owes.
         var placed = new HashSet<long>();
 
         return blocks
@@ -486,7 +485,7 @@ public static class ShipmentExportQuery
         PartyDelivery? delivery,
         Dictionary<(long ClientId, InvoiceLineSourceKind SourceKind, long SourceItemId), int> deliveredByClientItem,
         ClientDeviations deviations,
-        bool carriesLooseDeviations) =>
+        bool carriesAllDeviations) =>
         new()
         {
             ClientName = split.OrdererNames.GetValueOrDefault(ordererGroup.Key, Missing),
@@ -507,12 +506,8 @@ public static class ShipmentExportQuery
                     Deviation = deviations.ForLine(ordererGroup.Key, entry.Key.SourceKind, entry.Key.SourceItemId)
                 })
                 .OrderBy(p => p.Name, StringComparer.CurrentCulture)
-                // Goods taken at the door have no order line to sit on, so they follow the ordered
-                // rows rather than sorting in among them — the reader is looking for what was not
-                // planned, and it reads as a footnote to the table, not as part of it.
-                .Concat(carriesLooseDeviations ? deviations.AddedFor(ordererGroup.Key) : [])
                 .ToList(),
-            Deviations = carriesLooseDeviations ? deviations.LooseFor(ordererGroup.Key) : []
+            Deviations = carriesAllDeviations ? deviations.For(ordererGroup.Key) : []
         };
 
     /// <summary>
@@ -931,15 +926,19 @@ public static class ShipmentExportQuery
     }
 
     /// <summary>
-    /// The run's deviations, sorted into the places the file can show them: on a billed row, on a
-    /// vratka, as a row the order never planned, or — failing all three — on the client itself.
+    /// The run's deviations per client, plus which rows of the file they touched.
     /// </summary>
     /// <remarks>
-    /// The sorting is the whole point. A deviation is recorded against a line, but the file is
-    /// written from the invoice split, and the two do not always have the same rows: a line can be
-    /// billed on no invoice, or have been taken off the order since. Every case that cannot find its
-    /// row falls through to <see cref="LooseFor"/> rather than being dropped, because a deviation
-    /// the office recorded and the file does not mention is the failure that costs money.
+    /// Two jobs, and they are separate on purpose. <see cref="For"/> is what the file renders — every
+    /// deviation of that client, in the order it was recorded, whether or not the file has a row for
+    /// it. <see cref="ForLine"/> and <see cref="ForReturn"/> only mark the rows a deviation touched,
+    /// which is how the Changed scope knows which rows to keep.
+    ///
+    /// Marking cannot be the same thing as rendering, because the two do not line up: a deviation is
+    /// recorded against an order line, the file is written from the invoice split, and a line can be
+    /// billed on no invoice or have been taken off the order since. Rendering off the marks would
+    /// silently drop exactly those — and a deviation the office recorded that the file does not
+    /// mention is the failure that costs money.
     /// </remarks>
     private sealed record ClientDeviations
     {
@@ -949,9 +948,7 @@ public static class ShipmentExportQuery
 
         private Dictionary<(long ClientId, long ReturnId), ShipmentExportDeviation> ByReturn { get; init; } = [];
 
-        private Dictionary<long, List<ShipmentExportProduct>> AddedByClient { get; init; } = [];
-
-        private Dictionary<long, List<ShipmentExportDeviation>> LooseByClient { get; init; } = [];
+        private Dictionary<long, List<ShipmentExportDeviation>> ByClient { get; init; } = [];
 
         /// <summary>
         /// Sorts raw deviations against what the file actually has rows for.
@@ -978,6 +975,10 @@ public static class ShipmentExportQuery
             foreach (var raw in raws)
             {
                 var deviation = ToDeviation(raw);
+
+                sorted.ByClient.TryAdd(raw.ClientId, []);
+                sorted.ByClient[raw.ClientId].Add(deviation);
+
                 var line = LineKeyOf(raw);
 
                 if (line is not null && billed.Contains((raw.ClientId, line.Value.SourceKind, line.Value.SourceItemId)))
@@ -991,31 +992,10 @@ public static class ShipmentExportQuery
                     && returns.Contains((raw.ClientId, raw.OrderReturnId.Value)))
                 {
                     sorted.ByReturn[(raw.ClientId, raw.OrderReturnId.Value)] = deviation;
-                    continue;
                 }
 
-                // Goods that changed hands with no line behind them: taken at the door, and the only
-                // deviation that becomes a row of its own rather than annotating one.
-                if (raw.Target == ClientLedgerEntryTarget.ProductQuantity && raw.OrderItemId is null)
-                {
-                    sorted.AddedByClient.TryAdd(raw.ClientId, []);
-                    sorted.AddedByClient[raw.ClientId].Add(new ShipmentExportProduct
-                    {
-                        Name = raw.ProductName ?? raw.LineName ?? Missing,
-                        Kind = raw.ProductKind,
-                        PackageSize = raw.PackageSize,
-                        Weight = raw.Weight,
-                        // Nothing bills these pieces — the ledger stays out of invoicing — so the
-                        // billed count is 0 and what changed hands is on the deviation.
-                        Quantity = 0,
-                        IsFromDeviation = true,
-                        Deviation = deviation
-                    });
-                    continue;
-                }
-
-                sorted.LooseByClient.TryAdd(raw.ClientId, []);
-                sorted.LooseByClient[raw.ClientId].Add(deviation);
+                // Anything else touches no row of this file — goods taken at the door, money owed, a
+                // redirected delivery, a line billed on no invoice. It is rendered all the same.
             }
 
             return sorted;
@@ -1029,13 +1009,9 @@ public static class ShipmentExportQuery
         public ShipmentExportDeviation? ForReturn(long? clientId, long returnId) =>
             clientId is null ? null : ByReturn.GetValueOrDefault((clientId.Value, returnId));
 
-        /// <summary>Rows the order never planned — goods taken at the door.</summary>
-        public List<ShipmentExportProduct> AddedFor(long clientId) =>
-            AddedByClient.GetValueOrDefault(clientId, []);
-
-        /// <summary>Deviations with no row of their own: where it went, what is owed, everything else.</summary>
-        public List<ShipmentExportDeviation> LooseFor(long clientId) =>
-            LooseByClient.GetValueOrDefault(clientId, []);
+        /// <summary>Every deviation recorded against one client on this run, oldest first.</summary>
+        public List<ShipmentExportDeviation> For(long clientId) =>
+            ByClient.GetValueOrDefault(clientId, []);
 
         /// <summary>
         /// Which billed row a deviation is about, or null when it is about no row at all.
