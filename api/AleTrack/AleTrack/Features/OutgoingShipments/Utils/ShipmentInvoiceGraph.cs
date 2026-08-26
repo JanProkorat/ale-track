@@ -267,6 +267,34 @@ public static class ShipmentInvoiceGraph
     /// <summary>
     /// Whether the split may still be edited. Mirrors the nakládka rule.
     /// </summary>
+    /// <remarks>
+    /// Deliberately says nothing about the run's invoicing being filed, even though every write
+    /// endpoint refuses a filed run — see <see cref="EnsureInvoicingNotFiled"/>. This predicate is
+    /// also what the reconciler prunes stale billing recipients under and what the invoices DTO
+    /// reports as <c>IsEditable</c>, and folding a second rule into it would change both without
+    /// either asking for it.
+    /// </remarks>
     public static bool IsEditable(OutgoingShipment shipment) =>
         shipment.State is not (OutgoingShipmentState.Delivered or OutgoingShipmentState.Cancelled);
+
+    /// <summary>
+    /// Refuses a change to the invoicing of a run that has already been filed.
+    /// </summary>
+    /// <remarks>
+    /// Filed paperwork does not move. Past that point the split is the record of what was filed,
+    /// and the deviations recorded since are what say how the delivery actually went — so a change
+    /// here would rewrite a document that has already left the building.
+    ///
+    /// One guard rather than the same two lines in five endpoints: the UI hides all of them once a
+    /// run is filed, which makes this the layer nobody exercises by hand and the easiest one to
+    /// forget when the sixth endpoint arrives.
+    ///
+    /// Called after <see cref="IsEditable"/>, so a delivered or cancelled run is already refused by
+    /// its state and never reaches this.
+    /// </remarks>
+    public static void EnsureInvoicingNotFiled(OutgoingShipment shipment)
+    {
+        if (shipment.IsInvoicingFiled)
+            ThrowHelper.ShipmentInvoicingFiled(shipment.PublicId);
+    }
 }

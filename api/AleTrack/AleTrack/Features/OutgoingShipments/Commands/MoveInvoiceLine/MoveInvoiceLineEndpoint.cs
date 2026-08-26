@@ -85,6 +85,8 @@ public sealed class MoveInvoiceLineEndpoint(AleTrackDbContext dbContext, IDriver
             return;
         }
 
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
+
         // Reconcile first so the move operates on a split that matches what is actually loaded.
         var reconcileResult = ShipmentInvoiceReconciler.Reconcile(split);
         RemoveDetached(reconcileResult);
