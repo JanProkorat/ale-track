@@ -17740,6 +17740,7 @@ export interface IOutgoingShipmentDetailDto {
 
 export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
     clientIds!: string[];
+    scope?: ShipmentExportScope;
 
     constructor(data?: IExportOutgoingShipmentDto) {
         if (data) {
@@ -17760,6 +17761,7 @@ export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
                 for (let item of _data["clientIds"])
                     this.clientIds!.push(item);
             }
+            this.scope = _data["scope"];
         }
     }
 
@@ -17777,12 +17779,20 @@ export class ExportOutgoingShipmentDto implements IExportOutgoingShipmentDto {
             for (let item of this.clientIds)
                 data["clientIds"].push(item);
         }
+        data["scope"] = this.scope;
         return data;
     }
 }
 
 export interface IExportOutgoingShipmentDto {
     clientIds: string[];
+    scope?: ShipmentExportScope;
+}
+
+export enum ShipmentExportScope {
+    Plan = 0,
+    Changed = 1,
+    All = 2,
 }
 
 export class ShipmentVehicleDto implements IShipmentVehicleDto {
