@@ -64,9 +64,17 @@ function invoice(
 }
 
 /** A run with three rows: two confirmed (Lva #1, Kout #2) and Beseda not confirmed at all. */
-function split(over: { lvaExportedAt?: Date; koutExportedAt?: Date } = {}) {
+function split(over: {
+  lvaExportedAt?: Date;
+  koutExportedAt?: Date;
+  /** Filed runs are the only ones with deviations, so the scope choice only exists on them. */
+  filed?: boolean;
+  lvaDeviations?: number;
+  koutDeviations?: number;
+} = {}) {
   return new ShipmentInvoicesDto({
     isEditable: true,
+    isInvoicingFiled: over.filed ?? false,
     adjustments: [],
     invoices: [
       invoice(LVA, 'Hospoda U Lva', 10, 'U Lva gastro s.r.o.'),
@@ -76,9 +84,11 @@ function split(over: { lvaExportedAt?: Date; koutExportedAt?: Date } = {}) {
     confirmations: [
       new ShipmentInvoiceConfirmationDto({
         clientId: LVA, number: 1, isReady: true, lastExportedAt: over.lvaExportedAt,
+        deviationCount: over.lvaDeviations ?? 0,
       }),
       new ShipmentInvoiceConfirmationDto({
         clientId: KOUT, number: 2, isReady: true, lastExportedAt: over.koutExportedAt,
+        deviationCount: over.koutDeviations ?? 0,
       }),
     ],
   });
@@ -277,5 +287,92 @@ describe('exporting', () => {
     expect(within(row).getByText('1')).toBeInTheDocument();
     expect(within(row).getByText('10 ks')).toBeInTheDocument();
     expect(within(row).getByText('1000 Kč')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// Which of the three files it produces. Deviations only start being recorded once the
+// invoicing is filed, so before that the choice would be three names for one file.
+// ---------------------------------------------------------------------------------
+
+describe('how much of the run it carries', () => {
+  const scopeOf = (name: string) => screen.queryByRole('button', { name });
+
+  it('offers no choice before the invoicing is filed', () => {
+    renderDrawer();
+
+    expect(scopeOf('Jen změny')).not.toBeInTheDocument();
+    expect(screen.queryByText('Co má soubor obsahovat')).not.toBeInTheDocument();
+  });
+
+  it('offers all three once it is filed, starting on the plan', () => {
+    invoicesResponse = split({ filed: true });
+
+    renderDrawer();
+
+    expect(screen.getByText('Co má soubor obsahovat')).toBeInTheDocument();
+    expect(scopeOf('Původní')).toHaveAttribute('aria-pressed', 'true');
+    expect(scopeOf('Jen změny')).toHaveAttribute('aria-pressed', 'false');
+    expect(scopeOf('Vše')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('exports the plan when nobody picked anything else', () => {
+    invoicesResponse = split({ filed: true });
+
+    renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'Excel' }));
+
+    expect(onExport).toHaveBeenCalledWith('excel', expect.any(Array), 'plan');
+  });
+
+  it('carries the chosen scope into the export', () => {
+    invoicesResponse = split({ filed: true, lvaDeviations: 2 });
+
+    renderDrawer();
+    fireEvent.click(scopeOf('Jen změny')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Word' }));
+
+    expect(onExport).toHaveBeenCalledWith('word', expect.any(Array), 'changed');
+  });
+
+  // An empty file cannot be told from a broken one, so the drawer says so before producing it.
+  it('warns that a correction of rows that went to plan would be empty', () => {
+    invoicesResponse = split({ filed: true });
+
+    renderDrawer();
+    fireEvent.click(scopeOf('Jen změny')!);
+
+    expect(screen.getByText(/soubor bude prázdný/)).toBeInTheDocument();
+  });
+
+  it('does not warn once a chosen row has a deviation', () => {
+    invoicesResponse = split({ filed: true, lvaDeviations: 2 });
+
+    renderDrawer();
+    fireEvent.click(scopeOf('Jen změny')!);
+
+    expect(screen.queryByText(/soubor bude prázdný/)).not.toBeInTheDocument();
+  });
+
+  // Counted over the ticked rows, not the run: a correction of two rows that went to plan is empty
+  // even on a run where somebody else's did not.
+  it('warns when the run changed but the chosen rows did not', () => {
+    invoicesResponse = split({ filed: true, koutDeviations: 3 });
+
+    renderDrawer();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pivovar Kout' }));
+    fireEvent.click(scopeOf('Jen změny')!);
+
+    expect(screen.getByText(/soubor bude prázdný/)).toBeInTheDocument();
+  });
+
+  it("names each row's deviations, so the office sees which rows a correction lands on", () => {
+    invoicesResponse = split({ filed: true, lvaDeviations: 2, koutDeviations: 1 });
+
+    renderDrawer();
+
+    expect(within(screen.getByTestId(`export-row-${LVA}`)).getByText(/2 odchylky/)).toBeInTheDocument();
+    expect(within(screen.getByTestId(`export-row-${KOUT}`)).getByText(/1 odchylka/)).toBeInTheDocument();
+    expect(within(screen.getByTestId(`export-row-${LVA}`)).queryByText(/0 odchylek/)).not.toBeInTheDocument();
   });
 });

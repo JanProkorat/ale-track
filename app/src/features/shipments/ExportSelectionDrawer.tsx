@@ -16,12 +16,14 @@ import {
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import { SegControl } from 'src/components/common/SegControl';
 import { useShipmentInvoices } from 'src/hooks/useShipmentInvoices';
 import { fmtDateShort, fmtTime, num, plural } from 'src/lib/format';
+import { exportScopeHint, L } from 'src/lib/labels';
 import { useCurrency } from 'src/providers/CurrencyProvider';
 import { colorForClient } from './clientColor';
 import { toBands, type ClientBand } from './shipmentInvoiceModel';
-import type { ShipmentExportFormat } from 'src/hooks/useShipments';
+import type { ShipmentExportFormat, ShipmentExportScopeName } from 'src/hooks/useShipments';
 
 /** "23. 8. 21:40" — the date alone cannot tell two exports of one morning apart. */
 function fmtStamp(d: Date): string {
@@ -85,6 +87,13 @@ function ExportRow({ band, checked, onToggle }: {
         </Typography>
         <Typography sx={{ fontSize: 11.5, color: exported ? 'warning.dark' : 'text.secondary' }}>
           {exported ? `Exportováno ${fmtStamp(exported)}` : 'Zatím neexportováno'}
+          {/* Named on the row rather than only in the scope's hint: choosing "jen změny" is a
+              choice about these rows, and the office should see which of them it will land on. */}
+          {band.deviationCount > 0 && (
+            <Typography component="span" sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+              {` · ${num(band.deviationCount)} ${plural(band.deviationCount, 'odchylka', 'odchylky', 'odchylek')}`}
+            </Typography>
+          )}
         </Typography>
       </Box>
       <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
@@ -105,7 +114,7 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
   /** An export is running — both formats are locked so a second click cannot race the first. */
   busy: boolean;
   onClose: () => void;
-  onExport: (format: ShipmentExportFormat, clientIds: string[]) => void;
+  onExport: (format: ShipmentExportFormat, clientIds: string[], scope: ShipmentExportScopeName) => void;
 }) {
   const { data, isLoading, isError } = useShipmentInvoices(open ? shipmentId : undefined);
 
@@ -120,9 +129,19 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
   // focus — cannot wipe a selection the office is halfway through making.
   const [selected, setSelected] = useState<Set<string> | null>(null);
 
+  // The plan, which is what an export meant before there was a choice — so the office's muscle
+  // memory keeps producing the file it already knows.
+  const [scope, setScope] = useState<ShipmentExportScopeName>('plan');
+
+  // Deviations only start being recorded once the invoicing is filed, so before that all three
+  // scopes would produce the same file and the choice is noise.
+  const filed = data?.isInvoicingFiled ?? false;
+  const offersScope = filed && rows.length > 0;
+
   useEffect(() => {
     if (!open) {
       setSelected(null);
+      setScope('plan');
       return;
     }
 
@@ -142,6 +161,13 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
   });
 
   const allTicked = rows.length > 0 && rows.every((band) => ticked.has(band.clientId));
+
+  // Counted over the chosen rows rather than the run: "jen změny" of two rows that went to plan is
+  // an empty file even on a run where something else changed, and an empty file cannot be told
+  // from a broken one.
+  const chosenDeviations = rows
+    .filter((band) => ticked.has(band.clientId))
+    .reduce((total, band) => total + band.deviationCount, 0);
 
   return (
     <Drawer
@@ -187,6 +213,28 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
           </Typography>
         )}
 
+        {offersScope && (
+          <Stack spacing={0.75} sx={{ mb: 2.5 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>Co má soubor obsahovat</Typography>
+            <SegControl
+              value={scope}
+              onChange={setScope}
+              options={(['plan', 'changed', 'all'] as const).map((value) => ({
+                value,
+                label: L.exportScope[value],
+              }))}
+            />
+            <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+              {exportScopeHint[scope]}
+            </Typography>
+            {scope === 'changed' && chosenDeviations === 0 && (
+              <Typography sx={{ fontSize: 11.5, color: 'warning.dark' }}>
+                U vybraných objednávek není zaznamenaná žádná odchylka — soubor bude prázdný.
+              </Typography>
+            )}
+          </Stack>
+        )}
+
         {rows.length > 0 && (
           <Stack spacing={1}>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -224,7 +272,7 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
           startIcon={<TableChartOutlinedIcon />}
           variant="outlined"
           disabled={busy || ticked.size === 0}
-          onClick={() => onExport('excel', [...ticked])}
+          onClick={() => onExport('excel', [...ticked], scope)}
         >
           Excel
         </Button>
@@ -232,7 +280,7 @@ export function ExportSelectionDrawer({ open, shipmentId, busy, onClose, onExpor
           startIcon={<DescriptionOutlinedIcon />}
           variant="contained"
           disabled={busy || ticked.size === 0}
-          onClick={() => onExport('word', [...ticked])}
+          onClick={() => onExport('word', [...ticked], scope)}
         >
           Word
         </Button>

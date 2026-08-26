@@ -77,6 +77,17 @@ public sealed record ShipmentInvoiceConfirmationDto
     /// to preselect the rows that have not gone out yet.
     /// </summary>
     public DateTime? LastExportedAt { get; set; }
+
+    /// <summary>
+    /// How many deviations have been recorded against this client's order on the run. Zero until
+    /// the invoicing is filed, since that is when they start being recorded at all.
+    /// </summary>
+    /// <remarks>
+    /// What lets the export drawer offer "only what changed" honestly: a run nobody recorded
+    /// anything against would answer that with an empty file, and the office cannot tell an empty
+    /// file from a broken one.
+    /// </remarks>
+    public int DeviationCount { get; set; }
 }
 
 /// <summary>

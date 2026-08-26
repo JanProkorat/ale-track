@@ -17469,6 +17469,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
     number?: number;
     isReady?: boolean;
     lastExportedAt?: Date | undefined;
+    deviationCount?: number;
 
     constructor(data?: IShipmentInvoiceConfirmationDto) {
         if (data) {
@@ -17485,6 +17486,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
             this.number = _data["number"];
             this.isReady = _data["isReady"];
             this.lastExportedAt = _data["lastExportedAt"] ? new Date(_data["lastExportedAt"].toString()) : undefined as any;
+            this.deviationCount = _data["deviationCount"];
         }
     }
 
@@ -17501,6 +17503,7 @@ export class ShipmentInvoiceConfirmationDto implements IShipmentInvoiceConfirmat
         data["number"] = this.number;
         data["isReady"] = this.isReady;
         data["lastExportedAt"] = this.lastExportedAt ? this.lastExportedAt.toISOString() : undefined as any;
+        data["deviationCount"] = this.deviationCount;
         return data;
     }
 }
@@ -17510,6 +17513,7 @@ export interface IShipmentInvoiceConfirmationDto {
     number?: number;
     isReady?: boolean;
     lastExportedAt?: Date | undefined;
+    deviationCount?: number;
 }
 
 export class GetShipmentInvoicesRequest implements IGetShipmentInvoicesRequest {

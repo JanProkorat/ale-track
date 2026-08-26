@@ -19,7 +19,17 @@ public static class ShipmentInvoiceMapper
     /// <summary>
     /// Maps the shipment's invoices and a reconciliation result into the response DTO.
     /// </summary>
-    public static ShipmentInvoicesDto ToDto(ShipmentInvoiceSplit split, ReconcileResult reconcileResult)
+    /// <param name="split">The shipment's invoice split.</param>
+    /// <param name="reconcileResult">What reconciliation had to change.</param>
+    /// <param name="deviationCountsByClientId">
+    /// Deviations recorded against each client's order on this run, by internal client ID. Omitted
+    /// by callers that have not counted them, which reads as none — the ledger is a separate read
+    /// from the split and not every caller needs it.
+    /// </param>
+    public static ShipmentInvoicesDto ToDto(
+        ShipmentInvoiceSplit split,
+        ReconcileResult reconcileResult,
+        IReadOnlyDictionary<long, int>? deviationCountsByClientId = null)
     {
         var shipment = split.Shipment;
         var stopOrders = ShipmentInvoiceGraph.StopOrderByClientId(shipment);
@@ -63,7 +73,8 @@ public static class ShipmentInvoiceMapper
                     ClientId = c.Client?.PublicId ?? Guid.Empty,
                     Number = c.Number,
                     IsReady = c.IsReady,
-                    LastExportedAt = c.LastExportedAt
+                    LastExportedAt = c.LastExportedAt,
+                    DeviationCount = deviationCountsByClientId?.GetValueOrDefault(c.ClientId) ?? 0
                 })
                 .OrderBy(c => c.Number)
                 .ToList(),

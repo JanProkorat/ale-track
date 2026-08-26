@@ -5,6 +5,7 @@ using AleTrack.Entities;
 using AleTrack.Features.OutgoingShipments.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 
 namespace AleTrack.Features.OutgoingShipments.Queries.Invoices;
 
@@ -83,6 +84,41 @@ public sealed class GetShipmentInvoicesEndpoint(AleTrackDbContext dbContext, IDr
 
         await dbContext.SaveChangesAsync(ct);
 
-        await Send.OkAsync(ShipmentInvoiceMapper.ToDto(split!, reconcileResult), cancellation: ct);
+        var deviationCounts = await CountDeviationsAsync(split!, ct);
+
+        await Send.OkAsync(
+            ShipmentInvoiceMapper.ToDto(split!, reconcileResult, deviationCounts),
+            cancellation: ct);
+    }
+
+    /// <summary>
+    /// Deviations recorded against each client's order on this run, by internal client ID.
+    /// </summary>
+    /// <remarks>
+    /// A separate read from the split, because the ledger is deliberately not part of it — see
+    /// <see cref="ShipmentInvoiceSplit.LedgerEntries"/>. Counted rather than loaded: the screen
+    /// needs to know whether a row changed, and the export drawer whether the run did at all. What
+    /// each deviation says is read from the client's ledger, where it lives.
+    ///
+    /// A standalone debt with no order behind it is out, matching the export: it is a fact about the
+    /// client, not about this run.
+    /// </remarks>
+    private async Task<Dictionary<long, int>> CountDeviationsAsync(
+        ShipmentInvoiceSplit split,
+        CancellationToken ct)
+    {
+        var orderIds = split.Shipment.Stops
+            .Where(stop => stop.ClientOrder is not null)
+            .Select(stop => stop.ClientOrder!.Id)
+            .ToList();
+
+        if (orderIds.Count == 0)
+            return [];
+
+        return await dbContext.ClientLedgerEntries
+            .Where(e => e.OrderId != null && orderIds.Contains(e.OrderId.Value))
+            .GroupBy(e => e.ClientId)
+            .Select(g => new { ClientId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ClientId, x => x.Count, ct);
     }
 }

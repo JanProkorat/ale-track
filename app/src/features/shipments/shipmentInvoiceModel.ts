@@ -50,6 +50,9 @@ export interface ClientBand {
   /** When an export last carried this row, or undefined while none has. What the export drawer
    *  preselects by. */
   lastExportedAt?: Date;
+  /** Deviations recorded against this client's order on the run — 0 until the invoicing is filed,
+   *  since that is when they start being recorded. What the export drawer offers "jen změny" by. */
+  deviationCount: number;
   invoices: ShipmentInvoiceDto[];
   /** Billed pieces only — private ones are counted separately. */
   quantity: number;
@@ -217,6 +220,7 @@ export function toBands(data: ShipmentInvoicesDto): ClientBand[] {
         number: confirmation?.number,
         isReady: confirmation?.isReady ?? false,
         lastExportedAt: confirmation?.lastExportedAt,
+        deviationCount: confirmation?.deviationCount ?? 0,
         invoices: [],
         quantity: 0,
         value: 0,

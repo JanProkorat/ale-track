@@ -69,6 +69,13 @@ export const L = {
     Multipack: 'Multipack',
     Tray: 'Tray',
   } as Record<string, string>,
+  // How much of a run an export file carries. Short enough for a three-way segmented control in
+  // a 460-wide drawer; `exportScopeHint` below is where each one says what it means.
+  exportScope: {
+    plan: 'Původní',
+    changed: 'Jen změny',
+    all: 'Vše',
+  } as Record<string, string>,
   // What an imported price list would do to one product.
   priceListChange: {
     Added: 'Nový',
@@ -492,6 +499,13 @@ export const KIND_ORDER: Record<string, number> = {
   Can: 3,
   Multipack: 4,
   Other: 5,
+};
+
+/** One line saying what an export scope leaves in the file, under the control that picks it. */
+export const exportScopeHint: Record<string, string> = {
+  plan: 'Objednávka tak, jak byla naplánovaná — bez odchylek.',
+  changed: 'Jen klienti a řádky, kterých se odchylka dotkla.',
+  all: 'Plán i všechny zaznamenané odchylky.',
 };
 
 export type StatusTone = 'grey' | 'amber' | 'ok' | 'info' | 'crit';

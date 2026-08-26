@@ -539,7 +539,8 @@ describe('invoiceParties', () => {
 describe('otherClientCount', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   it('is zero for a band billing only its own client', () => {
@@ -565,7 +566,8 @@ describe('otherClientCount', () => {
 describe('bandAddress', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({
@@ -657,7 +659,8 @@ describe('bandAddress', () => {
 describe('bandNotes', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({
@@ -700,7 +703,8 @@ describe('bandNotes', () => {
 describe('bandReturns', () => {
   const band = (over: Partial<ClientBand> = {}): ClientBand => ({
     clientId: CLIENT_A, clientName: 'Klient A', stopOrder: 1, isReady: false, invoices: [],
-    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0, ...over,
+    quantity: 0, value: 0, crossBilled: 0, privateLines: [], privateQuantity: 0,
+    deviationCount: 0, ...over,
   });
 
   const stop = (over: Record<string, unknown> = {}) => ({

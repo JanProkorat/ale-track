@@ -53,6 +53,7 @@ import {
   useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
   useReorderShipmentStops,
   type ShipmentExportFormat,
+  type ShipmentExportScopeName,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
 import { useInventory } from 'src/hooks/useInventory';
@@ -1176,10 +1177,14 @@ export function ShipmentDetail({
   // that name off Content-Disposition, so nothing here has to reconstruct it. The fallback only
   // covers a proxy that strips the header, and carries the right extension per format so the file
   // still opens in the right program.
-  function runExport(format: ShipmentExportFormat, clientIds: string[]) {
+  function runExport(
+    format: ShipmentExportFormat,
+    clientIds: string[],
+    scope: ShipmentExportScopeName,
+  ) {
     if (!shipment.id) return;
 
-    exportShipment.mutate({ id: shipment.id, format, clientIds }, {
+    exportShipment.mutate({ id: shipment.id, format, clientIds, scope }, {
       onSuccess: (file) => {
         setExportOpen(false);
         downloadBlob(file.data, file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'));
