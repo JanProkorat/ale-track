@@ -111,13 +111,61 @@ public sealed class DeleteOrderTests
         dbContext.Verify(e => e.Orders.Remove(It.IsAny<Order>()), Times.Once);
     }
 
+    /// <summary>
+    /// An order that is history cannot be taken back either — the same rule that closes editing,
+    /// because an order nobody may change is one nobody may cancel.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_OrderOnADeliveredRun_Fails()
+    {
+        var f = OnRun(filedAt: null, state: OutgoingShipmentState.Delivered);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(orders: [f.Order], outgoingShipments: [f.Shipment]);
+
+        var endpoint = EndpointBuilder<DeleteOrderRequest, DeleteOrderEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(new DeleteOrderRequest { Id = f.Order.PublicId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+        dbContext.Verify(e => e.Orders.Remove(It.IsAny<Order>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_FinishedOrder_Fails()
+    {
+        var f = OnRun(filedAt: null, orderState: OrderState.Finished);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(orders: [f.Order], outgoingShipments: [f.Shipment]);
+
+        var endpoint = EndpointBuilder<DeleteOrderRequest, DeleteOrderEndpoint>.Create(dbContext.Object);
+
+        var act = () => endpoint.HandleAsync(new DeleteOrderRequest { Id = f.Order.PublicId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.OrderContentFrozen);
+        dbContext.Verify(e => e.Orders.Remove(It.IsAny<Order>()), Times.Never);
+    }
+
+    /// <summary>Cancelling twice changes nothing, so a double-tap must not read as a failure.</summary>
+    [Fact]
+    public async Task ProcessAsync_AlreadyCancelledOrder_Succeeds()
+    {
+        var f = OnRun(filedAt: null, orderState: OrderState.Cancelled);
+        var dbContext = AleTrackDbContextMockFactory.CreateMock(orders: [f.Order], outgoingShipments: [f.Shipment]);
+
+        var endpoint = EndpointBuilder<DeleteOrderRequest, DeleteOrderEndpoint>.Create(dbContext.Object);
+        await endpoint.HandleAsync(new DeleteOrderRequest { Id = f.Order.PublicId }, CancellationToken.None);
+
+        dbContext.Verify(e => e.Orders.Remove(It.IsAny<Order>()), Times.Once);
+    }
+
     /// <summary>One order on one run, with the run's invoicing filed or not.</summary>
     private static (Order Order, OutgoingShipment Shipment) OnRun(
         DateTime? filedAt,
-        OutgoingShipmentState state = OutgoingShipmentState.Loaded)
+        OutgoingShipmentState state = OutgoingShipmentState.Loaded,
+        OrderState orderState = OrderState.Planning)
     {
         var client = ClientBuilder.BuildEntity(publicId: Guid.NewGuid(), officialAddress: AddressBuilder.BuildEntity());
-        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: OrderState.Planning);
+        var order = OrderBuilder.BuildEntity(publicId: Guid.NewGuid(), client: client, state: orderState);
 
         var shipment = OutgoingShipmentBuilder.BuildEntity(
             publicId: Guid.NewGuid(),

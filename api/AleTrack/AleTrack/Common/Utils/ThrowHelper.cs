@@ -254,8 +254,8 @@ public static class ThrowHelper
             });
 
     /// <summary>
-    /// Throws an <see cref="AleTrackException"/> when an update would change the content of
-    /// an order that is closed, or already loaded onto a shipment.
+    /// Throws an <see cref="AleTrackException"/> when a change — an update or a cancellation —
+    /// is asked of an order that is closed, or on a shipment that has already delivered.
     /// </summary>
     /// <param name="orderId">ID of the order</param>
     /// <exception cref="AleTrackException"></exception>

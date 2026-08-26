@@ -935,18 +935,25 @@ describe('OrderDetail — editing the order', () => {
     expect(edit()).not.toBeInTheDocument();
   });
 
-  // Once the run's invoicing is filed the order is a record of what went out. Losing it would
-  // take a delivery out of a run already invoiced — and reopen every debt it promised to settle.
+  // Cancelling follows the same rule, because it is the larger version of it: an order nobody may
+  // change is one nobody may take back. Losing a filed order would reopen every debt it promised
+  // to settle on a run already invoiced; losing a delivered one would rewrite what happened.
   const cancel = () => screen.queryByRole('button', { name: 'Zrušit objednávku' });
 
-  it('offers cancelling while the invoicing is unfiled', () => {
-    renderDetail(order());
+  it('offers cancelling while the content is open', () => {
+    renderDetail(order({ isContentEditable: true }));
 
     expect(cancel()).toBeInTheDocument();
   });
 
   it('withholds cancelling once the invoicing is filed', () => {
-    renderDetail(order({ isInvoicingFiled: true }));
+    renderDetail(order({ isContentEditable: false, isInvoicingFiled: true }));
+
+    expect(cancel()).not.toBeInTheDocument();
+  });
+
+  it('withholds cancelling once the order is finished on a delivered run', () => {
+    renderDetail(order({ isContentEditable: false, state: OrderState.Finished }));
 
     expect(cancel()).not.toBeInTheDocument();
   });

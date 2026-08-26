@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Features.Clients.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,12 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
         {
             ThrowHelper.ShipmentInvoicingFiled(shipment.PublicId);
         }
+
+        // And an order that is history cannot be taken back either: finished, or on a run that has
+        // already delivered. Cancelling twice stays allowed — the second flip changes nothing, and
+        // a double-tap should not read as a failure.
+        if (order.State is not OrderState.Cancelled && !OrderMutability.IsContentEditable(order))
+            ThrowHelper.OrderContentFrozen(req.Id);
 
         // Before the removal, which the context turns into a state flip to Cancelled: a cancelled
         // order settles nothing, so every open point it promised to carry goes back to open.

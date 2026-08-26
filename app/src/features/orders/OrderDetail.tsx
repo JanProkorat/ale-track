@@ -273,10 +273,12 @@ export function OrderDetail({
   // deviation recorded against it stays true.
   const canRecordNow = canRecordDeviation && (order.isInvoicingFiled ?? false);
 
-  // Cancelling is gone once the run's invoicing is filed: from then on the order is a record of
-  // what went out, and only deviations are written against it. The API refuses it too — losing
-  // the order would take a delivery out of a run whose invoicing has already gone out.
-  const canCancelOrder = editable && !(order.isInvoicingFiled ?? false);
+  // Cancelling follows the same rule as editing, because it is the larger version of it: an order
+  // nobody may change is one nobody may take back either. That closes it once the run's invoicing
+  // is filed, once the run has delivered, and once the order itself is finished — the API refuses
+  // all three, which matters most here, since cancelling releases every open point this order had
+  // promised to settle.
+  const canCancelOrder = editable && canEditOrder;
 
   // The plan the drawer diffs against is the order's own quantity, which is also what was
   // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype
