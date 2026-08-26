@@ -34,9 +34,10 @@ import { ConfirmDialog } from 'src/components/common/ConfirmDialog';
 import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/common/RouteMap';
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
-import { fmtDate, num, fmtLiters, plural, shipmentNumber } from 'src/lib/format';
+import { fmtDate, num, fmtLiters, orderNumber, plural, shipmentNumber } from 'src/lib/format';
 import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName } from 'src/lib/labels';
 import {
+  type ClientLedgerEntryDto,
   type OutgoingShipmentDetailDto,
   OutgoingShipmentStopDto,
   type OutgoingShipmentSupplierGoodDto,
@@ -52,6 +53,7 @@ import {
   useSetShipmentState, useSetOrderItemSourcing, useSetSupplierGoodSourcing, useSetStockPurchase,
   useReorderShipmentStops,
   type ShipmentExportFormat,
+  type ShipmentExportScopeName,
 } from 'src/hooks/useShipments';
 import { downloadBlob } from 'src/lib/download';
 import { useInventory } from 'src/hooks/useInventory';
@@ -78,7 +80,15 @@ import {
 } from './supplierGoodSourcing';
 import { stopOverviewEntries, reorderedStopIds, type StopOverviewEntry } from './stopOverview';
 import { predictPickupStops, withSplitApplied } from './pickupStopPrediction';
-import { platoSizeChipText, unloadOrder } from './unloadOrder';
+import { platoSizeChipText, unloadChipText, unloadOrder, type UnloadStop } from './unloadOrder';
+import { useClientLedgersMany } from 'src/hooks/useClientLedger';
+import {
+  applyLedger, entriesForOrder, entriesForTarget, planRow,
+} from 'src/features/clients/ledgerModel';
+import { LedgerRowTag, QuantityDiff } from 'src/features/clients/LedgerDiff';
+import {
+  LedgerEntryDrawer, type LedgerDrawerContext,
+} from 'src/features/clients/LedgerEntryDrawer';
 import { UnloadOrderList } from './UnloadOrderList';
 import { ExportSelectionDrawer } from './ExportSelectionDrawer';
 import { ShipmentInvoicing } from './ShipmentInvoicing';
@@ -765,8 +775,28 @@ export function SupplierGoodsCard({ rows, editable, onAdjust }: {
 /** Vratky the driver collects on this route. Returns belong to the orders, not
  * to the shipment, so this is read-only and grouped per stop — two orders for
  * one client read as two groups, which is what the driver actually walks. */
-export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
-  const groups = stops.filter((st) => (st.returns ?? []).length > 0);
+export function ReturnsCard({ stops, ledgerByClient }: {
+  stops: OutgoingShipmentStopDto[];
+  /**
+   * The run's clients' ledgers. Without them the card reads exactly as it did; with them, a stop
+   * whose only returns are a deviation appears at all — before this, a client who handed the
+   * driver four crates against an order that planned none showed up nowhere on the run.
+   */
+  ledgerByClient?: Map<string, ClientLedgerEntryDto[]>;
+}) {
+  const groups = stops
+    .map((stop) => ({
+      stop,
+      rows: applyLedger(
+        (stop.returns ?? []).map((r) => planRow(r.id, r.name, r.quantity)),
+        entriesForTarget(
+          entriesForOrder(ledgerByClient?.get(stop.clientId ?? '') ?? [], stop.orderId),
+          'ReturnQuantity',
+        ),
+      ),
+    }))
+    .filter(({ rows }) => rows.length > 0);
+
   if (groups.length === 0) return null;
 
   return (
@@ -776,22 +806,30 @@ export function ReturnsCard({ stops }: { stops: OutgoingShipmentStopDto[] }) {
         <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Vratky</Typography>
       </Stack>
       <Stack divider={<Box sx={{ borderTop: 1, borderColor: 'divider' }} />}>
-        {groups.map((stop) => (
+        {groups.map(({ stop, rows }) => (
           <Box key={stop.id} sx={{ px: 2.5, py: 1.5 }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '2px', flexShrink: 0, bgcolor: colorForClient(stop.clientId ?? '') }} />
               <Typography sx={{ fontWeight: 700, fontSize: 13 }} noWrap>{stop.clientName ?? '—'}</Typography>
             </Stack>
             <Stack spacing={1}>
-              {(stop.returns ?? []).map((r) => (
-                <Stack key={r.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 13.5 }} noWrap>{r.name}</Typography>
-                    {r.note && <Typography variant="caption" color="text.secondary">{r.note}</Typography>}
-                  </Box>
-                  <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.quantity}×</Typography>
-                </Stack>
-              ))}
+              {rows.map((row) => {
+                const stored = (stop.returns ?? []).find((r) => r.id === row.key);
+                return (
+                  <Stack key={row.key} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={{ fontSize: 13.5, ...(row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : {}) }} noWrap>
+                          {row.name}
+                        </Typography>
+                        <LedgerRowTag row={row} />
+                      </Stack>
+                      {stored?.note && <Typography variant="caption" color="text.secondary">{stored.note}</Typography>}
+                    </Box>
+                    <Box sx={{ fontWeight: 700 }}><QuantityDiff row={row} unit="×" /></Box>
+                  </Stack>
+                );
+              })}
             </Stack>
           </Box>
         ))}
@@ -808,6 +846,7 @@ export function ShipmentDetail({
   editable,
   canSeeInvoicing = false,
   canSeeLoadingBreakdown = false,
+  canRecordLedger = false,
   onBack,
   backLabel = 'Zpět na vývozy',
   onEdit,
@@ -823,6 +862,9 @@ export function ShipmentDetail({
    *  view as the card's only content. Defaults closed for the same reason as
    *  canSeeInvoicing above. */
   canSeeLoadingBreakdown?: boolean;
+  /** Whether the user may record a deviation. The ledger rides on Clients : Edit, not Shipments —
+   *  a driver phones the dispatcher, who writes it down. Defaults closed like the two above. */
+  canRecordLedger?: boolean;
   onBack: () => void;
   /** Overridden when the vývoz was opened from another screen and Back returns
    *  there — see `DetailBackState`. */
@@ -948,11 +990,38 @@ export function ShipmentDetail({
   const extraRows = useMemo(() => (shipment.stockPurchases ?? []).map(extraRowFrom), [shipment.stockPurchases]);
 
   // Custom extras belong to the orders on the route; the nakládka only lists them.
-  const customExtras = useMemo(
-    () => stopsSorted.flatMap((st) => (st.customExtraItems ?? []).map((extra) => ({
-      clientName: st.clientName ?? '—', extra,
-    }))),
+  // Every client the run calls on, so one query per client rather than one per stop — two stops
+  // of the same client share a ledger.
+  const ledgerClientIds = useMemo(
+    () => [...new Set(stopsSorted.map((st) => st.clientId).filter((id): id is string => !!id))],
     [stopsSorted],
+  );
+  // 'all', not 'open': what came off the van is a permanent fact about that handover, so settling
+  // it afterwards must not put the plan back on this screen.
+  const { byClient: ledgerByClient } = useClientLedgersMany(ledgerClientIds, 'all');
+
+  // Diffed, and including the rows that exist only as a deviation: an extra handed over at the
+  // door against an order that listed none showed up nowhere on the run before this.
+  const customExtras = useMemo(
+    () => stopsSorted.flatMap((st) => {
+      const rows = applyLedger(
+        (st.customExtraItems ?? []).map((e) => planRow(e.id, e.description, e.quantity)),
+        entriesForTarget(
+          entriesForOrder(ledgerByClient.get(st.clientId ?? '') ?? [], st.orderId),
+          'CustomExtraQuantity',
+        ),
+      );
+
+      return rows.map((row) => ({
+        clientName: st.clientName ?? '—',
+        row,
+        note: (st.customExtraItems ?? []).find((e) => e.id === row.key)?.note,
+      }));
+    }),
+    // ledgerByClient is a fresh Map per render, so the deps key on the stops; a ledger arriving
+    // re-renders this component anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stopsSorted, ledgerClientIds.join(',')],
   );
 
   // Warned about rather than blocked: a booked delivery may still land in time. Only while
@@ -1014,9 +1083,25 @@ export function ShipmentDetail({
   // unloadOrder.ts (Task 10) rather than derived inline so it stays testable
   // without a rendering harness — this screen only shapes it into rows.
   const unloadStops = useMemo(
-    () => unloadOrder(stopsSorted, shipment.stockPurchases ?? [], shipment.supplierGoods ?? []),
-    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods],
+    () => unloadOrder(
+      stopsSorted,
+      shipment.stockPurchases ?? [],
+      shipment.supplierGoods ?? [],
+      ledgerByClient,
+    ),
+    // ledgerByClient is a fresh Map per render (see the hook's own note), so the deps key on the
+    // stops and the goods; a ledger arriving re-renders this component anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stopsSorted, shipment.stockPurchases, shipment.supplierGoods, ledgerClientIds.join(',')],
   );
+
+  // Recording is offered per stop, once that stop's Fakturace row is marked finished — see
+  // UnloadOrderList. Nothing about the run's own state decides it: at Naloženo the papers need
+  // not be done, and gating on state let the office record here while the order screen was still
+  // offering to edit the plan underneath.
+  const canRecordDeviation = canRecordLedger;
+
+  const [recordingStop, setRecordingStop] = useState<UnloadStop | null>(null);
 
   const visibleRows = useMemo(
     () => (activeFilter === ALL_INVOICES
@@ -1092,10 +1177,14 @@ export function ShipmentDetail({
   // that name off Content-Disposition, so nothing here has to reconstruct it. The fallback only
   // covers a proxy that strips the header, and carries the right extension per format so the file
   // still opens in the right program.
-  function runExport(format: ShipmentExportFormat, clientIds: string[]) {
+  function runExport(
+    format: ShipmentExportFormat,
+    clientIds: string[],
+    scope: ShipmentExportScopeName,
+  ) {
     if (!shipment.id) return;
 
-    exportShipment.mutate({ id: shipment.id, format, clientIds }, {
+    exportShipment.mutate({ id: shipment.id, format, clientIds, scope }, {
       onSuccess: (file) => {
         setExportOpen(false);
         downloadBlob(file.data, file.fileName ?? (format === 'word' ? 'vyvoz.docx' : 'vyvoz.xlsx'));
@@ -1476,7 +1565,17 @@ export function ShipmentDetail({
               </Stack>
               {activeFilter === UNLOAD_VIEW ? (
                 <Box sx={{ px: { xs: 1.25, compact: 2.5 } }}>
-                  <UnloadOrderList stops={unloadStops} startPoint={startPointLabel} onOpenOrder={onOpenOrder} />
+                  <UnloadOrderList
+                    stops={unloadStops}
+                    startPoint={startPointLabel}
+                    onOpenOrder={onOpenOrder}
+                    // Recording opens when the run's invoicing is filed — before that the
+                    // office is still correcting the orders themselves, and a deviation
+                    // recorded against a plan that can still move would not stay true.
+                    onRecordChange={canRecordDeviation && (shipment.isInvoicingFiled ?? false)
+                      ? setRecordingStop
+                      : undefined}
+                  />
                 </Box>
               ) : (
                 <NakladkaTable
@@ -1554,14 +1653,19 @@ export function ShipmentDetail({
               </Stack>
               <Stack sx={{ px: 2.5, py: 1.5 }} spacing={1}>
                 {/* Owned by the order — added there, only displayed here. */}
-                {customExtras.map(({ clientName, extra }) => (
-                  <Stack key={extra.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                {customExtras.map(({ clientName, row, note }) => (
+                  <Stack key={`${clientName}-${row.key}`} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography noWrap>{extra.description}</Typography>
+                      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography sx={row.status === 'removed' ? { textDecoration: 'line-through', color: 'text.disabled' } : undefined} noWrap>
+                          {row.name}
+                        </Typography>
+                        <LedgerRowTag row={row} />
+                      </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{clientName}</Typography>
-                      {extra.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{extra.note}</Typography>}
+                      {note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{note}</Typography>}
                     </Box>
-                    <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{extra.quantity} ks</Typography>
+                    <Box sx={{ fontWeight: 700 }}><QuantityDiff row={row} /></Box>
                   </Stack>
                 ))}
               </Stack>
@@ -1667,7 +1771,7 @@ export function ShipmentDetail({
             }))}
           />
 
-          <ReturnsCard stops={stopsSorted} />
+          <ReturnsCard stops={stopsSorted} ledgerByClient={ledgerByClient} />
 
           <PreparationStepsCard
             steps={shipment.preparationSteps ?? []}
@@ -1751,9 +1855,56 @@ export function ShipmentDetail({
         onClose={() => setConfirmCancel(false)}
       />
 
+      {/* One drawer for whichever stop is being recorded. Its "actual" column is prefilled from
+          the stored deviation, so reopening it never records the same difference twice. */}
+      {recordingStop && (
+        <LedgerEntryDrawer
+          open
+          context={ledgerDrawerContext(recordingStop, stopsSorted, ledgerByClient)}
+          onClose={() => setRecordingStop(null)}
+        />
+      )}
+
       <StateChangeOverlay state={stateChange} />
     </Box>
   );
+}
+
+/**
+ * What the recording drawer needs about one stop: the client, the order, and the plan each
+ * collection is measured against.
+ *
+ * The plan is the order's own quantity, which is also what was loaded — a shipment's content
+ * freezes when the truck is packed, so the two cannot diverge. (The prototype shows an
+ * "objednáno 4, naloženo 6" case; the real model has no way to load more than the order says.)
+ */
+function ledgerDrawerContext(
+  stop: UnloadStop,
+  stops: OutgoingShipmentStopDto[],
+  ledgerByClient: Map<string, ClientLedgerEntryDto[]>,
+): LedgerDrawerContext {
+  const source = stops.find((st) => st.orderId === stop.orderId);
+  const clientId = stop.clientIdForLedger ?? '';
+  const entries = entriesForOrder(ledgerByClient.get(clientId) ?? [], stop.orderId);
+
+  return {
+    clientId,
+    clientName: stop.title,
+    orderId: stop.orderId,
+    orderLabel: stop.orderId ? orderNumber(stop.orderId) : undefined,
+    items: (source?.products ?? []).map((p) => planRow(
+      p.orderItemId,
+      p.name,
+      p.quantity,
+      unloadChipText(p),
+    )),
+    itemProductIds: (source?.products ?? [])
+      .map((p) => p.id)
+      .filter((id): id is string => Boolean(id)),
+    returns: (source?.returns ?? []).map((r) => planRow(r.id, r.name, r.quantity)),
+    extras: (source?.customExtraItems ?? []).map((e) => planRow(e.id, e.description, e.quantity)),
+    entries,
+  };
 }
 
 /**

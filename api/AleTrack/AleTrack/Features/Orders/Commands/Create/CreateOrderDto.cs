@@ -60,6 +60,14 @@ public sealed record CreateOrderDto
     /// </summary>
     public List<OrderSupplierGoodItemDto> SupplierGoodItems { get; set; } = [];
 
+    /// <summary>
+    /// Public IDs of the client's open ledger entries this order is going to settle.
+    /// </summary>
+    /// <remarks>
+    /// Assigning does not settle anything: the entries close when this order is actually
+    /// delivered, because promising is not delivering.
+    /// </remarks>
+    public List<Guid> SettledLedgerEntryIds { get; set; } = [];
 }
 
 /// <summary>

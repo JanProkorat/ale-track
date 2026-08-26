@@ -201,7 +201,7 @@ public sealed class ShipmentDriverScopingTests
         var dbContext = AleTrackDbContextMockFactory.CreateMock(outgoingShipments: [theirs]);
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Scoped(1));
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Scoped(1), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(
             new UpdateOutgoingShipmentRequest { Id = theirs.PublicId, Data = new UpdateOutgoingShipmentDto() },

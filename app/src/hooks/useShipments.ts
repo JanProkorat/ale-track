@@ -7,6 +7,7 @@ import { useDataSource } from 'src/api/dataSource';
 import { qk } from 'src/api/queryKeys';
 import {
   ExportOutgoingShipmentDto,
+  ShipmentExportScope,
   SetOrderItemSourcingDto,
   SetSupplierGoodSourcingDto,
   ReorderShipmentStopsDto,
@@ -468,6 +469,19 @@ export function useSetStockPurchase(shipmentId: string | undefined) {
 export type ShipmentExportFormat = 'excel' | 'word';
 
 /**
+ * How much of a run an export carries: the plan as it was ordered, only what diverged from it, or
+ * both. A string union rather than the generated numeric enum, like `ShipmentExportFormat` — the UI
+ * picks by name and the mapping to the wire lives here, in one place.
+ */
+export type ShipmentExportScopeName = 'plan' | 'changed' | 'all';
+
+const EXPORT_SCOPES: Record<ShipmentExportScopeName, ShipmentExportScope> = {
+  plan: ShipmentExportScope.Plan,
+  changed: ShipmentExportScope.Changed,
+  all: ShipmentExportScope.All,
+};
+
+/**
  * Downloads the shipment as a spreadsheet or a document — an overview of the run, then one sheet
  * (Excel) or one page (Word) per client listing what that client ordered.
  *
@@ -486,12 +500,14 @@ export function useExportShipment() {
   const ds = useDataSource();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, format, clientIds }: {
+    mutationFn: ({ id, format, clientIds, scope = 'plan' }: {
       id: string;
       format: ShipmentExportFormat;
       clientIds: string[];
+      /** Defaults to the plan, which is what an export meant before there was a choice. */
+      scope?: ShipmentExportScopeName;
     }) => {
-      const data = new ExportOutgoingShipmentDto({ clientIds });
+      const data = new ExportOutgoingShipmentDto({ clientIds, scope: EXPORT_SCOPES[scope] });
       return format === 'word'
         ? ds.exportOutgoingShipmentWordEndpoint(id, data)
         : ds.exportOutgoingShipmentExcelEndpoint(id, data);

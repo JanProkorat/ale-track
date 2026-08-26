@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using FastEndpoints;
 using FluentValidation;
@@ -14,6 +15,12 @@ public sealed record ExportOutgoingShipmentDto
     /// drawer; every one of them has to be a confirmed row on the run.
     /// </summary>
     public List<Guid> ClientIds { get; set; } = [];
+
+    /// <summary>
+    /// How much of what happened to those rows the file carries. Defaults to the plan, which is
+    /// what an export meant before there was a choice.
+    /// </summary>
+    public ShipmentExportScope Scope { get; set; } = ShipmentExportScope.Plan;
 }
 
 /// <summary>
@@ -60,5 +67,7 @@ public sealed class ExportOutgoingShipmentDtoValidator : AbstractValidator<Expor
             .Must(ids => ids.Distinct().Count() == ids.Count)
             .WithErrorCode(ErrorCodes.ValidationError)
             .WithMessage("A client can be named only once.");
+
+        RuleFor(dto => dto.Scope).IsInEnum().WithErrorCode(ErrorCodes.ValidationEnumError);
     }
 }

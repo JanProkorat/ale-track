@@ -198,6 +198,12 @@ public class AleTrackDbContext : DbContext
     public virtual DbSet<ClientProductPrice> ClientProductPrices => Set<ClientProductPrice>();
 
     /// <summary>
+    /// What happened to a client differently from how it was planned, and what is still open
+    /// about it.
+    /// </summary>
+    public virtual DbSet<ClientLedgerEntry> ClientLedgerEntries => Set<ClientLedgerEntry>();
+
+    /// <summary>
     /// DbSet of <see cref="Supplier"/>
     /// </summary>
     public virtual DbSet<Supplier> Suppliers => Set<Supplier>();

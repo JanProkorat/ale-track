@@ -30,6 +30,8 @@ const addMutate = vi.fn();
 const deleteMutate = vi.fn();
 const setRecipientsMutate = vi.fn();
 const setReadinessMutate = vi.fn();
+// Filing the invoicing — the one-way door the section head offers.
+const fileInvoicingMutate = vi.fn();
 /** Client detail per id — the billing-recipient dropdown reads its options off it. */
 let clientDetails: Record<string, ClientDto> = {};
 let invoicesResponse: ShipmentInvoicesDto | undefined;
@@ -45,6 +47,7 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
   useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
   useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, isPending: false }),
+  useFileShipmentInvoicing: () => ({ mutate: fileInvoicingMutate, isPending: false }),
 }));
 
 vi.mock('src/hooks/useClients', () => ({
@@ -1421,5 +1424,88 @@ describe('marking a row finished', () => {
     renderSection(false);
 
     expect(screen.queryByText('Hotovo')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// Filing the invoicing: the one-way door. Up to it the office marks and unmarks and corrects the
+// orders themselves; past it the rows lock, the orders close, and deviations start being recorded
+// against them.
+// ---------------------------------------------------------------------------------
+
+describe('filing the invoicing', () => {
+  function readyRow(clientId = CLIENT_A) {
+    return new ShipmentInvoiceConfirmationDto({ clientId, number: 1, isReady: true });
+  }
+
+  function withRows(confirmations: ShipmentInvoiceConfirmationDto[], over: Partial<ShipmentInvoicesDto> = {}) {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ lines: [line({ quantity: 10 })] })],
+      confirmations,
+      ...over,
+    });
+  }
+
+  const fileButton = () => screen.queryByRole('button', { name: 'Zaevidovat' });
+
+  it('waits for every row to be finished', () => {
+    withRows([]);
+    renderSection();
+
+    expect(fileButton()).toBeDisabled();
+  });
+
+  it('offers it once they are', () => {
+    withRows([readyRow()]);
+    renderSection();
+
+    expect(fileButton()).toBeEnabled();
+  });
+
+  it('asks before filing, because nothing undoes it', () => {
+    withRows([readyRow()]);
+    renderSection();
+
+    fireEvent.click(fileButton()!);
+
+    expect(screen.getByText('Zaevidovat fakturaci?')).toBeInTheDocument();
+    expect(fileInvoicingMutate).not.toHaveBeenCalled();
+  });
+
+  it('files it once confirmed', () => {
+    withRows([readyRow()]);
+    renderSection();
+
+    fireEvent.click(fileButton()!);
+    // Scoped to the dialog: the header's own button carries the same word, and which one is
+    // reachable while a modal is open is not something this test should depend on.
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.click(dialog.getByRole('button', { name: 'Zaevidovat' }));
+
+    expect(fileInvoicingMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks the ticks and says so once filed', () => {
+    withRows([readyRow()], {
+      isInvoicingFiled: true,
+      invoicingFiledAt: new Date('2026-08-25T09:00:00Z'),
+      invoicingFiledByUserName: 'Jana Nováková',
+    });
+    renderSection();
+
+    expect(screen.getByText('Zaevidováno')).toBeInTheDocument();
+    expect(fileButton()).not.toBeInTheDocument();
+    // The tick is gone, and what is left is the record of what was filed.
+    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Hotovo')).toBeInTheDocument();
+  });
+
+  it('offers no filing to a viewer who cannot edit', () => {
+    withRows([readyRow()]);
+    renderSection(false);
+
+    expect(fileButton()).not.toBeInTheDocument();
   });
 });

@@ -33,6 +33,10 @@ export const qk = {
   clientReminders: (clientId: string) => ['clients', clientId, 'reminders'] as const,
   clientDeliveryPlaces: (clientId: string) => ['clients', clientId, 'delivery-places'] as const,
   clientProductPrices: (clientId: string) => ['clients', clientId, 'product-prices'] as const,
+  // Keyed on the state too: the order editor reads only the open points while the profile reads
+  // the whole history, and a shared key would make one of them show the other's list.
+  clientLedger: (clientId: string, state: 'open' | 'all') =>
+    ['clients', clientId, 'ledger', state] as const,
 
   suppliers: resource('suppliers'),
   supplierNotes: (supplierId: string) => ['suppliers', supplierId, 'notes'] as const,

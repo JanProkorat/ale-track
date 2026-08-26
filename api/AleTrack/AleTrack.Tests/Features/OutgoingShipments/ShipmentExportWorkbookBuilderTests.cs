@@ -70,7 +70,8 @@ public sealed class ShipmentExportWorkbookBuilderTests
         string? cityLine = null,
         string? deliveryPlaceName = null,
         List<string>? notes = null,
-        List<ShipmentExportReturn>? returns = null) =>
+        List<ShipmentExportReturn>? returns = null,
+        List<ShipmentExportDeviation>? deviations = null) =>
         new()
         {
             ClientName = clientName,
@@ -80,7 +81,34 @@ public sealed class ShipmentExportWorkbookBuilderTests
             DeliveryPlaceName = deliveryPlaceName,
             Notes = notes ?? [],
             Returns = returns ?? [],
+            Deviations = deviations ?? [],
             Products = products ?? [BuildProduct("Pilsner Urquell", 24)]
+        };
+
+    /// <summary>
+    /// A short delivery of a named line — the deviation the office records most.
+    /// </summary>
+    private static ShipmentExportDeviation BuildDeviation(
+        string? lineName = "Pilsner Urquell",
+        ClientLedgerEntryTarget target = ClientLedgerEntryTarget.ProductQuantity,
+        int? planned = 24,
+        int? actual = 18,
+        string? plannedText = null,
+        string? actualText = null,
+        decimal? amount = null,
+        string? note = null,
+        bool requiresFollowUp = false) =>
+        new()
+        {
+            Target = target,
+            LineName = lineName,
+            PlannedQuantity = planned,
+            ActualQuantity = actual,
+            PlannedText = plannedText,
+            ActualText = actualText,
+            Amount = amount,
+            Note = note,
+            RequiresFollowUp = requiresFollowUp
         };
 
     /// <summary>
@@ -793,4 +821,81 @@ public sealed class ShipmentExportWorkbookBuilderTests
         sheet.Column(1).CellsUsed(c => c.GetString() == "Hospoda U Kotvy")
             .Should().HaveCount(2, "one party row each, named by the client alone");
     }
+
+    #region deviations
+
+    /// <summary>
+    /// Every kind of deviation in one table under the party's own, as text cells: a column holding
+    /// "18 ks" on one row and an address on the next cannot be a numeric column.
+    /// </summary>
+    [Fact]
+    public void Build_PartyWithDeviations_ListsThemAllUnderItsTables()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, deviations:
+                [
+                    BuildDeviation(note: "Sklep byl plný", requiresFollowUp: true),
+                    BuildDeviation("Kozel 11", planned: 0, actual: 12),
+                    BuildDeviation(null, ClientLedgerEntryTarget.Money, planned: null, actual: null, amount: 2400m)
+                ])
+            ])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        var heading = RowOf(sheet, "ODCHYLKY");
+        sheet.Cell(heading + 1, 1).GetString().Should().Be("CO");
+        sheet.Cell(heading + 1, 4).GetString().Should().Be("POZNÁMKA");
+
+        sheet.Cell(heading + 2, 1).GetString().Should().Be("Pilsner Urquell");
+        sheet.Cell(heading + 2, 2).GetString().Should().Be("24 ks");
+        sheet.Cell(heading + 2, 3).GetString().Should().Be("18 ks");
+        sheet.Cell(heading + 2, 4).GetString().Should().Be("Sklep byl plný · k vyřešení");
+
+        sheet.Cell(heading + 3, 1).GetString().Should().Be("Kozel 11");
+        // cs-CZ groups thousands with a non-breaking space.
+        sheet.Cell(heading + 4, 3).GetString().Replace('\u00A0', ' ').Should()
+            .Be("Klient dluží 2 400 Kč");
+    }
+
+    /// <summary>
+    /// A party with nothing to bill and something to correct is a correction, not an empty order.
+    /// </summary>
+    [Fact]
+    public void Build_PartyWithOnlyDeviations_DoesNotClaimTheClientOrderedNothing()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties:
+            [
+                BuildParty("Hospoda U Kotvy", isPayer: true, products: [], deviations: [BuildDeviation()])
+            ])
+        ]);
+
+        using var workbook = Open(model);
+        var sheet = workbook.Worksheet("Fakturace");
+
+        sheet.Column(1).CellsUsed(c => c.GetString() == "Bez položek").Should().BeEmpty();
+        sheet.Column(1).CellsUsed(c => c.GetString() == "ODCHYLKY").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Build_PartyThatWentToPlan_HasNoDeviationsSection()
+    {
+        var model = BuildModel(invoices:
+        [
+            BuildInvoice("Hospoda U Kotvy", sequence: 1, parties: [BuildParty("Hospoda U Kotvy", isPayer: true)])
+        ]);
+
+        using var workbook = Open(model);
+
+        workbook.Worksheet("Fakturace").Column(1)
+            .CellsUsed(c => c.GetString() == "ODCHYLKY").Should().BeEmpty();
+    }
+
+    #endregion
 }

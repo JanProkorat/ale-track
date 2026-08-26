@@ -130,7 +130,7 @@ public sealed class OrderItemInventorySourcingTests
     }
 
     private static UpdateOutgoingShipmentEndpoint Endpoint(Mock<AleTrack.Infrastructure.Persistence.AleTrackDbContext> db) =>
-        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+        EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>.Create(db.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
     [Fact]
     public async Task Update_RecordsHowManyPiecesCameFromStock()

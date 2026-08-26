@@ -31,6 +31,18 @@ import { theme } from 'src/theme/theme';
 
 // Hoisted rather than a fresh spy per call so the export tests can assert what was surfaced.
 const enqueueSnackbar = vi.hoisted(() => vi.fn());
+// The Vykládka, the Vratky card and the Extra položky card all read the run's clients' ledgers,
+// so the hook is mocked like every other resource. Its "nothing recorded" answer is the ordinary
+// case, and the one every assertion here is written against.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedgersMany: () => ({ byClient: new Map(), loading: new Set() }),
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSaveClientLedgerEntries: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteClientLedgerEntry: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetClientLedgerEntryAssignment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar }) }));
 
 // The real helper drives an <a download> click, which happy-dom cannot act on. Saving the file is

@@ -1,4 +1,5 @@
 using AleTrack.Common.Enums;
+using AleTrack.Common.Utils;
 using AleTrack.Entities;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -56,7 +57,9 @@ public static class ShipmentInvoiceGraph
             .Include(s => s.Invoices).ThenInclude(i => i.Lines)
             .Include(s => s.Invoices).ThenInclude(i => i.Client)
             .Include(s => s.Invoices).ThenInclude(i => i.BillingRecipients).ThenInclude(r => r.Client)
-            .Include(s => s.InvoiceConfirmations).ThenInclude(c => c.Client);
+            .Include(s => s.InvoiceConfirmations).ThenInclude(c => c.Client)
+            // Who filed the invoicing, for the Fakturace head to name them.
+            .Include(s => s.InvoicingFiledByUser);
 
         if (!tracked)
             shipments = shipments.AsNoTrackingWithIdentityResolution();
@@ -74,7 +77,18 @@ public static class ShipmentInvoiceGraph
         if (!tracked)
             privateLines = privateLines.AsNoTracking();
 
-        return new ShipmentInvoiceSplit { Shipment = shipment, PrivateLines = await privateLines.ToListAsync(ct) };
+        var clientIds = shipment.Stops
+            .Where(s => s.ClientOrder is not null)
+            .Select(s => s.ClientOrder!.ClientId)
+            .Distinct()
+            .ToList();
+
+        return new ShipmentInvoiceSplit
+        {
+            Shipment = shipment,
+            PrivateLines = await privateLines.ToListAsync(ct),
+            PriceListsByClientId = await ClientPriceResolver.LoadForClientsAsync(dbContext, clientIds, ct)
+        };
     }
 
     /// <summary>
@@ -120,16 +134,19 @@ public static class ShipmentInvoiceGraph
             .Where(s => s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.SupplierGoodItems.Select(i => (i, s.ClientOrder!)));
 
-    public static long? ResolveSourceItemId(OutgoingShipment shipment, InvoiceLineSourceKind kind, Guid publicId) => kind switch
+    public static long? ResolveSourceItemId(ShipmentInvoiceSplit split, InvoiceLineSourceKind kind, Guid publicId) => kind switch
     {
-        InvoiceLineSourceKind.OrderItem => shipment.Stops
+        InvoiceLineSourceKind.OrderItem => split.Shipment.Stops
             .Where(s => s.ClientOrder is not null)
             .SelectMany(s => s.ClientOrder!.OrderItems)
             .FirstOrDefault(i => i.PublicId == publicId)?.Id,
-        InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(shipment)
+        InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(split.Shipment)
             .Select(x => x.Extra).FirstOrDefault(e => e.PublicId == publicId)?.Id,
-        InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(shipment)
+        InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(split.Shipment)
             .Select(x => x.Item).FirstOrDefault(i => i.PublicId == publicId)?.Id,
+        // A product taken at the door is identified by its ledger entry — it has no order line.
+        InvoiceLineSourceKind.LedgerEntry => split.LedgerEntries
+            .FirstOrDefault(e => e.PublicId == publicId)?.Id,
         _ => null
     };
 
@@ -141,6 +158,7 @@ public static class ShipmentInvoiceGraph
         InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
         InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
         InvoiceLineSourceKind.SupplierGoodItem => line.SupplierGoodItemId ?? 0,
+        InvoiceLineSourceKind.LedgerEntry => line.LedgerEntryId ?? 0,
         _ => 0
     };
 
@@ -160,6 +178,9 @@ public static class ShipmentInvoiceGraph
                 break;
             case InvoiceLineSourceKind.SupplierGoodItem:
                 line.SupplierGoodItemId = itemId;
+                break;
+            case InvoiceLineSourceKind.LedgerEntry:
+                line.LedgerEntryId = itemId;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown invoice line source kind.");
@@ -209,7 +230,7 @@ public static class ShipmentInvoiceGraph
 
         foreach (var line in split.PrivateLines)
         {
-            var clientId = OrderingClientIdOf(split.Shipment, line);
+            var clientId = OrderingClientIdOf(split, line);
             if (clientId is not null)
                 ids.Add(clientId.Value);
         }
@@ -221,14 +242,16 @@ public static class ShipmentInvoiceGraph
     /// Internal ID of the client who ordered a line's pieces, or null when its source item is no
     /// longer on the run.
     /// </summary>
-    public static long? OrderingClientIdOf(OutgoingShipment shipment, OutgoingShipmentInvoiceLine line) =>
+    public static long? OrderingClientIdOf(ShipmentInvoiceSplit split, OutgoingShipmentInvoiceLine line) =>
         line.SourceKind switch
         {
-            InvoiceLineSourceKind.OrderItem => OrderOf(shipment, line.OrderItemId ?? 0)?.ClientId,
-            InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(shipment)
+            InvoiceLineSourceKind.OrderItem => OrderOf(split.Shipment, line.OrderItemId ?? 0)?.ClientId,
+            InvoiceLineSourceKind.CustomExtraItem => CustomExtrasOf(split.Shipment)
                 .FirstOrDefault(x => x.Extra.Id == line.CustomExtraItemId).Order?.ClientId,
-            InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(shipment)
+            InvoiceLineSourceKind.SupplierGoodItem => SupplierGoodsOf(split.Shipment)
                 .FirstOrDefault(x => x.Item.Id == line.SupplierGoodItemId).Order?.ClientId,
+            InvoiceLineSourceKind.LedgerEntry => split.LedgerEntries
+                .FirstOrDefault(e => e.Id == line.LedgerEntryId)?.ClientId,
             _ => null
         };
 

@@ -34,6 +34,12 @@ const clientDetails: Record<string, { officialAddress?: unknown; contactAddress?
   'client-contact': { officialAddress: undefined, contactAddress: { streetName: 'Dvůr', streetNumber: '2a', city: 'Žitava', zip: '02763' }, name: 'Hospoda Kontaktní' },
 };
 
+// The editor reads the client's open ledger points above the cart, so the hook is mocked like
+// every other resource — and the mock can say "nothing open", which is the ordinary case.
+vi.mock('src/hooks/useClientLedger', () => ({
+  useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+}));
+
 vi.mock('src/hooks/useClients', () => ({
   useClients: () => ({
     data: [{ id: 'client-official', name: 'Hospoda Fakturační' }, { id: 'client-contact', name: 'Hospoda Kontaktní' }],

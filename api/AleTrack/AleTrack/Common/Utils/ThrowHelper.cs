@@ -254,8 +254,8 @@ public static class ThrowHelper
             });
 
     /// <summary>
-    /// Throws an <see cref="AleTrackException"/> when an update would change the content of
-    /// an order that is closed, or already loaded onto a shipment.
+    /// Throws an <see cref="AleTrackException"/> when a change — an update or a cancellation —
+    /// is asked of an order that is closed, or on a shipment that has already delivered.
     /// </summary>
     /// <param name="orderId">ID of the order</param>
     /// <exception cref="AleTrackException"></exception>
@@ -298,6 +298,123 @@ public static class ThrowHelper
             new Dictionary<string, object>
             {
                 { nameof(driverId), driverId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run whose invoicing is filed would have
+    /// that invoicing changed.
+    /// </summary>
+    /// <param name="shipmentId">Public id of the run.</param>
+    /// <remarks>
+    /// Filing is the one-way door: past it the paperwork is what was filed, and what happens at
+    /// the door is recorded beside it.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingFiled(Guid shipmentId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingFiled,
+            new Dictionary<string, object>
+            {
+                { nameof(shipmentId), shipmentId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run would be filed with invoice rows still
+    /// unfinished.
+    /// </summary>
+    /// <param name="unfinished">How many rows are not marked finished.</param>
+    /// <remarks>
+    /// Filing with a row unfinished would lock an order whose paperwork is not done: neither
+    /// editable afterwards, nor ever markable. Carries the count so the UI can say how many.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingIncomplete(int unfinished)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingIncomplete,
+            new Dictionary<string, object>
+            {
+                { nameof(unfinished), unfinished }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a run cannot be filed at all.
+    /// </summary>
+    /// <param name="shipmentId">Public id of the run.</param>
+    /// <remarks>
+    /// A cancelled run: its orders are freed for reuse, and filing would lock them against a run
+    /// that did not happen.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void ShipmentInvoicingNotFileable(Guid shipmentId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.ShipmentInvoicingNotFileable,
+            new Dictionary<string, object>
+            {
+                { nameof(shipmentId), shipmentId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a settled deviation would be handed to an
+    /// order to settle.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <remarks>
+    /// Settling is history. Taking it back is the resolution endpoint's business, and letting an
+    /// assignment do it as a side effect would undo a close nobody asked to undo.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryAlreadyResolved(Guid entryId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryAlreadyResolved,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when an order would take on a deviation recorded
+    /// against a different client.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <param name="orderId">Public id of the order.</param>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryClientMismatch(Guid entryId, Guid orderId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryClientMismatch,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId },
+                { nameof(orderId), orderId }
+            });
+
+    /// <summary>
+    /// Throws an <see cref="AleTrackException"/> when a second order would promise to settle a
+    /// deviation another order is already carrying.
+    /// </summary>
+    /// <param name="entryId">Public id of the ledger entry.</param>
+    /// <remarks>
+    /// Two orders promising the same three kegs is the failure this prevents: the first to arrive
+    /// closes the entry and the second is left carrying nothing.
+    /// </remarks>
+    /// <exception cref="AleTrackException">Thrown with 409 Conflict.</exception>
+    [DoesNotReturn]
+    public static void LedgerEntryAlreadyAssigned(Guid entryId)
+        => throw new AleTrackException(
+            StatusCodes.Status409Conflict,
+            ErrorCodes.LedgerEntryAlreadyAssigned,
+            new Dictionary<string, object>
+            {
+                { nameof(entryId), entryId }
             });
 
     /// <summary>

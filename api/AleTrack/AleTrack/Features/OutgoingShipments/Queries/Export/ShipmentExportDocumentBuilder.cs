@@ -69,6 +69,13 @@ public static class ShipmentExportDocumentBuilder
 
     private static readonly int[] BillingRecipientColumns = [3000, 6000];
 
+    /// <summary>
+    /// Widths for a party's deviations — see WriteDeviationsTable. The two middle columns hold either
+    /// a piece count or an address, so they are sized for the address; the note takes what is left,
+    /// and the subject column has to fit a product name.
+    /// </summary>
+    private static readonly int[] DeviationColumns = [2600, 1700, 2100, 2600];
+
     /// <summary>Header-row fill, matching the workbook's.</summary>
     private const string HeaderFill = "F2F2F2";
 
@@ -313,6 +320,48 @@ public static class ShipmentExportDocumentBuilder
     }
 
     /// <summary>
+    /// What diverged from one party's plan, below its tables.
+    /// </summary>
+    /// <remarks>
+    /// One table for every kind of deviation — short pieces, empties not handed back, goods taken at
+    /// the door, a delivery that went elsewhere, money owed. A correction is read as a list, and
+    /// splitting it by target would make the reader collect the answer from four places.
+    /// </remarks>
+    private static void WriteDeviationsTable(Body body, List<ShipmentExportDeviation> deviations)
+    {
+        if (deviations.Count == 0)
+            return;
+
+        body.AppendChild(SectionHeading(ShipmentExportLabels.Deviations));
+
+        var table = BuildTable(DeviationColumns);
+        table.AppendChild(HeaderRow("Co", "Plán", "Skutečnost", "Poznámka"));
+
+        foreach (var deviation in deviations)
+        {
+            table.AppendChild(DataRow(
+                ShipmentExportLabels.DeviationSubject(deviation),
+                ShipmentExportLabels.DeviationPlanned(deviation),
+                ShipmentExportLabels.DeviationActual(deviation),
+                ShipmentExportLabels.DeviationNote(deviation)));
+        }
+
+        AppendTable(body, table);
+    }
+
+    /// <summary>
+    /// One party's goods, unless the party has nothing to bill and something to correct — that is a
+    /// correction, not an empty order, and "Bez položek" would claim the client ordered nothing.
+    /// </summary>
+    private static void WritePartyProducts(Body body, ShipmentExportInvoiceParty party)
+    {
+        if (party.Products.Count == 0 && party.Deviations.Count > 0)
+            return;
+
+        WriteProductTable(body, party.Products);
+    }
+
+    /// <summary>
     /// The run's invoice split, one page per invoice: its parties' goods as a table each, with a
     /// subtotal, and the payer's total under them.
     /// </summary>
@@ -375,10 +424,12 @@ public static class ShipmentExportDocumentBuilder
             // No address here: the invoice has one, at the top. What the client's own order said and
             // what it hands back are its alone, though, and belong beside its goods.
             WritePartyNotes(body, party);
-            WriteProductTable(body, party.Products);
+            WritePartyProducts(body, party);
 
             if (party.Returns.Count > 0)
                 WriteReturnsTable(body, party.Returns);
+
+            WriteDeviationsTable(body, party.Deviations);
         }
     }
 
@@ -390,10 +441,12 @@ public static class ShipmentExportDocumentBuilder
         foreach (var party in invoice.Parties)
         {
             WritePartyDelivery(body, party);
-            WriteProductTable(body, party.Products);
+            WritePartyProducts(body, party);
 
             if (party.Returns.Count > 0)
                 WriteReturnsTable(body, party.Returns);
+
+            WriteDeviationsTable(body, party.Deviations);
         }
 
         WriteBillingRecipients(body, invoice);

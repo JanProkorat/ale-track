@@ -179,10 +179,17 @@ public static class ShipmentExportWorkbookBuilder
 
                 var first = row;
                 WritePartyDelivery(sheet, ref row, party);
-                WriteProductTable(sheet, ref row, party.Products, withTotal: false);
+
+                // A party with nothing to bill and something to correct is a correction, not an
+                // empty order — "Bez položek" would claim the client ordered nothing.
+                if (party.Products.Count > 0 || party.Deviations.Count == 0)
+                    WriteProductTable(sheet, ref row, party.Products, withTotal: false);
 
                 if (party.Returns.Count > 0)
                     WriteReturnsTable(sheet, ref row, party.Returns);
+
+                if (party.Deviations.Count > 0)
+                    WriteDeviationsTable(sheet, ref row, party.Deviations);
 
                 if (row > first)
                     sheet.Rows(first, row - 1).Group();
@@ -269,6 +276,38 @@ public static class ShipmentExportWorkbookBuilder
 
             sheet.Cell(row, quantityColumn).Value = item.Quantity;
             sheet.Cell(row, quantityColumn).Style.NumberFormat.Format = QuantityFormat;
+            row++;
+        }
+    }
+
+    /// <summary>
+    /// What diverged from this party's plan, under its tables.
+    /// </summary>
+    /// <remarks>
+    /// One table for every kind of deviation — short pieces, empties not handed back, goods taken at
+    /// the door, a delivery that went elsewhere, money owed. They read as a list of corrections, and
+    /// splitting them by target across several tables would make the reader collect the answer from
+    /// four places.
+    ///
+    /// Text cells throughout, unlike the piece counts above. A column holding "18 ks" on one row and
+    /// "Sklad Modřice" on the next cannot be a numeric column, and a number format applied to some
+    /// rows of one column is worse than none.
+    /// </remarks>
+    private static void WriteDeviationsTable(
+        IXLWorksheet sheet,
+        ref int row,
+        List<ShipmentExportDeviation> deviations)
+    {
+        row++;
+        WriteSectionHeading(sheet, row++, ShipmentExportLabels.Deviations);
+        WriteTableHeader(sheet, row++, "Co", "Plán", "Skutečnost", "Poznámka");
+
+        foreach (var deviation in deviations)
+        {
+            sheet.Cell(row, 1).Value = ShipmentExportLabels.DeviationSubject(deviation);
+            sheet.Cell(row, 2).Value = ShipmentExportLabels.DeviationPlanned(deviation);
+            sheet.Cell(row, 3).Value = ShipmentExportLabels.DeviationActual(deviation);
+            sheet.Cell(row, 4).Value = ShipmentExportLabels.DeviationNote(deviation);
             row++;
         }
     }

@@ -72,6 +72,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                 Name = os.Name,
                 Id = os.PublicId,
                 State = os.State,
+                IsInvoicingFiled = os.InvoicingFiledAt != null,
                 DeliveryDate = os.DeliveryDate,
                 VehicleId = os.Vehicle != null ? os.Vehicle.PublicId : null,
                 StartPointKind = os.StartPointKind,
@@ -151,6 +152,14 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                             }
                             : null,
                         IsAddressOverridden = s.IsAddressOverridden,
+                        // The Fakturace row covering this stop, matched on the PAYING client —
+                        // a sub-client has no row of its own, and matching the ordering client
+                        // would leave every sub-client's order unrecordable. The rule and the
+                        // reasons behind it live in InvoiceReadiness; this is one of its two
+                        // read sites, and InvoiceReadinessTests keeps them agreeing.
+                        IsInvoiceReady = s.ClientOrder != null
+                            && os.InvoiceConfirmations.Any(c => c.IsReady
+                                && c.ClientId == (s.ClientOrder.Client.InvoicingClientId ?? s.ClientOrder.ClientId)),
                         AddressChangedAt = s.AddressChangedAt,
                         OrderDeliveryAddress = s.ClientOrder != null
                             ? new OrderDeliveryAddressDto

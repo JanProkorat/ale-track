@@ -86,7 +86,7 @@ public sealed class ExportOutgoingShipmentExcelEndpoint(
 
         await Send.BytesAsync(
             bytes,
-            ShipmentExportFileName.For(selection.Model, "xlsx"),
+            ShipmentExportFileName.For(selection.Model, "xlsx", selection.Scope),
             WorkbookContentType,
             cancellation: ct);
     }

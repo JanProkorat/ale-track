@@ -80,7 +80,7 @@ public sealed class ExportOutgoingShipmentWordEndpoint(
 
         await Send.BytesAsync(
             bytes,
-            ShipmentExportFileName.For(selection.Model, "docx"),
+            ShipmentExportFileName.For(selection.Model, "docx", selection.Scope),
             DocumentContentType,
             cancellation: ct);
     }

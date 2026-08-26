@@ -30,4 +30,31 @@ public static class ClientPriceResolver
 
         return new ClientPriceList(prices.ToDictionary(p => p.ProductId, p => p.PriceWithVat));
     }
+
+    /// <summary>
+    /// Loads the price lists of several clients at once, keyed by internal id. Clients with no
+    /// overrides are absent; callers fall back to <see cref="ClientPriceList.Empty"/>.
+    /// </summary>
+    public static async Task<Dictionary<long, ClientPriceList>> LoadForClientsAsync(
+        AleTrackDbContext dbContext,
+        IReadOnlyCollection<long> clientIds,
+        CancellationToken ct)
+    {
+        if (clientIds.Count == 0)
+        {
+            return [];
+        }
+
+        var prices = await dbContext.ClientProductPrices
+            .AsNoTracking()
+            .Where(p => clientIds.Contains(p.ClientId))
+            .Select(p => new { p.ClientId, p.ProductId, p.PriceWithVat })
+            .ToListAsync(ct);
+
+        return prices
+            .GroupBy(p => p.ClientId)
+            .ToDictionary(
+                g => g.Key,
+                g => new ClientPriceList(g.ToDictionary(p => p.ProductId, p => p.PriceWithVat)));
+    }
 }

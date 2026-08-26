@@ -31,7 +31,7 @@ public sealed class ShipmentStartPointWriteTests
         request.Data.StartBreweryId = brewery.PublicId;
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         await endpoint.HandleAsync(request, CancellationToken.None);
 
@@ -49,7 +49,7 @@ public sealed class ShipmentStartPointWriteTests
         request.Data.StartBreweryId = Guid.NewGuid();
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(request, CancellationToken.None);
 
@@ -68,7 +68,7 @@ public sealed class ShipmentStartPointWriteTests
         request.Data.StartBreweryId = brewery.PublicId;
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(request, CancellationToken.None);
 
@@ -147,7 +147,7 @@ public sealed class ShipmentStartPointWriteTests
         request.Data.StartBreweryAddressKind = DeliveryAddressKind.Contact;
 
         var endpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, Options.Create(new CompanyOptions()), DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         var act = async () => await endpoint.HandleAsync(request, CancellationToken.None);
 
@@ -177,7 +177,7 @@ public sealed class ShipmentStartPointWriteTests
 
         var companyOptions = Options.Create(new CompanyOptions());
         var updateEndpoint = EndpointBuilder<UpdateOutgoingShipmentRequest, UpdateOutgoingShipmentEndpoint>
-            .Create(dbContext.Object, companyOptions, DriverScopeMockFactory.Unscoped());
+            .Create(dbContext.Object, companyOptions, DriverScopeMockFactory.Unscoped(), AppContextMockFactory.Anonymous());
 
         await updateEndpoint.HandleAsync(request, CancellationToken.None);
 

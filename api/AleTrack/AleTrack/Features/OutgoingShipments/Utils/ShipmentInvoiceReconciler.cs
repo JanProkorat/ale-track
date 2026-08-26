@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Suppliers.Utils;
 
 namespace AleTrack.Features.OutgoingShipments.Utils;
@@ -164,7 +165,7 @@ public static class ShipmentInvoiceReconciler
         var removedLines = new List<OutgoingShipmentInvoiceLine>();
         var removedRecipients = new List<OutgoingShipmentInvoiceBillingRecipient>();
 
-        var sources = CollectSources(shipment);
+        var sources = CollectSources(split);
         var sourceKeys = sources.Select(s => s.Key).ToHashSet();
         // Both ends of the payer redirect have a stake in the run. The client billed obviously
         // does; so does the one ordering, even though it is no longer the one billed — it may hold
@@ -353,9 +354,17 @@ public static class ShipmentInvoiceReconciler
     /// Inventory extra items are absent by design — they return to our own stock.
     /// Extra items without a <c>ClientId</c> are skipped rather than guessed at; they predate
     /// invoicing and there is nobody to bill them to.
+    ///
+    /// Quantities are the <em>planned</em> ones. The client ledger records what actually came off
+    /// the van, but for now it stays out of the invoice and the export — the office decides what
+    /// to bill from the deviations it can see on the run, rather than the invoice moving under it.
+    /// Re-enabling it means billing the effective quantity here and taking door-side products as
+    /// billable sources of their own; the line's <c>LedgerEntry</c> source kind and its column stay
+    /// in place for that, and to prune the lines an earlier build already wrote.
     /// </remarks>
-    private static List<BillableSource> CollectSources(OutgoingShipment shipment)
+    private static List<BillableSource> CollectSources(ShipmentInvoiceSplit split)
     {
+        var shipment = split.Shipment;
         var sources = new List<BillableSource>();
 
         foreach (var stop in shipment.Stops.Where(s => s.ClientOrder is not null).OrderBy(s => s.Order))
@@ -593,6 +602,9 @@ public static class ShipmentInvoiceReconciler
             case InvoiceLineSourceKind.SupplierGoodItem:
                 line.SupplierGoodItemId = source.ItemId;
                 break;
+            case InvoiceLineSourceKind.LedgerEntry:
+                line.LedgerEntryId = source.ItemId;
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), source.Kind, "Unknown invoice line source kind.");
         }
@@ -609,6 +621,7 @@ public static class ShipmentInvoiceReconciler
             InvoiceLineSourceKind.OrderItem => line.OrderItemId ?? 0,
             InvoiceLineSourceKind.CustomExtraItem => line.CustomExtraItemId ?? 0,
             InvoiceLineSourceKind.SupplierGoodItem => line.SupplierGoodItemId ?? 0,
+            InvoiceLineSourceKind.LedgerEntry => line.LedgerEntryId ?? 0,
             _ => 0
         });
 

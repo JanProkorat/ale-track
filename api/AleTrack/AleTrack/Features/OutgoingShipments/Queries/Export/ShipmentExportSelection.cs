@@ -1,3 +1,4 @@
+using AleTrack.Common.Enums;
 using AleTrack.Common.Options;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
@@ -12,6 +13,12 @@ namespace AleTrack.Features.OutgoingShipments.Queries.Export;
 internal sealed record ShipmentExportSelection
 {
     public required ShipmentExportModel Model { get; init; }
+
+    /// <summary>
+    /// How much of the run the file carries — already applied to <see cref="Model"/>, and kept
+    /// because the download name says which of the three files this is.
+    /// </summary>
+    public required ShipmentExportScope Scope { get; init; }
 
     /// <summary>
     /// The confirmations the file covers, tracked, so stamping them needs no second read.
@@ -80,7 +87,15 @@ internal static class ShipmentExportSelector
             return null!;
         }
 
-        return new ShipmentExportSelection { Model = model, Rows = rows };
+        // The query loads the plan and its deviations either way; the scope decides which of the two
+        // the writer is shown. Applied here rather than in each endpoint, for the same reason the
+        // guards are: the .xlsx and the .docx must not disagree about what a scope means.
+        return new ShipmentExportSelection
+        {
+            Model = ShipmentExportScopeFilter.Apply(model, req.Data.Scope),
+            Scope = req.Data.Scope,
+            Rows = rows
+        };
     }
 
     /// <summary>

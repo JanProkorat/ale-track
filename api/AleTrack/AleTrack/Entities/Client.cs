@@ -87,4 +87,9 @@ public sealed class Client : PublicSoftlyDeletableEntity
     /// Related reminders
     /// </summary>
     public List<ClientReminder> Reminders { get; set; } = [];
+
+    /// <summary>
+    /// What happened differently from the plan on this client's deliveries, open and settled.
+    /// </summary>
+    public List<ClientLedgerEntry> LedgerEntries { get; set; } = [];
 }

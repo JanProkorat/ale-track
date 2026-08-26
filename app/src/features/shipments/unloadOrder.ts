@@ -9,11 +9,15 @@
 // without a rendering harness, same as nakladkaGrouping.ts.
 
 import type {
+  ClientLedgerEntryDto,
   OutgoingShipmentStopDto, OutgoingShipmentStockPurchaseItemDto, OutgoingShipmentSupplierGoodDto,
   ProductKind,
 } from 'src/generated/api-client';
 import { kindLabel, stopKindName } from 'src/lib/labels';
 import { fmtLiters } from 'src/lib/format';
+import {
+  applyLedger, entriesForOrder, entriesForTarget, isOpen, planRow, type DecoratedRow,
+} from 'src/features/clients/ledgerModel';
 import { resolveDetailStopAddress } from './stopAddress';
 
 /** What a line needs to build its chip and quantity — order items and stock
@@ -25,6 +29,8 @@ interface ChippableProduct {
   platoDegree?: number;
   packageSize?: number;
   quantity?: number;
+  /** Present on a stop's order items; absent on the warehouse stop's stock purchases. */
+  orderItemId?: string;
 }
 
 /**
@@ -49,6 +55,16 @@ export interface UnloadLine {
   /** What kind of thing it is, then how big and how strong. See {@link unloadChipText}. */
   chip: string;
   quantity: number;
+  /**
+   * How a ledger entry points at this line — the order-item or supplier-good id. Absent on a
+   * line no deviation can be recorded against (the warehouse stop's stock purchases).
+   */
+  key?: string;
+  /**
+   * What the ledger says about this line, when the caller passed one. The handover is the one
+   * moment a plan and a reality exist side by side, and this list is the view of it.
+   */
+  diff?: DecoratedRow;
 }
 
 /**
@@ -88,6 +104,18 @@ export interface UnloadStop {
   lines: UnloadLine[];
   /** Pieces coming off here, all lines together — the number to count the handover against. */
   totalQuantity: number;
+  /**
+   * How many of this stop's deviations are still open, for the badge beside the client's name.
+   * Zero on a stop nothing was recorded against, and on every stop when no ledger was passed.
+   */
+  openChanges: number;
+  /**
+   * Whether this stop's Fakturace row is marked finished, which is what opens recording against
+   * it. False on a stop with no order — there is no row to finish.
+   */
+  isInvoiceReady: boolean;
+  /** The client whose ledger a deviation here belongs to, for the recording drawer. */
+  clientIdForLedger?: string;
 }
 
 function lineFrom(product: ChippableProduct): UnloadLine {
@@ -95,6 +123,7 @@ function lineFrom(product: ChippableProduct): UnloadLine {
     name: product.name ?? '—',
     chip: unloadChipText(product),
     quantity: product.quantity ?? 0,
+    key: product.orderItemId,
   };
 }
 
@@ -113,6 +142,8 @@ function supplierLineFrom(good: OutgoingShipmentSupplierGoodDto): UnloadLine {
     name: good.name ?? '—',
     chip: ['Zboží dodavatele', good.size].filter(Boolean).join(' · '),
     quantity: good.quantity ?? 0,
+    // The DTO's own id is the order's supplier-good line — the id a deviation points at.
+    key: good.id,
   };
 }
 
@@ -143,6 +174,8 @@ function shapeStop(
       title: stop.label ?? '—',
       addressMissing: false,
       lines: stockPurchases.map(lineFrom),
+      openChanges: 0,
+      isInvoiceReady: false,
     };
   }
 
@@ -153,6 +186,8 @@ function shapeStop(
       addressMissing: false,
       note: stop.note,
       lines: [],
+      openChanges: 0,
+      isInvoiceReady: false,
     };
   }
 
@@ -164,6 +199,9 @@ function shapeStop(
     addressMissing: resolved.addressText.trim().length === 0,
     orderId: stop.orderId,
     clientId: stop.clientId,
+    // Filled in by decorate() once a ledger is in hand.
+    openChanges: 0,
+    isInvoiceReady: false,
     // The order's beer, then the supplier goods bought alongside it. Those are carried on the
     // run rather than on the stop, so they are matched back to it by order — a stop with no
     // order (a run may not have reconciled one yet) matches nothing rather than everything.
@@ -198,6 +236,11 @@ export function unloadOrder(
   stops: OutgoingShipmentStopDto[],
   stockPurchases: OutgoingShipmentStockPurchaseItemDto[],
   supplierGoods: OutgoingShipmentSupplierGoodDto[],
+  /**
+   * The run's clients' ledgers, keyed by client id. Omitted before the deviations are loaded, and
+   * on a run nobody has recorded anything against — the list then reads exactly as it did.
+   */
+  ledgerByClientId?: Map<string, ClientLedgerEntryDto[]>,
 ): UnloadStop[] {
   return stops
     .slice()
@@ -206,7 +249,61 @@ export function unloadOrder(
     .filter(({ stop }) => stopKindName(stop.kind) !== 'Supplier')
     .map(({ stop, seq }) => {
       const shaped = shapeStop(stop, stockPurchases, supplierGoods);
-      return { ...shaped, seq, totalQuantity: shaped.lines.reduce((sum, l) => sum + l.quantity, 0) };
+      const decorated = decorate(shaped.lines, stop, ledgerByClientId);
+
+      return {
+        ...shaped,
+        seq,
+        lines: decorated.lines,
+        // What actually comes off, so the number beside the client's name is the one the driver
+        // counts against rather than the one the office planned.
+        totalQuantity: decorated.lines.reduce((sum, l) => sum + (l.diff?.actualQuantity ?? l.quantity), 0),
+        openChanges: decorated.openChanges,
+        clientIdForLedger: stop.clientId,
+        isInvoiceReady: stop.isInvoiceReady ?? false,
+      };
     })
     .filter((stop) => stop.kind !== 'company' || stop.lines.length > 0);
+}
+
+/**
+ * Lays the stop's client's ledger over its lines, and appends what the plan never had.
+ *
+ * Goes through {@link applyLedger}, the same function the order detail uses, so the two views of
+ * one handover cannot drift into showing different numbers.
+ *
+ * Returns and extra items are deliberately left out: they are not what comes off the pallet.
+ * The driver takes the empties and the client signs for the loan — a different transaction at the
+ * same doorstep — and they have their own cards on the shipment, which is where their diff goes.
+ */
+function decorate(
+  lines: UnloadLine[],
+  stop: OutgoingShipmentStopDto,
+  ledgerByClientId?: Map<string, ClientLedgerEntryDto[]>,
+): { lines: UnloadLine[]; openChanges: number } {
+  const all = stop.clientId ? ledgerByClientId?.get(stop.clientId) : undefined;
+  if (!all || !stop.orderId) return { lines, openChanges: 0 };
+
+  const forOrder = entriesForOrder(all, stop.orderId);
+  const productEntries = entriesForTarget(forOrder, 'ProductQuantity');
+  const goodEntries = entriesForTarget(forOrder, 'SupplierGoodQuantity');
+
+  const rows = applyLedger(
+    lines.map((l) => planRow(l.key, l.name, l.quantity, l.chip)),
+    [...productEntries, ...goodEntries],
+  );
+
+  const decorated = rows.map<UnloadLine>((row) => {
+    const original = lines.find((l) => l.key === row.key);
+    return {
+      name: row.name,
+      // An appended row has no planned line to borrow a chip from, so it says what it is instead.
+      chip: original?.chip ?? 'Vzato na místě',
+      quantity: row.quantity,
+      key: row.key,
+      diff: row,
+    };
+  });
+
+  return { lines: decorated, openChanges: forOrder.filter(isOpen).length };
 }

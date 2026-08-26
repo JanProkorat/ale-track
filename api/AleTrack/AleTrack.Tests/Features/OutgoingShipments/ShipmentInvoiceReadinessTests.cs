@@ -2,6 +2,7 @@ using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.OutgoingShipments.Commands.FileInvoicing;
 using AleTrack.Features.OutgoingShipments.Commands.SetInvoiceReadiness;
 using AleTrack.Features.OutgoingShipments.Queries.Invoices;
 using AleTrack.Features.OutgoingShipments.Utils;
@@ -232,7 +233,134 @@ public sealed class ShipmentInvoiceReadinessTests
 
     #endregion
 
+    #region filing
+
+    /// <summary>
+    /// Filing is the one-way door: the run's orders close, these marks lock, and only then can a
+    /// deviation be recorded against what was delivered.
+    /// </summary>
+    [Fact]
+    public async Task File_EveryRowFinished_StampsItWithWhoAndWhen()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().NotBeNull();
+        scenario.Shipment.InvoicingFiledByUserId.Should().Be(Scenario.OfficeUserId);
+    }
+
+    /// <summary>
+    /// Filing over an unfinished row would lock that order out of both worlds: no longer
+    /// editable, and never markable either.
+    /// </summary>
+    [Fact]
+    public async Task File_WithAnUnfinishedRow_ConflictsAndFilesNothing()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await Set(scenario, db, scenario.Lva.PublicId, isReady: true);
+
+        var act = () => File(scenario, db);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingIncomplete);
+        scenario.Shipment.InvoicingFiledAt.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A run marked delivered before the office closed its paperwork must still be fileable, or it
+    /// could neither be filed nor ever have a deviation recorded against it.
+    /// </summary>
+    [Fact]
+    public async Task File_ADeliveredRun_IsAllowed()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        scenario.Shipment.State = OutgoingShipmentState.Delivered;
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// A cancelled run frees its orders for reuse; filing would lock them against a run that did
+    /// not happen.
+    /// </summary>
+    [Fact]
+    public async Task File_ACancelledRun_Conflicts()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        scenario.Shipment.State = OutgoingShipmentState.Cancelled;
+
+        var act = () => File(scenario, db);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingNotFileable);
+        scenario.Shipment.InvoicingFiledAt.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Pressing it twice is not an error — it is a state, not an event — and the second press must
+    /// not restamp who filed it.
+    /// </summary>
+    [Fact]
+    public async Task File_Twice_KeepsTheFirstStamp()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        await File(scenario, db);
+        var first = scenario.Shipment.InvoicingFiledAt;
+
+        await File(scenario, db);
+
+        scenario.Shipment.InvoicingFiledAt.Should().Be(first);
+    }
+
+    [Fact]
+    public async Task Set_AfterFiling_Conflicts()
+    {
+        var scenario = Scenario.Build();
+        var db = scenario.Mock();
+        await MarkEveryRow(scenario, db);
+        await File(scenario, db);
+
+        var act = () => Set(scenario, db, scenario.Lva.PublicId, isReady: false);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.ConfirmationOf(Scenario.LvaId).IsReady.Should().BeTrue();
+    }
+
+    #endregion
+
     #region helpers
+
+    private static async Task MarkEveryRow(Scenario scenario, Mock<AleTrackDbContext> db)
+    {
+        foreach (var client in new[] { scenario.Kout, scenario.Lva, scenario.Beseda, scenario.Payer })
+            await Set(scenario, db, client.PublicId, isReady: true);
+    }
+
+    /// <summary>
+    /// The endpoint takes no body and reads the run off the route — see its remarks for why — so
+    /// the test has to put it there.
+    /// </summary>
+    private static Task File(Scenario scenario, Mock<AleTrackDbContext> db)
+    {
+        var endpoint = EndpointWithoutRequestBuilder<FileShipmentInvoicingEndpoint>
+            .Create(db.Object, AppContextMockFactory.For(Scenario.OfficeUserPublicId));
+
+        endpoint.HttpContext.Request.RouteValues["Id"] = scenario.ShipmentId.ToString();
+        return endpoint.HandleAsync(CancellationToken.None);
+    }
 
     private static async Task Set(
         Scenario scenario,
@@ -252,10 +380,84 @@ public sealed class ShipmentInvoiceReadinessTests
         }, CancellationToken.None);
     }
 
-    private static async Task<ShipmentInvoicesDto> GetInvoices(Scenario scenario)
+
+    #region deviation counts
+
+    /// <summary>
+    /// The row says how many deviations were recorded against it. It is what lets the export drawer
+    /// offer "only what changed" honestly — a run nobody recorded anything against would answer that
+    /// with an empty file, and an empty file cannot be told from a broken one.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_DeviationsAgainstARow_AreCountedOnIt()
+    {
+        var scenario = Scenario.Build();
+        await MarkEveryRow(scenario, scenario.Mock());
+
+        var invoices = await GetInvoices(scenario, [
+            Deviation(Scenario.KoutId, orderId: 101),
+            Deviation(Scenario.KoutId, orderId: 101),
+            Deviation(Scenario.LvaId, orderId: 102)
+        ]);
+
+        Count(invoices, scenario.Kout.PublicId).Should().Be(2);
+        Count(invoices, scenario.Lva.PublicId).Should().Be(1);
+        Count(invoices, scenario.Beseda.PublicId).Should().Be(0, "nothing was recorded against it");
+    }
+
+    /// <summary>
+    /// A standalone debt is a fact about the client, not about this run — the same line the export
+    /// draws. Counting it here would make a run look corrected when nothing on it changed.
+    /// </summary>
+    [Fact]
+    public async Task GetInvoices_DebtWithNoOrderBehindIt_IsNotCounted()
+    {
+        var scenario = Scenario.Build();
+
+        await MarkEveryRow(scenario, scenario.Mock());
+
+        var standalone = Deviation(Scenario.KoutId, orderId: 101);
+        standalone.OrderId = null;
+
+        var invoices = await GetInvoices(scenario, [standalone]);
+
+        Count(invoices, scenario.Kout.PublicId).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetInvoices_DeviationOfAnotherRun_IsNotCounted()
+    {
+        var scenario = Scenario.Build();
+        await MarkEveryRow(scenario, scenario.Mock());
+
+        var invoices = await GetInvoices(scenario, [Deviation(Scenario.KoutId, orderId: 9_999)]);
+
+        Count(invoices, scenario.Kout.PublicId).Should().Be(0);
+    }
+
+    private static int Count(ShipmentInvoicesDto invoices, Guid clientId) =>
+        invoices.Confirmations.Single(c => c.ClientId == clientId).DeviationCount;
+
+    private static ClientLedgerEntry Deviation(long clientId, long orderId) =>
+        new()
+        {
+            PublicId = Guid.NewGuid(),
+            ClientId = clientId,
+            OrderId = orderId,
+            Target = ClientLedgerEntryTarget.ProductQuantity,
+            PlannedQuantity = 4,
+            ActualQuantity = 1,
+            CreatedAt = new DateTime(2026, 8, 20, 8, 0, 0, DateTimeKind.Utc)
+        };
+
+    #endregion
+
+    private static async Task<ShipmentInvoicesDto> GetInvoices(
+        Scenario scenario,
+        List<ClientLedgerEntry>? ledger = null)
     {
         var endpoint = EndpointWithResponseBuilder<GetShipmentInvoicesRequest, ShipmentInvoicesDto, GetShipmentInvoicesEndpoint>
-            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+            .Create(scenario.Mock(ledger).Object, DriverScopeMockFactory.Unscoped());
         await endpoint.HandleAsync(new GetShipmentInvoicesRequest { Id = scenario.ShipmentId }, CancellationToken.None);
         return endpoint.Response;
     }
@@ -272,6 +474,9 @@ public sealed class ShipmentInvoiceReadinessTests
         internal const long PayerId = 4;
         internal const long SubId = 5;
         internal const long OutsiderId = 6;
+        internal const long OfficeUserId = 7;
+
+        internal static readonly Guid OfficeUserPublicId = Guid.NewGuid();
 
         internal required OutgoingShipment Shipment { get; init; }
         internal required Client Kout { get; init; }
@@ -286,13 +491,23 @@ public sealed class ShipmentInvoiceReadinessTests
         internal OutgoingShipmentInvoiceConfirmation ConfirmationOf(long clientId) =>
             Shipment.InvoiceConfirmations.Single(c => c.ClientId == clientId);
 
-        internal Mock<AleTrackDbContext> Mock() =>
+        internal Mock<AleTrackDbContext> Mock(List<ClientLedgerEntry>? ledger = null) =>
             AleTrackDbContextMockFactory.CreateMock(
+                users: [new User
+                {
+                    Id = OfficeUserId,
+                    PublicId = OfficeUserPublicId,
+                    UserName = "fakturantka",
+                    Password = "x",
+                    FirstName = "Jana",
+                    LastName = "Nováková"
+                }],
                 clients: [Kout, Lva, Beseda, Payer, Sub, Outsider],
                 outgoingShipments: [Shipment],
                 outgoingShipmentInvoices: Shipment.Invoices.ToList(),
                 outgoingShipmentInvoiceLines: Shipment.Invoices.SelectMany(i => i.Lines).ToList(),
-                outgoingShipmentInvoiceConfirmations: Shipment.InvoiceConfirmations.ToList());
+                outgoingShipmentInvoiceConfirmations: Shipment.InvoiceConfirmations.ToList(),
+                clientLedgerEntries: ledger ?? []);
 
         internal static Scenario Build()
         {

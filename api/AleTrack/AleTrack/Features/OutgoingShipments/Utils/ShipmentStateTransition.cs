@@ -1,6 +1,7 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Utils;
 using AleTrack.Entities;
+using AleTrack.Features.Clients.Utils;
 using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -91,6 +92,19 @@ public static class ShipmentStateTransition
         shipment.State = next;
 
         ApplyToOrders(shipment, next);
+
+        // Delivered is where an order settles the deviations it was carrying. Hooked to the same
+        // edge that turns its orders Finished, so "the debt is closed" cannot drift away from
+        // "the goods arrived".
+        if (isTransitioningToDelivered)
+        {
+            var deliveredOrders = shipment.Stops
+                .Where(s => s.ClientOrder is not null)
+                .Select(s => s.ClientOrder!)
+                .ToList();
+
+            await ClientLedgerAssignment.SettleForDeliveredOrdersAsync(dbContext, deliveredOrders, DateTime.UtcNow, ct);
+        }
 
         // Before the reset below, which zeroes the very quantities the return reads.
         if (isReturningStock)

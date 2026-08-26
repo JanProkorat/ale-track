@@ -81,7 +81,40 @@ export function useSetInvoiceReadiness(shipmentId: string | undefined) {
   return useMutation({
     mutationFn: ({ clientId, isReady }: SetInvoiceReadinessArgs) =>
       ds.setInvoiceReadinessEndpoint(shipmentId!, clientId, new SetInvoiceReadinessDto({ isReady })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+
+    // Ticking a row is not only an invoicing fact any more: it is what opens recording a
+    // deviation, and that flag is carried on the shipment's stops and on the order itself. With
+    // only the invoices query invalidated, the button appeared or vanished a page refresh late.
+    //
+    // Awaited, so the checkbox stays disabled until the refreshed flag has actually arrived —
+    // the same reasoning useSetShipmentState gives for its own await. Orders are invalidated
+    // wholesale because a payer's tick covers its whole sub-client group, so which orders it
+    // touched is not knowable from here.
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.orders.all }),
+    ]),
+  });
+}
+
+/**
+ * Files the run's invoicing — the one-way door.
+ *
+ * Invalidates what the readiness tick does, and for the same reason: filing closes the run's
+ * orders to editing and opens recording against them, and both flags travel on the shipment's
+ * stops and on the orders themselves.
+ */
+export function useFileShipmentInvoicing(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => ds.fileShipmentInvoicingEndpoint(shipmentId!),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: qk.shipmentInvoices(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.shipments.detail(shipmentId ?? '') }),
+      qc.invalidateQueries({ queryKey: qk.orders.all }),
+    ]),
   });
 }
 

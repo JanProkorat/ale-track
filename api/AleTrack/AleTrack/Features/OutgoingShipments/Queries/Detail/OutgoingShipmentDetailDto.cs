@@ -23,6 +23,16 @@ public sealed record OutgoingShipmentDetailDto
     public OutgoingShipmentState State { get; set; }
 
     /// <summary>
+    /// Whether the run's invoicing has been filed — the one-way door after which its orders are
+    /// closed to editing and the Vykládka begins offering to record deviations instead.
+    /// </summary>
+    /// <remarks>
+    /// On the run rather than on each stop: filing is one act for the whole run, and a copy per
+    /// stop would invite the copies to disagree.
+    /// </remarks>
+    public bool IsInvoicingFiled { get; set; }
+
+    /// <summary>
     /// Name of the outgoing shipment
     /// </summary>
     public string Name { get; set; } = null!;
@@ -338,6 +348,17 @@ public sealed record OutgoingShipmentStopDto
     /// order asks for. An order edit will not rewrite such a stop.
     /// </summary>
     public bool IsAddressOverridden { get; set; }
+
+    /// <summary>
+    /// Whether the Fakturace row covering this stop's order is marked finished — which is what
+    /// opens recording a deviation against it. See <see cref="Utils.InvoiceReadiness"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the stop rather than read from the invoicing endpoint so the unload list needs
+    /// no second query, and so a caller denied the Fakturace capability still gets the flag: what
+    /// it gates is a client record, not an invoice.
+    /// </remarks>
+    public bool IsInvoiceReady { get; set; }
 
     /// <summary>
     /// Set when an order edit changed the delivery address under this shipment

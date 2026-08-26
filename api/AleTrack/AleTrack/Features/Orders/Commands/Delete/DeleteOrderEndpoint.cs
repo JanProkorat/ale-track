@@ -1,6 +1,8 @@
 using AleTrack.Common.Enums;
 using AleTrack.Common.Models;
 using AleTrack.Common.Utils;
+using AleTrack.Features.Clients.Utils;
+using AleTrack.Features.Orders.Utils;
 using AleTrack.Infrastructure.Persistence;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
@@ -47,12 +49,41 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteOrderRequest req, CancellationToken ct)
     {
-        var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+        var order = await dbContext.Orders
+            .Include(o => o.OutgoingShipmentStop)
+                .ThenInclude(s => s!.OutgoingShipment)
+            .FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+
         if (order == null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
 
+        // Filed paperwork does not lose an order. Past filing the plan is what was filed and only
+        // deviations are recorded against it, so cancelling would take a delivery out of a run
+        // whose invoicing has already gone out — and, through the release below, quietly reopen
+        // every debt this order had promised to settle.
+        var shipment = order!.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is not null
+            && shipment.State is not OutgoingShipmentState.Cancelled
+            && shipment.IsInvoicingFiled)
+        {
+            ThrowHelper.ShipmentInvoicingFiled(shipment.PublicId);
+        }
+
+        // And an order that is history cannot be taken back either: finished, or on a run that has
+        // already delivered. Cancelling twice stays allowed — the second flip changes nothing, and
+        // a double-tap should not read as a failure.
+        if (order.State is not OrderState.Cancelled && !OrderMutability.IsContentEditable(order))
+            ThrowHelper.OrderContentFrozen(req.Id);
+
+        // Before the removal, which the context turns into a state flip to Cancelled: a cancelled
+        // order settles nothing, so every open point it promised to carry goes back to open.
+        // Cancelling the *shipment* is a different thing entirely and must not do this — that only
+        // frees the order for re-planning, and it still carries the debt.
+        await ClientLedgerAssignment.ReleaseForCancelledOrderAsync(dbContext, order!.Id, ct);
+
         dbContext.Orders.Remove(order!);
-        
+
         await dbContext.SaveChangesAsync(ct);
         await Send.ResponseAsync(null, StatusCodes.Status202Accepted, ct);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DeliveryAddressKind, OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
+import { ClientLedgerEntryDto, ClientLedgerEntryTarget, DeliveryAddressKind, OutgoingShipmentStopDto, OutgoingShipmentStopKind, ProductKind } from 'src/generated/api-client';
 import { unloadOrder } from './unloadOrder';
 
 const orderStop = (order: number, clientName: string, products: unknown[] = []) =>
@@ -166,7 +166,10 @@ describe('unloadOrder', () => {
 
     // Named as supplier goods rather than left chipless: a CO₂ bottle has no kind, and a bare
     // '10 kg' beside the beer's 'Basa · 0,5 l · 12°' reads as a line missing its chip.
-    expect(result[0].lines).toEqual([
+    //
+    // toMatchObject, not toEqual: a line also carries the id a recorded deviation points at,
+    // which this assertion is not about.
+    expect(result[0].lines).toMatchObject([
       { name: 'Kozel 12°', quantity: 24, chip: 'Basa · 0,5 l · 12°' },
       { name: 'CO₂ láhev', quantity: 2, chip: 'Zboží dodavatele · 10 kg' },
     ]);
@@ -192,7 +195,7 @@ describe('unloadOrder', () => {
 
     const result = unloadOrder([orderStop(1, 'Chrastava')], [], goods as never);
 
-    expect(result[0].lines).toEqual([
+    expect(result[0].lines).toMatchObject([
       { name: 'CO₂ láhev', quantity: 5, chip: 'Zboží dodavatele · 10 kg' },
     ]);
   });
@@ -219,5 +222,160 @@ describe('unloadOrder', () => {
     const stops = unloadOrder([stopWithOfficialAddress()], [], []);
 
     expect(stops[0].addressMissing).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// Deviations. The handover is the one moment a plan and a reality exist side by side, and the
+// unload list is the view of it — the nakládka, settled with the brewery before the van left,
+// stays out of it entirely.
+// ---------------------------------------------------------------------------------
+
+describe('unloadOrder — deviations', () => {
+  const CLIENT = 'client-a';
+  const ORDER = 'order-1';
+  const ITEM = 'item-1';
+
+  function entry(over: Partial<ClientLedgerEntryDto> = {}): ClientLedgerEntryDto {
+    return ClientLedgerEntryDto.fromJS({
+      id: `e-${Math.random()}`,
+      clientId: CLIENT,
+      orderId: ORDER,
+      target: ClientLedgerEntryTarget.ProductQuantity,
+      requiresFollowUp: false,
+      createdAt: '2026-08-24T10:00:00Z',
+      ...over,
+    });
+  }
+
+  /** A stop whose product carries the order-item id a deviation points at. */
+  function stopWithItem(): OutgoingShipmentStopDto {
+    const stop = orderStop(1, 'Chrastava', [
+      { name: 'Kozel 12°', quantity: 10, kind: ProductKind.Keg, platoDegree: 12, packageSize: 50 },
+    ]);
+    stop.clientId = CLIENT;
+    stop.orderId = ORDER;
+    (stop.products ?? []).forEach((p) => { p.orderItemId = ITEM; });
+    return stop;
+  }
+
+  function ledger(...entries: ClientLedgerEntryDto[]) {
+    return new Map([[CLIENT, entries]]);
+  }
+
+  it('leaves the lines alone with no ledger in hand', () => {
+    const result = unloadOrder([stopWithItem()], [], []);
+
+    expect(result[0].lines[0].diff).toBeUndefined();
+    expect(result[0].openChanges).toBe(0);
+    expect(result[0].totalQuantity).toBe(10);
+  });
+
+  it('diffs a line against what came off', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(entry({ orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7 })),
+    );
+
+    expect(result[0].lines[0].diff).toMatchObject({
+      status: 'changed', plannedQuantity: 10, actualQuantity: 7,
+    });
+  });
+
+  // The number beside the client's name is what the driver counts the handover against, so it
+  // has to be what actually comes off rather than what the office planned.
+  it('counts the stop by what actually comes off', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(entry({ orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7 })),
+    );
+
+    expect(result[0].totalQuantity).toBe(7);
+  });
+
+  it('appends a product the client took at the door', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(entry({ productId: 'p-9', productName: 'Světlé 10', plannedQuantity: 0, actualQuantity: 4 })),
+    );
+
+    expect(result[0].lines).toHaveLength(2);
+    expect(result[0].lines[1]).toMatchObject({ name: 'Světlé 10', chip: 'Vzato na místě' });
+    expect(result[0].lines[1].diff?.status).toBe('added');
+  });
+
+  it('badges the stop with how many changes are still open', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(
+        entry({ orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7, requiresFollowUp: true }),
+        entry({ target: ClientLedgerEntryTarget.Money, amount: 500, requiresFollowUp: true }),
+        entry({
+          target: ClientLedgerEntryTarget.Money,
+          amount: 200,
+          resolvedAt: new Date('2026-08-26T09:00:00Z'),
+        }),
+      ),
+    );
+
+    expect(result[0].openChanges).toBe(2);
+  });
+
+  // Returns and extras go the other way — the driver takes the empties, the client signs for the
+  // loan — so they are a different transaction at the same doorstep and keep their own cards.
+  it('keeps returns and extras out of the unload lines', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(entry({
+        target: ClientLedgerEntryTarget.ReturnQuantity,
+        lineName: 'Basy prázdných',
+        plannedQuantity: 0,
+        actualQuantity: 4,
+      })),
+    );
+
+    expect(result[0].lines).toHaveLength(1);
+    expect(result[0].lines[0].name).toBe('Kozel 12°');
+  });
+
+  it('ignores a deviation recorded against another order', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      ledger(entry({ orderId: 'some-other-order', orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7 })),
+    );
+
+    expect(result[0].lines[0].diff?.status).toBe('unchanged');
+    expect(result[0].openChanges).toBe(0);
+  });
+
+  it('ignores another client\'s ledger', () => {
+    const result = unloadOrder(
+      [stopWithItem()], [], [],
+      new Map([['client-b', [entry({ orderItemId: ITEM, plannedQuantity: 10, actualQuantity: 7 })]]]),
+    );
+
+    expect(result[0].lines[0].diff).toBeUndefined();
+  });
+});
+
+describe('unloadOrder — finished paperwork', () => {
+  it('carries the stop\'s invoice-ready flag through', () => {
+    const stop = orderStop(1, 'Chrastava');
+    stop.isInvoiceReady = true;
+
+    expect(unloadOrder([stop], [], [])[0].isInvoiceReady).toBe(true);
+  });
+
+  it('reads an absent flag as not ready', () => {
+    expect(unloadOrder([orderStop(1, 'Chrastava')], [], [])[0].isInvoiceReady).toBe(false);
+  });
+
+  // A warehouse or fuel stop has no order, so there is no Fakturace row to finish.
+  it('is never ready on a stop with no order', () => {
+    const fuel = new OutgoingShipmentStopDto({
+      id: 'fuel', order: 1, kind: 'Custom' as unknown as OutgoingShipmentStopKind, label: 'Čerpací stanice',
+    } as never);
+
+    expect(unloadOrder([fuel], [], [])[0].isInvoiceReady).toBe(false);
   });
 });

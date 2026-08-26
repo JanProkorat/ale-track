@@ -19,7 +19,7 @@ import { useMemo, useState } from 'react';
 import {
   Box, Button, Card, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions,
   DialogContent, DialogTitle, FormControlLabel, IconButton, ListSubheader, MenuItem, Stack, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
@@ -48,10 +48,11 @@ import {
   type OutgoingShipmentStopDto,
 } from 'src/generated/api-client';
 import {
-  useAddShipmentInvoice, useDeleteShipmentInvoice, useMoveInvoiceLine, useSetInvoiceReadiness,
+  useAddShipmentInvoice, useDeleteShipmentInvoice, useFileShipmentInvoicing, useMoveInvoiceLine,
+  useSetInvoiceReadiness,
   useShipmentInvoices,
 } from 'src/hooks/useShipmentInvoices';
-import { fmtLiters, num, plural } from 'src/lib/format';
+import { fmtDate, fmtLiters, num, plural } from 'src/lib/format';
 import {
   bandAddress, bandOrderDetails, groupLineList, groupLines, groupValue, invoiceParties, invoiceQuantity,
   invoiceValue, otherClientCount,
@@ -392,15 +393,22 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
   const addInvoice = useAddShipmentInvoice(shipmentId);
   const deleteInvoice = useDeleteShipmentInvoice(shipmentId);
   const setReadiness = useSetInvoiceReadiness(shipmentId);
+  const fileInvoicing = useFileShipmentInvoicing(shipmentId);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [driftDismissed, setDriftDismissed] = useState(false);
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ShipmentInvoiceDto | null>(null);
+  const [confirmFiling, setConfirmFiling] = useState(false);
 
   const bands = useMemo(() => toBands(data), [data]);
-  // The section is read-only whenever the shipment is, and the server has the final say.
-  const canEdit = editable && (data.isEditable ?? false);
+  const filed = data.isInvoicingFiled ?? false;
+  // The section is read-only whenever the shipment is, and the server has the final say. Filing
+  // closes it for good: past that point these rows are the record of what was filed.
+  const canEdit = editable && (data.isEditable ?? false) && !filed;
+  // Filing needs every row finished — the server refuses otherwise, and a button that only ever
+  // errors is worse than one that says why it is waiting.
+  const unfinished = bands.filter((band) => !band.isReady).length;
   const totals = useMemo(() => sectionTotals(data, bands), [bands, data]);
 
   // Every party key across every multi-party invoice — an invoice with one party renders no
@@ -457,6 +465,16 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
     });
   };
 
+  const handleFiling = () => {
+    fileInvoicing.mutate(undefined, {
+      onSuccess: () => {
+        setConfirmFiling(false);
+        enqueueSnackbar('Fakturace zaevidována — objednávky jsou uzamčené', { variant: 'success' });
+      },
+      onError: (e) => enqueueSnackbar(apiErrorMessage(e), { variant: 'error' }),
+    });
+  };
+
   const handleDelete = (invoice: ShipmentInvoiceDto) => {
     deleteInvoice.mutate(invoice.id!, {
       onSuccess: () => enqueueSnackbar('Faktura smazána — kusy vráceny na fakturu plátce', { variant: 'success' }),
@@ -471,9 +489,46 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 2.5, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
           <ReceiptLongOutlinedIcon sx={{ fontSize: 19, color: 'text.secondary' }} />
           <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Fakturace</Typography>
-          <Typography sx={{ ml: 'auto', fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'block' } }}>
+          <Typography sx={{ fontSize: 12.5, color: 'text.disabled', display: { xs: 'none', md: 'none', lg: 'block' } }}>
             Rozdělení položek vývozu na faktury — pro fakturaci klientům
           </Typography>
+
+          {/* A spacer rather than `ml: 'auto'` on what follows: this Stack spaces its children
+              with margins, and that rule outranks a child's own sx — the margin quietly won and
+              the button sat next to the subtitle instead of at the edge. */}
+          <Box sx={{ flex: 1 }} />
+
+          {/* The one-way door. Up to here the office moves freely — mark a row, unmark it, correct
+              an order the ordinary way, take the export again. Past it the rows lock, the orders
+              close, and deviations start being recorded against them instead. Which is why it
+              asks first, and why what it says afterwards is who filed it. */}
+          {filed ? (
+            <Tooltip title={filedTooltip(data)}>
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                <Pill tint="okTint" color="success.main" icon={<LockOutlinedIcon sx={{ fontSize: 12 }} />}>
+                  Zaevidováno
+                </Pill>
+              </Box>
+            </Tooltip>
+          ) : editable && (data.isEditable ?? false) && (
+            <Tooltip title={unfinished > 0
+              ? `Nejdřív označte všechny řádky jako hotové (zbývá ${unfinished}).`
+              : 'Zamkne fakturaci i objednávky. Nevratné.'}
+            >
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<LockOutlinedIcon fontSize="small" />}
+                  disabled={unfinished > 0 || fileInvoicing.isPending}
+                  onClick={() => setConfirmFiling(true)}
+                  sx={{ flexShrink: 0, color: 'text.primary', borderColor: 'divider', fontWeight: 700 }}
+                >
+                  Zaevidovat
+                </Button>
+              </Box>
+            </Tooltip>
+          )}
         </Stack>
 
         <Box sx={{ p: 2.5 }}>
@@ -849,8 +904,34 @@ function InvoicingContent({ shipmentId, editable, data, stops }: {
         onConfirm={() => confirmDelete && handleDelete(confirmDelete)}
         onClose={() => setConfirmDelete(null)}
       />
+
+      <ConfirmDialog
+        open={confirmFiling}
+        title="Zaevidovat fakturaci?"
+        message={
+          'Řádky se zamknou a objednávky tohoto vývozu už nebude možné upravovat běžnou cestou — '
+          + 'od té chvíle se k nim zaznamenávají změny. Tuto akci nelze vzít zpět.'
+        }
+        confirmLabel="Zaevidovat"
+        destructive={false}
+        busy={fileInvoicing.isPending}
+        onConfirm={handleFiling}
+        onClose={() => setConfirmFiling(false)}
+      />
     </>
   );
+}
+
+/** What the filed pill says on hover: who closed the paperwork, and when. */
+function filedTooltip(data: ShipmentInvoicesDto): string {
+  const parts = [
+    data.invoicingFiledAt ? fmtDate(data.invoicingFiledAt) : undefined,
+    data.invoicingFiledByUserName,
+  ].filter(Boolean);
+
+  return parts.length > 0
+    ? `Fakturace zaevidována ${parts.join(' · ')}. Objednávky jsou uzamčené.`
+    : 'Fakturace je zaevidovaná. Objednávky jsou uzamčené.';
 }
 
 /** The target list groups by client and can run long, so its menu gets a scroll cap and a
