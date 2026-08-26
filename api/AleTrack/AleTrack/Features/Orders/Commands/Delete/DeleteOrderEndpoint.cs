@@ -48,9 +48,26 @@ public sealed class DeleteOrderEndpoint(AleTrackDbContext dbContext) : Endpoint<
     /// <inheritdoc />
     public override async Task HandleAsync(DeleteOrderRequest req, CancellationToken ct)
     {
-        var order = await dbContext.Orders.FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+        var order = await dbContext.Orders
+            .Include(o => o.OutgoingShipmentStop)
+                .ThenInclude(s => s!.OutgoingShipment)
+            .FirstOrDefaultAsync(o => o.PublicId == req.Id, ct);
+
         if (order == null)
             ThrowHelper.PublicEntityNotFound(nameof(Order), req.Id);
+
+        // Filed paperwork does not lose an order. Past filing the plan is what was filed and only
+        // deviations are recorded against it, so cancelling would take a delivery out of a run
+        // whose invoicing has already gone out — and, through the release below, quietly reopen
+        // every debt this order had promised to settle.
+        var shipment = order!.OutgoingShipmentStop?.OutgoingShipment;
+
+        if (shipment is not null
+            && shipment.State is not OutgoingShipmentState.Cancelled
+            && shipment.IsInvoicingFiled)
+        {
+            ThrowHelper.ShipmentInvoicingFiled(shipment.PublicId);
+        }
 
         // Before the removal, which the context turns into a state flip to Cancelled: a cancelled
         // order settles nothing, so every open point it promised to carry goes back to open.

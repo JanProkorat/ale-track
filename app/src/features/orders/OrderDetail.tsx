@@ -273,6 +273,11 @@ export function OrderDetail({
   // deviation recorded against it stays true.
   const canRecordNow = canRecordDeviation && (order.isInvoicingFiled ?? false);
 
+  // Cancelling is gone once the run's invoicing is filed: from then on the order is a record of
+  // what went out, and only deviations are written against it. The API refuses it too — losing
+  // the order would take a delivery out of a run whose invoicing has already gone out.
+  const canCancelOrder = editable && !(order.isInvoicingFiled ?? false);
+
   // The plan the drawer diffs against is the order's own quantity, which is also what was
   // loaded: content freezes when the truck is packed, so the two cannot diverge. (The prototype
   // shows an "objednáno 4, naloženo 6" case; the real model has no way to load more than the
@@ -439,7 +444,7 @@ export function OrderDetail({
                 </Button>
               </Tooltip>
             )}
-            {editable && (
+            {canCancelOrder && (
               <IconButton color="error" onClick={onDelete} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }} aria-label="Zrušit objednávku">
                 <DeleteIcon />
               </IconButton>

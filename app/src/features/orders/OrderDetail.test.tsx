@@ -934,4 +934,20 @@ describe('OrderDetail — editing the order', () => {
 
     expect(edit()).not.toBeInTheDocument();
   });
+
+  // Once the run's invoicing is filed the order is a record of what went out. Losing it would
+  // take a delivery out of a run already invoiced — and reopen every debt it promised to settle.
+  const cancel = () => screen.queryByRole('button', { name: 'Zrušit objednávku' });
+
+  it('offers cancelling while the invoicing is unfiled', () => {
+    renderDetail(order());
+
+    expect(cancel()).toBeInTheDocument();
+  });
+
+  it('withholds cancelling once the invoicing is filed', () => {
+    renderDetail(order({ isInvoicingFiled: true }));
+
+    expect(cancel()).not.toBeInTheDocument();
+  });
 });
