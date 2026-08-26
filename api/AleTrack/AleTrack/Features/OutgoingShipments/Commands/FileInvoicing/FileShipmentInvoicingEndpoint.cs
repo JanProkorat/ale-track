@@ -10,15 +10,6 @@ using Microsoft.EntityFrameworkCore;
 namespace AleTrack.Features.OutgoingShipments.Commands.FileInvoicing;
 
 /// <summary>
-/// Request to file a run's invoicing.
-/// </summary>
-public sealed record FileShipmentInvoicingRequest
-{
-    /// <summary>Public ID of the outgoing shipment.</summary>
-    public Guid Id { get; set; }
-}
-
-/// <summary>
 /// Files the run's invoicing: the one-way door between correcting orders and recording deviations.
 /// </summary>
 /// <remarks>
@@ -31,9 +22,14 @@ public sealed record FileShipmentInvoicingRequest
 /// Allowed in every state but <see cref="OutgoingShipmentState.Cancelled"/> —
 /// <see cref="OutgoingShipmentState.Delivered"/> included, because a run marked delivered before
 /// the paperwork was closed would otherwise be able neither to file nor ever to record.
+///
+/// Deliberately <see cref="EndpointWithoutRequest"/> rather than a request DTO holding just the
+/// route ID, for the reason <c>AddPurchaseInvoiceEndpoint</c> spells out: FastEndpoints binds a
+/// request DTO from the body and answers 415 when the caller sends none — which the generated
+/// client does, because a route-only DTO produces no body.
 /// </remarks>
 public sealed class FileShipmentInvoicingEndpoint(AleTrackDbContext dbContext, IAppContext appContext)
-    : Endpoint<FileShipmentInvoicingRequest>
+    : EndpointWithoutRequest
 {
     /// <inheritdoc />
     public override void Configure()
@@ -61,19 +57,21 @@ public sealed class FileShipmentInvoicingEndpoint(AleTrackDbContext dbContext, I
     }
 
     /// <inheritdoc />
-    public override async Task HandleAsync(FileShipmentInvoicingRequest req, CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
-        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, req.Id, ct);
+        var shipmentId = Route<Guid>("Id");
+
+        var split = await ShipmentInvoiceGraph.LoadAsync(dbContext, shipmentId, ct);
         if (split is null)
         {
-            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), req.Id);
+            ThrowHelper.PublicEntityNotFound(nameof(OutgoingShipment), shipmentId);
             return;
         }
 
         var shipment = split.Shipment;
 
         if (shipment.State is OutgoingShipmentState.Cancelled)
-            ThrowHelper.ShipmentInvoicingNotFileable(req.Id);
+            ThrowHelper.ShipmentInvoicingNotFileable(shipmentId);
 
         // Pressing it twice is not an error: the run is filed either way, and this is a PUT of a
         // state rather than an event.

@@ -18810,9 +18810,9 @@ export class GetOutgoingShipmentDetailRequest implements IGetOutgoingShipmentDet
 export interface IGetOutgoingShipmentDetailRequest {
 }
 
-export class FileShipmentInvoicingRequest implements IFileShipmentInvoicingRequest {
+export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceRequest {
 
-    constructor(data?: IFileShipmentInvoicingRequest) {
+    constructor(data?: IDeletePurchaseInvoiceRequest) {
         if (data) {
             for (var property in data) {
                 if (data.hasOwnProperty(property))
@@ -18824,9 +18824,9 @@ export class FileShipmentInvoicingRequest implements IFileShipmentInvoicingReque
     init(_data?: any) {
     }
 
-    static fromJS(data: any): FileShipmentInvoicingRequest {
+    static fromJS(data: any): DeletePurchaseInvoiceRequest {
         data = typeof data === 'object' ? data : {};
-        let result = new FileShipmentInvoicingRequest();
+        let result = new DeletePurchaseInvoiceRequest();
         result.init(data);
         return result;
     }
@@ -18837,7 +18837,7 @@ export class FileShipmentInvoicingRequest implements IFileShipmentInvoicingReque
     }
 }
 
-export interface IFileShipmentInvoicingRequest {
+export interface IDeletePurchaseInvoiceRequest {
 }
 
 export class UpdateOutgoingShipmentDto implements IUpdateOutgoingShipmentDto {
@@ -19871,36 +19871,6 @@ export interface IMoveInvoiceLineDto {
     toInvoiceId?: string | undefined;
     toClientId?: string | undefined;
     toPrivate?: boolean;
-}
-
-export class DeletePurchaseInvoiceRequest implements IDeletePurchaseInvoiceRequest {
-
-    constructor(data?: IDeletePurchaseInvoiceRequest) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-    }
-
-    static fromJS(data: any): DeletePurchaseInvoiceRequest {
-        data = typeof data === 'object' ? data : {};
-        let result = new DeletePurchaseInvoiceRequest();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        return data;
-    }
-}
-
-export interface IDeletePurchaseInvoiceRequest {
 }
 
 export class DeleteShipmentInvoiceRequest implements IDeleteShipmentInvoiceRequest {

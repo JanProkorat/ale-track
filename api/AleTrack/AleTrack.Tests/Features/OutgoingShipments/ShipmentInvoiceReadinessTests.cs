@@ -349,12 +349,17 @@ public sealed class ShipmentInvoiceReadinessTests
             await Set(scenario, db, client.PublicId, isReady: true);
     }
 
+    /// <summary>
+    /// The endpoint takes no body and reads the run off the route — see its remarks for why — so
+    /// the test has to put it there.
+    /// </summary>
     private static Task File(Scenario scenario, Mock<AleTrackDbContext> db)
     {
-        var endpoint = EndpointBuilder<FileShipmentInvoicingRequest, FileShipmentInvoicingEndpoint>
+        var endpoint = EndpointWithoutRequestBuilder<FileShipmentInvoicingEndpoint>
             .Create(db.Object, AppContextMockFactory.For(Scenario.OfficeUserPublicId));
 
-        return endpoint.HandleAsync(new FileShipmentInvoicingRequest { Id = scenario.ShipmentId }, CancellationToken.None);
+        endpoint.HttpContext.Request.RouteValues["Id"] = scenario.ShipmentId.ToString();
+        return endpoint.HandleAsync(CancellationToken.None);
     }
 
     private static async Task Set(
