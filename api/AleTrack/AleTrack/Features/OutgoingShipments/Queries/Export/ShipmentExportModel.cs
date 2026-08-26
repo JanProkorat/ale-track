@@ -203,6 +203,27 @@ public sealed record ShipmentExportProduct
     /// </remarks>
     public int? DeliveredQuantity { get; init; }
 
+    /// <summary>
+    /// The deviation recorded against this line, or null while the line went to plan.
+    /// </summary>
+    /// <remarks>
+    /// A third pair of numbers on the row, and deliberately not either of the first two.
+    /// <see cref="Quantity"/> against <see cref="DeliveredQuantity"/> is what the invoice split did
+    /// with the pieces; this is what happened to them at the door. Conflating the two would let an
+    /// editing decision read as a delivery going wrong.
+    /// </remarks>
+    public ShipmentExportDeviation? Deviation { get; init; }
+
+    /// <summary>
+    /// Whether the row exists only because of a deviation — goods the client took at the door that
+    /// no order planned.
+    /// </summary>
+    /// <remarks>
+    /// Its <see cref="Quantity"/> is 0 and stays 0: nothing bills those pieces yet, and inventing a
+    /// billed number for them would put money on an invoice nobody raised. What changed hands is on
+    /// the <see cref="Deviation"/>.
+    /// </remarks>
+    public bool IsFromDeviation { get; init; }
 }
 
 /// <summary>
@@ -244,6 +265,9 @@ public sealed record ShipmentExportInvoice
 
     public List<ShipmentExportInvoiceParty> Parties { get; init; } = [];
 
+    /// <summary>Whether any party on this invoice diverged from the plan.</summary>
+    public bool HasDeviations => Parties.Any(p => p.HasDeviations);
+
     public int TotalQuantity => Parties.Sum(p => p.TotalQuantity);
 
     /// <summary>
@@ -272,10 +296,49 @@ public sealed record ShipmentExportInvoice
                 Quantity = group.Sum(p => p.Quantity),
                 DeliveredQuantity = group.Any(p => p.DeliveredQuantity is not null)
                     ? group.Sum(p => p.DeliveredQuantity ?? 0)
-                    : null
+                    : null,
+                IsFromDeviation = group.All(p => p.IsFromDeviation),
+                Deviation = MergeDeviations(group)
             })
             .OrderBy(product => product.Name, StringComparer.CurrentCulture)
             .ToList();
+
+    /// <summary>
+    /// The deviations of every row merged into that row, or null when none of them diverged.
+    /// </summary>
+    /// <remarks>
+    /// Only the counts merge. Two rows of one product can carry two different reasons, and there is
+    /// no honest way to add prose together — the words stay on the per-party detail, which is where
+    /// the reader goes for them. What survives is the pair the difference is computed from, and it
+    /// adds up: a payer whose two sub-clients were each three kegs short is six kegs short.
+    /// </remarks>
+    private static ShipmentExportDeviation? MergeDeviations(IEnumerable<ShipmentExportProduct> group)
+    {
+        var deviations = group.Select(p => p.Deviation).OfType<ShipmentExportDeviation>().ToList();
+
+        if (deviations.Count == 0)
+            return null;
+
+        if (deviations.Count == 1)
+            return deviations[0];
+
+        return new ShipmentExportDeviation
+        {
+            Target = deviations[0].Target,
+            PlannedQuantity = Sum(deviations, d => d.PlannedQuantity),
+            ActualQuantity = Sum(deviations, d => d.ActualQuantity),
+            RequiresFollowUp = deviations.Any(d => d.RequiresFollowUp)
+        };
+    }
+
+    /// <summary>
+    /// Adds up what is known, and stays null when nothing is — a merged row must not read as "nought
+    /// planned" for lines that never answered the question.
+    /// </summary>
+    private static int? Sum(
+        List<ShipmentExportDeviation> deviations,
+        Func<ShipmentExportDeviation, int?> pick) =>
+        deviations.Any(d => pick(d) is not null) ? deviations.Sum(d => pick(d) ?? 0) : null;
 
     /// <summary>
     /// Sub-clients whose official address the office chose to name on this invoice, for the
@@ -345,6 +408,24 @@ public sealed record ShipmentExportInvoiceParty
 
     public List<ShipmentExportProduct> Products { get; init; } = [];
 
+    /// <summary>
+    /// Deviations of this party that no row carries: where the goods went instead, money owed either
+    /// way, and anything else the dispatcher recorded.
+    /// </summary>
+    /// <remarks>
+    /// Also the catch-all for a deviation whose line has since been removed from the order. It has
+    /// nowhere to sit and is still true, so it lands here rather than being dropped.
+    /// </remarks>
+    public List<ShipmentExportDeviation> Deviations { get; init; } = [];
+
+    /// <summary>
+    /// Whether anything about this party diverged from the plan — what the Changed scope keeps.
+    /// </summary>
+    public bool HasDeviations =>
+        Deviations.Count > 0
+        || Products.Any(p => p.Deviation is not null)
+        || Returns.Any(r => r.Deviation is not null);
+
     public int TotalQuantity => Products.Sum(p => p.Quantity);
 }
 
@@ -367,4 +448,66 @@ public sealed record ShipmentExportReturn
     /// Pieces handed back.
     /// </summary>
     public required int Quantity { get; init; }
+
+    /// <summary>
+    /// The deviation recorded against this vratka, or null while it went to plan. Short means the
+    /// client still owes empties, over means we hold deposits that are not ours — which is why it
+    /// needs following up in both directions.
+    /// </summary>
+    public ShipmentExportDeviation? Deviation { get; init; }
+}
+
+/// <summary>
+/// One recorded divergence between what a client's order planned and what actually happened —
+/// pieces not unloaded, goods taken at the door, empties not handed back, a delivery that went
+/// somewhere else, money owed either way.
+/// </summary>
+/// <remarks>
+/// Read off the client ledger, which is where a deviation lives: beside the order, never inside it,
+/// so the plan stays the plan and the paper printed before the run stays true. That is what lets one
+/// run yield three files — see <see cref="ShipmentExportScope"/>.
+///
+/// It sits on the row it is about wherever there is one, and in
+/// <see cref="ShipmentExportInvoiceParty.Deviations"/> when there is not. Nothing is dropped for
+/// want of a row to hang it on: a deviation the office recorded and the file does not mention is
+/// the one failure this part exists to prevent.
+/// </remarks>
+public sealed record ShipmentExportDeviation
+{
+    /// <summary>Which part of the order diverged.</summary>
+    public required ClientLedgerEntryTarget Target { get; init; }
+
+    /// <summary>
+    /// What diverged, named — for a deviation with no row of its own, and for goods the order never
+    /// planned at all.
+    /// </summary>
+    public string? LineName { get; init; }
+
+    /// <summary>Pieces the plan said. Zero for something never planned.</summary>
+    public int? PlannedQuantity { get; init; }
+
+    /// <summary>Pieces that actually changed hands.</summary>
+    public int? ActualQuantity { get; init; }
+
+    /// <summary>Where the goods were meant to go, for a redirected delivery.</summary>
+    public string? PlannedText { get; init; }
+
+    /// <summary>Where they went instead.</summary>
+    public string? ActualText { get; init; }
+
+    /// <summary>Money owed, signed: positive means the client owes us. CZK.</summary>
+    public decimal? Amount { get; init; }
+
+    /// <summary>Why it happened, in the dispatcher's own words.</summary>
+    public string? Note { get; init; }
+
+    /// <summary>Whether it is a debt to settle rather than a mere record.</summary>
+    public bool RequiresFollowUp { get; init; }
+
+    /// <summary>
+    /// Pieces gained or lost, signed. Null unless both counts are known, and never stored — a
+    /// stored difference is a third number that can stop agreeing with the first two.
+    /// </summary>
+    public int? QuantityDifference =>
+        PlannedQuantity is null || ActualQuantity is null ? null : ActualQuantity - PlannedQuantity;
 }
