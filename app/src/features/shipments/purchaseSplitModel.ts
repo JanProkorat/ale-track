@@ -282,3 +282,21 @@ export function columnTotals(
 
   return totals;
 }
+
+/**
+ * The column whose second count blocks moving pieces in or out of the one at `sequence`:
+ * that column itself, or the remainder column it takes its pieces from. Undefined while
+ * neither has been checked.
+ *
+ * A stepper on a later column always moves pieces between that column and the remainder,
+ * so both ends have to be open: nudging F2 once F1 is checked would silently change a
+ * pallet somebody has already counted twice, and nudging a checked F2 would change its own.
+ * Reverting either state to nadiktováno opens the stepper again.
+ */
+export function checkedBlocker(
+  states: OutgoingShipmentLoadingStateDto[],
+  productId: string | undefined,
+  sequence: number,
+): number | undefined {
+  return [1, sequence].find((column) => loadingStateAt(states, productId, column) === 'Checked');
+}

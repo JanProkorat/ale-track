@@ -19,6 +19,11 @@ namespace AleTrack.Features.OutgoingShipments.Utils;
 public static class PurchaseInvoiceSplit
 {
     /// <summary>
+    /// The column holding whatever the other invoices do not claim. Never stores lines.
+    /// </summary>
+    public const int RemainderSequence = 1;
+
+    /// <summary>
     /// Loads a shipment with everything the purchase split needs, tracked. Null when it does
     /// not exist.
     /// </summary>
@@ -159,6 +164,28 @@ public static class PurchaseInvoiceSplit
         columns[1] = Math.Max(0, PurchasedByProduct(shipment).GetValueOrDefault(productId) - claimed) + fromGarage;
 
         return columns;
+    }
+
+    /// <summary>
+    /// The column whose second count blocks moving pieces in or out of the invoice at
+    /// <paramref name="sequence"/>: that column itself, or the remainder column it takes its
+    /// pieces from. Null while neither has been checked.
+    /// </summary>
+    /// <remarks>
+    /// A line write on a later invoice always moves pieces between it and the remainder, so both
+    /// ends have to be open — writing to F2 once F1 is checked would silently change a pallet
+    /// somebody has already counted twice. Clearing either state back to dictated reopens it.
+    /// </remarks>
+    public static int? CheckedBlocker(OutgoingShipment shipment, long productId, int sequence)
+    {
+        foreach (var column in new[] { RemainderSequence, sequence })
+        {
+            if (shipment.LoadingStates.Any(s =>
+                    s.ProductId == productId && s.Sequence == column && s.State == ShipmentLoadingState.Checked))
+                return column;
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -236,6 +236,66 @@ describe('PurchaseInvoiceHeaderCells', () => {
   });
 });
 
+describe('a checked column locks the split', () => {
+  // Both ends of the move have to stay open: stepping F2 takes its pieces out of the
+  // remainder, so a checked F1 blocks it just as a checked F2 does.
+  function stepper(sequence: number) {
+    return {
+      minus: screen.getByLabelText(`Kusy na faktu\u0159e ${sequence} \u2014 ubrat`) as HTMLButtonElement,
+      plus: screen.getByLabelText(`Kusy na faktu\u0159e ${sequence} \u2014 p\u0159idat`) as HTMLButtonElement,
+      field: screen.getByLabelText(`Kusy na faktu\u0159e ${sequence}`) as HTMLInputElement,
+    };
+  }
+
+  it('locks F2 once the remainder has been checked', () => {
+    renderRowCells({ states: [state(LEZAK, 1, 'Checked')] });
+
+    const { minus, plus, field } = stepper(2);
+    expect(minus.disabled).toBe(true);
+    expect(plus.disabled).toBe(true);
+    expect(field.readOnly).toBe(true);
+  });
+
+  it('locks F2 once F2 itself has been checked', () => {
+    renderRowCells({ states: [state(LEZAK, 2, 'Checked')] });
+
+    const { minus, plus } = stepper(2);
+    expect(minus.disabled).toBe(true);
+    expect(plus.disabled).toBe(true);
+  });
+
+  it('commits nothing from a locked field on blur', () => {
+    const onSet = vi.fn();
+    renderRowCells({ states: [state(LEZAK, 1, 'Checked')], onSet });
+
+    const { field } = stepper(2);
+    fireEvent.change(field, { target: { value: '9' } });
+    fireEvent.blur(field);
+
+    expect(onSet).not.toHaveBeenCalled();
+  });
+
+  it('stays open while both ends are only dictated', () => {
+    renderRowCells({ states: [state(LEZAK, 1, 'Dictated'), state(LEZAK, 2, 'Dictated')] });
+
+    const { minus, plus, field } = stepper(2);
+    expect(minus.disabled).toBe(false);
+    expect(plus.disabled).toBe(false);
+    expect(field.readOnly).toBe(false);
+  });
+
+  it('is unaffected by a checked column the move does not touch', () => {
+    // F3 is checked; stepping F2 moves pieces between F2 and the remainder only.
+    renderRowCells({
+      invoices: [invoice(1, 'i1'), invoice(2, 'i2', [[LEZAK, 4]]), invoice(3, 'i3', [[LEZAK, 2]])],
+      states: [state(LEZAK, 3, 'Checked')],
+    });
+
+    expect(stepper(2).plus.disabled).toBe(false);
+    expect(stepper(3).plus.disabled).toBe(true);
+  });
+});
+
 describe('loading state control', () => {
   it('starts empty and advances to nadikt\u00f3v\u00e1no on click', () => {
     const onSetState = vi.fn();

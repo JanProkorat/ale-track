@@ -173,6 +173,60 @@ public sealed class PurchaseInvoiceEndpointsTests
     }
 
     [Fact]
+    public async Task SetLine_WithTheRemainderColumnChecked_IsRejected()
+    {
+        // Writing to F2 takes its pieces out of F1, and F1 has already been counted a second
+        // time - the pallet the driver signed off would change under him.
+        var scenario = Scenario.Build();
+        scenario.AddInvoices(2);
+        scenario.Loading(1, ShipmentLoadingState.Checked);
+
+        var act = async () => await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+    }
+
+    [Fact]
+    public async Task SetLine_WithTheTargetInvoiceChecked_IsRejected()
+    {
+        var scenario = Scenario.Build();
+        scenario.AddInvoices(2);
+        scenario.Loading(2, ShipmentLoadingState.Checked);
+
+        var act = async () => await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+
+        await act.Should().ThrowAsync<AleTrackException>().Where(e => e.ErrorCode == ErrorCodes.BadRequestError);
+    }
+
+    [Fact]
+    public async Task SetLine_WithBothEndsOnlyDictated_IsStored()
+    {
+        // Dictated is the first count. Blocking there would stop the office correcting a
+        // split the driver has read out but not yet verified.
+        var scenario = Scenario.Build();
+        var second = scenario.AddInvoices(2)[1];
+        scenario.Loading(1, ShipmentLoadingState.Dictated);
+        scenario.Loading(2, ShipmentLoadingState.Dictated);
+
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+
+        second.Lines.Single().Quantity.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task SetLine_WithAnUninvolvedColumnChecked_IsStored()
+    {
+        // F3 is checked, but a write to F2 moves pieces between F2 and the remainder only.
+        var scenario = Scenario.Build();
+        var invoices = scenario.AddInvoices(3);
+        scenario.Loading(3, ShipmentLoadingState.Checked);
+
+        await SetLine(scenario, scenario.Mock(), sequence: 2, quantity: 4);
+
+        invoices[1].Lines.Single().Quantity.Should().Be(4);
+    }
+
+    [Fact]
     public async Task SetLine_DeliveredShipment_IsRejected()
     {
         var scenario = Scenario.Build(state: OutgoingShipmentState.Delivered);
@@ -309,6 +363,17 @@ public sealed class PurchaseInvoiceEndpointsTests
 
             return purchased - claimed;
         }
+
+        /// <summary>How far the product has got through loading in one column.</summary>
+        internal void Loading(int sequence, ShipmentLoadingState state) =>
+            Shipment.LoadingStates.Add(new OutgoingShipmentLoadingState
+            {
+                PublicId = Guid.NewGuid(),
+                OutgoingShipment = Shipment,
+                ProductId = Product.Id,
+                Sequence = sequence,
+                State = state
+            });
 
         internal List<OutgoingShipmentPurchaseInvoice> AddInvoices(int count)
         {
