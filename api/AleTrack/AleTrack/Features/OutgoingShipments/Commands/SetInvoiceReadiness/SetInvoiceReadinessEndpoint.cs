@@ -103,10 +103,7 @@ public sealed class SetInvoiceReadinessEndpoint(AleTrackDbContext dbContext, IDr
             return;
         }
 
-        // Filed paperwork does not move. Past that point the marks are the record of what was
-        // filed, and the deviations recorded since are what say how the delivery actually went.
-        if (shipment.IsInvoicingFiled)
-            ThrowHelper.ShipmentInvoicingFiled(req.Id);
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
 
         var client = await dbContext.Clients.FirstOrDefaultAsync(c => c.PublicId == req.ClientId, ct);
 

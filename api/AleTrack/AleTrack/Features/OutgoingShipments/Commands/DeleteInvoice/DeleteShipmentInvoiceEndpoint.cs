@@ -86,6 +86,8 @@ public sealed class DeleteShipmentInvoiceEndpoint(AleTrackDbContext dbContext, I
             return;
         }
 
+        ShipmentInvoiceGraph.EnsureInvoicingNotFiled(shipment);
+
         var invoice = shipment.Invoices.FirstOrDefault(i => i.PublicId == req.InvoiceId);
         if (invoice is null)
         {

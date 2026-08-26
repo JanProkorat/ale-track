@@ -780,6 +780,122 @@ public sealed class ShipmentInvoiceEndpointsTests
 
     #endregion
 
+    #region filed paperwork
+
+    /// <summary>
+    /// A filed run's split is the record of what was filed. Every write endpoint refuses one — the
+    /// UI hides all of them, which makes this the layer nobody exercises by hand.
+    /// </summary>
+    /// <remarks>
+    /// Four tests rather than one on the guard itself: what is worth pinning is that each endpoint
+    /// actually calls it, which is exactly what a test of the helper cannot say.
+    /// </remarks>
+    [Fact]
+    public async Task AddInvoice_OnAFiledRun_IsRefused()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.File();
+
+        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>
+            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        var act = () => endpoint.HandleAsync(new AddShipmentInvoiceRequest
+        {
+            Id = scenario.ShipmentId,
+            Data = new AddShipmentInvoiceDto { ClientId = scenario.ClientA.PublicId }
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.Shipment.Invoices.Should().NotContain(i => i.ClientId == Scenario.ClientAId && i.Sequence == 2);
+    }
+
+    [Fact]
+    public async Task DeleteInvoice_OnAFiledRun_IsRefused()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+
+        // A second invoice of client A, which is the one deletion would otherwise accept.
+        await Move(scenario, new MoveInvoiceLineDto
+        {
+            FromInvoiceId = scenario.InvoiceOf(Scenario.ClientAId).PublicId,
+            SourceKind = InvoiceLineSourceKind.OrderItem,
+            SourceItemId = scenario.OrderItemA.PublicId,
+            Quantity = 4,
+            ToClientId = scenario.ClientA.PublicId
+        });
+        var extra = scenario.Shipment.Invoices.Single(i => i.ClientId == Scenario.ClientAId && i.Sequence == 2);
+
+        scenario.File();
+
+        var endpoint = EndpointBuilder<DeleteShipmentInvoiceRequest, DeleteShipmentInvoiceEndpoint>
+            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        var act = () => endpoint.HandleAsync(new DeleteShipmentInvoiceRequest
+        {
+            Id = scenario.ShipmentId, InvoiceId = extra.PublicId
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.Shipment.Invoices.Should().Contain(extra);
+    }
+
+    [Fact]
+    public async Task MoveLine_OnAFiledRun_IsRefused()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+        scenario.File();
+
+        var endpoint = EndpointBuilder<MoveInvoiceLineRequest, MoveInvoiceLineEndpoint>
+            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        var act = () => endpoint.HandleAsync(new MoveInvoiceLineRequest
+        {
+            Id = scenario.ShipmentId,
+            Data = new MoveInvoiceLineDto
+            {
+                FromInvoiceId = scenario.InvoiceOf(Scenario.ClientAId).PublicId,
+                SourceKind = InvoiceLineSourceKind.OrderItem,
+                SourceItemId = scenario.OrderItemA.PublicId,
+                Quantity = 4,
+                ToClientId = scenario.ClientB.PublicId
+            }
+        }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentInvoicingFiled);
+        scenario.InvoiceOf(Scenario.ClientAId).Lines
+            .Single(l => l.OrderItemId == scenario.OrderItemA.Id).Quantity.Should().Be(10);
+    }
+
+    /// <summary>
+    /// A run that has not been filed still takes changes: the guard is about the paperwork, not
+    /// about the run being far along.
+    /// </summary>
+    [Fact]
+    public async Task AddInvoice_OnAnUnfiledRun_StillOpensOne()
+    {
+        var scenario = Scenario.Build();
+        scenario.Materialise();
+
+        var endpoint = EndpointBuilder<AddShipmentInvoiceRequest, AddShipmentInvoiceEndpoint>
+            .Create(scenario.Mock().Object, DriverScopeMockFactory.Unscoped());
+
+        await endpoint.HandleAsync(new AddShipmentInvoiceRequest
+        {
+            Id = scenario.ShipmentId,
+            Data = new AddShipmentInvoiceDto { ClientId = scenario.ClientA.PublicId }
+        }, CancellationToken.None);
+
+        scenario.Shipment.Invoices.Should().Contain(i => i.ClientId == Scenario.ClientAId && i.Sequence == 2);
+    }
+
+    #endregion
+
     #region helpers
 
     private static async Task Move(Scenario scenario, MoveInvoiceLineDto data) =>
@@ -837,6 +953,13 @@ public sealed class ShipmentInvoiceEndpointsTests
         /// Materialises the default split, the way a first read of the shipment would.
         /// </summary>
         internal ReconcileResult Materialise() => ShipmentInvoiceReconciler.Reconcile(Split());
+
+        /// <summary>
+        /// Files the run's invoicing, as the Zaevidovat button does — the one-way door past which
+        /// the split is a record rather than a working document.
+        /// </summary>
+        internal void File() =>
+            Shipment.InvoicingFiledAt = new DateTime(2026, 8, 25, 9, 0, 0, DateTimeKind.Utc);
 
         internal ShipmentInvoiceSplit Split() =>
             new() { Shipment = Shipment, PrivateLines = PrivateLines };
