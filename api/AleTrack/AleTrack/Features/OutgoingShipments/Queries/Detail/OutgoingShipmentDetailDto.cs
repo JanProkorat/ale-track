@@ -361,6 +361,12 @@ public sealed record OutgoingShipmentStopDto
     public bool IsInvoiceReady { get; set; }
 
     /// <summary>
+    /// When the run finished with this stop, or null while it has not. Set by hand from the
+    /// vykládka while the run is on the road.
+    /// </summary>
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>
     /// Set when an order edit changed the delivery address under this shipment
     /// and nobody has acknowledged it yet. Drives the banner.
     /// </summary>

@@ -22,8 +22,8 @@ public static class ShipmentContentGuard
 {
     /// <summary>
     /// Names of the frozen DTO fields whose value differs from the stored shipment — vehicle,
-    /// stops, custom stops, via points, stock purchases and the run's start point. Empty means
-    /// the request changes no frozen content.
+    /// stops, custom stops (which carry the company and supplier stops too), via points, stock
+    /// purchases and the run's start point. Empty means the request changes no frozen content.
     /// </summary>
     public static List<string> ChangedFrozenFields(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
     {
@@ -115,11 +115,15 @@ public static class ShipmentContentGuard
 
     private static bool CustomStopsMatch(OutgoingShipment stored, UpdateOutgoingShipmentDto incoming)
     {
-        // Both non-order kinds live in this list; filtering to Custom alone would make a
-        // stored Company stop look like it vanished from every incoming request (it still
-        // travels in CustomStops), rejecting every save of a non-Created shipment.
+        // All three non-order kinds live in this list — see BuildCustomStopsAsync, which looks up
+        // the same three. Filtering to fewer makes a stored stop of the missing kind look as if it
+        // vanished from every incoming request (it still travels in CustomStops), which rejected
+        // every save of a non-Created run that had one. Supplier was the kind that was missing:
+        // a Loaded run with a pickup could not have its departure date changed.
         var storedStopsById = stored.Stops
-            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom or OutgoingShipmentStopKind.Company)
+            .Where(s => s.Kind is OutgoingShipmentStopKind.Custom
+                or OutgoingShipmentStopKind.Company
+                or OutgoingShipmentStopKind.Supplier)
             .ToDictionary(s => s.PublicId);
 
         var storedStops = storedStopsById.Values
@@ -130,18 +134,26 @@ public static class ShipmentContentGuard
                 s.Label,
                 s.Note,
                 s.Latitude,
-                s.Longitude))
+                s.Longitude,
+                // Which supplier a pickup calls at is content: nothing reconciles a frozen run's
+                // stops, so without this a client could re-point one at another supplier and
+                // BuildCustomStopsAsync would write it. Requires the Supplier navigation to be
+                // loaded — the update endpoint includes it for exactly this comparison.
+                SupplierId: s.Supplier?.PublicId))
             .OrderBy(s => s.Id)
             .ToList();
 
-        // A Company stop's label and coordinates are server-authored from CompanyOptions
-        // and ignored on write (see BuildCustomStops), so whatever a client sends there is
-        // never real content. Normalize through the stored value — the last value they were
-        // authored with — so a stale or blank client submission cannot register as a change.
+        // A Company or Supplier stop's label and coordinates are server-authored — from
+        // CompanyOptions and from the supplier's own address — and ignored on write (see
+        // BuildCustomStopsAsync), so whatever a client sends there is never real content.
+        // Normalize through the stored value — the last value they were authored with — so a
+        // stale or blank client submission cannot register as a change.
         var incomingStops = incoming.CustomStops
             .Select(s =>
             {
-                var storedCompanyStop = s.Kind == OutgoingShipmentStopKind.Company && s.Id is not null
+                var isServerAuthored = s.Kind is OutgoingShipmentStopKind.Company
+                    or OutgoingShipmentStopKind.Supplier;
+                var storedAuthoredStop = isServerAuthored && s.Id is not null
                     ? storedStopsById.GetValueOrDefault(s.Id.Value)
                     : null;
 
@@ -149,10 +161,11 @@ public static class ShipmentContentGuard
                     s.Id,
                     s.Kind,
                     s.Order,
-                    Label: storedCompanyStop?.Label ?? (string?)s.Label,
+                    Label: storedAuthoredStop?.Label ?? (string?)s.Label,
                     s.Note,
-                    Latitude: storedCompanyStop?.Latitude ?? (decimal?)s.Latitude,
-                    Longitude: storedCompanyStop?.Longitude ?? (decimal?)s.Longitude);
+                    Latitude: storedAuthoredStop?.Latitude ?? (decimal?)s.Latitude,
+                    Longitude: storedAuthoredStop?.Longitude ?? (decimal?)s.Longitude,
+                    SupplierId: s.SupplierId);
             })
             .OrderBy(s => s.Id)
             .ToList();

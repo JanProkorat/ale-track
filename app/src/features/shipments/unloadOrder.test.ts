@@ -123,35 +123,84 @@ describe('unloadOrder', () => {
     expect(result[0].note).toBe('natankovat');
   });
 
-  it('leaves out a supplier pickup, keeping the route numbers the map shows', () => {
-    // The complaint: a supplier set as the first stop showed up in the vykládka as a
-    // nameless "Bez vykládky" row — the van calls there to collect, not to unload.
-    // Wire-string kind again ('Supplier'), the shape a raw enum comparison gets wrong.
-    //
-    // The remaining stop stays "2", not renumbered to "1": the pins on the map and the
-    // rows in Přehled zastávek number the whole route, so renumbering here would have
-    // the driver's list and the map disagree about which stop is which.
+  // The list is the driver's whole round now, not only the doorsteps where something comes off:
+  // a stop missing from it reads as a stop that is not on the route. Both kinds below used to be
+  // dropped for calling to collect rather than to unload.
+  it('lists a supplier pickup, named and addressed, with what is collected there', () => {
+    // Wire-string kind ('Supplier'), the shape a raw enum comparison gets wrong. The name is the
+    // stop's own label rather than the live supplier name, as in Přehled zastávek: it was written
+    // when the stop was created, so it still reads correctly if the supplier is since gone.
     const linde = new OutgoingShipmentStopDto({
       id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind, label: 'Linde Gas',
+      supplierId: 'sup-linde',
+      supplierAddress: { streetName: 'Průmyslová', streetNumber: '12', city: 'Liberec', zip: '46001' },
     } as never);
+    const goods = [{
+      id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 4, supplierId: 'sup-linde', orderId: 'order-2',
+    }];
 
-    const result = unloadOrder([linde, orderStop(2, 'Chrastava')], [], []);
+    const result = unloadOrder([linde, orderStop(2, 'Chrastava')], [], goods as never);
 
-    expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
+    expect(result.map((s) => [s.seq, s.title])).toEqual([[1, 'Linde Gas'], [2, 'Chrastava']]);
+    expect(result[0].kind).toBe('supplier');
+    expect(result[0].subtitle).toContain('Průmyslová 12');
+    expect(result[0].supplierId).toBe('sup-linde');
+    expect(result[0].lines).toMatchObject([
+      { name: 'CO₂ láhev', quantity: 4, chip: 'Zboží dodavatele · 10 kg' },
+    ]);
   });
 
-  it('leaves out the warehouse when nothing is bought for stock', () => {
-    // A run that only fetches garage-sourced supplier goods gets the company stop too, and
-    // there it is a pickup like the supplier's — nothing comes off the van. The stop with
-    // stock purchases on it is covered above, so this asserts the difference between the two
-    // reasons the stop can exist, not "company stops are never listed".
+  // The split says where the van picks the pieces up, so at the supplier it is the other half of
+  // the same sum: what the garage covers is not fetched here. The client's own stop still lists
+  // the whole quantity — the test above this one.
+  it('counts only the pieces actually fetched at the supplier', () => {
+    const linde = new OutgoingShipmentStopDto({
+      id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind, label: 'Linde Gas',
+      supplierId: 'sup-linde',
+    } as never);
+    const goods = [
+      { id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 5, quantityFromGarage: 3, supplierId: 'sup-linde' },
+      // Wholly out of the garage: nothing to collect, so it is not read out here at all.
+      { id: 'line-2', name: 'Redukce', size: '—', quantity: 2, quantityFromGarage: 2, supplierId: 'sup-linde' },
+      // Another supplier's good, which belongs to that supplier's own stop.
+      { id: 'line-3', name: 'Kartony', size: '1 ks', quantity: 9, supplierId: 'sup-obaly' },
+    ];
+
+    const result = unloadOrder([linde], [], goods as never);
+
+    expect(result[0].lines).toMatchObject([{ name: 'CO₂ láhev', quantity: 2 }]);
+    expect(result[0].totalQuantity).toBe(2);
+  });
+
+  it('lists the warehouse even when nothing is bought for stock', () => {
+    // A run that only fetches garage-sourced goods gets the company stop too, and nothing comes
+    // off the van there. It is still a stop the driver drives to, so the row stays and says so
+    // through the component's own "Bez vykládky" placeholder.
     const hq = new OutgoingShipmentStopDto({
       id: 'hq', order: 1, kind: 'Company' as unknown as OutgoingShipmentStopKind, label: 'AleTrack s.r.o.',
     } as never);
 
     const result = unloadOrder([hq, orderStop(2, 'Chrastava')], [], []);
 
-    expect(result.map((s) => [s.seq, s.title])).toEqual([[2, 'Chrastava']]);
+    expect(result.map((s) => [s.seq, s.title])).toEqual([[1, 'AleTrack s.r.o.'], [2, 'Chrastava']]);
+    expect(result[0].lines).toEqual([]);
+  });
+
+  // Nothing is ever recorded against a pickup: the deviation ledger belongs to a client's order,
+  // and a supplier stop has neither.
+  it('leaves a supplier pickup out of the deviation machinery', () => {
+    const linde = new OutgoingShipmentStopDto({
+      id: 'pickup', order: 1, kind: 'Supplier' as unknown as OutgoingShipmentStopKind, label: 'Linde Gas',
+      supplierId: 'sup-linde',
+    } as never);
+    const goods = [{ id: 'line-1', name: 'CO₂ láhev', size: '10 kg', quantity: 4, supplierId: 'sup-linde' }];
+
+    const result = unloadOrder([linde], [], goods as never);
+
+    expect(result[0].lines[0].key).toBeUndefined();
+    expect(result[0].lines[0].diff).toBeUndefined();
+    expect(result[0].openChanges).toBe(0);
+    expect(result[0].isInvoiceReady).toBe(false);
   });
 
   it("hands the order's supplier goods over at its own stop, after the beer", () => {
@@ -198,6 +247,22 @@ describe('unloadOrder', () => {
     expect(result[0].lines).toMatchObject([
       { name: 'CO₂ láhev', quantity: 5, chip: 'Zboží dodavatele · 10 kg' },
     ]);
+  });
+
+  // The mark is written against the stop itself, so the row has to carry its id — and the time
+  // the drivers rang in with, which is what it reads out.
+  it("carries each stop's own id and its finished mark", () => {
+    const finished = new OutgoingShipmentStopDto({
+      id: 'stop-done', order: 1, kind: OutgoingShipmentStopKind.Order, clientName: 'Chrastava',
+      orderId: 'order-1', products: [], completedAt: new Date('2026-08-24T12:32:00Z'),
+    } as never);
+
+    const result = unloadOrder([finished, orderStop(2, 'Bílý Kostel')], [], []);
+
+    expect(result[0].stopId).toBe('stop-done');
+    expect(result[0].completedAt).toEqual(new Date('2026-08-24T12:32:00Z'));
+    expect(result[1].stopId).toBe('stop-2');
+    expect(result[1].completedAt).toBeUndefined();
   });
 
   it('returns nothing for a shipment with no stops', () => {

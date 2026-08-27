@@ -59,6 +59,20 @@ public sealed class OutgoingShipmentStop : PublicEntity
     public bool IsAddressOverridden { get; set; }
 
     /// <summary>
+    /// When the run finished with this stop, or null while it has not.
+    /// </summary>
+    /// <remarks>
+    /// Set by hand from the vykládka while the run is on the road: nobody tracks the van, the
+    /// drivers ring in, and this is where the office writes down what they said. A time rather
+    /// than a flag because "when" is what the round is reconstructed from afterwards.
+    ///
+    /// Cleared when the run goes back to Loaded or Created — see
+    /// <c>ShipmentStateTransition</c> — so a re-run never starts with the last round's ticks.
+    /// </remarks>
+    [Column("completed_at")]
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>
     /// Stamped when an order edit changed the delivery address under this
     /// active shipment — whether or not the change propagated here. Drives the
     /// shipment banner; cleared by acknowledging it or by saving the shipment.

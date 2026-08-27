@@ -7,13 +7,18 @@
 
 import { Box } from '@mui/material';
 
-export function Pill({ tint, color, icon, onClick, children }: {
+export function Pill({ tint, color, icon, onClick, disabled, pressed, ariaLabel, children }: {
   tint: 'okTint' | 'infoTint' | 'amberTint' | 'critTint' | 'greyTint';
   color: string;
   icon?: React.ReactNode;
-  /** Present only for the one pill that is also a control — renders it as a real
-   *  button (native focus/keyboard handling) instead of a plain span. */
+  /** Present only for the pills that are also controls — renders as a real button
+   *  (native focus/keyboard handling) instead of a plain span. */
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  disabled?: boolean;
+  /** Makes the pill announce as a toggle, for the ones that carry a state rather than open something. */
+  pressed?: boolean;
+  /** For pills whose visible word repeats down the screen — several bands each say "Hotovo". */
+  ariaLabel?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -21,6 +26,9 @@ export function Pill({ tint, color, icon, onClick, children }: {
       component={onClick ? 'button' : 'span'}
       type={onClick ? 'button' : undefined}
       onClick={onClick}
+      disabled={onClick ? disabled : undefined}
+      aria-pressed={onClick && pressed !== undefined ? pressed : undefined}
+      aria-label={ariaLabel}
       sx={{
         display: 'inline-flex', alignItems: 'center', gap: 0.5, height: 23,
         px: 1.25, py: 0, borderRadius: 99, fontSize: 11.5, fontWeight: 700, color,
@@ -31,6 +39,9 @@ export function Pill({ tint, color, icon, onClick, children }: {
           cursor: 'pointer',
           '&:hover': { filter: 'brightness(0.95)' },
           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+          // The write is in flight: the pill already shows where it is going, it just cannot be
+          // clicked again until it lands.
+          '&:disabled': { cursor: 'default', opacity: 0.55, filter: 'none' },
         }),
       }}
     >

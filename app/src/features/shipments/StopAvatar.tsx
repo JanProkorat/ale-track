@@ -5,7 +5,8 @@
 // both — two copies of this would drift the moment one of them gained a kind.
 
 import type { ReactNode } from 'react';
-import { Box } from '@mui/material';
+import { Box, ButtonBase } from '@mui/material';
+import CheckIcon from '@mui/icons-material/CheckOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PropaneOutlinedIcon from '@mui/icons-material/PropaneOutlined';
 import WarehouseOutlinedIcon from '@mui/icons-material/WarehouseOutlined';
@@ -30,24 +31,56 @@ function iconFor(kind: StopAvatarKind): ReactNode {
  * `clientId` keys the colour rather than the client's name, so the same client keeps its colour
  * across screens even where only one of the two is loaded.
  */
-export function StopAvatar({ kind, seq, clientId, testId }: {
+export function StopAvatar({ kind, seq, clientId, done = false, onToggleDone, label, testId }: {
   kind: StopAvatarKind;
   seq: number;
   clientId?: string;
+  /** Whether the run has finished with this stop: the circle then reads as a check, not a number. */
+  done?: boolean;
+  /**
+   * Makes the circle itself the control that marks the stop off. Withheld wherever there is
+   * nothing to mark — Přehled zastávek passes neither this nor `done`, so the route list keeps
+   * the plain numbered circle it has always had.
+   */
+  onToggleDone?: () => void;
+  /** Accessible name for the clickable circle; required with `onToggleDone`. */
+  label?: string;
   testId?: string;
 }) {
   const isOrder = kind === 'order';
+  const clickable = Boolean(onToggleDone);
+
   return (
     <Box
+      component={clickable ? ButtonBase : 'div'}
       data-testid={testId}
+      {...(clickable
+        ? { onClick: onToggleDone, 'aria-label': label, 'aria-pressed': done, type: 'button' as const }
+        : {})}
       sx={{
         width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center',
         fontSize: isOrder ? 12 : 11, fontWeight: 800, color: '#fff', flexShrink: 0,
-        bgcolor: isOrder ? colorForClient(clientId ?? '') : ROUTE_STOP_COLOR,
+        // Green once the run has finished with the stop, so a glance down the list reads what is
+        // behind it. The client's own colour comes back if the mark is taken back.
+        bgcolor: done
+          ? 'success.main'
+          : (isOrder ? colorForClient(clientId ?? '') : ROUTE_STOP_COLOR),
         position: 'relative',
+        ...(clickable && {
+          cursor: 'pointer',
+          // A circle that can be pressed has to say so without hover: this list is read on a
+          // phone in a van. An unfinished stop wears a dashed ring — an empty slot asking to be
+          // filled — which the check fills in and replaces once the stop is done.
+          ...(done ? null : { outline: '2px dashed', outlineOffset: 2, outlineColor: 'text.disabled' }),
+          transition: 'transform .12s, filter .12s',
+          '&:hover': { filter: 'brightness(1.15)', transform: 'scale(1.06)' },
+          '&:focus-visible': { outline: '2px solid', outlineOffset: 2, outlineColor: 'primary.main' },
+        }),
       }}
     >
-      {seq}
+      {done
+        ? <CheckIcon data-testid="stop-done-check" sx={{ fontSize: 16 }} />
+        : seq}
       {!isOrder && (
         <Box sx={{
           position: 'absolute', right: -4, bottom: -4, width: 15, height: 15, borderRadius: '50%',

@@ -37,6 +37,7 @@ vi.mock('src/hooks/useShipments', () => ({
   useSetSupplierGoodSourcing: () => noMutation,
   useReorderShipmentStops: () => noMutation,
   useSetStockPurchase: () => noMutation,
+  useSetStopCompletion: () => noMutation,
   useExportShipment: () => noMutation,
   useShipmentStartPoints: () => listQuery,
   // Reached through AddressChangedBanner rather than the detail itself.
@@ -45,6 +46,11 @@ vi.mock('src/hooks/useShipments', () => ({
 vi.mock('src/hooks/useInventory', () => ({ useInventory: () => listQuery }));
 vi.mock('src/hooks/useProducts', () => ({ useProducts: () => listQuery }));
 vi.mock('src/hooks/useBreweries', () => ({ useBreweryColors: () => ({}) }));
+// The Vykládka reads pickup stops' opening hours off the suppliers themselves; this run has
+// no supplier stop, so an empty map is the whole of it.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliersMany: () => ({ bySupplier: new Map(), loading: new Set<string>() }),
+}));
 vi.mock('src/hooks/usePurchaseInvoices', () => ({
   useAddPurchaseInvoice: () => noMutation,
   useDeletePurchaseInvoice: () => noMutation,

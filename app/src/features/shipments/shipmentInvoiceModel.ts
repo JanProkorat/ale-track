@@ -392,6 +392,20 @@ function stopForBand(
     : stops.find((s) => s.clientId === band.clientId);
 }
 
+/**
+ * The order this band's client takes delivery on, for the header's link to it.
+ *
+ * Undefined for a payer linked to another client's order, which holds no stop of its own — and for
+ * a band whose stop is not an order stop at all. The header renders plain text there rather than a
+ * link to nothing.
+ */
+export function bandOrderId(
+  band: ClientBand,
+  stops: OutgoingShipmentStopDto[],
+): string | undefined {
+  return stopForBand(band, stops)?.orderId;
+}
+
 /** Where a band's goods are actually delivered, for the Fakturace header.
  *
  * The driver's note on a delivery place is deliberately not returned: it routes

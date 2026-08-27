@@ -454,6 +454,12 @@ export interface IClient {
     setSupplierGoodSourcingEndpoint(id: string, itemId: string, data: SetSupplierGoodSourcingDto, signal?: AbortSignal): Promise<string>;
 
     /**
+     * Marks one stop of an outgoing shipment as finished
+     * @return Mark stored
+     */
+    setStopCompletionEndpoint(id: string, stopId: string, data: SetStopCompletionDto, signal?: AbortSignal): Promise<string>;
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -5584,6 +5590,81 @@ export class Client implements IClient {
     }
 
     /**
+     * Marks one stop of an outgoing shipment as finished
+     * @return Mark stored
+     */
+    setStopCompletionEndpoint(id: string, stopId: string, data: SetStopCompletionDto, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/ale-track/outgoing-shipments/{Id}/stops/{StopId}/completion";
+        if (id === undefined || id === null)
+            throw new globalThis.Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{Id}", encodeURIComponent("" + id));
+        if (stopId === undefined || stopId === null)
+            throw new globalThis.Error("The parameter 'stopId' must be defined.");
+        url_ = url_.replace("{StopId}", encodeURIComponent("" + stopId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(data);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processSetStopCompletionEndpoint(_response);
+        });
+    }
+
+    protected processSetStopCompletionEndpoint(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            let result204: any = null;
+            let resultData204 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result204 = resultData204 !== undefined ? resultData204 : null as any;
+    
+            return result204;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            return throwException("The run is not on the road", status, _responseText, _headers);
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = FailureResponse.fromJS(resultData401);
+            return throwException("Unauthorized", status, _responseText, _headers, result401);
+            });
+        } else if (status === 403) {
+            return response.text().then((_responseText) => {
+            let result403: any = null;
+            let resultData403 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result403 = FailureResponse.fromJS(resultData403);
+            return throwException("Forbidden", status, _responseText, _headers, result403);
+            });
+        } else if (status === 404) {
+            return response.text().then((_responseText) => {
+            let result404: any = null;
+            let resultData404 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result404 = FailureResponse.fromJS(resultData404);
+            return throwException("Outgoing shipment or stop not found", status, _responseText, _headers, result404);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    /**
      * Sets how many pieces of a product the run buys for our warehouse
      * @return Stock purchase stored
      */
@@ -5768,7 +5849,7 @@ export class Client implements IClient {
             });
         } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return throwException("Shipment no longer editable, or the remainder invoice was targeted", status, _responseText, _headers);
+            return throwException("Shipment no longer editable, the remainder invoice was targeted, or a column involved is already checked", status, _responseText, _headers);
             });
         } else if (status === 401) {
             return response.text().then((_responseText) => {
@@ -17910,6 +17991,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
     isInvoiceReady?: boolean;
+    completedAt?: Date | undefined;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -17946,6 +18028,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
             this.deliveryPlace = _data["deliveryPlace"] ? ClientDeliveryPlaceDto.fromJS(_data["deliveryPlace"]) : undefined as any;
             this.isAddressOverridden = _data["isAddressOverridden"];
             this.isInvoiceReady = _data["isInvoiceReady"];
+            this.completedAt = _data["completedAt"] ? new Date(_data["completedAt"].toString()) : undefined as any;
             this.addressChangedAt = _data["addressChangedAt"] ? new Date(_data["addressChangedAt"].toString()) : undefined as any;
             this.orderDeliveryAddress = _data["orderDeliveryAddress"] ? OrderDeliveryAddressDto.fromJS(_data["orderDeliveryAddress"]) : undefined as any;
             this.label = _data["label"];
@@ -17998,6 +18081,7 @@ export class OutgoingShipmentStopDto implements IOutgoingShipmentStopDto {
         data["deliveryPlace"] = this.deliveryPlace ? this.deliveryPlace.toJSON() : undefined as any;
         data["isAddressOverridden"] = this.isAddressOverridden;
         data["isInvoiceReady"] = this.isInvoiceReady;
+        data["completedAt"] = this.completedAt ? this.completedAt.toISOString() : undefined as any;
         data["addressChangedAt"] = this.addressChangedAt ? this.addressChangedAt.toISOString() : undefined as any;
         data["orderDeliveryAddress"] = this.orderDeliveryAddress ? this.orderDeliveryAddress.toJSON() : undefined as any;
         data["label"] = this.label;
@@ -18043,6 +18127,7 @@ export interface IOutgoingShipmentStopDto {
     deliveryPlace?: ClientDeliveryPlaceDto | undefined;
     isAddressOverridden?: boolean;
     isInvoiceReady?: boolean;
+    completedAt?: Date | undefined;
     addressChangedAt?: Date | undefined;
     orderDeliveryAddress?: OrderDeliveryAddressDto | undefined;
     label?: string | undefined;
@@ -19458,6 +19543,42 @@ export class SetSupplierGoodSourcingDto implements ISetSupplierGoodSourcingDto {
 
 export interface ISetSupplierGoodSourcingDto {
     quantityFromGarage?: number;
+}
+
+export class SetStopCompletionDto implements ISetStopCompletionDto {
+    isCompleted?: boolean;
+
+    constructor(data?: ISetStopCompletionDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.isCompleted = _data["isCompleted"];
+        }
+    }
+
+    static fromJS(data: any): SetStopCompletionDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new SetStopCompletionDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["isCompleted"] = this.isCompleted;
+        return data;
+    }
+}
+
+export interface ISetStopCompletionDto {
+    isCompleted?: boolean;
 }
 
 export class SetStockPurchaseDto implements ISetStockPurchaseDto {

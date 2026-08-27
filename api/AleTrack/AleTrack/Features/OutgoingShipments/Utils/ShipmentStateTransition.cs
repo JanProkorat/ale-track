@@ -88,6 +88,11 @@ public static class ShipmentStateTransition
         var isRevertingToCreated = previous != OutgoingShipmentState.Created && next == OutgoingShipmentState.Created;
         var isTransitioningToDelivered = previous != OutgoingShipmentState.Delivered
                                          && next == OutgoingShipmentState.Delivered;
+        // A round that is being taken back: the stops the drivers reported as done did not happen,
+        // or are about to happen again. Loaded and Cancelled are the only two ways off the road
+        // that are not Delivered (see ShipmentMutability.IsTransitionAllowed).
+        var isLeavingTheRoad = previous == OutgoingShipmentState.InTransit
+                               && next is OutgoingShipmentState.Loaded or OutgoingShipmentState.Cancelled;
 
         shipment.State = next;
 
@@ -125,6 +130,15 @@ public static class ShipmentStateTransition
         // rebuilt on the next transition into Loaded.
         if (isRevertingToCreated)
             ShipmentContentSnapshotWriter.Clear(shipment);
+
+        // The per-stop "finished" marks are notes about one journey. Keeping them across a revert
+        // would start the next attempt with stops already ticked off, which is worse than losing
+        // what was only ever a progress note.
+        if (isLeavingTheRoad)
+        {
+            foreach (var stop in shipment.Stops)
+                stop.CompletedAt = null;
+        }
 
         if (isTransitioningToDelivered && shipment.StockPurchases.Count > 0)
             await AddStockPurchasesToInventoryAsync(dbContext, shipment.StockPurchases, ct);
