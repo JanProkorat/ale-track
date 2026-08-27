@@ -10,6 +10,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { qk } from 'src/api/queryKeys';
+import {
+  ShipmentInvoiceConfirmationDto,
+  ShipmentInvoicesDto,
+} from 'src/generated/api-client';
 import { useSetInvoiceReadiness } from './useShipmentInvoices';
 
 const SHIPMENT = 's-1';
@@ -23,13 +27,16 @@ vi.mock('src/api/dataSource', () => ({
   }),
 }));
 
-function setup() {
+function setup(split: Partial<ShipmentInvoicesDto> = {}) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
   // Seeded and marked fresh, so only an invalidation can mark them stale.
-  qc.setQueryData(qk.shipmentInvoices(SHIPMENT), { invoices: [] });
+  qc.setQueryData(
+    qk.shipmentInvoices(SHIPMENT),
+    new ShipmentInvoicesDto({ invoices: [], confirmations: [], ...split }),
+  );
   qc.setQueryData(qk.shipments.detail(SHIPMENT), { id: SHIPMENT });
   qc.setQueryData(qk.orders.detail('order-1'), { id: 'order-1', isInvoiceReady: false });
 
@@ -92,5 +99,82 @@ describe('useSetInvoiceReadiness', () => {
 
     await waitFor(() => expect(isStale(qc, qk.shipments.detail(SHIPMENT))).toBe(false));
     expect(isStale(qc, qk.orders.detail('order-1'))).toBe(false);
+  });
+});
+
+// A tick used to change nothing on screen until three invalidated queries had come back — one of
+// them every orders query on the client. These tests pin the optimistic half: the invoices cache
+// carries the new flag from the click, and gives it back if the write fails.
+describe('useSetInvoiceReadiness — optimistic tick', () => {
+  /** The seeded split, as the hook leaves it. */
+  function confirmations(qc: QueryClient) {
+    return (qc.getQueryData(qk.shipmentInvoices(SHIPMENT)) as ShipmentInvoicesDto | undefined)
+      ?.confirmations ?? [];
+  }
+
+  it('flips the cache before the endpoint answers', async () => {
+    let settle = () => {};
+    readinessEndpoint.mockImplementation(() => new Promise<void>((r) => { settle = () => r(); }));
+    const { qc, result } = setup();
+
+    result.current.mutate({ clientId: PAYER, isReady: true });
+
+    await waitFor(() => expect(confirmations(qc)).toHaveLength(1));
+    expect(confirmations(qc)[0].isReady).toBe(true);
+
+    settle();
+  });
+
+  it('hands the first tick the number the endpoint would have handed it', async () => {
+    readinessEndpoint.mockResolvedValue(undefined);
+    const { qc, result } = setup({
+      confirmations: [
+        new ShipmentInvoiceConfirmationDto({ clientId: 'client-other', number: 2, isReady: true }),
+      ],
+    });
+
+    await result.current.mutateAsync({ clientId: PAYER, isReady: true });
+
+    // Mirrors NextConfirmationNumber: the highest number on the run, plus one — so the band's
+    // circle shows its number from the click rather than a dash.
+    const added = confirmations(qc).find((c) => c.clientId === PAYER);
+    expect(added?.number).toBe(3);
+  });
+
+  it('keeps the number a marked row already has when it is un-ticked', async () => {
+    readinessEndpoint.mockResolvedValue(undefined);
+    const { qc, result } = setup({
+      confirmations: [
+        new ShipmentInvoiceConfirmationDto({ clientId: PAYER, number: 4, isReady: true }),
+      ],
+    });
+
+    await result.current.mutateAsync({ clientId: PAYER, isReady: false });
+
+    expect(confirmations(qc)[0].number).toBe(4);
+    expect(confirmations(qc)[0].isReady).toBe(false);
+  });
+
+  it('opens no row when clearing one nobody ever marked', async () => {
+    readinessEndpoint.mockResolvedValue(undefined);
+    const { qc, result } = setup();
+
+    await result.current.mutateAsync({ clientId: PAYER, isReady: false });
+
+    // The endpoint treats this as a no-op rather than burn a number; the cache must not invent one.
+    expect(confirmations(qc)).toHaveLength(0);
+  });
+
+  it('gives the old flag back when the write fails', async () => {
+    readinessEndpoint.mockRejectedValue(new Error('nope'));
+    const { qc, result } = setup({
+      confirmations: [
+        new ShipmentInvoiceConfirmationDto({ clientId: PAYER, number: 1, isReady: true }),
+      ],
+    });
+
+    await expect(result.current.mutateAsync({ clientId: PAYER, isReady: false })).rejects.toThrow();
+
+    await waitFor(() => expect(confirmations(qc)[0].isReady).toBe(true));
   });
 });

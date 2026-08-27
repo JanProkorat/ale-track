@@ -92,6 +92,11 @@ public sealed class UpdateOutgoingShipmentEndpoint(
                     .ThenInclude(i => i.SupplierGood)
                         .ThenInclude(g => g.Supplier)
         .Include(os => os.RouteViaPoints)
+        // Needed by ShipmentContentGuard, which compares a pickup stop's supplier by public ID —
+        // without this every save of a run with a supplier stop would read the supplier as
+        // removed and be wrongly rejected as frozen content.
+        .Include(os => os.Stops)
+            .ThenInclude(s => s.Supplier)
         // Needed by ShipmentContentGuard, which compares the stop's delivery place by
         // public ID — without this the diff would read every place as removed.
         .Include(os => os.Stops)

@@ -13,6 +13,7 @@ import AltRouteIcon from '@mui/icons-material/AltRouteOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreOutlined';
 import { haversine, fetchRoadRoute, insertVias, viaFromAlternative, type LatLng, type RoadRoute } from 'src/lib/geo';
 import { RouteNavButton } from 'src/components/common/RouteNavButton';
+import { fmtDateShort, fmtTime } from 'src/lib/format';
 
 function viaIcon(): L.DivIcon {
   const svg = '<svg width="18" height="18" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="9" r="6" fill="#fff" stroke="#F08C00" stroke-width="3.5"/></svg>';
@@ -88,7 +89,7 @@ function depotIcon(): L.DivIcon {
  * located. */
 export function RouteMap({
   stops, start, end, height = 340, viaPoints = [], editable = false, onViasChange, navigable = false,
-  overlay, overlayWidth = 380,
+  overlay, overlayWidth = 380, startAt,
   overlayShowLabel = 'Zobrazit seznam', overlayHideLabel = 'Skrýt seznam',
   busy = false, busyLabel = 'Přepočítávám trasu…',
 }: {
@@ -110,6 +111,11 @@ export function RouteMap({
   overlay?: ReactNode;
   /** Width of the stats bar and the panel below it — they share one. */
   overlayWidth?: number;
+  /**
+   * When the run sets off, shown in the stats bar beside how far it goes and how long that takes.
+   * Omitted while a run has no date yet — the map is drawn during planning too.
+   */
+  startAt?: Date;
   /** Labels for the chevron, so it can name what it actually unfolds. */
   overlayShowLabel?: string;
   overlayHideLabel?: string;
@@ -495,8 +501,16 @@ export function RouteMap({
               flex: '0 0 auto',
               bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1.5,
               px: 1.75, py: 1.1, boxShadow: 2,
-              // Spread within the fixed width rather than overflow it: `spacing` is the
-              // minimum gap, and a long distance ("1 234.5 km") just closes it up.
+              // Content-sized, with the shared width as a floor rather than a ceiling. Four stats
+              // and the chevron do not fit 380px, and a fixed width left `space-between` with no
+              // gaps to give up — the last label then ran past the bar's own rounded edge. The
+              // panel below keeps overlayWidth; only the bar grows, so unfolding the panel still
+              // cannot resize it.
+              alignSelf: 'flex-start',
+              width: 'max-content',
+              minWidth: overlay ? '100%' : undefined,
+              // Spread within that width rather than overflow it: `spacing` is the minimum gap,
+              // and a long distance ("1 234.5 km") just closes it up.
               justifyContent: overlay ? 'space-between' : 'flex-start',
             }}
           >
@@ -510,25 +524,44 @@ export function RouteMap({
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ČAS (odhad)</Typography>
               <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{fmtDur(stats.min)}</Typography>
             </Box>
-            <Box sx={{ whiteSpace: 'nowrap' }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
-              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
-            </Box>
-            {overlay && (
-              <MuiTooltip title={overlayOpen ? overlayHideLabel : overlayShowLabel}>
-                <IconButton
-                  size="small"
-                  onClick={() => setOverlayOpen((v) => !v)}
-                  aria-label={overlayOpen ? overlayHideLabel : overlayShowLabel}
-                  aria-expanded={overlayOpen}
-                  sx={{ ml: -0.5, flexShrink: 0 }}
-                >
-                  <ExpandMoreIcon
-                    sx={{ color: 'text.secondary', transition: 'transform .15s', transform: overlayOpen ? 'rotate(180deg)' : 'none' }}
-                  />
-                </IconButton>
-              </MuiTooltip>
+            {/* Between the estimate and the stop count: how far, how long, and when it leaves
+                read as one sentence, and the count keeps the bar's end. */}
+            {startAt && (
+              <Box sx={{ whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ODJEZD</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: 16 }}>
+                  {`${fmtDateShort(startAt)} ${fmtTime(startAt)}`}
+                </Typography>
+              </Box>
             )}
+            {/* pr, because this label is the widest thing in its own box and sits at the bar's
+                end: without it the text stops exactly where the padding does and reads as
+                touching the edge. */}
+            <Box sx={{ whiteSpace: 'nowrap', pr: 0.5 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary' }}>ZASTÁVEK</Typography>
+              {/* The chevron rides in the count's own value line rather than after the last stat,
+                  so it sits under the end of the label instead of floating off the bar's edge.
+                  Padding trimmed to the icon: a default IconButton is taller than the value row
+                  and would grow the whole bar. */}
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <Typography sx={{ fontWeight: 800, fontSize: 16 }}>{located.length}</Typography>
+                {overlay && (
+                  <MuiTooltip title={overlayOpen ? overlayHideLabel : overlayShowLabel}>
+                    <IconButton
+                      size="small"
+                      onClick={() => setOverlayOpen((v) => !v)}
+                      aria-label={overlayOpen ? overlayHideLabel : overlayShowLabel}
+                      aria-expanded={overlayOpen}
+                      sx={{ p: 0.25, flexShrink: 0 }}
+                    >
+                      <ExpandMoreIcon
+                        sx={{ color: 'text.secondary', transition: 'transform .15s', transform: overlayOpen ? 'rotate(180deg)' : 'none' }}
+                      />
+                    </IconButton>
+                  </MuiTooltip>
+                )}
+              </Stack>
+            </Box>
           </Stack>
 
           {overlay && (

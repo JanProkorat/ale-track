@@ -1,4 +1,6 @@
 using AleTrack.Common.Enums;
+using AleTrack.Entities;
+using AleTrack.Tests.Builders;
 using AleTrack.Features.OutgoingShipments.Commands.Update;
 using AleTrack.Features.OutgoingShipments.Utils;
 using FluentAssertions;
@@ -37,6 +39,107 @@ public sealed class ShipmentContentGuardTests
         dto.DriverIds = [Guid.NewGuid()];
 
         ShipmentContentGuard.ChangedFrozenFields(shipment, dto).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The reported bug: on a Loaded run with a supplier pickup, changing only the departure date
+    /// was refused with SHIPMENT_CONTENT_FROZEN / ["CustomStops"].
+    /// </summary>
+    /// <remarks>
+    /// A pickup stop travels inside <c>CustomStops</c> like the company stop does — see
+    /// <c>BuildCustomStopsAsync</c>, which looks up all three non-order kinds — so the stored side
+    /// of this diff has to admit the same three. Reading only Custom and Company made the incoming
+    /// pickup an entry with no counterpart, and every save of a non-Created run with a supplier
+    /// stop a 400.
+    /// </remarks>
+    [Fact]
+    public void ChangedFrozenFields_UnchangedRequestWithASupplierPickup_ReturnsEmpty()
+    {
+        var (shipment, dto) = RoundTrippedWithPickup();
+
+        dto.DeliveryDate = DateTime.UtcNow.AddDays(9);
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A pickup's label and coordinates are authored from its supplier and ignored on write (see
+    /// <c>BuildCustomStopsAsync</c>), exactly as the company stop's are, so whatever a stale client
+    /// sends for them is never a content change.
+    /// </summary>
+    [Fact]
+    public void ChangedFrozenFields_SupplierPickupWithClientAuthoredLabel_ReturnsEmpty()
+    {
+        var (shipment, dto) = RoundTrippedWithPickup();
+        var pickup = dto.CustomStops.Single(c => c.Kind == OutgoingShipmentStopKind.Supplier);
+
+        pickup.Label = string.Empty;
+        pickup.Latitude = 0m;
+        pickup.Longitude = 0m;
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto).Should().BeEmpty();
+    }
+
+    /// <summary>Moving the pickup along the route is content, and still reported.</summary>
+    [Fact]
+    public void ChangedFrozenFields_SupplierPickupMoved_ReportsCustomStops()
+    {
+        var (shipment, dto) = RoundTrippedWithPickup();
+        var pickup = dto.CustomStops.Single(c => c.Kind == OutgoingShipmentStopKind.Supplier);
+
+        pickup.Order = 9;
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto)
+            .Should().Contain(nameof(UpdateOutgoingShipmentDto.CustomStops));
+    }
+
+    /// <summary>And so is dropping it from the run.</summary>
+    [Fact]
+    public void ChangedFrozenFields_SupplierPickupRemoved_ReportsCustomStops()
+    {
+        var (shipment, dto) = RoundTrippedWithPickup();
+
+        dto.CustomStops.RemoveAll(c => c.Kind == OutgoingShipmentStopKind.Supplier);
+
+        ShipmentContentGuard.ChangedFrozenFields(shipment, dto)
+            .Should().Contain(nameof(UpdateOutgoingShipmentDto.CustomStops));
+    }
+
+    /// <summary>
+    /// The round-tripped pair, plus the supplier pickup a run collecting goods carries. Its label
+    /// and coordinates come off the supplier, which is what the server writes and the client
+    /// merely echoes.
+    /// </summary>
+    private static (OutgoingShipment Shipment, UpdateOutgoingShipmentDto Dto) RoundTrippedWithPickup()
+    {
+        var (shipment, dto) = RoundTripped();
+
+        var supplier = SupplierBuilder.BuildEntity(publicId: Guid.NewGuid());
+        var pickup = new OutgoingShipmentStop
+        {
+            PublicId = Guid.NewGuid(),
+            Kind = OutgoingShipmentStopKind.Supplier,
+            Order = 4,
+            Label = supplier.Name,
+            Latitude = 50.7m,
+            Longitude = 15.1m,
+            Supplier = supplier,
+            SupplierId = supplier.Id
+        };
+        shipment.Stops.Add(pickup);
+
+        dto.CustomStops.Add(new CustomStopDto
+        {
+            Id = pickup.PublicId,
+            Kind = OutgoingShipmentStopKind.Supplier,
+            Order = 4,
+            SupplierId = supplier.PublicId,
+            Label = supplier.Name,
+            Latitude = 50.7m,
+            Longitude = 15.1m
+        });
+
+        return (shipment, dto);
     }
 
     [Fact]

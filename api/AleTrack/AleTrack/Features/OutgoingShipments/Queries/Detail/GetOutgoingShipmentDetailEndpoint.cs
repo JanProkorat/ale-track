@@ -160,6 +160,7 @@ public sealed class GetOutgoingShipmentDetailEndpoint(
                         IsInvoiceReady = s.ClientOrder != null
                             && os.InvoiceConfirmations.Any(c => c.IsReady
                                 && c.ClientId == (s.ClientOrder.Client.InvoicingClientId ?? s.ClientOrder.ClientId)),
+                        CompletedAt = s.CompletedAt,
                         AddressChangedAt = s.AddressChangedAt,
                         OrderDeliveryAddress = s.ClientOrder != null
                             ? new OrderDeliveryAddressDto

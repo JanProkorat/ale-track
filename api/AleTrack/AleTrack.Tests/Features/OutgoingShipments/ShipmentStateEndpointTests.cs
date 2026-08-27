@@ -191,6 +191,27 @@ public sealed class ShipmentStateEndpointTests
             .Where(e => e.ErrorCode == ErrorCodes.ShipmentNotPrepared);
     }
 
+    /// <summary>
+    /// The other half of the same readiness rule: a van with nobody in it does not leave.
+    /// </summary>
+    /// <remarks>
+    /// Pinned because the detail screen now reads this rule to decide whether to offer "Vyrazit"
+    /// (app/src/features/shipments/departureReadiness.ts). A relaxation here would leave the two
+    /// disagreeing, with a button the office cannot press on a run the API would have let go.
+    /// </remarks>
+    [Fact]
+    public async Task SetState_ToInTransitWithoutADriver_IsRejected()
+    {
+        var f = BuildFixture(state: OutgoingShipmentState.Loaded);
+        f.Shipment.Drivers.Clear();
+
+        var act = async () => await StateEndpoint(MockFor(f))
+            .HandleAsync(StateRequest(f, OutgoingShipmentState.InTransit), CancellationToken.None);
+
+        await act.Should().ThrowAsync<AleTrackException>()
+            .Where(e => e.ErrorCode == ErrorCodes.ShipmentNotPrepared);
+    }
+
     // -----------------------------------------------------------------------------------
     // Stock, drawn and returned.
     //

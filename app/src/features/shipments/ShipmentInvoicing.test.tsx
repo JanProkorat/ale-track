@@ -30,6 +30,10 @@ const addMutate = vi.fn();
 const deleteMutate = vi.fn();
 const setRecipientsMutate = vi.fn();
 const setReadinessMutate = vi.fn();
+// One mutation object serves every band, so a test needs to be able to say which band's write is
+// in flight — that is what decides whose pill goes disabled.
+let readinessState: { isPending: boolean; variables?: { clientId: string; isReady: boolean } } =
+  { isPending: false };
 // Filing the invoicing — the one-way door the section head offers.
 const fileInvoicingMutate = vi.fn();
 /** Client detail per id — the billing-recipient dropdown reads its options off it. */
@@ -46,7 +50,7 @@ vi.mock('src/hooks/useShipmentInvoices', () => ({
   useAddShipmentInvoice: () => ({ mutate: addMutate, isPending: false }),
   useDeleteShipmentInvoice: () => ({ mutate: deleteMutate, isPending: false }),
   useSetInvoiceBillingRecipients: () => ({ mutate: setRecipientsMutate, isPending: false }),
-  useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, isPending: false }),
+  useSetInvoiceReadiness: () => ({ mutate: setReadinessMutate, ...readinessState }),
   useFileShipmentInvoicing: () => ({ mutate: fileInvoicingMutate, isPending: false }),
 }));
 
@@ -96,10 +100,19 @@ function invoice(over: Partial<ShipmentInvoiceDto> = {}): ShipmentInvoiceDto {
   });
 }
 
-function renderSection(editable = true, stops: OutgoingShipmentStopDto[] = []) {
+function renderSection(
+  editable = true,
+  stops: OutgoingShipmentStopDto[] = [],
+  onOpenOrder?: (orderId: string) => void,
+) {
   return render(
     <MuiThemeProvider theme={theme}>
-      <ShipmentInvoicing shipmentId="ship-1" editable={editable} stops={stops} />
+      <ShipmentInvoicing
+        shipmentId="ship-1"
+        editable={editable}
+        stops={stops}
+        onOpenOrder={onOpenOrder}
+      />
     </MuiThemeProvider>,
   );
 }
@@ -108,6 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   clientDetails = {};
   queryState = { isLoading: false, isError: false };
+  readinessState = { isPending: false };
   invoicesResponse = new ShipmentInvoicesDto({
     isEditable: true,
     adjustments: [],
@@ -988,6 +1002,60 @@ describe('delivery address', () => {
   });
 });
 
+// Reading the split and then wanting the order behind it is the office's own path, and the band
+// header is where it starts. Which order a band belongs to is pinned in shipmentInvoiceModel.test.ts
+// (bandOrderId); what the section owes is the link, and no link where there is no order.
+describe('the band header links to its order', () => {
+  const stop = (over: Record<string, unknown> = {}) => ({
+    id: 'st1', order: 1, clientId: CLIENT_A, orderId: 'order-a',
+    selectedAddressKind: 'Official',
+    officialAddress: { streetName: 'Hlavní', streetNumber: '1', city: 'Liberec', zip: '46001' },
+    ...over,
+  } as unknown as OutgoingShipmentStopDto);
+
+  it('opens the band client\'s own order', () => {
+    const openOrder = vi.fn();
+    renderSection(true, [stop()], openOrder);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Klient A' }));
+
+    expect(openOrder).toHaveBeenCalledWith('order-a');
+  });
+
+  // Withheld from a user who cannot see orders (ShipmentsPage decides that), and the name has to
+  // go back to being a name rather than a dead control.
+  it('leaves the name as plain text when opening orders is not on offer', () => {
+    renderSection(true, [stop()]);
+
+    expect(screen.queryByRole('button', { name: 'Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+  });
+
+  // A payer billed for another client's goods holds no stop of its own, so there is no order of
+  // its own to open.
+  it('leaves a payer that takes no delivery unlinked', () => {
+    renderSection(true, [stop({ clientId: 'someone-else', order: 99 })], vi.fn());
+
+    expect(screen.queryByRole('button', { name: 'Klient A' })).not.toBeInTheDocument();
+    expect(screen.getByText('Klient A')).toBeInTheDocument();
+  });
+
+  // The trading name sits outside the link: what is opened is the order, and a client's own name
+  // is what identifies it.
+  it('keeps the trading name out of the link', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [invoice({ clientBusinessName: 'Prager frühling', lines: [line({ quantity: 4 })] })],
+    });
+
+    renderSection(true, [stop()], vi.fn());
+
+    expect(screen.getByRole('button', { name: 'Klient A' })).toBeInTheDocument();
+    expect(screen.getByText('· Prager frühling')).toBeInTheDocument();
+  });
+});
+
 describe("a payer's band: each sub-client's own order", () => {
   const PAYER = 'client-payer';
 
@@ -1382,7 +1450,7 @@ describe('marking a row finished', () => {
   it('marks the row ready through the endpoint, keyed on the client', () => {
     renderSection();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Hotovo – Klient A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Označit hotovo – Klient A' }));
 
     expect(setReadinessMutate).toHaveBeenCalledTimes(1);
     expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: true });
@@ -1398,12 +1466,31 @@ describe('marking a row finished', () => {
 
     renderSection();
 
-    const checkbox = screen.getByRole('checkbox', { name: 'Hotovo – Klient A' });
-    expect(checkbox).toBeChecked();
+    const tick = screen.getByRole('button', { name: 'Hotovo – Klient A' });
+    expect(tick).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.click(checkbox);
+    fireEvent.click(tick);
 
     expect(setReadinessMutate.mock.calls[0][0]).toEqual({ clientId: CLIENT_A, isReady: false });
+  });
+
+  it('disables only the band being written to while the tick is in flight', () => {
+    invoicesResponse = new ShipmentInvoicesDto({
+      isEditable: true,
+      adjustments: [],
+      invoices: [
+        invoice({ lines: [line({ quantity: 10 })] }),
+        invoice({ clientId: CLIENT_B, clientName: 'Klient B', stopOrder: 2, lines: [line({ quantity: 4, orderingClientId: CLIENT_B })] }),
+      ],
+    });
+    readinessState = { isPending: true, variables: { clientId: CLIENT_A, isReady: true } };
+
+    renderSection();
+
+    // One mutation object serves both bands; gating on isPending alone deadened the whole screen
+    // for the length of the round trip.
+    expect(screen.getByRole('button', { name: 'Označit hotovo – Klient A' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Označit hotovo – Klient B' })).toBeEnabled();
   });
 
   it('offers no tick to a viewer who cannot edit, and reports a ready row as a chip', () => {
@@ -1416,7 +1503,7 @@ describe('marking a row finished', () => {
 
     renderSection(false);
 
-    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
     expect(screen.getByText('Hotovo')).toBeInTheDocument();
   });
 
@@ -1498,7 +1585,7 @@ describe('filing the invoicing', () => {
     expect(screen.getByText('Zaevidováno')).toBeInTheDocument();
     expect(fileButton()).not.toBeInTheDocument();
     // The tick is gone, and what is left is the record of what was filed.
-    expect(screen.queryByRole('checkbox', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hotovo – Klient A' })).not.toBeInTheDocument();
     expect(screen.getByText('Hotovo')).toBeInTheDocument();
   });
 

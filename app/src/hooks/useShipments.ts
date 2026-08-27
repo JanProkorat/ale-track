@@ -12,6 +12,7 @@ import {
   SetSupplierGoodSourcingDto,
   ReorderShipmentStopsDto,
   SetPreparationStepDto,
+  SetStopCompletionDto,
   SetShipmentStateDto,
   SetStockPurchaseDto,
   type CreateOutgoingShipmentDto,
@@ -164,6 +165,67 @@ export function useSetPreparationStep(shipmentId: string | undefined) {
 
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.shipments.all });
+      if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+}
+
+export interface SetStopCompletionArgs {
+  /** Public id of the stop, as the vykládka row carries it. */
+  stopId: string;
+  isCompleted: boolean;
+}
+
+/**
+ * Marks one stop of a run as finished — unloaded and left behind.
+ *
+ * Nobody tracks the van: the drivers ring in as they go, and this is the office writing that
+ * down. The API takes it only while the run is in transit, in both directions.
+ *
+ * Optimistic for the same reason the checklist is: the answer is a value the clicker already
+ * knows, and the round trip would otherwise be a visibly dead row. The stamped time is the
+ * server's, so the patched one is a placeholder the refetch corrects — near enough that nobody
+ * sees the difference, and never stored.
+ */
+export function useSetStopCompletion(shipmentId: string | undefined) {
+  const ds = useDataSource();
+  const qc = useQueryClient();
+  const detailKey = qk.shipments.detail(shipmentId ?? '');
+
+  return useMutation({
+    mutationFn: ({ stopId, isCompleted }: SetStopCompletionArgs) =>
+      ds.setStopCompletionEndpoint(shipmentId!, stopId, new SetStopCompletionDto({ isCompleted })),
+
+    onMutate: async ({ stopId, isCompleted }: SetStopCompletionArgs) => {
+      if (!shipmentId) return undefined;
+
+      await qc.cancelQueries({ queryKey: detailKey });
+
+      const previous = qc.getQueryData<OutgoingShipmentDetailDto>(detailKey);
+      if (!previous) return undefined;
+
+      // Cloned through the prototype, as the checklist patch above is and for the same reason.
+      const next = Object.assign(
+        Object.create(Object.getPrototypeOf(previous)) as OutgoingShipmentDetailDto,
+        previous,
+      );
+      next.stops = (previous.stops ?? []).map((stop) => {
+        if (stop.id !== stopId) return stop;
+        const patched = Object.assign(Object.create(Object.getPrototypeOf(stop)), stop);
+        // Re-marking keeps the first time, as the endpoint does.
+        patched.completedAt = isCompleted ? stop.completedAt ?? new Date() : undefined;
+        return patched;
+      });
+      qc.setQueryData(detailKey, next);
+
+      return { previous };
+    },
+
+    onError: (_error, _args, context) => {
+      if (context?.previous) qc.setQueryData(detailKey, context.previous);
+    },
+
+    onSettled: () => {
       if (shipmentId) qc.invalidateQueries({ queryKey: detailKey });
     },
   });
