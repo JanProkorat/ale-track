@@ -368,8 +368,11 @@ public sealed class UpdateOrderEndpoint(
         var loadingChecksCleared = 0;
         var movedProductIds = new HashSet<long>();
 
+        // Dropped on the same key the match below uses: a stored line whose product is still on
+        // the order but whose kind is gone is a line the save no longer has.
         var dropped = order.OrderItems
-            .Where(stored => posted.All(p => p.ProductId != stored.Product.PublicId))
+            .Where(stored => posted.All(p =>
+                p.ProductId != stored.Product.PublicId || p.LineKind != stored.LineKind))
             .ToList();
 
         foreach (var stored in dropped)
@@ -381,7 +384,12 @@ public sealed class UpdateOrderEndpoint(
 
         foreach (var line in posted)
         {
-            var existing = order.OrderItems.FirstOrDefault(i => i.Product.PublicId == line.ProductId);
+            // Matched on the product AND the kind: one product can sit on an order twice, once as
+            // goods to deliver and once as pieces the client already has and only owes money for.
+            // Matching on the product alone silently merged the two, and the merged line was
+            // loaded — billing pieces is not the same instruction as carrying them.
+            var existing = order.OrderItems.FirstOrDefault(i =>
+                i.Product.PublicId == line.ProductId && i.LineKind == line.LineKind);
 
             if (existing is not null)
             {
@@ -429,7 +437,8 @@ public sealed class UpdateOrderEndpoint(
             {
                 Product = relatedProduct!,
                 Quantity = line.Quantity,
-                ReminderState = line.ReminderState
+                ReminderState = line.ReminderState,
+                LineKind = line.LineKind
             });
         }
 
@@ -591,6 +600,7 @@ public sealed class UpdateOrderEndpoint(
                 SupplierGood = good!,
                 Quantity = i.Quantity,
                 Note = i.Note,
+                LineKind = i.LineKind,
                 QuantityFromGarage = SupplierGoodSourcing.DefaultFromGarage(good!, i.Quantity)
             });
         }

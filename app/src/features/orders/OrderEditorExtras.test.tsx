@@ -11,7 +11,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto, ProductListItemDto, ProductKind, ProductType } from 'src/generated/api-client';
+import { OrderDto, OrderState, OrderReturnDto, OrderNoteDto, OrderCustomExtraItemDto, OrderItemDto, ClientInfoDto, OrderLineKind, ProductListItemDto, ProductKind, ProductType } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
 
 const updateMutate = vi.fn();
@@ -32,6 +32,7 @@ vi.mock('src/hooks/useOrders', () => ({
 // every other resource — and the mock can say "nothing open", which is the ordinary case.
 vi.mock('src/hooks/useClientLedger', () => ({
   useClientLedger: () => ({ data: [], isLoading: false, isError: false }),
+  useSetClientLedgerEntryResolution: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('src/hooks/useClients', () => ({
@@ -440,6 +441,85 @@ describe('OrderEditor — poznámka u položky košíku', () => {
     await waitFor(() => expect(updateMutate).toHaveBeenCalled());
 
     expect(updateMutate.mock.calls[0][0].data.orderItems[0].note).toBeUndefined();
+  });
+});
+
+// A line has two sides — pieces on the run and money on the invoice — and settling an earlier
+// handover needs them apart. This is where the operator says which.
+describe('OrderEditor — what a line is for', () => {
+
+  const openKindMenu = () => fireEvent.click(
+    within(cartCard()).getByRole('button', { name: /Druh položky/ }),
+  );
+
+  it('defaults a line to an ordinary one', async () => {
+    renderEditor();
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    expect(updateMutate.mock.calls[0][0].data.orderItems[0].lineKind).toBe(OrderLineKind.Normal);
+  });
+
+  it('sends a bill-only line, and says so on the row', async () => {
+    renderEditor();
+
+    openKindMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Jen fakturace/ }));
+
+    expect(within(cartCard()).getByText(/Jen fakturace/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    expect(updateMutate.mock.calls[0][0].data.orderItems[0].lineKind).toBe(OrderLineKind.BillOnly);
+  });
+
+  it('sends a private line', async () => {
+    renderEditor();
+
+    openKindMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Soukromě/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Uložit/i }));
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+
+    expect(updateMutate.mock.calls[0][0].data.orderItems[0].lineKind).toBe(OrderLineKind.Private);
+  });
+
+  // Otherwise the change is lost on navigating away without a word.
+  it('marks the form dirty', () => {
+    renderEditor();
+
+    const save = screen.getByRole('button', { name: /Uložit/i });
+    openKindMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Soukromě/ }));
+
+    expect(save).not.toBeDisabled();
+  });
+
+  it('loads the kind an existing line was saved with', () => {
+    orderResponse = new OrderDto({
+      id: 'order-1',
+      client: new ClientInfoDto({ id: 'client-a', name: 'Hospoda A' }),
+      orderItems: [
+        new OrderItemDto({
+          id: 'item-1',
+          orderId: 'order-1',
+          productId: 'prod-1',
+          productName: 'Albrecht 12°',
+          quantity: 2,
+          lineKind: OrderLineKind.Private,
+        }),
+      ],
+      returns: [],
+      notes: [],
+      customExtraItems: [],
+    });
+
+    renderEditor();
+
+    expect(within(cartCard()).getByText(/Soukromě/)).toBeInTheDocument();
   });
 });
 

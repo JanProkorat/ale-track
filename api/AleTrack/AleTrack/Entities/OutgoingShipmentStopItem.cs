@@ -67,6 +67,14 @@ public sealed class OutgoingShipmentStopItem : PublicEntity
     [Column("units_per_package")]
     public int UnitsPerPackage { get; set; } = 1;
 
+    /// <summary>
+    /// The line kind as it was when the run was loaded — see <see cref="OrderLineKind"/>. A
+    /// <see cref="OrderLineKind.BillOnly"/> row is snapshotted so the invoicing can bill it, and
+    /// skipped by the nakládka and the vykládka, which are about pieces on the truck.
+    /// </summary>
+    [Column("line_kind")]
+    public OrderLineKind LineKind { get; set; } = OrderLineKind.Normal;
+
     /// <summary>Pieces carried.</summary>
     [Column("quantity")]
     public int Quantity { get; set; }

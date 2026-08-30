@@ -3,6 +3,7 @@ using System;
 using AleTrack.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AleTrack.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AleTrackDbContext))]
-    partial class AleTrackDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827143326_AddLedgerEntrySupplierGood")]
+    partial class AddLedgerEntrySupplierGood
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1016,10 +1019,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_shipment_loading_confirmed");
 
-                    b.Property<int>("LineKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("line_kind");
-
                     b.Property<string>("Note")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -1150,10 +1149,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("LineKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("line_kind");
 
                     b.Property<string>("Note")
                         .HasMaxLength(500)
@@ -1845,10 +1840,6 @@ namespace AleTrack.Infrastructure.Persistence.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("integer")
                         .HasColumnName("kind");
-
-                    b.Property<int>("LineKind")
-                        .HasColumnType("integer")
-                        .HasColumnName("line_kind");
 
                     b.Property<long?>("OrderItemId")
                         .HasColumnType("bigint")

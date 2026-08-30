@@ -29,8 +29,12 @@ import {
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
 import { useClientProductHistory } from 'src/hooks/useOrders';
+import { useSuppliers, useSuppliersMany } from 'src/hooks/useSuppliers';
+import { useCurrency } from 'src/providers/CurrencyProvider';
 import { useBreweryColors } from 'src/hooks/useBreweries';
 import { ProductCatalogBrowser } from 'src/features/orders/ProductCatalog';
+import { SupplierGoodCatalogBrowser } from 'src/features/orders/SupplierGoodCatalog';
+import { resolvedGoodMap } from 'src/features/orders/supplierGoodCatalogModel';
 import { catalogByProductId } from 'src/features/orders/clientPrices';
 import {
   useDeleteClientLedgerEntry,
@@ -41,6 +45,7 @@ import {
   ADDED_EXTRA,
   deliveredEntryFor,
   doorSideAdditions,
+  doorSideGoods,
   entriesForTarget,
   isFreeEntry,
   quantityTone,
@@ -101,6 +106,14 @@ interface AddedRow {
   actual: string;
 }
 
+/** The same for a supplier good, which is keyed by the good rather than by a product. */
+interface AddedGoodRow {
+  entryId?: string;
+  supplierGoodId: string;
+  name: string;
+  actual: string;
+}
+
 const EMPTY_NEW_LINE: NewLine = { name: '', quantity: '' };
 
 function toEditable(rows: PlanRow[], entries: ClientLedgerEntryDto[]): EditableRow[] {
@@ -129,6 +142,7 @@ export function LedgerEntryDrawer({
   onClose: () => void;
 }) {
   const { enqueueSnackbar } = useSnackbar();
+  const { formatMoney } = useCurrency();
   const save = useSaveClientLedgerEntries();
   const updateEntry = useUpdateClientLedgerEntry();
   const deleteEntry = useDeleteClientLedgerEntry();
@@ -141,6 +155,22 @@ export function LedgerEntryDrawer({
   // a grey placeholder, which reads as "no colour" rather than as this brewery's.
   const colorForBrewery = useBreweryColors();
   const productsById = useMemo(() => catalogByProductId(catalog.data), [catalog.data]);
+
+  // The suppliers' price lists, loaded the way the order editor loads them: the list first, then
+  // each supplier's goods. Without this a good handed over unplanned could only be written down
+  // as free text, which loses the price list it came off.
+  const suppliersQuery = useSuppliers();
+  const supplierIds = useMemo(
+    () => (suppliersQuery.data ?? []).map((sup) => sup.id).filter((id): id is string => Boolean(id)),
+    [suppliersQuery.data],
+  );
+  const { bySupplier } = useSuppliersMany(supplierIds);
+  const loadedSuppliers = useMemo(
+    () => supplierIds.map((id) => bySupplier.get(id)).filter((sup): sup is NonNullable<typeof sup> => Boolean(sup)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supplierIds, supplierIds.map((id) => bySupplier.has(id)).join(',')],
+  );
+  const goodsById = useMemo(() => resolvedGoodMap(loadedSuppliers), [loadedSuppliers]);
 
   /** Packaging under a door-side product's name, the way the catalog labels it. */
   const chipFor = (productId: string) => {
@@ -161,6 +191,7 @@ export function LedgerEntryDrawer({
   const [returns, setReturns] = useState<EditableRow[]>([]);
   const [extras, setExtras] = useState<EditableRow[]>([]);
   const [added, setAdded] = useState<AddedRow[]>([]);
+  const [addedGoods, setAddedGoods] = useState<AddedGoodRow[]>([]);
   const [newReturns, setNewReturns] = useState<NewLine[]>([EMPTY_NEW_LINE]);
   const [newExtras, setNewExtras] = useState<NewLine[]>([EMPTY_NEW_LINE]);
   const [money, setMoney] = useState('');
@@ -193,6 +224,12 @@ export function LedgerEntryDrawer({
       name: e.productName ?? '—',
       actual: String(e.actualQuantity ?? 0),
     })));
+    setAddedGoods(doorSideGoods(entries).map((e) => ({
+      entryId: e.id,
+      supplierGoodId: e.supplierGoodId ?? '',
+      name: e.goodName ?? '—',
+      actual: String(e.actualQuantity ?? 0),
+    })));
     setNewReturns([EMPTY_NEW_LINE]);
     setNewExtras([EMPTY_NEW_LINE]);
     setMoney(moneyEntry?.amount != null ? String(moneyEntry.amount) : '');
@@ -205,6 +242,18 @@ export function LedgerEntryDrawer({
   const addedQuantities = useMemo(
     () => new Map(added.map((row) => [row.productId, parsed(row.actual, 0)])),
     [added],
+  );
+
+  const addedGoodQuantities = useMemo(
+    () => new Map(addedGoods.map((row) => [row.supplierGoodId, parsed(row.actual, 0)])),
+    [addedGoods],
+  );
+
+  // Goods the order itself plans, for the reason the products above are excluded: taking more of
+  // a planned good is an over-delivery on its own line, not something handed over unplanned.
+  const goodsOnOrder = useMemo(
+    () => new Set<string | undefined>((context.goods ?? []).map((row) => row.key)),
+    [context.goods],
   );
 
   // Products the order itself plans. Taking more of one of those is an over-delivery on its own
@@ -221,6 +270,23 @@ export function LedgerEntryDrawer({
     setAdded((prev) => (prev.some((r) => r.productId === productId)
       ? prev.map((r) => (r.productId === productId ? { ...r, actual: '1' } : r))
       : [...prev, { productId, name, actual: '1' }]));
+  };
+
+  /** The same for a good off a supplier's price list. */
+  const addGood = (supplierGoodId: string) => {
+    const name = goodsById.get(supplierGoodId)?.good.name ?? '—';
+    setAddedGoods((prev) => (prev.some((r) => r.supplierGoodId === supplierGoodId)
+      ? prev.map((r) => (r.supplierGoodId === supplierGoodId ? { ...r, actual: '1' } : r))
+      : [...prev, { supplierGoodId, name, actual: '1' }]));
+  };
+
+  const changeGoodQty = (supplierGoodId: string, delta: number) => {
+    setAddedGoods((prev) => prev.flatMap((row) => {
+      if (row.supplierGoodId !== supplierGoodId) return [row];
+      const next = Math.max(0, parsed(row.actual, 0) + delta);
+      if (next === 0 && !row.entryId) return [];
+      return [{ ...row, actual: String(next) }];
+    }));
   };
 
   /**
@@ -283,6 +349,19 @@ export function LedgerEntryDrawer({
         customExtraItemId: row.key,
         plannedQuantity: row.quantity,
         actualQuantity: parsed(row.actual, row.quantity),
+      });
+    }
+
+    // Goods taken at the door, keyed by the good — the mirror of the products below.
+    for (const row of addedGoods) {
+      const quantity = parsed(row.actual, 0);
+      if (quantity === 0 && !row.entryId) continue;
+
+      push({
+        target: ClientLedgerEntryTarget.SupplierGoodQuantity,
+        supplierGoodId: row.supplierGoodId,
+        plannedQuantity: 0,
+        actualQuantity: quantity,
       });
     }
 
@@ -444,6 +523,26 @@ export function LedgerEntryDrawer({
     />
   ));
 
+  /** The goods taken at the door, as rows of the Zboží dodavatele table. */
+  const doorSideGoodRows = addedGoods.map((row, index) => (
+    <QuantityRow
+      key={row.supplierGoodId}
+      name={row.name}
+      tone="new"
+      tag={ADDED_EXTRA}
+      value={row.actual}
+      inputLabel={`${row.name} — vzato na místě`}
+      onValue={(value) => {
+        const next = [...addedGoods];
+        next[index] = { ...row, actual: value };
+        setAddedGoods(next);
+      }}
+      onRemove={() => setAddedGoods((prev) => (row.entryId
+        ? prev.map((r) => (r.supplierGoodId === row.supplierGoodId ? { ...r, actual: '0' } : r))
+        : prev.filter((r) => r.supplierGoodId !== row.supplierGoodId)))}
+    />
+  ));
+
   /**
    * Lines the order never planned, as many as the client handed over.
    *
@@ -572,12 +671,28 @@ export function LedgerEntryDrawer({
               )}
             </Box>
 
-            {(context.goods ?? []).length > 0 && (
-              <>
-                <Divider />
-                {quantityTable('Zboží dodavatele', 'Skutečně', goods, setGoods, 'ks')}
-              </>
-            )}
+            {/* Rendered even with nothing planned, for the reason Vratky below is: a client who
+                ordered no CO₂ and takes a bottle at the door is an ordinary case, and with the
+                section hidden there would be nowhere to write it down. */}
+            <Divider />
+            {quantityTable('Zboží dodavatele', 'Skutečně', goods, setGoods, 'ks', { appended: doorSideGoodRows })}
+
+            <Box>
+              <SectionLabel>Přidat zboží dodavatele navíc</SectionLabel>
+              {suppliersQuery.isLoading ? (
+                <Stack alignItems="center" sx={{ py: 2 }}><CircularProgress size={22} /></Stack>
+              ) : (
+                <SupplierGoodCatalogBrowser
+                  suppliers={loadedSuppliers}
+                  quantities={addedGoodQuantities}
+                  formatMoney={formatMoney}
+                  onAdd={addGood}
+                  onChange={changeGoodQty}
+                  exclude={goodsOnOrder}
+                  panelsOpenByDefault={false}
+                />
+              )}
+            </Box>
 
             <Divider />
             {/* Rendered even with nothing planned: a client who was to return nothing and hands

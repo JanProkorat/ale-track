@@ -37,7 +37,9 @@ import { RouteMap, type RouteStop, type RouteEndpoint } from 'src/components/com
 import { ProductCombobox } from 'src/components/common/ProductCombobox';
 import { apiErrorMessage } from 'src/api/errors';
 import { fmtDate, num, fmtLiters, orderNumber, plural, shipmentNumber } from 'src/lib/format';
-import { SHIP_STATUS, shipStateName, kindLabel, startPointKindName, stopKindName } from 'src/lib/labels';
+import {
+  SHIP_STATUS, shipStateName, kindLabel, lineTravels, startPointKindName, stopKindName,
+} from 'src/lib/labels';
 import {
   type ClientLedgerEntryDto,
   type OutgoingShipmentDetailDto,
@@ -77,7 +79,7 @@ import {
   ALL_INVOICES, UNLOAD_VIEW, defaultLoadingView,
 } from './loadingView';
 import {
-  departureBlockReason, missingForDeparture, needsDeparturePrep,
+  departureBlockReason, missingForState, needsDeparturePrep,
 } from './departureReadiness';
 import { colorForClient } from './clientColor';
 import { StopAvatar } from './StopAvatar';
@@ -1038,8 +1040,15 @@ export function ShipmentDetail({
     () => overdrawnStock(stopsSorted, shipStateName(shipment.state)),
     [stopsSorted, shipment.state],
   );
+  // A bill-only line is left out: nothing of it is loaded or carried, so it belongs on neither
+  // the nakládka nor the weight. Its money is on the Fakturace, which reads the invoice lines.
   const combinedRows = useMemo(
-    () => [...stopsSorted.flatMap((st) => (st.products ?? []).map(productRowFrom)), ...extraRows],
+    () => [
+      ...stopsSorted.flatMap((st) => (st.products ?? [])
+        .filter((p) => lineTravels(p.lineKind))
+        .map(productRowFrom)),
+      ...extraRows,
+    ],
     [stopsSorted, extraRows],
   );
   const aggRows = useMemo(() => aggregateRows(combinedRows), [combinedRows]);
@@ -1210,11 +1219,12 @@ export function ShipmentDetail({
     Loaded: S.Created,
     InTransit: S.Loaded,
   } as Record<string, OutgoingShipmentState>)[stateName ?? ''];
-  // The API refuses InTransit and Delivered on a run that is not fully planned (EnsureReady →
-  // HasFilledData). Offering the button anyway meant the office learned about a forgotten driver
-  // from an error toast, so the same rule is read here and the button says what is missing.
+  // The API refuses a step the run is not ready for (EnsureReady): a vehicle to be loaded, the
+  // full plan to leave or to be delivered. Offering the button anyway meant the office learned
+  // about a forgotten van from an error toast, so the same rule is read here and the button says
+  // what is missing.
   const missingToDepart = forwardStep && needsDeparturePrep(forwardStep.to)
-    ? missingForDeparture(shipment)
+    ? missingForState(shipment, forwardStep.to)
     : [];
   const departureBlocked = missingToDepart.length > 0;
 

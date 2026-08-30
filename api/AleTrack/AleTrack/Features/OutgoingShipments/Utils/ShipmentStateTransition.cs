@@ -60,6 +60,17 @@ public static class ShipmentStateTransition
         if (next is OutgoingShipmentState.Loaded && shipment.Stops.Count == 0)
             ThrowHelper.ShipmentCannotBeLoadedWithoutStops();
 
+        // Nakládka is pieces going into one particular van: the loading list is checked off
+        // against its capacity, and the state freezes the run's content as loaded. Neither means
+        // anything without knowing which vehicle it was loaded into. The driver and the date are
+        // not required here — they are what leaving needs, which is the check below.
+        // The navigation as well as the key: the full PUT can assign a van and ask for Loaded in
+        // one request, and EF fills the foreign key only on save — reading the key alone would
+        // reject the very request that supplies the van.
+        if (next is OutgoingShipmentState.Loaded
+            && shipment.VehicleId is null && shipment.Vehicle is null)
+            ThrowHelper.ShipmentCannotBeLoadedWithoutVehicle();
+
         if (next is OutgoingShipmentState.Delivered or OutgoingShipmentState.InTransit
             && !shipment.HasFilledData)
             ThrowHelper.ShipmentNotPrepared(next);

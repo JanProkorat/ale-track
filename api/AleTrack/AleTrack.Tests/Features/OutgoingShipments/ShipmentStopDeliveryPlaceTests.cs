@@ -341,16 +341,24 @@ public sealed class ShipmentStopDeliveryPlaceTests
             ClientDeliveryPlaceId = place.Id
         };
 
+        // The van is incidental to what this test is about — a run just cannot be loaded without
+        // one, and this request asks for Loaded.
+        var vehicle = VehicleBuilder.BuildEntity(name: "3A2 1234");
+        vehicle.Id = 71;
+
         var outgoingShipment = OutgoingShipmentBuilder.BuildEntity(
             publicId: shipmentId,
             state: OutgoingShipmentState.Created,
-            stops: [existingStop]
+            stops: [existingStop],
+            vehicle: vehicle
         );
+        outgoingShipment.VehicleId = vehicle.Id;
 
         var dbContext = AleTrackDbContextMockFactory.CreateMock(
             outgoingShipments: [outgoingShipment],
             orders: [order],
-            clientDeliveryPlaces: [place]
+            clientDeliveryPlaces: [place],
+            vehicles: [vehicle]
         );
         dbContext.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
@@ -362,6 +370,7 @@ public sealed class ShipmentStopDeliveryPlaceTests
                 Name = "vyvoz",
                 DeliveryDate = DateTime.UtcNow.AddDays(1),
                 DriverIds = [],
+                VehicleId = vehicle.PublicId,
                 State = OutgoingShipmentState.Loaded,
                 ClientOrderShipments =
                 [

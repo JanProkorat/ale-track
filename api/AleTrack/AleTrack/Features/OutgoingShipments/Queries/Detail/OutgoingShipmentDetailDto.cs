@@ -502,6 +502,14 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
     public Guid OrderItemId { get; set; }
 
     /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// A <see cref="OrderLineKind.BillOnly"/> line is on the wire so the Fakturace can bill it;
+    /// the nakládka and the vykládka leave it out.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
+
+
+    /// <summary>
     /// The order line's own note — an instruction for whoever loads or delivers it.
     /// Read-only here; owned and edited by the order.
     /// </summary>
@@ -534,6 +542,13 @@ public sealed record OutgoingShipmentOrderItemDto : OutgoingShipmentProductDto
 /// </summary>
 public sealed record OutgoingShipmentSupplierGoodDto
 {
+    /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// A <see cref="OrderLineKind.BillOnly"/> line is on the wire so the Fakturace can bill it;
+    /// the nakládka and the vykládka leave it out.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; }
+
     /// <summary>Public ID of the order line this came from.</summary>
     public Guid Id { get; set; }
 

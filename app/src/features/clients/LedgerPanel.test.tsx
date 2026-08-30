@@ -5,6 +5,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClientLedgerEntryDto, ClientLedgerEntryTarget } from 'src/generated/api-client';
 import { theme } from 'src/theme/theme';
+import { orderNumber } from 'src/lib/format';
 
 vi.mock('notistack', () => ({ useSnackbar: () => ({ enqueueSnackbar: vi.fn() }) }));
 vi.mock('src/providers/CurrencyProvider', () => ({
@@ -20,6 +21,7 @@ const ledgerState: { data?: ClientLedgerEntryDto[]; isLoading: boolean; isError:
 };
 
 const resolveMock = vi.fn();
+const openOrderMock = vi.fn();
 // The order screen's card promises rather than closes, so it drives a different mutation.
 const assignMock = vi.fn();
 
@@ -38,6 +40,11 @@ vi.mock('src/hooks/useOrders', () => ({
 // The catalog marks each brewery with its colour; the hook rides on the brewery list.
 vi.mock('src/hooks/useBreweries', () => ({
   useBreweryColors: () => (id?: string) => (id === 'b-1' ? '#F08C00' : undefined),
+}));
+// The recording drawer's second catalog: the suppliers' price lists.
+vi.mock('src/hooks/useSuppliers', () => ({
+  useSuppliers: () => ({ data: [], isLoading: false, isError: false }),
+  useSuppliersMany: () => ({ bySupplier: new Map() }),
 }));
 
 const { LedgerPanel } = await import('./LedgerPanel');
@@ -63,7 +70,12 @@ function entry(over: Partial<ClientLedgerEntryDto> = {}): ClientLedgerEntryDto {
 function renderPanel() {
   return render(
     <MuiThemeProvider theme={theme}>
-      <LedgerPanel clientId="client-a" clientName="U Zeleného stromu" editable />
+      <LedgerPanel
+        clientId="client-a"
+        clientName="U Zeleného stromu"
+        editable
+        onOpenOrder={openOrderMock}
+      />
     </MuiThemeProvider>,
   );
 }
@@ -85,11 +97,17 @@ function section(title: string): HTMLElement {
   return screen.getByText(title).closest('.MuiCard-root') as HTMLElement;
 }
 
+/** Historie leads collapsed, so a test reading it has to open it first. */
+function openHistory() {
+  fireEvent.click(within(section('Historie')).getByRole('button', { expanded: false }));
+}
+
 beforeEach(() => {
   ledgerState.data = [];
   ledgerState.isLoading = false;
   ledgerState.isError = false;
   resolveMock.mockReset().mockResolvedValue('ok');
+  openOrderMock.mockReset();
   assignMock.mockReset().mockResolvedValue('ok');
 });
 
@@ -119,6 +137,31 @@ describe('LedgerPanel', () => {
     expect(open.getByText('300 Kč')).toBeInTheDocument();
   });
 
+  // The row says what happened at the door; only the totals above it read as a balance.
+  it('names a money entry as the client being short at handover', () => {
+    ledgerState.data = [entry({
+      target: ClientLedgerEntryTarget.Money,
+      amount: 100,
+      plannedQuantity: undefined,
+      actualQuantity: undefined,
+    })];
+    renderPanel();
+
+    expect(within(section('Nedořešeno')).getByText('Neměl na zaplacení 100 Kč')).toBeInTheDocument();
+  });
+
+  it('keeps the other direction as a debt of ours', () => {
+    ledgerState.data = [entry({
+      target: ClientLedgerEntryTarget.Money,
+      amount: -100,
+      plannedQuantity: undefined,
+      actualQuantity: undefined,
+    })];
+    renderPanel();
+
+    expect(within(section('Nedořešeno')).getByText('Dlužíme klientovi 100 Kč')).toBeInTheDocument();
+  });
+
   it('says so when nothing is open', () => {
     renderPanel();
 
@@ -132,8 +175,20 @@ describe('LedgerPanel', () => {
     renderPanel();
 
     const open = within(section('Nedořešeno'));
-    expect(open.getByText('zařazeno')).toBeInTheDocument();
+    expect(open.getByText('v řešení')).toBeInTheDocument();
     expect(open.queryByRole('button', { name: 'Vyřešit' })).not.toBeInTheDocument();
+  });
+
+  // "v řešení" is only useful with the where: the order carrying it is named and reachable.
+  it('links the order that is going to settle it', () => {
+    ledgerState.data = [entry({ resolvedByOrderId: OTHER_ORDER })];
+    renderPanel();
+
+    const link = within(section('Nedořešeno'))
+      .getByRole('button', { name: `vyřeší ${orderNumber(OTHER_ORDER)}` });
+    fireEvent.click(link);
+
+    expect(openOrderMock).toHaveBeenCalledWith(OTHER_ORDER);
   });
 
   it('marks a standalone debt as having no order behind it', () => {
@@ -146,7 +201,70 @@ describe('LedgerPanel', () => {
     })];
     renderPanel();
 
-    expect(within(section('Nedořešeno')).getByText(/bez objednávky/)).toBeInTheDocument();
+    expect(within(section('Nedořešeno')).getByText('Bez objednávky')).toBeInTheDocument();
+  });
+
+  // Grouped, so two disputed deliveries do not read as one pile — and the number is on the
+  // group header once instead of on every row of it.
+  it('groups the open points by order, one header per order', () => {
+    ledgerState.data = [
+      entry({ productName: 'Ležák 12', orderId: ORDER }),
+      entry({ productName: 'Světlé 10', orderId: ORDER, createdAt: new Date('2026-08-25T10:00:00Z') }),
+      entry({ productName: 'Řezané', orderId: OTHER_ORDER }),
+    ];
+    renderPanel();
+
+    const open = within(section('Nedořešeno'));
+    expect(open.getAllByRole('button', { name: `Objednávka ${orderNumber(ORDER)}` })).toHaveLength(1);
+    expect(open.getAllByRole('button', { name: `Objednávka ${orderNumber(OTHER_ORDER)}` })).toHaveLength(1);
+  });
+
+  // Which run these goods go out on is the question the header is read for; the order's own
+  // promised date is not it.
+  it('dates a group from the run carrying the order', () => {
+    ledgerState.data = [entry({
+      orderId: ORDER,
+      shipmentDeliveryDate: new Date('2026-08-26T06:30:00Z'),
+    })];
+    renderPanel();
+
+    expect(within(section('Nedořešeno')).getByText(/vývoz/)).toBeInTheDocument();
+  });
+
+  it('says nothing about a run when no shipment carries the order', () => {
+    ledgerState.data = [entry({ orderId: ORDER })];
+    renderPanel();
+
+    expect(within(section('Nedořešeno')).queryByText(/vývoz/)).not.toBeInTheDocument();
+  });
+
+  // "vyřešeno" says a point is done; the history is also asked which delivery did it, so the
+  // order is named there in the past tense and stays reachable.
+  it('links the order that settled a point in the history', () => {
+    ledgerState.data = [entry({
+      resolvedByOrderId: OTHER_ORDER,
+      resolvedAt: new Date('2026-08-28T09:00:00Z'),
+    })];
+    renderPanel();
+    openHistory();
+
+    const history = within(section('Historie'));
+    expect(history.getByText('vyřešeno')).toBeInTheDocument();
+    fireEvent.click(history.getByRole('button', { name: `vyřešila ${orderNumber(OTHER_ORDER)}` }));
+
+    expect(openOrderMock).toHaveBeenCalledWith(OTHER_ORDER);
+  });
+
+  // Settled by hand on this profile: there is no order behind it, and inventing one would be
+  // worse than saying nothing.
+  it('names no order for a point settled by hand', () => {
+    ledgerState.data = [entry({ resolvedAt: new Date('2026-08-28T09:00:00Z') })];
+    renderPanel();
+    openHistory();
+
+    const history = within(section('Historie'));
+    expect(history.getByText('vyřešeno')).toBeInTheDocument();
+    expect(history.queryByRole('button', { name: /vyřešila/ })).not.toBeInTheDocument();
   });
 
   it('does not crash while the ledger is loading', () => {
@@ -204,7 +322,7 @@ describe('ClientOpenItemsCard', () => {
   it('words a shortfall as pieces missing', () => {
     renderCard([entry({ plannedQuantity: 10, actualQuantity: 7 })]);
 
-    expect(screen.getByText('Ležák 12 — chybí 3 ks')).toBeInTheDocument();
+    expect(screen.getByText('Ležák 12 — nevyloženo 3 ks')).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------------

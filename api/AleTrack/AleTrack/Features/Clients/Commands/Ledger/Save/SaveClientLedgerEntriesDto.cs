@@ -43,6 +43,12 @@ public sealed record ClientLedgerRowDto
     /// <summary>The affected supplier-good line.</summary>
     public Guid? SupplierGoodItemId { get; set; }
 
+    /// <summary>
+    /// The affected good. Set without <see cref="SupplierGoodItemId"/> for a good handed over at
+    /// the door, which has no order line to point at — the mirror of <see cref="ProductId"/>.
+    /// </summary>
+    public Guid? SupplierGoodId { get; set; }
+
     /// <summary>The affected custom extra line.</summary>
     public Guid? CustomExtraItemId { get; set; }
 

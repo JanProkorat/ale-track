@@ -99,6 +99,7 @@ public static class ClientLedgerWriter
         && entry.OrderItemId == line.OrderItemId
         && entry.ProductId == line.ProductId
         && entry.SupplierGoodItemId == line.SupplierGoodItemId
+        && entry.SupplierGoodId == line.SupplierGoodId
         && entry.CustomExtraItemId == line.CustomExtraItemId
         && entry.OrderReturnId == line.OrderReturnId
         && string.Equals(entry.LineName, line.LineName, StringComparison.Ordinal);
@@ -140,6 +141,8 @@ public static class ClientLedgerWriter
             ProductId = line.ProductId,
             ProductName = line.ProductName,
             SupplierGoodItemId = line.SupplierGoodItemId,
+            SupplierGoodId = line.SupplierGoodId,
+            GoodName = line.GoodName,
             CustomExtraItemId = line.CustomExtraItemId,
             OrderReturnId = line.OrderReturnId,
             LineName = line.LineName,
@@ -175,6 +178,7 @@ public static class ClientLedgerWriter
         entry.Amount = line.Amount;
         entry.Note = line.Note ?? entry.Note;
         entry.ProductName = line.ProductName ?? entry.ProductName;
+        entry.GoodName = line.GoodName ?? entry.GoodName;
         entry.RequiresFollowUp = RequiresFollowUp(line.Target, line.PlannedQuantity, line.ActualQuantity);
     }
 }

@@ -109,6 +109,7 @@ public sealed class SaveClientLedgerEntriesEndpoint(AleTrackDbContext dbContext,
             .Include(o => o.Returns)
             .Include(o => o.CustomExtraItems)
             .Include(o => o.SupplierGoodItems)
+                .ThenInclude(i => i.SupplierGood)
             .Include(o => o.OutgoingShipmentStop)
             .FirstOrDefaultAsync(o => o.PublicId == orderPublicId, ct);
 
@@ -146,6 +147,16 @@ public sealed class SaveClientLedgerEntriesEndpoint(AleTrackDbContext dbContext,
                 ThrowHelper.PublicEntityNotFound(nameof(Product), row.ProductId.Value);
         }
 
+        // Same for a good: an order line carries its own, and one handed over at the door is
+        // identified by nothing else.
+        var good = supplierGoodItem?.SupplierGood;
+        if (good is null && row.SupplierGoodId is not null)
+        {
+            good = await dbContext.SupplierGoods.FirstOrDefaultAsync(g => g.PublicId == row.SupplierGoodId, ct);
+            if (good is null)
+                ThrowHelper.PublicEntityNotFound(nameof(SupplierGood), row.SupplierGoodId.Value);
+        }
+
         return new ClientLedgerLine
         {
             Target = row.Target,
@@ -153,6 +164,8 @@ public sealed class SaveClientLedgerEntriesEndpoint(AleTrackDbContext dbContext,
             ProductId = product?.Id,
             ProductName = product?.Name,
             SupplierGoodItemId = supplierGoodItem?.Id,
+            SupplierGoodId = good?.Id,
+            GoodName = good?.Name,
             CustomExtraItemId = customExtraItem?.Id,
             OrderReturnId = orderReturn?.Id,
             LineName = row.LineName,

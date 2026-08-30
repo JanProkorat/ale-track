@@ -192,6 +192,31 @@ public sealed class ShipmentContentSnapshotWriterTests
     private sealed record Graph(
         OutgoingShipment Shipment, Client Client, Brewery Brewery, Product Product, OrderItem Item);
 
+    /// <summary>
+    /// The kind travels with the quantity, because the run has to know it after the content is
+    /// frozen: the nakládka skips a bill-only row and the invoicing still bills it.
+    /// </summary>
+    [Fact]
+    public void Apply_CarriesTheLineKindOntoTheStop()
+    {
+        var f = Fixture();
+        f.Item.LineKind = OrderLineKind.BillOnly;
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        f.Shipment.Stops.Single().Items.Single().LineKind.Should().Be(OrderLineKind.BillOnly);
+    }
+
+    [Fact]
+    public void Apply_OrdinaryLine_IsSnapshottedAsNormal()
+    {
+        var f = Fixture();
+
+        ShipmentContentSnapshotWriter.Apply(f.Shipment, NoClientPrices);
+
+        f.Shipment.Stops.Single().Items.Single().LineKind.Should().Be(OrderLineKind.Normal);
+    }
+
     private static Graph Fixture()
     {
         var brewery = BreweryBuilder.BuildEntity(name: "Pivovar Zittau", color: "#E69F00");

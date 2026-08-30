@@ -28,6 +28,7 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   ORDER_ALREADY_ASSIGNED_TO_OUTGOING_SHIPMENT: 'Objednávka už je zařazena do jiného vývozu.',
   SHIPMENT_NOT_PREPARED: 'Vývoz nemá vyplněná všechna povinná data.',
   SHIPMENT_CANNOT_BE_LOADED_WITHOUT_STOPS: 'Vývoz nelze naložit bez zastávek.',
+  SHIPMENT_CANNOT_BE_LOADED_WITHOUT_VEHICLE: 'Vývoz nelze naložit bez přiřazeného vozidla.',
   SHIPMENT_ALREADY_DELIVERED: 'Vývoz už byl doručen.',
   SHIPMENT_ALREADY_CANCELLED: 'Vývoz už byl zrušen.',
   DRIVER_ALREADY_LINKED_TO_USER: 'Tento řidič už je propojen s jiným účtem.',

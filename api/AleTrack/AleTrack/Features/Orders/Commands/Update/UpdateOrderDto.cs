@@ -110,6 +110,13 @@ public sealed record UpdateOrderItemDto
     public int Quantity { get; set; }
     
     /// <summary>
+    /// Whether the line is for the goods, the money, or both — see <see cref="OrderLineKind"/>.
+    /// Defaults to <see cref="OrderLineKind.Normal"/>, so an older client that does not send it
+    /// keeps writing ordinary lines.
+    /// </summary>
+    public OrderLineKind LineKind { get; set; } = OrderLineKind.Normal;
+
+    /// <summary>
     /// State of the reminder for this item.
     /// </summary>
     public OrderItemReminderState? ReminderState { get; set; }

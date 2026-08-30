@@ -23,6 +23,12 @@ public sealed record ClientLedgerEntryDto
     /// <summary>Delivery date of that order, so the row can name where it came from.</summary>
     public DateOnly? OrderRequiredDeliveryDate { get; set; }
 
+    /// <summary>
+    /// Delivery date of the shipment carrying that order, null while no run has it. The order's
+    /// own required date is a promise; this is when it is actually going out.
+    /// </summary>
+    public DateTime? ShipmentDeliveryDate { get; set; }
+
     /// <summary>The stop it happened at.</summary>
     public Guid? StopId { get; set; }
 
@@ -37,6 +43,12 @@ public sealed record ClientLedgerEntryDto
 
     /// <summary>The affected supplier-good line.</summary>
     public Guid? SupplierGoodItemId { get; set; }
+
+    /// <summary>The affected good, for one handed over with no line on the order.</summary>
+    public Guid? SupplierGoodId { get; set; }
+
+    /// <summary>Good name as it was when the entry was written.</summary>
+    public string? GoodName { get; set; }
 
     /// <summary>The affected custom extra line.</summary>
     public Guid? CustomExtraItemId { get; set; }

@@ -25,19 +25,35 @@ import {
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
 import { useSetClientLedgerEntryAssignment } from 'src/hooks/useClientLedger';
-import { entryTooltip, isAssigned, isOpen, moneySummary } from './ledgerModel';
+import {
+  entryDeviation,
+  entryDisplayName,
+  entryTooltip,
+  isAssigned,
+  isOpen,
+  ledgerTodo,
+  moneySummary,
+  moneyText,
+} from './ledgerModel';
 import { LedgerTag } from './LedgerDiff';
 
-/** One line of the client's open list, in the order screen's own voice. */
+/**
+ * One line of the client's open list, in the order screen's own voice.
+ *
+ * The deviation is worded by {@link entryDeviation} rather than by arithmetic done here: empties
+ * run the other way from goods, and "navíc 2 ks" on a crate handed back said the opposite of
+ * what happened.
+ */
 function headlineOf(entry: ClientLedgerEntryDto, formatMoney: (v: number) => string): string {
   if (entry.amount != null) {
-    return `${entry.amount >= 0 ? 'Klient dluží' : 'Dlužíme klientovi'} ${formatMoney(Math.abs(entry.amount))}`;
+    return `${moneyText(entry)} ${formatMoney(Math.abs(entry.amount))}`;
   }
-  if (entry.plannedQuantity != null || entry.actualQuantity != null) {
-    const missing = (entry.plannedQuantity ?? 0) - (entry.actualQuantity ?? 0);
-    const name = entry.productName ?? entry.lineName ?? 'Položka';
-    return missing > 0 ? `${name} — chybí ${missing} ks` : `${name} — navíc ${-missing} ks`;
+
+  const deviation = entryDeviation(entry);
+  if (deviation) {
+    return `${entryDisplayName(entry) ?? 'Položka'} — ${deviation.toLowerCase()}`;
   }
+
   return entry.note ?? 'Změna';
 }
 
@@ -145,7 +161,13 @@ export function ClientOpenItemsCard({
                         />
                       )}
                     </Stack>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {/* What has to happen about it. The promise button below says who will do
+                        it; this says what "it" is. */}
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.primary', fontWeight: 700 }}>
+                      {ledgerTodo(entry, formatMoney).text}
+                    </Typography>
+
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block' }}>
                       {[
                         fmtDate(entry.createdAt),
                         entry.orderId ? orderNumber(entry.orderId) : 'bez objednávky',

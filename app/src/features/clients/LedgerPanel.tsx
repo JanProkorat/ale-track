@@ -22,7 +22,11 @@ import {
   type ClientLedgerEntryDto,
 } from 'src/generated/api-client';
 import { useClientLedger, useSetClientLedgerEntryResolution } from 'src/hooks/useClientLedger';
-import { entryTooltip, isAssigned, isOpen, moneySummary } from './ledgerModel';
+import {
+  entryDisplayName, entryTooltip, groupByOrder, isAssigned, isOpen, moneySummary, moneyText,
+  plannedActualText,
+} from './ledgerModel';
+import type { LedgerOrderGroup } from './ledgerModel';
 import { LedgerTag } from './LedgerDiff';
 import { LedgerEntryDrawer } from './LedgerEntryDrawer';
 
@@ -34,6 +38,7 @@ function EntryRow({
   onReopen,
   onOpenOrder,
   badge,
+  showOrder = true,
 }: {
   entry: ClientLedgerEntryDto;
   editable: boolean;
@@ -41,17 +46,36 @@ function EntryRow({
   onReopen: (entry: ClientLedgerEntryDto) => void;
   onOpenOrder?: (orderId: string) => void;
   badge?: string;
+  /** False under a group header that already names the order — see {@link OrderGroup}. */
+  showOrder?: boolean;
 }) {
   const { formatMoney } = useCurrency();
   const assigned = isAssigned(entry);
   const settled = !isOpen(entry);
 
+  /** The order behind a point, reachable where the screen can open one. */
+  const orderLink = (verb: string, orderId: string) => (onOpenOrder ? (
+    <Button
+      size="small"
+      onClick={() => onOpenOrder(orderId)}
+      sx={{ fontWeight: 700, minWidth: 0, px: 0.5, py: 0, fontSize: 12 }}
+    >
+      {verb}
+      &nbsp;
+      <Box component="span" sx={{ fontFamily: 'monospace' }}>{orderNumber(orderId)}</Box>
+    </Button>
+  ) : (
+    <Typography variant="caption" color="text.secondary">
+      {verb} {orderNumber(orderId)}
+    </Typography>
+  ));
+
   const headline = entry.amount != null
-    ? `${entry.amount >= 0 ? 'Klient dluží' : 'Dlužíme klientovi'} ${formatMoney(Math.abs(entry.amount))}`
+    ? `${moneyText(entry)} ${formatMoney(Math.abs(entry.amount))}`
     : entry.plannedText != null || entry.actualText != null
       ? 'Vyloženo jinde než v objednávce'
       : entry.plannedQuantity != null || entry.actualQuantity != null
-        ? `${entry.productName ?? entry.lineName ?? 'Položka'} — plán ${entry.plannedQuantity ?? 0}, skutečně ${entry.actualQuantity ?? 0}`
+        ? `${entryDisplayName(entry) ?? 'Položka'} — ${plannedActualText(entry)}`
         : (entry.note ?? 'Změna');
 
   return (
@@ -62,10 +86,14 @@ function EntryRow({
             <Typography sx={{ fontWeight: 700, fontSize: 13.5 }}>{headline}</Typography>
             <LedgerTag tone="info" label={ledgerTargetLabel(entry.target) ?? '—'} title={entryTooltip(entry)} />
             {badge && <Chip size="small" label={badge} sx={{ height: 20, fontWeight: 700 }} />}
-            {/* An entry another order already carries closes itself when that order arrives, so
-                it offers no manual close — settling it by hand would quietly bypass the link. */}
-            {assigned && <LedgerTag tone="new" label="zařazeno" />}
+            {/* An entry an order already carries closes itself when that order arrives, so it
+                offers no manual close — settling it by hand would quietly bypass the link. The
+                order is named, and reachable: "v řešení" is only useful with the where. */}
+            {assigned && <LedgerTag tone="new" label="v řešení" />}
             {settled && <LedgerTag tone="more" label="vyřešeno" />}
+            {/* Which order, in whichever tense applies. A point settled by hand on this profile
+                has no order behind it and shows nothing — "vyřešeno" is the whole story there. */}
+            {entry.resolvedByOrderId && orderLink(settled ? 'vyřešila' : 'vyřeší', entry.resolvedByOrderId)}
           </Stack>
 
           {entry.note && (
@@ -80,13 +108,13 @@ function EntryRow({
             {[
               fmtDate(entry.createdAt),
               entry.createdByUserName,
-              entry.orderId ? undefined : 'bez objednávky',
+              showOrder && !entry.orderId ? 'bez objednávky' : undefined,
               entry.resolvedAt ? `vyřešeno ${fmtDate(entry.resolvedAt)}` : undefined,
             ].filter(Boolean).join(' · ')}
           </Typography>
         </Box>
 
-        {entry.orderId && onOpenOrder && (
+        {showOrder && entry.orderId && onOpenOrder && (
           <Button
             size="small"
             onClick={() => onOpenOrder(entry.orderId!)}
@@ -117,6 +145,77 @@ function EntryRow({
           </IconButton>
         )}
       </Stack>
+    </Box>
+  );
+}
+
+/**
+ * One order's entries under the order number they were written against.
+ *
+ * A flat list interleaves orders, so two disputed deliveries read as one pile and the reader has
+ * to check the number line by line. The number is on the header once instead of on every row.
+ */
+function OrderGroup({
+  group,
+  editable,
+  onResolve,
+  onReopen,
+  onOpenOrder,
+}: {
+  group: LedgerOrderGroup;
+  editable: boolean;
+  onResolve: (entry: ClientLedgerEntryDto) => void;
+  onReopen: (entry: ClientLedgerEntryDto) => void;
+  onOpenOrder?: (orderId: string) => void;
+}) {
+  return (
+    <Box sx={{ pt: 2, '&:first-of-type': { pt: 0.5 } }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ pb: 0.5, borderBottom: 1, borderColor: 'divider' }}
+      >
+        {group.orderId && onOpenOrder ? (
+          <Button
+            size="small"
+            onClick={() => onOpenOrder(group.orderId!)}
+            sx={{ fontWeight: 700, minWidth: 0, px: 0.5, ml: -0.5 }}
+          >
+            Objednávka&nbsp;
+            <Box component="span" sx={{ fontFamily: 'monospace' }}>{orderNumber(group.orderId)}</Box>
+          </Button>
+        ) : (
+          <Typography sx={{ fontWeight: 700, fontSize: 13, color: 'text.secondary' }}>
+            {group.orderId ? `Objednávka ${orderNumber(group.orderId)}` : 'Bez objednávky'}
+          </Typography>
+        )}
+
+        {/* The run's date, not the order's promised one: it is when these goods actually go out. */}
+        {group.shipmentDeliveryDate && (
+          <Typography variant="caption" color="text.secondary">
+            vývoz {fmtDate(group.shipmentDeliveryDate)}
+          </Typography>
+        )}
+      </Stack>
+
+      <Box sx={{ pl: 1.25 }}>
+        {group.entries.map((entry) => (
+          <EntryRow
+            key={entry.id}
+            entry={entry}
+            editable={editable}
+            onResolve={onResolve}
+            onReopen={onReopen}
+            // Still handed down with the source order suppressed: the row's own link is to the
+            // order *settling* it, which is a different order from the group's.
+            onOpenOrder={onOpenOrder}
+            showOrder={false}
+          />
+        ))}
+      </Box>
     </Box>
   );
 }
@@ -203,19 +302,18 @@ export function LedgerPanel({
                   {open.length === 0 ? (
                     <EmptyState title="Nic nedořešeného" description="U tohoto klienta nejsou otevřené body." />
                   ) : (
-                    // Newest first: the thing that just happened is the thing being asked about.
-                    [...open]
-                      .sort((a, b) => Number(new Date(b.createdAt ?? 0)) - Number(new Date(a.createdAt ?? 0)))
-                      .map((entry) => (
-                        <EntryRow
-                          key={entry.id}
-                          entry={entry}
-                          editable={editable}
-                          onResolve={(e) => setResolved(e, true)}
-                          onReopen={(e) => setResolved(e, false)}
-                          onOpenOrder={onOpenOrder}
-                        />
-                      ))
+                    // By order, newest first: the thing that just happened is the thing being
+                    // asked about, and it is asked about one delivery at a time.
+                    groupByOrder(open).map((group) => (
+                      <OrderGroup
+                        key={group.orderId ?? 'no-order'}
+                        group={group}
+                        editable={editable}
+                        onResolve={(e) => setResolved(e, true)}
+                        onReopen={(e) => setResolved(e, false)}
+                        onOpenOrder={onOpenOrder}
+                      />
+                    ))
                   )}
                 </Box>
               </CollapsibleCard>
@@ -226,18 +324,16 @@ export function LedgerPanel({
                   {history.length === 0 ? (
                     <EmptyState title="Žádná historie" description="U tohoto klienta nebyla vyřešena žádná změna." />
                   ) : (
-                    [...history]
-                      .sort((a, b) => Number(new Date(b.createdAt ?? 0)) - Number(new Date(a.createdAt ?? 0)))
-                      .map((entry) => (
-                        <EntryRow
-                          key={entry.id}
-                          entry={entry}
-                          editable={editable}
-                          onResolve={(e) => setResolved(e, true)}
-                          onReopen={(e) => setResolved(e, false)}
-                          onOpenOrder={onOpenOrder}
-                        />
-                      ))
+                    groupByOrder(history).map((group) => (
+                      <OrderGroup
+                        key={group.orderId ?? 'no-order'}
+                        group={group}
+                        editable={editable}
+                        onResolve={(e) => setResolved(e, true)}
+                        onReopen={(e) => setResolved(e, false)}
+                        onOpenOrder={onOpenOrder}
+                      />
+                    ))
                   )}
                 </Box>
               </CollapsibleCard>

@@ -60,7 +60,8 @@ export function entryLineKey(entry: ClientLedgerEntryDto): string {
 
   if (id) return id;
   if (entry.productId) return `product:${entry.productId}`;
-  return `name:${(entry.lineName ?? entry.productName ?? '').trim().toLowerCase()}`;
+  if (entry.supplierGoodId) return `good:${entry.supplierGoodId}`;
+  return `name:${(entry.lineName ?? entry.productName ?? entry.goodName ?? '').trim().toLowerCase()}`;
 }
 
 /** Targets that decorate a row of some collection, as opposed to standing on their own. */
@@ -189,6 +190,22 @@ export function doorSideAdditions(entries: ClientLedgerEntryDto[]): ClientLedger
     && ledgerTargetName(e.target) === 'ProductQuantity'
     && !e.orderItemId
     && !!e.productId
+    && isOpen(e)
+    && (e.actualQuantity ?? 0) !== (e.plannedQuantity ?? 0));
+}
+
+/**
+ * Supplier goods handed over with no line on the order, still correctable.
+ *
+ * The mirror of {@link doorSideAdditions}: keyed by the good rather than the product, and settled
+ * ones are left out for the same reason — a save carrying the same good would open a second row
+ * beside the stored one instead of rewriting it.
+ */
+export function doorSideGoods(entries: ClientLedgerEntryDto[]): ClientLedgerEntryDto[] {
+  return entries.filter((e) =>
+    ledgerTargetName(e.target) === 'SupplierGoodQuantity'
+    && !e.supplierGoodItemId
+    && !!e.supplierGoodId
     && isOpen(e)
     && (e.actualQuantity ?? 0) !== (e.plannedQuantity ?? 0));
 }
@@ -348,9 +365,15 @@ export function quantityTone(planned: number, actual: number, isReturn = false):
   }
 }
 
-/** Money read as a direction: who owes whom. */
+/**
+ * Money read as a direction: who owes whom.
+ *
+ * A money entry is written at the door, so "Neměl na zaplacení" is what actually happened — the
+ * client was short at handover. The totals above the list stay "Klient dluží", because a sum of
+ * several such moments is a balance rather than one of them.
+ */
 export function moneyText(entry: ClientLedgerEntryDto): string {
-  return (entry.amount ?? 0) >= 0 ? 'Klient dluží' : 'Dlužíme klientovi';
+  return (entry.amount ?? 0) >= 0 ? 'Neměl na zaplacení' : 'Dlužíme klientovi';
 }
 
 /**
@@ -374,12 +397,229 @@ export function owedPieces(entry: ClientLedgerEntryDto): number {
 }
 
 /**
+ * The two numbers behind a quantity entry, as the client profile states them.
+ *
+ * The evidence under a row whose instruction already carries the delta: "vyzvednout 1 ks obalů"
+ * says what to do, this says where the 1 came from. Shared with the profile so the two screens
+ * cannot word the same pair differently.
+ */
+export function plannedActualText(entry: ClientLedgerEntryDto): string {
+  return `plán ${entry.plannedQuantity ?? 0}, skutečně ${entry.actualQuantity ?? 0}`;
+}
+
+/**
+ * What an entry's line is called.
+ *
+ * One helper rather than a fallback chain repeated per screen: a good handed over at the door
+ * carries `goodName` and neither of the other two, so a screen that forgot it showed "Položka".
+ */
+export function entryDisplayName(entry: ClientLedgerEntryDto): string | undefined {
+  return entry.productName ?? entry.goodName ?? entry.lineName ?? undefined;
+}
+
+/** What happened on an entry's line, in the words the diffs use. Undefined when nothing moved. */
+export function entryDeviation(entry: ClientLedgerEntryDto): string | undefined {
+  if (!isQuantityEntry(entry)) return undefined;
+  return quantityWords(
+    entry.plannedQuantity ?? 0,
+    entry.actualQuantity ?? 0,
+    ledgerTargetName(entry.target) === 'ReturnQuantity',
+  );
+}
+
+/**
+ * Where an entry gets closed: from this order's cart, from its supplier-goods lines, from its
+ * vratky, or off the screen entirely.
+ */
+export type LedgerTodoAction = 'order' | 'goods' | 'extras' | 'returns' | 'bill' | 'none';
+
+/** What still has to happen for an entry to close, and whether this screen can do it. */
+export interface LedgerTodo {
+  /** The instruction, in the imperative: "dovézt 3 ks", "vybrat 100 Kč". */
+  text: string;
+  action: LedgerTodoAction;
+}
+
+/**
+ * What to do about an entry.
+ *
+ * The lists used to show only what an entry *was* — a name, a tag, a date — which reads as six
+ * labels rather than six jobs. Every open point has exactly one next step, and it is derivable:
+ * the target says whose problem it is and the sign says which direction it runs in.
+ *
+ * `action` is only about what this screen can do about it. A shortfall of a known product goes in
+ * the cart, unreturned empties go in the vratky, and everything else is an office job — cash
+ * taken, a keg written off, pieces billed — which no delivery closes.
+ */
+export function ledgerTodo(
+  entry: ClientLedgerEntryDto,
+  formatMoney: (value: number) => string,
+): LedgerTodo {
+  const acknowledge: LedgerTodo = { text: 'vzít na vědomí', action: 'none' };
+
+  if (entry.amount != null && entry.amount !== 0) {
+    return entry.amount > 0
+      ? { text: `vybrat ${formatMoney(entry.amount)}`, action: 'none' }
+      : { text: `vrátit ${formatMoney(-entry.amount)}`, action: 'none' };
+  }
+
+  if (!isQuantityEntry(entry)) return acknowledge;
+
+  const missing = (entry.plannedQuantity ?? 0) - (entry.actualQuantity ?? 0);
+  if (missing === 0) return acknowledge;
+
+  if (ledgerTargetName(entry.target) === 'ReturnQuantity') {
+    // Empties, so the directions are the other way round from goods: too few back and the client
+    // is still holding them, too many and we are sitting on somebody's deposit.
+    return missing > 0
+      ? { text: `vyzvednout ${pieces(missing)} obalů`, action: 'returns' }
+      : { text: `vrátit zálohu za ${pieces(-missing)}`, action: 'none' };
+  }
+
+  // Over-delivered: the pieces are with the client and nothing more is owed to them, so what is
+  // left is money. A shortfall can be carried by an order, but only of something its lists know:
+  // a product goes in the cart, a supplier good in its own lines, a custom extra in neither.
+  // A custom extra is free text with a count, so the order carries the shortfall as another row
+  // of the same list. Nothing about money here: what an extra costs is not modelled yet.
+  if (missing > 0 && ledgerTargetName(entry.target) === 'CustomExtraQuantity') {
+    return { text: `dovézt ${pieces(missing)}`, action: 'extras' };
+  }
+
+  // Over-delivered: the pieces are with the client, so what is left is money. The next order can
+  // carry that as a bill-only line — billed, never loaded — as long as it knows what to price,
+  // which is the product or the good.
+  if (missing < 0) {
+    const billable: LedgerTodoAction = entry.productId != null || entry.supplierGoodId != null
+      ? 'bill'
+      : 'none';
+    return { text: `doúčtovat ${pieces(-missing)}`, action: billable };
+  }
+
+  const carrier: LedgerTodoAction = entry.productId != null
+    ? 'order'
+    : entry.supplierGoodId != null
+      ? 'goods'
+      : 'none';
+
+  return { text: `dovézt ${pieces(missing)}`, action: carrier };
+}
+
+/**
  * Whether an entry can be topped up from an order's cart: a quantity of a known product that is
  * genuinely owed, and that no other order has already promised to bring.
  */
-export function isSettleable(entry: ClientLedgerEntryDto): boolean {
-  return isOpen(entry) && !isAssigned(entry) && isQuantityEntry(entry)
+export function canGoToCart(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry) && isQuantityEntry(entry)
     && entry.productId != null && owedPieces(entry) > 0;
+}
+
+export function isSettleable(entry: ClientLedgerEntryDto): boolean {
+  return canGoToCart(entry) && !isAssigned(entry);
+}
+
+/**
+ * The point as a sentence for an order's note.
+ *
+ * For everything no delivery settles by itself — cash to collect, a deposit to hand back, pieces
+ * to bill — the order carries a reminder instead of a line. The wording is {@link ledgerTodo}'s,
+ * so the note and the card cannot say different things about the same point.
+ */
+export function ledgerNoteText(
+  entry: ClientLedgerEntryDto,
+  formatMoney: (value: number) => string,
+): string {
+  const todo = ledgerTodo(entry, formatMoney).text;
+  const sentence = todo.charAt(0).toUpperCase() + todo.slice(1);
+  const name = entryDisplayName(entry);
+
+  return name ? `${sentence} — ${name}` : sentence;
+}
+
+/** How many pieces the client has and has not been billed for. Zero when nothing is owed. */
+export function billablePieces(entry: ClientLedgerEntryDto): number {
+  return Math.max(0, (entry.actualQuantity ?? 0) - (entry.plannedQuantity ?? 0));
+}
+
+/**
+ * Whether the pieces can be put on an order to be billed: a quantity of something the catalog
+ * can price, that the client has more of than was planned, and that no order is already carrying.
+ */
+export function canBeBilled(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry) && isQuantityEntry(entry)
+    && ledgerTargetName(entry.target) !== 'ReturnQuantity'
+    && (entry.productId != null || entry.supplierGoodId != null)
+    && billablePieces(entry) > 0;
+}
+
+export function isBillable(entry: ClientLedgerEntryDto): boolean {
+  return canBeBilled(entry) && !isAssigned(entry);
+}
+
+/**
+ * Whether a supplier good can be topped up from an order's own goods lines.
+ *
+ * Its own predicate for the reason {@link isReturnSettleable} has one: the row it becomes is a
+ * supplier-good line priced off the supplier's list, not a cart line priced off the client's.
+ */
+export function canGoToGoods(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry)
+    && ledgerTargetName(entry.target) === 'SupplierGoodQuantity'
+    && entry.supplierGoodId != null
+    && owedPieces(entry) > 0;
+}
+
+export function isGoodSettleable(entry: ClientLedgerEntryDto): boolean {
+  return canGoToGoods(entry) && !isAssigned(entry);
+}
+
+export function canGoToExtras(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry)
+    && ledgerTargetName(entry.target) === 'CustomExtraQuantity'
+    && owedPieces(entry) > 0;
+}
+
+/**
+ * Whether a shortfall on a custom extra can be put on an order's own Položky navíc.
+ *
+ * Its own predicate for the reason the others have one: the row it becomes is free text and a
+ * count, with no product and no price list behind it.
+ */
+export function isExtraSettleable(entry: ClientLedgerEntryDto): boolean {
+  return canGoToExtras(entry) && !isAssigned(entry);
+}
+
+/**
+ * Whether an entry can be collected on the next run: empties the client did not hand back.
+ *
+ * Its own predicate rather than a branch of {@link isSettleable}, because the row it becomes is
+ * a vratka and not a cart line — there is no product to price, only a name and a count.
+ */
+export function canGoToReturns(entry: ClientLedgerEntryDto): boolean {
+  return isOpen(entry)
+    && ledgerTargetName(entry.target) === 'ReturnQuantity'
+    && owedPieces(entry) > 0;
+}
+
+export function isReturnSettleable(entry: ClientLedgerEntryDto): boolean {
+  return canGoToReturns(entry) && !isAssigned(entry);
+}
+
+/** The name a vratka row takes when one is opened from an entry. */
+export function returnLineName(entry: ClientLedgerEntryDto): string {
+  return (entry.lineName ?? entry.productName ?? 'Vratka').trim();
+}
+
+/** The same for a Položky navíc row. */
+export function extraLineName(entry: ClientLedgerEntryDto): string {
+  return (entryDisplayName(entry) ?? 'Položka navíc').trim();
+}
+
+/**
+ * How a free-text row and an entry are matched up: the name, folded the way {@link entryLineKey}
+ * folds it. Shared by the vratky and the extras — neither has an id until it is saved.
+ */
+export function lineNameKey(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 /** Money owed in both directions, summed separately. */
@@ -434,4 +674,44 @@ export function addressEntry(entries: ClientLedgerEntryDto[]): ClientLedgerEntry
 export function isQuantityTarget(target?: ClientLedgerEntryTarget | string | number): boolean {
   const name = ledgerTargetName(target);
   return name != null && QUANTITY_TARGETS.has(name);
+}
+
+/** The entries recorded against one order, or the ones recorded against no order at all. */
+export interface LedgerOrderGroup {
+  /** Undefined for the standalone debts — the group the order button cannot link anywhere. */
+  orderId?: string;
+  /** When the run carrying the order goes out. Undefined while no run has it. */
+  shipmentDeliveryDate?: Date;
+  entries: ClientLedgerEntryDto[];
+}
+
+/**
+ * The ledger split into one block per order, newest first.
+ *
+ * A flat newest-first list interleaves orders, so a client with two disputed deliveries reads as
+ * one undifferentiated pile and the order number has to be checked line by line. Groups are
+ * ordered by their newest entry — the same "what just happened comes first" the rows keep among
+ * themselves — so the standalone debts sort by date with everything else rather than being
+ * parked at one end.
+ */
+export function groupByOrder(entries: ClientLedgerEntryDto[]): LedgerOrderGroup[] {
+  const groups = new Map<string, LedgerOrderGroup>();
+
+  for (const entry of entries) {
+    const key = entry.orderId ?? '';
+    const group = groups.get(key) ?? { orderId: entry.orderId, entries: [] };
+    group.entries.push(entry);
+    groups.set(key, group);
+  }
+
+  for (const group of groups.values()) {
+    group.entries.sort((a, b) => dateValue(b.createdAt) - dateValue(a.createdAt));
+    // Every entry of one order reads the same run, so the first that has it speaks for the group.
+    group.shipmentDeliveryDate = group.entries.find((e) => e.shipmentDeliveryDate != null)
+      ?.shipmentDeliveryDate;
+  }
+
+  return [...groups.values()].sort(
+    (a, b) => dateValue(b.entries[0]?.createdAt) - dateValue(a.entries[0]?.createdAt),
+  );
 }
